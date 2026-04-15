@@ -11,3 +11,11 @@ applyTo: "**/*.py"
 - Prefer explicit response_model declarations for route handlers.
 - Use dependency injection with typed dependencies.
 - Keep API validation and schema logic in Pydantic models, not ad hoc dictionaries.
+
+## Do Not
+
+- Do not return raw `dict` from route handlers — always use a Pydantic `response_model`.
+- Do not perform blocking I/O in route handlers — use `async` and asyncio-compatible clients.
+- Do not put business logic inside route handlers — delegate to service functions or repositories.
+- Do not access `request.body()` for JSON — define a Pydantic body model instead.
+- Do not skip `status_code` declarations on mutation endpoints (POST/PUT/DELETE).
