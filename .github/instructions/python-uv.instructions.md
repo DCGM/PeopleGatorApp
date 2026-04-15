@@ -10,7 +10,7 @@ applyTo: "**/*.py"
 - Always use `uv add <package1> <package2> ...` to add new dependencies.
 - If you need to add a development dependency, use `uv add --dev <package-name>`.
 - Modify `pyproject.toml` directly only for non-dependency related changes (e.g., project metadata).
-- Allowed modification of `pyproject.toml` is also for adding runnable modules under the `[tool.uv.scripts]` section.
+- Allowed modification of `pyproject.toml` is also for adding runnable modules under the `[project.scripts]` section.
 - All dependency changes must be made through `uv` commands to ensure proper lockfile updates.
 - Always install `ipykernel` as a development dependency for Python projects to enable Jupyter notebook support.
 - Keep dependency changes compatible with uv workflows.
