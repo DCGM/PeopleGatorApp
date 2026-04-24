@@ -10,6 +10,7 @@ applyTo: "**/*.py"
 - Keep endpoints fully typed, including path and query parameters, request models, and response models.
 - Prefer explicit response_model declarations for route handlers.
 - Use dependency injection with typed dependencies.
+- Use absolute package imports in API code; avoid relative imports.
 - Keep API validation and schema logic in Pydantic models, not ad hoc dictionaries.
 
 ## Do Not

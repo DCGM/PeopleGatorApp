@@ -14,5 +14,6 @@ applyTo: "**/*.py"
 - All dependency changes must be made through `uv` commands to ensure proper lockfile updates.
 - Always install `ipykernel` as a development dependency for Python projects to enable Jupyter notebook support.
 - Keep dependency changes compatible with uv workflows.
+- Use absolute package imports in Python modules; avoid relative imports.
 - Treat lockfile reproducibility as mandatory.
 - Commit uv.lock when Python dependencies are changed.

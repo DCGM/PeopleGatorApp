@@ -10,6 +10,8 @@ applyTo: "**/*.py"
 - Use inline type parameters and generic syntax available in modern Python (PEP 695 style) where applicable.
 - Use explicit, precise type hints for public functions, methods, class attributes, and return values.
 - Use dataclasses, TypedDict, Protocol, and Literal where they improve type safety and readability.
+- Prefer absolute package imports (for example `from people_gator_faceid_train.modules import ...`) instead of relative imports.
+- Do not use relative imports like `from .foo` or `from ..bar`; keep imports fully package-qualified.
 - Do not introduce untyped public APIs.
 - Do not use `Any` or `object` as a catch-all type — prefer more specific types or generics.
 - Do not use `Union` with `None` — use `| None` syntax instead.
