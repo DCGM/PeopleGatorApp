@@ -20,6 +20,10 @@ services:
           # Exclude the project virtual environment
           ignore:
             - .venv/
+            - docs/
+            - .github/
+            - .vscode/
+            - .git/
         # Rebuild the image on changes to the `pyproject.toml`
         - action: rebuild
           path: ./pyproject.toml
@@ -28,7 +32,7 @@ services:
           path: ./Dockerfile.dev
     labels:
       - traefik.enable=true
-      - traefik.http.routers.people-gator-api-dev.rule=Host(`people-gator-api-dev.spis-ai.com`)
+      - traefik.http.routers.people-gator-api-dev.rule=Host(`dev.people-gator.capturemyhand.com`)
       - traefik.http.routers.people-gator-api-dev.entrypoints=websecure
       - traefik.http.services.people-gator-api-dev.loadbalancer.server.port=8000
       - traefik.http.routers.people-gator-api-dev.tls=true
