@@ -2,6 +2,7 @@ from pydantic import Field, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class OpenTelemetrySettings(BaseModel):
+    enabled: bool = True
     http_endpoint: str = "http://lgtm:4318"
     grpc_endpoint: str = "http://lgtm:4317"
     traces_path: str = "/v1/traces"
