@@ -40,7 +40,10 @@ services:
     networks:
       - web
       - default
+      - logging
 
 networks:
   web:
+    external: true
+  logging:
     external: true
