@@ -42,21 +42,21 @@ Inference systems remain external and deliver prepared artifacts.
 
 ### 2.5 Identity Resolution Service
 
-1. Builds and updates `EntityInstance` hypotheses.
+1. Builds and updates `EntityProposal` records from search evidence.
 2. Uses face, image, text, and page-level face-to-name signals.
-3. Maintains explainable confidence breakdowns.
+3. Maintains explainable confidence breakdowns and proposal-level confidence.
 
 ### 2.6 Annotation Service
 
-1. Manages `AnnotationTask` lifecycle and assignment policies.
-2. Stores `AnnotationDecision` outputs.
-3. Computes agreement metrics.
+1. Manages annotation assignment and `AnnotationInstance` lifecycle.
+2. Stores annotation revisions as independent rows (no in-place overwrite).
+3. Keeps proposal baseline immutable while annotation evolves.
 
 ### 2.7 Review Service
 
-1. Manages `ReviewTask` assignment.
-2. Stores `ReviewDecision` adjudication.
-3. Publishes reviewed master outcomes.
+1. Manages review assignment for submitted annotation instances.
+2. Stores `ReviewInstance` adjudication.
+3. Publishes reviewed outcomes to `MasterEntity` and grounding versions.
 
 ### 2.8 Auth and Access Control
 
@@ -74,10 +74,11 @@ Inference systems remain external and deliver prepared artifacts.
 ### 3.1 PostgreSQL (Transactional Truth)
 
 1. Users, roles, tasks, decisions, audit log, and exports.
-2. Person entities, entity instances, evidence links, and grounding states.
-3. Local Wikidata subset.
-4. Artifact and indexing metadata registry.
-5. Grounding identifier records and grounding evidence metadata (including language tags, confidence, and source linkage).
+2. Master entities, grounding versions, entity proposals, and evidence links.
+3. Annotation instances, review instances, and removal log records.
+4. Local Wikidata subset.
+5. Artifact and indexing metadata registry.
+6. Grounding identifier records and grounding evidence metadata (including language tags, confidence, and source linkage).
 
 ### 3.2 Weaviate (Retrieval Index)
 
@@ -141,7 +142,8 @@ This avoids global recomputation while keeping model provenance available for au
    2. Compute evidence contribution breakdown per signal.
 3. Evidence assembly:
    1. Build `face_evidence`, `image_evidence`, `text_evidence` buckets.
-   2. Attach provenance and per-item relevance.
+   2. Build `EntityProposal` candidates with optional grounding links.
+   3. Attach provenance and per-item relevance.
 
 ## 6. Regional Grounding Defaults
 
@@ -181,7 +183,7 @@ Regional filters are configurable without schema changes.
 ### 8.1 Phase 1 (MVP Foundation)
 
 1. FastAPI skeleton with typed models.
-2. PostgreSQL schema for core workflow and grounding.
+2. PostgreSQL schema for master entities, grounding versions, proposals, and annotation/review revisions.
 3. Weaviate retrieval collections.
 4. Ingestion gateway plus incremental reindex queue.
 5. Search profile management.

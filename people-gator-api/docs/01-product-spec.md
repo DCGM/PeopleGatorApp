@@ -7,7 +7,7 @@ People Gator API is an annotation-first backend for person-centric retrieval in 
 The main user workflow is:
 
 1. Search for a person using name, face, text context, or combinations.
-2. Build or update grounded person entities from evidence.
+2. Build grounding versions and entity proposals from evidence.
 3. Run annotation and review to converge on verified master records.
 
 ## 2. Product Scope
@@ -72,88 +72,66 @@ Mandatory semantics:
 
 ## 6. Domain Models With Separated Responsibilities
 
-### 6.1 PersonEntity
+### 6.1 MasterEntity
 
-1. Identity aggregate record.
-2. Stores canonical display name, aliases, optional authority linkage, and current resolved status.
-3. Does not store per-annotator decisions directly.
+1. Stable identity aggregate for one person.
+2. Stores canonical display name and global status.
+3. Connects to versioned grounding records.
 
-### 6.2 EntityInstance
+### 6.2 GroundingVersion
 
-1. Versioned hypothesis snapshot for one `PersonEntity` over a concrete evidence set.
-2. Carries confidence, explanation metadata, and lifecycle state.
-3. Immutable after review; new evidence creates a new instance version.
+1. Versioned grounding snapshot for one `MasterEntity`.
+2. Contains candidate external identifiers (Wikidata and other schemes), names, and photos.
+3. New grounding evidence creates a new version.
 
-### 6.3 EvidenceItem
+### 6.3 EntityProposal
 
-1. Atomic evidence object (face, image, page, region, line, named entity span).
-2. Stores modality-native payload plus provenance.
+1. Explicit proposal used as the baseline object for annotation.
+2. Can optionally target an existing `MasterEntity`.
+3. Connects proposed names, proposed grounding candidates, and linked evidence.
 
-### 6.4 EvidenceLink
+### 6.4 EvidenceItem
 
-1. Association between one `EntityInstance` and one `EvidenceItem`.
-2. Stores relation status (accepted, rejected, tentative) and scoring metadata.
+1. Atomic evidence object (face, image, page, region, line, named entity span, text).
+2. Has required source provenance.
+3. Has polarity constrained to `positive` or `negative`.
 
-### 6.5 AnnotationTask
+### 6.5 AnnotationInstance
 
-1. Workflow container for annotation assignment.
-2. Points to a frozen `EntityInstance` version.
-3. Holds assignment policy and lifecycle state.
+1. One independently updatable annotation revision derived from an `EntityProposal`.
+2. Updates create a new revision row and preserve previous revisions.
+3. Original proposal remains unchanged.
 
-### 6.6 AnnotationDecision
+### 6.6 AnnotatedEntity
 
-1. One annotator submission for one `AnnotationTask`.
-2. Contains acceptance and rejection decisions for grounding and evidence.
+1. Materialized annotation outcome for one `AnnotationInstance`.
+2. Captures selected name and selected grounding.
+3. Can link to an existing `MasterEntity` or stay unresolved.
 
-### 6.7 ReviewTask
+### 6.7 ReviewInstance
 
-1. Reviewer work item for one `AnnotationTask` once policy conditions are met.
+1. Reviewer adjudication for one `AnnotationInstance`.
+2. Produces accept/reject/request-changes decision.
 
-### 6.8 ReviewDecision
+### 6.8 RemovalLog
 
-1. Reviewer adjudication output.
-2. Produces the reviewed master outcome and closes or reopens workflow.
+1. Immutable audit record for removals.
+2. Stores target type, target id, actor, reason, and timestamp.
 
 ## 7. Formal State Machines
 
-### 7.1 EntityInstance State Machine
+### 7.1 GroundingVersion State Machine
 
 States:
 
 1. `tentative`
-2. `annotation_pending`
-3. `annotated`
-4. `review_pending`
-5. `reviewed`
-6. `rejected`
-
-Allowed transitions:
-
-1. `tentative -> annotation_pending`
-2. `annotation_pending -> annotated`
-3. `annotated -> review_pending`
-4. `review_pending -> reviewed`
-5. `review_pending -> rejected`
-6. `annotated -> rejected`
-
-Rules:
-
-1. `reviewed` is terminal for that instance version.
-2. New evidence after `reviewed` creates a new `EntityInstance` version starting at `tentative`.
-3. `rejected` instances are never silently deleted; they remain audit-visible.
-
-### 7.2 Grounding State Machine
-
-States:
-
-1. `none`
 2. `proposed`
 3. `accepted`
 4. `rejected`
 
 Allowed transitions:
 
-1. `none -> proposed`
+1. `tentative -> proposed`
 2. `proposed -> accepted`
 3. `proposed -> rejected`
 4. `accepted -> proposed`
@@ -161,43 +139,66 @@ Allowed transitions:
 
 Rules:
 
-1. Only reviewer actions can move to `accepted`.
-2. Re-proposal is allowed when new evidence appears.
+1. Each accepted or rejected grounding result remains in history through versioning.
+2. New evidence creates a new `GroundingVersion`.
 
-### 7.3 AnnotationTask State Machine
+### 7.2 EntityProposal State Machine
 
 States:
 
 1. `draft`
-2. `published`
-3. `in_progress`
-4. `ready_for_review`
-5. `completed`
-6. `cancelled`
+2. `ready_for_annotation`
+3. `annotated`
+4. `reviewed`
+5. `closed`
 
 Allowed transitions:
 
-1. `draft -> published`
-2. `published -> in_progress`
-3. `in_progress -> ready_for_review`
-4. `ready_for_review -> completed`
-5. `draft -> cancelled`
-6. `published -> cancelled`
-7. `in_progress -> cancelled`
+1. `draft -> ready_for_annotation`
+2. `ready_for_annotation -> annotated`
+3. `annotated -> reviewed`
+4. `reviewed -> closed`
+5. `annotated -> closed`
 
 Rules:
 
-1. Completed tasks are immutable except for administrative audit metadata.
-2. Any cancellation requires reason code.
+1. Proposal rows are retained as original baseline records.
+2. Closing does not delete linked annotations.
+
+### 7.3 AnnotationInstance State Machine
+
+States:
+
+1. `in_progress`
+2. `submitted`
+3. `reviewed`
+4. `superseded`
+5. `removed`
+
+Allowed transitions:
+
+1. `in_progress -> submitted`
+2. `submitted -> reviewed`
+3. `in_progress -> superseded`
+4. `submitted -> superseded`
+5. `reviewed -> superseded`
+6. `in_progress -> removed`
+7. `submitted -> removed`
+
+Rules:
+
+1. Superseding creates a newer revision while preserving history.
+2. Removal creates a corresponding `RemovalLog` record.
 
 ## 8. Search and Grounding Behavior
 
 1. Search uses multi-signal retrieval over text, visual similarity, metadata context, and face-to-name page co-occurrence.
 2. Result objects must include:
    1. Best identity hypothesis.
-   2. Ranked `face_evidence`, `image_evidence`, and `text_evidence`.
-   3. Per-signal contribution scores.
-   4. Effective `search_profile_id`.
+   2. Best available person photo and person name.
+   3. Ranked `face_evidence`, `image_evidence`, and `text_evidence`.
+   4. Per-signal contribution scores.
+   5. Effective `search_profile_id`.
 3. Weights are sourced only from saved search profiles.
 4. Search never accepts ad hoc per-request weight overrides.
 
@@ -208,8 +209,8 @@ Rules:
 1. Ingestion of prepared artifacts.
 2. `POST /search` as the primary search primitive.
 3. Search profile CRUD.
-4. PersonEntity and EntityInstance creation and retrieval.
-5. Annotation and review tasks with submit endpoints.
+4. Master entity, grounding version, and proposal creation and retrieval.
+5. Entity proposal, annotation instance, and review instance workflows.
 6. Grounding states and reviewer adjudication.
 7. Auth, roles, audit log, and basic export job support.
 
@@ -226,66 +227,10 @@ Rules:
 3. Every result and decision is provenance-traceable and audit-loggable.
 4. Reindex work is incremental and avoids global recomputation.
 
-## 11. Grounding Notation and Evidence Model
+## 11. Data Model Reference
 
-To keep external authority linkage stable and extensible, grounding data must follow a typed identifier and evidence-record model.
+The normative relational model is defined in `docs/02-entity-relations.md` and split into three diagrams:
 
-### 11.1 Authority Identifier Notation
-
-Each external identifier must be represented as a typed identifier object instead of adding ad hoc columns per authority provider.
-
-Required fields:
-
-1. `scheme` (identifier namespace)
-2. `value` (identifier value in provider-native format)
-3. `state` in `{proposed, accepted, rejected}`
-4. `confidence` (float in `[0,1]`)
-5. `asserted_at` (UTC ISO-8601)
-6. `asserted_by` (actor id)
-
-Initial required schemes:
-
-1. `wikidata_qid` (for example `Q12345`)
-2. `nkcr_authority_id` (Narodni Knihovna CR authority identifier)
-3. `google_entity_graph_mid` (for example `/m/012abc`)
-
-New schemes may be added without schema-breaking changes.
-
-### 11.2 Grounding Evidence Record Types
-
-Grounding decisions must be backed by typed evidence records:
-
-1. `name_record`
-2. `text_record`
-3. `photo_record`
-
-Each evidence record must carry:
-
-1. source metadata (`provider`, `library`, `document`, `page`, and source URI where available)
-2. content payload or structured reference to payload
-3. `local_asset_path` (pointer to local object storage or filesystem asset)
-4. `content_hash` (for reproducibility and dedup)
-
-### 11.3 Language Representation Rules
-
-All human-readable name or text values used by grounding must carry explicit language metadata.
-
-Required fields:
-
-1. `text`
-2. `language_tag` (BCP-47; for example `cs`, `sk`, `de`, `hu`, `pl`, `und`)
-3. `normalized_text` (normalization profile documented by implementation)
-
-Optional fields:
-
-1. `script`
-2. `transliteration`
-3. `language_confidence`
-
-Rules:
-
-1. Preserve original source text unchanged.
-2. Keep normalization output in a separate field.
-3. Use `und` when language cannot be determined reliably.
-
-### 11.4 Grounding Entity Model Diagram
+1. Master entity and grounding versions.
+2. Entity proposal and evidence acquisition.
+3. Annotation, review, and removal log.

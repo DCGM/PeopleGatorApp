@@ -101,7 +101,7 @@ Response:
 
 Collection endpoints in this group use the unified pagination envelope.
 
-## 3. Authority and Person Entities
+## 3. Authority, Master Entities, and Proposals
 
 ### 3.1 Endpoints
 
@@ -110,6 +110,10 @@ Collection endpoints in this group use the unified pagination envelope.
 3. `GET /authority/people/{person_id}`
 4. `GET /authority/people/{person_id}/instances`
 5. `GET /authority/people/{person_id}/evidence`
+6. `GET /entity-proposals`
+7. `POST /entity-proposals`
+8. `GET /entity-proposals/{proposal_id}`
+9. `GET /entity-proposals/{proposal_id}/evidence`
 
 ### 3.2 Notes
 
@@ -219,6 +223,12 @@ Rules:
 
 ## 5. Annotation and Review Workflow API
 
+The workflow is proposal-first:
+
+1. Start annotation from one `EntityProposal`.
+2. Keep each annotation update as a separate `AnnotationInstance` revision.
+3. Keep the original proposal immutable.
+
 ## 5.1 Annotation Task Drafts
 
 1. `GET /annotation/task-drafts`
@@ -244,6 +254,10 @@ Rules:
 4. `PATCH /annotation/instances/{task_id}/person`
 5. `POST /annotation/instances/{task_id}/submit`
 
+Revision rule:
+
+1. Mutating operations in this section create a new annotation revision row and preserve prior revisions.
+
 ## 5.4 Review Decisions
 
 1. `GET /review/instances`
@@ -251,6 +265,10 @@ Rules:
 3. `GET /review/instances/{task_id}`
 4. `PATCH /review/instances/{task_id}/person`
 5. `POST /review/instances/{task_id}/submit`
+
+Removal logging rule:
+
+1. Any remove or cancel operation in annotation or review flows must emit a `RemovalLog` record.
 
 Collection routes in sections 5.1-5.4 use unified pagination envelope.
 
@@ -283,24 +301,22 @@ Long-running exports return asynchronous job handles.
 
 Only reviewer actions can produce `accepted`.
 
-### 8.2 EntityInstance
+### 8.2 EntityProposal
 
-1. `tentative -> annotation_pending`
-2. `annotation_pending -> annotated`
-3. `annotated -> review_pending`
-4. `review_pending -> reviewed`
-5. `review_pending -> rejected`
-6. `annotated -> rejected`
+1. `draft -> ready_for_annotation`
+2. `ready_for_annotation -> annotated`
+3. `annotated -> reviewed`
+4. `reviewed -> closed`
+5. `annotated -> closed`
 
-`reviewed` is terminal for that instance version.
+Proposal rows remain immutable baselines for annotation revisions.
 
-### 8.3 AnnotationTask
+### 8.3 AnnotationInstance
 
-1. `draft -> published`
-2. `published -> in_progress`
-3. `in_progress -> ready_for_review`
-4. `ready_for_review -> completed`
-5. `draft|published|in_progress -> cancelled`
+1. `in_progress -> submitted`
+2. `submitted -> reviewed`
+3. `in_progress|submitted|reviewed -> superseded`
+4. `in_progress|submitted -> removed`
 
 ## 9. Audit and Idempotency
 
