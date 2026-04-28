@@ -7,67 +7,78 @@ This document keeps the data model intentionally simple and split into focused d
 ```mermaid
 erDiagram
       MASTER_ENTITY ||--o{ GROUNDING_VERSION : has
-      GROUNDING_VERSION ||--o{ GROUNDING_CANDIDATE : includes
-      GROUNDING_VERSION ||--o{ GROUNDING_NAME : includes
-      GROUNDING_VERSION ||--o{ GROUNDING_PHOTO : includes
-      GROUNDING_CANDIDATE }o--|| SOURCE : from
-      GROUNDING_NAME }o--|| SOURCE : from
-      GROUNDING_PHOTO }o--|| SOURCE : from
+      GROUNDING_VERSION_RECORD_LINK ||--o{ GROUNDING_VERSION : links
+      GROUNDING_VERSION_RECORD_LINK ||--o{ GROUNDING_RECORD : links
+      GROUNDING_RECORD ||--o| GROUNDING_IDENTIFIER : typed_as
+      GROUNDING_RECORD ||--o| GROUNDING_NAME : typed_as
+      GROUNDING_RECORD ||--o| GROUNDING_TEXT : typed_as
+      GROUNDING_RECORD ||--o| GROUNDING_PHOTO : typed_as
+
+      SOURCE_PROVIDER ||--o{ GROUNDING_RECORD : provides
+
 
       MASTER_ENTITY {
          uuid master_entity_id PK
-         string canonical_display_name
-         string status
-         datetime created_at
-         datetime updated_at
+         string canonical_name
+         string global_status
       }
 
       GROUNDING_VERSION {
          uuid grounding_version_id PK
          uuid master_entity_id FK
-         int version
-         string lifecycle_state
-         float confidence
-         string notes
+         int revision
+         string state
          datetime created_at
+         datetime updated_at
       }
 
-      GROUNDING_CANDIDATE {
-         uuid candidate_id PK
+      GROUNDING_VERSION_RECORD_LINK {
+         uuid grounding_version_id PK, FK
+         uuid grounding_record_id PK, FK
+      }
+
+      GROUNDING_RECORD {
+         uuid grounding_record_id PK
          uuid grounding_version_id FK
+         string record_type
+         string source_provider FK
+         string source_uri
+      }
+
+      GROUNDING_IDENTIFIER {
+         uuid grounding_record_id PK, FK
          string scheme
          string value
-         string state
          float confidence
-         uuid source_id FK
+         string state
+         datetime asserted_at
+         string asserted_by
       }
 
       GROUNDING_NAME {
-         uuid grounding_name_id PK
-         uuid grounding_version_id FK
+         uuid grounding_record_id PK, FK
+         string name
+         string language
+         string normalized_name
+      }
+
+      GROUNDING_TEXT {
+         uuid grounding_record_id PK, FK
          string text
-         string language_tag
-         bool is_primary
-         float confidence
-         uuid source_id FK
+         string language
+         string normalized_text
       }
 
       GROUNDING_PHOTO {
-         uuid grounding_photo_id PK
-         uuid grounding_version_id FK
-         string asset_path
+         uuid grounding_record_id PK, FK
+         string local_asset_path
+         string mime_type
          string content_hash
-         float quality_score
-         uuid source_id FK
       }
 
-      SOURCE {
-         uuid source_id PK
-         string provider
-         string library
-         string document
-         int page
-         string uri
+      SOURCE_PROVIDER {
+         string name PK
+         string description
       }
 ```
 
@@ -75,125 +86,155 @@ erDiagram
 
 ```mermaid
 erDiagram
-      MASTER_ENTITY ||--o{ ENTITY_PROPOSAL : context_for
-      ENTITY_PROPOSAL ||--o{ PROPOSAL_NAME : has
       ENTITY_PROPOSAL ||--o{ PROPOSAL_GROUNDING : has
+      GROUNDING_VERSION ||--o{ PROPOSAL_GROUNDING : supports
       ENTITY_PROPOSAL ||--o{ PROPOSAL_EVIDENCE : links
-      PROPOSAL_EVIDENCE }o--|| EVIDENCE_ITEM : references
-      EVIDENCE_ITEM }o--|| SOURCE : from
+      PROPOSAL_EVIDENCE }o--|| EVIDENCE : references
+      EVIDENCE }o--|| SOURCE_PROVIDER : from
+
+      EVIDENCE ||--o| EVIDENCE_PHOTO : typed_as
+      EVIDENCE ||--o| EVIDENCE_FACE_DETECTION : typed_as
+      EVIDENCE ||--o| EVIDENCE_TEXT_REGION : typed_as
+      EVIDENCE ||--o| EVIDENCE_PHOTO_DETECTION : typed_as
+
 
       ENTITY_PROPOSAL {
          uuid proposal_id PK
          uuid master_entity_id FK
-         string title
          string status
          datetime created_at
       }
-
-      PROPOSAL_NAME {
-         uuid proposal_name_id PK
-         uuid proposal_id FK
-         string text
-         string language_tag
-         float confidence
-      }
-
+      
       PROPOSAL_GROUNDING {
          uuid proposal_grounding_id PK
+         uuid grounding_version_id FK
          uuid proposal_id FK
-         string scheme
-         string value
-         float confidence
-         string state
-      }
-
-      EVIDENCE_ITEM {
-         uuid evidence_id PK
-         string evidence_type
-         string polarity
-         string content_ref
-         uuid source_id FK
-         datetime created_at
       }
 
       PROPOSAL_EVIDENCE {
          uuid proposal_evidence_id PK
          uuid proposal_id FK
          uuid evidence_id FK
-         float confidence
+      }
+      
+      EVIDENCE {
+         uuid evidence_id PK
+         string evidence_type
+         string source_provider FK
+         string source_uri
       }
 
-      SOURCE {
-         uuid source_id PK
-         string provider
-         string library
-         string document
-         int page
-         string uri
+      EVIDENCE_PHOTO {
+         uuid evidence_id PK, FK
+         int image_width
+         int image_height
+         string mime_type
+      }
+
+      EVIDENCE_FACE_DETECTION {
+         uuid evidence_id PK, FK
+         uuid parent_photo_evidence_id FK
+         json metadata
+      }
+
+      EVIDENCE_PHOTO_DETECTION {
+         uuid evidence_id PK, FK
+         uuid parent_photo_evidence_id FK
+         json metadata
+      }
+      
+      EVIDENCE_TEXT_REGION {
+         uuid evidence_id PK, FK
+         string text
+         string language
+         json metadata
       }
 ```
-
-`EVIDENCE_ITEM.polarity` is constrained to `positive` or `negative`.
 
 ## 3. Annotation, Review, and Removal Log
 
 ```mermaid
 erDiagram
-      ENTITY_PROPOSAL ||--o{ ANNOTATION_INSTANCE : base_for
-      ANNOTATION_INSTANCE ||--o{ ANNOTATION_INSTANCE : revision_of
-      ANNOTATION_INSTANCE ||--o| ANNOTATED_ENTITY : produces
-      ANNOTATION_INSTANCE ||--o| REVIEW_INSTANCE : reviewed_by
-      REMOVAL_LOG }o--|| ANNOTATION_INSTANCE : can_reference
-      REMOVAL_LOG }o--|| ANNOTATED_ENTITY : can_reference
-      REMOVAL_LOG }o--|| REVIEW_INSTANCE : can_reference
-
-      ENTITY_PROPOSAL {
-         uuid proposal_id PK
-         string status
-      }
+      USER ||--o{ ANNOTATION_INSTANCE : annotates
+      ANNOTATION_INSTANCE ||--o{ REVIEW_INSTANCE : has
+      USER ||--o{ REVIEW_INSTANCE : reviews
+      ANNOTATION_INSTANCE ||--o{ ACTION_LOG : logs
+      REVIEW_INSTANCE ||--o{ ACTION_LOG : logs
+      EVIDENCE ||--o{ ACTION_LOG : has_removal
+      EVIDENCE ||--o{ ACTION_LOG : has_addition
+      GROUNDING_RECORD ||--o{ ACTION_LOG : has_removal
+      GROUNDING_RECORD ||--o{ ACTION_LOG : has_addition
 
       ANNOTATION_INSTANCE {
          uuid annotation_instance_id PK
          uuid proposal_id FK
-         uuid previous_instance_id FK
-         int revision
-         string annotator_id
+         uuid annotator_id FK
          string status
-         datetime created_at
          datetime updated_at
-      }
-
-      ANNOTATED_ENTITY {
-         uuid annotated_entity_id PK
-         uuid annotation_instance_id FK
-         uuid master_entity_id FK
-         string selected_name
-         string selected_grounding
-         datetime created_at
       }
 
       REVIEW_INSTANCE {
          uuid review_instance_id PK
          uuid annotation_instance_id FK
-         string reviewer_id
-         string decision
+         uuid reviewer_id FK
          string status
          datetime reviewed_at
       }
 
-      REMOVAL_LOG {
-         uuid removal_log_id PK
-         string target_type
-         uuid target_id
-         string reason
-         string removed_by
-         datetime removed_at
+      ACTION_LOG {
+         uuid action_log_id PK
+         uuid action_by FK
+         uuid annotation_instance_id FK
+         uuid review_instance_id FK
+         uuid removed_evidence_id FK
+         uuid added_evidence_id FK
+         uuid removed_grounding_id FK
+         uuid added_grounding_id FK
+         datetime action_at
       }
 ```
 
-Rules:
+## 4. User and Role Management
 
-1. `ENTITY_PROPOSAL` is the baseline and remains preserved.
-2. Updates create new `ANNOTATION_INSTANCE` revisions rather than overwriting earlier rows.
-3. Each annotation instance is reviewable.
-4. Removals are soft and recorded in `REMOVAL_LOG`.
+```mermaid
+erDiagram
+      USER ||--o{ USER_ROLE : has
+      ROLE ||--o{ USER_ROLE : assigned_to
+      USER ||--o{ AUTH_IDENTITY : authenticates_with
+      
+      USER {
+         uuid user_id PK
+         string username
+         string email
+         string full_name
+         string status
+         string refresh_token
+         datetime created_at
+         datetime updated_at
+      }
+
+      ROLE {
+         uuid role_id PK
+         string role_name
+         string description
+      }
+
+      USER_ROLE {
+         uuid user_role_id PK
+         uuid user_id FK
+         uuid role_id FK
+         datetime assigned_at
+      }
+
+      AUTH_IDENTITY {
+         uuid auth_identity_id PK
+         uuid user_id FK
+         string provider
+         string provider_subject
+         string provider_email
+         string provider_username
+         datetime last_login_at
+         datetime created_at
+      }
+```
+
