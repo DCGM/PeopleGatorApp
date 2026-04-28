@@ -1,5 +1,3 @@
-version: '3.4'
-
 services:
   people-gator-api-dev:
     image: people-gator-api-dev:latest
@@ -32,7 +30,7 @@ services:
           path: ./Dockerfile.dev
     labels:
       - traefik.enable=true
-      - traefik.http.routers.people-gator-api-dev.rule=Host(`dev.people-gator.capturemyhand.com`)
+      - traefik.http.routers.people-gator-api-dev.rule=Host(`dev.people-gator.capturemyhand.com`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
       - traefik.http.routers.people-gator-api-dev.entrypoints=websecure
       - traefik.http.services.people-gator-api-dev.loadbalancer.server.port=8000
       - traefik.http.routers.people-gator-api-dev.tls=true
