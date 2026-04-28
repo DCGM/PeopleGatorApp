@@ -7,25 +7,27 @@ This document keeps the data model intentionally simple and split into focused d
 ```mermaid
 erDiagram
       MASTER_ENTITY ||--o{ GROUNDING_VERSION : has
-      GROUNDING_VERSION_RECORD_LINK ||--o{ GROUNDING_VERSION : links
-      GROUNDING_VERSION_RECORD_LINK ||--o{ GROUNDING_RECORD : links
+      GROUNDING_VERSION ||--o{ GROUNDING_VERSION_RECORD_LINK : has
+      GROUNDING_RECORD ||--o{ GROUNDING_VERSION_RECORD_LINK : links
       GROUNDING_RECORD ||--o| GROUNDING_IDENTIFIER : typed_as
+      GROUNDING_RECORD ||--o| GROUNDING_NATIONALITY : typed_as
       GROUNDING_RECORD ||--o| GROUNDING_NAME : typed_as
       GROUNDING_RECORD ||--o| GROUNDING_TEXT : typed_as
       GROUNDING_RECORD ||--o| GROUNDING_PHOTO : typed_as
+      GROUNDING_PHOTO ||--o{ GROUNDING_FACE_DETECTION : has
 
       SOURCE_PROVIDER ||--o{ GROUNDING_RECORD : provides
 
-
       MASTER_ENTITY {
          uuid master_entity_id PK
-         string canonical_name
-         string global_status
+         uuid current_grounding_version_id FK
       }
 
       GROUNDING_VERSION {
          uuid grounding_version_id PK
          uuid master_entity_id FK
+         datetime  birth_date
+         datetime  death_date
          int revision
          string state
          datetime created_at
@@ -47,10 +49,16 @@ erDiagram
 
       GROUNDING_IDENTIFIER {
          uuid grounding_record_id PK, FK
-         string scheme
          string value
-         float confidence
-         string state
+         string scheme
+         datetime asserted_at
+         string asserted_by
+      }
+
+      GROUNDING_NATIONALITY {
+         uuid grounding_record_id PK, FK
+         string country_name
+         string language
          datetime asserted_at
          string asserted_by
       }
@@ -59,14 +67,12 @@ erDiagram
          uuid grounding_record_id PK, FK
          string name
          string language
-         string normalized_name
       }
 
       GROUNDING_TEXT {
          uuid grounding_record_id PK, FK
          string text
          string language
-         string normalized_text
       }
 
       GROUNDING_PHOTO {
@@ -74,6 +80,12 @@ erDiagram
          string local_asset_path
          string mime_type
          string content_hash
+      }
+
+      GROUNDING_FACE_DETECTION {
+         uuid grounding_record_id PK, FK
+         uuid parent_photo_grounding_record_id FK
+         json metadata
       }
 
       SOURCE_PROVIDER {
