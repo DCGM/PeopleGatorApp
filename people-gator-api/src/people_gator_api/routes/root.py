@@ -8,6 +8,6 @@ router = APIRouter()
 
 @router.get("/api/v1/")
 async def home() -> HelloWorldResponse:
-    var = "Hello from people-gator-api!"
-    logger.info("Root endpoint called", message=var, version="0.1.0", package_name="people-gator-api", endpoint="/api/v1/")
-    return HelloWorldResponse(message=var)
+    response = HelloWorldResponse(message="Hello from people-gator-api!")
+    logger.info("Root endpoint called", **response.model_dump())
+    return response

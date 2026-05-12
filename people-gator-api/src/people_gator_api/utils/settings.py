@@ -9,7 +9,14 @@ class OpenTelemetrySettings(BaseModel):
     logs_path: str = "/v1/logs"
     metrics_path: str = "/v1/metrics"
     profiles_path: str = "/v1/profiles"
-    
+
+
+class PostgresSettings(BaseModel):
+    host: str = "dev-peoplegator-postgres"
+    port: int = Field(default=5432, le=65535, ge=1)
+    user: str = "postgres"
+    password: str = "password"
+    database: str = "people_gator"
 
 
 class Settings(BaseSettings):
@@ -24,5 +31,6 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     log_level: str = "INFO"
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
+    postgres: PostgresSettings = PostgresSettings()
 
 settings = Settings()
