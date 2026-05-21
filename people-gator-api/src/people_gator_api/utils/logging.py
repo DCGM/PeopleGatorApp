@@ -1,7 +1,8 @@
 import structlog
 import logging
+from datetime import datetime, timezone
 from opentelemetry import trace
-from people_gator_api.utils.settings import settings
+from people_gator_api.settings import settings
 
 ALL_CALLSITE_PARAMETERS = list(structlog.processors.CallsiteParameter)
 
@@ -23,39 +24,54 @@ ALL_CALLSITE_PARAMETERS = list(structlog.processors.CallsiteParameter)
 #    return event_dict
 
 def configure_logging(otel_handler: logging.Handler | None = None):
-    timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
-    shared_processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.ExtraAdder(),
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.processors.CallsiteParameterAdder(
-            parameters=ALL_CALLSITE_PARAMETERS
-        ),
-        timestamper,
-        #add_open_telemetry_spans,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-    ]
+    #timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
+    #shared_processors = [
+    #    structlog.contextvars.merge_contextvars,
+    #    structlog.stdlib.ExtraAdder(),
+    #    structlog.stdlib.add_logger_name,
+    #    structlog.stdlib.add_log_level,
+    #    structlog.processors.CallsiteParameterAdder(
+    #        parameters=ALL_CALLSITE_PARAMETERS
+    #    ),
+    #    timestamper,
+    #    #add_open_telemetry_spans,
+    #    structlog.processors.StackInfoRenderer(),
+    #    structlog.processors.format_exc_info,
+    #]
 
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            *shared_processors,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
+    #structlog.configure(
+    #    processors=[
+    #        structlog.stdlib.filter_by_level,
+    #        *shared_processors,
+    #        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    #    ],
+    #    logger_factory=structlog.stdlib.LoggerFactory(),
+    #    wrapper_class=structlog.stdlib.BoundLogger,
+    #    cache_logger_on_first_use=True,
+    #)
 
-    formatter = structlog.stdlib.ProcessorFormatter(
-        processor=structlog.processors.JSONRenderer(),
-        foreign_pre_chain=shared_processors,
-    )
+    #formatter = structlog.stdlib.ProcessorFormatter(
+    #    processor=structlog.processors.JSONRenderer(),
+    #    foreign_pre_chain=shared_processors,
+    #)
 
     handlers: list[logging.Handler] = []
-    
+
+    class Iso8601Formatter(logging.Formatter):
+        """Formatter that uses ISO-8601 timestamps in UTC with milliseconds.
+
+        Example: 2026-05-21T14:30:00.123+00:00
+        """
+
+        def formatTime(self, record, datefmt=None):
+            dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+            return dt.isoformat(timespec="milliseconds")
+
+    fmt = (
+        "%(asctime)s %(levelname)s %(name)s %(module)s:%(lineno)d "
+        "[pid:%(process)d tid:%(thread)d] %(message)s"
+    )
+    formatter = Iso8601Formatter(fmt=fmt)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     handlers.append(stream_handler)
@@ -64,13 +80,10 @@ def configure_logging(otel_handler: logging.Handler | None = None):
         otel_handler.setFormatter(formatter)
         handlers.append(otel_handler)
     
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+
     logging.basicConfig(
-        level={
-            "DEBUG": logging.DEBUG,
-            "INFO": logging.INFO,
-            "WARNING": logging.WARNING,
-            "ERROR": logging.ERROR
-        }[settings.log_level],
+        level=level,
         handlers=handlers,
         force=True,
     )

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
-from people_gator_api.utils.settings import settings
+from people_gator_api.settings import settings
 from people_gator_api.routes import root_router
 
 app = FastAPI(

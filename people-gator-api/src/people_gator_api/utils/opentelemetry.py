@@ -28,7 +28,7 @@ from opentelemetry.instrumentation.weaviate import WeaviateInstrumentor
 
 from urllib.parse import urljoin
 
-from people_gator_api.utils.settings import settings
+from people_gator_api.settings import settings
 
 def initialize_opentelemetry():
     resource = Resource.create({
