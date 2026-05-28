@@ -1,11 +1,12 @@
 services:
   people-gator-api-dev:
     image: people-gator-api-dev:latest
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./Dockerfile.dev
     ports:
-      - 5678:5678 # debugger
+      - 5679:5678 # debugger
     user: root
     develop:
       # Create a `watch` configuration to update the app
