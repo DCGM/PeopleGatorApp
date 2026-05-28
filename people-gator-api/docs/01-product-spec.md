@@ -187,13 +187,6 @@ Here enforced constraints for the ACTION:
     - `lineage_type` is `merge` and `target_cluster_id` is the current `target_commit_id` is the current head commit, then the `source_commit_id` is now the head commit.
     - `lineage_type` is `cluster-merge` and `target_cluster_id` is the current `target_commit_id` is the current head commit, then the `source_commit_id` is now the head commit.
 
-  1. From `LINEAGE`, start with the specified `cluster_id` and traverse forward through lineage types of:
-    - `next` to follow the main chain of versions,
-    - `pull` where the `target_cluster_id` is the current `cluster_id` to follow merges.
-    - `merge` where the `target_cluster_id` is the current `cluster_id` to follow merges of branches.
-    - `cluster-merge` where the `target_cluster_id` is the current `cluster_id` to follow merges of independent clusters.
-  2. The resulting `commit_id` represents the head of the cluster.
-
 - Case `any`:
   1. From `LINEAGE`, query for all commits of the cluster with `cluster_id` and `lineage_type` in (`initial`, `next`, `branch`, `tree`, `pull`, `merge`, `cluster-merge`, `cluster-split`).
   2. The resulting set of `commit_id`s represents all possible heads of the cluster
