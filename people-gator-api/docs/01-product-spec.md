@@ -8,8 +8,10 @@ Main workflow:
 1. Search returns ranked information clusters — groupings of face detections, name mentions, and authority records that speak to the same person.
 2. Annotators confirm, extend, or reject proposed clusters.
 3. Annotator can search similar looking units (faces, names, authority records, paragraphs..) to find additional evidence and add to the cluster.
-5. Annotators can merge clusters they believe to be the same person, or can create new clusters if they believe no existing cluster matches.
-4. Reviewed clusters are promoted to grounded clusters and linked to master entity records.
+4. Annotators can merge clusters they believe to be the same person, or can create new clusters if they believe no existing cluster matches.
+5. Commited annotations are presented to reviewers.
+6. Reviewer create single master record update from all annotation branches, that were sent to annotators.
+7. Reviewed clusters are promoted to grounded clusters.
 
 ## 2. Product Scope
 
@@ -37,41 +39,43 @@ Authority filtering defaults to: Czechoslovakia, Czechia, Slovakia, Hungary, Aus
 ## 4. Design Principles
 
 1. Cluster-first: search returns, annotation targets, and grounding outputs are all information clusters.
-  - Search query is defined as a set of weighted signals (face similarity, name similarity, authority link strength, etc.), meaning it itself is a information cluster.
-  - Any person evidence that is grouped together in a cluster.
-  - Search can return similarity-ranked clusters.
-  - Search can return individual records, their cluster lineage is optional.
+    - Search query is defined as a set of weighted signals (face similarity, name similarity, authority link strength, etc.), meaning it itself is a **information cluster**.
+    - Any person evidence that is grouped together in a cluster.
+    - Search can return similarity-ranked clusters.
+    - Search can return individual records, their cluster lineage is optional.
 2. Typed canonical records: every atomic evidence item preserves typed metadata, and lineage information.
-  - Typed metadata enables modality-specific search signals and faceting. 
-  - Lineage tells about the source of data. It is critical for provenance, trust, and interpretability.
+    - Typed metadata enables modality-specific search signals and faceting. 
+    - Lineage tells about the source of data.
 3. Explainable ranking: every cluster result includes per-modality signal contributions, extensive info enables per member analysis.
 4. Human-in-the-loop user workflows: search
 4. Human-in-the-loop user workflows: annotation
-  - A annotation instance of cluster gets created to be assigned to an annotator. It pins to a specific cluster version at assignment time.
-  - Annotator can add, remove, cluster members, which modifies the branched off version.
-  - Annotator can modify other clusters uppon which the cluster automatically branches off a new version, but the annotation instance remains pinned to the original version.
-  - Annotator can submit the annotation instance.
-  - Annotator can create a new proposed cluster from scratch if they believe no existing cluster matches.
+    - A annotation instance of cluster gets created to be assigned to an annotator. It pins to a specific cluster version at assignment time.
+    - Annotator can add, remove, cluster members, which modifies the branched off version.
+    - Annotator can modify other clusters uppon which the cluster automatically branches off a new version, but the annotation instance remains pinned to the original version.
+    - Annotator can submit the annotation instance.
+    - Annotator can create a new proposed cluster from scratch if they believe no existing cluster matches.
 4. Human-in-the-loop user workflows: review
-  - Branched off versions from annotation are visible to reviewers.
-  - Reviewer can chhose what changes from the proposed cluster to accept, which creates a new version with those changes.
-  - Reviewer decisions trigger new cluster version creation. Annotation instances are pinned to the original version, then become immutable.
-  - Reviewer can change `proposed_cluster` role to `grounded_cluster` if they believe the proposed cluster is well supported, which creates a new version with that role.
+    - Branched off versions from annotation are visible to reviewers.
+    - Reviewer can chhose what changes from the proposed cluster to accept, which creates a new version with those changes.
+    - Reviewer decisions trigger new cluster version creation. Annotation instances are pinned to the original version, then become immutable.
+    - Reviewer can change `proposed_cluster` role to `grounded_cluster` if they believe the proposed cluster is well supported, which creates a new version with that role.
 5. Separation of concerns: this service ingests and reasons over artifacts; inference remains external.
-  - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed records.
-  - This service does not train or serve any models. It only stores the model version used to generate each record and uses that for staleness detection.
-  - This service does not perform live authority lookups. It only ingests authority records from periodic syncs and links them to clusters, via exposed APIs for data access.
+    - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed records.
+    - This service does not train or serve any models. It only stores the model version used to generate each record and uses that for staleness detection.
+    - This service does not perform live authority lookups. It only ingests authority records from periodic syncs and links them to clusters, via exposed APIs for data access.
 6. Identity-first accountability: every state change carries a traceable actor.
-  - Every COMMIT and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
-  - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
-  - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
-  - The `reason` field on ACTION categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
+    - Every COMMIT and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
+    - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
+    - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
+    - The `reason` field on ACTION categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
 
 ## 5. Data Model
 
 ### 5.0 IDs
 
-All identifiers are represented as UUID v6 if not specified otherwise. meaning it already contains a time component and is k-sortable, which is useful for efficient versioning and lineage tracking. The UUIDv6 has the following 128bit structure:
+All identifiers are exclusively represented as **UUID v6**. 
+Meaning it already contains a time component and is k-sortable, which is useful for efficient versioning and lineage tracking. 
+The UUIDv6 has the following 128bit structure:
 - `time_high` (bits 0-31)
 - `time_mid` (bits 32-47)
 - `ver` (bits 48-51)
@@ -80,7 +84,8 @@ All identifiers are represented as UUID v6 if not specified otherwise. meaning i
 - `clock_seq` (bits 66-79)
 - `node` (bits 80-127)
 
-Meaning that sorting by UUIDv6 is effectively sorting by creation time as the top 64bits (minus the version bits) represent the timestamp. The timestamp is a Gregorian Epoch timestamp.
+Sorting by UUIDv6 is effectively sorting by creation time as the top 64bits (minus the version bits) represent the timestamp. 
+The timestamp is a Gregorian Epoch timestamp.
 The node id is generated randomly, which ensures uniqueness across distributed systems without coordination.
 
 ### 5.1 SOURCE_SCHEMA
@@ -93,12 +98,14 @@ Fields: `schema_id`, `schema_name`, `resolver_type`, `resolver_config`.
 - `resolver_type`: one of `local-filesystem`, `s3`, `iiif`, `http`.
 - `resolver_config`: JSONB with resolver-specific parameters, interpolated with values from `SOURCE.provider_id` and optionally `RECORD.source_path`.
 
-| `resolver_type` | Example `resolver_config` |
-|---|---|
-| `local-filesystem` | `{"base_path": "/data/scans", "path_template": "{provider_id}/{page}.tif"}` |
-| `s3` | `{"bucket": "scan-archive", "key_template": "{provider}/{provider_id}.jpg"}` |
-| `iiif` | `{"base_url": "https://kramerius.example.org/iiif/3", "manifest_template": "{provider_id}/manifest"}` |
-| `http` | `{"base_url": "https://cdn.example.org/scans", "path_template": "{provider_id}"}` |
+| `resolver_type` | Example `schema_name` | Example `resolver_config` |
+|---|---|---|
+| `local-filesystem` | `local-scan-archive` | `{"base_path": "/data/scans", "path_template": "{provider_id}/{page}.tif"}` |
+| `s3` | `s3-newspaper-archive` | `{"bucket": "scan-archive", "key_template": "{provider}/{provider_id}.jpg"}` |
+| `iiif` | `kramerius-iiif` | `{"base_url": "https://kramerius.example.org/iiif/3", "manifest_template": "{provider_id}/manifest"}` |
+| `http` | `cdn-scans` | `{"base_url": "https://cdn.example.org/scans", "path_template": "{provider_id}"}` |
+| `http` | `wikidata-authority` | `{"base_url": "https://www.wikidata.org/wiki", "path_template": "{provider_id}"}` |
+| `http` | `nkcr-authority` | `{"base_url": "https://aleph.nkp.cz/F", "path_template": "?func=find-c&ccl_term=sys={provider_id}"}` |
 
 ### 5.2 SOURCE
 
@@ -112,6 +119,8 @@ Fields: `source_id`, `source_schema_id`, `provider`, `provider_id`, `metadata`.
 - `metadata`: JSONB with source-level descriptive information — document title, publication date, page number within a multi-page document, detected language, collection name, etc.
 
 The combination `(provider, provider_id)` is unique and serves as the natural deduplication key for re-ingestion runs.
+
+Authority systems (Wikidata, NKCR, VIAF, etc.) are also modelled as SOURCEs. For authority SOURCEs, `provider` is the authority system name (e.g. `wikidata`, `nkcr`, `viaf`) and `provider_id` is the system's own stable identifier for the entity (e.g. a Wikidata Q-ID or NKCR system number). The SOURCE_SCHEMA for each authority system defines how to resolve the canonical URL for that entity. The `metadata` field on an authority SOURCE captures entity-level biographical data at ingest time — canonical name, birth and death dates, entity type, short description — that was present in the authority at the time of the sync. RECORDs derived from an authority SOURCE are the individual grounded name forms and descriptions extracted from that entry. The authority entity that a grounded name or description belongs to is implicit in `RECORD.source_id`.
 
 ### 5.3 METADATA_SCHEMA
 
@@ -127,7 +136,7 @@ Fields: `schema_id`, `schema_name`, `record_type`, `version`, `json_schema`, `de
 
 ### 5.4 RECORD
 
-The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and authority data — is a RECORD.
+The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and grounded identity claims — is a RECORD.
 
 Required fields: `record_id`, `record_version_id`, `record_type`, `content_hash`, `source_id`, `source_path`, `metadata_schema_id`, `metadata`, `embedding_id`.
 
@@ -140,7 +149,7 @@ Required fields: `record_id`, `record_version_id`, `record_type`, `content_hash`
 
 The `record_version_id` with `record_id` forms a unique identifier for each version. When a record is updated (e.g. a face detection is refined with a new bounding box), a new RECORD row is created with the same `record_id` but a later `record_version_id`, preserving the full version history.
 
-Record types include: `face_detection`, `named_entity`, `text_region`, `image_region`, `grounded_name`, `alternative_grounded_name`, `description`, `authority_record`, etc.
+Record types: `face_detection`, `named_entity`, `text_region`, `image_region`, `grounded_name`, `grounded_description`.
 
 The `model_version` is stored inside `metadata` for records generated by inference, enabling staleness detection when a new model version is released.
 
@@ -246,31 +255,26 @@ The top-level `embedding_id` on RECORD links this detection's face crop to its v
 | `model_version` | string | yes | Model identifier that produced this detection |
 
 
-##### `authority_record` — schema `authority-record/v1`
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `authority_type` | string | yes | `wikidata`, `nkcr`, `viaf`, … |
-| `external_id` | string | yes | Identifier in the authority system |
-| `birth_date` | ISO 8601 | no | Date of birth |
-| `death_date` | ISO 8601 | no | Date of death |
-
 ##### `grounded_name` — schema `grounded-name/v1`
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | Surface name form as it appears in the source |
-| `type` | string | yes | `alias` or `preferred` defines the role of the name |
-| `language` | string (BCP 47) | no | Language tag for the name, if applicable |
-| `authority_record_id` | UUID | yes | `record_id` of the linked `authority_record` RECORD |
-| `confidence` | float [0,1] | yes | Name-to-authority linking confidence |
+A name form belonging to an authority entity. The entity itself is captured by `RECORD.source_id`, which references the authority SOURCE — there is no explicit authority FK inside the metadata.
 
-### `grounded_description` — schema `grounded-description/v1`
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `description` | string | yes | Surface description form as it appears in the source |
-| `authority_record_id` | UUID | yes | `record_id` of the linked `authority_record` RECORD |
-| `confidence` | float [0,1] | yes | Description-to-authority linking confidence |
+| `name` | string | yes | Name form as recorded in the authority source |
+| `type` | string | yes | `preferred` or `alias` — role of this name form in the authority |
+| `language` | string (BCP 47) | no | Language of the name form, if applicable |
+| `confidence` | float [0,1] | no | Linking confidence when assigned by an automated process; omit for manually curated authority data |
+
+##### `grounded_description` — schema `grounded-description/v1`
+
+A textual description belonging to an authority entity. The entity is captured by `RECORD.source_id` as above.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `description` | string | yes | Description text as recorded in the authority source |
+| `language` | string (BCP 47) | no | Language of the description, if applicable |
+| `confidence` | float [0,1] | no | Linking confidence when assigned by an automated process |
 
 ### 5.5 CLUSTER
 
