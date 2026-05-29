@@ -2,10 +2,7 @@ services:
   people-gator-postgres-dev:
     image: postgres:18
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: people_gator
-      POSTGRES_PASSWORD: people_gator
-      POSTGRES_DB: people_gator_dev
+    env_file: .env
     volumes:
       - people-gator-postgres-dev-data:/var/lib/postgresql/data
     networks:
@@ -19,6 +16,7 @@ services:
     ports:
       - 5679:5678 # debugger
     user: root
+    env_file: .env
     develop:
       # Create a `watch` configuration to update the app
       #
