@@ -1,4 +1,15 @@
 services:
+  people-gator-postgres-dev:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: people_gator
+      POSTGRES_PASSWORD: people_gator
+      POSTGRES_DB: people_gator_dev
+    volumes:
+      - people-gator-postgres-dev-data:/var/lib/postgresql/data
+    networks:
+      - default
   people-gator-api-dev:
     image: people-gator-api-dev:latest
     restart: unless-stopped
@@ -46,3 +57,8 @@ networks:
     external: true
   logging:
     external: true
+
+
+volumes:
+  people-gator-postgres-dev-data:
+    driver: local
