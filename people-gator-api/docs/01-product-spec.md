@@ -48,22 +48,24 @@ Authority filtering defaults to: Czechoslovakia, Czechia, Slovakia, Hungary, Aus
     - Lineage tells about the source of data.
 3. Explainable ranking: every cluster result includes per-modality signal contributions, extensive info enables per member analysis.
 4. Human-in-the-loop user workflows: search
-4. Human-in-the-loop user workflows: annotation
-    - A annotation instance of cluster gets created to be assigned to an annotator. It pins to a specific cluster version at assignment time.
-    - Annotator can add, remove, cluster members, which modifies the branched off version.
-    - Annotator can modify other clusters uppon which the cluster automatically branches off a new version, but the annotation instance remains pinned to the original version.
+    - Search results are ranked clusters with per-modality signal contributions.
+    - Search query itself is a weighted cluster of signals (face similarity, name similarity, authority link strength, etc.).
+5. Human-in-the-loop user workflows: annotation
+    - An annotation instance of a cluster gets created to be assigned to an annotator. It pins to a specific cluster version at assignment time.
+    - Annotator can add or remove cluster members, which modifies the branched-off version.
+    - Annotator can modify other clusters, upon which the cluster automatically branches off a new version, but the annotation instance remains pinned to the original version.
     - Annotator can submit the annotation instance.
-    - Annotator can create a new proposed cluster from scratch if they believe no existing cluster matches.
-4. Human-in-the-loop user workflows: review
-    - Branched off versions from annotation are visible to reviewers.
-    - Reviewer can chhose what changes from the proposed cluster to accept, which creates a new version with those changes.
+    - Annotator can create a new `mutable_cluster` from scratch if they believe no existing cluster matches.
+6. Human-in-the-loop user workflows: review
+    - Branched-off versions from annotation are visible to reviewers.
+    - Reviewer can choose what changes from the proposed cluster to accept, which creates a new version with those changes.
     - Reviewer decisions trigger new cluster version creation. Annotation instances are pinned to the original version, then become immutable.
-    - Reviewer can change `proposed_cluster` role to `grounded_cluster` if they believe the proposed cluster is well supported, which creates a new version with that role.
-5. Separation of concerns: this service ingests and reasons over artifacts; inference remains external.
+    - Reviewer can promote a `review_cluster` to `grounded_cluster` if they believe the cluster is well supported, which creates a new version with that role.
+7. Separation of concerns: this service ingests and reasons over artifacts; inference remains external.
     - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed records.
     - This service does not train or serve any models. It only stores the model version used to generate each record and uses that for staleness detection.
     - This service does not perform live authority lookups. It only ingests authority records from periodic syncs and links them to clusters, via exposed APIs for data access.
-6. Identity-first accountability: every state change carries a traceable actor.
+8. Identity-first accountability: every state change carries a traceable actor.
     - Every COMMIT and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
     - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
     - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
@@ -100,35 +102,39 @@ Both values are stable for the process lifetime, so clock sequence roll-over and
 
 Defines how to resolve the storage and access paths for a family of sources. Every SOURCE references one SOURCE_SCHEMA, which tells the system how to construct local file paths, remote URLs, or IIIF endpoints from a source's provider identifier. Centralising this logic here means both the local archive copy and the remote canonical URL are derived from the same SOURCE record — there is no duplication on RECORD itself.
 
-Fields: `schema_id`, `schema_name`, `resolver_type`, `resolver_config`.
+Fields: `schema_name`, `resolver_type`, `resolver_config`.
 
-- `schema_name`: human-readable label, e.g. `kramerius-iiif`, `local-scan-archive`, `s3-newspaper-archive`.
-- `resolver_type`: one of `local-filesystem`, `s3`, `iiif`, `http`.
+- `schema_name`: human-readable label, e.g. `s3-upload`, `kramerius5-iiif`, `wikimedia-image`, `nkcr-authority`. Must be globally unique.
+- `resolver_type`: one of `local-filesystem`, `s3`, `iiif`, `http`, `sparql`.
 - `resolver_config`: JSONB with resolver-specific parameters, interpolated with values from `SOURCE.provider_id` and optionally `RECORD.source_path`.
 
 | `resolver_type` | Example `schema_name` | Example `resolver_config` |
 |---|---|---|
-| `local-filesystem` | `local-scan-archive` | `{"base_path": "/data/scans", "path_template": "{provider_id}/{page}.tif"}` |
-| `s3` | `s3-newspaper-archive` | `{"bucket": "scan-archive", "key_template": "{provider}/{provider_id}.jpg"}` |
-| `iiif` | `kramerius-iiif` | `{"base_url": "https://kramerius.example.org/iiif/3", "manifest_template": "{provider_id}/manifest"}` |
-| `http` | `cdn-scans` | `{"base_url": "https://cdn.example.org/scans", "path_template": "{provider_id}"}` |
-| `http` | `wikidata-authority` | `{"base_url": "https://www.wikidata.org/wiki", "path_template": "{provider_id}"}` |
-| `http` | `nkcr-authority` | `{"base_url": "https://aleph.nkp.cz/F", "path_template": "?func=find-c&ccl_term=sys={provider_id}"}` |
+| `s3` | `s3-upload` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
+| `http` | `kramerius5-iiif` | `{"base_url_template": "https://api.kramerius.{library}.cz/", "manifest_template": "search/iiif/uuid:{page_id}/full/max/0/default.jpg"}` |
+| `http` | `wikimedia-image` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
+| `http` | `wikidata-entity` | `{"base_url_template": "https://www.wikidata.org/", "path_template": "wiki/{wikidata_id}"}` |
+| `http` | `nkcr-authority` | `{"base_url_template": "https://aleph.nkp.cz/", "path_template": "F/?func=find-b&local_base=AUT&find_code=WRD&request={nkcr_authority_id}"}` |
+
+
+Resolver then does the following for a SOURCE field where `schema_name` references this `SOURCE_SCHEMA`:
+1. Take `SOURCE.metadata` and `SOURCE_SCHEMA.resolver_config`.
+2. Interpolate any `{placeholders}` in `resolver_config` with values from `SOURCE.metadata` (e.g. `library`, `page_id`, `nkcr_authority_id`).
+3. Construct the final URL or file path according to the `resolver_type` logic. For example, for `s3`, the final S3 key would be constructed by interpolating `key_template` with values from `SOURCE.metadata` and `PRINCIPAL` (e.g. `principal_id`), and the full S3 URI would be `s3://{bucket_template}/{interpolated_key}`.
 
 ### 5.2 SOURCE
 
 A specific document, scan, or artifact from which one or more RECORDs were derived. SOURCE normalises provenance — a RECORD belongs to exactly one SOURCE, and the SOURCE belongs to one SOURCE_SCHEMA that knows how to resolve its storage paths.
 
-Fields: `source_id`, `source_schema_id`, `provider`, `provider_id`, `metadata`.
+Fields: `source_id`, `source_schema_id`, `provider`, `provider_id`, `metadata`, `created_by`.
 
-- `source_schema_id`: FK → SOURCE_SCHEMA — determines how this source's files are located and accessed.
-- `provider`: string identifying the originating system, e.g. `kramerius`, `nkcr`, `local-ingest`.
-- `provider_id`: the external system's stable identifier for this artifact (e.g. a Kramerius page UUID or a scan filename).
+- `source_schema_id`: FK → SOURCE_SCHEMA — determines how this original source can be resolved.
+- `provider`: originating system identifier, e.g. `kramerius`, `nkcr`, `local-ingest`. Used as a namespacing prefix when interpolating resolver templates.
+- `provider_id`: the external system's stable identifier for this artifact, e.g. a Kramerius UUID or NKCR authority number. Used when interpolating `{provider_id}` placeholders in `SOURCE_SCHEMA.resolver_config`.
+- `created_by`: FK → PRINCIPAL — the user or service agent that ingested this source.
 - `metadata`: JSONB with source-level descriptive information — document title, publication date, page number within a multi-page document, detected language, collection name, etc.
 
-The combination `(provider, provider_id)` is unique and serves as the natural deduplication key for re-ingestion runs.
-
-Authority systems (Wikidata, NKCR, VIAF, etc.) are also modelled as SOURCEs. For authority SOURCEs, `provider` is the authority system name (e.g. `wikidata`, `nkcr`, `viaf`) and `provider_id` is the system's own stable identifier for the entity (e.g. a Wikidata Q-ID or NKCR system number). The SOURCE_SCHEMA for each authority system defines how to resolve the canonical URL for that entity. The `metadata` field on an authority SOURCE captures entity-level biographical data at ingest time — canonical name, birth and death dates, entity type, short description — that was present in the authority at the time of the sync. RECORDs derived from an authority SOURCE are the individual grounded name forms and descriptions extracted from that entry. The authority entity that a grounded name or description belongs to is implicit in `RECORD.source_id`.
+This is intentionally flexible to accommodate the wide variety of source types and metadata that may be relevant for different use cases. The exact structure of this JSONB is not enforced at the database level but is expected to conform to the requirements of the associated SOURCE_SCHEMA's resolver logic.
 
 ### 5.3 METADATA_SCHEMA
 
@@ -335,8 +341,9 @@ The lineage_type field can contain following values:
 | `initial` | The initial version of a cluster. | `source_cluster_id` and `source_commit_id` are `NULL`. No prior lineage entry exists for the `cluster_id`. |
 | `next` | A new version is created by modifying the previous version. | `source_cluster_id == target_cluster_id` |
 | `branch` | A new branch is created from a parent commit. | `source_cluster_id == target_cluster_id` |
-| `merge` | Two or multiple branches are merged into one form multiple clusters ino. | single `target_commit_id`, multiple `source_commit_id` rows |
-| `split` | One cluster is split into two multiple clusters. |  |
+| `merge` | Two or more branches within the same cluster are merged into one. | single `target_commit_id`, multiple `source_commit_id` rows; `source_cluster_id == target_cluster_id` |
+| `cluster-merge` | Commits from two or more different clusters are merged into a single target cluster. | single `target_commit_id`, multiple `source_commit_id` rows; `source_cluster_id` may differ from `target_cluster_id` |
+| `split` | One cluster is split into two or more clusters. | single `source_commit_id`, multiple `target_commit_id` rows |
 
 ### 5.8 ACTION
 
