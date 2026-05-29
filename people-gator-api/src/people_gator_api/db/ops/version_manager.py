@@ -73,13 +73,14 @@ async def initialize_cluster(
     session: AsyncSession,
     cluster_role: ClusterRole,
     head_constraints: HeadConstraint,
+    actor_id: uuid.UUID,
     initial_records: list[RecordRef] | None = None,
 ) -> tuple[Cluster, Commit]:
     """Create a brand-new cluster with its initial commit and lineage.
 
     Atomically:
     1. Creates CLUSTER (no head yet).
-    2. Creates the initial COMMIT.
+    2. Creates the initial COMMIT authored by ``actor_id``.
     3. Creates LINEAGE(initial).
     4. Creates ACTION(add) rows for each record in ``initial_records``.
     5. Updates CLUSTER.head_commit_id.
@@ -88,7 +89,7 @@ async def initialize_cluster(
     Returns ``(cluster, commit)``.
     """
     cluster = await Cluster.create(session, cluster_role, head_constraints)
-    commit = await Commit.create(session, cluster.cluster_id, cluster_role)
+    commit = await Commit.create(session, cluster.cluster_id, cluster_role, actor_id)
     await Lineage.create_initial(session, cluster.cluster_id, commit.commit_id)
 
     if initial_records:
@@ -102,6 +103,7 @@ async def initialize_cluster(
                 action_type=ActionType.add,
                 reason=ref.reason,
                 weight=ref.weight,
+                actor_id=actor_id,
             )
             await apply_action_to_membership(session, action)
 
@@ -113,6 +115,7 @@ async def initialize_cluster(
             "cluster_id": str(cluster.cluster_id),
             "commit_id": str(commit.commit_id),
             "cluster_role": cluster_role.value,
+            "actor_id": str(actor_id),
             "initial_record_count": len(initial_records) if initial_records else 0,
         },
     )
@@ -122,6 +125,7 @@ async def initialize_cluster(
 async def advance_cluster(
     session: AsyncSession,
     cluster: Cluster,
+    actor_id: uuid.UUID,
     added_records: list[RecordRef] | None = None,
     removed_records: list[RecordRef] | None = None,
     new_role: ClusterRole | None = None,
@@ -129,7 +133,7 @@ async def advance_cluster(
     """Create the next version of a cluster via a ``next`` lineage entry.
 
     Atomically:
-    1. Creates a new COMMIT for the cluster.
+    1. Creates a new COMMIT authored by ``actor_id``.
     2. Creates LINEAGE(next) from current head to new commit.
     3. Creates ACTION rows for all adds and removes.
     4. Updates CLUSTER.head_commit_id (and role if provided).
@@ -145,7 +149,7 @@ async def advance_cluster(
     role = new_role or cluster.cluster_role
     old_head = cluster.head_commit_id
 
-    new_commit = await Commit.create(session, cluster.cluster_id, role)
+    new_commit = await Commit.create(session, cluster.cluster_id, role, actor_id)
     await Lineage.create_next(
         session, cluster.cluster_id, old_head, new_commit.commit_id
     )
@@ -160,6 +164,7 @@ async def advance_cluster(
             action_type=ActionType.add,
             reason=ref.reason,
             weight=ref.weight,
+            actor_id=actor_id,
         )
 
     for ref in removed_records or []:
@@ -172,6 +177,7 @@ async def advance_cluster(
             action_type=ActionType.remove,
             reason=ref.reason,
             weight=ref.weight,
+            actor_id=actor_id,
         )
 
     await cluster.update_head_commit(session, new_commit.commit_id, role if new_role else None)
@@ -183,6 +189,7 @@ async def advance_cluster(
             "cluster_id": str(cluster.cluster_id),
             "old_commit_id": str(old_head),
             "new_commit_id": str(new_commit.commit_id),
+            "actor_id": str(actor_id),
             "added": len(added_records) if added_records else 0,
             "removed": len(removed_records) if removed_records else 0,
             "new_role": new_role.value if new_role else None,
@@ -194,6 +201,7 @@ async def advance_cluster(
 async def branch_cluster(
     session: AsyncSession,
     cluster: Cluster,
+    actor_id: uuid.UUID,
     from_commit_id: uuid.UUID | None = None,
 ) -> Commit:
     """Create a branch commit off a given (or head) commit.
@@ -209,7 +217,7 @@ async def branch_cluster(
         )
 
     branch_commit = await Commit.create(
-        session, cluster.cluster_id, cluster.cluster_role
+        session, cluster.cluster_id, cluster.cluster_role, actor_id
     )
     await Lineage.create_branch(
         session, cluster.cluster_id, source_commit_id, branch_commit.commit_id
@@ -221,6 +229,7 @@ async def branch_cluster(
             "cluster_id": str(cluster.cluster_id),
             "source_commit_id": str(source_commit_id),
             "branch_commit_id": str(branch_commit.commit_id),
+            "actor_id": str(actor_id),
         },
     )
     return branch_commit
@@ -230,6 +239,7 @@ async def merge_commits(
     session: AsyncSession,
     source_commits: list[tuple[uuid.UUID, uuid.UUID]],
     target_cluster: Cluster,
+    actor_id: uuid.UUID,
     new_role: ClusterRole | None = None,
     added_records: list[RecordRef] | None = None,
     removed_records: list[RecordRef] | None = None,
@@ -243,7 +253,7 @@ async def merge_commits(
     - ``cluster-merge`` when any source is from a different cluster.
 
     Atomically:
-    1. Creates the target COMMIT.
+    1. Creates the target COMMIT authored by ``actor_id``.
     2. Creates one LINEAGE row per source commit.
     3. Creates ACTION rows.
     4. Updates CLUSTER.head_commit_id if the current head is among the sources.
@@ -252,7 +262,7 @@ async def merge_commits(
     Returns the new target COMMIT.
     """
     role = new_role or target_cluster.cluster_role
-    merge_commit = await Commit.create(session, target_cluster.cluster_id, role)
+    merge_commit = await Commit.create(session, target_cluster.cluster_id, role, actor_id)
 
     for src_cluster_id, src_commit_id in source_commits:
         is_cross = src_cluster_id != target_cluster.cluster_id
@@ -276,6 +286,7 @@ async def merge_commits(
             action_type=ActionType.add,
             reason=ref.reason,
             weight=ref.weight,
+            actor_id=actor_id,
         )
 
     for ref in removed_records or []:
@@ -288,6 +299,7 @@ async def merge_commits(
             action_type=ActionType.remove,
             reason=ref.reason,
             weight=ref.weight,
+            actor_id=actor_id,
         )
 
     # Update head if current head is one of the merged sources.
@@ -304,6 +316,7 @@ async def merge_commits(
         extra={
             "target_cluster_id": str(target_cluster.cluster_id),
             "target_commit_id": str(merge_commit.commit_id),
+            "actor_id": str(actor_id),
             "source_count": len(source_commits),
             "new_role": new_role.value if new_role else None,
         },
@@ -314,6 +327,7 @@ async def merge_commits(
 async def split_cluster(
     session: AsyncSession,
     source_cluster: Cluster,
+    actor_id: uuid.UUID,
     source_commit_id: uuid.UUID | None = None,
     new_cluster_memberships: list[tuple[ClusterRole, HeadConstraint, list[RecordRef]]] | None = None,
 ) -> list[tuple[Cluster, Commit]]:
@@ -323,12 +337,10 @@ async def split_cluster(
     tuples, one per split target.
 
     Atomically:
-    1. For each target: creates a new CLUSTER + COMMIT.
+    1. For each target: creates a new CLUSTER + COMMIT authored by ``actor_id``.
     2. Creates LINEAGE(split) from the source commit to each target commit.
     3. Creates ACTION(add) rows for each target's initial records.
-    4. Updates CLUSTER.head_commit_id for the first split target using the
-       original cluster's identity, or creates new clusters.
-    5. Materializes MEMBERSHIP for each new cluster.
+    4. Materializes MEMBERSHIP for each new cluster.
 
     Returns a list of ``(cluster, commit)`` for each split target.
     """
@@ -341,7 +353,7 @@ async def split_cluster(
     results: list[tuple[Cluster, Commit]] = []
     for role, constraints, records in (new_cluster_memberships or []):
         new_cluster = await Cluster.create(session, role, constraints)
-        new_commit = await Commit.create(session, new_cluster.cluster_id, role)
+        new_commit = await Commit.create(session, new_cluster.cluster_id, role, actor_id)
 
         await Lineage.create_split_entry(
             session,
@@ -366,6 +378,7 @@ async def split_cluster(
                 action_type=ActionType.add,
                 reason=ref.reason,
                 weight=ref.weight,
+                actor_id=actor_id,
             )
 
         await new_cluster.update_head_commit(session, new_commit.commit_id)
@@ -377,6 +390,7 @@ async def split_cluster(
         extra={
             "source_cluster_id": str(source_cluster.cluster_id),
             "source_commit_id": str(src_commit_id),
+            "actor_id": str(actor_id),
             "split_count": len(results),
         },
     )

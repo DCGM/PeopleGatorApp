@@ -30,6 +30,12 @@ class Commit(Base):
         SAEnum(ClusterRole, name="cluster_role_enum"),
         nullable=False,
     )
+    # The principal (user or service agent) that created this commit version.
+    actor_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("principal.principal_id"),
+        nullable=False,
+    )
 
     # -------------------------------------------------------------------------
     # Hybrid predicates — work in Python and as SQL expressions
@@ -78,12 +84,14 @@ class Commit(Base):
         session: AsyncSession,
         cluster_id: uuid.UUID,
         cluster_role: ClusterRole,
+        actor_id: uuid.UUID,
         commit_id: uuid.UUID | None = None,
     ) -> "Commit":
         commit = cls(
             commit_id=commit_id or new_uuid6(),
             cluster_id=cluster_id,
             cluster_role=cluster_role,
+            actor_id=actor_id,
         )
         session.add(commit)
         logger.info(
@@ -92,6 +100,7 @@ class Commit(Base):
                 "commit_id": str(commit.commit_id),
                 "cluster_id": str(cluster_id),
                 "cluster_role": cluster_role.value,
+                "actor_id": str(actor_id),
             },
         )
         return commit

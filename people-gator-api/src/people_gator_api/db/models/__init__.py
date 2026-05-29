@@ -8,10 +8,12 @@ from people_gator_api.db.models.enums import (
     ClusterRole,
     HeadConstraint,
     LineageType,
+    PrincipalType,
     RecordType,
 )
 from people_gator_api.db.models.lineage import Lineage
 from people_gator_api.db.models.membership import Membership
+from people_gator_api.db.models.principal import Principal, ServiceAgent, User
 from people_gator_api.db.models.record import Record
 
 __all__ = [
@@ -26,7 +28,11 @@ __all__ = [
     "Lineage",
     "LineageType",
     "Membership",
-    "RecordType",
-    "new_uuid6",
+    "Principal",
+    "PrincipalType",
     "Record",
+    "RecordType",
+    "ServiceAgent",
+    "User",
+    "new_uuid6",
 ]

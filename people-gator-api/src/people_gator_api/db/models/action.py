@@ -52,6 +52,12 @@ class Action(Base):
     reason: Mapped[str] = mapped_column(
         SAEnum(ActionReason, name="action_reason_enum"), nullable=False
     )
+    # The principal (user or service agent) that authored this action.
+    actor_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        sa.ForeignKey("principal.principal_id"),
+        nullable=False,
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -61,6 +67,7 @@ class Action(Base):
         ),
         sa.Index("ix_action_cluster_commit", "cluster_id", "commit_id"),
         sa.Index("ix_action_record", "record_id", "record_version_id"),
+        sa.Index("ix_action_actor", "actor_id"),
     )
 
     # -------------------------------------------------------------------------
@@ -125,6 +132,7 @@ class Action(Base):
         record_version_id: uuid.UUID,
         action_type: ActionType,
         reason: ActionReason,
+        actor_id: uuid.UUID,
         weight: float = 1.0,
     ) -> "Action":
         action = cls(
@@ -136,6 +144,7 @@ class Action(Base):
             action_type=action_type,
             weight=weight,
             reason=reason,
+            actor_id=actor_id,
         )
         session.add(action)
         logger.debug(
@@ -148,6 +157,7 @@ class Action(Base):
                 "record_version_id": str(record_version_id),
                 "action_type": action_type.value,
                 "reason": reason.value,
+                "actor_id": str(actor_id),
                 "weight": weight,
             },
         )

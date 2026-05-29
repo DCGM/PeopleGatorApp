@@ -11,8 +11,12 @@ from people_gator_api.db.models import (
     Lineage,
     LineageType,
     Membership,
+    Principal,
+    PrincipalType,
     Record,
     RecordType,
+    ServiceAgent,
+    User,
     new_uuid6,
 )
 from people_gator_api.db.ops import (
@@ -45,13 +49,17 @@ __all__ = [
     "Commit",
     "Lineage",
     "Membership",
+    "Principal",
     "Record",
+    "ServiceAgent",
+    "User",
     # Enums
     "ActionReason",
     "ActionType",
     "ClusterRole",
     "HeadConstraint",
     "LineageType",
+    "PrincipalType",
     "RecordType",
     # Ops
     "RecordRef",

@@ -61,6 +61,11 @@ Authority filtering defaults to: Czechoslovakia, Czechia, Slovakia, Hungary, Aus
   - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed records.
   - This service does not train or serve any models. It only stores the model version used to generate each record and uses that for staleness detection.
   - This service does not perform live authority lookups. It only ingests authority records from periodic syncs and links them to clusters, via exposed APIs for data access.
+6. Identity-first accountability: every state change carries a traceable actor.
+  - Every COMMIT and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
+  - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
+  - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
+  - The `reason` field on ACTION categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
 
 ## 5. Data Model
 
@@ -134,7 +139,9 @@ Possible `head_constraints` values:
 
 One immutable version within a lineage. Created by copy-on-write on any membership change.
 
-Fields: `commit_id`, `cluster_id`, `cluster_role`.
+Fields: `commit_id`, `cluster_id`, `cluster_role`, `actor_id`.
+
+- `actor_id`: FK to PRINCIPAL — the user or service agent that created this commit version.
 
 ### 5.4 LINEAGE
 Represents a relations of versions of the same cluster and relations between commits of independent logical clusters e.g. for `next`, `branch`, `pull`, `cluster-merge`, `cluster-split`.
@@ -153,13 +160,14 @@ The lineage_type field can contain following values:
 
 Associates a RECORD with a specific CLUSTER COMMIT, representing the addition or removal of that record from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
-Fields: `action_id`, `cluster_id`, `commit_id`, `record_id`, `record_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`.
+Fields: `action_id`, `cluster_id`, `commit_id`, `record_id`, `record_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
 
 Explanation of fields:
 - `cluster_id`: Denormalized from `COMMIT` for query performance — `commit_id` alone uniquely identifies a cluster's commit, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `commit_id`.
 - `action_type`: Indicates whether the record is being added to or removed after `commit_id` `cluster_id` state.
 - `weight`: A numerical value representing the strength of the association between the record and the cluster in this commit, which can be used for ranking and confidence scoring.
 - `reason`: Can be `manual-annotation` or `automatic-linking`.
+- `actor_id`: FK to PRINCIPAL — the user or service agent that authored this specific record addition or removal.
 
 Here enforced constraints for the ACTION:
 1. `record_id` and `record_version_id` must exist in the RECORD table
@@ -209,3 +217,46 @@ Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_
 `as_of_commit_id` records which commit this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_commit_id` at the time of the last update.
 
 The view is updated in real-time as new ACTIONs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to compute the full lineage of commits and actions each time. Updates to MEMBERSHIP must be applied in the same transaction as the ACTION write that triggered them. MEMBERSHIP reflects the committed state only — uncommitted actions (those on a commit that has no outgoing lineage entry yet) are applied to MEMBERSHIP as they are written, since the working commit is the live head.
+
+### 5.7 PRINCIPAL
+
+Unified identity record for any actor that can modify the system. Every COMMIT and every ACTION carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
+
+`principal_type` values:
+
+| Type | Description |
+|---|---|
+| `user` | A human authenticated via an external OIDC provider |
+| `service_agent` | A named autonomous process (ingestion pipeline, ML agent, etc.) |
+
+Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
+
+`PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER` or `SERVICE_AGENT` table.
+
+#### 5.7.1 USER
+
+A human principal authenticated through an external OpenID Connect (OIDC) identity provider such as Keycloak or Auth0. The user record is created or refreshed on first token verification.
+
+Fields (extends PRINCIPAL): `principal_id`, `external_subject`, `external_issuer`, `email`.
+
+- `external_subject`: the OIDC `sub` claim — stable, provider-scoped user identifier.
+- `external_issuer`: the OIDC `iss` claim — identifies the identity provider.
+- Together `(external_subject, external_issuer)` forms a globally unique identity key across multiple IdPs.
+- `email` is optional; sourced from the OIDC `email` claim when present.
+
+#### 5.7.2 SERVICE_AGENT
+
+An autonomous process principal. Agents are pre-registered and identified by a unique `agent_slug` following the convention `<category>:<name>`, for example:
+
+| Slug | Category | Description |
+|---|---|---|
+| `system:kramerius-ingest` | `system` | Kramerius document ingestion pipeline |
+| `agent:face-detector-v2` | `agent` | Face detection ML model, version 2 |
+| `agent:ner-extraction` | `agent` | Named-entity recognition pipeline |
+| `pipeline:authority-sync` | `pipeline` | Periodic authority record synchronisation |
+
+Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `agent_version`, `description`.
+
+- `agent_slug`: unique human-readable identifier, format `<category>:<name>`.
+- `agent_version`: optional semantic version string tied to the model or code version that produced the records (enables staleness detection).
+- `description`: optional free-text description of the agent's purpose.

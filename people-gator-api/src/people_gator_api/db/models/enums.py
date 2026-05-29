@@ -44,3 +44,8 @@ class ActionType(StrEnum):
 class ActionReason(StrEnum):
     manual_annotation = "manual-annotation"
     automatic_linking = "automatic-linking"
+
+
+class PrincipalType(StrEnum):
+    user = "user"
+    service_agent = "service_agent"
