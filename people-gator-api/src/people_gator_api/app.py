@@ -3,6 +3,8 @@ from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
 from people_gator_api.routes.root import router as root_router
+import dotenv
+dotenv.load_dotenv()  # Load environment variables from .env file at startup
 
 app = FastAPI(
     title="People Gator API",

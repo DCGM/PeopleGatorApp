@@ -4,11 +4,17 @@ from enum import StrEnum
 class RecordType(StrEnum):
     face_detection = "face_detection"
     named_entity = "named_entity"
-    text = "text"
+    text_region = "text_region"
+    image_region = "image_region"
     grounded_name = "grounded_name"
-    alternative_grounded_name = "alternative_grounded_name"
-    description = "description"
-    authority_record = "authority_record"
+    grounded_description = "grounded_description"
+
+
+class ResolverType(StrEnum):
+    local_filesystem = "local-filesystem"
+    s3 = "s3"
+    iiif = "iiif"
+    http = "http"
 
 
 class ClusterRole(StrEnum):
