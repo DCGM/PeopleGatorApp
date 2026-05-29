@@ -12,12 +12,21 @@ class OpenTelemetrySettings(BaseModel):
 
 
 class PostgresSettings(BaseModel):
-    host: str = "dev-peoplegator-postgres"
-    port: int = Field(default=5432, le=65535, ge=1)
-    user: str = "postgres"
-    password: str = "password"
-    database: str = "people_gator"
+    host: str
+    port: int = Field(le=65535, ge=1)
+    user: str
+    password: str
+    database: str
 
+class S3Settings(BaseModel):
+    access_key_id: str
+    secret_access_key: str
+    bucket_name: str
+    region: str
+    endpoint_url: str | None = None
+
+class StorageSettings(BaseModel):
+    s3: S3Settings
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -31,6 +40,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     log_level: str = "INFO"
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
-    postgres: PostgresSettings = PostgresSettings()
+    postgres: PostgresSettings
+    storage: StorageSettings
 
-settings = Settings()
+settings = Settings() # type: ignore
