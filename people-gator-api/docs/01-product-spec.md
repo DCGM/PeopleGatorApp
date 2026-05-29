@@ -83,26 +83,148 @@ All identifiers are represented as UUID v6 if not specified otherwise. meaning i
 Meaning that sorting by UUIDv6 is effectively sorting by creation time as the top 64bits (minus the version bits) represent the timestamp. The timestamp is a Gregorian Epoch timestamp.
 The node id is generated randomly, which ensures uniqueness across distributed systems without coordination.
 
-### 5.1 RECORD
+### 5.1 SOURCE_SCHEMA
+
+Defines how to resolve the storage and access paths for a family of sources. Every SOURCE references one SOURCE_SCHEMA, which tells the system how to construct local file paths, remote URLs, or IIIF endpoints from a source's provider identifier. Centralising this logic here means both the local archive copy and the remote canonical URL are derived from the same SOURCE record — there is no duplication on RECORD itself.
+
+Fields: `schema_id`, `schema_name`, `resolver_type`, `resolver_config`.
+
+- `schema_name`: human-readable label, e.g. `kramerius-iiif`, `local-scan-archive`, `s3-newspaper-archive`.
+- `resolver_type`: one of `local-filesystem`, `s3`, `iiif`, `http`.
+- `resolver_config`: JSONB with resolver-specific parameters, interpolated with values from `SOURCE.provider_id` and optionally `RECORD.source_path`.
+
+| `resolver_type` | Example `resolver_config` |
+|---|---|
+| `local-filesystem` | `{"base_path": "/data/scans", "path_template": "{provider_id}/{page}.tif"}` |
+| `s3` | `{"bucket": "scan-archive", "key_template": "{provider}/{provider_id}.jpg"}` |
+| `iiif` | `{"base_url": "https://kramerius.example.org/iiif/3", "manifest_template": "{provider_id}/manifest"}` |
+| `http` | `{"base_url": "https://cdn.example.org/scans", "path_template": "{provider_id}"}` |
+
+### 5.2 SOURCE
+
+A specific document, scan, or artifact from which one or more RECORDs were derived. SOURCE normalises provenance — a RECORD belongs to exactly one SOURCE, and the SOURCE belongs to one SOURCE_SCHEMA that knows how to resolve its storage paths.
+
+Fields: `source_id`, `source_schema_id`, `provider`, `provider_id`, `metadata`.
+
+- `source_schema_id`: FK → SOURCE_SCHEMA — determines how this source's files are located and accessed.
+- `provider`: string identifying the originating system, e.g. `kramerius`, `nkcr`, `local-ingest`.
+- `provider_id`: the external system's stable identifier for this artifact (e.g. a Kramerius page UUID or a scan filename).
+- `metadata`: JSONB with source-level descriptive information — document title, publication date, page number within a multi-page document, detected language, collection name, etc.
+
+The combination `(provider, provider_id)` is unique and serves as the natural deduplication key for re-ingestion runs.
+
+### 5.3 RECORD
 
 The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and authority data — is a RECORD.
 
-Required fields: `record_id`, `record_version_id`, `record_type`, `content_hash`, `source_provider`, `source_schema`, `source`, `metadata_schema`, `metadata`, `storage_location`.
+Required fields: `record_id`, `record_version_id`, `record_type`, `content_hash`, `source_id`, `source_path`, `metadata_schema`, `metadata`, `embedding_id`.
 
+- `source_id`: FK → SOURCE — the document or artifact this record was derived from.
+- `source_path`: JSONB — within-source coordinates that identify exactly where in the source this record originates, e.g. `{"page": 3, "region_index": 7}` or `{"line_id": "abc", "face_index": 2}`. Combined with SOURCE_SCHEMA.resolver_config this fully resolves the physical storage location without duplicating paths on the record.
+- `embedding_id`: nullable string — top-level reference to this record's embedding vector in the external vector store (Qdrant, Weaviate, Milvus, etc.). Stored at the top level because it is a first-class join key for similarity search, not an opaque metadata detail. Records that are the *root* of an embedding (i.e. the crop or text span that was directly encoded) carry a non-null `embedding_id`.
+- `metadata_schema`: versioned schema identifier that `metadata` conforms to (see §5.3.2).
+- `metadata`: JSONB typed evidence payload, structured per `metadata_schema`.
+- `content_hash`: hash of the content that defines the record's identity for deduplication and staleness detection (e.g. for a face detection: hash of the image crop pixels and the embedding vector).
 
-The `record_version_id` with `record_id` forms a unique identifier for each version of a record. When a record is updated (e.g., a face detection is refined with a new bounding box), a new RECORD row is created with the same `record_id` but a later `record_version_id`, preserving the full version history.
+The `record_version_id` with `record_id` forms a unique identifier for each version. When a record is updated (e.g. a face detection is refined with a new bounding box), a new RECORD row is created with the same `record_id` but a later `record_version_id`, preserving the full version history.
 
-Record types include: `face_detection`, `named_entity`, `text`, `grounded_name`, `alternative_grounded_name`, `description`, `authority_record`, etc. 
+Record types include: `face_detection`, `named_entity`, `text_region`, `image_region`, `grounded_name`, `alternative_grounded_name`, `description`, `authority_record`, etc.
 
-The `metadata` field is a JSON blob with schema defined by `metadata_schema` that preserves typed information about the record (e.g., for a face detection, bounding box coordinates, detection confidence, and embedding vector reference, each has some class that defines this schema).
+The `model_version` is stored inside `metadata` for records generated by inference, enabling staleness detection when a new model version is released.
 
-The `source` field is a JSON blob defined by `source_schema` that preserves provenance information about the record (e.g., for a face detection, the source might be `page_id`, `line_id`, and `face_index` on that line, which allows us to link back to the original scan and display in context).
+#### 5.3.1 Shared sub-schemas
 
-The `content_hash` is a hash of the content that defines the record's identity for deduplication and staleness detection. For a face detection, this might be a hash of the image crop pixels and the embedding vector.
+These sub-schemas are reused across multiple record metadata types.
 
-The `model_version` is stored in the `metadata` for records generated by inference, enabling staleness detection when a new model version is released.
+**BoundingBox** — spatial extent of a detection on an image, coordinates normalised to [0, 1] relative to image dimensions:
 
-### 5.2 CLUSTER
+| Field | Type | Description |
+|---|---|---|
+| `x_min` | float [0,1] | Left edge normalised to image width |
+| `y_min` | float [0,1] | Top edge normalised to image height |
+| `x_max` | float [0,1] | Right edge normalised to image width |
+| `y_max` | float [0,1] | Bottom edge normalised to image height |
+
+**Keypoint** — a single spatially localised facial or structural landmark:
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | string | Semantic label, e.g. `left_eye`, `right_eye`, `nose_tip`, `left_mouth`, `right_mouth` |
+| `x` | float [0,1] | Normalised x coordinate |
+| `y` | float [0,1] | Normalised y coordinate |
+| `confidence` | float [0,1] | Keypoint localisation confidence |
+
+#### 5.3.2 Metadata schemas by record type
+
+The `metadata_schema` field carries a versioned identifier (suffixed `/<vN>`) so old records remain valid when a schema evolves. Each type below defines the canonical structure of `metadata` JSONB for that record type.
+
+##### `face_detection` — schema `face-detection/v1`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bounding_box` | BoundingBox | yes | Detection area on the source image |
+| `keypoints` | list[Keypoint] | no | Facial landmarks when available from the detector |
+| `detection_confidence` | float [0,1] | yes | Detector confidence score |
+| `model_version` | string | yes | Model identifier that produced this detection |
+
+The top-level `embedding_id` on RECORD links this detection's face crop to its vector in the embedding store.
+
+##### `named_entity` — schema `named-entity/v1`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `entity_type` | string | yes | `person`, `organization`, `location`, `date`, … |
+| `text` | string | yes | Raw surface form as it appears in the source |
+| `normalized_text` | string | yes | Lowercased and normalised form |
+| `bounding_box` | BoundingBox | no | Spatial extent on the page image, when available |
+| `char_span` | `{start: int, end: int}` | no | Character offsets within the OCR text of the source |
+| `confidence` | float [0,1] | yes | NER model confidence score |
+| `model_version` | string | yes | NER model identifier |
+
+##### `text_region` — schema `text-region/v1`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bounding_box` | BoundingBox | yes | Region extent on the page |
+| `text` | string | yes | OCR'd text content |
+| `ocr_confidence` | float [0,1] | yes | OCR model confidence |
+| `language` | string | no | ISO 639-1 language code |
+| `model_version` | string | yes | OCR model identifier |
+
+##### `image_region` — schema `image-region/v1`
+
+A general-purpose image crop, used when the region is not a face detection but still carries a visual embedding (e.g. a photo, illustration, or seal).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bounding_box` | BoundingBox | yes | Region extent on the source image |
+| `image_format` | string | yes | `jpeg`, `png`, `tiff` |
+| `width_px` | int | yes | Crop width in pixels |
+| `height_px` | int | yes | Crop height in pixels |
+
+When the region was encoded into an embedding, `embedding_id` on RECORD is non-null.
+
+##### `authority_record` — schema `authority-record/v1`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `authority_type` | string | yes | `wikidata`, `nkcr`, `viaf`, … |
+| `external_id` | string | yes | Identifier in the authority system |
+| `canonical_name` | string | yes | Preferred name form |
+| `aliases` | list[string] | no | Known alternative name forms |
+| `birth_date` | string (ISO 8601) | no | Date of birth |
+| `death_date` | string (ISO 8601) | no | Date of death |
+| `description` | string | no | Short biographical or contextual description |
+
+##### `grounded_name` — schema `grounded-name/v1`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Surface name form as it appears in the source |
+| `authority_record_id` | UUID | yes | `record_id` of the linked `authority_record` RECORD |
+| `confidence` | float [0,1] | yes | Name-to-authority linking confidence |
+
+### 5.4 CLUSTER
 
 Stable identity for a cluster across its version history.
 
@@ -135,7 +257,7 @@ Possible `head_constraints` values:
 - On `merge` or `cluster-merge` where this cluster is the target and the current head is one of the source commits: set to `target_commit_id`.
 - On `branch`: `head_commit_id` is **not** updated — it stays on the main-chain commit the branch diverged from.
 
-### 5.3 COMMIT
+### 5.5 COMMIT
 
 One immutable version within a lineage. Created by copy-on-write on any membership change.
 
@@ -143,7 +265,7 @@ Fields: `commit_id`, `cluster_id`, `cluster_role`, `actor_id`.
 
 - `actor_id`: FK to PRINCIPAL — the user or service agent that created this commit version.
 
-### 5.4 LINEAGE
+### 5.6 LINEAGE
 Represents a relations of versions of the same cluster and relations between commits of independent logical clusters e.g. for `next`, `branch`, `pull`, `cluster-merge`, `cluster-split`.
 
 Fields: `source_cluster_id`, `source_commit_id`, `target_cluster_id`, `target_commit_id`, `lineage_type`.
@@ -156,7 +278,7 @@ The lineage_type field can contain following values:
 | `merge` | Two or multiple branches are merged into one form multiple clusters ino. | single `target_commit_id`, multiple `source_commit_id` rows |
 | `split` | One cluster is split into two multiple clusters. |  |
 
-### 5.5 ACTION
+### 5.7 ACTION
 
 Associates a RECORD with a specific CLUSTER COMMIT, representing the addition or removal of that record from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
@@ -177,7 +299,7 @@ Here enforced constraints for the ACTION:
 5. For an `add` action, the specified `record_id` and `record_version_id` must exist in the RECORD table, and the `commit_id` must exist in the COMMIT table for the specified `cluster_id`.
 
 
-#### 5.5.1 Algorithm to resolve membership for a given `cluster_id` and `commit_id`:
+#### 5.7.1 Algorithm to resolve membership for a given `cluster_id` and `commit_id`:
 1. Start with an empty set of member records.
 2. From `LINEAGE`, start with the specified `cluster_id` and `commit_id`, and perform a full DAG walk backwards through all ancestor lineage entries to the root commit, collecting all `(cluster_id, commit_id)` pairs. Follow ALL ancestor paths — including those via `cluster-merge` and `cluster-split` entries into different clusters. Do not prune at the first path to root.
 3. For each collected `cluster_id` and `commit_id`, query the ACTION table for all actions associated with that commit.
@@ -185,13 +307,13 @@ Here enforced constraints for the ACTION:
 5. Sequentially apply each action to the set of member records, adding or removing records based on the `action_type` and updating the `weight` and `reason` accordingly.
 6. After processing all actions, the resulting set of member records represents the cluster membership for the specified `cluster_id` and `commit_id`.
 
-#### 5.5.2 Algorithm to resolve uncommitted changes for a given `cluster_id` and `commit_id`:
+#### 5.7.2 Algorithm to resolve uncommitted changes for a given `cluster_id` and `commit_id`:
 1. From `ACTION` table, query for any actions associated with the specified `cluster_id` and `commit_id`.
 2. Sort the actions by their `action_id` ascending to ensure they are processed in the order they were created.
 3. Reduce the actions if same `RECORD` has been added and removed multiple times, keeping only the latest action for each `RECORD`.
 4. The resulting set of actions represents the uncommitted diff from the last committed state for the specified `cluster_id` and `commit_id`.
 
-#### 5.5.3 Resolve possible head of the cluster:
+#### 5.7.3 Resolve possible head of the cluster:
 - Case `locked` in `head_constraints`:
   1. From `LINEAGE`, query for the first commit of the cluster with `cluster_id` and `lineage_type` = `initial`.
   2. The resulting `commit_id` represents the head of the cluster.
@@ -209,7 +331,7 @@ Here enforced constraints for the ACTION:
   2. The resulting set of `commit_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf commits (commits with no outgoing `next` or `merge` entry).
 
 
-### 5.6 MEMBERSHIP
+### 5.8 MEMBERSHIP
 Represents the current materialized state of cluster membership for each cluster, derived from the ACTION table.
 
 Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_of_commit_id`.
@@ -218,7 +340,7 @@ Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_
 
 The view is updated in real-time as new ACTIONs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to compute the full lineage of commits and actions each time. Updates to MEMBERSHIP must be applied in the same transaction as the ACTION write that triggered them. MEMBERSHIP reflects the committed state only — uncommitted actions (those on a commit that has no outgoing lineage entry yet) are applied to MEMBERSHIP as they are written, since the working commit is the live head.
 
-### 5.7 PRINCIPAL
+### 5.9 PRINCIPAL
 
 Unified identity record for any actor that can modify the system. Every COMMIT and every ACTION carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
 
@@ -233,7 +355,7 @@ Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
 `PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER` or `SERVICE_AGENT` table.
 
-#### 5.7.1 USER
+#### 5.9.1 USER
 
 A human principal authenticated through an external OpenID Connect (OIDC) identity provider such as Keycloak or Auth0. The user record is created or refreshed on first token verification.
 
@@ -244,7 +366,7 @@ Fields (extends PRINCIPAL): `principal_id`, `external_subject`, `external_issuer
 - Together `(external_subject, external_issuer)` forms a globally unique identity key across multiple IdPs.
 - `email` is optional; sourced from the OIDC `email` claim when present.
 
-#### 5.7.2 SERVICE_AGENT
+#### 5.9.2 SERVICE_AGENT
 
 An autonomous process principal. Agents are pre-registered and identified by a unique `agent_slug` following the convention `<category>:<name>`, for example:
 
@@ -260,3 +382,4 @@ Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `agent_version`, `desc
 - `agent_slug`: unique human-readable identifier, format `<category>:<name>`.
 - `agent_version`: optional semantic version string tied to the model or code version that produced the records (enables staleness detection).
 - `description`: optional free-text description of the agent's purpose.
+
