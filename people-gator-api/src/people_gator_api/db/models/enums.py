@@ -15,6 +15,7 @@ class ResolverType(StrEnum):
     s3 = "s3"
     iiif = "iiif"
     http = "http"
+    sparql = "sparql"
 
 
 class ClusterRole(StrEnum):

@@ -170,6 +170,38 @@ class HTTPResolverConfig(BaseModel):
         return f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
 
 
+class SparqlResolverConfig(BaseModel):
+    """Config for ResolverType.sparql sources (RDF/SPARQL authority endpoints).
+
+    Used for authority sources queried via SPARQL, such as Wikidata or local
+    RDF triple stores.  ``query_template`` is a SPARQL SELECT query string
+    with ``{provider_id}`` placeholder interpolated from ``SOURCE.provider_id``.
+
+    Example::
+
+        SparqlResolverConfig(
+            endpoint_url="https://query.wikidata.org/sparql",
+            query_template="SELECT ?item WHERE { ?item wdt:P31 wd:{provider_id} }",
+        )
+    """
+
+    endpoint_url: str
+    query_template: str
+
+    def resolve(
+        self,
+        provider: str,
+        provider_id: str,
+        source_path: dict[str, object] | None = None,
+    ) -> str:
+        context: dict[str, object] = {
+            "provider": provider,
+            "provider_id": provider_id,
+            **(source_path or {}),
+        }
+        return self.query_template.format_map(context)
+
+
 # ---------------------------------------------------------------------------
 # Union type for use in typed resolution helpers
 # ---------------------------------------------------------------------------
@@ -179,4 +211,5 @@ ResolverConfig = (
     | S3ResolverConfig
     | IIIFResolverConfig
     | HTTPResolverConfig
+    | SparqlResolverConfig
 )

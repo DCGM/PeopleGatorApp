@@ -41,6 +41,7 @@ from people_gator_api.db.models.source_resolver_config import (
     LocalFilesystemResolverConfig,
     ResolverConfig,
     S3ResolverConfig,
+    SparqlResolverConfig,
     SupportsResolve,
 )
 from people_gator_api.db.models.source_schema import SourceSchema
@@ -90,5 +91,6 @@ __all__ = [
     "LocalFilesystemResolverConfig",
     "ResolverConfig",
     "S3ResolverConfig",
+    "SparqlResolverConfig",
     "SupportsResolve",
 ]

@@ -42,6 +42,12 @@ class Source(Base):
     metadata_: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata", JSONB, nullable=True
     )
+    # FK to PRINCIPAL — the user or service agent that ingested this source.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("principal.principal_id"),
+        nullable=True,
+    )
 
     __table_args__ = (
         UniqueConstraint("provider", "provider_id", name="uq_source_provider_id"),
@@ -86,6 +92,7 @@ class Source(Base):
         provider: str,
         provider_id: str,
         metadata: dict[str, Any] | None = None,
+        created_by: uuid.UUID | None = None,
     ) -> tuple["Source", bool]:
         """Return ``(source, created)`` — idempotent for re-ingestion runs.
 
@@ -113,6 +120,7 @@ class Source(Base):
             provider=provider,
             provider_id=provider_id,
             metadata_=metadata,
+            created_by=created_by,
         )
         session.add(source)
         logger.info(
@@ -122,6 +130,7 @@ class Source(Base):
                 "source_schema_id": str(source_schema_id),
                 "provider": provider,
                 "provider_id": provider_id,
+                "created_by": str(created_by) if created_by else None,
             },
         )
         return source, True
