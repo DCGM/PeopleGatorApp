@@ -1,4 +1,3 @@
-from people_gator_api.app import app
 from people_gator_api.settings import settings
 import uvicorn
 

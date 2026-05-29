@@ -1,0 +1,97 @@
+import logging
+import uuid
+
+import sqlalchemy as sa
+from sqlalchemy import Enum as SAEnum, ForeignKey, select
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.hybrid import hybrid_method
+from sqlalchemy.orm import Mapped, mapped_column
+
+from people_gator_api.db.models.base import Base, new_uuid6
+from people_gator_api.db.models.enums import ClusterRole
+
+logger = logging.getLogger(__name__)
+
+
+class Commit(Base):
+    __tablename__ = "commit"
+
+    commit_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=new_uuid6
+    )
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("cluster.cluster_id"),
+        nullable=False,
+    )
+    # Source of truth for cluster_role at this commit version.
+    cluster_role: Mapped[ClusterRole] = mapped_column(
+        SAEnum(ClusterRole, name="cluster_role_enum"),
+        nullable=False,
+    )
+
+    # -------------------------------------------------------------------------
+    # Hybrid predicates — work in Python and as SQL expressions
+    # -------------------------------------------------------------------------
+
+    @hybrid_method
+    def belongs_to_cluster(self, cluster_id: uuid.UUID) -> bool:  # type: ignore[misc]
+        return self.cluster_id == cluster_id
+
+    @belongs_to_cluster.expression  # type: ignore[override]
+    @classmethod
+    def belongs_to_cluster(cls, cluster_id: uuid.UUID) -> sa.ColumnElement[bool]:
+        return cls.cluster_id == cluster_id
+
+    # -------------------------------------------------------------------------
+    # Class-level queries
+    # -------------------------------------------------------------------------
+
+    @classmethod
+    async def get(
+        cls,
+        session: AsyncSession,
+        commit_id: uuid.UUID,
+    ) -> "Commit | None":
+        result = await session.execute(
+            select(cls).where(cls.commit_id == commit_id)
+        )
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def get_for_cluster(
+        cls,
+        session: AsyncSession,
+        cluster_id: uuid.UUID,
+    ) -> list["Commit"]:
+        result = await session.execute(
+            select(cls)
+            .where(cls.cluster_id == cluster_id)
+            .order_by(cls.commit_id.asc())
+        )
+        return list(result.scalars().all())
+
+    @classmethod
+    async def create(
+        cls,
+        session: AsyncSession,
+        cluster_id: uuid.UUID,
+        cluster_role: ClusterRole,
+        commit_id: uuid.UUID | None = None,
+    ) -> "Commit":
+        commit = cls(
+            commit_id=commit_id or new_uuid6(),
+            cluster_id=cluster_id,
+            cluster_role=cluster_role,
+        )
+        session.add(commit)
+        logger.info(
+            "Created commit",
+            extra={
+                "commit_id": str(commit.commit_id),
+                "cluster_id": str(cluster_id),
+                "cluster_role": cluster_role.value,
+            },
+        )
+        return commit

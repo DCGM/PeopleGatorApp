@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
-from people_gator_api.routes import root_router
+from people_gator_api.routes.root import router as root_router
 
 app = FastAPI(
     title="People Gator API",
@@ -15,7 +15,9 @@ if settings.otel.enabled:
         _, _, _,
         logging_handler,
         fastapi_instrumentor,
-        _, _, _, _,
+        _,
+        _,
+        _
     ) = initialize_opentelemetry()    
     fastapi_instrumentor.instrument_app(app)
     configure_logging(logging_handler)  # Initialize structlog with OpenTelemetry integration

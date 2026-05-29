@@ -1,0 +1,12 @@
+{
+  "typeCheckingMode": "strict",
+
+  "reportIncompatibleMethodOverride": "error",
+  "reportIncompatibleVariableOverride": "error",
+  "reportUnnecessaryTypeIgnoreComment ": "error",
+  "reportImportCycles" : "error",
+  "reportImplicitStringConcatenation": "error",
+  "reportMissingSuperCall": "error",
+  "reportUnreachable": "error",
+  "reportMissingTypeStubs": false
+}
