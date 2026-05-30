@@ -1,4 +1,4 @@
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class OpenTelemetrySettings(BaseModel):
@@ -28,6 +28,20 @@ class S3Settings(BaseModel):
 class StorageSettings(BaseModel):
     s3: S3Settings
 
+class KeycloakSettings(BaseModel):
+    url: str = "https://auth.dev.people-gator.capturemyhand.com"
+    realm: str = "people-gator"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def issuer(self) -> str:
+        return f"{self.url}/realms/{self.realm}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def jwks_uri(self) -> str:
+        return f"{self.url}/realms/{self.realm}/protocol/openid-connect/certs"
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix='PEOPLE_GATOR_API__',
@@ -42,5 +56,6 @@ class Settings(BaseSettings):
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
     postgres: PostgresSettings
     storage: StorageSettings
+    keycloak: KeycloakSettings = KeycloakSettings()
 
 settings = Settings() # type: ignore

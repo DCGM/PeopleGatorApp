@@ -1,4 +1,25 @@
 services:
+  people-gator-keycloak-dev:
+    image: quay.io/keycloak/keycloak:26
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: https://auth.dev.people-gator.capturemyhand.com
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_PROXY_HEADERS: xforwarded
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.people-gator-keycloak-dev.rule=Host(`auth.dev.people-gator.capturemyhand.com`)
+      - traefik.http.routers.people-gator-keycloak-dev.entrypoints=websecure
+      - traefik.http.services.people-gator-keycloak-dev.loadbalancer.server.port=8080
+      - traefik.http.routers.people-gator-keycloak-dev.tls=true
+      - traefik.http.routers.people-gator-keycloak-dev.tls.certresolver=tlschallenge
+    networks:
+      - web
+      - default
+
   people-gator-postgres-dev:
     image: postgres:18
     restart: unless-stopped
