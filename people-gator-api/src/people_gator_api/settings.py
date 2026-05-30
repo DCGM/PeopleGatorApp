@@ -32,12 +32,12 @@ class KeycloakSettings(BaseModel):
     url: str = "https://auth.dev.people-gator.capturemyhand.com"
     realm: str = "people-gator"
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def issuer(self) -> str:
         return f"{self.url}/realms/{self.realm}"
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def jwks_uri(self) -> str:
         return f"{self.url}/realms/{self.realm}/protocol/openid-connect/certs"
