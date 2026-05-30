@@ -67,19 +67,19 @@ class Record(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_property
-    def is_face_detection(self) -> bool:  # type: ignore[misc]
+    def is_face_detection(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.record_type == RecordType.face_detection
 
-    @is_face_detection.expression  # type: ignore[override]
+    @is_face_detection.expression
     @classmethod
     def is_face_detection(cls) -> sa.ColumnElement[bool]:
         return cls.record_type == RecordType.face_detection.value
 
     @hybrid_method
-    def has_type(self, record_type: RecordType) -> bool:  # type: ignore[misc]
+    def has_type(self, record_type: RecordType) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.record_type == record_type
 
-    @has_type.expression  # type: ignore[override]
+    @has_type.expression
     @classmethod
     def has_type(cls, record_type: RecordType) -> sa.ColumnElement[bool]:
         return cls.record_type == record_type.value

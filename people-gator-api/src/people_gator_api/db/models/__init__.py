@@ -10,8 +10,11 @@ from people_gator_api.db.models.enums import (
     TransitionType,
     PrincipalType,
     RecordType,
+    RegistrySource,
     ResolverType,
 )
+from people_gator_api.db.models.modality_model import ModalityModel
+from people_gator_api.db.models.search_profile import SearchProfile, SearchProfileModality
 from people_gator_api.db.models.transition import Transition
 from people_gator_api.db.models.membership import Membership
 from people_gator_api.db.models.metadata_schema import MetadataSchema
@@ -55,6 +58,7 @@ __all__ = [
     "ClusterRole",
     "Version",
     "HeadConstraint",
+    "ModalityModel",
     "Transition",
     "TransitionType",
     "Membership",
@@ -63,7 +67,10 @@ __all__ = [
     "PrincipalType",
     "Record",
     "RecordType",
+    "RegistrySource",
     "ResolverType",
+    "SearchProfile",
+    "SearchProfileModality",
     "ServiceAgent",
     "Source",
     "SourceSchema",

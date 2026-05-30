@@ -47,19 +47,19 @@ class Principal(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_property
-    def is_user(self) -> bool:  # type: ignore[misc]
+    def is_user(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.principal_type == PrincipalType.user
 
-    @is_user.expression  # type: ignore[override]
+    @is_user.expression
     @classmethod
     def is_user(cls) -> sa.ColumnElement[bool]:
         return cls.principal_type == PrincipalType.user.value
 
     @hybrid_property
-    def is_service_agent(self) -> bool:  # type: ignore[misc]
+    def is_service_agent(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.principal_type == PrincipalType.service_agent
 
-    @is_service_agent.expression  # type: ignore[override]
+    @is_service_agent.expression
     @classmethod
     def is_service_agent(cls) -> sa.ColumnElement[bool]:
         return cls.principal_type == PrincipalType.service_agent.value

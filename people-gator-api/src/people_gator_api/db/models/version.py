@@ -42,10 +42,10 @@ class Version(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_method
-    def belongs_to_cluster(self, cluster_id: uuid.UUID) -> bool:  # type: ignore[misc]
+    def belongs_to_cluster(self, cluster_id: uuid.UUID) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.cluster_id == cluster_id
 
-    @belongs_to_cluster.expression  # type: ignore[override]
+    @belongs_to_cluster.expression
     @classmethod
     def belongs_to_cluster(cls, cluster_id: uuid.UUID) -> sa.ColumnElement[bool]:
         return cls.cluster_id == cluster_id

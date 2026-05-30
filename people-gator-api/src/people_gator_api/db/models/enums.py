@@ -56,3 +56,9 @@ class ActionReason(StrEnum):
 class PrincipalType(StrEnum):
     user = "user"
     service_agent = "service_agent"
+
+
+class RegistrySource(StrEnum):
+    mlflow = "mlflow"
+    huggingface = "huggingface"
+    local = "local"

@@ -50,6 +50,7 @@ Authority filtering defaults to: Czechoslovakia, Czechia, Slovakia, Hungary, Aus
 4. Human-in-the-loop user workflows: search
     - Search results are ranked clusters with per-modality signal contributions.
     - Search query itself is a weighted cluster of signals (face similarity, name similarity, authority link strength, etc.).
+    - Per-modality weights and preferred embedding model per modality are defined by a `SEARCH_PROFILE` (see §7). Profiles are reusable, shareable, and customizable across users.
 5. Human-in-the-loop user workflows: annotation
     - An annotation instance of a cluster gets created to be assigned to an annotator. It pins to a specific cluster version at assignment time.
     - Annotator can add or remove cluster members, which modifies the branched-off version.
@@ -549,6 +550,7 @@ These fields are populated only for the applicable `record_type`s. They enable f
 | `keypoints` | object | `face_detection` | Serialised list of `Keypoint`s — cached for search result thumbnail rendering without a relational join |
 | `baseline` | object | `text_region`, `named_entity` | Serialised list of `Point`s representing the text baseline — cached for search result rendering without a relational join |
 | `source` | object | all | Parsed source metadata — enables filtering and faceting |
+
 ### 6.3 Query Patterns
 
 | Pattern | Vector slot prefix | Filters applied |
@@ -571,4 +573,77 @@ These fields are populated only for the applicable `record_type`s. They enable f
 - **On RECORD new version**: a new document is created for the new `record_version_id`. The old document is retained unless explicitly purged by a maintenance job.
 - **On re-embedding**: new named vector slots (e.g. from a new model) are added to existing documents without replacing or removing old slots.
 - **On RECORD deletion**: all documents for that `record_id` are removed from the vector store.
+
+---
+
+## 7. Search Configuration
+
+Search scoring is driven by per-modality weighted signals. Each modality corresponds to a `record_type` and an embedding model slot in the vector store. The structures in this section live outside the versioned cluster data model — they are user-space configuration that governs how retrieval is performed, not what was annotated or by whom.
+
+### 7.1 MODALITY_MODEL
+
+A registry of available embedding models per modality. Each row represents one deployable vector slot — a specific model that can encode records of a given `record_type` into a named slot in the vector store (see §6.2.3). Rows are registered at deployment time and updated when new models are introduced or retired.
+
+Fields: `model_id`, `record_type`, `role`, `model_slug`, `display_name`, `description`, `registry_source`, `registry_uri`, `is_active`.
+
+- `record_type`: the RECORD type this model encodes, e.g. `face_detection`, `named_entity`.
+- `role`: the slot role prefix, e.g. `face`, `text`, `layout` — determines the vector slot name prefix in the vector store.
+- `model_slug`: unique identifier used as the suffix in the vector slot name (`<role>:<model_slug>`), e.g. `arcface-r100-v2`. Must be globally unique within a `(record_type, role)` pair.
+- `display_name`: human-readable label shown in the UI.
+- `description`: optional free-text description of the model's architecture, training data, or intended use.
+- `registry_source`: the model registry that hosts this model version, e.g. `mlflow`, `huggingface`, `local`. Provides enough context to resolve the `registry_uri`.
+- `registry_uri`: the fully-qualified URI that identifies this specific model version in its registry. Format depends on `registry_source`:
+- `inference-provider-repo`: defines the repository that was used to do the inference and produce the vector. 
+
+  | `registry_source` | Example `registry_uri` |
+  |---|---|
+  | `mlflow` | `models:/face-detector/3` (registered model name + version number) |
+  | `huggingface` | `DCGM/arcface-r100-v2@sha256:abc123` (repo + commit/tag) |
+  | `local` | `/models/face-detector-v2/` (filesystem path) |
+
+  Together `(registry_source, registry_uri)` forms the canonical lineage reference for this model version and is stored on every vector store document that carries this model's slot (see §6.2.4).
+
+- `is_active`: whether this model is currently used for encoding newly ingested records. Multiple models for the same `record_type` may be active simultaneously when a new model is being rolled out.
+
+Models that are no longer active are retained for querying existing documents that carry their vector slot — they are never deleted as long as any documents reference them.
+
+### 7.2 SEARCH_PROFILE
+
+A named, reusable search configuration. Its modality weights and model selections are stored in the join table `SEARCH_PROFILE_MODALITY` (see §7.3).
+
+Fields: `profile_id`, `profile_name`, `description`, `owner_id`, `is_public`, `is_system`.
+
+- `owner_id`: FK → PRINCIPAL — the user who created this profile. Null for system profiles.
+- `is_public`: if true, the profile is visible and cloneable by all authenticated users.
+- `is_system`: system-provided profiles are read-only defaults provisioned at deployment. They cannot be modified or deleted.
+
+### 7.3 SEARCH_PROFILE_MODALITY
+
+Join table that configures one modality's participation in a specific `SEARCH_PROFILE`. Each row represents one `(profile, record_type)` pair and carries a direct FK to the pinned `MODALITY_MODEL`, if any.
+
+Fields: `profile_id`, `record_type`, `model_id`, `weight`, `enabled`, `min_confidence`.
+
+Constraints:
+- `UNIQUE (profile_id, record_type)` — only one row per modality per profile.
+- `profile_id`: FK → SEARCH_PROFILE.
+- `model_id`: nullable FK → MODALITY_MODEL — if null, the highest-priority active `MODALITY_MODEL` for the `record_type` is resolved at query time. If set, the query is pinned to that specific model's vector slot.
+- `weight`: float [0, ∞) — relative contribution of this modality to the combined retrieval score. Weights across all enabled modalities are normalised to sum to 1.0 at query time.
+- `enabled`: bool — whether this modality participates in the search. Allows toggling a modality off without deleting the row.
+- `min_confidence`: nullable float [0, 1] — records of this type below this detection confidence are excluded from candidates before scoring.
+
+#### 7.3.1 Example profiles
+
+| Profile name | Description | Enabled modalities |
+|---|---|---|
+| `face-only` | Pure face similarity search | `record_type=face_detection` |
+| `name-only` | Pure text name similarity search | `record_type=named_entity`, `record_type=grounded_name` |
+| `balanced` | Equal-weight face and name signals | `record_type=face_detection weight=1.0`, `record_type=named_entity weight=1.0`, `record_type=grounded_name weight=1.0` |
+| `authority-grounded` | Weighted towards authority name and description matches | `record_type=grounded_name weight=1.0`, `record_type=grounded_description weight=0.5`, `record_type=named_entity weight=0.5` |
+
+### 7.4 Profile sharing and lifecycle
+
+- **System profiles** (`is_system = true`) are provisioned at deployment time and serve as stable, read-only defaults. Their `SEARCH_PROFILE` row and all associated `SEARCH_PROFILE_MODALITY` rows cannot be modified or deleted.
+- **User profiles** are created by any authenticated principal. A user may mark any of their own profiles as their personal default for search sessions.
+- **Cloning**: any profile can be cloned. Cloning creates a new `SEARCH_PROFILE` row and copies all associated `SEARCH_PROFILE_MODALITY` rows to the new `profile_id`, owned by the requesting user. The clone is fully independent — there is no link back to the source profile, and subsequent changes to either do not affect the other. This is the only mechanism for deriving a customised variant of an existing profile.
+- **Model retirement**: when a `MODALITY_MODEL` is marked `is_active = false`, existing `SEARCH_PROFILE_MODALITY` rows that FK to it are detected via a simple indexed join on `model_id`. A warning is surfaced at query time to encourage migration to a newer model. The FK prevents the `MODALITY_MODEL` row from being deleted while any profile still references it.
 

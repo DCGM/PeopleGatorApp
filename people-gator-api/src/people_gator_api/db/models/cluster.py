@@ -40,37 +40,37 @@ class Cluster(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_property
-    def is_grounded(self) -> bool:  # type: ignore[misc]
+    def is_grounded(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.cluster_role == ClusterRole.grounded_cluster
 
-    @is_grounded.expression  # type: ignore[override]
+    @is_grounded.expression
     @classmethod
     def is_grounded(cls) -> sa.ColumnElement[bool]:
         return cls.cluster_role == ClusterRole.grounded_cluster.value
 
     @hybrid_property
-    def is_mutable(self) -> bool:  # type: ignore[misc]
+    def is_mutable(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.cluster_role == ClusterRole.mutable_cluster
 
-    @is_mutable.expression  # type: ignore[override]
+    @is_mutable.expression
     @classmethod
     def is_mutable(cls) -> sa.ColumnElement[bool]:
         return cls.cluster_role == ClusterRole.mutable_cluster.value
 
     @hybrid_property
-    def is_under_review(self) -> bool:  # type: ignore[misc]
+    def is_under_review(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.cluster_role == ClusterRole.review_cluster
 
-    @is_under_review.expression  # type: ignore[override]
+    @is_under_review.expression
     @classmethod
     def is_under_review(cls) -> sa.ColumnElement[bool]:
         return cls.cluster_role == ClusterRole.review_cluster.value
 
     @hybrid_property
-    def is_authority(self) -> bool:  # type: ignore[misc]
+    def is_authority(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.cluster_role == ClusterRole.authority_cluster
 
-    @is_authority.expression  # type: ignore[override]
+    @is_authority.expression
     @classmethod
     def is_authority(cls) -> sa.ColumnElement[bool]:
         return cls.cluster_role == ClusterRole.authority_cluster.value

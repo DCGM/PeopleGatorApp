@@ -75,28 +75,28 @@ class Action(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_property
-    def is_add(self) -> bool:  # type: ignore[misc]
+    def is_add(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.action_type == ActionType.add
 
-    @is_add.expression  # type: ignore[override]
+    @is_add.expression
     @classmethod
     def is_add(cls) -> sa.ColumnElement[bool]:
         return cls.action_type == ActionType.add.value
 
     @hybrid_property
-    def is_remove(self) -> bool:  # type: ignore[misc]
+    def is_remove(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.action_type == ActionType.remove
 
-    @is_remove.expression  # type: ignore[override]
+    @is_remove.expression
     @classmethod
     def is_remove(cls) -> sa.ColumnElement[bool]:
         return cls.action_type == ActionType.remove.value
 
     @hybrid_method
-    def matches_record(self, record_id: uuid.UUID) -> bool:  # type: ignore[misc]
+    def matches_record(self, record_id: uuid.UUID) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.record_id == record_id
 
-    @matches_record.expression  # type: ignore[override]
+    @matches_record.expression
     @classmethod
     def matches_record(cls, record_id: uuid.UUID) -> sa.ColumnElement[bool]:
         return cls.record_id == record_id

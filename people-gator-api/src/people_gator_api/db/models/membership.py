@@ -56,10 +56,10 @@ class Membership(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_method
-    def has_record(self, record_id: uuid.UUID) -> bool:  # type: ignore[misc]
+    def has_record(self, record_id: uuid.UUID) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.record_id == record_id
 
-    @has_record.expression  # type: ignore[override]
+    @has_record.expression
     @classmethod
     def has_record(cls, record_id: uuid.UUID) -> sa.ColumnElement[bool]:
         return cls.record_id == record_id

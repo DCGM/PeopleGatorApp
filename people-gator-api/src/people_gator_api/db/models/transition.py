@@ -60,19 +60,19 @@ class Transition(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_property
-    def is_initial(self) -> bool:  # type: ignore[misc]
+    def is_initial(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.transition_type == TransitionType.initial
 
-    @is_initial.expression  # type: ignore[override]
+    @is_initial.expression
     @classmethod
     def is_initial(cls) -> sa.ColumnElement[bool]:
         return cls.transition_type == TransitionType.initial.value
 
     @hybrid_property
-    def is_cross_cluster(self) -> bool:  # type: ignore[misc]
+    def is_cross_cluster(self) -> bool:  # pyright: ignore[reportRedeclaration]
         return self.transition_type == TransitionType.cluster_merge
 
-    @is_cross_cluster.expression  # type: ignore[override]
+    @is_cross_cluster.expression
     @classmethod
     def is_cross_cluster(cls) -> sa.ColumnElement[bool]:
         return cls.transition_type == TransitionType.cluster_merge.value
