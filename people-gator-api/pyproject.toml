@@ -38,7 +38,7 @@ dependencies = [
     "types-aiobotocore[s3]>=3.7.0",
     "uuid6>=2025.0.1",
     "uvicorn>=0.46.0",
-    "weaviate-client>=4.21.0",
+    "weaviate-client>=4.21.2",
 ]
 
 [project.scripts]
