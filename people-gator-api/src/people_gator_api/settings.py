@@ -28,6 +28,16 @@ class S3Settings(BaseModel):
 class StorageSettings(BaseModel):
     s3: S3Settings
 
+class WeaviateSettings(BaseModel):
+    http_host: str = "weaviate"
+    http_port: int = Field(default=8080, le=65535, ge=1)
+    http_secure: bool = False
+    grpc_host: str = "weaviate"
+    grpc_port: int = Field(default=50051, le=65535, ge=1)
+    grpc_secure: bool = False
+    api_key: str | None = None
+
+
 class KeycloakSettings(BaseModel):
     url: str = "https://auth.dev.people-gator.capturemyhand.com"
     realm: str = "people-gator"
@@ -60,5 +70,6 @@ class Settings(BaseSettings):
     postgres: PostgresSettings
     storage: StorageSettings
     keycloak: KeycloakSettings = KeycloakSettings()
+    weaviate: WeaviateSettings = WeaviateSettings()
 
 settings = Settings() # type: ignore

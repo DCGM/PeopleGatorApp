@@ -1,18 +1,18 @@
 from people_gator_api.db.models.action import Action
 from people_gator_api.db.models.base import Base, new_uuid6
 from people_gator_api.db.models.cluster import Cluster
-from people_gator_api.db.models.commit import Commit
+from people_gator_api.db.models.version import Version
 from people_gator_api.db.models.enums import (
     ActionReason,
     ActionType,
     ClusterRole,
     HeadConstraint,
-    LineageType,
+    TransitionType,
     PrincipalType,
     RecordType,
     ResolverType,
 )
-from people_gator_api.db.models.lineage import Lineage
+from people_gator_api.db.models.transition import Transition
 from people_gator_api.db.models.membership import Membership
 from people_gator_api.db.models.metadata_schema import MetadataSchema
 from people_gator_api.db.models.principal import Principal, ServiceAgent, User
@@ -53,10 +53,10 @@ __all__ = [
     "Base",
     "Cluster",
     "ClusterRole",
-    "Commit",
+    "Version",
     "HeadConstraint",
-    "Lineage",
-    "LineageType",
+    "Transition",
+    "TransitionType",
     "Membership",
     "MetadataSchema",
     "Principal",

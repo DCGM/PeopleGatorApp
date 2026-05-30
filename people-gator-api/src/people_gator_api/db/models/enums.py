@@ -33,7 +33,7 @@ class HeadConstraint(StrEnum):
     any = "any"
 
 
-class LineageType(StrEnum):
+class TransitionType(StrEnum):
     initial = "initial"
     next = "next"
     branch = "branch"

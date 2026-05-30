@@ -18,8 +18,8 @@ class Membership(Base):
     """Materialized current membership for each cluster.
 
     Updated in the same transaction as every ACTION write.  The
-    ``as_of_commit_id`` records which commit this state was derived from —
-    equal to ``CLUSTER.head_commit_id`` at the time of the last update.
+    The ``as_of_version_id`` records which version this state was derived from —
+    equal to ``CLUSTER.head_version_id`` at the time of the last update.
     """
 
     __tablename__ = "membership"
@@ -37,9 +37,9 @@ class Membership(Base):
     )
     weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     reason: Mapped[str] = mapped_column(String, nullable=False)
-    as_of_commit_id: Mapped[uuid.UUID] = mapped_column(
+    as_of_version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        sa.ForeignKey("commit.commit_id"),
+        sa.ForeignKey("version.version_id"),
         nullable=False,
     )
 
@@ -103,7 +103,7 @@ class Membership(Base):
         record_version_id: uuid.UUID,
         weight: float,
         reason: str,
-        as_of_commit_id: uuid.UUID,
+        as_of_version_id: uuid.UUID,
     ) -> None:
         stmt = (
             pg_insert(cls)
@@ -113,7 +113,7 @@ class Membership(Base):
                 record_version_id=record_version_id,
                 weight=weight,
                 reason=reason,
-                as_of_commit_id=as_of_commit_id,
+                as_of_version_id=as_of_version_id,
             )
             .on_conflict_do_update(
                 index_elements=["cluster_id", "record_id"],
@@ -121,7 +121,7 @@ class Membership(Base):
                     "record_version_id": record_version_id,
                     "weight": weight,
                     "reason": reason,
-                    "as_of_commit_id": as_of_commit_id,
+                    "as_of_version_id": as_of_version_id,
                 },
             )
         )
@@ -132,7 +132,7 @@ class Membership(Base):
                 "cluster_id": str(cluster_id),
                 "record_id": str(record_id),
                 "record_version_id": str(record_version_id),
-                "as_of_commit_id": str(as_of_commit_id),
+                "as_of_version_id": str(as_of_version_id),
             },
         )
 

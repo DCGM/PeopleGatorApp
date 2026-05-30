@@ -66,7 +66,7 @@ Authority filtering defaults to: Czechoslovakia, Czechia, Slovakia, Hungary, Aus
     - This service does not train or serve any models. It only stores the model version used to generate each record and uses that for staleness detection.
     - This service does not perform live authority lookups. It only ingests authority records from periodic syncs and links them to clusters, via exposed APIs for data access.
 8. Identity-first accountability: every state change carries a traceable actor.
-    - Every COMMIT and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
+    - Every VERSION and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
     - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
     - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
     - The `reason` field on ACTION categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
@@ -294,7 +294,7 @@ A textual description belonging to an authority entity. The entity is captured b
 
 Stable identity for a cluster across its version history.
 
-Fields: `cluster_id`, `cluster_role`, `head_commit_id`, `head_constraints`.
+Fields: `cluster_id`, `cluster_role`, `head_version_id`, `head_constraints`.
 
 
 `cluster_role` values:
@@ -312,48 +312,48 @@ Possible `head_constraints` values:
 | Constraint | Description |
 |---|---|
 | `locked` | Materialized view display only first version of the cluster. |
-| `main` | Materialized views are locked to only the last `next` lineage chain of the cluster. |
+| `main` | Materialized views are locked to only the last `next` transition chain of the cluster. |
 | `any` | Materialized views can display any versions of the cluster. |
 
-`CLUSTER.cluster_role` is a denormalized cache of the `cluster_role` from the commit pointed to by `head_commit_id`. It must be updated atomically in the same transaction as any `head_commit_id` change. `COMMIT.cluster_role` is the source of truth.
+`CLUSTER.cluster_role` is a denormalized cache of the `cluster_role` from the version pointed to by `head_version_id`. It must be updated atomically in the same transaction as any `head_version_id` change. `VERSION.cluster_role` is the source of truth.
 
-`head_commit_id` update rules — updated atomically whenever a new commit becomes the logical head of this cluster's main chain:
-- On `initial`: set to the initial `commit_id`.
-- On `next`: set to the new `target_commit_id` with current head being the `source_commit_id`.
-- On `merge` or `cluster-merge` where this cluster is the target and the current head is one of the source commits: set to `target_commit_id`.
-- On `branch`: `head_commit_id` is **not** updated — it stays on the main-chain commit the branch diverged from.
+`head_version_id` update rules — updated atomically whenever a new version becomes the logical head of this cluster's main chain:
+- On `initial`: set to the initial `version_id`.
+- On `next`: set to the new `target_version_id` with current head being the `source_version_id`.
+- On `merge` or `cluster-merge` where this cluster is the target and the current head is one of the source versions: set to `target_version_id`.
+- On `branch`: `head_version_id` is **not** updated — it stays on the main-chain version the branch diverged from.
 
-### 5.6 COMMIT
+### 5.6 VERSION
 
-One immutable version within a lineage. Created by copy-on-write on any membership change.
+One immutable snapshot of cluster membership state. Created by copy-on-write on any membership change.
 
-Fields: `commit_id`, `cluster_id`, `cluster_role`, `actor_id`.
+Fields: `version_id`, `cluster_id`, `cluster_role`, `actor_id`.
 
-- `actor_id`: FK to PRINCIPAL — the user or service agent that created this commit version.
+- `actor_id`: FK to PRINCIPAL — the user or service agent that created this version.
 
-### 5.7 LINEAGE
-Represents a relations of versions of the same cluster and relations between commits of independent logical clusters e.g. for `next`, `branch`, `pull`, `cluster-merge`, `cluster-split`.
+### 5.7 TRANSITION
+Represents a directed edge between versions of the same cluster, or between versions of independent logical clusters for `cluster-merge` and `split` operations.
 
-Fields: `source_cluster_id`, `source_commit_id`, `target_cluster_id`, `target_commit_id`, `lineage_type`.
-The lineage_type field can contain following values:
-| Lineage Type | Description | Enforced Constraints |
+Fields: `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_version_id`, `transition_type`.
+The transition_type field can contain following values:
+| Transition Type | Description | Enforced Constraints |
 |---|---|---|
-| `initial` | The initial version of a cluster. | `source_cluster_id` and `source_commit_id` are `NULL`. No prior lineage entry exists for the `cluster_id`. |
-| `next` | A new version is created by modifying the previous version. | `source_cluster_id == target_cluster_id` |
-| `branch` | A new branch is created from a parent commit. | `source_cluster_id == target_cluster_id` |
-| `merge` | Two or more branches within the same cluster are merged into one. | single `target_commit_id`, multiple `source_commit_id` rows; `source_cluster_id == target_cluster_id` |
-| `cluster-merge` | Commits from two or more different clusters are merged into a single target cluster. | single `target_commit_id`, multiple `source_commit_id` rows; `source_cluster_id` may differ from `target_cluster_id` |
-| `split` | One cluster is split into two or more clusters. | single `source_commit_id`, multiple `target_commit_id` rows |
+| `initial` | The initial version of a cluster. | `source_cluster_id` and `source_version_id` are `NULL`. No prior transition entry exists for the `cluster_id`. |
+| `next` | A new version is created by advancing the previous version. | `source_cluster_id == target_cluster_id` |
+| `branch` | A new parallel version is created from a source version. | `source_cluster_id == target_cluster_id` |
+| `merge` | Two or more parallel versions within the same cluster are merged into one. | single `target_version_id`, multiple `source_version_id` rows; `source_cluster_id == target_cluster_id` |
+| `cluster-merge` | Versions from two or more different clusters are merged into a single target cluster. | single `target_version_id`, multiple `source_version_id` rows; `source_cluster_id` may differ from `target_cluster_id` |
+| `split` | One cluster is split into two or more clusters. | single `source_version_id`, multiple `target_version_id` rows |
 
 ### 5.8 ACTION
 
-Associates a RECORD with a specific CLUSTER COMMIT, representing the addition or removal of that record from the cluster in that version. This is the core table for determining cluster membership at any given version.
+Associates a RECORD with a specific CLUSTER VERSION, representing the addition or removal of that record from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
-Fields: `action_id`, `cluster_id`, `commit_id`, `record_id`, `record_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
+Fields: `action_id`, `cluster_id`, `version_id`, `record_id`, `record_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
 
 Explanation of fields:
-- `cluster_id`: Denormalized from `COMMIT` for query performance — `commit_id` alone uniquely identifies a cluster's commit, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `commit_id`.
-- `action_type`: Indicates whether the record is being added to or removed after `commit_id` `cluster_id` state.
+- `cluster_id`: Denormalized from `VERSION` for query performance — `version_id` alone uniquely identifies a cluster version, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `version_id`.
+- `action_type`: Indicates whether the record is being added to or removed from the `version_id` `cluster_id` state.
 - `weight`: A numerical value representing the strength of the association between the record and the cluster in this commit, which can be used for ranking and confidence scoring.
 - `reason`: Can be `manual-annotation` or `automatic-linking`.
 - `actor_id`: FK to PRINCIPAL — the user or service agent that authored this specific record addition or removal.
@@ -361,51 +361,51 @@ Explanation of fields:
 Here enforced constraints for the ACTION:
 1. `record_id` and `record_version_id` must exist in the RECORD table
 2. The `cluster_id` must exist in the CLUSTER table.
-3. The `commit_id` must exist in the COMMIT table for the specified `cluster_id`.
-4. There is no entry in lineage table for the `cluster_id` and `commit_id` as `source_cluster_id` and `source_commit_id`. No derived versions have been created.
-5. For an `add` action, the specified `record_id` and `record_version_id` must exist in the RECORD table, and the `commit_id` must exist in the COMMIT table for the specified `cluster_id`.
+3. The `version_id` must exist in the VERSION table for the specified `cluster_id`.
+4. There is no entry in the TRANSITION table for the `cluster_id` and `version_id` as `source_cluster_id` and `source_version_id`. No derived versions have been created.
+5. For an `add` action, the specified `record_id` and `record_version_id` must exist in the RECORD table, and the `version_id` must exist in the VERSION table for the specified `cluster_id`.
 
 
-#### 5.8.1 Algorithm to resolve membership for a given `cluster_id` and `commit_id`:
+#### 5.8.1 Algorithm to resolve membership for a given `cluster_id` and `version_id`:
 1. Start with an empty set of member records.
-2. From `LINEAGE`, start with the specified `cluster_id` and `commit_id`, and perform a full DAG walk backwards through all ancestor lineage entries to the root commit, collecting all `(cluster_id, commit_id)` pairs. Follow ALL ancestor paths — including those via `cluster-merge` and `cluster-split` entries into different clusters. Do not prune at the first path to root.
-3. For each collected `cluster_id` and `commit_id`, query the ACTION table for all actions associated with that commit.
-4. Sort the collected actions globally by their `action_id` ascending. Because `action_id` is a UUIDv6, this is equivalent to creation-time order across all ancestor commits.
+2. From `TRANSITION`, start with the specified `cluster_id` and `version_id`, and perform a full DAG walk backwards through all ancestor transition entries to the root version, collecting all `(cluster_id, version_id)` pairs. Follow ALL ancestor paths — including those via `cluster-merge` and `cluster-split` entries into different clusters. Do not prune at the first path to root.
+3. For each collected `cluster_id` and `version_id`, query the ACTION table for all actions associated with that version.
+4. Sort the collected actions globally by their `action_id` ascending. Because `action_id` is a UUIDv6, this is equivalent to creation-time order across all ancestor versions.
 5. Sequentially apply each action to the set of member records, adding or removing records based on the `action_type` and updating the `weight` and `reason` accordingly.
-6. After processing all actions, the resulting set of member records represents the cluster membership for the specified `cluster_id` and `commit_id`.
+6. After processing all actions, the resulting set of member records represents the cluster membership for the specified `cluster_id` and `version_id`.
 
-#### 5.8.2 Algorithm to resolve uncommitted changes for a given `cluster_id` and `commit_id`:
-1. From `ACTION` table, query for any actions associated with the specified `cluster_id` and `commit_id`.
+#### 5.8.2 Algorithm to resolve pending (unsealed) changes for a given `cluster_id` and `version_id`:
+1. From `ACTION` table, query for any actions associated with the specified `cluster_id` and `version_id`.
 2. Sort the actions by their `action_id` ascending to ensure they are processed in the order they were created.
 3. Reduce the actions if same `RECORD` has been added and removed multiple times, keeping only the latest action for each `RECORD`.
-4. The resulting set of actions represents the uncommitted diff from the last committed state for the specified `cluster_id` and `commit_id`.
+4. The resulting set of actions represents the pending diff on the current working version for the specified `cluster_id` and `version_id`.
 
 #### 5.8.3 Resolve possible head of the cluster:
 - Case `locked` in `head_constraints`:
-  1. From `LINEAGE`, query for the first commit of the cluster with `cluster_id` and `lineage_type` = `initial`.
-  2. The resulting `commit_id` represents the head of the cluster.
+  1. From `TRANSITION`, query for the first version of the cluster with `cluster_id` and `transition_type` = `initial`.
+  2. The resulting `version_id` represents the head of the cluster.
 - Case `main`:
-  1. Filter `LINEAGE` for entries with `cluster_id`.
-  2. Sort the filtered lineage by `target_commit_id` ascending.
-  3. Set head commit to commit with `lineage_type` = `initial`, it should be first in the sorted list.
-  4. Go through the list and update the head commit if any of the following conditions are met:
-    - `lineage_type` is `next` and `source_commit_id` equals the current head commit → `target_commit_id` is now the head commit.
-    - `lineage_type` is `merge` and `source_commit_id` equals the current head commit → `target_commit_id` is now the head commit.
-    - `lineage_type` is `cluster-merge` and `source_cluster_id == cluster_id` and `source_commit_id` equals the current head commit → `target_commit_id` is now the head commit.
+  1. Filter `TRANSITION` for entries with `cluster_id`.
+  2. Sort the filtered transitions by `target_version_id` ascending.
+  3. Set head version to the version with `transition_type` = `initial`, it should be first in the sorted list.
+  4. Go through the list and update the head version if any of the following conditions are met:
+    - `transition_type` is `next` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
+    - `transition_type` is `merge` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
+    - `transition_type` is `cluster-merge` and `source_cluster_id == cluster_id` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
 
 - Case `any`:
-  1. From `LINEAGE`, query for all commits of the cluster with `cluster_id` and `lineage_type` in (`initial`, `next`, `branch`, `merge`, `cluster-merge`, `cluster-split`).
-  2. The resulting set of `commit_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf commits (commits with no outgoing `next` or `merge` entry).
+  1. From `TRANSITION`, query for all versions of the cluster with `cluster_id` and `transition_type` in (`initial`, `next`, `branch`, `merge`, `cluster-merge`, `cluster-split`).
+  2. The resulting set of `version_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf versions (versions with no outgoing `next` or `merge` transition).
 
 
 ### 5.9 TASK
 
 A unit of work assigned to a PRINCIPAL, directing them to act on a specific cluster commit. Tasks are the primary mechanism for driving the annotation and review workflow.
 
-Fields: `task_id`, `cluster_id`, `commit_id`, `assignee_id`, `task_role`, `status`, `created_by`, `created_at`, `updated_at`.
+Fields: `task_id`, `cluster_id`, `version_id`, `assignee_id`, `task_role`, `status`, `created_by`, `created_at`, `updated_at`.
 
 - `cluster_id`: FK → CLUSTER — the cluster this task concerns.
-- `commit_id`: FK → COMMIT — the specific commit version the assignee should work from. Pinned at task creation so the assignee always sees a consistent snapshot.
+- `version_id`: FK → VERSION — the specific version the assignee should work from. Pinned at task creation so the assignee always sees a consistent snapshot.
 - `assignee_id`: FK → PRINCIPAL — the user assigned to perform the task.
 - `created_by`: FK → PRINCIPAL — the user or service agent that created this task.
 - `task_role`: specifies what the assignee is expected to do with the cluster commit.
@@ -431,15 +431,15 @@ Fields: `task_id`, `cluster_id`, `commit_id`, `assignee_id`, `task_role`, `statu
 ### 5.10 MEMBERSHIP
 Represents the current materialized state of cluster membership for each cluster, derived from the ACTION table.
 
-Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_of_commit_id`.
+Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_of_version_id`.
 
-`as_of_commit_id` records which commit this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_commit_id` at the time of the last update.
+`as_of_version_id` records which version this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_version_id` at the time of the last update.
 
-The view is updated in real-time as new ACTIONs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to compute the full lineage of commits and actions each time. Updates to MEMBERSHIP must be applied in the same transaction as the ACTION write that triggered them. MEMBERSHIP reflects the committed state only — uncommitted actions (those on a commit that has no outgoing lineage entry yet) are applied to MEMBERSHIP as they are written, since the working commit is the live head.
+The view is updated in real-time as new ACTIONs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to replay the full version transition history and actions each time. Updates to MEMBERSHIP must be applied in the same transaction as the ACTION write that triggered them. MEMBERSHIP reflects the sealed state only — pending actions (those on a version that has no outgoing transition entry yet) are applied to MEMBERSHIP as they are written, since the working version is the live head.
 
 ### 5.11 PRINCIPAL
 
-Unified identity record for any actor that can modify the system. Every COMMIT and every ACTION carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
+Unified identity record for any actor that can modify the system. Every VERSION and every ACTION carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
 
 `principal_type` values:
 

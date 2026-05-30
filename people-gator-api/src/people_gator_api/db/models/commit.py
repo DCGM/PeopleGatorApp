@@ -14,10 +14,10 @@ from people_gator_api.db.models.enums import ClusterRole
 logger = logging.getLogger(__name__)
 
 
-class Commit(Base):
-    __tablename__ = "commit"
+class Version(Base):
+    __tablename__ = "version"
 
-    commit_id: Mapped[uuid.UUID] = mapped_column(
+    version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=new_uuid6
     )
     cluster_id: Mapped[uuid.UUID] = mapped_column(
@@ -58,10 +58,10 @@ class Commit(Base):
     async def get(
         cls,
         session: AsyncSession,
-        commit_id: uuid.UUID,
-    ) -> "Commit | None":
+        version_id: uuid.UUID,
+    ) -> "Version | None":
         result = await session.execute(
-            select(cls).where(cls.commit_id == commit_id)
+            select(cls).where(cls.version_id == version_id)
         )
         return result.scalar_one_or_none()
 
@@ -70,11 +70,11 @@ class Commit(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-    ) -> list["Commit"]:
+    ) -> list["Version"]:
         result = await session.execute(
             select(cls)
             .where(cls.cluster_id == cluster_id)
-            .order_by(cls.commit_id.asc())
+            .order_by(cls.version_id.asc())
         )
         return list(result.scalars().all())
 
@@ -85,22 +85,22 @@ class Commit(Base):
         cluster_id: uuid.UUID,
         cluster_role: ClusterRole,
         actor_id: uuid.UUID,
-        commit_id: uuid.UUID | None = None,
-    ) -> "Commit":
-        commit = cls(
-            commit_id=commit_id or new_uuid6(),
+        version_id: uuid.UUID | None = None,
+    ) -> "Version":
+        version = cls(
+            version_id=version_id or new_uuid6(),
             cluster_id=cluster_id,
             cluster_role=cluster_role,
             actor_id=actor_id,
         )
-        session.add(commit)
+        session.add(version)
         logger.info(
             "Created commit",
             extra={
-                "commit_id": str(commit.commit_id),
+                "version_id": str(version.version_id),
                 "cluster_id": str(cluster_id),
                 "cluster_role": cluster_role.value,
                 "actor_id": str(actor_id),
             },
         )
-        return commit
+        return version

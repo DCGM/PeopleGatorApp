@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 class Action(Base):
-    """Associates a RECORD with a specific CLUSTER COMMIT.
+    """Associates a RECORD with a specific CLUSTER VERSION.
 
     Represents the addition or removal of a record from a cluster at the given
-    commit.  The ``action_id`` is UUID v6 so sorting ascending gives
+    version.  The ``action_id`` is UUID v6 so sorting ascending gives
     creation-time order, which is required by the membership resolution
     algorithm.
     """
@@ -34,9 +34,9 @@ class Action(Base):
         sa.ForeignKey("cluster.cluster_id"),
         nullable=False,
     )
-    commit_id: Mapped[uuid.UUID] = mapped_column(
+    version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        sa.ForeignKey("commit.commit_id"),
+        sa.ForeignKey("version.version_id"),
         nullable=False,
     )
     record_id: Mapped[uuid.UUID] = mapped_column(
@@ -65,7 +65,7 @@ class Action(Base):
             ["record.record_id", "record.record_version_id"],
             name="fk_action_record_version",
         ),
-        sa.Index("ix_action_cluster_commit", "cluster_id", "commit_id"),
+        sa.Index("ix_action_cluster_version", "cluster_id", "version_id"),
         sa.Index("ix_action_record", "record_id", "record_version_id"),
         sa.Index("ix_action_actor", "actor_id"),
     )
@@ -106,17 +106,17 @@ class Action(Base):
     # -------------------------------------------------------------------------
 
     @classmethod
-    async def get_for_commit(
+    async def get_for_version(
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        commit_id: uuid.UUID,
+        version_id: uuid.UUID,
     ) -> list["Action"]:
         result = await session.execute(
             select(cls)
             .where(
                 cls.cluster_id == cluster_id,
-                cls.commit_id == commit_id,
+                cls.version_id == version_id,
             )
             .order_by(cls.action_id.asc())
         )
@@ -127,7 +127,7 @@ class Action(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        commit_id: uuid.UUID,
+        version_id: uuid.UUID,
         record_id: uuid.UUID,
         record_version_id: uuid.UUID,
         action_type: ActionType,
@@ -138,7 +138,7 @@ class Action(Base):
         action = cls(
             action_id=new_uuid6(),
             cluster_id=cluster_id,
-            commit_id=commit_id,
+            version_id=version_id,
             record_id=record_id,
             record_version_id=record_version_id,
             action_type=action_type,
@@ -152,7 +152,7 @@ class Action(Base):
             extra={
                 "action_id": str(action.action_id),
                 "cluster_id": str(cluster_id),
-                "commit_id": str(commit_id),
+                "version_id": str(version_id),
                 "record_id": str(record_id),
                 "record_version_id": str(record_version_id),
                 "action_type": action_type.value,

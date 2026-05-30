@@ -9,39 +9,39 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 from people_gator_api.db.models.base import Base, new_uuid6
-from people_gator_api.db.models.enums import LineageType
+from people_gator_api.db.models.enums import TransitionType
 
 logger = logging.getLogger(__name__)
 
 
-class Lineage(Base):
+class Transition(Base):
     """One directed edge in the version DAG.
 
     For ``initial``: source fields are NULL.
     For ``merge``/``cluster_merge``: multiple rows share the same
-    ``target_commit_id`` — one row per source commit.
-    For ``split``: multiple rows share the same ``source_commit_id`` — one row
-    per target commit.
+    ``target_version_id`` — one row per source version.
+    For ``split``: multiple rows share the same ``source_version_id`` — one row
+    per target version.
     """
 
-    __tablename__ = "lineage"
+    __tablename__ = "transition"
 
     # Surrogate PK — the natural key has no single-column identity for merge
     # rows (multiple sources → one target) or split rows.
-    lineage_id: Mapped[uuid.UUID] = mapped_column(
+    transition_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=new_uuid6
     )
-    lineage_type: Mapped[LineageType] = mapped_column(
-        SAEnum(LineageType, name="lineage_type_enum"), nullable=False
+    transition_type: Mapped[TransitionType] = mapped_column(
+        SAEnum(TransitionType, name="transition_type_enum"), nullable=False
     )
     source_cluster_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("cluster.cluster_id"),
         nullable=True,
     )
-    source_commit_id: Mapped[uuid.UUID | None] = mapped_column(
+    source_version_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("commit.commit_id"),
+        ForeignKey("version.version_id"),
         nullable=True,
     )
     target_cluster_id: Mapped[uuid.UUID] = mapped_column(
@@ -49,9 +49,9 @@ class Lineage(Base):
         ForeignKey("cluster.cluster_id"),
         nullable=False,
     )
-    target_commit_id: Mapped[uuid.UUID] = mapped_column(
+    target_version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("commit.commit_id"),
+        ForeignKey("version.version_id"),
         nullable=False,
     )
 
@@ -61,21 +61,21 @@ class Lineage(Base):
 
     @hybrid_property
     def is_initial(self) -> bool:  # type: ignore[misc]
-        return self.lineage_type == LineageType.initial
+        return self.transition_type == TransitionType.initial
 
     @is_initial.expression  # type: ignore[override]
     @classmethod
     def is_initial(cls) -> sa.ColumnElement[bool]:
-        return cls.lineage_type == LineageType.initial.value
+        return cls.transition_type == TransitionType.initial.value
 
     @hybrid_property
     def is_cross_cluster(self) -> bool:  # type: ignore[misc]
-        return self.lineage_type == LineageType.cluster_merge
+        return self.transition_type == TransitionType.cluster_merge
 
     @is_cross_cluster.expression  # type: ignore[override]
     @classmethod
     def is_cross_cluster(cls) -> sa.ColumnElement[bool]:
-        return cls.lineage_type == LineageType.cluster_merge.value
+        return cls.transition_type == TransitionType.cluster_merge.value
 
     # -------------------------------------------------------------------------
     # Class-level queries
@@ -86,13 +86,13 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        commit_id: uuid.UUID,
-    ) -> list["Lineage"]:
-        """Return all lineage entries that point TO the given commit."""
+        version_id: uuid.UUID,
+    ) -> list["Transition"]:
+        """Return all transition entries that point TO the given version."""
         result = await session.execute(
             select(cls).where(
                 cls.target_cluster_id == cluster_id,
-                cls.target_commit_id == commit_id,
+                cls.target_version_id == version_id,
             )
         )
         return list(result.scalars().all())
@@ -102,13 +102,13 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        commit_id: uuid.UUID,
-    ) -> list["Lineage"]:
-        """Return all lineage entries that originate FROM the given commit."""
+        version_id: uuid.UUID,
+    ) -> list["Transition"]:
+        """Return all transition entries that originate FROM the given version."""
         result = await session.execute(
             select(cls).where(
                 cls.source_cluster_id == cluster_id,
-                cls.source_commit_id == commit_id,
+                cls.source_version_id == version_id,
             )
         )
         return list(result.scalars().all())
@@ -118,26 +118,26 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-    ) -> list["Lineage"]:
+    ) -> list["Transition"]:
         """Return all lineage entries whose target belongs to this cluster."""
         result = await session.execute(
             select(cls)
             .where(cls.target_cluster_id == cluster_id)
-            .order_by(cls.target_commit_id.asc())
+            .order_by(cls.target_version_id.asc())
         )
         return list(result.scalars().all())
 
     @classmethod
-    async def get_initial_commit_id(
+    async def get_initial_version_id(
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
     ) -> uuid.UUID | None:
-        """Return the commit_id of the initial commit for a cluster."""
+        """Return the version_id of the initial version for a cluster."""
         result = await session.execute(
-            select(cls.target_commit_id).where(
+            select(cls.target_version_id).where(
                 cls.target_cluster_id == cluster_id,
-                cls.lineage_type == LineageType.initial,
+                cls.transition_type == TransitionType.initial,
             )
         )
         return result.scalar_one_or_none()
@@ -147,22 +147,22 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         target_cluster_id: uuid.UUID,
-        target_commit_id: uuid.UUID,
-    ) -> "Lineage":
+        target_version_id: uuid.UUID,
+    ) -> "Transition":
         entry = cls(
-            lineage_id=new_uuid6(),
-            lineage_type=LineageType.initial,
+            transition_id=new_uuid6(),
+            transition_type=TransitionType.initial,
             source_cluster_id=None,
-            source_commit_id=None,
+            source_version_id=None,
             target_cluster_id=target_cluster_id,
-            target_commit_id=target_commit_id,
+            target_version_id=target_version_id,
         )
         session.add(entry)
         logger.info(
-            "Created initial lineage entry",
+            "Created initial transition entry",
             extra={
                 "target_cluster_id": str(target_cluster_id),
-                "target_commit_id": str(target_commit_id),
+                "target_version_id": str(target_version_id),
             },
         )
         return entry
@@ -172,24 +172,24 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        source_commit_id: uuid.UUID,
-        target_commit_id: uuid.UUID,
-    ) -> "Lineage":
+        source_version_id: uuid.UUID,
+        target_version_id: uuid.UUID,
+    ) -> "Transition":
         entry = cls(
-            lineage_id=new_uuid6(),
-            lineage_type=LineageType.next,
+            transition_id=new_uuid6(),
+            transition_type=TransitionType.next,
             source_cluster_id=cluster_id,
-            source_commit_id=source_commit_id,
+            source_version_id=source_version_id,
             target_cluster_id=cluster_id,
-            target_commit_id=target_commit_id,
+            target_version_id=target_version_id,
         )
         session.add(entry)
         logger.info(
-            "Created next lineage entry",
+            "Created next transition entry",
             extra={
                 "cluster_id": str(cluster_id),
-                "source_commit_id": str(source_commit_id),
-                "target_commit_id": str(target_commit_id),
+                "source_version_id": str(source_version_id),
+                "target_version_id": str(target_version_id),
             },
         )
         return entry
@@ -199,24 +199,24 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        source_commit_id: uuid.UUID,
-        target_commit_id: uuid.UUID,
-    ) -> "Lineage":
+        source_version_id: uuid.UUID,
+        target_version_id: uuid.UUID,
+    ) -> "Transition":
         entry = cls(
-            lineage_id=new_uuid6(),
-            lineage_type=LineageType.branch,
+            transition_id=new_uuid6(),
+            transition_type=TransitionType.branch,
             source_cluster_id=cluster_id,
-            source_commit_id=source_commit_id,
+            source_version_id=source_version_id,
             target_cluster_id=cluster_id,
-            target_commit_id=target_commit_id,
+            target_version_id=target_version_id,
         )
         session.add(entry)
         logger.info(
-            "Created branch lineage entry",
+            "Created branch transition entry",
             extra={
                 "cluster_id": str(cluster_id),
-                "source_commit_id": str(source_commit_id),
-                "target_commit_id": str(target_commit_id),
+                "source_version_id": str(source_version_id),
+                "target_version_id": str(target_version_id),
             },
         )
         return entry
@@ -226,29 +226,29 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         source_cluster_id: uuid.UUID,
-        source_commit_id: uuid.UUID,
+        source_version_id: uuid.UUID,
         target_cluster_id: uuid.UUID,
-        target_commit_id: uuid.UUID,
-        lineage_type: LineageType = LineageType.merge,
-    ) -> "Lineage":
-        """Create one row of a merge (call once per source commit)."""
+        target_version_id: uuid.UUID,
+        transition_type: TransitionType = TransitionType.merge,
+    ) -> "Transition":
+        """Create one row of a merge (call once per source version)."""
         entry = cls(
-            lineage_id=new_uuid6(),
-            lineage_type=lineage_type,
+            transition_id=new_uuid6(),
+            transition_type=transition_type,
             source_cluster_id=source_cluster_id,
-            source_commit_id=source_commit_id,
+            source_version_id=source_version_id,
             target_cluster_id=target_cluster_id,
-            target_commit_id=target_commit_id,
+            target_version_id=target_version_id,
         )
         session.add(entry)
         logger.info(
-            "Created merge lineage entry",
+            "Created merge transition entry",
             extra={
-                "lineage_type": lineage_type.value,
+                "transition_type": transition_type.value,
                 "source_cluster_id": str(source_cluster_id),
-                "source_commit_id": str(source_commit_id),
+                "source_version_id": str(source_version_id),
                 "target_cluster_id": str(target_cluster_id),
-                "target_commit_id": str(target_commit_id),
+                "target_version_id": str(target_version_id),
             },
         )
         return entry
@@ -258,27 +258,27 @@ class Lineage(Base):
         cls,
         session: AsyncSession,
         source_cluster_id: uuid.UUID,
-        source_commit_id: uuid.UUID,
+        source_version_id: uuid.UUID,
         target_cluster_id: uuid.UUID,
-        target_commit_id: uuid.UUID,
-    ) -> "Lineage":
-        """Create one row of a split (call once per target commit)."""
+        target_version_id: uuid.UUID,
+    ) -> "Transition":
+        """Create one row of a split (call once per target version)."""
         entry = cls(
-            lineage_id=new_uuid6(),
-            lineage_type=LineageType.cluster_split,
+            transition_id=new_uuid6(),
+            transition_type=TransitionType.cluster_split,
             source_cluster_id=source_cluster_id,
-            source_commit_id=source_commit_id,
+            source_version_id=source_version_id,
             target_cluster_id=target_cluster_id,
-            target_commit_id=target_commit_id,
+            target_version_id=target_version_id,
         )
         session.add(entry)
         logger.info(
-            "Created split lineage entry",
+            "Created split transition entry",
             extra={
                 "source_cluster_id": str(source_cluster_id),
-                "source_commit_id": str(source_commit_id),
+                "source_version_id": str(source_version_id),
                 "target_cluster_id": str(target_cluster_id),
-                "target_commit_id": str(target_commit_id),
+                "target_version_id": str(target_version_id),
             },
         )
         return entry

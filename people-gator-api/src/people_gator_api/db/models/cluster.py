@@ -26,9 +26,9 @@ class Cluster(Base):
     # Circular reference resolved with use_alter — cluster points to its head
     # commit, and commit points back to cluster. The FK is deferred to ALTER
     # TABLE so both tables can be created first.
-    head_commit_id: Mapped[uuid.UUID | None] = mapped_column(
+    head_version_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("commit.commit_id", use_alter=True, name="fk_cluster_head_commit_id"),
+        ForeignKey("version.version_id", use_alter=True, name="fk_cluster_head_version_id"),
         nullable=True,
     )
     head_constraints: Mapped[HeadConstraint] = mapped_column(
@@ -112,7 +112,7 @@ class Cluster(Base):
         cluster = cls(
             cluster_id=cluster_id or new_uuid6(),
             cluster_role=cluster_role,
-            head_commit_id=None,
+            head_version_id=None,
             head_constraints=head_constraints,
         )
         session.add(cluster)
@@ -130,23 +130,23 @@ class Cluster(Base):
     # Instance-level operations
     # -------------------------------------------------------------------------
 
-    async def update_head_commit(
+    async def update_head_version(
         self,
         session: AsyncSession,
-        commit_id: uuid.UUID,
+        version_id: uuid.UUID,
         cluster_role: ClusterRole | None = None,
     ) -> None:
-        old_head = self.head_commit_id
-        self.head_commit_id = commit_id
+        old_head = self.head_version_id
+        self.head_version_id = version_id
         if cluster_role is not None:
             self.cluster_role = cluster_role
         session.add(self)
         logger.info(
-            "Updated cluster head commit",
+            "Updated cluster head version",
             extra={
                 "cluster_id": str(self.cluster_id),
-                "old_head_commit_id": str(old_head) if old_head else None,
-                "new_head_commit_id": str(commit_id),
+                "old_head_version_id": str(old_head) if old_head else None,
+                "new_head_version_id": str(version_id),
                 "new_role": cluster_role.value if cluster_role else None,
             },
         )
