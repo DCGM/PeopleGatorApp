@@ -105,11 +105,13 @@ Defines how to resolve the storage and access paths for a family of sources. Eve
 Fields: `schema_name`, `resolver_type`, `resolver_config`.
 
 - `schema_name`: human-readable label, e.g. `s3-upload`, `kramerius5-iiif`, `wikimedia-image`, `nkcr-authority`. Must be globally unique.
-- `resolver_type`: one of `local-filesystem`, `s3`, `iiif`, `http`, `sparql`.
+- `resolver_type`: one of `this-table`,  `local-filesystem`, `s3`, `iiif`, `http`, `sparql`.
 - `resolver_config`: JSONB with resolver-specific parameters, interpolated with values from `SOURCE.provider_id` and optionally `RECORD.source_path`.
 
 | `resolver_type` | Example `schema_name` | Example `resolver_config` |
 |---|---|---|
+| `this-table` | `principal-defined-name` | `{"name": "{text}"}` |
+| `this-table` | `principal-defined-description` | `{"description": "{text}"}` |
 | `s3` | `s3-upload` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
 | `http` | `kramerius5-iiif` | `{"base_url_template": "https://api.kramerius.{library}.cz/", "manifest_template": "search/iiif/uuid:{page_id}/full/max/0/default.jpg"}` |
 | `http` | `wikimedia-image` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
@@ -126,11 +128,9 @@ Resolver then does the following for a SOURCE field where `schema_name` referenc
 
 A specific document, scan, or artifact from which one or more RECORDs were derived. SOURCE normalises provenance — a RECORD belongs to exactly one SOURCE, and the SOURCE belongs to one SOURCE_SCHEMA that knows how to resolve its storage paths.
 
-Fields: `source_id`, `source_schema_id`, `provider`, `provider_id`, `metadata`, `created_by`.
-
+Fields: `source_id`, `source_schema_id`, `metadata`, `created_by`.
+- `source_id`: UUIDv6 primary key.
 - `source_schema_id`: FK → SOURCE_SCHEMA — determines how this original source can be resolved.
-- `provider`: originating system identifier, e.g. `kramerius`, `nkcr`, `local-ingest`. Used as a namespacing prefix when interpolating resolver templates.
-- `provider_id`: the external system's stable identifier for this artifact, e.g. a Kramerius UUID or NKCR authority number. Used when interpolating `{provider_id}` placeholders in `SOURCE_SCHEMA.resolver_config`.
 - `created_by`: FK → PRINCIPAL — the user or service agent that ingested this source.
 - `metadata`: JSONB with source-level descriptive information — document title, publication date, page number within a multi-page document, detected language, collection name, etc.
 
