@@ -95,13 +95,13 @@ class Record(Base):
         record_id: uuid.UUID,
         record_version_id: uuid.UUID,
     ) -> "Record | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(
                 cls.record_id == record_id,
                 cls.record_version_id == record_version_id,
             )
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_latest_version(
@@ -109,13 +109,13 @@ class Record(Base):
         session: AsyncSession,
         record_id: uuid.UUID,
     ) -> "Record | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls)
             .where(cls.record_id == record_id)
             .order_by(cls.record_version_id.desc())
             .limit(1)
         )
-        record = result.scalar_one_or_none()
+        record = result.one_or_none()
         logger.debug(
             "Fetched latest record version",
             extra={"record_id": str(record_id), "found": record is not None},
@@ -128,13 +128,13 @@ class Record(Base):
         session: AsyncSession,
         content_hash: str,
     ) -> "Record | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls)
             .where(cls.content_hash == content_hash)
             .order_by(cls.record_version_id.desc())
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def create(

@@ -134,13 +134,13 @@ class Transition(Base):
         cluster_id: uuid.UUID,
     ) -> uuid.UUID | None:
         """Return the version_id of the initial version for a cluster."""
-        result = await session.execute(
+        result = await session.scalars(
             select(cls.target_version_id).where(
                 cls.target_cluster_id == cluster_id,
                 cls.transition_type == TransitionType.initial,
             )
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def create_initial(

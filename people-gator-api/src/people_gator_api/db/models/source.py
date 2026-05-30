@@ -64,10 +64,10 @@ class Source(Base):
         session: AsyncSession,
         source_id: uuid.UUID,
     ) -> "Source | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(cls.source_id == source_id)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_by_provider(
@@ -76,13 +76,13 @@ class Source(Base):
         provider: str,
         provider_id: str,
     ) -> "Source | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(
                 cls.provider == provider,
                 cls.provider_id == provider_id,
             )
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_or_create(

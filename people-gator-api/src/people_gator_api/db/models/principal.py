@@ -74,10 +74,10 @@ class Principal(Base):
         session: AsyncSession,
         principal_id: uuid.UUID,
     ) -> "Principal | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(cls.principal_id == principal_id)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     # -------------------------------------------------------------------------
     # Instance-level operations
@@ -137,13 +137,13 @@ class User(Principal):
         external_subject: str,
         external_issuer: str,
     ) -> "User | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(
                 cls.external_subject == external_subject,
                 cls.external_issuer == external_issuer,
             )
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_or_create(
@@ -233,10 +233,10 @@ class ServiceAgent(Principal):
         session: AsyncSession,
         agent_slug: str,
     ) -> "ServiceAgent | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(cls.agent_slug == agent_slug)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_or_create(

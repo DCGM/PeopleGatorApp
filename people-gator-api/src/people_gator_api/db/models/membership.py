@@ -86,13 +86,13 @@ class Membership(Base):
         cluster_id: uuid.UUID,
         record_id: uuid.UUID,
     ) -> "Membership | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(
                 cls.cluster_id == cluster_id,
                 cls.record_id == record_id,
             )
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def upsert(

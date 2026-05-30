@@ -57,10 +57,10 @@ class MetadataSchema(Base):
         session: AsyncSession,
         schema_id: uuid.UUID,
     ) -> "MetadataSchema | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(cls.schema_id == schema_id)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_by_name(
@@ -68,10 +68,10 @@ class MetadataSchema(Base):
         session: AsyncSession,
         schema_name: str,
     ) -> "MetadataSchema | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(cls.schema_name == schema_name)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_by_type_version(
@@ -80,13 +80,13 @@ class MetadataSchema(Base):
         record_type: RecordType,
         version: str,
     ) -> "MetadataSchema | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(
                 cls.record_type == record_type,
                 cls.version == version,
             )
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def create(

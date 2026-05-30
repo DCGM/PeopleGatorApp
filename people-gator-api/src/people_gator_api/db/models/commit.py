@@ -60,10 +60,10 @@ class Version(Base):
         session: AsyncSession,
         version_id: uuid.UUID,
     ) -> "Version | None":
-        result = await session.execute(
+        result = await session.scalars(
             select(cls).where(cls.version_id == version_id)
         )
-        return result.scalar_one_or_none()
+        return result.one_or_none()
 
     @classmethod
     async def get_for_cluster(
