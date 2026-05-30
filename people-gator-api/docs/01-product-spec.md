@@ -398,7 +398,37 @@ Here enforced constraints for the ACTION:
   2. The resulting set of `commit_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf commits (commits with no outgoing `next` or `merge` entry).
 
 
-### 5.9 MEMBERSHIP
+### 5.9 TASK
+
+A unit of work assigned to a PRINCIPAL, directing them to act on a specific cluster commit. Tasks are the primary mechanism for driving the annotation and review workflow.
+
+Fields: `task_id`, `cluster_id`, `commit_id`, `assignee_id`, `task_role`, `status`, `created_by`, `created_at`, `updated_at`.
+
+- `cluster_id`: FK → CLUSTER — the cluster this task concerns.
+- `commit_id`: FK → COMMIT — the specific commit version the assignee should work from. Pinned at task creation so the assignee always sees a consistent snapshot.
+- `assignee_id`: FK → PRINCIPAL — the user assigned to perform the task.
+- `created_by`: FK → PRINCIPAL — the user or service agent that created this task.
+- `task_role`: specifies what the assignee is expected to do with the cluster commit.
+- `status`: lifecycle state of the task.
+
+`task_role` values:
+
+| Role | Description |
+|---|---|
+| `annotate` | Assignee should review and extend or correct the cluster membership |
+| `review` | Assignee should adjudicate annotation branches and produce a consolidated version |
+| `verify` | Assignee should confirm the cluster grounding against authority records |
+
+`status` values:
+
+| Status | Description |
+|---|---|
+| `pending` | Task created, not yet accepted by the assignee |
+| `submitted` | Assignee has submitted their changes for the next workflow stage |
+| `closed` | Task completed or cancelled; no further action expected |
+
+
+### 5.10 MEMBERSHIP
 Represents the current materialized state of cluster membership for each cluster, derived from the ACTION table.
 
 Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_of_commit_id`.
@@ -407,7 +437,7 @@ Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_
 
 The view is updated in real-time as new ACTIONs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to compute the full lineage of commits and actions each time. Updates to MEMBERSHIP must be applied in the same transaction as the ACTION write that triggered them. MEMBERSHIP reflects the committed state only — uncommitted actions (those on a commit that has no outgoing lineage entry yet) are applied to MEMBERSHIP as they are written, since the working commit is the live head.
 
-### 5.10 PRINCIPAL
+### 5.11 PRINCIPAL
 
 Unified identity record for any actor that can modify the system. Every COMMIT and every ACTION carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
 
@@ -422,7 +452,7 @@ Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
 `PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER` or `SERVICE_AGENT` table.
 
-#### 5.10.1 USER
+#### 5.11.1 USER
 
 A human principal authenticated through an external OpenID Connect (OIDC) identity provider such as Keycloak or Auth0. The user record is created or refreshed on first token verification.
 
@@ -433,7 +463,7 @@ Fields (extends PRINCIPAL): `principal_id`, `external_subject`, `external_issuer
 - Together `(external_subject, external_issuer)` forms a globally unique identity key across multiple IdPs.
 - `email` is optional; sourced from the OIDC `email` claim when present.
 
-#### 5.10.2 SERVICE_AGENT
+#### 5.11.2 SERVICE_AGENT
 
 An autonomous process principal. Agents are pre-registered and identified by a unique `agent_slug` following the convention `<category>:<name>`, for example:
 
