@@ -105,15 +105,15 @@ Defines how to resolve the storage and access paths for a family of sources. Eve
 Fields: `schema_name`, `resolver_type`, `resolver_config`.
 
 - `schema_name`: human-readable label, e.g. `s3-upload`, `kramerius5-iiif`, `wikimedia-image`, `nkcr-authority`. Must be globally unique.
-- `resolver_type`: one of `this-table`,  `local-filesystem`, `s3`, `iiif`, `http`, `sparql`.
+- `resolver_type`: one of `table`, `fsspec`, `s3`, `http`, `sparql`.
 - `resolver_config`: JSONB with resolver-specific parameters, interpolated with values from `SOURCE.provider_id` and optionally `RECORD.source_path`.
 
 | `resolver_type` | Example `schema_name` | Example `resolver_config` |
 |---|---|---|
-| `this-table` | `principal-defined-name` | `{"name": "{text}"}` |
-| `this-table` | `principal-defined-description` | `{"description": "{text}"}` |
+| `table` | `user-provided` | `{"table_template": "SOURCE", "column_template": "source_id={resource_id} principal_id={principal_id}"}` |
 | `s3` | `s3-upload` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
-| `http` | `kramerius5-iiif` | `{"base_url_template": "https://api.kramerius.{library}.cz/", "manifest_template": "search/iiif/uuid:{page_id}/full/max/0/default.jpg"}` |
+| `fsspec` | `kramerius-ocr-public` | `{"path_template": "zip://{page_id}.xml::file:///mnt/matylda1/ihradis/digiknihovna_public/{library}/{document_id}.page_xml.zip"}` |
+| `http` | `kramerius-iiif` | `{"base_url_template": "https://api.kramerius.{library}.cz/", "manifest_template": "search/iiif/uuid:{page_id}/full/max/0/default.jpg"}` |
 | `http` | `wikimedia-image` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
 | `http` | `wikidata-entity` | `{"base_url_template": "https://www.wikidata.org/", "path_template": "wiki/{wikidata_id}"}` |
 | `http` | `nkcr-authority` | `{"base_url_template": "https://aleph.nkp.cz/", "path_template": "F/?func=find-b&local_base=AUT&find_code=WRD&request={nkcr_authority_id}"}` |
