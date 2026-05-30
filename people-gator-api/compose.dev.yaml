@@ -1,23 +1,35 @@
 services:
   people-gator-keycloak-dev:
-    image: quay.io/keycloak/keycloak:26
+    image: quay.io/keycloak/keycloak:26.6
     restart: unless-stopped
     command: start-dev
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HOSTNAME: https://auth.dev.people-gator.capturemyhand.com
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: true
       KC_PROXY_HEADERS: xforwarded
+      ### Telemetry
+      KC_TELEMETRY_ENDPOINT: http://lgtm:4317
+      KC_TELEMETRY_SERVICE_NAME: people-gator-keycloak-dev
+      KC_FEATURE_OPENTELEMETRY: enabled
+      KC_FEATURE_OPENTELEMETRY_METRICS: enabled
+      KC_FEATURE_OPENTELEMETRY_LOGS: enabled
+      KC_TELEMETRY_METRICS_ENABLED: true
+      KC_TELEMETRY_LOGS_ENABLED: true
+      KC_TELEMETRY_LOGS_LEVEL: info
+      KC_METRICS_ENABLED: true
+      KC_TRACING_ENABLED: true
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.people-gator-keycloak-dev.rule=Host(`auth.dev.people-gator.capturemyhand.com`)
-      - traefik.http.routers.people-gator-keycloak-dev.entrypoints=websecure
-      - traefik.http.services.people-gator-keycloak-dev.loadbalancer.server.port=8080
-      - traefik.http.routers.people-gator-keycloak-dev.tls=true
-      - traefik.http.routers.people-gator-keycloak-dev.tls.certresolver=tlschallenge
+      traefik.enable: true
+      traefik.http.routers.people-gator-keycloak-dev.rule: Host(`auth.dev.people-gator.capturemyhand.com`)
+      traefik.http.routers.people-gator-keycloak-dev.entrypoints: websecure
+      traefik.http.services.people-gator-keycloak-dev.loadbalancer.server.port: 8080
+      traefik.http.routers.people-gator-keycloak-dev.tls: true
+      traefik.http.routers.people-gator-keycloak-dev.tls.certresolver: tlschallenge
     networks:
       - web
+      - logging
       - default
 
   people-gator-postgres-dev:
@@ -25,7 +37,7 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - people-gator-postgres-dev-data:/var/lib/postgresql/data
+      - /mnt/hdd/Data/people-gator-dev/postgres:/var/lib/postgresql
     networks:
       - default
   people-gator-api-dev:
@@ -60,12 +72,12 @@ services:
         - action: rebuild
           path: ./Dockerfile.dev
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.people-gator-api-dev.rule=Host(`dev.people-gator.capturemyhand.com`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
-      - traefik.http.routers.people-gator-api-dev.entrypoints=websecure
-      - traefik.http.services.people-gator-api-dev.loadbalancer.server.port=8000
-      - traefik.http.routers.people-gator-api-dev.tls=true
-      - traefik.http.routers.people-gator-api-dev.tls.certresolver=tlschallenge
+      traefik.enable: true
+      traefik.http.routers.people-gator-api-dev.rule: Host(`dev.people-gator.capturemyhand.com`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
+      traefik.http.routers.people-gator-api-dev.entrypoints: websecure
+      traefik.http.services.people-gator-api-dev.loadbalancer.server.port: 8000
+      traefik.http.routers.people-gator-api-dev.tls: true
+      traefik.http.routers.people-gator-api-dev.tls.certresolver: tlschallenge
     networks:
       - web
       - default
@@ -77,7 +89,3 @@ networks:
   logging:
     external: true
 
-
-volumes:
-  people-gator-postgres-dev-data:
-    driver: local
