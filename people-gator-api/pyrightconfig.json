@@ -3,7 +3,7 @@
 
   "reportIncompatibleMethodOverride": "error",
   "reportIncompatibleVariableOverride": "error",
-  "reportUnnecessaryTypeIgnoreComment ": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
   "reportImportCycles" : "error",
   "reportImplicitStringConcatenation": "error",
   "reportMissingSuperCall": "error",
