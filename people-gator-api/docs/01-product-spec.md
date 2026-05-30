@@ -480,3 +480,95 @@ Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `agent_version`, `desc
 - `agent_version`: optional semantic version string tied to the model or code version that produced the records (enables staleness detection).
 - `description`: optional free-text description of the agent's purpose.
 
+---
+
+## 6. Vector Data Model
+
+The vector store is a document store. Each document is in a strict **1:1 relationship with one RECORD version** — one document per `(record_id, record_version_id)` pair. Because a RECORD has exactly one `record_type`, each document represents a single modality. Multiple vectors can exist within the same document, but only as the result of running different embedding models or pipelines over the same content — not because the document spans multiple modalities.
+
+### 6.1 Design Goals
+
+1. **One document per RECORD version** — `(record_id, record_version_id)` is the document key. No document aggregates evidence across multiple RECORDs.
+2. **Single modality per document** — the `record_type` of the RECORD fully determines the modality of every vector in the document. Cross-modal queries join across documents at query time.
+3. **Multiple vectors for the same modality** — a document may carry several named vector slots for its modality, each produced by a different embedding model or pipeline version. This allows parallel staleness-aware retrieval and A/B comparison of models without rewriting history.
+4. **Derived faceting metadata** — faceting attributes are derived from the RECORD's SOURCE and SOURCE_SCHEMA at ingest time and stored inline on the document. This allows the vector DB to evaluate filters without a round-trip to the relational store.
+5. **Modality-specific searchable fields** — some record types store additional normalised text fields (e.g. `normalized_text` on `named_entity`) to enable full-text search directly in the vector DB alongside vector similarity.
+6. **Relational anchor** — every document carries `record_id` and `record_version_id` as the stable FK pair back to the RECORD table. The vector store is always a derived projection; the relational model is the source of truth.
+
+### 6.2 Document Schema
+
+#### 6.2.1 Identity and relational anchor
+
+| Field | Type | Description |
+|---|---|---|
+| `record_id` | UUID v6 | FK → RECORD.record_id — stable identifier across versions |
+| `record_version_id` | UUID v6 | FK → RECORD.record_version_id — together forms the unique document key |
+| `record_type` | string | `face_detection` \| `named_entity` \| `text_region` \| `image_region` \| `grounded_name` \| `grounded_description` — determines the modality and which vector slots and metadata fields are populated |
+
+#### 6.2.2 Faceting metadata (derived from SOURCE and SOURCE_SCHEMA)
+
+These fields are resolved at ingest time by applying the SOURCE_SCHEMA resolver logic to the RECORD's SOURCE and `source_path`. Stored inline on the document for filter efficiency.
+
+| Field | Type | Description |
+|---|---|---|
+| `source_id` | UUID v6 | FK → SOURCE — enables per-document-source filtering |
+| `provider` | string | SOURCE.provider value, e.g. `kramerius`, `nkcr`, `local-ingest` — coarse provenance facet |
+| `cluster_ids` | list[UUID v6] | Current cluster memberships — denormalised from MEMBERSHIP; updated on membership change |
+| `language` | string (BCP 47) | Language of the textual content; null for non-textual record types |
+
+#### 6.2.3 Named vector slots
+
+Each slot is a dense float vector produced by a specific embedding model. Multiple slots may be present on the same document if the same content has been encoded by more than one model or pipeline. Each slot name encodes both the modality role and the model identifier, following the convention `<role>:<model_slug>`.
+
+The `<role>` prefix is fixed per `record_type`:
+
+| `record_type` | Role prefix | Meaning |
+|---|---|---|
+| `face_detection` | `face` | Embedding of the detected face crop |
+| `image_region` | `image` | Embedding of an image patch |
+| `named_entity` | `text` | Semantic embedding of the entity text span |
+| `text_region` | `text` | Semantic embedding of the text region content |
+| `text_region` | `layout` | Embedding encoding spatial/layout structure of the region |
+| `grounded_name` | `text` | Semantic embedding of the name string |
+| `grounded_description` | `text` | Semantic embedding of the description text |
+
+Example slot names: `face:arcface-r100-v2`, `text:multilingual-e5-large-v1`, `layout:lilt-base-v1`.
+
+Adding a new model produces new slot names on newly ingested documents. Old documents retain their original slots and are not backfilled unless an explicit re-embedding job is run.
+
+#### 6.2.4 Modality-specific metadata fields
+
+These fields are populated only for the applicable `record_type`s. They enable filtering and full-text search directly in the vector DB.
+
+| Field | Type | Applicable `record_type`(s) | Description |
+|---|---|---|---|
+| `confidence` | float [0,1] | all | Detection or linking confidence from the originating model |
+| `normalized_text` | string | `named_entity`, `grounded_name`, `grounded_description` | Normalised form of the text — enables full-text search alongside vector similarity |
+| `name_type` | string | `grounded_name` | `preferred` or `alias` — allows filtering to preferred name forms only |
+| `polygon` | object | `face_detection`, `named_entity` | Serialised `BoundingBox` — cached for search result thumbnail rendering without a relational join |
+| `keypoints` | object | `face_detection` | Serialised list of `Keypoint`s — cached for search result thumbnail rendering without a relational join |
+| `baseline` | object | `text_region`, `named_entity` | Serialised list of `Point`s representing the text baseline — cached for search result rendering without a relational join |
+| `source` | object | all | Parsed source metadata — enables filtering and faceting |
+### 6.3 Query Patterns
+
+| Pattern | Vector slot prefix | Filters applied |
+|---|---|---|
+| Face similarity search | `face:*` | `record_type = face_detection` |
+| Name similarity search | `text:*` | `record_type IN (named_entity, grounded_name)` |
+| Preferred name search only | `text:*` | `record_type = grounded_name`, `name_type = preferred` |
+| Full-text name search | — (keyword on `normalized_text`) | `record_type IN (named_entity, grounded_name)` |
+| Description similarity | `text:*` | `record_type = grounded_description` |
+| Within-cluster face search | `face:*` | `record_type = face_detection`, `cluster_ids contains <id>` |
+| Source-scoped search | any | `source_id = <id>` |
+| Provider-scoped search | any | `provider = <provider>` |
+| Specific model retrieval | `face:arcface-r100-v2` | `record_type = face_detection` |
+| Language-scoped name search | `text:*` | `record_type = grounded_name`, `language = <bcp47>` |
+
+### 6.4 Lifecycle
+
+- **On RECORD ingest**: a new document is created in the vector store keyed on `(record_id, record_version_id)`. Faceting metadata is resolved from SOURCE and SOURCE_SCHEMA at this point. `cluster_ids` is initially empty.
+- **On MEMBERSHIP change**: `cluster_ids` on all affected documents is updated. Eventual consistency is acceptable — vector queries are not the membership source of truth.
+- **On RECORD new version**: a new document is created for the new `record_version_id`. The old document is retained unless explicitly purged by a maintenance job.
+- **On re-embedding**: new named vector slots (e.g. from a new model) are added to existing documents without replacing or removing old slots.
+- **On RECORD deletion**: all documents for that `record_id` are removed from the vector store.
+
