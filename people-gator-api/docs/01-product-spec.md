@@ -5,11 +5,11 @@
 People Gator API is an backend for person-centric retrieval an person cluster annotation in historical document scans.
 
 Main workflow:
-1. Search returns ranked information clusters — groupings of face detections, name mentions, and authority records that speak to the same person.
+1. Search returns ranked information clusters — groupings of face detections, name mentions, and authority evidence that speak to the same person.
 2. User selects a cluster that seems promising, and creates and can start annotating it.
 3. User can add or remove any member from the cluster, which first creates a new version branched and then createss change delta.
 4. User can merge with other clusters, or split current cluster into multiple clusters.
-5. User can search similar looking units (faces, names, authority records, paragraphs..) to find additional evidence and add to the cluster.
+5. User can search similar looking units (faces, names, authority evidence, paragraphs..) to find additional evidence and add to the cluster.
 6. Commited cluster deltas are presented to reviewers.
 7. Reviewer create single master record update from all annotation branches, that were created by annotators.
 8. Reviewed clusters are promoted to grounded clusters.
@@ -49,12 +49,12 @@ Optional assigned tasks workflow:
 ## 3. Design Principles
 
 1. Cluster-first: search returns, annotation targets, and grounding outputs are all information clusters.
-    - Search query is itself a `search_cluster`: the query is expressed as a list of signals, zero to many per modality. A name string, a free-text snippet, and a face image each become typed records in the same table used for ingested artifacts, subject to content-hash deduplication so identical signals are never stored twice.
-    - The query cluster references those records via `ACTION` entries, exactly like any other cluster. It can be saved, shared, or promoted into an annotation target.
-    - Any person evidence that is grouped together in a cluster.
-    - Search results are polymorphic: results can be similarity-ranked clusters, individual records of any modality, or both in the same response. Facet counts are returned inline with every response.
+    - Search query is itself a `search_cluster`: the query is expressed as a list of signals, zero to many per modality. A name string, a free-text snippet, and a face image each become typed evidence items in the same table used for ingested artifacts, subject to content-hash deduplication so identical signals are never stored twice.
+    - The query cluster references those evidence items via `ACTION` entries, exactly like any other cluster. It can be saved, shared, or promoted into an annotation target.
+    - Any person evidence that is grouped together is in a cluster.
+    - Search results are polymorphic: results can be similarity-ranked clusters, individual evidence items of any modality, or both in the same response. Facet counts are returned inline with every response.
     - A system-default `SEARCH_PROFILE` is used when the caller does not specify one explicitly.
-2. Typed canonical records: every atomic evidence item preserves typed metadata, and lineage information.
+2. Typed canonical evidence: every atomic evidence item preserves typed metadata, and lineage information.
     - Typed metadata enables modality-specific search signals and faceting. 
     - Lineage tells about the source of data.
 3. Explainable ranking: every cluster result includes per-modality signal contributions, extensive info enables per member analysis.
@@ -74,9 +74,9 @@ Optional assigned tasks workflow:
     - Reviewer decisions trigger new cluster version creation. Annotation instances are pinned to the original version, then become immutable.
     - Reviewer can promote a `review_cluster` to `grounded_cluster` if they believe the cluster is well supported, which creates a new version with that role.
 7. Separation of concerns: this service ingests and reasons over artifacts; inference remains external.
-    - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed records.
-    - This service does not train or serve any models. It only stores the model version used to generate each record and uses that for staleness detection.
-    - This service does not perform live authority lookups. It only ingests authority records from periodic syncs and links them to clusters, via exposed APIs for data access.
+    - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed evidence.
+    - This service does not train or serve any models. It only stores the model version used to generate each evidence item and uses that for staleness detection.
+    - This service does not perform live authority lookups. It only ingests authority evidence from periodic syncs and links them to clusters, via exposed APIs for data access.
 8. Identity-first accountability: every state change carries a traceable actor.
     - Every VERSION and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
     - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
@@ -112,23 +112,24 @@ Both values are stable for the process lifetime, so clock sequence roll-over and
 
 ### 4.1 SOURCE_SCHEMA
 
-Defines how to resolve the storage and access paths for a family of sources. Every SOURCE references one SOURCE_SCHEMA, which tells the system how to construct local file paths, remote URLs, or IIIF endpoints from a source's provider identifier. Centralising this logic here means both the local archive copy and the remote canonical URL are derived from the same SOURCE record — there is no duplication on RECORD itself.
+Defines how to resolve the storage and access paths for a family of sources. Every SOURCE references one SOURCE_SCHEMA, which tells the system how to construct local file paths, remote URLs, or IIIF endpoints from a source's provider identifier. Centralising this logic here means both the local archive copy and the remote canonical URL are derived from the same SOURCE record — there is no duplication on EVIDENCE itself.
 
 Fields: `schema_name`, `resolver_type`, `resolver_config`.
 
-- `schema_name`: human-readable label, e.g. `s3-upload`, `kramerius5-iiif`, `wikimedia-image`, `nkcr-authority`. Must be globally unique.
-- `resolver_type`: one of `table`, `fsspec`, `s3`, `http`, `sparql`.
-- `resolver_config`: JSONB with resolver-specific parameters, interpolated with values from `SOURCE.provider_id` and optionally `RECORD.source_path`.
+- `schema_name`: human-readable label, e.g. `image-upload`, `kramerius-iiif`, `wikimedia-image`, `nkcr-authority`. Must be globally unique.
+- `resolver_type`: one of `db-source-table-row`, `s3-image`, `http-image`, `fsspec-image`, `fsspec-pagexml`, `s3-table`.
+- `resolver_config`: JSONB with resolver-specific parameters. resolver can be applied on the SOURCE.source string and we can get structured source metadata, this metadata is materialized and can be e.g. faceted.
 
 | `resolver_type` | Example `schema_name` | Example `resolver_config` |
 |---|---|---|
-| `table` | `user-provided` | `{"table_template": "SOURCE", "column_template": "source_id={resource_id} principal_id={principal_id}"}` |
-| `s3` | `s3-upload` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
-| `fsspec` | `kramerius-ocr-public` | `{"path_template": "zip://{page_id}.xml::file:///mnt/matylda1/ihradis/digiknihovna_public/{library}/{document_id}.page_xml.zip"}` |
-| `http` | `kramerius-iiif` | `{"base_url_template": "https://api.kramerius.{library}.cz/", "manifest_template": "search/iiif/uuid:{page_id}/full/max/0/default.jpg"}` |
-| `http` | `wikimedia-image` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
-| `http` | `wikidata-entity` | `{"base_url_template": "https://www.wikidata.org/", "path_template": "wiki/{wikidata_id}"}` |
-| `http` | `nkcr-authority` | `{"base_url_template": "https://aleph.nkp.cz/", "path_template": "F/?func=find-b&local_base=AUT&find_code=WRD&request={nkcr_authority_id}"}` |
+| `db-source-table-row` | `user-provided-name` | `{"source_template": "{principal_id}"}` |
+| `db-source-table-row` | `user-provided-description` | `{"source_template": "{principal_id}"}` |
+| `s3-image` | `image-upload` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
+| `http-image` | `wikimedia-image` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
+| `fsspec-pagexml` | `kramerius-ocr-public` | `{"path_template": "zip://{page_id}.xml::file:///mnt/matylda1/ihradis/digiknihovna_public/{library}/{document_id}.page_xml.zip"}` |
+| `fsspec-image` | `kramerius-image-public` | `{"path_template": "file:///mnt/matylda1/ihradis/digiknihovna_public/{library}/{document_id}.images/{page_id}.jpg"}` |
+| `s3-table` | `nkcr-authority` | `{"bucket_template": "peoplegator-ingest", "key_template": "nlcr_aut/nlcr_aut__{text_type}.csv"}` |
+| `s3-table` | `wikidata-authority` | `{"bucket_template": "peoplegator-ingest", "key_template": "wikidata/people_of_all_{text_type}.csv"}` |
 
 
 Resolver then does the following for a SOURCE field where `schema_name` references this `SOURCE_SCHEMA`:
@@ -138,50 +139,48 @@ Resolver then does the following for a SOURCE field where `schema_name` referenc
 
 ### 4.2 SOURCE
 
-A specific document, scan, or artifact from which one or more RECORDs were derived. SOURCE normalises provenance — a RECORD belongs to exactly one SOURCE, and the SOURCE belongs to one SOURCE_SCHEMA that knows how to resolve its storage paths.
+A specific document, scan, or artifact from which one or more EVIDENCEs were derived. SOURCE normalises provenance — an EVIDENCE belongs to exactly one SOURCE, and the SOURCE belongs to one SOURCE_SCHEMA that knows how to resolve its storage paths.
 
-Fields: `source_id`, `source_schema_id`, `metadata`, `created_by`.
+Fields: `source_id`, `source_schema_name`, `metadata`, `created_by`.
 - `source_id`: UUIDv6 primary key.
-- `source_schema_id`: FK → SOURCE_SCHEMA — determines how this original source can be resolved.
+- `source`: opaque string identifier for the original source, e.g. a filename. Parsable via `source_schema_name`.
+- `source_schema_name`: FK → SOURCE_SCHEMA — determines how this original source can be resolved.
+- `content_hash` : hash of ingested content for deduplication and staleness detection, e.g. hash of the original image bytes for a scanned document, or hash of the authority record JSON for an imported authority entity.
 - `created_by`: FK → PRINCIPAL — the user or service agent that ingested this source.
-- `metadata`: JSONB with source-level descriptive information — document title, publication date, page number within a multi-page document, detected language, collection name, etc.
 
 This is intentionally flexible to accommodate the wide variety of source types and metadata that may be relevant for different use cases. The exact structure of this JSONB is not enforced at the database level but is expected to conform to the requirements of the associated SOURCE_SCHEMA's resolver logic.
 
 ### 4.3 METADATA_SCHEMA
 
-Defines the versioned structure of the `metadata` JSONB payload for each record type. Every RECORD references one METADATA_SCHEMA, which identifies the contract that `metadata` conforms to and optionally carries a machine-readable JSON Schema for runtime validation. Centralising schema registration here means schema evolution is tracked in the database, not embedded as opaque string constants in application code.
+Defines the versioned structure of the `metadata` JSONB payload for each evidence type. Every EVIDENCE references one METADATA_SCHEMA, which identifies the contract that `metadata` conforms to and optionally carries a machine-readable JSON Schema for runtime validation. Centralising schema registration here means schema evolution is tracked in the database, not embedded as opaque string constants in application code.
 
-Fields: `schema_id`, `schema_name`, `record_type`, `version`, `json_schema`, `description`.
+Fields: `evidence_type`, `schema_version`, `json_schema`, `description`.
 
-- `schema_name`: the canonical versioned identifier, e.g. `face-detection/v1`, `named-entity/v1`, `text-region/v1`. Must be globally unique.
-- `record_type`: the RECORD type this schema applies to (see §4.4). One registered schema per `(record_type, version)` pair is enforced.
-- `version`: schema version string, e.g. `v1`, `v2`. Incrementing the version produces a new METADATA_SCHEMA row while leaving the old one intact, so old RECORDs referencing the previous version remain valid.
+- `evidence_type`: the EVIDENCE type this schema applies to. Can be `face_detection`, `named_entity`, `text_region`, `grounded_name`, `grounded_description`, or `authority_identifier`.
+- `schema_version`: version string for the schema, e.g. `v1`, `v2`.
 - `json_schema`: optional JSONB — machine-readable JSON Schema (draft-07 compatible) for validating the `metadata` payload at ingest time. Null for built-in schemas whose structure is described in §4.4.2.
 - `description`: optional free-text description of the schema's purpose and contents.
 
-### 4.4 RECORD
+### 4.4 EVIDENCE
 
-The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and grounded identity claims — is a RECORD.
+The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and grounded identity claims — is an EVIDENCE.
 
-Required fields: `record_id`, `record_version_id`, `record_type`, `content_hash`, `source_id`, `source_path`, `metadata_schema_id`, `metadata`, `model_id`.
+Required fields: `evidence_id`, `evidence_version_id`, `content_hash`, `source_id`, `source_path`, `metadata_schema_name`, `model_metadata`, `revised_metadata`, `model_id`.
 
-- `source_id`: FK → SOURCE — the document or artifact this record was derived from.
-- `source_path`: JSONB — within-source coordinates that identify exactly where in the source this record originates, e.g. `{"page": 3, "region_index": 7}` or `{"line_id": "abc", "face_index": 2}`. Combined with SOURCE_SCHEMA.resolver_config this fully resolves the physical storage location without duplicating paths on the record.
-- `model_id`: nullable FK → MODALITY_MODEL — the model that produced this record. Null for manually curated or authority records. The corresponding vector in the external store is identified by the deterministic UUID computed as `uuid5(record_id + record_version_id)`; no back-reference pointer is stored on the record itself.
-- `metadata_schema_id`: FK → METADATA_SCHEMA — identifies the versioned contract that `metadata` conforms to (see §4.4.2).
-- `metadata`: JSONB typed evidence payload, structured per `metadata_schema`.
-- `content_hash`: hash of the content that defines the record's identity for deduplication and staleness detection (e.g. for a face detection: hash of the image crop pixels and the embedding vector).
+- `evidence_id`: stable UUIDv6 identifier for this evidence.
+- `evidence_version_id`: monotonically incrementing integer for versioning this evidence.
+- `evidence_type`: part of FK, determines the schema of `metadata`.
+- `schema_version`: part of FK, determines the version of the schema that `metadata` conforms to. Together pair (`evidence_type`, `schema_version`) FK -> METADATA_SCHEMA.
+- `source_id`: FK → SOURCE — the document or artifact this evidence was derived from.
+- `model_id`: nullable FK → MODALITY_MODEL — the model that produced this evidence. Null for manually curated or authority evidence.
+- `model_metadata`: JSONB typed evidence payload, structured per `metadata_schema`.
+- `revised_metadata`: JSONB with the same structure as `metadata`, used for storing human revisions.
+- `content_hash`: hash of the content if applicable, mainly hash of the metadata.
 
-The `record_version_id` with `record_id` forms a unique identifier for each version. When a record is updated (e.g. a face detection is refined with a new bounding box), a new RECORD row is created with the same `record_id` but a later `record_version_id`, preserving the full version history.
-
-Record types: `face_detection`, `named_entity`, `text_region`, `image_region`, `grounded_name`, `grounded_description`.
-
-The `model_version` is stored inside `metadata` for records generated by inference, enabling staleness detection when a new model version is released.
 
 #### 4.4.1 Shared sub-schemas
 
-These sub-schemas are reused across multiple record metadata types.
+These sub-schemas are reused across multiple evidence metadata types.
 
 **Point** — a single spatial coordinate on an image, normalised to [0, 1] relative to image dimensions:
 | Field | Type | Description |
@@ -211,7 +210,7 @@ These sub-schemas are reused across multiple record metadata types.
 | `start` | int | Starting character offset (inclusive) |
 | `end` | int | Ending character offset (exclusive) |
 
-**Image** — a information about image that is associated with a record, mainly defining image format and dimensions.
+**Image** — a information about image that is associated with an evidence, mainly defining image format and dimensions.
 | Field | Type | Description |
 |---|---|---|
 | `image_format` | string | `jpeg`, `png`, `tiff` |
@@ -248,11 +247,11 @@ These sub-schemas are reused across multiple record metadata types.
 | `normalized_text` | string | Normalised form of the text |
 | `label` | string | Semantic label for the text region, e.g. `paragraph` |
 
-#### 4.4.2 Metadata schemas by record type
+#### 4.4.2 Metadata schemas by evidence type
 
-The `metadata_schema_id` FK links each RECORD to a METADATA_SCHEMA row (see §4.3). Each type below defines the canonical structure of `metadata` JSONB for that record type. Adding a new schema version creates a new METADATA_SCHEMA row; old RECORDs remain valid by retaining their original FK.
+The `metadata_schema_id` FK links each EVIDENCE to a METADATA_SCHEMA row (see §4.3). Each type below defines the canonical structure of `metadata` JSONB for that evidence type. Adding a new schema version creates a new METADATA_SCHEMA row; old EVIDENCEs remain valid by retaining their original FK.
 
-##### `face_detection` — schema `face-detection/v1`
+##### `face_detection` — schema_version `v1`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -260,47 +259,55 @@ The `metadata_schema_id` FK links each RECORD to a METADATA_SCHEMA row (see §4.
 | `keypoints` | list[Keypoint] | no | Facial landmarks when available from the detector |
 | `image` | Image | yes | Image format and dimensions for this detection |
 | `confidence` | float [0,1] | yes | Model confidence score for this detection |
-| `model_version` | string | yes | Model identifier that produced this detection |
 
-The top-level `model_id` on RECORD links this detection to the MODALITY_MODEL that produced it; the vector in the embedding store is looked up by `(record_id, record_version_id)`.
+In record the `model_id` links the detection to the specific MODALITY_MODEL that produced it, enabling staleness detection when models are updated.
 
-##### `named_entity` — schema `named-entity/v1`
+##### `named_entity` — schema_version `v1`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `span` | PhysicalTextSpan | yes | Detected text span with layout information |
 | `confidence` | float [0,1] | yes | Model confidence score for this detection |
-| `model_version` | string | yes | Model identifier that produced this detection |
 
-##### `text_region` — schema `text-region/v1`
+In record the `model_id` links the detection to the specific MODALITY_MODEL that produced it, enabling staleness detection when models are updated.
+
+##### `text_region` — schema_version `v1`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `area` | PhysicalTextRegion | yes | Detected text region with layout information |
 | `confidence` | float [0,1] | yes | Model confidence score for this detection |
-| `model_version` | string | yes | Model identifier that produced this detection |
 
+In record the `model_id` links the detection to the specific MODALITY_MODEL that produced it, enabling staleness detection when models are updated.
 
-##### `grounded_name` — schema `grounded-name/v1`
+##### `grounded_name` — schema_version `v1`
 
-A name form belonging to an authority entity. The entity itself is captured by `RECORD.source_id`, which references the authority SOURCE — there is no explicit authority FK inside the metadata.
+A name form belonging to an authority entity. The entity itself is captured by `EVIDENCE.source_id`, which references the authority SOURCE — there is no explicit authority FK inside the metadata.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Name form as recorded in the authority source |
 | `type` | string | yes | `preferred` or `alias` — role of this name form in the authority |
 | `language` | string (BCP 47) | no | Language of the name form, if applicable |
-| `confidence` | float [0,1] | no | Linking confidence when assigned by an automated process; omit for manually curated authority data |
 
-##### `grounded_description` — schema `grounded-description/v1`
+##### `grounded_description` — schema_version `v1`
 
-A textual description belonging to an authority entity. The entity is captured by `RECORD.source_id` as above.
+A textual description belonging to an authority entity. The entity is captured by `EVIDENCE.source_id` as above.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `description` | string | yes | Description text as recorded in the authority source |
 | `language` | string (BCP 47) | no | Language of the description, if applicable |
-| `confidence` | float [0,1] | no | Linking confidence when assigned by an automated process |
+
+
+#### `authority_identifier` — schema_version `v1`
+
+An identifier for an authority entity, such as a Wikidata QID or an NKCR ID. The entity is captured by `EVIDENCE.source_id` as above.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `identifier` | string | yes | The authority identifier, e.g. `Q42` for Wikidata or `NKCR12345` for NKCR |
+| `authority_type` | string | yes | The type of authority, e.g. `wikidata` or `nkcr` |
 
 ### 4.5 CLUSTER
 
@@ -344,52 +351,52 @@ Fields: `version_id`, `cluster_id`, `cluster_role`, `actor_id`.
 - `actor_id`: FK to PRINCIPAL — the user or service agent that created this version.
 
 ### 4.7 TRANSITION
-Represents a directed edge between versions of the same cluster, or between versions of independent logical clusters for `cluster-merge` and `split` operations.
+Represents a directed edge between versions of the same cluster, or between versions of independent logical clusters.
 
 Fields: `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_version_id`, `transition_type`.
 The transition_type field can contain following values:
 | Transition Type | Description | Enforced Constraints |
 |---|---|---|
-| `initial` | The initial version of a cluster. | `source_cluster_id` and `source_version_id` are `NULL`. No prior transition entry exists for the `cluster_id`. |
-| `next` | A new version is created by advancing the previous version. | `source_cluster_id == target_cluster_id` |
+| `empty` | The initial version of a cluster, it has no prior versions, declared cluster as empty. | `source_cluster_id=cluster_id`, `target_cluster_id=cluster_id`, `source_version_id=version_id`, `target_version_id=version_id`. No prior transition entry exists for the `cluster_id`. |
+| `stage` | A new version is created by advancing the previous version. | `source_cluster_id == target_cluster_id` |
 | `branch` | A new parallel version is created from a source version. | `source_cluster_id == target_cluster_id` |
-| `merge` | Two or more parallel versions within the same cluster are merged into one. | single `target_version_id`, multiple `source_version_id` rows; `source_cluster_id == target_cluster_id` |
-| `cluster-merge` | Versions from two or more different clusters are merged into a single target cluster. | single `target_version_id`, multiple `source_version_id` rows; `source_cluster_id` may differ from `target_cluster_id` |
+| `union` | Two or more parallel versions or clusters are merged into one via union, all materialized members from all sources will be in the final version. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
+| `intersection` | Two or more parallel versions or clusters are merged into one, keeping only common members. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
 | `split` | One cluster is split into two or more clusters. | single `source_version_id`, multiple `target_version_id` rows |
 
 ### 4.8 ACTION
 
-Associates a RECORD with a specific CLUSTER VERSION, representing the addition or removal of that record from the cluster in that version. This is the core table for determining cluster membership at any given version.
+Associates an EVIDENCE with a specific CLUSTER VERSION, representing the addition or removal of that evidence from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
-Fields: `action_id`, `cluster_id`, `version_id`, `record_id`, `record_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
+Fields: `action_id`, `cluster_id`, `version_id`, `evidence_id`, `evidence_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
 
 Explanation of fields:
 - `cluster_id`: Denormalized from `VERSION` for query performance — `version_id` alone uniquely identifies a cluster version, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `version_id`.
-- `action_type`: Indicates whether the record is being added to or removed from the `version_id` `cluster_id` state.
-- `weight`: A numerical value representing the strength of the association between the record and the cluster in this commit, which can be used for ranking and confidence scoring.
+- `action_type`: Indicates whether the evidence is being added to or removed from the `version_id` `cluster_id` state.
+- `weight`: A numerical value representing the strength of the association between the evidence and the cluster in this commit, which can be used for ranking and confidence scoring.
 - `reason`: Can be `manual-annotation` or `automatic-linking`.
-- `actor_id`: FK to PRINCIPAL — the user or service agent that authored this specific record addition or removal.
+- `actor_id`: FK to PRINCIPAL — the user or service agent that authored this specific evidence addition or removal.
 
 Here enforced constraints for the ACTION:
-1. `record_id` and `record_version_id` must exist in the RECORD table
+1. `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table
 2. The `cluster_id` must exist in the CLUSTER table.
 3. The `version_id` must exist in the VERSION table for the specified `cluster_id`.
 4. There is no entry in the TRANSITION table for the `cluster_id` and `version_id` as `source_cluster_id` and `source_version_id`. No derived versions have been created.
-5. For an `add` action, the specified `record_id` and `record_version_id` must exist in the RECORD table, and the `version_id` must exist in the VERSION table for the specified `cluster_id`.
+5. For an `add` action, the specified `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table, and the `version_id` must exist in the VERSION table for the specified `cluster_id`.
 
 
 #### 4.8.1 Algorithm to resolve membership for a given `cluster_id` and `version_id`:
-1. Start with an empty set of member records.
+1. Start with an empty set of member evidence.
 2. From `TRANSITION`, start with the specified `cluster_id` and `version_id`, and perform a full DAG walk backwards through all ancestor transition entries to the root version, collecting all `(cluster_id, version_id)` pairs. Follow ALL ancestor paths — including those via `cluster-merge` and `cluster-split` entries into different clusters. Do not prune at the first path to root.
 3. For each collected `cluster_id` and `version_id`, query the ACTION table for all actions associated with that version.
 4. Sort the collected actions globally by their `action_id` ascending. Because `action_id` is a UUIDv6, this is equivalent to creation-time order across all ancestor versions.
-5. Sequentially apply each action to the set of member records, adding or removing records based on the `action_type` and updating the `weight` and `reason` accordingly.
-6. After processing all actions, the resulting set of member records represents the cluster membership for the specified `cluster_id` and `version_id`.
+5. Sequentially apply each action to the set of member evidence, adding or removing evidence based on the `action_type` and updating the `weight` and `reason` accordingly.
+6. After processing all actions, the resulting set of member evidence represents the cluster membership for the specified `cluster_id` and `version_id`.
 
 #### 4.8.2 Algorithm to resolve pending (unsealed) changes for a given `cluster_id` and `version_id`:
 1. From `ACTION` table, query for any actions associated with the specified `cluster_id` and `version_id`.
 2. Sort the actions by their `action_id` ascending to ensure they are processed in the order they were created.
-3. Reduce the actions if same `RECORD` has been added and removed multiple times, keeping only the latest action for each `RECORD`.
+3. Reduce the actions if same `EVIDENCE` has been added and removed multiple times, keeping only the latest action for each `EVIDENCE`.
 4. The resulting set of actions represents the pending diff on the current working version for the specified `cluster_id` and `version_id`.
 
 #### 4.8.3 Resolve possible head of the cluster:
@@ -443,7 +450,7 @@ Fields: `task_id`, `cluster_id`, `version_id`, `assignee_id`, `task_role`, `stat
 ### 4.10 MEMBERSHIP
 Represents the current materialized state of cluster membership for each cluster, derived from the ACTION table.
 
-Fields: `cluster_id`, `record_id`, `record_version_id`, `weight`, `reason`, `as_of_version_id`.
+Fields: `cluster_id`, `evidence_id`, `evidence_version_id`, `weight`, `reason`, `as_of_version_id`.
 
 `as_of_version_id` records which version this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_version_id` at the time of the last update.
 
@@ -466,17 +473,17 @@ Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
 ### 4.12 SOURCE_PROCESSING
 
-Flags whether a MODALITY_MODEL has been applied to a SOURCE to get RECORDs.
+Flags whether a MODALITY_MODEL has been applied to a SOURCE to get EVIDENCEs.
 
 Fields: `source_id`, `model_id`, `is_processed`.
 
 - `source_id`: FK → SOURCE (part of composite PK).
 - `model_id`: FK → MODALITY_MODEL (part of composite PK).
-- `is_processed`: boolean — `true` once all resulting RECORDs have been ingested; `false` while pending or in-flight.
+- `is_processed`: boolean — `true` once all resulting EVIDENCEs have been ingested; `false` while pending or in-flight.
 
 `(source_id, model_id)` is the composite primary key — one row per pair. To find sources not yet processed by a given model, query for rows where `is_processed = false` or for sources with no row at all for that `model_id`.
 
-Record-level lineage is available via `RECORD.model_id`, which carries the FK to the model that produced it (null for manually curated or authority records).
+Evidence-level lineage is available via `EVIDENCE.model_id`, which carries the FK to the model that produced it (null for manually curated or authority evidence).
 
 #### 4.11.1 USER
 
@@ -503,23 +510,23 @@ An autonomous process principal. Agents are pre-registered and identified by a u
 Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `agent_version`, `description`.
 
 - `agent_slug`: unique human-readable identifier, format `<category>:<name>`.
-- `agent_version`: optional semantic version string tied to the model or code version that produced the records (enables staleness detection).
+- `agent_version`: optional semantic version string tied to the model or code version that produced the evidence (enables staleness detection).
 - `description`: optional free-text description of the agent's purpose.
 
 ---
 
 ## 5. Vector Data Model
 
-The vector store is a document store. Each document is in a strict **1:1 relationship with one RECORD version** — one document per `(record_id, record_version_id)` pair. Because a RECORD has exactly one `record_type`, each document represents a single modality. Multiple vectors can exist within the same document, but only as the result of running different embedding models or pipelines over the same content — not because the document spans multiple modalities.
+The vector store is a document store. Each document is in a strict **1:1 relationship with one EVIDENCE version** — one document per `(evidence_id, evidence_version_id)` pair. Because an EVIDENCE has exactly one `evidence_type`, each document represents a single modality. Multiple vectors can exist within the same document, but only as the result of running different embedding models or pipelines over the same content — not because the document spans multiple modalities.
 
 ### 5.1 Design Goals
 
-1. **One document per RECORD version** — `(record_id, record_version_id)` is the document key. No document aggregates evidence across multiple RECORDs.
-2. **Single modality per document** — the `record_type` of the RECORD fully determines the modality of every vector in the document. Cross-modal queries join across documents at query time.
+1. **One document per EVIDENCE version** — `(evidence_id, evidence_version_id)` is the document key. No document aggregates evidence across multiple EVIDENCEs.
+2. **Single modality per document** — the `evidence_type` of the EVIDENCE fully determines the modality of every vector in the document. Cross-modal queries join across documents at query time.
 3. **Multiple vectors for the same modality** — a document may carry several named vector slots for its modality, each produced by a different embedding model or pipeline version. This allows parallel staleness-aware retrieval and A/B comparison of models without rewriting history.
-4. **Derived faceting metadata** — faceting attributes are derived from the RECORD's SOURCE and SOURCE_SCHEMA at ingest time and stored inline on the document. This allows the vector DB to evaluate filters without a round-trip to the relational store.
-5. **Modality-specific searchable fields** — some record types store additional normalised text fields (e.g. `normalized_text` on `named_entity`) to enable full-text search directly in the vector DB alongside vector similarity.
-6. **Relational anchor** — every document carries `record_id` and `record_version_id` as the stable FK pair back to the RECORD table. The vector store is always a derived projection; the relational model is the source of truth.
+4. **Derived faceting metadata** — faceting attributes are derived from the EVIDENCE's SOURCE and SOURCE_SCHEMA at ingest time and stored inline on the document. This allows the vector DB to evaluate filters without a round-trip to the relational store.
+5. **Modality-specific searchable fields** — some evidence types store additional normalised text fields (e.g. `normalized_text` on `named_entity`) to enable full-text search directly in the vector DB alongside vector similarity.
+6. **Relational anchor** — every document carries `evidence_id` and `evidence_version_id` as the stable FK pair back to the EVIDENCE table. The vector store is always a derived projection; the relational model is the source of truth.
 
 ### 5.2 Document Schema
 
@@ -527,28 +534,28 @@ The vector store is a document store. Each document is in a strict **1:1 relatio
 
 | Field | Type | Description |
 |---|---|---|
-| `record_id` | UUID v6 | FK → RECORD.record_id — stable identifier across versions |
-| `record_version_id` | UUID v6 | FK → RECORD.record_version_id — together forms the unique document key |
-| `record_type` | string | `face_detection` \| `named_entity` \| `text_region` \| `image_region` \| `grounded_name` \| `grounded_description` — determines the modality and which vector slots and metadata fields are populated |
+| `evidence_id` | UUID v6 | FK → EVIDENCE.evidence_id — stable identifier across versions |
+| `evidence_version_id` | UUID v6 | FK → EVIDENCE.evidence_version_id — together forms the unique document key |
+| `evidence_type` | string | `face_detection` \| `named_entity` \| `text_region` \| `image_region` \| `grounded_name` \| `grounded_description` — determines the modality and which vector slots and metadata fields are populated |
 
 #### 5.2.2 Faceting metadata (derived from SOURCE and SOURCE_SCHEMA)
 
-These fields are resolved at ingest time by applying the SOURCE_SCHEMA resolver logic to the RECORD's SOURCE and `source_path`. Stored inline on the document for filter efficiency.
+These fields are resolved at ingest time by applying the SOURCE_SCHEMA resolver logic to the EVIDENCE's SOURCE and `source_path`. Stored inline on the document for filter efficiency.
 
 | Field | Type | Description |
 |---|---|---|
 | `source_id` | UUID v6 | FK → SOURCE — enables per-document-source filtering |
 | `provider` | string | SOURCE.provider value, e.g. `kramerius`, `nkcr`, `local-ingest` — coarse provenance facet |
 | `cluster_ids` | list[UUID v6] | Current cluster memberships — denormalised from MEMBERSHIP; updated on membership change |
-| `language` | string (BCP 47) | Language of the textual content; null for non-textual record types |
+| `language` | string (BCP 47) | Language of the textual content; null for non-textual evidence types |
 
 #### 5.2.3 Named vector slots
 
 Each slot is a dense float vector produced by a specific embedding model. Multiple slots may be present on the same document if the same content has been encoded by more than one model or pipeline. Each slot name encodes both the modality role and the model identifier, following the convention `<role>:<model_slug>`.
 
-The `<role>` prefix is fixed per `record_type`:
+The `<role>` prefix is fixed per `evidence_type`:
 
-| `record_type` | Role prefix | Meaning |
+| `evidence_type` | Role prefix | Meaning |
 |---|---|---|
 | `face_detection` | `face` | Embedding of the detected face crop |
 | `image_region` | `image` | Embedding of an image patch |
@@ -564,9 +571,9 @@ Adding a new model produces new slot names on newly ingested documents. Old docu
 
 #### 5.2.4 Modality-specific metadata fields
 
-These fields are populated only for the applicable `record_type`s. They enable filtering and full-text search directly in the vector DB.
+These fields are populated only for the applicable `evidence_type`s. They enable filtering and full-text search directly in the vector DB.
 
-| Field | Type | Applicable `record_type`(s) | Description |
+| Field | Type | Applicable `evidence_type`(s) | Description |
 |---|---|---|---|
 | `confidence` | float [0,1] | all | Detection or linking confidence from the originating model |
 | `normalized_text` | string | `named_entity`, `grounded_name`, `grounded_description` | Normalised form of the text — enables full-text search alongside vector similarity |
@@ -580,40 +587,40 @@ These fields are populated only for the applicable `record_type`s. They enable f
 
 | Pattern | Vector slot prefix | Filters applied |
 |---|---|---|
-| Face similarity search | `face:*` | `record_type = face_detection` |
-| Name similarity search | `text:*` | `record_type IN (named_entity, grounded_name)` |
-| Preferred name search only | `text:*` | `record_type = grounded_name`, `name_type = preferred` |
-| Full-text name search | — (keyword on `normalized_text`) | `record_type IN (named_entity, grounded_name)` |
-| Description similarity | `text:*` | `record_type = grounded_description` |
-| Within-cluster face search | `face:*` | `record_type = face_detection`, `cluster_ids contains <id>` |
+| Face similarity search | `face:*` | `evidence_type = face_detection` |
+| Name similarity search | `text:*` | `evidence_type IN (named_entity, grounded_name)` |
+| Preferred name search only | `text:*` | `evidence_type = grounded_name`, `name_type = preferred` |
+| Full-text name search | — (keyword on `normalized_text`) | `evidence_type IN (named_entity, grounded_name)` |
+| Description similarity | `text:*` | `evidence_type = grounded_description` |
+| Within-cluster face search | `face:*` | `evidence_type = face_detection`, `cluster_ids contains <id>` |
 | Source-scoped search | any | `source_id = <id>` |
 | Provider-scoped search | any | `provider = <provider>` |
-| Specific model retrieval | `face:arcface-r100-v2` | `record_type = face_detection` |
-| Language-scoped name search | `text:*` | `record_type = grounded_name`, `language = <bcp47>` |
+| Specific model retrieval | `face:arcface-r100-v2` | `evidence_type = face_detection` |
+| Language-scoped name search | `text:*` | `evidence_type = grounded_name`, `language = <bcp47>` |
 
 ### 5.4 Lifecycle
 
-- **On RECORD ingest**: a new document is created in the vector store keyed on `(record_id, record_version_id)`. Faceting metadata is resolved from SOURCE and SOURCE_SCHEMA at this point. `cluster_ids` is initially empty.
+- **On EVIDENCE ingest**: a new document is created in the vector store keyed on `(evidence_id, evidence_version_id)`. Faceting metadata is resolved from SOURCE and SOURCE_SCHEMA at this point. `cluster_ids` is initially empty.
 - **On MEMBERSHIP change**: `cluster_ids` on all affected documents is updated. Eventual consistency is acceptable — vector queries are not the membership source of truth.
-- **On RECORD new version**: a new document is created for the new `record_version_id`. The old document is retained unless explicitly purged by a maintenance job.
+- **On EVIDENCE new version**: a new document is created for the new `evidence_version_id`. The old document is retained unless explicitly purged by a maintenance job.
 - **On re-embedding**: new named vector slots (e.g. from a new model) are added to existing documents without replacing or removing old slots.
-- **On RECORD deletion**: all documents for that `record_id` are removed from the vector store.
+- **On EVIDENCE deletion**: all documents for that `evidence_id` are removed from the vector store.
 
 ---
 
 ## 6. Search Configuration
 
-Search scoring is driven by per-modality weighted signals. Each modality corresponds to a `record_type` and an embedding model slot in the vector store. The structures in this section live outside the versioned cluster data model — they are user-space configuration that governs how retrieval is performed, not what was annotated or by whom.
+Search scoring is driven by per-modality weighted signals. Each modality corresponds to an `evidence_type` and an embedding model slot in the vector store. The structures in this section live outside the versioned cluster data model — they are user-space configuration that governs how retrieval is performed, not what was annotated or by whom.
 
 ### 6.1 MODALITY_MODEL
 
-A registry of available embedding models per modality. Each row represents one deployable vector slot — a specific model that can encode records of a given `record_type` into a named slot in the vector store (see §5.2.3). Rows are registered at deployment time and updated when new models are introduced or retired.
+A registry of available embedding models per modality. Each row represents one deployable vector slot — a specific model that can encode evidence of a given `evidence_type` into a named slot in the vector store (see §5.2.3). Rows are registered at deployment time and updated when new models are introduced or retired.
 
-Fields: `model_id`, `record_type`, `role`, `model_slug`, `display_name`, `description`, `registry_source`, `registry_uri`, `is_active`.
+Fields: `model_id`, `evidence_type`, `role`, `model_slug`, `display_name`, `description`, `registry_source`, `registry_uri`, `is_active`.
 
-- `record_type`: the RECORD type this model encodes, e.g. `face_detection`, `named_entity`.
+- `evidence_type`: the EVIDENCE type this model encodes, e.g. `face_detection`, `named_entity`.
 - `role`: the slot role prefix, e.g. `face`, `text`, `layout` — determines the vector slot name prefix in the vector store.
-- `model_slug`: unique identifier used as the suffix in the vector slot name (`<role>:<model_slug>`), e.g. `arcface-r100-v2`. Must be globally unique within a `(record_type, role)` pair.
+- `model_slug`: unique identifier used as the suffix in the vector slot name (`<role>:<model_slug>`), e.g. `arcface-r100-v2`. Must be globally unique within a `(evidence_type, role)` pair.
 - `display_name`: human-readable label shown in the UI.
 - `description`: optional free-text description of the model's architecture, training data, or intended use.
 - `registry_source`: the model registry that hosts this model version, e.g. `mlflow`, `huggingface`, `local`. Provides enough context to resolve the `registry_uri`.
@@ -628,7 +635,7 @@ Fields: `model_id`, `record_type`, `role`, `model_slug`, `display_name`, `descri
 
   Together `(registry_source, registry_uri)` forms the canonical lineage reference for this model version and is stored on every vector store document that carries this model's slot (see §5.2.4).
 
-- `is_active`: whether this model is currently used for encoding newly ingested records. Multiple models for the same `record_type` may be active simultaneously when a new model is being rolled out.
+- `is_active`: whether this model is currently used for encoding newly ingested evidence. Multiple models for the same `evidence_type` may be active simultaneously when a new model is being rolled out.
 
 Models that are no longer active are retained for querying existing documents that carry their vector slot — they are never deleted as long as any documents reference them.
 
@@ -644,26 +651,26 @@ Fields: `profile_id`, `profile_name`, `description`, `owner_id`, `is_public`, `i
 
 ### 6.3 SEARCH_PROFILE_MODALITY
 
-Join table that configures one modality's participation in a specific `SEARCH_PROFILE`. Each row represents one `(profile, record_type)` pair and carries a direct FK to the pinned `MODALITY_MODEL`, if any.
+Join table that configures one modality's participation in a specific `SEARCH_PROFILE`. Each row represents one `(profile, evidence_type)` pair and carries a direct FK to the pinned `MODALITY_MODEL`, if any.
 
-Fields: `profile_id`, `record_type`, `model_id`, `weight`, `enabled`, `min_confidence`.
+Fields: `profile_id`, `evidence_type`, `model_id`, `weight`, `enabled`, `min_confidence`.
 
 Constraints:
-- `UNIQUE (profile_id, record_type)` — only one row per modality per profile.
+- `UNIQUE (profile_id, evidence_type)` — only one row per modality per profile.
 - `profile_id`: FK → SEARCH_PROFILE.
-- `model_id`: nullable FK → MODALITY_MODEL — if null, the highest-priority active `MODALITY_MODEL` for the `record_type` is resolved at query time. If set, the query is pinned to that specific model's vector slot.
+- `model_id`: nullable FK → MODALITY_MODEL — if null, the highest-priority active `MODALITY_MODEL` for the `evidence_type` is resolved at query time. If set, the query is pinned to that specific model's vector slot.
 - `weight`: float [0, ∞) — relative contribution of this modality to the combined retrieval score. Weights across all enabled modalities are normalised to sum to 1.0 at query time.
 - `enabled`: bool — whether this modality participates in the search. Allows toggling a modality off without deleting the row.
-- `min_confidence`: nullable float [0, 1] — records of this type below this detection confidence are excluded from candidates before scoring.
+- `min_confidence`: nullable float [0, 1] — evidence of this type below this detection confidence are excluded from candidates before scoring.
 
 #### 6.3.1 Example profiles
 
 | Profile name | Description | Enabled modalities |
 |---|---|---|
-| `face-only` | Pure face similarity search | `record_type=face_detection` |
-| `name-only` | Pure text name similarity search | `record_type=named_entity`, `record_type=grounded_name` |
-| `balanced` | Equal-weight face and name signals | `record_type=face_detection weight=1.0`, `record_type=named_entity weight=1.0`, `record_type=grounded_name weight=1.0` |
-| `authority-grounded` | Weighted towards authority name and description matches | `record_type=grounded_name weight=1.0`, `record_type=grounded_description weight=0.5`, `record_type=named_entity weight=0.5` |
+| `face-only` | Pure face similarity search | `evidence_type=face_detection` |
+| `name-only` | Pure text name similarity search | `evidence_type=named_entity`, `evidence_type=grounded_name` |
+| `balanced` | Equal-weight face and name signals | `evidence_type=face_detection weight=1.0`, `evidence_type=named_entity weight=1.0`, `evidence_type=grounded_name weight=1.0` |
+| `authority-grounded` | Weighted towards authority name and description matches | `evidence_type=grounded_name weight=1.0`, `evidence_type=grounded_description weight=0.5`, `evidence_type=named_entity weight=0.5` |
 
 ### 6.4 Profile sharing and lifecycle
 
