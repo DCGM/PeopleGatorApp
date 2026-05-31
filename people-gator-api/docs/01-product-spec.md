@@ -50,7 +50,7 @@ Optional assigned tasks workflow:
 
 1. Cluster-first: search returns, annotation targets, and grounding outputs are all information clusters.
     - Search query is itself a `search_cluster`: the query is expressed as a list of signals, zero to many per modality. A name string, a free-text snippet, and a face image each become typed evidence items in the same table used for ingested artifacts, subject to content-hash deduplication so identical signals are never stored twice.
-    - The query cluster references those evidence items via `ACTION` entries, exactly like any other cluster. It can be saved, shared, or promoted into an annotation target.
+    - The query cluster references those evidence items via `DELTA` entries, exactly like any other cluster. It can be saved, shared, or promoted into an annotation target.
     - Any person evidence that is grouped together is in a cluster.
     - Search results are polymorphic: results can be similarity-ranked clusters, individual evidence items of any modality, or both in the same response. Facet counts are returned inline with every response.
     - A system-default `SEARCH_PROFILE` is used when the caller does not specify one explicitly.
@@ -78,10 +78,10 @@ Optional assigned tasks workflow:
     - This service does not train or serve any models. It only stores the model version used to generate each evidence item and uses that for staleness detection.
     - This service does not perform live authority lookups. It only ingests authority evidence from periodic syncs and links them to clusters, via exposed APIs for data access.
 8. Identity-first accountability: every state change carries a traceable actor.
-    - Every VERSION and every ACTION records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
+    - Every VERSION and every DELTA records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
     - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
     - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
-    - The `reason` field on ACTION categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
+    - The `reason` field on DELTA categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
 
 ## 4. Data Model
 
@@ -331,15 +331,15 @@ Possible `head_constraints` values:
 | Constraint | Description |
 |---|---|
 | `locked` | Materialized view display only first version of the cluster. |
-| `main` | Materialized views are locked to only the last `next` transition chain of the cluster. |
+| `main` | Materialized views are locked to only the last `stage` operation chain of the cluster. |
 | `any` | Materialized views can display any versions of the cluster. |
 
 `CLUSTER.cluster_role` is a denormalized cache of the `cluster_role` from the version pointed to by `head_version_id`. It must be updated atomically in the same transaction as any `head_version_id` change. `VERSION.cluster_role` is the source of truth.
 
 `head_version_id` update rules — updated atomically whenever a new version becomes the logical head of this cluster's main chain:
-- On `initial`: set to the initial `version_id`.
-- On `next`: set to the new `target_version_id` with current head being the `source_version_id`.
-- On `merge` or `cluster-merge` where this cluster is the target and the current head is one of the source versions: set to `target_version_id`.
+- On `empty`: set to the initial `version_id`.
+- On `stage`: set to the new `target_version_id` with current head being the `source_version_id`.
+- On `union` or `intersection` where this cluster is the target and the current head is one of the source versions: set to `target_version_id`.
 - On `branch`: `head_version_id` is **not** updated — it stays on the main-chain version the branch diverged from.
 
 ### 4.6 VERSION
@@ -350,71 +350,70 @@ Fields: `version_id`, `cluster_id`, `cluster_role`, `actor_id`.
 
 - `actor_id`: FK to PRINCIPAL — the user or service agent that created this version.
 
-### 4.7 TRANSITION
+### 4.7 OPERATION
 Represents a directed edge between versions of the same cluster, or between versions of independent logical clusters.
 
-Fields: `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_version_id`, `transition_type`.
-The transition_type field can contain following values:
-| Transition Type | Description | Enforced Constraints |
+Fields: `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_version_id`, `operation_type`.
+The operation_type field can contain following values:
+| Operation Type | Description | Enforced Constraints |
 |---|---|---|
-| `empty` | The initial version of a cluster, it has no prior versions, declared cluster as empty. | `source_cluster_id=cluster_id`, `target_cluster_id=cluster_id`, `source_version_id=version_id`, `target_version_id=version_id`. No prior transition entry exists for the `cluster_id`. |
+| `empty` | The initial version of a cluster, it has no prior versions, declared cluster as empty. | `source_cluster_id=cluster_id`, `target_cluster_id=cluster_id`, `source_version_id=version_id`, `target_version_id=version_id`. No prior operation entry exists for the `cluster_id`. |
 | `stage` | A new version is created by advancing the previous version. | `source_cluster_id == target_cluster_id` |
 | `branch` | A new parallel version is created from a source version. | `source_cluster_id == target_cluster_id` |
 | `union` | Two or more parallel versions or clusters are merged into one via union, all materialized members from all sources will be in the final version. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
 | `intersection` | Two or more parallel versions or clusters are merged into one, keeping only common members. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
 | `split` | One cluster is split into two or more clusters. | single `source_version_id`, multiple `target_version_id` rows |
 
-### 4.8 ACTION
+### 4.8 DELTA
 
 Associates an EVIDENCE with a specific CLUSTER VERSION, representing the addition or removal of that evidence from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
-Fields: `action_id`, `cluster_id`, `version_id`, `evidence_id`, `evidence_version_id`, `action_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
+Fields: `delta_id`, `cluster_id`, `version_id`, `evidence_id`, `evidence_version_id`, `delta_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
 
 Explanation of fields:
 - `cluster_id`: Denormalized from `VERSION` for query performance — `version_id` alone uniquely identifies a cluster version, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `version_id`.
-- `action_type`: Indicates whether the evidence is being added to or removed from the `version_id` `cluster_id` state.
+- `delta_type`: Indicates whether the evidence is being added to or removed from the `version_id` `cluster_id` state.
 - `weight`: A numerical value representing the strength of the association between the evidence and the cluster in this commit, which can be used for ranking and confidence scoring.
 - `reason`: Can be `manual-annotation` or `automatic-linking`.
 - `actor_id`: FK to PRINCIPAL — the user or service agent that authored this specific evidence addition or removal.
 
-Here enforced constraints for the ACTION:
+Here enforced constraints for the DELTA:
 1. `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table
 2. The `cluster_id` must exist in the CLUSTER table.
 3. The `version_id` must exist in the VERSION table for the specified `cluster_id`.
-4. There is no entry in the TRANSITION table for the `cluster_id` and `version_id` as `source_cluster_id` and `source_version_id`. No derived versions have been created.
-5. For an `add` action, the specified `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table, and the `version_id` must exist in the VERSION table for the specified `cluster_id`.
+4. There is no entry in the OPERATION table for the `cluster_id` and `version_id` as `source_cluster_id` and `source_version_id`. No derived versions have been created.
+5. For an `add` delta, the specified `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table, and the `version_id` must exist in the VERSION table for the specified `cluster_id`.
 
 
 #### 4.8.1 Algorithm to resolve membership for a given `cluster_id` and `version_id`:
 1. Start with an empty set of member evidence.
-2. From `TRANSITION`, start with the specified `cluster_id` and `version_id`, and perform a full DAG walk backwards through all ancestor transition entries to the root version, collecting all `(cluster_id, version_id)` pairs. Follow ALL ancestor paths — including those via `cluster-merge` and `cluster-split` entries into different clusters. Do not prune at the first path to root.
-3. For each collected `cluster_id` and `version_id`, query the ACTION table for all actions associated with that version.
-4. Sort the collected actions globally by their `action_id` ascending. Because `action_id` is a UUIDv6, this is equivalent to creation-time order across all ancestor versions.
-5. Sequentially apply each action to the set of member evidence, adding or removing evidence based on the `action_type` and updating the `weight` and `reason` accordingly.
-6. After processing all actions, the resulting set of member evidence represents the cluster membership for the specified `cluster_id` and `version_id`.
+2. From `OPERATION`, start with the specified `cluster_id` and `version_id`, and perform a full DAG walk backwards through all ancestor operation entries to the root version, collecting all `(cluster_id, version_id)` pairs. Follow ALL ancestor paths — including those via `union`, `intersection`, and `split` entries that cross cluster boundaries. Do not prune at the first path to root.
+3. For each collected `cluster_id` and `version_id`, query the DELTA table for all deltas associated with that version.
+4. Sort the collected deltas globally by their `delta_id` ascending. Because `delta_id` is a UUIDv6, this is equivalent to creation-time order across all ancestor versions.
+5. Sequentially apply each delta to the set of member evidence, adding or removing evidence based on the `delta_type` and updating the `weight` and `reason` accordingly.
+6. After processing all deltas, the resulting set of member evidence represents the cluster membership for the specified `cluster_id` and `version_id`.
 
 #### 4.8.2 Algorithm to resolve pending (unsealed) changes for a given `cluster_id` and `version_id`:
-1. From `ACTION` table, query for any actions associated with the specified `cluster_id` and `version_id`.
-2. Sort the actions by their `action_id` ascending to ensure they are processed in the order they were created.
-3. Reduce the actions if same `EVIDENCE` has been added and removed multiple times, keeping only the latest action for each `EVIDENCE`.
-4. The resulting set of actions represents the pending diff on the current working version for the specified `cluster_id` and `version_id`.
+1. From `DELTA` table, query for any deltas associated with the specified `cluster_id` and `version_id`.
+2. Sort the deltas by their `delta_id` ascending to ensure they are processed in the order they were created.
+3. Reduce the deltas if same `EVIDENCE` has been added and removed multiple times, keeping only the latest delta for each `EVIDENCE`.
+4. The resulting set of deltas represents the pending diff on the current working version for the specified `cluster_id` and `version_id`.
 
 #### 4.8.3 Resolve possible head of the cluster:
 - Case `locked` in `head_constraints`:
-  1. From `TRANSITION`, query for the first version of the cluster with `cluster_id` and `transition_type` = `initial`.
+  1. From `OPERATION`, query for the first version of the cluster with `cluster_id` and `operation_type` = `empty`.
   2. The resulting `version_id` represents the head of the cluster.
 - Case `main`:
-  1. Filter `TRANSITION` for entries with `cluster_id`.
-  2. Sort the filtered transitions by `target_version_id` ascending.
-  3. Set head version to the version with `transition_type` = `initial`, it should be first in the sorted list.
+  1. Filter `OPERATION` for entries with `cluster_id`.
+  2. Sort the filtered operations by `target_version_id` ascending.
+  3. Set head version to the version with `operation_type` = `empty`, it should be first in the sorted list.
   4. Go through the list and update the head version if any of the following conditions are met:
-    - `transition_type` is `next` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
-    - `transition_type` is `merge` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
-    - `transition_type` is `cluster-merge` and `source_cluster_id == cluster_id` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
+    - `operation_type` is `stage` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
+    - `operation_type` is `union` or `intersection` and `source_cluster_id == cluster_id` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
 
 - Case `any`:
-  1. From `TRANSITION`, query for all versions of the cluster with `cluster_id` and `transition_type` in (`initial`, `next`, `branch`, `merge`, `cluster-merge`, `cluster-split`).
-  2. The resulting set of `version_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf versions (versions with no outgoing `next` or `merge` transition).
+  1. From `OPERATION`, query for all versions of the cluster with `cluster_id` and `operation_type` in (`empty`, `stage`, `branch`, `union`, `intersection`, `split`).
+  2. The resulting set of `version_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf versions (versions with no outgoing `stage`, `union`, or `intersection` operation).
 
 
 ### 4.9 TASK
@@ -448,17 +447,17 @@ Fields: `task_id`, `cluster_id`, `version_id`, `assignee_id`, `task_role`, `stat
 
 
 ### 4.10 MEMBERSHIP
-Represents the current materialized state of cluster membership for each cluster, derived from the ACTION table.
+Represents the current materialized state of cluster membership for each cluster, derived from the DELTA table.
 
 Fields: `cluster_id`, `evidence_id`, `evidence_version_id`, `weight`, `reason`, `as_of_version_id`.
 
 `as_of_version_id` records which version this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_version_id` at the time of the last update.
 
-The view is updated in real-time as new ACTIONs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to replay the full version transition history and actions each time. Updates to MEMBERSHIP must be applied in the same transaction as the ACTION write that triggered them. MEMBERSHIP reflects the sealed state only — pending actions (those on a version that has no outgoing transition entry yet) are applied to MEMBERSHIP as they are written, since the working version is the live head.
+The view is updated in real-time as new DELTAs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to replay the full version operation history and deltas each time. Updates to MEMBERSHIP must be applied in the same transaction as the DELTA write that triggered them. MEMBERSHIP reflects the sealed state only — pending deltas (those on a version that has no outgoing operation entry yet) are applied to MEMBERSHIP as they are written, since the working version is the live head.
 
 ### 4.11 PRINCIPAL
 
-Unified identity record for any actor that can modify the system. Every VERSION and every ACTION carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
+Unified identity record for any actor that can modify the system. Every VERSION and every DELTA carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
 
 `principal_type` values:
 
