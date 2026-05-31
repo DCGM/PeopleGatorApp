@@ -165,16 +165,16 @@ Fields: `evidence_type`, `schema_version`, `json_schema`, `description`.
 
 The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and grounded identity claims — is an EVIDENCE.
 
-Required fields: `evidence_id`, `evidence_version_id`, `content_hash`, `source_id`, `source_path`, `metadata_schema_name`, `model_metadata`, `revised_metadata`, `model_id`.
+Required fields: `evidence_id`, `evidence_version_id`, `content_hash`, `source_id`, `source_path`, `metadata_schema_name`, `inferred_metadata`, `revised_metadata`, `producer_id`.
 
 - `evidence_id`: stable UUIDv6 identifier for this evidence.
 - `evidence_version_id`: monotonically incrementing integer for versioning this evidence.
 - `evidence_type`: part of FK, determines the schema of `metadata`.
 - `schema_version`: part of FK, determines the version of the schema that `metadata` conforms to. Together pair (`evidence_type`, `schema_version`) FK -> METADATA_SCHEMA.
 - `source_id`: FK → SOURCE — the document or artifact this evidence was derived from.
-- `model_id`: nullable FK → MODALITY_MODEL — the model that produced this evidence. Null for manually curated or authority evidence.
-- `model_metadata`: JSONB typed evidence payload, structured per `metadata_schema`.
-- `revised_metadata`: JSONB with the same structure as `metadata`, used for storing human revisions.
+- `producer_id`: nullable FK → PRINCIPAL — the model agent principal that produced this evidence. Null for manually curated or authority evidence. Must reference a PRINCIPAL with `principal_type = model_agent`.
+- `inferred_metadata`: JSONB typed evidence payload produced by the model, structured per `metadata_schema`.
+- `revised_metadata`: JSONB with the same structure as `inferred_metadata`, used for storing human revisions.
 - `content_hash`: hash of the content if applicable, mainly hash of the metadata.
 
 
@@ -260,7 +260,7 @@ The `metadata_schema_id` FK links each EVIDENCE to a METADATA_SCHEMA row (see §
 | `image` | Image | yes | Image format and dimensions for this detection |
 | `confidence` | float [0,1] | yes | Model confidence score for this detection |
 
-In record the `model_id` links the detection to the specific MODALITY_MODEL that produced it, enabling staleness detection when models are updated.
+The `producer_id` links the detection to the specific MODEL_AGENT principal that produced it, enabling staleness detection when models are updated.
 
 ##### `named_entity` — schema_version `v1`
 
@@ -269,7 +269,7 @@ In record the `model_id` links the detection to the specific MODALITY_MODEL that
 | `span` | PhysicalTextSpan | yes | Detected text span with layout information |
 | `confidence` | float [0,1] | yes | Model confidence score for this detection |
 
-In record the `model_id` links the detection to the specific MODALITY_MODEL that produced it, enabling staleness detection when models are updated.
+The `producer_id` links the detection to the specific MODEL_AGENT principal that produced it, enabling staleness detection when models are updated.
 
 ##### `text_region` — schema_version `v1`
 
@@ -278,7 +278,7 @@ In record the `model_id` links the detection to the specific MODALITY_MODEL that
 | `area` | PhysicalTextRegion | yes | Detected text region with layout information |
 | `confidence` | float [0,1] | yes | Model confidence score for this detection |
 
-In record the `model_id` links the detection to the specific MODALITY_MODEL that produced it, enabling staleness detection when models are updated.
+The `producer_id` links the detection to the specific MODEL_AGENT principal that produced it, enabling staleness detection when models are updated.
 
 ##### `grounded_name` — schema_version `v1`
 
@@ -357,7 +357,7 @@ Fields: `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_v
 The operation_type field can contain following values:
 | Operation Type | Description | Enforced Constraints |
 |---|---|---|
-| `empty` | The initial version of a cluster, it has no prior versions, declared cluster as empty. | `source_cluster_id=cluster_id`, `target_cluster_id=cluster_id`, `source_version_id=version_id`, `target_version_id=version_id`. No prior operation entry exists for the `cluster_id`. |
+| `empty` | The initial version of a cluster, it has no prior versions, declared cluster as empty. | `source_cluster_id=cluster_id`, `target_cluster_id=cluster_id`, `source_version_id=NULL`, `target_version_id=version_id`. No prior operation entry exists for the `cluster_id`. |
 | `stage` | A new version is created by advancing the previous version. | `source_cluster_id == target_cluster_id` |
 | `branch` | A new parallel version is created from a source version. | `source_cluster_id == target_cluster_id` |
 | `union` | Two or more parallel versions or clusters are merged into one via union, all materialized members from all sources will be in the final version. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
@@ -366,16 +366,15 @@ The operation_type field can contain following values:
 
 ### 4.8 DELTA
 
-Associates an EVIDENCE with a specific CLUSTER VERSION, representing the addition or removal of that evidence from the cluster in that version. This is the core table for determining cluster membership at any given version.
+Associates an EVIDENCE applied as a delta to specific CLUSTER VERSION, representing the addition or removal of that evidence from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
-Fields: `delta_id`, `cluster_id`, `version_id`, `evidence_id`, `evidence_version_id`, `delta_type` (`add` or `remove`), `weight`, `reason`, `actor_id`.
+Fields: `delta_id`, `cluster_id`, `version_id`, `evidence_id`, `evidence_version_id`, `delta_type` (`add` or `remove`), `weight`, `actor_id`.
 
 Explanation of fields:
 - `cluster_id`: Denormalized from `VERSION` for query performance — `version_id` alone uniquely identifies a cluster version, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `version_id`.
 - `delta_type`: Indicates whether the evidence is being added to or removed from the `version_id` `cluster_id` state.
 - `weight`: A numerical value representing the strength of the association between the evidence and the cluster in this commit, which can be used for ranking and confidence scoring.
-- `reason`: Can be `manual-annotation` or `automatic-linking`.
-- `actor_id`: FK to PRINCIPAL — the user or service agent that authored this specific evidence addition or removal.
+- `actor_id`: FK to PRINCIPAL — the user, service agent, or model agent that authored this specific evidence addition or removal.
 
 Here enforced constraints for the DELTA:
 1. `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table
@@ -457,32 +456,50 @@ The view is updated in real-time as new DELTAs are added, ensuring that it alway
 
 ### 4.11 PRINCIPAL
 
-Unified identity record for any actor that can modify the system. Every VERSION and every DELTA carries an `actor_id` FK to this table, giving a complete audit trail of who changed what.
+Unified identity record for any actor that can modify the system. Every VERSION and every DELTA carries an `actor_id` FK to this table, giving a complete audit trail of who changed what. Every EVIDENCE carries a `producer_id` FK to this table, identifying the model that generated the evidence.
 
 `principal_type` values:
 
 | Type | Description |
 |---|---|
 | `user` | A human authenticated via an external OIDC provider |
-| `service_agent` | A named autonomous process (ingestion pipeline, ML agent, etc.) |
+| `service_agent` | A named autonomous process (ingestion pipeline, non-ML automation, etc.) |
+| `model_agent` | A registered ML model agent capable of producing EVIDENCE and acting autonomously |
 
 Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
-`PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER` or `SERVICE_AGENT` table.
+`PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER`, `SERVICE_AGENT`, or `MODEL_AGENT` table.
 
 ### 4.12 SOURCE_PROCESSING
 
-Flags whether a MODALITY_MODEL has been applied to a SOURCE to get EVIDENCEs.
+Flags whether a MODEL_AGENT principal has been applied to a SOURCE to get EVIDENCEs.
 
-Fields: `source_id`, `model_id`, `is_processed`.
+Fields: `source_id`, `producer_id`, `is_processed`.
 
 - `source_id`: FK → SOURCE (part of composite PK).
-- `model_id`: FK → MODALITY_MODEL (part of composite PK).
+- `producer_id`: FK → PRINCIPAL where `principal_type = model_agent` (part of composite PK).
 - `is_processed`: boolean — `true` once all resulting EVIDENCEs have been ingested; `false` while pending or in-flight.
 
-`(source_id, model_id)` is the composite primary key — one row per pair. To find sources not yet processed by a given model, query for rows where `is_processed = false` or for sources with no row at all for that `model_id`.
+`(source_id, producer_id)` is the composite primary key — one row per pair. To find sources not yet processed by a given model, query for rows where `is_processed = false` or for sources with no row at all for that `producer_id`.
 
-Evidence-level lineage is available via `EVIDENCE.model_id`, which carries the FK to the model that produced it (null for manually curated or authority evidence).
+Evidence-level lineage is available via `EVIDENCE.producer_id`, which carries the FK to the model principal that produced it (null for manually curated or authority evidence).
+
+#### 4.11.3 MODEL_AGENT
+
+A registered ML model agent principal. The distinction from a static model artifact is intentional: the underlying model weights are immutable, but a MODEL_AGENT is the registered actor that operates the model — it has identity, can be assigned accountability, and can autonomously produce EVIDENCE or author VERSION and DELTA records. Every model that produces EVIDENCE must be pre-registered as a MODEL_AGENT. Because MODEL_AGENT extends PRINCIPAL, it can appear as the `producer_id` on EVIDENCE records and as the `actor_id` on VERSION or DELTA records.
+
+Fields (extends PRINCIPAL): `principal_id`, `evidence_type`, `role`, `model_slug`, `model_version`, `registry_source`, `registry_uri`, `is_active`.
+
+- `evidence_type`: the EVIDENCE type this agent produces, e.g. `face_detection`, `named_entity`.
+
+- `role`: the vector slot role prefix, e.g. `face`, `text`, `layout` — determines the vector slot name prefix in the vector store (see §5.2.3).
+- `model_slug`: unique human-readable identifier used as the suffix in the vector slot name (`<role>:<model_slug>`), e.g. `arcface-r100-v2`. Must be globally unique within a `(evidence_type, role)` pair.
+- `model_version`: semantic version string identifying the underlying model artifact, used for staleness detection.
+- `registry_source`: the model registry that hosts this model artifact, e.g. `mlflow`, `huggingface`, `local`.
+- `registry_uri`: the fully-qualified URI identifying this specific model version in its registry. Together with `registry_source` forms the canonical lineage reference stored on every vector document that carries this agent's slot.
+- `is_active`: whether this agent is currently used for encoding newly ingested evidence. Multiple agents for the same `evidence_type` may be active simultaneously during a rollout.
+
+Agents that are no longer active are retained for querying existing documents that carry their vector slot — they are never deleted as long as any EVIDENCE records reference them.
 
 #### 4.11.1 USER
 
@@ -506,10 +523,9 @@ An autonomous process principal. Agents are pre-registered and identified by a u
 | `agent:ner-extraction` | `agent` | Named-entity recognition pipeline |
 | `pipeline:authority-sync` | `pipeline` | Periodic authority record synchronisation |
 
-Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `agent_version`, `description`.
+Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `description`.
 
 - `agent_slug`: unique human-readable identifier, format `<category>:<name>`.
-- `agent_version`: optional semantic version string tied to the model or code version that produced the evidence (enables staleness detection).
 - `description`: optional free-text description of the agent's purpose.
 
 ---
@@ -611,32 +627,19 @@ These fields are populated only for the applicable `evidence_type`s. They enable
 
 Search scoring is driven by per-modality weighted signals. Each modality corresponds to an `evidence_type` and an embedding model slot in the vector store. The structures in this section live outside the versioned cluster data model — they are user-space configuration that governs how retrieval is performed, not what was annotated or by whom.
 
-### 6.1 MODALITY_MODEL
+### 6.1 MODEL_AGENT
 
-A registry of available embedding models per modality. Each row represents one deployable vector slot — a specific model that can encode evidence of a given `evidence_type` into a named slot in the vector store (see §5.2.3). Rows are registered at deployment time and updated when new models are introduced or retired.
+See §4.11.3. MODEL_AGENT is a subclass of PRINCIPAL (`principal_type = model_agent`) and is the authoritative registry for all ML model agents that produce EVIDENCE or encode vectors. The fields `evidence_type`, `role`, `model_slug`, `model_version`, `registry_source`, `registry_uri`, and `is_active` are defined there.
 
-Fields: `model_id`, `evidence_type`, `role`, `model_slug`, `display_name`, `description`, `registry_source`, `registry_uri`, `is_active`.
+For search configuration, a MODEL_AGENT row is referenced by `SEARCH_PROFILE_MODALITY` (see §6.3) to select which active model slot to use per modality during retrieval.
 
-- `evidence_type`: the EVIDENCE type this model encodes, e.g. `face_detection`, `named_entity`.
-- `role`: the slot role prefix, e.g. `face`, `text`, `layout` — determines the vector slot name prefix in the vector store.
-- `model_slug`: unique identifier used as the suffix in the vector slot name (`<role>:<model_slug>`), e.g. `arcface-r100-v2`. Must be globally unique within a `(evidence_type, role)` pair.
-- `display_name`: human-readable label shown in the UI.
-- `description`: optional free-text description of the model's architecture, training data, or intended use.
-- `registry_source`: the model registry that hosts this model version, e.g. `mlflow`, `huggingface`, `local`. Provides enough context to resolve the `registry_uri`.
-- `registry_uri`: the fully-qualified URI that identifies this specific model version in its registry. Format depends on `registry_source`:
-- `inference-provider-repo`: defines the repository that was used to do the inference and produce the vector. 
+`registry_uri` format by `registry_source`:
 
-  | `registry_source` | Example `registry_uri` |
-  |---|---|
-  | `mlflow` | `models:/face-detector/3` (registered model name + version number) |
-  | `huggingface` | `DCGM/arcface-r100-v2@sha256:abc123` (repo + commit/tag) |
-  | `local` | `/models/face-detector-v2/` (filesystem path) |
-
-  Together `(registry_source, registry_uri)` forms the canonical lineage reference for this model version and is stored on every vector store document that carries this model's slot (see §5.2.4).
-
-- `is_active`: whether this model is currently used for encoding newly ingested evidence. Multiple models for the same `evidence_type` may be active simultaneously when a new model is being rolled out.
-
-Models that are no longer active are retained for querying existing documents that carry their vector slot — they are never deleted as long as any documents reference them.
+| `registry_source` | Example `registry_uri` |
+|---|---|
+| `mlflow` | `models:/face-detector/3` (registered model name + version number) |
+| `huggingface` | `DCGM/arcface-r100-v2@sha256:abc123` (repo + commit/tag) |
+| `local` | `/models/face-detector-v2/` (filesystem path) |
 
 ### 6.2 SEARCH_PROFILE
 
@@ -650,14 +653,14 @@ Fields: `profile_id`, `profile_name`, `description`, `owner_id`, `is_public`, `i
 
 ### 6.3 SEARCH_PROFILE_MODALITY
 
-Join table that configures one modality's participation in a specific `SEARCH_PROFILE`. Each row represents one `(profile, evidence_type)` pair and carries a direct FK to the pinned `MODALITY_MODEL`, if any.
+Join table that configures one modality's participation in a specific `SEARCH_PROFILE`. Each row represents one `(profile, evidence_type)` pair and carries a direct FK to the pinned `MODEL_AGENT`, if any.
 
 Fields: `profile_id`, `evidence_type`, `model_id`, `weight`, `enabled`, `min_confidence`.
 
 Constraints:
 - `UNIQUE (profile_id, evidence_type)` — only one row per modality per profile.
 - `profile_id`: FK → SEARCH_PROFILE.
-- `model_id`: nullable FK → MODALITY_MODEL — if null, the highest-priority active `MODALITY_MODEL` for the `evidence_type` is resolved at query time. If set, the query is pinned to that specific model's vector slot.
+- `model_id`: nullable FK → MODEL_AGENT — if null, the highest-priority active `MODEL_AGENT` for the `evidence_type` is resolved at query time. If set, the query is pinned to that specific agent's vector slot.
 - `weight`: float [0, ∞) — relative contribution of this modality to the combined retrieval score. Weights across all enabled modalities are normalised to sum to 1.0 at query time.
 - `enabled`: bool — whether this modality participates in the search. Allows toggling a modality off without deleting the row.
 - `min_confidence`: nullable float [0, 1] — evidence of this type below this detection confidence are excluded from candidates before scoring.
@@ -676,5 +679,5 @@ Constraints:
 - **System profiles** (`is_system = true`) are provisioned at deployment time and serve as stable, read-only defaults. Their `SEARCH_PROFILE` row and all associated `SEARCH_PROFILE_MODALITY` rows cannot be modified or deleted.
 - **User profiles** are created by any authenticated principal. A user may mark any of their own profiles as their personal default for search sessions.
 - **Cloning**: any profile can be cloned. Cloning creates a new `SEARCH_PROFILE` row and copies all associated `SEARCH_PROFILE_MODALITY` rows to the new `profile_id`, owned by the requesting user. The clone is fully independent — there is no link back to the source profile, and subsequent changes to either do not affect the other. This is the only mechanism for deriving a customised variant of an existing profile.
-- **Model retirement**: when a `MODALITY_MODEL` is marked `is_active = false`, existing `SEARCH_PROFILE_MODALITY` rows that FK to it are detected via a simple indexed join on `model_id`. A warning is surfaced at query time to encourage migration to a newer model. The FK prevents the `MODALITY_MODEL` row from being deleted while any profile still references it.
+- **Model retirement**: when a `MODEL_AGENT` is marked `is_active = false`, existing `SEARCH_PROFILE_MODALITY` rows that FK to it are detected via a simple indexed join on `model_id`. A warning is surfaced at query time to encourage migration to a newer agent. The FK prevents the `MODEL_AGENT` row from being deleted while any profile still references it.
 
