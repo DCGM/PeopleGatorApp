@@ -165,15 +165,16 @@ Fields: `evidence_type`, `schema_version`, `json_schema`, `description`.
 
 The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and grounded identity claims — is an EVIDENCE.
 
-Required fields: `evidence_id`, `evidence_version_id`, `content_hash`, `source_id`, `source_path`, `metadata_schema_name`, `inferred_metadata`, `revised_metadata`, `producer_id`.
+Required fields: `evidence_id`, `evidence_version_id`, `content_hash`, `source_id`, `source_path`, `metadata_schema_name`, `inferred_metadata`, `revised_metadata`, `producer_id`, `revisor_id`.
 
 - `evidence_id`: stable UUIDv6 identifier for this evidence.
 - `evidence_version_id`: monotonically incrementing integer for versioning this evidence.
 - `evidence_type`: part of FK, determines the schema of `metadata`.
 - `schema_version`: part of FK, determines the version of the schema that `metadata` conforms to. Together pair (`evidence_type`, `schema_version`) FK -> METADATA_SCHEMA.
 - `source_id`: FK → SOURCE — the document or artifact this evidence was derived from.
-- `producer_id`: nullable FK → PRINCIPAL — the model agent principal that produced this evidence. Null for manually curated or authority evidence. Must reference a PRINCIPAL with `principal_type = model_agent`.
+- `producer_id`: nullable FK → MODEL_AGENT — the model agent principal that produced this evidence. Null for manually curated or authority evidence. Must reference a PRINCIPAL with `principal_type = model_agent`.
 - `inferred_metadata`: JSONB typed evidence payload produced by the model, structured per `metadata_schema`.
+- `revisor_id`: nullable FK → PRINCIPAL — the human user that last revised this evidence. Null if never revised.
 - `revised_metadata`: JSONB with the same structure as `inferred_metadata`, used for storing human revisions.
 - `content_hash`: hash of the content if applicable, mainly hash of the metadata.
 
