@@ -50,7 +50,7 @@ Optional assigned tasks workflow:
 
 1. Cluster-first: search returns, annotation targets, and grounding outputs are all information clusters.
     - Search query is itself a set of typed signals (a name string, a free-text snippet, a face image). These signals are typed evidence items subject to content-hash deduplication. An ephemeral search query lives in the application cache and is never written to the relational DB unless the user explicitly saves it.
-    - A **saved search** (`SAVED_SEARCH`) is the persisted form of a query. It stores the same evidence signal references and weights. A saved search can be promoted into a `mutable_cluster` annotation target via an explicit user action.
+    - A **saved search** is the persisted form of a query. When a user saves a search, the application creates a CLUSTER with `cluster_role = saved_search` and an initial VERSION, with DELTA entries carrying the signal weights — one DELTA per evidence signal. No separate table exists; a saved search is a cluster type. It is promoted into an annotation target by creating a new VERSION with `cluster_role = mutable_cluster`.
     - Any person evidence that is grouped together is in a cluster.
     - Search results are polymorphic: results can be similarity-ranked clusters, individual evidence items of any modality, or both in the same response. Facet counts are returned inline with every response.
     - A system-default `SEARCH_PROFILE` is used when the caller does not specify one explicitly.
@@ -81,7 +81,7 @@ Optional assigned tasks workflow:
     - Every VERSION and every DELTA records a `actor_id` referencing a PRINCIPAL — either a human user or a named service agent.
     - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
     - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
-    - The `reason` field on DELTA categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
+    - `actor_id` records the exact originator of every state change, enabling per-principal audit and replay.
 9. Authorization via OIDC scopes: access control is delegated to the identity provider, not managed in the application database.
     - The IdP issues tokens carrying scopes that map directly to workflow roles: `people-gator:annotate`, `people-gator:review`, `people-gator:verify`, `people-gator:ingest`, `people-gator:admin`.
     - Each API route declares the required scope(s). The FastAPI dependency layer validates the token scope before the handler runs. No RBAC table is maintained in this service.
@@ -149,12 +149,13 @@ Resolver then does the following for a SOURCE where `schema_name` references thi
 
 A specific document, scan, or artifact from which one or more EVIDENCEs were derived. SOURCE normalises provenance — an EVIDENCE belongs to exactly one SOURCE, and the SOURCE belongs to one SOURCE_SCHEMA that knows how to resolve its storage paths.
 
-Fields: `source_id`, `source_schema_name`, `metadata`, `created_by`.
+Fields: `source_id`, `source`, `source_schema_name`, `provider`, `metadata`, `content_hash`, `created_by`.
 - `source_id`: UUIDv6 primary key.
 - `source`: opaque string identifier for the original source, e.g. a filename. Parsable via `source_schema_name`.
 - `source_schema_name`: FK → SOURCE_SCHEMA — determines how this original source can be resolved.
-- `content_hash` : hash of ingested content for deduplication and staleness detection, e.g. hash of the original image bytes for a scanned document, or hash of the authority record JSON for an imported authority entity.
-- `created_by`: FK → PRINCIPAL — the user or service agent that ingested this source.
+- `provider`: enum string — coarse provenance identifier. One of `kramerius`, `nkcr`, `wikimedia`, `local`. Set at ingest time by the SERVICE_AGENT creating the source record. Used for vector store faceting (see §5.2.2).
+- `content_hash`: hash of ingested content for deduplication and staleness detection, e.g. hash of the original image bytes for a scanned document, or hash of the authority record JSON for an imported authority entity.
+- `created_by`: FK → `SERVICE_AGENT.principal_id` or `USER.principal_id` — the service agent or user that ingested this source.
 
 This is intentionally flexible to accommodate the wide variety of source types and metadata that may be relevant for different use cases. The exact structure of this JSONB is not enforced at the database level but is expected to conform to the requirements of the associated SOURCE_SCHEMA's resolver logic.
 
@@ -359,6 +360,7 @@ Fields: `cluster_id`, `head_version_id`.
 
 | Role | Created by |
 |---|---|
+| `saved_search` | A persisted search query saved by a user; promotes to `mutable_cluster` via a new VERSION |
 | `mutable_cluster` | A cluster that is proposed automatically or by an annotator |
 | `review_cluster` | A cluster that is under review by a human annotator |
 | `grounded_cluster` | Reviewer promotion of a `review_cluster` |
@@ -423,7 +425,7 @@ Here enforced constraints for the DELTA:
 2. From `OPERATION`, start with the specified `cluster_id` and `version_id`, and perform a full DAG walk backwards through all ancestor operation entries to the root version, collecting all `(cluster_id, version_id)` pairs. Follow ALL ancestor paths — including those via `union`, `intersection`, and `split` entries that cross cluster boundaries. Do not prune at the first path to root.
 3. For each collected `cluster_id` and `version_id`, query the DELTA table for all deltas associated with that version.
 4. Sort the collected deltas globally by their `delta_id` ascending. Because `delta_id` is a UUIDv6, this is equivalent to creation-time order across all ancestor versions.
-5. Sequentially apply each delta to the set of member evidence, adding or removing evidence based on the `delta_type` and updating the `weight` and `reason` accordingly.
+5. Sequentially apply each delta to the set of member evidence, adding or removing evidence based on the `delta_type` and updating the `weight` accordingly.
 6. After processing all deltas, the resulting set of member evidence represents the cluster membership for the specified `cluster_id` and `version_id`.
 
 #### 4.8.2 Algorithm to resolve pending (unsealed) changes for a given `cluster_id` and `version_id`:
@@ -488,7 +490,7 @@ A version is **sealed** once it appears as `source_version_id` in any OPERATION 
 ### 4.10 MEMBERSHIP
 Represents the current materialized state of cluster membership for each cluster, derived from the DELTA table.
 
-Fields: `cluster_id`, `evidence_id`, `evidence_version_id`, `weight`, `reason`, `as_of_version_id`.
+Fields: `cluster_id`, `evidence_id`, `evidence_version_id`, `weight`, `as_of_version_id`.
 
 `as_of_version_id` records which version this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_version_id` at the time of the last update.
 
@@ -498,21 +500,17 @@ MEMBERSHIP is updated **asynchronously** after a new VERSION is created (via `st
 
 MEMBERSHIP reflects sealed versions only. The background job must complete before a newly-created version is queryable via MEMBERSHIP.
 
-### 4.11 SAVED_SEARCH
+### 4.11 Saved searches as clusters
 
-A persisted user search query. Ephemeral search sessions are held in the application cache and never written to the DB. A `SAVED_SEARCH` is created only when the user explicitly saves a query.
+There is no separate SAVED_SEARCH table. A saved search is represented as a CLUSTER with `cluster_role = saved_search` (see §4.5). When a user saves a search query, the application creates:
 
-Fields: `saved_search_id`, `owner_id`, `profile_id`, `signals`, `name`, `description`, `created_at`.
+1. A CLUSTER row.
+2. An initial VERSION with `cluster_role = saved_search` and `actor_id` set to the saving user.
+3. One DELTA per evidence signal, carrying `evidence_id`, `evidence_version_id`, `delta_type = add`, and `weight` from the signal weight.
 
-- `saved_search_id`: UUIDv6 primary key.
-- `owner_id`: FK → PRINCIPAL — the user who saved this search.
-- `profile_id`: FK → SEARCH_PROFILE — the search profile active when the query was saved.
-- `signals`: JSONB array of typed signal entries. Each entry carries `evidence_id`, `evidence_version_id`, `evidence_type`, and `weight`. Signal evidence items must exist in the EVIDENCE table (FK enforced per entry at application layer; no DB-level array FK).
-- `name`: optional user-provided label for the saved search.
-- `description`: optional free-text notes.
-- `created_at`: timestamp.
+The SEARCH_PROFILE used when saving the query is not stored on the cluster itself — it is associated at query time via the caller's profile selection.
 
-A `SAVED_SEARCH` can be promoted into a `mutable_cluster` via an explicit `POST /clusters` action. Promotion creates a CLUSTER + initial VERSION + DELTA entries from the signal weights. After promotion the `SAVED_SEARCH` row is not deleted — it retains its identity as the origin query.
+Promotion to an annotation target creates a new VERSION via a `stage` operation with `cluster_role = mutable_cluster`. The original `saved_search` VERSION is retained as the version history root.
 
 ### 4.12 PRINCIPAL
 
@@ -536,13 +534,25 @@ Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
 Tracks the processing state of a MODEL_AGENT being applied to a SOURCE to produce DERIVED_EVIDENCE.
 
-Fields: `source_id`, `producer_id`, `is_processed`.
+Fields: `source_id`, `producer_id`, `processing_status`, `started_at`, `completed_at`, `error_message`.
 
 - `source_id`: FK → SOURCE (part of composite PK).
 - `producer_id`: FK → `MODEL_AGENT.principal_id` (part of composite PK) — DB-enforced to model agents only via the subtype table FK.
-- `is_processed`: boolean — `true` once all resulting EVIDENCEs have been ingested; `false` while pending or in-flight.
+- `processing_status`: enum — lifecycle state of this processing job.
+- `started_at`: nullable `timestamptz` — set when the job transitions to `in_progress`.
+- `completed_at`: nullable `timestamptz` — set when the job reaches `complete` or `failed`.
+- `error_message`: nullable text — populated on `failed` with the error detail.
 
-`(source_id, producer_id)` is the composite primary key — one row per pair. To find sources not yet processed by a given model, query for rows where `is_processed = false` or for sources with no row at all for that `producer_id`.
+`processing_status` values:
+
+| Value | Description |
+|---|---|
+| `queued` | Row exists; processing has not yet been triggered |
+| `in_progress` | Processing has been triggered and is actively running |
+| `complete` | All resulting DERIVED_EVIDENCEs have been ingested successfully |
+| `failed` | Processing encountered an error; see `error_message` |
+
+`(source_id, producer_id)` is the composite primary key — one row per pair. A source with no row for a given `producer_id` has never been queued. A source with `processing_status = queued` has been registered but the job has not yet started. This allows idempotent retry logic to distinguish "never queued", "in flight", "done", and "stuck/failed" states.
 
 Evidence-level lineage is available via `DERIVED_EVIDENCE.producer_id`, which carries the FK to the MODEL_AGENT that produced it. Authority evidence lineage is available via `AUTHORITY_EVIDENCE.producer_id`, which carries the FK to the SERVICE_AGENT that ingested it.
 
@@ -613,7 +623,7 @@ The vector store is a document store. Each document is in a strict **1:1 relatio
 |---|---|---|
 | `evidence_id` | UUID v6 | FK → EVIDENCE.evidence_id — stable identifier across versions |
 | `evidence_version_id` | UUID v6 | FK → EVIDENCE.evidence_version_id — together forms the unique document key |
-| `evidence_type` | string | `face_detection` \| `named_entity` \| `text_region` \| `image_region` \| `grounded_name` \| `grounded_description` — determines the modality and which vector slots and metadata fields are populated |
+| `evidence_type` | string | `face_detection` \| `named_entity` \| `text_region` \| `grounded_name` \| `grounded_description` \| `authority_identifier` — determines the modality and which vector slots and metadata fields are populated |
 
 #### 5.2.2 Faceting metadata (derived from SOURCE and SOURCE_SCHEMA)
 
@@ -622,7 +632,7 @@ These fields are resolved at ingest time by applying the SOURCE_SCHEMA resolver 
 | Field | Type | Description |
 |---|---|---|
 | `source_id` | UUID v6 | FK → SOURCE — enables per-document-source filtering |
-| `provider` | string | SOURCE.provider value, e.g. `kramerius`, `nkcr`, `local-ingest` — coarse provenance facet |
+| `provider` | string | SOURCE.provider enum value — one of `kramerius`, `nkcr`, `wikimedia`, `local` — coarse provenance facet |
 | `cluster_ids` | list[UUID v6] | Current cluster memberships — denormalised from MEMBERSHIP; updated on membership change |
 | `language` | string (BCP 47) | Language of the textual content; null for non-textual evidence types |
 
@@ -635,7 +645,6 @@ The `<role>` prefix is fixed per `evidence_type`:
 | `evidence_type` | Role prefix | Meaning |
 |---|---|---|
 | `face_detection` | `face` | Embedding of the detected face crop |
-| `image_region` | `image` | Embedding of an image patch |
 | `named_entity` | `text` | Semantic embedding of the entity text span |
 | `text_region` | `text` | Semantic embedding of the text region content |
 | `text_region` | `layout` | Embedding encoding spatial/layout structure of the region |
