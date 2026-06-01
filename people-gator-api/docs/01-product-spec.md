@@ -33,7 +33,7 @@ Optional assigned tasks workflow:
 3. Person cluster retrieval, creation, extension, merging, and versioning.
 4. Grounding to locally imported authority sources (Wikidata, NKCR).
 5. Annotation workflows, inter-annotator agreement tracking, and reviewer adjudication.
-6. User roles, audit.
+6. Authorization via OIDC scopes delegated to the identity provider. Audit trail via actor-stamped VERSION and DELTA records.
 7. Data export.
 8. New data ingest and indexing pipelines to keep up with new scans, new model versions, and new authority data dumps.
 
@@ -49,8 +49,8 @@ Optional assigned tasks workflow:
 ## 3. Design Principles
 
 1. Cluster-first: search returns, annotation targets, and grounding outputs are all information clusters.
-    - Search query is itself a `search_cluster`: the query is expressed as a list of signals, zero to many per modality. A name string, a free-text snippet, and a face image each become typed evidence items in the same table used for ingested artifacts, subject to content-hash deduplication so identical signals are never stored twice.
-    - The query cluster references those evidence items via `DELTA` entries, exactly like any other cluster. It can be saved, shared, or promoted into an annotation target.
+    - Search query is itself a set of typed signals (a name string, a free-text snippet, a face image). These signals are typed evidence items subject to content-hash deduplication. An ephemeral search query lives in the application cache and is never written to the relational DB unless the user explicitly saves it.
+    - A **saved search** (`SAVED_SEARCH`) is the persisted form of a query. It stores the same evidence signal references and weights. A saved search can be promoted into a `mutable_cluster` annotation target via an explicit user action.
     - Any person evidence that is grouped together is in a cluster.
     - Search results are polymorphic: results can be similarity-ranked clusters, individual evidence items of any modality, or both in the same response. Facet counts are returned inline with every response.
     - A system-default `SEARCH_PROFILE` is used when the caller does not specify one explicitly.
@@ -82,6 +82,10 @@ Optional assigned tasks workflow:
     - Human users are identified via external OIDC authentication (e.g. Keycloak, Auth0). Their stable identity is the `(sub, iss)` claim pair from the ID token.
     - Service agents are autonomous processes identified by a conventional slug such as `system:kramerius-ingest` or `agent:face-detector-v2`. Slugs encode the agent category and name.
     - The `reason` field on DELTA categorises intent (`manual-annotation` vs `automatic-linking`), while `actor_id` records the exact originator. Together they enable per-principal audit, replay, and trust scoring.
+9. Authorization via OIDC scopes: access control is delegated to the identity provider, not managed in the application database.
+    - The IdP issues tokens carrying scopes that map directly to workflow roles: `people-gator:annotate`, `people-gator:review`, `people-gator:verify`, `people-gator:ingest`, `people-gator:admin`.
+    - Each API route declares the required scope(s). The FastAPI dependency layer validates the token scope before the handler runs. No RBAC table is maintained in this service.
+    - Coarse scope enforcement (annotator vs reviewer vs admin) is handled at route level. Fine-grained resource enforcement (can this annotator write to this cluster?) is handled via TASK assignment — an annotator may only write DELTAs against a version referenced by a TASK assigned to them.
 
 ## 4. Data Model
 
@@ -118,24 +122,28 @@ Fields: `schema_name`, `resolver_type`, `resolver_config`.
 
 - `schema_name`: human-readable label, e.g. `image-upload`, `kramerius-iiif`, `wikimedia-image`, `nkcr-authority`. Must be globally unique.
 - `resolver_type`: one of `db-source-table-row`, `s3-image`, `http-image`, `fsspec-image`, `fsspec-pagexml`, `s3-table`.
-- `resolver_config`: JSONB with resolver-specific parameters. resolver can be applied on the SOURCE.source string and we can get structured source metadata, this metadata is materialized and can be e.g. faceted.
+- `resolver_config`: typed nested JSONB whose structure is discriminated by `resolver_type`. Each `resolver_type` defines an explicit schema (enforced by a Pydantic discriminated union at registration time) specifying exactly which template keys are permitted and what format their values must take. No arbitrary keys are allowed — the model rejects any `resolver_config` that contains keys not in the allow-list for that `resolver_type`. A GIN index is defined on `resolver_config` to support containment queries for config-based faceting and admin lookups.
 
-| `resolver_type` | Example `schema_name` | Example `resolver_config` |
+**GIN index trade-off**: SOURCE_SCHEMA is a low-write, high-read table (schemas are registered once at deployment). GIN write amplification is negligible here. For high-volume write tables (e.g. DERIVED_EVIDENCE), partial GIN indexes scoped to specific `evidence_type` values are used instead to bound the index maintenance cost (see §4.4.1).
+
+Per-resolver-type `resolver_config` schemas and allowed placeholder keys:
+
+| `resolver_type` | Allowed placeholder keys | Example `resolver_config` |
 |---|---|---|
-| `db-source-table-row` | `user-provided-name` | `{"source_template": "{principal_id}"}` |
-| `db-source-table-row` | `user-provided-description` | `{"source_template": "{principal_id}"}` |
-| `s3-image` | `image-upload` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
-| `http-image` | `wikimedia-image` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
-| `fsspec-pagexml` | `kramerius-ocr-public` | `{"path_template": "zip://{page_id}.xml::file:///mnt/matylda1/ihradis/digiknihovna_public/{library}/{document_id}.page_xml.zip"}` |
-| `fsspec-image` | `kramerius-image-public` | `{"path_template": "file:///mnt/matylda1/ihradis/digiknihovna_public/{library}/{document_id}.images/{page_id}.jpg"}` |
-| `s3-table` | `nkcr-authority` | `{"bucket_template": "peoplegator-ingest", "key_template": "nlcr_aut/nlcr_aut__{text_type}.csv"}` |
-| `s3-table` | `wikidata-authority` | `{"bucket_template": "peoplegator-ingest", "key_template": "wikidata/people_of_all_{text_type}.csv"}` |
+| `db-source-table-row` | `principal_id` | `{"source_template": "{principal_id}"}` |
+| `s3-image` | `principal_id`, `file_id` | `{"bucket_template": "peoplegator-upload", "key_template": "{principal_id}/{file_id}.jpg"}` |
+| `http-image` | `file_name` | `{"base_url_template": "https://commons.wikimedia.org/", "path_template": "wiki/Special:FilePath/{file_name}"}` |
+| `fsspec-pagexml` | `page_id`, `library`, `document_id` | `{"path_template": "zip://{page_id}.xml::file:///mnt/data/{library}/{document_id}.page_xml.zip"}` |
+| `fsspec-image` | `library`, `document_id`, `page_id` | `{"path_template": "file:///mnt/data/{library}/{document_id}.images/{page_id}.jpg"}` |
+| `s3-table` | `text_type` | `{"bucket_template": "peoplegator-ingest", "key_template": "nlcr_aut/nlcr_aut__{text_type}.csv"}` |
 
+Placeholder values sourced from `SOURCE.metadata` are validated against a per-key format rule before interpolation (e.g. `principal_id` must be a valid UUIDv6 string, `file_id` must be alphanumeric). Interpolation is performed only after validation passes. This closes the path-traversal and SSRF vectors that would otherwise exist for `s3-image` and `http-image` resolver types.
 
-Resolver then does the following for a SOURCE field where `schema_name` references this `SOURCE_SCHEMA`:
-1. Take `SOURCE.metadata` and `SOURCE_SCHEMA.resolver_config`.
-2. Interpolate any `{placeholders}` in `resolver_config` with values from `SOURCE.metadata` (e.g. `library`, `page_id`, `nkcr_authority_id`).
-3. Construct the final URL or file path according to the `resolver_type` logic. For example, for `s3`, the final S3 key would be constructed by interpolating `key_template` with values from `SOURCE.metadata` and `PRINCIPAL` (e.g. `principal_id`), and the full S3 URI would be `s3://{bucket_template}/{interpolated_key}`.
+Resolver then does the following for a SOURCE where `schema_name` references this `SOURCE_SCHEMA`:
+1. Look up the `resolver_config` for the `schema_name` and validate its structure against the `resolver_type` schema.
+2. Take `SOURCE.metadata` and extract values for each allowed placeholder key. Validate each value against its per-key format rule.
+3. Interpolate the validated placeholder values into the `resolver_config` templates.
+4. Construct the final URL or file path according to the `resolver_type` logic.
 
 ### 4.2 SOURCE
 
@@ -163,25 +171,54 @@ Fields: `evidence_type`, `schema_version`, `json_schema`, `description`.
 
 ### 4.4 EVIDENCE
 
-The unified atomic evidence unit. Every piece of evidence — face detections, name mentions, text regions, photos, and grounded identity claims — is an EVIDENCE.
+Evidence is split into a **base table** and two **specialised child tables** that cover the two structurally distinct evidence families. All DELTA and MEMBERSHIP FKs reference the base `EVIDENCE` table so membership queries never need to know which family an item belongs to.
 
-Required fields: `evidence_id`, `evidence_version_id`, `content_hash`, `source_id`, `source_path`, `metadata_schema_name`, `inferred_metadata`, `revised_metadata`, `producer_id`, `revisor_id`.
+#### 4.4.0 EVIDENCE (base)
 
-- `evidence_id`: stable UUIDv6 identifier for this evidence.
-- `evidence_version_id`: monotonically incrementing integer for versioning this evidence.
-- `evidence_type`: part of FK, determines the schema of `metadata`.
-- `schema_version`: part of FK, determines the version of the schema that `metadata` conforms to. Together pair (`evidence_type`, `schema_version`) FK -> METADATA_SCHEMA.
+Shared identity and provenance fields. Every DERIVED_EVIDENCE and AUTHORITY_EVIDENCE row has a corresponding EVIDENCE row with the same `evidence_id`.
+
+Required fields: `evidence_id`, `evidence_version_id`, `evidence_type`, `schema_version`, `source_id`, `source_path`, `content_hash`.
+
+- `evidence_id`: stable UUIDv6 identifier for this evidence item across all versions.
+- `evidence_version_id`: UUIDv6, incremented on each revision. A new `evidence_version_id` is created only when a human user revises the evidence metadata (see §4.4.3). Re-running inference over the same source produces a new EVIDENCE row entirely, not a new version of an existing one.
+- `evidence_type`: discriminator — one of `face_detection`, `named_entity`, `text_region` (→ DERIVED_EVIDENCE) or `grounded_name`, `grounded_description`, `authority_identifier` (→ AUTHORITY_EVIDENCE).
+- `schema_version`: together with `evidence_type`, forms the FK → METADATA_SCHEMA.
 - `source_id`: FK → SOURCE — the document or artifact this evidence was derived from.
-- `producer_id`: nullable FK → MODEL_AGENT — the model agent principal that produced this evidence. Null for manually curated or authority evidence. Must reference a PRINCIPAL with `principal_type = model_agent`.
-- `produced_metadata`: JSONB typed evidence payload produced by the model, structured per `metadata_schema`.
-- `revisor_id`: nullable FK → PRINCIPAL — the human user that last revised this evidence. Null if never revised.
-- `revised_metadata`: JSONB with the same structure as `produced_metadata`, used for storing human revisions.
-- `content_hash`: hash of the content if applicable, mainly hash of the metadata.
+- `source_path`: string — sub-path or key within the SOURCE identifying the specific artifact (e.g. a page ID within a document zip, or a crop region URI). Null when the evidence covers the entire source document. Opaque to the DB; interpreted by the SOURCE_SCHEMA resolver.
+- `content_hash`: hash of the evidence payload for deduplication and staleness detection.
+
+A **partial GIN index** is defined per `evidence_type` on the child table's `produced_metadata` column to support modality-specific JSONB field access and faceting without a full table scan.
+
+#### 4.4.1 DERIVED_EVIDENCE
+
+Extends EVIDENCE for ML-model-produced detections: `face_detection`, `named_entity`, and `text_region`.
+
+Additional fields: `producer_id`, `produced_metadata`, `revisor_id`, `revised_metadata`.
+
+- `producer_id`: non-null FK → `MODEL_AGENT.principal_id` — the model that produced this detection. Because MODEL_AGENT is a proper subtype table (see §4.12.3), this FK is DB-enforced at the table level; no CHECK constraint or trigger required.
+- `produced_metadata`: JSONB — typed detection payload structured per the METADATA_SCHEMA. Partial GIN index per `evidence_type`.
+- `revisor_id`: nullable FK → `USER.principal_id` — the human who last revised the metadata. Null if never revised. DB-enforced at the table level.
+- `revised_metadata`: nullable JSONB — human correction of `produced_metadata`. Same schema. When present, supersedes `produced_metadata` for display; `produced_metadata` is always retained for audit.
+
+#### 4.4.2 AUTHORITY_EVIDENCE
+
+Extends EVIDENCE for authority-sourced records: `grounded_name`, `grounded_description`, and `authority_identifier`. These are ingested from periodic authority syncs run by a SERVICE_AGENT, not produced by an ML model.
+
+Additional fields: `producer_id`, `metadata`.
+
+- `producer_id`: non-null FK → `SERVICE_AGENT.principal_id` — the ingestion pipeline that produced this record. DB-enforced at the table level.
+- `metadata`: JSONB — typed authority payload structured per the METADATA_SCHEMA. Partial GIN index per `evidence_type`. No `revised_metadata` — authority evidence is replaced wholesale on re-sync by creating a new EVIDENCE version.
 
 
-#### 4.4.1 Shared sub-schemas
+#### 4.4.3 EVIDENCE versioning
 
-These sub-schemas are reused across multiple evidence metadata types.
+A new `evidence_version_id` is created only when a human user revises metadata (sets `revised_metadata` on DERIVED_EVIDENCE, or re-syncs an AUTHORITY_EVIDENCE row). Running inference again over the same source produces a **new EVIDENCE row** with a new `evidence_id` — it does not increment the version of the existing row. This keeps the lineage of model-produced detections independent from human corrections.
+
+DELTA rows pin to a specific `(evidence_id, evidence_version_id)`. They are immutable — they continue to reference the pinned version even when newer versions of that evidence exist. MEMBERSHIP reflects whichever version was pinned when the delta was written.
+
+#### 4.4.4 Shared sub-schemas
+
+These sub-schemas are reused across both DERIVED_EVIDENCE and AUTHORITY_EVIDENCE metadata payloads.
 
 **Point** — a single spatial coordinate on an image, normalised to [0, 1] relative to image dimensions:
 | Field | Type | Description |
@@ -248,9 +285,9 @@ These sub-schemas are reused across multiple evidence metadata types.
 | `normalized_text` | string | Normalised form of the text |
 | `label` | string | Semantic label for the text region, e.g. `paragraph` |
 
-#### 4.4.2 Metadata schemas by evidence type
+#### 4.4.5 Metadata schemas by evidence type
 
-The `metadata_schema_id` FK links each EVIDENCE to a METADATA_SCHEMA row (see §4.3). Each type below defines the canonical structure of `metadata` JSONB for that evidence type. Adding a new schema version creates a new METADATA_SCHEMA row; old EVIDENCEs remain valid by retaining their original FK.
+The `(evidence_type, schema_version)` FK links each EVIDENCE to a METADATA_SCHEMA row (see §4.3). Each type below defines the canonical structure of the JSONB payload for that evidence type. Adding a new schema version creates a new METADATA_SCHEMA row; old EVIDENCE rows remain valid by retaining their original FK.
 
 ##### `face_detection` — schema_version `v1`
 
@@ -301,7 +338,7 @@ A textual description belonging to an authority entity. The entity is captured b
 | `language` | string (BCP 47) | no | Language of the description, if applicable |
 
 
-#### `authority_identifier` — schema_version `v1`
+##### `authority_identifier` — schema_version `v1`
 
 An identifier for an authority entity, such as a Wikidata QID or an NKCR ID. The entity is captured by `EVIDENCE.source_id` as above.
 
@@ -314,34 +351,29 @@ An identifier for an authority entity, such as a Wikidata QID or an NKCR ID. The
 
 Stable identity for a cluster across its version history.
 
-Fields: `cluster_id`, `cluster_role`, `head_version_id`, `head_constraints`.
+Fields: `cluster_id`, `head_version_id`.
 
+`cluster_role` is not stored on CLUSTER. It is computed on read from `VERSION.cluster_role` via `head_version_id`. This eliminates the dual-write invariant that previously required application-level enforcement.
 
-`cluster_role` values:
+`cluster_role` values (defined on VERSION, readable via head join):
 
 | Role | Created by |
 |---|---|
-| `mutable_cluster` |  A cluster that is proposed automatically or by an annotator |
-| `review_cluster` |  A cluster that is under review by a human annotator |
+| `mutable_cluster` | A cluster that is proposed automatically or by an annotator |
+| `review_cluster` | A cluster that is under review by a human annotator |
 | `grounded_cluster` | Reviewer promotion of a `review_cluster` |
 | `authority_cluster` | Authority sync (Wikidata, NKCR import) |
 | `automatic_cluster` | Automatically generated cluster without human intervention |
-| `search_cluster` | Product of user initiated search can be commited or empheral |
 
-Possible `head_constraints` values:
-| Constraint | Description |
+`head_version_id` points to the current logical head of the cluster's main chain. It is updated atomically in the same transaction as the operation that advances it. Rules for when `head_version_id` is updated:
+
+| Operation | Head update rule |
 |---|---|
-| `locked` | Materialized view display only first version of the cluster. |
-| `main` | Materialized views are locked to only the last `stage` operation chain of the cluster. |
-| `any` | Materialized views can display any versions of the cluster. |
-
-`CLUSTER.cluster_role` is a denormalized cache of the `cluster_role` from the version pointed to by `head_version_id`. It must be updated atomically in the same transaction as any `head_version_id` change. `VERSION.cluster_role` is the source of truth.
-
-`head_version_id` update rules — updated atomically whenever a new version becomes the logical head of this cluster's main chain:
-- On `empty`: set to the initial `version_id`.
-- On `stage`: set to the new `target_version_id` with current head being the `source_version_id`.
-- On `union` or `intersection` where this cluster is the target and the current head is one of the source versions: set to `target_version_id`.
-- On `branch`: `head_version_id` is **not** updated — it stays on the main-chain version the branch diverged from.
+| `empty` | Set to the initial `target_version_id`. |
+| `stage` | Advance to `target_version_id` (current head must be the `source_version_id`). |
+| `union` or `intersection` (this cluster is the target) | Set to `target_version_id`. Current head must be one of the `source_version_id` values. |
+| `branch` | **Not updated.** Head stays on the main-chain version the branch diverged from. |
+| `split` (this cluster is a new target) | Set to the `target_version_id` allocated for this new cluster. |
 
 ### 4.6 VERSION
 
@@ -354,35 +386,36 @@ Fields: `version_id`, `cluster_id`, `cluster_role`, `actor_id`.
 ### 4.7 OPERATION
 Represents a directed edge between versions of the same cluster, or between versions of independent logical clusters.
 
-Fields: `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_version_id`, `operation_type`.
+Fields: `operation_id`, `source_cluster_id`, `source_version_id`, `target_cluster_id`, `target_version_id`, `operation_type`.
+
+- `operation_id`: UUIDv6 primary key shared across all rows that belong to the same logical operation. Multi-row operations (`union`, `intersection`, `split`) carry the same `operation_id` on every row. This provides an atomic FK target for audit, rollback, and completeness checks — a logical operation is complete only when all expected rows sharing an `operation_id` are present.
+
 The operation_type field can contain following values:
 | Operation Type | Description | Enforced Constraints |
 |---|---|---|
 | `empty` | The initial version of a cluster, it has no prior versions, declared cluster as empty. | `source_cluster_id=cluster_id`, `target_cluster_id=cluster_id`, `source_version_id=NULL`, `target_version_id=version_id`. No prior operation entry exists for the `cluster_id`. |
 | `stage` | A new version is created by advancing the previous version. | `source_cluster_id == target_cluster_id` |
 | `branch` | A new parallel version is created from a source version. | `source_cluster_id == target_cluster_id` |
-| `union` | Two or more parallel versions or clusters are merged into one via union, all materialized members from all sources will be in the final version. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
-| `intersection` | Two or more parallel versions or clusters are merged into one, keeping only common members. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values |
-| `split` | One cluster is split into two or more clusters. | single `source_version_id`, multiple `target_version_id` rows |
+| `union` | Two or more parallel versions or clusters are merged into one. The resulting membership is the **union of all positive (add) deltas** from all source version memberships. Where the same evidence item has an `add` delta in one source and a `remove` delta in another, the `add` wins — the union operation is additive by definition. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values, all sharing one `operation_id` |
+| `intersection` | Two or more parallel versions or clusters are merged into one, keeping only items present in all source memberships. An evidence item is included in the result only if it has a resolved positive membership in **every** source version. Items that are explicitly removed in all source versions are also removed in the result. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values, all sharing one `operation_id` |
+| `split` | One cluster is split into two or more clusters. | single `source_version_id`, multiple `target_version_id` rows, all sharing one `operation_id` |
 
 ### 4.8 DELTA
 
-Associates an EVIDENCE applied as a delta to specific CLUSTER VERSION, representing the addition or removal of that evidence from the cluster in that version. This is the core table for determining cluster membership at any given version.
+Associates an EVIDENCE applied as a delta to a specific CLUSTER VERSION, representing the addition or removal of that evidence from the cluster in that version. This is the core table for determining cluster membership at any given version.
 
 Fields: `delta_id`, `cluster_id`, `version_id`, `evidence_id`, `evidence_version_id`, `delta_type` (`add` or `remove`), `weight`, `actor_id`.
 
 Explanation of fields:
-- `cluster_id`: Denormalized from `VERSION` for query performance — `version_id` alone uniquely identifies a cluster version, but `cluster_id` enables efficient indexed queries such as `WHERE cluster_id = $1`. Must always match the `cluster_id` of the referenced `version_id`.
+- `cluster_id`: enforced via a composite FK `FOREIGN KEY (version_id, cluster_id) REFERENCES VERSION (version_id, cluster_id)`. VERSION carries a unique index on `(version_id, cluster_id)`. This means the DB enforces that `cluster_id` always matches the cluster of the referenced version — no application-level invariant required.
 - `delta_type`: Indicates whether the evidence is being added to or removed from the `version_id` `cluster_id` state.
 - `weight`: A numerical value representing the strength of the association between the evidence and the cluster in this commit, which can be used for ranking and confidence scoring.
 - `actor_id`: FK to PRINCIPAL — the user, service agent, or model agent that authored this specific evidence addition or removal.
 
 Here enforced constraints for the DELTA:
-1. `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table
-2. The `cluster_id` must exist in the CLUSTER table.
-3. The `version_id` must exist in the VERSION table for the specified `cluster_id`.
-4. There is no entry in the OPERATION table for the `cluster_id` and `version_id` as `source_cluster_id` and `source_version_id`. No derived versions have been created.
-5. For an `add` delta, the specified `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table, and the `version_id` must exist in the VERSION table for the specified `cluster_id`.
+1. `evidence_id` and `evidence_version_id` must exist in the EVIDENCE table.
+2. The composite `(version_id, cluster_id)` FK into VERSION is enforced at DB level.
+3. There is no entry in the OPERATION table for the `cluster_id` and `version_id` as `source_cluster_id` and `source_version_id`. No derived versions have been created from this version yet.
 
 
 #### 4.8.1 Algorithm to resolve membership for a given `cluster_id` and `version_id`:
@@ -399,34 +432,23 @@ Here enforced constraints for the DELTA:
 3. Reduce the deltas if same `EVIDENCE` has been added and removed multiple times, keeping only the latest delta for each `EVIDENCE`.
 4. The resulting set of deltas represents the pending diff on the current working version for the specified `cluster_id` and `version_id`.
 
-#### 4.8.3 Resolve possible head of the cluster:
-- Case `locked` in `head_constraints`:
-  1. From `OPERATION`, query for the first version of the cluster with `cluster_id` and `operation_type` = `empty`.
-  2. The resulting `version_id` represents the head of the cluster.
-- Case `main`:
-  1. Filter `OPERATION` for entries with `cluster_id`.
-  2. Sort the filtered operations by `target_version_id` ascending.
-  3. Set head version to the version with `operation_type` = `empty`, it should be first in the sorted list.
-  4. Go through the list and update the head version if any of the following conditions are met:
-    - `operation_type` is `stage` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
-    - `operation_type` is `union` or `intersection` and `source_cluster_id == cluster_id` and `source_version_id` equals the current head version → `target_version_id` is now the head version.
+#### 4.8.3 Note on head_version_id
 
-- Case `any`:
-  1. From `OPERATION`, query for all versions of the cluster with `cluster_id` and `operation_type` in (`empty`, `stage`, `branch`, `union`, `intersection`, `split`).
-  2. The resulting set of `version_id`s represents all possible heads of the cluster. MEMBERSHIP for a cluster with `any` constraints is the union of memberships across all leaf versions (versions with no outgoing `stage`, `union`, or `intersection` operation).
+`head_version_id` on CLUSTER always reflects the current main-chain head. There are no `head_constraints` — the semantics are fixed by the operation rules in §4.5. Callers that want to inspect a non-head version (e.g. a branch) reference that `version_id` directly. There is no mode where membership is the union across all leaf versions; that computation must be done explicitly by the caller.
 
 
 ### 4.9 TASK
 
-A unit of work assigned to a PRINCIPAL, directing them to act on a specific cluster commit. Tasks are the primary mechanism for driving the annotation and review workflow.
+A unit of work assigned to a PRINCIPAL, directing them to act on a specific cluster version. Tasks are the primary mechanism for driving the annotation and review workflow.
 
-Fields: `task_id`, `cluster_id`, `version_id`, `assignee_id`, `task_role`, `status`, `created_by`, `created_at`, `updated_at`.
+Fields: `task_id`, `cluster_id`, `pinned_version_id`, `head_version_id`, `assignee_id`, `task_role`, `status`, `created_by`, `created_at`, `updated_at`.
 
 - `cluster_id`: FK → CLUSTER — the cluster this task concerns.
-- `version_id`: FK → VERSION — the specific version the assignee should work from. Pinned at task creation so the assignee always sees a consistent snapshot.
+- `pinned_version_id`: FK → VERSION — **immutable**. The version that existed when the task was created. Never changes after task creation. Provides the stable traceability anchor for `union` and `intersection` operations that need to know the shared ancestor.
+- `head_version_id`: FK → VERSION — the current working head of this task. Starts equal to `pinned_version_id`. Advances each time a new version is created under this task (e.g. the annotator adds or removes evidence, which creates a new VERSION via a `stage` operation). Always points to the local head of the task's branch. If the referenced version becomes sealed (an outgoing OPERATION exists for it), the task must create a new `branch` from that version before writing further DELTAs.
 - `assignee_id`: FK → PRINCIPAL — the user assigned to perform the task.
 - `created_by`: FK → PRINCIPAL — the user or service agent that created this task.
-- `task_role`: specifies what the assignee is expected to do with the cluster commit.
+- `task_role`: specifies what the assignee is expected to do.
 - `status`: lifecycle state of the task.
 
 `task_role` values:
@@ -437,13 +459,30 @@ Fields: `task_id`, `cluster_id`, `version_id`, `assignee_id`, `task_role`, `stat
 | `review` | Assignee should adjudicate annotation branches and produce a consolidated version |
 | `verify` | Assignee should confirm the cluster grounding against authority records |
 
-`status` values:
+#### 4.9.1 Task status state machine
 
 | Status | Description |
 |---|---|
-| `pending` | Task created, not yet accepted by the assignee |
-| `submitted` | Assignee has submitted their changes for the next workflow stage |
+| `pending` | Task created, not yet acted on by the assignee |
+| `submitted` | Annotator has submitted their working version for review |
+| `review` | A reviewer has picked up the submitted task and is adjudicating it |
 | `closed` | Task completed or cancelled; no further action expected |
+
+Allowed transitions and authorised actors:
+
+| From | To | Authorised actor | Side effects |
+|---|---|---|---|
+| `pending` | `submitted` | Task `assignee_id` (requires `people-gator:annotate` scope) | None. `head_version_id` at submission time becomes the version handed to the reviewer. |
+| `submitted` | `review` | Any principal with `people-gator:review` scope | None. |
+| `review` | `closed` | The principal who moved to `review` (reviewer) | Reviewer may create a new VERSION via `union` or `intersection` of the submitted branch and the cluster main chain before closing. |
+| `pending` | `closed` | Task `created_by` or any `people-gator:admin` scope | Cancellation. No version changes required. |
+| `submitted` | `pending` | Task `assignee_id` | Annotator retracts submission. `head_version_id` is unchanged. |
+
+No other transitions are permitted.
+
+#### 4.9.2 Version immutability and task writes
+
+A version is **sealed** once it appears as `source_version_id` in any OPERATION row. A sealed version cannot receive new DELTAs. If an external operation (e.g. a merge initiated by a reviewer on a parallel task) seals the version that `head_version_id` points to, the assignee must create a `branch` from that version before writing further DELTAs. The new branch version becomes the new `head_version_id`. The application must detect this condition before any DELTA write and surface it to the user.
 
 
 ### 4.10 MEMBERSHIP
@@ -453,39 +492,88 @@ Fields: `cluster_id`, `evidence_id`, `evidence_version_id`, `weight`, `reason`, 
 
 `as_of_version_id` records which version this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_version_id` at the time of the last update.
 
-The view is updated in real-time as new DELTAs are added, ensuring that it always reflects the latest state of cluster membership. This allows for efficient querying of current cluster members without needing to replay the full version operation history and deltas each time. Updates to MEMBERSHIP must be applied in the same transaction as the DELTA write that triggered them. MEMBERSHIP reflects the sealed state only — pending deltas (those on a version that has no outgoing operation entry yet) are applied to MEMBERSHIP as they are written, since the working version is the live head.
+MEMBERSHIP is updated **asynchronously** after a new VERSION is created (via `stage`, `union`, `intersection`, or `split`). It is not updated in the same transaction as the DELTA write. The update is triggered by a background job enqueued when a new OPERATION row seals a version. For the current working (unsealed) version — the version that has no outgoing OPERATION entry yet — pending deltas are read live from the DELTA table and combined with the MEMBERSHIP rows of the most recently sealed ancestor version. This means:
+- Read queries for a sealed version: served from MEMBERSHIP directly.
+- Read queries for the current working version: MEMBERSHIP of the sealed parent + live DELTA query for unsealed deltas.
 
-### 4.11 PRINCIPAL
+MEMBERSHIP reflects sealed versions only. The background job must complete before a newly-created version is queryable via MEMBERSHIP.
 
-Unified identity record for any actor that can modify the system. Every VERSION and every DELTA carries an `actor_id` FK to this table, giving a complete audit trail of who changed what. Every EVIDENCE carries a `producer_id` FK to this table, identifying the model that generated the evidence.
+### 4.11 SAVED_SEARCH
+
+A persisted user search query. Ephemeral search sessions are held in the application cache and never written to the DB. A `SAVED_SEARCH` is created only when the user explicitly saves a query.
+
+Fields: `saved_search_id`, `owner_id`, `profile_id`, `signals`, `name`, `description`, `created_at`.
+
+- `saved_search_id`: UUIDv6 primary key.
+- `owner_id`: FK → PRINCIPAL — the user who saved this search.
+- `profile_id`: FK → SEARCH_PROFILE — the search profile active when the query was saved.
+- `signals`: JSONB array of typed signal entries. Each entry carries `evidence_id`, `evidence_version_id`, `evidence_type`, and `weight`. Signal evidence items must exist in the EVIDENCE table (FK enforced per entry at application layer; no DB-level array FK).
+- `name`: optional user-provided label for the saved search.
+- `description`: optional free-text notes.
+- `created_at`: timestamp.
+
+A `SAVED_SEARCH` can be promoted into a `mutable_cluster` via an explicit `POST /clusters` action. Promotion creates a CLUSTER + initial VERSION + DELTA entries from the signal weights. After promotion the `SAVED_SEARCH` row is not deleted — it retains its identity as the origin query.
+
+### 4.12 PRINCIPAL
+
+Polymorphic supertype table for all actors that can modify the system. Every VERSION and every DELTA carries an `actor_id` FK to `PRINCIPAL.principal_id`, giving a complete, type-agnostic audit trail across users, service agents, and model agents.
+
+Type-safe evidence FKs do **not** point here — they point directly to the appropriate subtype table (`MODEL_AGENT`, `SERVICE_AGENT`, or `USER`), whose PK is the same value as `PRINCIPAL.principal_id`. This is class table inheritance: the subtype rows share the same PK value and are always created together with their PRINCIPAL row. A FK to a subtype table is implicitly type-restricted without any CHECK constraint or trigger.
 
 `principal_type` values:
 
-| Type | Description |
-|---|---|
-| `user` | A human authenticated via an external OIDC provider |
-| `service_agent` | A named autonomous process (ingestion pipeline, non-ML automation, etc.) |
-| `model_agent` | A registered ML model agent capable of producing EVIDENCE and acting autonomously |
+| Type | FK target for evidence fields | Description |
+|---|---|---|
+| `user` | `USER.principal_id` | A human authenticated via an external OIDC provider |
+| `service_agent` | `SERVICE_AGENT.principal_id` | A named ingestion or automation pipeline |
+| `model_agent` | `MODEL_AGENT.principal_id` | A registered ML model agent that produces DERIVED_EVIDENCE |
 
 Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
-`PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER`, `SERVICE_AGENT`, or `MODEL_AGENT` table.
+`PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER`, `SERVICE_AGENT`, or `MODEL_AGENT` subtype table. The PRINCIPAL row and its subtype row are always inserted together within the same transaction.
 
-### 4.12 SOURCE_PROCESSING
+### 4.13 SOURCE_PROCESSING
 
-Flags whether a MODEL_AGENT principal has been applied to a SOURCE to get EVIDENCEs.
+Tracks the processing state of a MODEL_AGENT being applied to a SOURCE to produce DERIVED_EVIDENCE.
 
 Fields: `source_id`, `producer_id`, `is_processed`.
 
 - `source_id`: FK → SOURCE (part of composite PK).
-- `producer_id`: FK → PRINCIPAL where `principal_type = model_agent` (part of composite PK).
+- `producer_id`: FK → `MODEL_AGENT.principal_id` (part of composite PK) — DB-enforced to model agents only via the subtype table FK.
 - `is_processed`: boolean — `true` once all resulting EVIDENCEs have been ingested; `false` while pending or in-flight.
 
 `(source_id, producer_id)` is the composite primary key — one row per pair. To find sources not yet processed by a given model, query for rows where `is_processed = false` or for sources with no row at all for that `producer_id`.
 
-Evidence-level lineage is available via `EVIDENCE.producer_id`, which carries the FK to the model principal that produced it (null for manually curated or authority evidence).
+Evidence-level lineage is available via `DERIVED_EVIDENCE.producer_id`, which carries the FK to the MODEL_AGENT that produced it. Authority evidence lineage is available via `AUTHORITY_EVIDENCE.producer_id`, which carries the FK to the SERVICE_AGENT that ingested it.
 
-#### 4.11.3 MODEL_AGENT
+#### 4.12.1 USER
+
+A human principal authenticated through an external OpenID Connect (OIDC) identity provider such as Keycloak or Auth0. The user record is created or refreshed on first token verification.
+
+Fields (extends PRINCIPAL): `principal_id`, `external_subject`, `external_issuer`, `email`.
+
+- `external_subject`: the OIDC `sub` claim — stable, provider-scoped user identifier.
+- `external_issuer`: the OIDC `iss` claim — identifies the identity provider.
+- Together `(external_subject, external_issuer)` forms a globally unique identity key across multiple IdPs.
+- `email` is optional; sourced from the OIDC `email` claim when present.
+
+#### 4.12.2 SERVICE_AGENT
+
+A named autonomous process that drives ingestion and synchronisation pipelines but does **not** run ML inference. ML model agents are registered as MODEL_AGENT (§4.12.3) instead. SERVICE_AGENTs are the producers of AUTHORITY_EVIDENCE (see §4.4.2) and are responsible for creating SOURCE records during ingest. They are pre-registered and identified by a unique `agent_slug` following the convention `<category>:<name>`, for example:
+
+| Slug | Category | Description |
+|---|---|---|
+| `system:kramerius-ingest` | `system` | Kramerius document and page-XML ingestion pipeline |
+| `pipeline:authority-sync-wikidata` | `pipeline` | Periodic Wikidata authority record synchronisation |
+| `pipeline:authority-sync-nkcr` | `pipeline` | Periodic NKCR authority record synchronisation |
+| `system:local-ingest` | `system` | Local file ingest pipeline for manually staged artifacts |
+
+Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `description`.
+
+- `agent_slug`: unique human-readable identifier, format `<category>:<name>`.
+- `description`: optional free-text description of the agent's purpose.
+
+#### 4.12.3 MODEL_AGENT
 
 A registered ML model agent principal. The distinction from a static model artifact is intentional: the underlying model weights are immutable, but a MODEL_AGENT is the registered actor that operates the model — it has identity, can be assigned accountability, and can autonomously produce EVIDENCE or author VERSION and DELTA records. Every model that produces EVIDENCE must be pre-registered as a MODEL_AGENT. Because MODEL_AGENT extends PRINCIPAL, it can appear as the `producer_id` on EVIDENCE records and as the `actor_id` on VERSION or DELTA records.
 
@@ -501,33 +589,6 @@ Fields (extends PRINCIPAL): `principal_id`, `evidence_type`, `role`, `model_slug
 - `is_active`: whether this agent is currently used for encoding newly ingested evidence. Multiple agents for the same `evidence_type` may be active simultaneously during a rollout.
 
 Agents that are no longer active are retained for querying existing documents that carry their vector slot — they are never deleted as long as any EVIDENCE records reference them.
-
-#### 4.11.1 USER
-
-A human principal authenticated through an external OpenID Connect (OIDC) identity provider such as Keycloak or Auth0. The user record is created or refreshed on first token verification.
-
-Fields (extends PRINCIPAL): `principal_id`, `external_subject`, `external_issuer`, `email`.
-
-- `external_subject`: the OIDC `sub` claim — stable, provider-scoped user identifier.
-- `external_issuer`: the OIDC `iss` claim — identifies the identity provider.
-- Together `(external_subject, external_issuer)` forms a globally unique identity key across multiple IdPs.
-- `email` is optional; sourced from the OIDC `email` claim when present.
-
-#### 4.11.2 SERVICE_AGENT
-
-An autonomous process principal. Agents are pre-registered and identified by a unique `agent_slug` following the convention `<category>:<name>`, for example:
-
-| Slug | Category | Description |
-|---|---|---|
-| `system:kramerius-ingest` | `system` | Kramerius document ingestion pipeline |
-| `agent:face-detector-v2` | `agent` | Face detection ML model, version 2 |
-| `agent:ner-extraction` | `agent` | Named-entity recognition pipeline |
-| `pipeline:authority-sync` | `pipeline` | Periodic authority record synchronisation |
-
-Fields (extends PRINCIPAL): `principal_id`, `agent_slug`, `description`.
-
-- `agent_slug`: unique human-readable identifier, format `<category>:<name>`.
-- `description`: optional free-text description of the agent's purpose.
 
 ---
 
@@ -630,7 +691,7 @@ Search scoring is driven by per-modality weighted signals. Each modality corresp
 
 ### 6.1 MODEL_AGENT
 
-See §4.11.3. MODEL_AGENT is a subclass of PRINCIPAL (`principal_type = model_agent`) and is the authoritative registry for all ML model agents that produce EVIDENCE or encode vectors. The fields `evidence_type`, `role`, `model_slug`, `model_version`, `registry_source`, `registry_uri`, and `is_active` are defined there.
+See §4.12.3. MODEL_AGENT is a subclass of PRINCIPAL (`principal_type = model_agent`) and is the authoritative registry for all ML model agents that produce EVIDENCE or encode vectors. The fields `evidence_type`, `role`, `model_slug`, `model_version`, `registry_source`, `registry_uri`, and `is_active` are defined there.
 
 For search configuration, a MODEL_AGENT row is referenced by `SEARCH_PROFILE_MODALITY` (see §6.3) to select which active model slot to use per modality during retrieval.
 
