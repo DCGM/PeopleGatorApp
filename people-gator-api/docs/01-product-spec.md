@@ -6,8 +6,8 @@ People Gator API is an backend for person-centric retrieval an person cluster an
 
 Main workflow:
 1. Search returns ranked information clusters — groupings of face detections, name mentions, and authority evidence that speak to the same person.
-2. User selects a cluster that seems promising, and creates and can start annotating it.
-3. User can add or remove any member from the cluster, which first creates a new version branched and then createss change delta.
+2. User selects a cluster that seems promising, and can start annotating it.
+3. User can add or remove any member from the cluster. This first creates a new version branch and to which change delta is related to.
 4. User can merge with other clusters, or split current cluster into multiple clusters.
 5. User can search similar looking units (faces, names, authority evidence, paragraphs..) to find additional evidence and add to the cluster.
 6. Commited cluster deltas are presented to reviewers.
@@ -50,7 +50,7 @@ Optional assigned tasks workflow:
 
 1. Cluster-first: search returns, annotation targets, and grounding outputs are all information clusters.
     - Search query is itself a set of typed signals (a name string, a free-text snippet, a face image). These signals are typed evidence items subject to content-hash deduplication. An ephemeral search query lives in the application cache and is never written to the relational DB unless the user explicitly saves it.
-    - A **saved search** is the persisted form of a query. When a user saves a search, the application creates a CLUSTER with `cluster_role = saved_search` and an initial VERSION, with DELTA entries carrying the signal weights — one DELTA per evidence signal. No separate table exists; a saved search is a cluster type. It is promoted into an annotation target by creating a new VERSION with `cluster_role = mutable_cluster`.
+    - A **saved search** is the persisted form of a query. When a user saves a search, the application creates a CLUSTER with `cluster_role = saved_search` and an initial VERSION (with `search_profile_id` set to the active profile), carrying DELTA entries for the query signals — one DELTA per evidence signal, with `weight` encoding the signal's contribution strength. No separate table exists; a saved search is a cluster type. A saved search cluster is **mutable**: the user refines it by writing new DELTAs against the current working version (adding or removing signals) or staging new VERSIONs. Every change is audited via the VERSION/DELTA history. It is promoted into an annotation target by creating a new VERSION via a `stage` operation with `cluster_role = automatic_cluster`.
     - Any person evidence that is grouped together is in a cluster.
     - Search results are polymorphic: results can be similarity-ranked clusters, individual evidence items of any modality, or both in the same response. Facet counts are returned inline with every response.
     - A system-default `SEARCH_PROFILE` is used when the caller does not specify one explicitly.
@@ -63,16 +63,16 @@ Optional assigned tasks workflow:
     - Search query itself is a weighted cluster of signals (face similarity, name similarity, authority link strength, etc.).
     - Per-modality weights and preferred embedding model per modality are defined by a `SEARCH_PROFILE` (see §6). Profiles are reusable, shareable, and customizable across users.
 5. Human-in-the-loop user workflows: annotation
-    - An annotation instance of a cluster gets created to be assigned to an annotator. It pins to a specific cluster version at assignment time.
-    - Annotator can add or remove cluster members, which modifies the branched-off version.
-    - Annotator can modify other clusters, upon which the cluster automatically branches off a new version, but the annotation instance remains pinned to the original version.
-    - Annotator can submit the annotation instance.
-    - Annotator can create a new `mutable_cluster` from scratch if they believe no existing cluster matches.
+    - A TASK is created (by admin assignment or auto-created when an annotator submits a self-created cluster) to formally enrol a VERSION chain in the review workflow. The TASK pins to a specific cluster version at creation time.
+    - Any authenticated annotator may freely branch any cluster and write DELTAs to their branch without a TASK (personal working space).
+    - Annotator can add or remove cluster members under their TASK, advancing the working version via `stage` operations.
+    - Annotator can submit their TASK's working version for review.
+    - Annotator can create a new cluster from scratch if they believe no existing cluster matches.
 6. Human-in-the-loop user workflows: review
-    - Branched-off versions from annotation are visible to reviewers.
-    - Reviewer can choose what changes from the proposed cluster to accept, which creates a new version with those changes.
-    - Reviewer decisions trigger new cluster version creation. Annotation instances are pinned to the original version, then become immutable.
-    - Reviewer can promote a `review_cluster` to `grounded_cluster` if they believe the cluster is well supported, which creates a new version with that role.
+    - VERSION chains enrolled in the review workflow via TASK are visible to reviewers.
+    - Reviewer can choose what changes from submitted annotation branches to accept, producing a consolidated version via `union`, `intersection`, or `conflict_free_join`.
+    - Reviewer decisions create a new cluster VERSION. Annotation TASKs are closed after the reviewer's merge is committed; their `head_version_id` remains unchanged as the immutable record of what was submitted.
+    - Reviewer can promote a cluster to `grounded_cluster` if they believe the cluster is well supported, creating a new VERSION with `cluster_role = grounded_cluster`.
 7. Separation of concerns: this service ingests and reasons over artifacts; inference remains external.
     - This service does not perform OCR, face detection, NER, embedding generation, or authority linking. It only ingests the outputs of those processes as typed evidence.
     - This service does not train or serve any models. It only stores the model version used to generate each evidence item and uses that for staleness detection.
@@ -85,7 +85,7 @@ Optional assigned tasks workflow:
 9. Authorization via OIDC scopes: access control is delegated to the identity provider, not managed in the application database.
     - The IdP issues tokens carrying scopes that map directly to workflow roles: `people-gator:annotate`, `people-gator:review`, `people-gator:verify`, `people-gator:ingest`, `people-gator:admin`.
     - Each API route declares the required scope(s). The FastAPI dependency layer validates the token scope before the handler runs. No RBAC table is maintained in this service.
-    - Coarse scope enforcement (annotator vs reviewer vs admin) is handled at route level. Fine-grained resource enforcement (can this annotator write to this cluster?) is handled via TASK assignment — an annotator may only write DELTAs against a version referenced by a TASK assigned to them.
+    - Coarse scope enforcement (annotator vs reviewer vs admin) is handled at route level. Fine-grained workflow enforcement is handled via TASK: only VERSION chains referenced by a TASK may participate as sources in workflow-advancing merge operations (`union`, `intersection`, `conflict_free_join`). Free branching and personal DELTA writes are permitted to any branch without a TASK; TASKs gate formal workflow progression only.
 
 ## 4. Data Model
 
@@ -110,9 +110,17 @@ The timestamp is a Gregorian Epoch timestamp.
 UUIDs are generated by `new_uuid6()` in `db/models/base.py` using the `uuid6` library. Two process-scoped values are initialised once at startup and reused for the lifetime of the process:
 
 - **`node`** — a random 48-bit value, fixed per process via `@lru_cache`. Replaces the MAC-address node of the original UUIDv1 spec, ensuring uniqueness across distributed instances without coordination or hardware dependency.
-- **`clock_seq`** — a 14-bit counter, also fixed per process via `@lru_cache`. It is seeded from a random UUIDv6 draw and then incremented monotonically (`mod 0x4000`) on each call. This prevents collisions when multiple UUIDs are generated within the same timestamp tick.
+- **`clock_seq`** — a 14-bit counter initialised once per process to a random seed value and advanced via a process-scoped `itertools.count` object. On each `new_uuid6()` call the current counter value is read and the counter is incremented (`mod 0x4000`). This prevents collisions when multiple UUIDs are generated within the same timestamp tick.
 
-Both values are stable for the process lifetime, so clock sequence roll-over and node identity are consistent within a single deployment instance.
+`node` is stable for the process lifetime. `clock_seq` advances monotonically within the process lifetime, resetting only on process restart. Together they ensure every UUID generated within the same process is unique regardless of timestamp tick.
+
+### 4.0.1 Content hashing
+
+All `content_hash` fields (on SOURCE, EVIDENCE) use **BLAKE3** with a 256-bit (32-byte) output, hex-encoded as a 64-character lowercase string. BLAKE3 is chosen for its combination of speed and collision resistance: it is significantly faster than SHA-256 on large inputs due to internal SIMD parallelism and tree-hashing, while producing a cryptographically strong digest. It handles both small payloads (authority JSON records, a few hundred bytes) and large ones (high-resolution scan images, tens of megabytes) without configuration changes.
+
+The hash is computed over the **raw bytes of the content** before any encoding or transformation. For SOURCE rows this is the raw file bytes of the ingested artifact. For EVIDENCE rows this is the canonical UTF-8 serialisation of the `produced_metadata` or `metadata` JSONB payload (keys sorted, no trailing whitespace).
+
+No database-level UNIQUE constraint is enforced on `content_hash` — the hash is used only for **application-layer** deduplication checks and staleness detection, not as a primary or unique key.
 
 ### 4.1 SOURCE_SCHEMA
 
@@ -154,7 +162,7 @@ Fields: `source_id`, `source`, `source_schema_name`, `provider`, `metadata`, `co
 - `source`: opaque string identifier for the original source, e.g. a filename. Parsable via `source_schema_name`.
 - `source_schema_name`: FK → SOURCE_SCHEMA — determines how this original source can be resolved.
 - `provider`: enum string — coarse provenance identifier. One of `kramerius`, `nkcr`, `wikimedia`, `local`. Set at ingest time by the SERVICE_AGENT creating the source record. Used for vector store faceting (see §5.2.2).
-- `content_hash`: hash of ingested content for deduplication and staleness detection, e.g. hash of the original image bytes for a scanned document, or hash of the authority record JSON for an imported authority entity.
+- `content_hash`: hash of ingested content for **application-layer** staleness detection and deduplication checks. No database-level UNIQUE constraint is enforced, e.g. hash of the original image bytes for a scanned document, or hash of the authority record JSON for an imported authority entity.
 - `created_by`: FK → `SERVICE_AGENT.principal_id` or `USER.principal_id` — the service agent or user that ingested this source.
 
 This is intentionally flexible to accommodate the wide variety of source types and metadata that may be relevant for different use cases. The exact structure of this JSONB is not enforced at the database level but is expected to conform to the requirements of the associated SOURCE_SCHEMA's resolver logic.
@@ -178,7 +186,7 @@ Evidence is split into a **base table** and two **specialised child tables** tha
 
 Shared identity and provenance fields. Every DERIVED_EVIDENCE and AUTHORITY_EVIDENCE row has a corresponding EVIDENCE row with the same `evidence_id`.
 
-Required fields: `evidence_id`, `evidence_version_id`, `evidence_type`, `schema_version`, `source_id`, `source_path`, `content_hash`.
+Required fields: `evidence_id`, `evidence_version_id`, `evidence_type`, `schema_version`, `source_id`, `source_path`, `content_hash`, `is_deleted`, `is_stale`.
 
 - `evidence_id`: stable UUIDv6 identifier for this evidence item across all versions.
 - `evidence_version_id`: UUIDv6, incremented on each revision. A new `evidence_version_id` is created only when a human user revises the evidence metadata (see §4.4.3). Re-running inference over the same source produces a new EVIDENCE row entirely, not a new version of an existing one.
@@ -186,7 +194,9 @@ Required fields: `evidence_id`, `evidence_version_id`, `evidence_type`, `schema_
 - `schema_version`: together with `evidence_type`, forms the FK → METADATA_SCHEMA.
 - `source_id`: FK → SOURCE — the document or artifact this evidence was derived from.
 - `source_path`: string — sub-path or key within the SOURCE identifying the specific artifact (e.g. a page ID within a document zip, or a crop region URI). Null when the evidence covers the entire source document. Opaque to the DB; interpreted by the SOURCE_SCHEMA resolver.
-- `content_hash`: hash of the evidence payload for deduplication and staleness detection.
+- `content_hash`: hash of the evidence payload for **application-layer** staleness detection and deduplication checks. No database-level UNIQUE constraint is enforced.
+- `is_deleted`: boolean, default false — soft-delete flag. When true the evidence is excluded from all query results and its vector store document is tombstoned. Hard deletes are not permitted.
+- `is_stale`: boolean, default false — set to true when a newer EVIDENCE row supersedes this one (e.g. re-inference with an updated model). Stale evidence is retained for audit but excluded from active retrieval by default.
 
 A **partial GIN index** is defined per `evidence_type` on the child table's `produced_metadata` column to support modality-specific JSONB field access and faceting without a full table scan.
 
@@ -252,7 +262,6 @@ These sub-schemas are reused across both DERIVED_EVIDENCE and AUTHORITY_EVIDENCE
 **Image** — a information about image that is associated with an evidence, mainly defining image format and dimensions.
 | Field | Type | Description |
 |---|---|---|
-| `image_format` | string | `jpeg`, `png`, `tiff` |
 | `width_px` | int | Image width in pixels |
 | `height_px` | int | Image height in pixels |
 
@@ -272,7 +281,7 @@ These sub-schemas are reused across both DERIVED_EVIDENCE and AUTHORITY_EVIDENCE
 | Field | Type | Description |
 |---|---|---|
 | `span` | **TextSpan** | Character offsets of the text span within the source text |
-| `baseline` | list[**Point**] | Optional baseline points for layout context, normalised to [0, 1] relative to the source image dimensions |
+| `baseline` | list[**PolyLine**] | Optional baseline polylines for layout context, with support for multiline text, normalised to [0, 1] relative to the source image dimensions |
 | `text` | string | OCR'd text content |
 | `normalized_text` | string | Normalised form of the text |
 | `label` | string | Semantic label for the text span, e.g. `person_name` |
@@ -281,7 +290,7 @@ These sub-schemas are reused across both DERIVED_EVIDENCE and AUTHORITY_EVIDENCE
 | Field | Type | Description |
 |---|---|---|
 | `area` | **Polygon** | Normalised bounding box coordinates of the text region |
-| `baseline` | list[**Point**] | Optional baseline points for layout context, normalised to [0, 1] relative to the source image dimensions |
+| `baseline` | list[**PolyLine**] | Optional baseline polylines for layout context, with support for multiline text, normalised to [0, 1] relative to the source image dimensions |
 | `text` | string | OCR'd text content |
 | `normalized_text` | string | Normalised form of the text |
 | `label` | string | Semantic label for the text region, e.g. `paragraph` |
@@ -358,32 +367,46 @@ Fields: `cluster_id`, `head_version_id`.
 
 `cluster_role` values (defined on VERSION, readable via head join):
 
-| Role | Created by |
+| Role | Description |
 |---|---|
-| `saved_search` | A persisted search query saved by a user; promotes to `mutable_cluster` via a new VERSION |
-| `mutable_cluster` | A cluster that is proposed automatically or by an annotator |
-| `review_cluster` | A cluster that is under review by a human annotator |
-| `grounded_cluster` | Reviewer promotion of a `review_cluster` |
+| `saved_search` | A persisted search query saved by a user |
+| `automatic_cluster` | Automatically generated cluster |
+| `manual_cluster` | Manually created or extended cluster by an annotator |
 | `authority_cluster` | Authority sync (Wikidata, NKCR import) |
-| `automatic_cluster` | Automatically generated cluster without human intervention |
+| `grounded_cluster` | Reviewer promotion of an `automatic_cluster`, signifying high-confidence identity grounding |
 
-`head_version_id` points to the current logical head of the cluster's main chain. It is updated atomically in the same transaction as the operation that advances it. Rules for when `head_version_id` is updated:
+**`authority_cluster` creation workflow**: An `authority_cluster` is created entirely by a SERVICE_AGENT during an authority sync run. The agent first writes a CLUSTER row and an initial VERSION via an `empty` OPERATION, declaring the cluster empty. It then writes DELTA rows associating the ingested AUTHORITY_EVIDENCE items for that entity with that version. Finally it creates a second VERSION via a `stage` OPERATION with `cluster_role = authority_cluster`, sealing the first version and advancing the head. This two-step pattern (empty initialisation → staged authority cluster) ensures every `authority_cluster` has a clean, auditable creation history with no special-case logic.
+
+Annotation lifecycle (pending, submitted, review, closed) is tracked on TASK (§4.9), not on `cluster_role`. A cluster remains `automatic_cluster`/`manual_cluster` throughout the annotation and review workflow; only an explicit reviewer promotion changes its role to `grounded_cluster`.
+
+`head_version_id` points to the current logical head of the cluster's main chain. It is updated eighter atomically in the same transaction as the operation that advances it or manualy if reviewer chooses to update it. Rules for when `head_version_id` is updated:
 
 | Operation | Head update rule |
 |---|---|
 | `empty` | Set to the initial `target_version_id`. |
 | `stage` | Advance to `target_version_id` (current head must be the `source_version_id`). |
-| `union` or `intersection` (this cluster is the target) | Set to `target_version_id`. Current head must be one of the `source_version_id` values. |
+| `union`, `intersection`, or `conflict_free_join` (this cluster is the target) | Here the new head has to be set excplicitly, depending on the reviewer. |
 | `branch` | **Not updated.** Head stays on the main-chain version the branch diverged from. |
-| `split` (this cluster is a new target) | Set to the `target_version_id` allocated for this new cluster. |
+| `split` (this cluster is a new target) | **Not updated.** Head stays on the main-chain version the split diverged from. |
+
+**Concurrency protection for `head_version_id` advances**: When a `stage` operation advances the head, the UPDATE is conditioned on the current value:
+
+```sql
+UPDATE cluster
+SET head_version_id = :new_version_id
+WHERE cluster_id = :id AND head_version_id = :expected_version_id
+```
+
+If zero rows are updated, a concurrent write raced ahead and the caller must re-read the current head before retrying. This optimistic CAS pattern is sufficient because the OPERATION row sealing the source version is written in the same transaction — a second concurrent `stage` from the same source cannot succeed once that seal exists, so conflicts do not loop. For reviewer-initiated `union`, `intersection`, and `conflict_free_join`, the same conditional UPDATE applies. The reviewer is expected to re-read the current head if the update fails and decide whether to proceed.
 
 ### 4.6 VERSION
 
 One immutable snapshot of cluster membership state. Created by copy-on-write on any membership change.
 
-Fields: `version_id`, `cluster_id`, `cluster_role`, `actor_id`.
+Fields: `version_id`, `cluster_id`, `cluster_role`, `actor_id`, `search_profile_id`.
 
 - `actor_id`: FK to PRINCIPAL — the user or service agent that created this version.
+- `search_profile_id`: nullable FK → SEARCH_PROFILE — the search profile active when this version was created. Set only for versions with `cluster_role = saved_search`. Null for all other roles. Enables reproducible re-execution of the saved search with its original profile configuration.
 
 ### 4.7 OPERATION
 Represents a directed edge between versions of the same cluster, or between versions of independent logical clusters.
@@ -400,7 +423,8 @@ The operation_type field can contain following values:
 | `branch` | A new parallel version is created from a source version. | `source_cluster_id == target_cluster_id` |
 | `union` | Two or more parallel versions or clusters are merged into one. The resulting membership is the **union of all positive (add) deltas** from all source version memberships. Where the same evidence item has an `add` delta in one source and a `remove` delta in another, the `add` wins — the union operation is additive by definition. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values, all sharing one `operation_id` |
 | `intersection` | Two or more parallel versions or clusters are merged into one, keeping only items present in all source memberships. An evidence item is included in the result only if it has a resolved positive membership in **every** source version. Items that are explicitly removed in all source versions are also removed in the result. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values, all sharing one `operation_id` |
-| `split` | One cluster is split into two or more clusters. | single `source_version_id`, multiple `target_version_id` rows, all sharing one `operation_id` |
+| `split` | One cluster is split into two or more clusters. The caller must write explicit DELTA rows to each target VERSION within the same transaction as the OPERATION row. Target versions begin as empty clusters; their membership is fully determined by these caller-supplied DELTAs. | single `source_version_id`, multiple `target_version_id` rows, all sharing one `operation_id` |
+| `conflict_free_join` | Two or more source versions are joined into one target, identical in result to a `union` but with a pre-commit conflict check. An evidence item is **in conflict** if it has `delta_type = add` in at least one source membership and `delta_type = remove` in at least one other. If any conflict is detected the operation is rejected with a 409 error listing the conflicting `evidence_id`s. The caller resolves conflicts by writing explicit DELTAs to a working version before retrying. When no conflicts remain the result is the union of all positive membership items across sources. | single `target_version_id`, `target_cluster_id`, multiple `source_version_id` rows and `source_cluster_id` values, all sharing one `operation_id` |
 
 ### 4.8 DELTA
 
@@ -441,7 +465,9 @@ Here enforced constraints for the DELTA:
 
 ### 4.9 TASK
 
-A unit of work assigned to a PRINCIPAL, directing them to act on a specific cluster version. Tasks are the primary mechanism for driving the annotation and review workflow.
+A permission declaration that ties a VERSION chain to the formal annotation and review workflow. A TASK grants its assignee the right to write DELTAs against the designated VERSION chain and makes that chain eligible for workflow-advancing operations (`union`, `intersection`, `conflict_free_join`) that progress a cluster through the review pipeline.
+
+Any authenticated principal may freely branch any cluster and write DELTAs to their own branch without a TASK — this constitutes personal working space. A TASK is required only when those changes need to enter the formal review workflow. Only TASK-backed VERSION chains may be used as sources in workflow-advancing merge operations. TASKs are typically created by an admin assigning work, but the system may auto-create a TASK when an annotator explicitly submits a self-created cluster for review.
 
 Fields: `task_id`, `cluster_id`, `pinned_version_id`, `head_version_id`, `assignee_id`, `task_role`, `status`, `created_by`, `created_at`, `updated_at`.
 
@@ -486,6 +512,9 @@ No other transitions are permitted.
 
 A version is **sealed** once it appears as `source_version_id` in any OPERATION row. A sealed version cannot receive new DELTAs. If an external operation (e.g. a merge initiated by a reviewer on a parallel task) seals the version that `head_version_id` points to, the assignee must create a `branch` from that version before writing further DELTAs. The new branch version becomes the new `head_version_id`. The application must detect this condition before any DELTA write and surface it to the user.
 
+#### 4.9.3 Inter-annotator agreement
+
+Inter-annotator agreement arises from the branch → annotate → review → (`union`, `intersection`, or `conflict_free_join`) flow. When two or more TASKs share the same `pinned_version_id` on the same cluster, their submitted `head_version_id` values represent independent annotation branches from the same baseline. Agreement metrics (e.g. Jaccard index over the resolved `evidence_id` sets) can be computed on demand by comparing the membership of each submitted `head_version_id` for TASKs sharing a `pinned_version_id`. No dedicated data model is required — TASK, VERSION, DELTA, and MEMBERSHIP together provide all necessary state.
 
 ### 4.10 MEMBERSHIP
 Represents the current materialized state of cluster membership for each cluster, derived from the DELTA table.
@@ -494,11 +523,18 @@ Fields: `cluster_id`, `evidence_id`, `evidence_version_id`, `weight`, `as_of_ver
 
 `as_of_version_id` records which version this materialized state was derived from, allowing staleness detection. Its value is `CLUSTER.head_version_id` at the time of the last update.
 
-MEMBERSHIP is updated **asynchronously** after a new VERSION is created (via `stage`, `union`, `intersection`, or `split`). It is not updated in the same transaction as the DELTA write. The update is triggered by a background job enqueued when a new OPERATION row seals a version. For the current working (unsealed) version — the version that has no outgoing OPERATION entry yet — pending deltas are read live from the DELTA table and combined with the MEMBERSHIP rows of the most recently sealed ancestor version. This means:
-- Read queries for a sealed version: served from MEMBERSHIP directly.
-- Read queries for the current working version: MEMBERSHIP of the sealed parent + live DELTA query for unsealed deltas.
+MEMBERSHIP is materialised **per sealed VERSION** using an operation-specific strategy. A background job is enqueued when a new OPERATION row seals a version and must complete before the new VERSION is queryable via MEMBERSHIP.
 
-MEMBERSHIP reflects sealed versions only. The background job must complete before a newly-created version is queryable via MEMBERSHIP.
+| Triggering operation | Materialisation strategy |
+|---|---|
+| `stage` | Parent VERSION MEMBERSHIP rows advanced by applying the new DELTAs in `delta_id` order |
+| `union` | Union of all source VERSION MEMBERSHIPs — evidence present in any source is included |
+| `intersection` | Intersection of all source VERSION MEMBERSHIPs — only evidence present in every source is included |
+| `conflict_free_join` | Same as `union` (caller has pre-validated that no conflicts exist) |
+| `branch` | Direct copy of the branched-from VERSION’s MEMBERSHIP |
+| `split` | Derived from the DELTA rows written by the caller for the target VERSION within the split transaction |
+
+For the current working (unsealed) version, read queries combine the most recently sealed ancestor’s MEMBERSHIP with live DELTA rows from the DELTA table.
 
 ### 4.11 Saved searches as clusters
 
@@ -508,9 +544,11 @@ There is no separate SAVED_SEARCH table. A saved search is represented as a CLUS
 2. An initial VERSION with `cluster_role = saved_search` and `actor_id` set to the saving user.
 3. One DELTA per evidence signal, carrying `evidence_id`, `evidence_version_id`, `delta_type = add`, and `weight` from the signal weight.
 
-The SEARCH_PROFILE used when saving the query is not stored on the cluster itself — it is associated at query time via the caller's profile selection.
+The SEARCH_PROFILE used when saving the query is stored on the VERSION via `VERSION.search_profile_id` (§4.6), enabling reproducible re-execution of the saved search with its original profile configuration. If the profile is later deleted, `search_profile_id` is set to null and a warning is surfaced at query time.
 
-Promotion to an annotation target creates a new VERSION via a `stage` operation with `cluster_role = mutable_cluster`. The original `saved_search` VERSION is retained as the version history root.
+Promotion to an annotation target creates a new VERSION via a `stage` operation with `cluster_role = automatic_cluster`. The original `saved_search` VERSION is retained as the version history root.
+
+A saved search cluster is mutable via the standard VERSION/DELTA/OPERATION mechanism. Adding a new query signal appends a DELTA with `delta_type = add` to the current working version. Removing a signal appends a DELTA with `delta_type = remove`. If the current version is sealed (an outgoing OPERATION exists for it), the user creates a `branch` from it before writing further DELTAs. The active SEARCH_PROFILE for a saved search can be updated by staging a new VERSION with a different `search_profile_id`. No "update in place" semantics exist \u2014 every modification produces an audited VERSION entry.
 
 ### 4.12 PRINCIPAL
 
@@ -529,32 +567,6 @@ Type-safe evidence FKs do **not** point here — they point directly to the appr
 Fields: `principal_id`, `principal_type`, `display_name`, `is_active`.
 
 `PRINCIPAL.principal_type` is the polymorphic discriminator. Type-specific fields are stored in the joined `USER`, `SERVICE_AGENT`, or `MODEL_AGENT` subtype table. The PRINCIPAL row and its subtype row are always inserted together within the same transaction.
-
-### 4.13 SOURCE_PROCESSING
-
-Tracks the processing state of a MODEL_AGENT being applied to a SOURCE to produce DERIVED_EVIDENCE.
-
-Fields: `source_id`, `producer_id`, `processing_status`, `started_at`, `completed_at`, `error_message`.
-
-- `source_id`: FK → SOURCE (part of composite PK).
-- `producer_id`: FK → `MODEL_AGENT.principal_id` (part of composite PK) — DB-enforced to model agents only via the subtype table FK.
-- `processing_status`: enum — lifecycle state of this processing job.
-- `started_at`: nullable `timestamptz` — set when the job transitions to `in_progress`.
-- `completed_at`: nullable `timestamptz` — set when the job reaches `complete` or `failed`.
-- `error_message`: nullable text — populated on `failed` with the error detail.
-
-`processing_status` values:
-
-| Value | Description |
-|---|---|
-| `queued` | Row exists; processing has not yet been triggered |
-| `in_progress` | Processing has been triggered and is actively running |
-| `complete` | All resulting DERIVED_EVIDENCEs have been ingested successfully |
-| `failed` | Processing encountered an error; see `error_message` |
-
-`(source_id, producer_id)` is the composite primary key — one row per pair. A source with no row for a given `producer_id` has never been queued. A source with `processing_status = queued` has been registered but the job has not yet started. This allows idempotent retry logic to distinguish "never queued", "in flight", "done", and "stuck/failed" states.
-
-Evidence-level lineage is available via `DERIVED_EVIDENCE.producer_id`, which carries the FK to the MODEL_AGENT that produced it. Authority evidence lineage is available via `AUTHORITY_EVIDENCE.producer_id`, which carries the FK to the SERVICE_AGENT that ingested it.
 
 #### 4.12.1 USER
 
@@ -599,6 +611,33 @@ Fields (extends PRINCIPAL): `principal_id`, `evidence_type`, `role`, `model_slug
 - `is_active`: whether this agent is currently used for encoding newly ingested evidence. Multiple agents for the same `evidence_type` may be active simultaneously during a rollout.
 
 Agents that are no longer active are retained for querying existing documents that carry their vector slot — they are never deleted as long as any EVIDENCE records reference them.
+
+### 4.13 SOURCE_PROCESSING
+
+Tracks the processing state of a MODEL_AGENT being applied to a SOURCE to produce DERIVED_EVIDENCE.
+
+Fields: `source_id`, `producer_id`, `processing_status`, `started_at`, `completed_at`, `error_message`.
+
+- `source_id`: FK → SOURCE (part of composite PK).
+- `producer_id`: FK → `MODEL_AGENT.principal_id` (part of composite PK) — DB-enforced to model agents only via the subtype table FK.
+- `processing_status`: enum — lifecycle state of this processing job.
+- `started_at`: nullable `timestamptz` — set when the job transitions to `in_progress`.
+- `completed_at`: nullable `timestamptz` — set when the job reaches `complete` or `failed`.
+- `error_message`: nullable text — populated on `failed` with the error detail.
+
+`processing_status` values:
+
+| Value | Description |
+|---|---|
+| `queued` | Row exists; processing has not yet been triggered |
+| `in_progress` | Processing has been triggered and is actively running |
+| `complete` | All resulting DERIVED_EVIDENCEs have been ingested successfully |
+| `failed` | Processing encountered an error; see `error_message` |
+
+`(source_id, producer_id)` is the composite primary key — one row per pair. A source with no row for a given `producer_id` has never been queued. A source with `processing_status = queued` has been registered but the job has not yet started. This allows idempotent retry logic to distinguish "never queued", "in flight", "done", and "stuck/failed" states.
+
+Evidence-level lineage is available via `DERIVED_EVIDENCE.producer_id`, which carries the FK to the MODEL_AGENT that produced it. Authority evidence lineage is available via `AUTHORITY_EVIDENCE.producer_id`, which carries the FK to the SERVICE_AGENT that ingested it.
+
 
 ---
 
@@ -650,10 +689,13 @@ The `<role>` prefix is fixed per `evidence_type`:
 | `text_region` | `layout` | Embedding encoding spatial/layout structure of the region |
 | `grounded_name` | `text` | Semantic embedding of the name string |
 | `grounded_description` | `text` | Semantic embedding of the description text |
+| `authority_identifier` | `authority` | Identifier-level embedding for authority-based lookup and cross-authority similarity |
 
-Example slot names: `face:arcface-r100-v2`, `text:multilingual-e5-large-v1`, `layout:lilt-base-v1`.
+Example slot names: `face:arcface-r100-v2`, `text:multilingual-e5-large-v1`, `layout:lilt-base-v1`, `authority:nkcr-aut-v1`.
 
 Adding a new model produces new slot names on newly ingested documents. Old documents retain their original slots and are not backfilled unless an explicit re-embedding job is run.
+
+Documents for `authority_identifier` evidence are always stored in the vector store to support faceting, cluster membership queries, and source-scoped filtering regardless of evidence type. A vector slot under the `authority` role prefix is populated only when a MODEL_AGENT with `evidence_type = authority_identifier` and `role = authority` is registered and active.
 
 #### 5.2.4 Modality-specific metadata fields
 
@@ -690,7 +732,8 @@ These fields are populated only for the applicable `evidence_type`s. They enable
 - **On MEMBERSHIP change**: `cluster_ids` on all affected documents is updated. Eventual consistency is acceptable — vector queries are not the membership source of truth.
 - **On EVIDENCE new version**: a new document is created for the new `evidence_version_id`. The old document is retained unless explicitly purged by a maintenance job.
 - **On re-embedding**: new named vector slots (e.g. from a new model) are added to existing documents without replacing or removing old slots.
-- **On EVIDENCE deletion**: all documents for that `evidence_id` are removed from the vector store.
+- **On EVIDENCE soft-deletion** (`is_deleted = true` on the EVIDENCE row): all vector store documents for that `evidence_id` are tombstoned. Relational rows (EVIDENCE, DELTA, MEMBERSHIP) are retained for audit. Hard deletes are not permitted.
+- **On EVIDENCE marked stale** (`is_stale = true`): the vector store document remains but is excluded from default retrieval. Explicit filters may include stale documents for audit and model-comparison purposes.
 
 ---
 
@@ -751,4 +794,211 @@ Constraints:
 - **User profiles** are created by any authenticated principal. A user may mark any of their own profiles as their personal default for search sessions.
 - **Cloning**: any profile can be cloned. Cloning creates a new `SEARCH_PROFILE` row and copies all associated `SEARCH_PROFILE_MODALITY` rows to the new `profile_id`, owned by the requesting user. The clone is fully independent — there is no link back to the source profile, and subsequent changes to either do not affect the other. This is the only mechanism for deriving a customised variant of an existing profile.
 - **Model retirement**: when a `MODEL_AGENT` is marked `is_active = false`, existing `SEARCH_PROFILE_MODALITY` rows that FK to it are detected via a simple indexed join on `model_id`. A warning is surfaced at query time to encourage migration to a newer agent. The FK prevents the `MODEL_AGENT` row from being deleted while any profile still references it.
+
+---
+
+## 7. Search Algorithm
+
+### 7.1 Overview
+
+Search takes a set of typed query signals (face crops, name strings, free-text) and returns ranked clusters. Scoring is a multi-stage pipeline:
+
+1. **Per-modality ANN retrieval** — for each enabled modality in the active SEARCH_PROFILE, query the vector store for the top-K most similar evidence items.
+2. **Within-modality slot fusion** — when multiple model slots are active for the same `evidence_type`, combine them into a single per-evidence score.
+3. **Evidence-to-cluster aggregation** — map evidence scores to clusters via `MEMBERSHIP.cluster_ids` and compute a per-cluster, per-modality score.
+4. **Cross-modality score fusion** — combine per-modality cluster scores into a final ranking score weighted by `SEARCH_PROFILE_MODALITY` weights.
+
+### 7.2 Per-modality retrieval
+
+For each enabled `SEARCH_PROFILE_MODALITY` row, the query signal is encoded using the pinned MODEL_AGENT's vector slot (or the highest-priority active agent if `model_id` is null). The vector store is queried with the encoded query vector, applying pre-filters:
+
+- `evidence_type = <modality evidence_type>`
+- `is_deleted = false`, `is_stale = false` (unless explicitly overridden by the caller)
+- `confidence >= SEARCH_PROFILE_MODALITY.min_confidence` (when set)
+- Optional caller-supplied filters: `provider`, `source_id`, `language`, `cluster_ids`
+
+The query returns the top-K evidence items with raw cosine similarity scores in `[-1, 1]`. K defaults to 200 per modality and is configurable per request.
+
+### 7.3 Within-modality slot fusion
+
+When multiple active model slots exist for the same `evidence_type` and the query carries vectors for more than one slot (e.g. both `face:arcface-r100-v2` and `face:adaface-ir100-v1`):
+
+1. Each slot produces its own ranked list of top-K evidence items.
+2. Scores for the same evidence document across slots are combined using **weighted max**: the highest per-slot score wins. This ensures a single strong model match surfaces the document regardless of weaker scores on other slots.
+3. The result is a single ranked list per modality with one score per evidence document.
+
+### 7.4 Evidence-to-cluster aggregation
+
+Each retrieved evidence item carries a `cluster_ids` list in its vector document (denormalised from MEMBERSHIP). For each cluster the **per-modality cluster score** is:
+
+```
+cluster_score[cluster_id][modality] = max(evidence_score)
+    over all retrieved evidence items belonging to that cluster for that modality
+```
+
+Using **max** rather than mean or sum means a single strong signal is sufficient to surface a cluster, and score magnitude is stable regardless of cluster size. Clusters with no retrieved evidence for a modality receive `0.0` for that modality. The top-50 clusters per modality are retained before cross-modality fusion to bound memory cost.
+
+### 7.5 Cross-modality score fusion
+
+Per-modality cluster scores are normalised to `[0, 1]` using **min-max normalisation** within each modality across the candidate set. This removes scale differences between modalities and between different embedding models.
+
+The final cluster score is a weighted sum of normalised per-modality scores:
+
+```
+score(c) = sum_m ( w_m * normalised_score_m(c) )
+```
+
+where `w_m` is the weight from `SEARCH_PROFILE_MODALITY.weight` normalised to sum to 1.0 across all enabled modalities, and `normalised_score_m(c)` is the min-max normalised per-modality score for cluster `c`. Clusters are ranked by this final score descending.
+
+### 7.6 Explainability payload
+
+Every cluster result includes a `signal_contributions` map keyed by `evidence_type`. Each entry carries:
+
+| Field | Type | Description |
+|---|---|---|
+| `raw_score` | float | Highest raw ANN score from this modality's retrieval pass |
+| `normalised_score` | float [0,1] | Min-max normalised score within this modality |
+| `weight` | float | Effective weight applied from `SEARCH_PROFILE_MODALITY` |
+| `top_evidence_id` | UUID v6 or null | The evidence item that produced the highest score for this modality; null if no items were retrieved |
+
+Modalities that are enabled but returned no candidates have `raw_score = 0.0`, `normalised_score = 0.0`, and `top_evidence_id = null`. This fulfils the explainable ranking design principle (§3.3) and enables the frontend to show per-modality signal bars without a second query.
+
+### 7.7 Query signal ingestion
+
+Ephemeral query signals (face crops, name strings, free-text) are encoded on-demand (§9.3) and held in the application cache for the duration of a search session. No relational write occurs for an unsaved query. When the user saves the search (§4.11) the signals are persisted: evidence items matched by content hash reuse existing EVIDENCE rows; novel signals produce new EVIDENCE rows, which are then written as DELTAs on the `saved_search` VERSION.
+
+---
+
+## 8. Export
+
+### 8.1 Scope
+
+Two primary export targets:
+
+1. **Inter-annotator agreement export** — structured comparison of annotation branches from multiple annotators over the same cluster baseline, with pairwise and multi-annotator agreement metrics.
+2. **Cluster state export** — a point-in-time snapshot of one or more clusters including membership, evidence metadata, provenance, and optionally version history.
+
+All exports are generated asynchronously and delivered as a signed S3 download URL or streamed directly. Export requests are audit-logged with the requesting PRINCIPAL's `actor_id`.
+
+### 8.2 Inter-annotator agreement export
+
+Triggered when a reviewer requests comparison across TASKs sharing the same `pinned_version_id` on the same cluster. The export requires at minimum two submitted TASKs with the same `pinned_version_id`; requests with fewer are rejected with a 422.
+
+**Format: JSONL** (one record per line, streamable for large clusters).
+
+Each record contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `export_type` | string | Always `inter_annotator_agreement` |
+| `cluster_id` | UUID v6 | The cluster being compared |
+| `pinned_version_id` | UUID v6 | The shared baseline version all tasks branched from |
+| `exported_at` | ISO 8601 | Export generation timestamp |
+| `tasks` | list | One entry per participating TASK. Each entry: `task_id`, `assignee_id`, `submitted_version_id`, `membership_evidence_ids` (list of evidence IDs in the resolved membership at submission) |
+| `metrics.pairwise_jaccard` | list | One entry per task pair: `task_a`, `task_b`, `jaccard` (Jaccard index over resolved membership sets) |
+| `metrics.fleiss_kappa` | float | Fleiss' kappa computed over the binary add/remove decision per evidence item across all annotators |
+| `metrics.agreement_set_evidence_ids` | list | Evidence IDs present in **all** annotator memberships |
+| `metrics.disagreement_set_evidence_ids` | list | Evidence IDs present in some but not all annotator memberships |
+
+**Fleiss' kappa** treats each evidence item as a category and each annotator's add/remove decision as a rating. It captures agreement beyond chance across more than two raters. **Jaccard index** is pairwise: `|A ∩ B| / |A ∪ B|` over the resolved membership sets of each task pair.
+
+### 8.3 Cluster state export
+
+Exports one or more clusters at their current head version.
+
+**Formats:**
+
+| Format | Use case | Notes |
+|---|---|---|
+| `json` | API consumers, single cluster | One JSON document per cluster |
+| `jsonl` | Bulk export of many clusters | One cluster record per line, suitable for streaming |
+| `csv` | Tabular analysis | One row per cluster–evidence membership pair; evidence metadata flattened to top-level columns |
+| `jsonld` | Linked data / archival interchange | JSON-LD using a `peoplegator:` context namespace alongside schema.org; preferred for authority-grounded clusters intended for linked data consumers |
+
+Each cluster record contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `export_type` | string | Always `cluster_state` |
+| `exported_at` | ISO 8601 | Export generation timestamp |
+| `cluster_id` | UUID v6 | Cluster identifier |
+| `cluster_role` | string | Current role from the head VERSION |
+| `head_version_id` | UUID v6 | Head version at export time |
+| `members` | list | One entry per MEMBERSHIP item: `evidence_id`, `evidence_version_id`, `evidence_type`, `weight`, `source_id`, `provider`, `metadata` |
+| `authority_links` | list | Subset of `members` where `evidence_type = authority_identifier`; `identifier` and `authority_type` surfaced at top level for easy consumption |
+| `version_history` | list | Empty array by default; populated when `include_history=true` is requested. Each entry: `version_id`, `cluster_role`, `actor_id`, `operation_type` |
+
+### 8.4 Access control
+
+| Export type | Minimum required scope |
+|---|---|
+| Single cluster state | `people-gator:annotate` |
+| Cluster state with `include_history=true` | `people-gator:review` |
+| Inter-annotator agreement | `people-gator:review` |
+| Bulk cluster export (more than one cluster) | `people-gator:admin` |
+
+---
+
+## 9. Ingest Pipeline
+
+### 9.1 Overview
+
+Ingest has three phases with different triggering modes and processing strategies:
+
+| Phase | Description | Mode |
+|---|---|---|
+| **Source registration** | Write SOURCE row, validate resolver config, dedup by content hash | Always synchronous |
+| **Evidence extraction** | Run a MODEL_AGENT over a SOURCE to produce DERIVED_EVIDENCE | On-demand for user uploads and query signals; batched queue for SERVICE_AGENT imports |
+| **Vector encoding** | Encode EVIDENCE into named vector slots in the vector store | On-demand for query signals (inline with extraction); enqueued as a follow-on job after batched extraction |
+
+### 9.2 Source registration
+
+Source registration is a synchronous write. No MODEL_AGENT call or vector encoding occurs at this stage.
+
+1. Validate `source_schema_name` against SOURCE_SCHEMA. Reject with 404 if unknown.
+2. Validate all placeholder values in `SOURCE.metadata` against per-key format rules for the resolver type (§4.1). Reject with 422 on failure.
+3. Compute the BLAKE3 hash of the raw source bytes (§4.0.1). Check for an existing SOURCE row with the same `content_hash`. If found, return the existing `source_id` — registration is idempotent.
+4. Write the SOURCE row within a transaction.
+5. For each MODEL_AGENT whose `evidence_type` is relevant to this source type, write a SOURCE_PROCESSING row with `processing_status = queued`. These rows signal that extraction has been scheduled but not yet dispatched.
+
+### 9.3 On-demand extraction (user upload, query signal)
+
+Triggered when a user uploads a face image or submits a name or text string as a search signal and the content hash is not already present in the relational store.
+
+1. Source registration (§9.2) runs synchronously and returns a `source_id`.
+2. The API worker dispatches an **inline extraction task** to a dedicated fast-path worker pool, separate from the bulk queue, and awaits the result within the request timeout. SOURCE_PROCESSING transitions to `in_progress`.
+3. The relevant MODEL_AGENT API is called to produce DERIVED_EVIDENCE rows.
+4. Vector encoding is called immediately for the query signal slots required by the active SEARCH_PROFILE. The encoded vectors are returned to the API worker for the ANN query.
+5. SOURCE_PROCESSING transitions to `complete`. The full pipeline from upload to searchable vector completes within a single request round-trip.
+
+User-uploaded face images are registered as `s3-image` sources with `provider = local`. The resulting detection is a `face_detection` DERIVED_EVIDENCE produced by the default active MODEL_AGENT for `face_detection`.
+
+### 9.4 Batched extraction (SERVICE_AGENT import)
+
+Triggered by ingestion pipelines such as `system:kramerius-ingest`, `pipeline:authority-sync-wikidata`, or `pipeline:authority-sync-nkcr`.
+
+1. The SERVICE_AGENT calls the source registration endpoint for each source in the batch. SOURCE rows are written synchronously; SOURCE_PROCESSING rows are written with `processing_status = queued`.
+2. A background dispatcher polls for `queued` SOURCE_PROCESSING rows (or is notified via an internal event) and enqueues them to a persistent task queue (e.g. Celery with a Redis or SQS broker).
+3. Worker processes pull jobs from the queue in parallel:
+   - Transition SOURCE_PROCESSING to `in_progress`.
+   - Call the MODEL_AGENT API for the relevant evidence type.
+   - Write DERIVED_EVIDENCE rows.
+   - Enqueue a vector encoding job for each new EVIDENCE row.
+   - Transition SOURCE_PROCESSING to `complete`, or `failed` with `error_message` on error.
+4. Vector encoding workers pull encoding jobs and write named vector slots to the vector store documents.
+5. `cluster_ids` on affected vector documents is updated asynchronously after each MEMBERSHIP change is committed.
+
+For authority evidence, the SERVICE_AGENT writes AUTHORITY_EVIDENCE rows directly (no MODEL_AGENT call), then enqueues vector encoding jobs. The `authority_cluster` creation workflow (§4.5) is executed by the agent after all AUTHORITY_EVIDENCE rows for the entity are committed.
+
+### 9.5 Shared data resolvers
+
+The SOURCE_SCHEMA resolver logic (§4.1) is a standalone Python module shared across all process types:
+
+| Consumer | Usage |
+|---|---|
+| **API workers** | Resolve source URLs for search result rendering (e.g. presigned S3 URLs for image thumbnails, IIIF endpoints for page scans) |
+| **Ingest workers** | Construct storage paths when writing new source artifacts to S3 or the local filesystem |
+| **Export workers** | Embed provenance URLs in export documents |
+
+The resolver module is imported from `people_gator_api.storage` and accepts only pre-validated SOURCE and SOURCE_SCHEMA objects. Path-traversal and SSRF validation (§4.1) is applied at the module boundary and is therefore enforced uniformly regardless of call site. No resolver logic is duplicated across process types.
 
