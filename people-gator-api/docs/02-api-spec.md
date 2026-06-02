@@ -33,6 +33,8 @@ OIDC scopes map directly to workflow roles. Each endpoint documents the minimum 
 
 Scopes are additive. An admin has all capabilities. Coarse enforcement is at route level via the FastAPI dependency layer; fine-grained TASK-based enforcement is applied in service logic.
 
+For token format, authentication workflows (user vs. service agent), required JWT claims, and authentication error responses see [§6 Authentication](#authentication).
+
 ---
 
 ## HEAD Requests and Response Headers
@@ -1402,6 +1404,70 @@ Returns `{ evidence_id, evidence_version_id }`.
 
 ---
 
+#### Discover allowed operations on a derived evidence item
+
+> **Required scope**: `people-gator:annotate`
+
+```
+OPTIONS /api/v1/evidence/derived/{evidence_id}
+```
+
+Returns what the calling principal can do with this specific derived evidence item. Availability reflects the item's current lifecycle state (`is_stale`, `is_deleted`, whether `revised_metadata` already exists) and the caller's scope.
+
+Response `200 OK`:
+
+```json
+{
+  "evidence_id": "<uuid>",
+  "evidence_type": "face_detection",
+  "current_version_id": "<uuid>",
+  "is_stale": false,
+  "is_deleted": false,
+  "has_revision": false,
+  "allowed_methods": ["GET", "HEAD", "OPTIONS", "POST"],
+  "allowed_operations": [
+    {
+      "operation": "revise",
+      "method": "POST",
+      "url": "/api/v1/evidence/derived/<uuid>/revise",
+      "requires_scope": "people-gator:annotate",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "revert_revision",
+      "method": "POST",
+      "url": "/api/v1/evidence/derived/<uuid>/revise",
+      "requires_scope": "people-gator:annotate",
+      "available": false,
+      "unavailable_reason": "no_revision_present",
+      "note": "Revert by omitting revised_metadata in the revise body — not yet supported in this version."
+    },
+    {
+      "operation": "use_as_search_signal",
+      "method": "POST",
+      "url": "/api/v1/search",
+      "requires_scope": "people-gator:browse",
+      "available": true,
+      "unavailable_reason": null,
+      "note": "Pass this evidence_id in query.evidence_ids."
+    }
+  ]
+}
+```
+
+`unavailable_reason` values specific to derived evidence:
+
+| Reason | Meaning |
+|---|---|
+| `evidence_deleted` | Item is soft-deleted; no write operations permitted |
+| `evidence_stale` | Item has been superseded; revision blocked to avoid branching stale lineage |
+| `no_revision_present` | Revert requires an existing `revised_metadata`; none has been written yet |
+
+`has_revision` is `true` when `revised_metadata` is non-null on the current version; informs the UI whether a "revert correction" affordance should be offered.
+
+---
+
 #### Get an evidence item
 
 > **Required scope**: `people-gator:annotate`
@@ -1847,6 +1913,74 @@ Common codes:
 
 ---
 
+### Authentication
+
+The authentication model is OIDC bearer tokens. The full scope reference is in the [Authentication and Scopes](#authentication-and-scopes) section at the top of this document. This section covers the token format, the authentication workflow for each principal type, required claims, and error handling.
+
+#### Token format
+
+Every authenticated request must carry a bearer token in the `Authorization` header:
+
+```
+Authorization: Bearer <id_token_or_access_token>
+```
+
+The token must be a signed JWT issued by the configured OIDC provider. The server validates the signature against the provider's JWKS endpoint on every request — tokens are not cached after expiry.
+
+#### Human user authentication (interactive)
+
+Human users authenticate via the **OIDC Authorization Code Flow with PKCE** (RFC 7636). No client secret is required on the frontend.
+
+1. Client redirects the user's browser to the IdP's `/authorize` endpoint with `response_type=code`, `code_challenge`, `scope=openid profile email people-gator:annotate` (or whichever scopes are needed), and a registered `redirect_uri`.
+2. User authenticates at the IdP.
+3. IdP redirects back to `redirect_uri` with an authorisation `code`.
+4. Client exchanges the code for tokens at the IdP's `/token` endpoint (sends `code_verifier`, never a client secret).
+5. Client uses the returned `access_token` (or `id_token`, depending on IdP configuration) as the bearer token on all API requests.
+6. On expiry (`401 Unauthorized` with `code: token_expired`), client uses the `refresh_token` to obtain a new access token silently without re-prompting the user.
+
+Scopes requested at step 1 determine what the token allows. Request the minimum set of scopes needed for the session.
+
+#### Service agent authentication (machine-to-machine)
+
+Service agents (ingest pipelines, authority sync jobs) authenticate via the **OIDC Client Credentials Flow** (RFC 6749 §4.4). No user interaction is involved.
+
+1. Service agent sends a `POST` to the IdP's `/token` endpoint with `grant_type=client_credentials`, `client_id`, `client_secret`, and `scope=people-gator:ingest` (or `people-gator:admin` for admin agents).
+2. IdP returns an `access_token` with no `refresh_token`.
+3. Service agent uses the `access_token` as the bearer token on all API requests.
+4. On expiry, the agent repeats step 1 — client credentials tokens are short-lived and re-fetching is cheap.
+
+Service agent `principal_id` is resolved from the `(sub, iss)` claim pair. A `SERVICE_AGENT` row must be pre-registered by an admin (`POST /api/v1/principals/service-agents`) before the agent can use any write endpoints. Read-only (`people-gator:browse`) calls do not require pre-registration.
+
+#### Required JWT claims
+
+| Claim | Required | Description |
+|---|---|---|
+| `sub` | yes | Subject identifier — unique within the issuer. Combined with `iss` to form the stable `principal_id` key. |
+| `iss` | yes | Token issuer URL. Must match the configured OIDC provider. |
+| `exp` | yes | Expiry timestamp. Tokens past `exp` are rejected with `401`. |
+| `aud` | yes | Audience. Must include the API's configured `audience` value. |
+| `scope` | yes | Space-separated list of granted scopes. At least one `people-gator:*` scope must be present for write operations. |
+| `email` | no | Used to populate `USER.email` on first upsert; ignored for service agents. |
+
+#### Authentication error responses
+
+| HTTP status | `code` | Cause |
+|---|---|---|
+| `401 Unauthorized` | `token_missing` | No `Authorization` header on a non-browse endpoint |
+| `401 Unauthorized` | `token_invalid` | Signature verification failed or JWT is malformed |
+| `401 Unauthorized` | `token_expired` | Token has passed its `exp` claim |
+| `401 Unauthorized` | `token_wrong_audience` | `aud` claim does not match the configured audience |
+| `403 Forbidden` | `insufficient_scope` | Token is valid but lacks the required scope for this endpoint |
+| `403 Forbidden` | `principal_not_registered` | Service agent's `sub` is not in the `SERVICE_AGENT` table (write endpoints only) |
+
+`WWW-Authenticate` is included on all `401` responses per RFC 9110:
+
+```
+WWW-Authenticate: Bearer realm="people-gator", error="invalid_token", error_description="Token has expired"
+```
+
+---
+
 ### Idempotency
 
 `POST /api/v1/sources`, `POST /api/v1/evidence/derived`, `POST /api/v1/evidence/authority`, and `POST /api/v1/import/authority-entity` are idempotent on `content_hash`. Callers may safely retry on network failure.
@@ -1856,3 +1990,89 @@ Common codes:
 ### Content hashing
 
 All `content_hash` fields use **BLAKE3** with 256-bit (32-byte) output, hex-encoded as a 64-character lowercase string. Compute the hash over the raw bytes of the content before any encoding or transformation.
+
+---
+
+### OPTIONS Requests
+
+The `OPTIONS` method is defined in **RFC 9110 §9.3.7**. The standard mandates only one thing: a response must include an `Allow` header listing the HTTP methods accepted on that URL. Everything beyond that — including the JSON body described below — is a custom convention of this API.
+
+The standard `Allow` header is always present on every `OPTIONS` response:
+
+```
+Allow: GET, HEAD, OPTIONS, PATCH
+```
+
+In addition, this API returns a JSON body that describes the **semantic operations** the calling principal can invoke right now, along with machine-readable reasons when an operation is unavailable. This lets clients render contextual UI affordances without encoding domain rules in the frontend.
+
+#### Shared response schema
+
+All `OPTIONS` responses share this top-level shape:
+
+| Field | Type | Description |
+|---|---|---|
+| `<resource>_id` | UUID | The ID of the resource this response describes. The field name matches the resource (e.g. `cluster_id`, `task_id`, `evidence_id`). |
+| `allowed_methods` | string[] | HTTP methods the caller may invoke on this URL right now. Always matches the `Allow` response header. |
+| `allowed_operations` | Operation[] | Semantic operations. See Operation schema below. |
+| *(resource-specific fields)* | — | State snapshot fields that help a client avoid a redundant GET (e.g. `current_status`, `is_stale`, `evidence_family`). Defined per resource. |
+
+#### Operation object schema
+
+| Field | Type | Description |
+|---|---|---|
+| `operation` | string | Machine-readable slug identifying the operation (e.g. `branch`, `submit`, `revise`). |
+| `method` | string | HTTP method to invoke. |
+| `url` | string | Concrete URL (real IDs substituted) of the endpoint to call. |
+| `requires_scope` | string | Minimum OIDC scope required. |
+| `available` | bool | `true` if the operation can be invoked right now by this caller. |
+| `unavailable_reason` | string \| null | `null` when `available` is `true`. Otherwise one of the reason codes below. |
+| `body` | object \| null | Exact request body to send for PATCH/POST operations where the body is fully determined by the transition (e.g. `{ "status": "submitted" }`). Omitted for operations where the caller supplies the body. |
+| `note` | string \| null | Optional human-readable hint. Not machine-actionable. |
+
+#### `unavailable_reason` codes
+
+All `OPTIONS` endpoints share this common vocabulary. Individual endpoints may add resource-specific codes (documented inline).
+
+| Code | Meaning |
+|---|---|
+| `insufficient_scope` | Caller's token does not carry the required scope |
+| `unauthenticated` | No token supplied and the operation requires authentication |
+| `version_sealed` | The working version is already sealed; a branch is needed first |
+| `version_not_found` | No unsealed (working) version exists on this cluster |
+| `cluster_role_ineligible` | Operation is not valid for the cluster's current `cluster_role` |
+| `invalid_task_transition` | Transition is not permitted from the task's current `status` |
+| `evidence_deleted` | Item is soft-deleted; no write operations permitted |
+| `evidence_stale` | Item has been superseded; write operations blocked |
+| `authority_evidence` | Operation applies only to derived evidence, not authority evidence |
+| `no_revision_present` | Operation requires an existing revision that has not been written yet |
+
+#### Example
+
+```json
+{
+  "cluster_id": "<uuid>",
+  "allowed_methods": ["GET", "HEAD", "OPTIONS", "PATCH"],
+  "allowed_operations": [
+    {
+      "operation": "update_head",
+      "method": "PATCH",
+      "url": "/api/v1/clusters/<uuid>",
+      "requires_scope": "people-gator:review",
+      "available": true,
+      "unavailable_reason": null,
+      "body": null,
+      "note": null
+    },
+    {
+      "operation": "branch",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/versions/<version_id>/branch",
+      "requires_scope": "people-gator:annotate",
+      "available": false,
+      "unavailable_reason": "insufficient_scope",
+      "body": null,
+      "note": null
+    }
+  ]
+}
+```

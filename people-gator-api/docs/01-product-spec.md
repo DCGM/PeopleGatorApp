@@ -1,5 +1,7 @@
 # People Gator Product Specification
 
+> **Skip to diagrams**: [§10 Entity Relationship Diagrams](#10-entity-relationship-diagrams) · [§11 System Architecture](#11-system-architecture)
+
 ## 1. Purpose
 
 People Gator API is an backend for person-centric retrieval an person cluster annotation in historical document scans.
@@ -1001,3 +1003,320 @@ The SOURCE_SCHEMA resolver logic (§4.1) is a standalone Python module shared ac
 
 The resolver module is imported from `people_gator_api.storage` and accepts only pre-validated SOURCE and SOURCE_SCHEMA objects. Path-traversal and SSRF validation (§4.1) is applied at the module boundary and is therefore enforced uniformly regardless of call site. No resolver logic is duplicated across process types.
 
+---
+
+## 10. Entity Relationship Diagrams
+
+The data model is split into four logical diagrams to keep each one readable. Cross-diagram references are noted in the titles.
+
+---
+
+### 10.1 Source & Evidence provenance
+
+Covers how raw artifacts (SOURCE) are described by a resolver schema (SOURCE_SCHEMA), produce evidence (EVIDENCE base + DERIVED_EVIDENCE + AUTHORITY_EVIDENCE), and are processed by model agents (SOURCE_PROCESSING).
+
+```mermaid
+erDiagram
+    SOURCE_SCHEMA {
+        string schema_name PK
+        string resolver_type
+        jsonb  resolver_config
+    }
+    SOURCE {
+        uuid   source_id PK
+        string source
+        string source_schema_name FK
+        string provider
+        jsonb  metadata
+        string content_hash
+        uuid   created_by FK
+    }
+    EVIDENCE {
+        uuid   evidence_id PK
+        uuid   evidence_version_id
+        string evidence_type
+        string schema_version
+        uuid   source_id FK
+        string source_path
+        string content_hash
+        bool   is_deleted
+        bool   is_stale
+    }
+    DERIVED_EVIDENCE {
+        uuid   evidence_id PK
+        uuid   producer_id FK
+        jsonb  produced_metadata
+        uuid   revisor_id FK
+        jsonb  revised_metadata
+    }
+    AUTHORITY_EVIDENCE {
+        uuid   evidence_id PK
+        uuid   producer_id FK
+        jsonb  metadata
+    }
+    SOURCE_PROCESSING {
+        uuid   source_id PK
+        uuid   producer_id PK
+        string processing_status
+        ts     started_at
+        ts     completed_at
+        string error_message
+    }
+
+    SOURCE_SCHEMA  ||--o{ SOURCE            : "defines resolver for"
+    SOURCE         ||--o{ EVIDENCE           : "is origin of"
+    EVIDENCE       ||--o| DERIVED_EVIDENCE   : "specialises into"
+    EVIDENCE       ||--o| AUTHORITY_EVIDENCE : "specialises into"
+    SOURCE         ||--o{ SOURCE_PROCESSING  : "queues processing for"
+```
+
+---
+
+### 10.2 Cluster versioning DAG
+
+Covers the core version graph: CLUSTER head pointer, immutable VERSIONs connected by OPERATIONs, DELTAs written to working versions, and the materialised MEMBERSHIP cache. Principal and Evidence entities are shown as references (detailed in diagrams 10.1 and 10.4).
+
+```mermaid
+erDiagram
+    CLUSTER {
+        uuid cluster_id        PK
+        uuid head_version_id   FK
+    }
+    VERSION {
+        uuid   version_id       PK
+        uuid   cluster_id       FK
+        string cluster_role
+        uuid   actor_id         FK
+        uuid   search_profile_id FK
+    }
+    OPERATION {
+        uuid   operation_id      PK
+        uuid   source_cluster_id FK
+        uuid   source_version_id FK
+        uuid   target_cluster_id FK
+        uuid   target_version_id FK
+        string operation_type
+    }
+    DELTA {
+        uuid   delta_id           PK
+        uuid   cluster_id         FK
+        uuid   version_id         FK
+        uuid   evidence_id        FK
+        uuid   evidence_version_id FK
+        string delta_type
+        float  weight
+        uuid   actor_id           FK
+    }
+    MEMBERSHIP {
+        uuid  cluster_id          PK
+        uuid  evidence_id         PK
+        uuid  evidence_version_id
+        float weight
+        uuid  as_of_version_id    FK
+    }
+    SEARCH_PROFILE {
+        uuid   profile_id PK
+        string profile_name
+        uuid   owner_id   FK
+        bool   is_public
+        bool   is_system
+    }
+
+    CLUSTER      ||--o{ VERSION    : "has versions"
+    CLUSTER      }o--|| VERSION    : "head points to"
+    VERSION      ||--o{ OPERATION  : "sealed by (source)"
+    OPERATION    ||--o{ VERSION    : "produces (target)"
+    VERSION      ||--o{ DELTA      : "carries"
+    CLUSTER      ||--o{ MEMBERSHIP : "materialised as"
+    VERSION      ||--o| MEMBERSHIP : "as_of version"
+    VERSION      }o--o| SEARCH_PROFILE : "uses profile"
+```
+
+---
+
+### 10.3 Annotation workflow
+
+Covers the TASK lifecycle that gates formal review progression. TASK references CLUSTER, VERSION, and PRINCIPAL (see diagrams 10.2 and 10.4).
+
+```mermaid
+erDiagram
+    TASK {
+        uuid   task_id           PK
+        uuid   cluster_id        FK
+        uuid   pinned_version_id FK
+        uuid   head_version_id   FK
+        uuid   assignee_id       FK
+        uuid   created_by        FK
+        string task_role
+        string status
+        ts     created_at
+        ts     updated_at
+    }
+    CLUSTER {
+        uuid cluster_id       PK
+        uuid head_version_id  FK
+    }
+    VERSION {
+        uuid   version_id  PK
+        uuid   cluster_id  FK
+        string cluster_role
+        uuid   actor_id    FK
+    }
+    PRINCIPAL {
+        uuid   principal_id   PK
+        string principal_type
+        string display_name
+        bool   is_active
+    }
+
+    TASK }o--|| CLUSTER   : "concerns"
+    TASK }o--|| VERSION   : "pinned to"
+    TASK }o--|| VERSION   : "head at"
+    TASK }o--|| PRINCIPAL : "assigned to"
+    TASK }o--|| PRINCIPAL : "created by"
+```
+
+---
+
+### 10.4 Principals
+
+Covers the class-table inheritance hierarchy for all actors: PRINCIPAL supertype with USER, SERVICE_AGENT, and MODEL_AGENT subtypes. SEARCH_PROFILE ownership and the link to SEARCH_PROFILE_MODALITY are also shown here.
+
+```mermaid
+erDiagram
+    PRINCIPAL {
+        uuid   principal_id   PK
+        string principal_type
+        string display_name
+        bool   is_active
+    }
+    USER {
+        uuid   principal_id     PK
+        string external_subject
+        string external_issuer
+        string email_address
+    }
+    SERVICE_AGENT {
+        uuid   principal_id PK
+        string agent_slug
+        string description
+    }
+    MODEL_AGENT {
+        uuid   principal_id    PK
+        string evidence_type
+        string role
+        string model_slug
+        string model_version
+        string registry_source
+        string registry_uri
+        bool   is_active
+    }
+    SEARCH_PROFILE {
+        uuid   profile_id  PK
+        string profile_name
+        uuid   owner_id    FK
+        bool   is_public
+        bool   is_system
+    }
+    SEARCH_PROFILE_MODALITY {
+        uuid   profile_id     PK
+        string evidence_type  PK
+        float  weight
+        uuid   model_id       FK
+        bool   enabled
+        float  min_confidence
+    }
+
+    PRINCIPAL ||--o| USER                     : "subtype"
+    PRINCIPAL ||--o| SERVICE_AGENT            : "subtype"
+    PRINCIPAL ||--o| MODEL_AGENT              : "subtype"
+    USER      ||--o{ SEARCH_PROFILE           : "owns"
+    SEARCH_PROFILE ||--o{ SEARCH_PROFILE_MODALITY : "has modalities"
+    MODEL_AGENT    ||--o{ SEARCH_PROFILE_MODALITY : "pinned in"
+```
+
+---
+
+## 11. System Architecture
+
+Overview of all interconnected services, their roles, and data flows. External actors and data sources are shown outside the deployment boundary.
+
+```mermaid
+flowchart TB
+    %% ── External actors ──────────────────────────────────────────
+    subgraph ext_users["External — Human Actors"]
+        Browser["Browser client\n(annotator / reviewer / admin)"]
+        AdminCLI["Admin CLI\n(principal management)"]
+    end
+
+    subgraph ext_agents["External — Ingestion & Inference Agents"]
+        KrameriusPipeline["system:kramerius-ingest\n(SERVICE_AGENT)\nDocument & page-XML ingest"]
+        WikidataPipeline["pipeline:authority-sync-wikidata\n(SERVICE_AGENT)\nPeriodic Wikidata authority sync"]
+        NKCRPipeline["pipeline:authority-sync-nkcr\n(SERVICE_AGENT)\nPeriodic NKCR authority sync"]
+        ModelAPIs["External ML inference APIs\n(face detection, NER,\nembedding generation)"]
+    end
+
+    subgraph ext_sources["External — Data Sources"]
+        KrameriusRepo["Kramerius document store\n(scanned pages, page-XML)"]
+        WikidataAPI["Wikidata\n(authority records)"]
+        NKCRAPI["NKCR\n(authority records)"]
+    end
+
+    %% ── Deployment boundary ──────────────────────────────────────
+    subgraph deploy["Deployment — people-gator stack"]
+        Traefik["Traefik\nReverse proxy / TLS termination\n(dev.people-gator.capturemyhand.com)"]
+
+        subgraph core["Core services"]
+            API["People Gator API\n(FastAPI / Uvicorn)\nREST API, auth enforcement,\nbusiness logic, ingest orchestration"]
+            Keycloak["Keycloak\n(OIDC identity provider)\nauth.dev.people-gator.capturemyhand.com\nIssues PKCE + Client Credentials tokens"]
+        end
+
+        subgraph datastores["Data stores"]
+            Postgres["PostgreSQL 18\nRelational data\n(clusters, versions, deltas,\nevidence, tasks, principals)"]
+            Weaviate["Weaviate\n(Vector store)\nEvidence documents with\nnamed vector slots per model"]
+            S3["S3 / MinIO\n(Object storage)\nBinary artifacts:\npage scans, face crops,\nNER span images"]
+        end
+
+        subgraph observability["Observability"]
+            LGTM["Grafana LGTM stack\n(Loki · Tempo · Mimir)\nOpenTelemetry collector\nTraces · Logs · Metrics"]
+        end
+    end
+
+    %% ── Inbound traffic ──────────────────────────────────────────
+    Browser        -->|"HTTPS REST / PKCE auth flow"| Traefik
+    AdminCLI       -->|"HTTPS REST / Client Credentials"| Traefik
+    KrameriusPipeline -->|"HTTPS REST / Client Credentials"| Traefik
+    WikidataPipeline  -->|"HTTPS REST / Client Credentials"| Traefik
+    NKCRPipeline      -->|"HTTPS REST / Client Credentials"| Traefik
+
+    Traefik -->|"Routes /api /docs /redoc"| API
+    Traefik -->|"Routes auth.*"| Keycloak
+
+    %% ── API ↔ core services ──────────────────────────────────────
+    API -->|"JWKS token verification"| Keycloak
+    API -->|"Read / write relational data\n(SQLAlchemy / asyncpg)"| Postgres
+    API -->|"Vector search queries\nDocument upserts\n(Weaviate Python client / gRPC)"| Weaviate
+    API -->|"Binary artifact read / write\n(aiobotocore)"| S3
+    API -->|"OpenTelemetry traces, logs, metrics\n(HTTP + gRPC exporter)"| LGTM
+
+    %% ── Ingest pipeline call-outs ────────────────────────────────
+    API -->|"Inference calls during\nSOURCE_PROCESSING jobs\n(face detection, NER, embeddings)"| ModelAPIs
+
+    %% ── External data source pull ────────────────────────────────
+    KrameriusPipeline -->|"Pulls page-XML & image artifacts"| KrameriusRepo
+    WikidataPipeline  -->|"Periodic authority dump pull"| WikidataAPI
+    NKCRPipeline      -->|"Periodic authority dump pull"| NKCRAPI
+
+    %% ── Styles ───────────────────────────────────────────────────
+    classDef store     fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    classDef svc       fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef external  fill:#fef9c3,stroke:#ca8a04,color:#713f12
+    classDef infra     fill:#f3e8ff,stroke:#9333ea,color:#3b0764
+    classDef obs       fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+
+    class Postgres,Weaviate,S3 store
+    class API,Keycloak svc
+    class Browser,AdminCLI,KrameriusPipeline,WikidataPipeline,NKCRPipeline,ModelAPIs,KrameriusRepo,WikidataAPI,NKCRAPI external
+    class Traefik infra
+    class LGTM obs
+```
