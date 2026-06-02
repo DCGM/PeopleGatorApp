@@ -18,10 +18,13 @@ All identifiers are UUIDv6. All responses are JSON. Error bodies always carry a 
 
 Every request must carry a bearer token issued by the configured OIDC provider. The token is validated against the JWKS endpoint on every request. The `principal_id` is resolved from the token's `(sub, iss)` claim pair and a USER row is upserted on first use.
 
+Read-only browse endpoints (`GET /api/v1/search`, `POST /api/v1/search`, `GET /api/v1/search/facets`, `POST /api/v1/search/facets`, `GET /api/v1/clusters`, `GET /api/v1/clusters/{cluster_id}`, `GET /api/v1/clusters/{cluster_id}/membership`, `GET /api/v1/clusters/{cluster_id}/similar`, `GET /api/v1/clusters/{cluster_id}/versions`, `GET /api/v1/clusters/{cluster_id}/versions/{version_id}`) also accept unauthenticated requests, treating them as if they carry the `people-gator:browse` scope.
+
 OIDC scopes map directly to workflow roles. Each endpoint documents the minimum scope required.
 
 | Scope | Role |
 |---|---|
+| `people-gator:browse` | Anonymous or authenticated read-only access — search and cluster browsing only, no write operations |
 | `people-gator:annotate` | Human annotator — search, branch, write DELTAs, manage own saved searches |
 | `people-gator:review` | Reviewer — adjudicate annotation branches, run union/intersection/conflict_free_join operations, promote to `grounded_cluster` |
 | `people-gator:verify` | Verifier — confirm grounding against authority records |
@@ -29,6 +32,70 @@ OIDC scopes map directly to workflow roles. Each endpoint documents the minimum 
 | `people-gator:admin` | Administrator — manage principals, source schemas, system profiles, assign tasks, bulk export |
 
 Scopes are additive. An admin has all capabilities. Coarse enforcement is at route level via the FastAPI dependency layer; fine-grained TASK-based enforcement is applied in service logic.
+
+---
+
+## HEAD Requests and Response Headers
+
+All `GET` endpoints implicitly support `HEAD` (RFC 9110 §9.3.2). Starlette handles this automatically — no separate route is needed. The server runs the full `GET` handler and strips the body before sending the response. The same scope rules apply to `HEAD` as to `GET`.
+
+`ETag`, `Last-Modified`, and `Cache-Control` semantics differ by resource category:
+
+### Immutable resources
+
+Sealed resources that never change after creation. Strong ETag equal to the resource ID. `Last-Modified` is derived from the UUIDv6 timestamp embedded in the ID. `Cache-Control: public, max-age=31536000, immutable`.
+
+| Endpoint | ETag source |
+|---|---|
+| `GET /api/v1/clusters/{cluster_id}/versions/{version_id}` | `version_id` |
+| `GET /api/v1/evidence/{evidence_id}/versions/{evidence_version_id}` | `evidence_version_id` |
+
+### Mutable single resources
+
+Strong ETag derived from the resource's most recent change indicator. `Cache-Control: private, no-cache`. `Last-Modified` derived from the UUIDv6 timestamp in the ETag source where possible.
+
+| Endpoint | ETag source |
+|---|---|
+| `GET /api/v1/search-profiles/{profile_id}` | BLAKE3 of serialised modality config |
+| `GET /api/v1/clusters/{cluster_id}` | `head_version_id` |
+| `GET /api/v1/clusters/{cluster_id}/membership` | `head_version_id` (or requested `version_id` if `?version_id=` is supplied) |
+| `GET /api/v1/clusters/{cluster_id}/versions/{version_id}/pending` | last `delta_id` written to the version |
+| `GET /api/v1/tasks/{task_id}` | `head_version_id` of the task's cluster |
+| `GET /api/v1/sources/{source_id}` | `content_hash` (BLAKE3, already computed at ingest) |
+| `GET /api/v1/sources/{source_id}/processing` | BLAKE3 of serialised processing status rows |
+| `GET /api/v1/evidence/{evidence_id}` | latest `evidence_version_id` |
+| `GET /api/v1/principals/{principal_id}` | BLAKE3 of mutable principal fields |
+| `GET /api/v1/principals/me` | BLAKE3 of mutable principal fields |
+
+### Collection (list) endpoints
+
+Weak ETag (`W/"<last_id>"`) where `<last_id>` is the UUIDv6 ID of the most recently created item visible to the caller — the embedded timestamp gives ordering without an extra column. `Last-Modified` derived from that ID's timestamp. `X-Total-Count` carries the total count before pagination. `Cache-Control: private, no-cache`.
+
+Polling clients can use `If-None-Match` with the weak ETag to detect new items without fetching a full body.
+
+| Endpoint | Weak ETag source |
+|---|---|
+| `GET /api/v1/search-profiles` | last `profile_id` |
+| `GET /api/v1/clusters` | last `cluster_id` |
+| `GET /api/v1/clusters/{cluster_id}/versions` | last `version_id` |
+| `GET /api/v1/clusters/{cluster_id}/versions/{version_id}/deltas` | last `delta_id` |
+| `GET /api/v1/tasks` | last `task_id` |
+| `GET /api/v1/source-schemas` | last schema name (alphabetical) |
+| `GET /api/v1/sources` | last `source_id` |
+| `GET /api/v1/evidence` | last `evidence_id` |
+| `GET /api/v1/principals` | last `principal_id` |
+
+### Ephemeral query endpoints
+
+Results depend on query parameters and the live vector index state. No `ETag` or `Last-Modified` is emitted. `Cache-Control: no-store`. `HEAD` is still implicitly supported but provides no caching benefit.
+
+| Endpoint |
+|---|
+| `GET /api/v1/search` |
+| `POST /api/v1/search` |
+| `GET /api/v1/clusters/{cluster_id}/similar` |
+| `GET /api/v1/search/facets` |
+| `POST /api/v1/search/facets` |
 
 ---
 
@@ -57,7 +124,8 @@ Search profiles define per-modality weights and model pins. They are independent
 #### List profiles
 
 ```
-GET /api/v1/search-profiles
+GET  /api/v1/search-profiles
+HEAD /api/v1/search-profiles
 ```
 
 Returns all profiles visible to the calling user: their own profiles plus all public and system profiles.
@@ -72,7 +140,8 @@ Returns all profiles visible to the calling user: their own profiles plus all pu
 #### Get a profile
 
 ```
-GET /api/v1/search-profiles/{profile_id}
+GET  /api/v1/search-profiles/{profile_id}
+HEAD /api/v1/search-profiles/{profile_id}
 ```
 
 Returns full profile detail including `SEARCH_PROFILE_MODALITY` rows.
@@ -170,10 +239,11 @@ All fields are optional and composable.
 
 #### Simple search (GET)
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/search
+GET  /api/v1/search
+HEAD /api/v1/search
 ```
 
 | Parameter | Type | Description |
@@ -188,7 +258,7 @@ GET /api/v1/search
 | `provider` | string (repeatable) | Filter by SOURCE.provider (`kramerius`, `nkcr`, `wikimedia`, `local`). |
 | `has_face` | bool | Filter to clusters with at least one `face_detection` member. |
 | `has_authority_link` | bool | Filter to clusters with at least one `authority_identifier` member. |
-| `language` | string (BCP 47) | Filter textual evidence by language. |
+| `language` | string (BCP 47, repeatable) | Filter textual evidence by language. |
 | `limit` | int | Default 20, max 200. |
 | `after_id` | UUID | Keyset cursor — pass the last result's ID from the previous page. |
 
@@ -203,7 +273,7 @@ Response: same structure as `POST /api/v1/search`.
 
 #### Composite search (POST)
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
 POST /api/v1/search
@@ -224,7 +294,7 @@ POST /api/v1/search
     "provider": ["kramerius", "nkcr"],
     "has_face": true,
     "has_authority_link": false,
-    "language": "cs"
+    "languages": ["cs", "sk"]
   },
   "limit": 20,
   "after_id": null,
@@ -278,6 +348,20 @@ Response:
     "has_face": { "true": 98, "false": 44 },
     "has_authority_link": { "true": 34, "false": 108 }
   },
+  "query": {
+    "names": ["Antonín Dvořák", "Dvořáček"],
+    "texts": ["skladatel narozen Nelahozeves"],
+    "evidence_ids": ["<uuid-face-evidence>", "<uuid-name-evidence>"],
+    "reference_cluster_id": null
+  },
+  "filters": {
+    "cluster_roles": ["grounded_cluster", "automatic_cluster"],
+    "provider": ["kramerius", "nkcr"],
+    "has_face": true,
+    "has_authority_link": false,
+    "languages": ["cs", "sk"]
+  },
+  "profile_id": "<uuid-of-resolved-profile>",
   "search_cluster_id": null
 }
 ```
@@ -292,10 +376,11 @@ Response:
 
 #### Find clusters similar to a given cluster
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/clusters/{cluster_id}/similar
+GET  /api/v1/clusters/{cluster_id}/similar
+HEAD /api/v1/clusters/{cluster_id}/similar
 ```
 
 Equivalent to `POST /api/v1/search` with `query.reference_cluster_id` set to this cluster. The source cluster is excluded from results.
@@ -303,11 +388,64 @@ Equivalent to `POST /api/v1/search` with `query.reference_cluster_id` set to thi
 | Parameter | Type | Description |
 |---|---|---|
 | `profile_id` | UUID | Override profile. Optional. |
-| `result_types` | string | Comma-separated. Default `cluster`. |
-| `cluster_role` | string (repeatable) | Role filter. Optional. |
+| `result_types` | string | Comma-separated. Allowed values: `cluster`, `face_detection`, `named_entity`, `text_region`, `grounded_name`, `grounded_description`, `authority_identifier`. Default `cluster`. |
+| `cluster_role` | string (repeatable) | Filter clusters by role. Optional. |
+| `provider` | string (repeatable) | Filter by SOURCE.provider (`kramerius`, `nkcr`, `wikimedia`, `local`). |
+| `has_face` | bool | Filter to clusters with at least one `face_detection` member. |
+| `has_authority_link` | bool | Filter to clusters with at least one `authority_identifier` member. |
+| `language` | string (BCP 47, repeatable) | Filter textual evidence by language. |
 | `limit` | int | Default 10. |
 
-Response: same structure as `POST /api/v1/search`.
+Response:
+
+```json
+{
+  "total": 12,
+  "limit": 10,
+  "next_after_id": "<uuid>",
+  "results": [
+    {
+      "result_type": "cluster",
+      "cluster_id": "<uuid>",
+      "head_version_id": "<uuid>",
+      "cluster_role": "grounded_cluster",
+      "score": 0.91,
+      "signal_contributions": {
+        "face_detection": { "raw_score": 0.93, "normalised_score": 0.91, "weight": 0.6, "top_evidence_id": "<uuid>" },
+        "named_entity":   { "raw_score": 0.88, "normalised_score": 0.85, "weight": 0.4, "top_evidence_id": "<uuid>" }
+      },
+      "members": {
+        "face_detection": { "total": 2 },
+        "named_entity":   { "total": 4 },
+        "authority_identifier": { "total": 1 }
+      }
+    }
+  ],
+  "facets": {
+    "cluster_roles": { "grounded_cluster": 8, "automatic_cluster": 4 },
+    "provider": { "kramerius": 10, "nkcr": 2 },
+    "result_types": { "cluster": 12 },
+    "evidence_types": { "face_detection": 20, "named_entity": 32 },
+    "has_face": { "true": 10, "false": 2 },
+    "has_authority_link": { "true": 5, "false": 7 }
+  },
+  "query": {
+    "names": null,
+    "texts": null,
+    "evidence_ids": null,
+    "reference_cluster_id": "<uuid-of-source-cluster>"
+  },
+  "filters": {
+    "cluster_roles": [],
+    "provider": [],
+    "has_face": null,
+    "has_authority_link": null,
+    "languages": []
+  },
+  "profile_id": "<uuid-of-resolved-profile>",
+  "search_cluster_id": null
+}
+```
 
 ---
 
@@ -315,10 +453,11 @@ Response: same structure as `POST /api/v1/search`.
 
 Facet counts are returned inline in every search response. For populating filter controls before submitting a full query, a facets-only endpoint is available:
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
 GET  /api/v1/search/facets
+HEAD /api/v1/search/facets
 POST /api/v1/search/facets
 ```
 
@@ -365,10 +504,11 @@ Accepts the same query parameters and body as the corresponding search endpoints
 
 #### List clusters
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/clusters
+GET  /api/v1/clusters
+HEAD /api/v1/clusters
 ```
 
 | Parameter | Type | Description |
@@ -381,13 +521,119 @@ GET /api/v1/clusters
 
 #### Get a cluster
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/clusters/{cluster_id}
+GET  /api/v1/clusters/{cluster_id}
+HEAD /api/v1/clusters/{cluster_id}
 ```
 
 Returns cluster identity fields and the current head version's `cluster_role`, `actor_id`, and `search_profile_id`.
+
+`HEAD` is implicitly supported on every `GET` endpoint (RFC 9110 §9.3.2): the server returns the same response headers as `GET` but with no body. Starlette/FastAPI handles this automatically — no separate route is needed. For this endpoint the useful headers are:
+
+| Response header | Value | Purpose |
+|---|---|---|
+| `ETag` | `"<head_version_id>"` (quoted) | Cache validation; changes atomically on every head update |
+| `Last-Modified` | RFC 7231 date derived from the UUIDv6 timestamp in `head_version_id` | HTTP cache and conditional-request support |
+| `X-Cluster-Role` | current `cluster_role` string | Lets a client know the cluster type before fetching the body |
+
+A `404 Not Found` response (with no body) indicates the cluster does not exist, making `HEAD` suitable for lightweight existence checks.
+
+Clients can use the standard HTTP conditional-request headers for efficient re-validation:
+- `If-None-Match: "<head_version_id>"` → `304 Not Modified` if the head has not changed.
+- `If-Modified-Since: <timestamp>` → `304 Not Modified` if the cluster has not been updated since that time.
+
+---
+
+#### Discover allowed operations on a cluster
+
+> **Required scope**: none (unauthenticated requests return capabilities for an anonymous caller; authenticated requests reflect the caller's actual scope and the cluster's current state)
+
+```
+OPTIONS /api/v1/clusters/{cluster_id}
+```
+
+Returns the HTTP methods and semantic workflow operations the calling principal may exercise on this cluster right now. The server evaluates both the caller's scope and the cluster's current state (working vs. sealed version, current `cluster_role`) to determine what is actually permitted.
+
+Response `200 OK`:
+
+```json
+{
+  "cluster_id": "<uuid>",
+  "allowed_methods": ["GET", "OPTIONS", "PATCH"],
+  "allowed_operations": [
+    {
+      "operation": "branch",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/versions/<version_id>/branch",
+      "requires_scope": "people-gator:annotate",
+      "available": false,
+      "unavailable_reason": "insufficient_scope"
+    },
+    {
+      "operation": "delta_add",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/versions/<version_id>/deltas",
+      "requires_scope": "people-gator:annotate",
+      "available": false,
+      "unavailable_reason": "insufficient_scope"
+    },
+    {
+      "operation": "stage",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/versions/<version_id>/stage",
+      "requires_scope": "people-gator:annotate",
+      "available": false,
+      "unavailable_reason": "insufficient_scope"
+    },
+    {
+      "operation": "update_head",
+      "method": "PATCH",
+      "url": "/api/v1/clusters/<uuid>",
+      "requires_scope": "people-gator:review",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "union",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/versions/<version_id>/union",
+      "requires_scope": "people-gator:review",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "intersection",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/versions/<version_id>/intersection",
+      "requires_scope": "people-gator:review",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "verify",
+      "method": "POST",
+      "url": "/api/v1/clusters/<uuid>/verify",
+      "requires_scope": "people-gator:verify",
+      "available": false,
+      "unavailable_reason": "cluster_role_ineligible"
+    }
+  ]
+}
+```
+
+`available` is `true` if the operation can be invoked right now. When `false`, `unavailable_reason` is one of:
+
+| Reason | Meaning |
+|---|---|
+| `insufficient_scope` | Caller's token does not carry the required scope |
+| `version_sealed` | The working version is already sealed; a branch is needed first |
+| `version_not_found` | No unsealed (working) version exists on this cluster |
+| `cluster_role_ineligible` | The operation is not valid for the cluster's current `cluster_role` (e.g., `verify` requires `grounded_cluster`) |
+| `unauthenticated` | No token was supplied and the operation requires authentication |
+
+The `url` field always contains the concrete URL (with real IDs) of the target endpoint for that operation, resolved against the cluster's current head version.
 
 ---
 
@@ -442,10 +688,11 @@ Returns `200 OK` with the updated cluster summary.
 
 #### Get resolved membership
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/clusters/{cluster_id}/membership
+GET  /api/v1/clusters/{cluster_id}/membership
+HEAD /api/v1/clusters/{cluster_id}/membership
 ```
 
 Returns the materialised MEMBERSHIP as of the current head version. Each member item includes `evidence_id`, `evidence_version_id`, `evidence_type`, `weight`, and `as_of_version_id`.
@@ -461,7 +708,8 @@ Returns the materialised MEMBERSHIP as of the current head version. Each member 
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/clusters/{cluster_id}/versions/{version_id}/pending
+GET  /api/v1/clusters/{cluster_id}/versions/{version_id}/pending
+HEAD /api/v1/clusters/{cluster_id}/versions/{version_id}/pending
 ```
 
 Returns the unreduced DELTAs on the given working (unsealed) version — the diff not yet committed into a downstream version. Returns `409 Conflict` if the version is already sealed.
@@ -472,10 +720,11 @@ Returns the unreduced DELTAs on the given working (unsealed) version — the dif
 
 #### List versions for a cluster
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/clusters/{cluster_id}/versions
+GET  /api/v1/clusters/{cluster_id}/versions
+HEAD /api/v1/clusters/{cluster_id}/versions
 ```
 
 Returns all versions in ascending `version_id` (creation-time) order with their `cluster_role`, `actor_id`, and the operation type that created them.
@@ -484,10 +733,11 @@ Returns all versions in ascending `version_id` (creation-time) order with their 
 
 #### Get a version
 
-> **Required scope**: `people-gator:annotate`
+> **Required scope**: `people-gator:browse` (unauthenticated requests accepted)
 
 ```
-GET /api/v1/clusters/{cluster_id}/versions/{version_id}
+GET  /api/v1/clusters/{cluster_id}/versions/{version_id}
+HEAD /api/v1/clusters/{cluster_id}/versions/{version_id}
 ```
 
 Returns full version detail: `cluster_role`, `actor_id`, `search_profile_id`, incoming operation, and outgoing operations (if sealed).
@@ -528,7 +778,8 @@ Returns `201 Created` with the new `delta_id`.
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/clusters/{cluster_id}/versions/{version_id}/deltas
+GET  /api/v1/clusters/{cluster_id}/versions/{version_id}/deltas
+HEAD /api/v1/clusters/{cluster_id}/versions/{version_id}/deltas
 ```
 
 Returns all DELTAs in `delta_id` ascending order.
@@ -699,7 +950,8 @@ TASKs tie a VERSION chain to the formal annotation and review workflow. A TASK g
 > **Required scope**: `people-gator:annotate` (own tasks); `people-gator:review` (submitted tasks); `people-gator:admin` (all tasks).
 
 ```
-GET /api/v1/tasks
+GET  /api/v1/tasks
+HEAD /api/v1/tasks
 ```
 
 | Parameter | Type | Description |
@@ -718,10 +970,96 @@ GET /api/v1/tasks
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/tasks/{task_id}
+GET  /api/v1/tasks/{task_id}
+HEAD /api/v1/tasks/{task_id}
 ```
 
 Returns: `task_id`, `cluster_id`, `pinned_version_id`, `head_version_id`, `assignee_id`, `created_by`, `task_role`, `status`.
+
+---
+
+#### Discover allowed operations on a task
+
+> **Required scope**: `people-gator:annotate`
+
+```
+OPTIONS /api/v1/tasks/{task_id}
+```
+
+Returns the status transitions the calling principal may invoke right now. Availability depends on the task's current `status`, the caller's scope, and whether the caller is the `assignee_id`, the `created_by` principal, or a reviewer picking up the task.
+
+Response `200 OK`:
+
+```json
+{
+  "task_id": "<uuid>",
+  "current_status": "submitted",
+  "allowed_methods": ["GET", "HEAD", "OPTIONS", "PATCH"],
+  "allowed_operations": [
+    {
+      "operation": "submit",
+      "method": "PATCH",
+      "url": "/api/v1/tasks/<uuid>",
+      "body": { "status": "submitted" },
+      "requires_scope": "people-gator:annotate",
+      "requires_role": "assignee",
+      "available": false,
+      "unavailable_reason": "invalid_task_transition"
+    },
+    {
+      "operation": "retract",
+      "method": "PATCH",
+      "url": "/api/v1/tasks/<uuid>",
+      "body": { "status": "pending" },
+      "requires_scope": "people-gator:annotate",
+      "requires_role": "assignee",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "pick_up",
+      "method": "PATCH",
+      "url": "/api/v1/tasks/<uuid>",
+      "body": { "status": "review" },
+      "requires_scope": "people-gator:review",
+      "requires_role": "any_reviewer",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "close",
+      "method": "PATCH",
+      "url": "/api/v1/tasks/<uuid>",
+      "body": { "status": "closed" },
+      "requires_scope": "people-gator:review",
+      "requires_role": "assigned_reviewer",
+      "available": false,
+      "unavailable_reason": "invalid_task_transition"
+    },
+    {
+      "operation": "cancel",
+      "method": "PATCH",
+      "url": "/api/v1/tasks/<uuid>",
+      "body": { "status": "closed" },
+      "requires_scope": "people-gator:admin",
+      "requires_role": "admin_or_creator",
+      "available": false,
+      "unavailable_reason": "invalid_task_transition"
+    }
+  ]
+}
+```
+
+`requires_role` values:
+
+| Value | Meaning |
+|---|---|
+| `assignee` | Caller must be the task's `assignee_id` |
+| `any_reviewer` | Any principal carrying `people-gator:review` |
+| `assigned_reviewer` | The specific reviewer who moved the task to `review` |
+| `admin_or_creator` | Any `people-gator:admin` or the `created_by` principal |
+
+`unavailable_reason` uses the same vocabulary as `OPTIONS /api/v1/clusters/{cluster_id}` plus `invalid_task_transition` (the transition is not allowed from the current status).
 
 ---
 
@@ -800,7 +1138,8 @@ Source schemas define how storage paths are resolved for a family of sources. Th
 #### List source schemas
 
 ```
-GET /api/v1/source-schemas
+GET  /api/v1/source-schemas
+HEAD /api/v1/source-schemas
 ```
 
 ---
@@ -808,7 +1147,8 @@ GET /api/v1/source-schemas
 #### Get a source schema
 
 ```
-GET /api/v1/source-schemas/{schema_name}
+GET  /api/v1/source-schemas/{schema_name}
+HEAD /api/v1/source-schemas/{schema_name}
 ```
 
 ---
@@ -854,7 +1194,8 @@ Returns `201 Created`. `schema_name` must be globally unique.
 > **Required scope**: `people-gator:ingest`
 
 ```
-GET /api/v1/sources
+GET  /api/v1/sources
+HEAD /api/v1/sources
 ```
 
 | Parameter | Type | Description |
@@ -871,8 +1212,51 @@ GET /api/v1/sources
 > **Required scope**: `people-gator:ingest`
 
 ```
-GET /api/v1/sources/{source_id}
+GET  /api/v1/sources/{source_id}
+HEAD /api/v1/sources/{source_id}
 ```
+
+---
+
+#### Discover allowed operations on a source
+
+> **Required scope**: `people-gator:ingest`
+
+```
+OPTIONS /api/v1/sources/{source_id}
+```
+
+Sources are immutable after registration. `OPTIONS` exposes whether the caller can inspect or act on the source's processing pipeline. Availability depends on the processing status of each MODEL_AGENT queue entry.
+
+Response `200 OK`:
+
+```json
+{
+  "source_id": "<uuid>",
+  "allowed_methods": ["GET", "HEAD", "OPTIONS"],
+  "allowed_operations": [
+    {
+      "operation": "view_processing_status",
+      "method": "GET",
+      "url": "/api/v1/sources/<uuid>/processing",
+      "requires_scope": "people-gator:ingest",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "upload_image_search",
+      "method": "POST",
+      "url": "/api/v1/search",
+      "requires_scope": "people-gator:annotate",
+      "available": false,
+      "unavailable_reason": "insufficient_scope",
+      "note": "Use the source's evidence as query signals via evidence_ids in POST /api/v1/search."
+    }
+  ]
+}
+```
+
+The `allowed_methods` array will never include `PATCH`, `PUT`, or `DELETE` — sources cannot be mutated or removed after registration. Re-ingesting the same content returns the existing `source_id` via the idempotent `content_hash` check.
 
 ---
 
@@ -909,7 +1293,8 @@ On success, one `SOURCE_PROCESSING` row per active MODEL_AGENT relevant to this 
 > **Required scope**: `people-gator:ingest`
 
 ```
-GET /api/v1/sources/{source_id}/processing
+GET  /api/v1/sources/{source_id}/processing
+HEAD /api/v1/sources/{source_id}/processing
 ```
 
 Returns the `SOURCE_PROCESSING` rows for this source — one per MODEL_AGENT that has been queued for it.
@@ -935,52 +1320,7 @@ Returns the `SOURCE_PROCESSING` rows for this source — one per MODEL_AGENT tha
 
 ---
 
-### 3.4 Metadata Schemas
-
-Metadata schemas register the versioned contract for an `evidence_type`'s metadata JSONB payload. The primary key is the composite `(evidence_type, schema_version)`. They must be registered before evidence of that type and version can be ingested.
-
-> **Required scope**: `GET` — `people-gator:ingest`; `POST` — `people-gator:admin`.
-
-#### List metadata schemas
-
-```
-GET /api/v1/metadata-schemas
-```
-
-| Parameter | Type | Description |
-|---|---|---|
-| `evidence_type` | string | Filter by evidence type. |
-
----
-
-#### Get a metadata schema
-
-```
-GET /api/v1/metadata-schemas/{evidence_type}/{schema_version}
-```
-
----
-
-#### Register a metadata schema
-
-```
-POST /api/v1/metadata-schemas
-```
-
-```json
-{
-  "evidence_type": "face_detection",
-  "schema_version": "v1",
-  "description": "Face crop with bounding box, keypoints, and detection confidence.",
-  "json_schema": { }
-}
-```
-
-`json_schema` is optional. When provided it is used to validate metadata payloads at ingest time (draft-07 compatible). Returns `201 Created`.
-
----
-
-### 3.5 Derived Evidence
+### 3.4 Derived Evidence
 
 DERIVED_EVIDENCE is produced by MODEL_AGENTs: `face_detection`, `named_entity`, and `text_region`. `producer_id` must be a registered `MODEL_AGENT.principal_id` for the given `evidence_type`.
 
@@ -1067,10 +1407,64 @@ Returns `{ evidence_id, evidence_version_id }`.
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/evidence/{evidence_id}
+GET  /api/v1/evidence/{evidence_id}
+HEAD /api/v1/evidence/{evidence_id}
 ```
 
 Returns the latest active version. Includes both `produced_metadata` and `revised_metadata` (when present) for DERIVED_EVIDENCE.
+
+---
+
+#### Discover allowed operations on an evidence item
+
+> **Required scope**: `people-gator:annotate`
+
+```
+OPTIONS /api/v1/evidence/{evidence_id}
+```
+
+Returns what the calling principal can do with this evidence item. The two key axes are evidence family (`derived` vs `authority`) and whether the item is stale or soft-deleted.
+
+Response `200 OK`:
+
+```json
+{
+  "evidence_id": "<uuid>",
+  "evidence_type": "face_detection",
+  "evidence_family": "derived",
+  "is_stale": false,
+  "is_deleted": false,
+  "allowed_methods": ["GET", "HEAD", "OPTIONS"],
+  "allowed_operations": [
+    {
+      "operation": "revise",
+      "method": "POST",
+      "url": "/api/v1/evidence/derived/<uuid>/revise",
+      "requires_scope": "people-gator:annotate",
+      "available": true,
+      "unavailable_reason": null
+    },
+    {
+      "operation": "view_cluster_memberships",
+      "method": "GET",
+      "url": "/api/v1/evidence/<uuid>/memberships",
+      "requires_scope": "people-gator:annotate",
+      "available": true,
+      "unavailable_reason": null
+    }
+  ]
+}
+```
+
+`evidence_family` is `derived` for `face_detection`, `named_entity`, `text_region`; `authority` for `grounded_name`, `grounded_description`, `authority_identifier`.
+
+`unavailable_reason` values specific to evidence:
+
+| Reason | Meaning |
+|---|---|
+| `authority_evidence` | `revise` is not available — authority evidence is replaced wholesale by re-sync, not revised in place |
+| `evidence_deleted` | Item is soft-deleted; no write operations are permitted |
+| `evidence_stale` | Item has been superseded; revision is blocked to avoid branching stale lineage |
 
 ---
 
@@ -1079,7 +1473,8 @@ Returns the latest active version. Includes both `produced_metadata` and `revise
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/evidence/{evidence_id}/versions/{evidence_version_id}
+GET  /api/v1/evidence/{evidence_id}/versions/{evidence_version_id}
+HEAD /api/v1/evidence/{evidence_id}/versions/{evidence_version_id}
 ```
 
 ---
@@ -1089,7 +1484,8 @@ GET /api/v1/evidence/{evidence_id}/versions/{evidence_version_id}
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/evidence
+GET  /api/v1/evidence
+HEAD /api/v1/evidence
 ```
 
 | Parameter | Type | Description |
@@ -1243,7 +1639,8 @@ Principals are the actors that create VERSIONs, write DELTAs, and produce EVIDEN
 > **Required scope**: `people-gator:admin`
 
 ```
-GET /api/v1/principals
+GET  /api/v1/principals
+HEAD /api/v1/principals
 ```
 
 | Parameter | Type | Description |
@@ -1260,7 +1657,8 @@ GET /api/v1/principals
 > **Required scope**: `people-gator:annotate` (own record); `people-gator:admin` (any).
 
 ```
-GET /api/v1/principals/{principal_id}
+GET  /api/v1/principals/{principal_id}
+HEAD /api/v1/principals/{principal_id}
 ```
 
 Returns `principal_type`-specific fields alongside the base `principal_id`, `display_name`, `is_active`.
@@ -1272,7 +1670,8 @@ Returns `principal_type`-specific fields alongside the base `principal_id`, `dis
 > **Required scope**: `people-gator:annotate`
 
 ```
-GET /api/v1/principals/me
+GET  /api/v1/principals/me
+HEAD /api/v1/principals/me
 ```
 
 Returns the USER record for the authenticated principal, creating it on first call.
@@ -1444,7 +1843,6 @@ Common codes:
 | `no_face_detected` | 422 | Image upload produced no face detections |
 | `batch_too_large` | 422 | Bulk ingest batch exceeds 500 items |
 | `content_hash_mismatch` | 409 | Supplied `content_hash` does not match stored value for an existing evidence version |
-| `schema_not_found` | 422 | No METADATA_SCHEMA registered for `(evidence_type, schema_version)` |
 | `resolver_validation_failed` | 422 | SOURCE.metadata placeholder values failed per-key format validation |
 
 ---
