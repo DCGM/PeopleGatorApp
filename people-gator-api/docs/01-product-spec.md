@@ -167,16 +167,15 @@ Fields: `source_id`, `source`, `source_schema_name`, `provider`, `metadata`, `co
 
 This is intentionally flexible to accommodate the wide variety of source types and metadata that may be relevant for different use cases. The exact structure of this JSONB is not enforced at the database level but is expected to conform to the requirements of the associated SOURCE_SCHEMA's resolver logic.
 
-### 4.3 METADATA_SCHEMA
+### 4.3 Evidence metadata schemas
 
-Defines the versioned structure of the `metadata` JSONB payload for each evidence type. Every EVIDENCE references one METADATA_SCHEMA, which identifies the contract that `metadata` conforms to and optionally carries a machine-readable JSON Schema for runtime validation. Centralising schema registration here means schema evolution is tracked in the database, not embedded as opaque string constants in application code.
+Metadata schemas are **not stored in the database**. They are defined statically in application code as versioned Pydantic models, one per `(evidence_type, schema_version)` pair. Validation happens at the application layer at ingest time — the database receives only the already-validated JSONB payload.
 
-Fields: `evidence_type`, `schema_version`, `json_schema`, `description`.
+The pair `(evidence_type, schema_version)` must be globally unique within the application's schema registry: each `evidence_type` may have multiple versions (e.g. `v1`, `v2`) but no two entries in the registry may share the same pair. This uniqueness is enforced at application startup, not by a database constraint.
 
-- `evidence_type`: the EVIDENCE type this schema applies to. Can be `face_detection`, `named_entity`, `text_region`, `grounded_name`, `grounded_description`, or `authority_identifier`.
-- `schema_version`: version string for the schema, e.g. `v1`, `v2`.
-- `json_schema`: optional JSONB — machine-readable JSON Schema (draft-07 compatible) for validating the `metadata` payload at ingest time. Null for built-in schemas whose structure is described in §4.4.2.
-- `description`: optional free-text description of the schema's purpose and contents.
+Schema versions are additive and backward-compatible by convention. When a breaking change is needed a new `schema_version` is introduced; existing EVIDENCE rows referencing the old version remain valid indefinitely because the old Pydantic model is retained in the registry alongside the new one.
+
+The canonical `(evidence_type, schema_version)` pairs and their payload structures are defined in §4.4.5.
 
 ### 4.4 EVIDENCE
 
@@ -191,7 +190,7 @@ Required fields: `evidence_id`, `evidence_version_id`, `evidence_type`, `schema_
 - `evidence_id`: stable UUIDv6 identifier for this evidence item across all versions.
 - `evidence_version_id`: UUIDv6, incremented on each revision. A new `evidence_version_id` is created only when a human user revises the evidence metadata (see §4.4.3). Re-running inference over the same source produces a new EVIDENCE row entirely, not a new version of an existing one.
 - `evidence_type`: discriminator — one of `face_detection`, `named_entity`, `text_region` (→ DERIVED_EVIDENCE) or `grounded_name`, `grounded_description`, `authority_identifier` (→ AUTHORITY_EVIDENCE).
-- `schema_version`: together with `evidence_type`, forms the FK → METADATA_SCHEMA.
+- `schema_version`: together with `evidence_type`, identifies the application-layer Pydantic model used to validate and interpret the metadata payload (see §4.3). No database FK — the pair is validated at ingest time by the schema registry.
 - `source_id`: FK → SOURCE — the document or artifact this evidence was derived from.
 - `source_path`: string — sub-path or key within the SOURCE identifying the specific artifact (e.g. a page ID within a document zip, or a crop region URI). Null when the evidence covers the entire source document. Opaque to the DB; interpreted by the SOURCE_SCHEMA resolver.
 - `content_hash`: hash of the evidence payload for **application-layer** staleness detection and deduplication checks. No database-level UNIQUE constraint is enforced.
@@ -297,7 +296,7 @@ These sub-schemas are reused across both DERIVED_EVIDENCE and AUTHORITY_EVIDENCE
 
 #### 4.4.5 Metadata schemas by evidence type
 
-The `(evidence_type, schema_version)` FK links each EVIDENCE to a METADATA_SCHEMA row (see §4.3). Each type below defines the canonical structure of the JSONB payload for that evidence type. Adding a new schema version creates a new METADATA_SCHEMA row; old EVIDENCE rows remain valid by retaining their original FK.
+Each type below defines the canonical structure of the JSONB payload for that evidence type, as implemented by the corresponding Pydantic model in the application-layer schema registry (see §4.3). Adding a new schema version means adding a new Pydantic model to the registry; old EVIDENCE rows remain valid because the old model is retained alongside the new one.
 
 ##### `face_detection` — schema_version `v1`
 
