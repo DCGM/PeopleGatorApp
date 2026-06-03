@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from people_gator_api.settings import settings
+from people_gator_api.db.models import Base
 
 logger = logging.getLogger(__name__)
 
@@ -53,3 +54,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+
+
+async def init_db() -> None:
+    """Initialize database tables from SQLAlchemy metadata."""
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)

@@ -1,4 +1,4 @@
-from people_gator_api.db.engine import AsyncSessionLocal, engine, get_session
+from people_gator_api.db.engine import AsyncSessionLocal, engine, get_session, init_db
 from people_gator_api.db.models import (
     AuthorityEvidence,
     AuthorityIdentifierEvidence,
@@ -42,6 +42,7 @@ __all__ = [
     "AsyncSessionLocal",
     "engine",
     "get_session",
+    "init_db",
     # models
     "AuthorityEvidence",
     "AuthorityIdentifierEvidence",
