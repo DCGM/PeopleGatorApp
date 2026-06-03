@@ -9,22 +9,22 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from people_gator_api.db.models.enums import ClusterRole, RecordType
+from people_gator_api.db.models.enums import ClusterRole, EvidenceType
 
 
-class RecordSearchResult(BaseModel):
-    """A single result from a nearest-neighbour search over RecordEmbedding."""
+class EvidenceSearchResult(BaseModel):
+    """A single result from a nearest-neighbour search over EvidenceEmbedding."""
 
-    weaviate_id: UUID = Field(description="Weaviate object UUID (same as embedding_id on RECORD).")
-    record_id: UUID
-    record_version_id: UUID
-    record_type: RecordType
+    weaviate_id: UUID = Field(description="Weaviate object UUID (deterministic: uuid5 of evidence_id + evidence_version_id).")
+    evidence_id: UUID
+    evidence_version_id: UUID
+    evidence_type: EvidenceType
     source_id: UUID
+    producer_id: UUID | None
     cluster_id: UUID | None
     confidence: float | None
     model_version: str | None
     membership_weight: float | None
-    membership_reason: str | None
     distance: float | None = Field(
         default=None,
         description="Cosine distance from the query vector.  Lower is more similar.",
@@ -55,8 +55,5 @@ class ClusterSearchResult(BaseModel):
     )
     combined_distance: float | None = Field(
         default=None,
-        description=(
-            "Weighted combined distance used to rank this result.  "
-            "Computed by Weaviate using the caller-supplied TargetVectors weights."
-        ),
+        description="Weighted combined distance used to rank this result. Computed by Weaviate using the caller-supplied TargetVectors weights.",
     )

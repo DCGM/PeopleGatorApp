@@ -2,7 +2,7 @@ import logging
 import uuid
 
 import sqlalchemy as sa
-from sqlalchemy import Float, ForeignKeyConstraint, String, delete, select
+from sqlalchemy import Float, ForeignKeyConstraint, delete, select
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 class Membership(Base):
     """Materialized current membership for each cluster.
 
-    Updated in the same transaction as every ACTION write.  The
-    The ``as_of_version_id`` records which version this state was derived from —
-    equal to ``CLUSTER.head_version_id`` at the time of the last update.
+    Derived from the DELTA table by replaying the OPERATION DAG.  Updated
+    in the same transaction as each OPERATION that seals a version.
+
+    ``as_of_version_id`` equals ``CLUSTER.head_version_id`` at the time of
+    the last update, enabling staleness detection.
     """
 
     __tablename__ = "membership"
@@ -29,14 +31,13 @@ class Membership(Base):
         sa.ForeignKey("cluster.cluster_id"),
         primary_key=True,
     )
-    record_id: Mapped[uuid.UUID] = mapped_column(
+    evidence_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True
     )
-    record_version_id: Mapped[uuid.UUID] = mapped_column(
+    evidence_version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), nullable=False
     )
     weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
-    reason: Mapped[str] = mapped_column(String, nullable=False)
     as_of_version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
         sa.ForeignKey("version.version_id"),
@@ -45,10 +46,12 @@ class Membership(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["record_id", "record_version_id"],
-            ["record.record_id", "record.record_version_id"],
-            name="fk_membership_record_version",
+            ["evidence_id", "evidence_version_id"],
+            ["evidence.evidence_id", "evidence.evidence_version_id"],
+            name="fk_membership_evidence_version",
         ),
+        sa.Index("ix_membership_cluster_id", "cluster_id"),
+        sa.Index("ix_membership_evidence_id", "evidence_id"),
     )
 
     # -------------------------------------------------------------------------
@@ -56,13 +59,13 @@ class Membership(Base):
     # -------------------------------------------------------------------------
 
     @hybrid_method
-    def has_record(self, record_id: uuid.UUID) -> bool:  # pyright: ignore[reportRedeclaration]
-        return self.record_id == record_id
+    def has_evidence(self, evidence_id: uuid.UUID) -> bool:  # pyright: ignore[reportRedeclaration]
+        return self.evidence_id == evidence_id
 
-    @has_record.expression
+    @has_evidence.expression
     @classmethod
-    def has_record(cls, record_id: uuid.UUID) -> sa.ColumnElement[bool]:
-        return cls.record_id == record_id
+    def has_evidence(cls, evidence_id: uuid.UUID) -> sa.ColumnElement[bool]:
+        return cls.evidence_id == evidence_id
 
     # -------------------------------------------------------------------------
     # Class-level queries
@@ -84,12 +87,12 @@ class Membership(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        record_id: uuid.UUID,
+        evidence_id: uuid.UUID,
     ) -> "Membership | None":
         result = await session.scalars(
             select(cls).where(
                 cls.cluster_id == cluster_id,
-                cls.record_id == record_id,
+                cls.evidence_id == evidence_id,
             )
         )
         return result.one_or_none()
@@ -99,63 +102,43 @@ class Membership(Base):
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        record_id: uuid.UUID,
-        record_version_id: uuid.UUID,
+        evidence_id: uuid.UUID,
+        evidence_version_id: uuid.UUID,
         weight: float,
-        reason: str,
         as_of_version_id: uuid.UUID,
     ) -> None:
-        stmt = (
-            pg_insert(cls)
-            .values(
-                cluster_id=cluster_id,
-                record_id=record_id,
-                record_version_id=record_version_id,
-                weight=weight,
-                reason=reason,
-                as_of_version_id=as_of_version_id,
-            )
-            .on_conflict_do_update(
-                index_elements=["cluster_id", "record_id"],
-                set_={
-                    "record_version_id": record_version_id,
-                    "weight": weight,
-                    "reason": reason,
-                    "as_of_version_id": as_of_version_id,
-                },
-            )
-        )
-        await session.execute(stmt)
-        logger.debug(
-            "Upserted membership entry",
-            extra={
-                "cluster_id": str(cluster_id),
-                "record_id": str(record_id),
-                "record_version_id": str(record_version_id),
-                "as_of_version_id": str(as_of_version_id),
+        stmt = pg_insert(cls).values(
+            cluster_id=cluster_id,
+            evidence_id=evidence_id,
+            evidence_version_id=evidence_version_id,
+            weight=weight,
+            as_of_version_id=as_of_version_id,
+        ).on_conflict_do_update(
+            index_elements=["cluster_id", "evidence_id"],
+            set_={
+                "evidence_version_id": evidence_version_id,
+                "weight": weight,
+                "as_of_version_id": as_of_version_id,
             },
         )
+        await session.execute(stmt)
 
     @classmethod
-    async def delete_record(
+    async def remove_entry(
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
-        record_id: uuid.UUID,
+        evidence_id: uuid.UUID,
     ) -> None:
         await session.execute(
             delete(cls).where(
                 cls.cluster_id == cluster_id,
-                cls.record_id == record_id,
+                cls.evidence_id == evidence_id,
             )
-        )
-        logger.debug(
-            "Deleted membership entry",
-            extra={"cluster_id": str(cluster_id), "record_id": str(record_id)},
         )
 
     @classmethod
-    async def delete_all_for_cluster(
+    async def delete_for_cluster(
         cls,
         session: AsyncSession,
         cluster_id: uuid.UUID,
@@ -163,6 +146,8 @@ class Membership(Base):
         await session.execute(
             delete(cls).where(cls.cluster_id == cluster_id)
         )
+
+
         logger.debug(
             "Cleared all membership entries for cluster",
             extra={"cluster_id": str(cluster_id)},

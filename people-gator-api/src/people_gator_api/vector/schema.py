@@ -93,6 +93,14 @@ RECORD_EMBEDDING_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
+        name="model_id",
+        data_type=DataType.UUID,
+        description="FK to MODALITY_MODEL — the model that produced this record's embedding.",
+        index_filterable=True,
+        index_searchable=False,
+        skip_vectorization=True,
+    ),
+    Property(
         name="model_version",
         data_type=DataType.TEXT,
         description="Identifier of the model that produced this record.",

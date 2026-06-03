@@ -28,8 +28,8 @@ from uuid import UUID
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter, MetadataQuery, TargetVectors
 
-from people_gator_api.db.models.enums import ClusterRole, RecordType
-from people_gator_api.vector.models import ClusterSearchResult, RecordSearchResult
+from people_gator_api.db.models.enums import ClusterRole, EvidenceType
+from people_gator_api.vector.models import ClusterSearchResult, EvidenceSearchResult
 from people_gator_api.vector.schema import (
     CLUSTER_SNAPSHOT_COLLECTION,
     FACE_VECTOR,
@@ -64,28 +64,28 @@ class VectorSearchService:
         self,
         vector: list[float],
         *,
-        record_type: RecordType | None = None,
+        evidence_type: EvidenceType | None = None,
         cluster_id: UUID | None = None,
         limit: int = _DEFAULT_LIMIT,
         certainty: float | None = None,
         distance: float | None = None,
-    ) -> list[RecordSearchResult]:
-        """Return the nearest RecordEmbedding objects to *vector*.
+    ) -> list[EvidenceSearchResult]:
+        """Return the nearest EvidenceEmbedding objects to *vector*.
 
         Args:
             vector: The query embedding vector.
-            record_type: When supplied, only records of this type are returned.
-            cluster_id: When supplied, only records in this cluster are returned.
+            evidence_type: When supplied, only evidence of this type is returned.
+            cluster_id: When supplied, only evidence in this cluster is returned.
             limit: Maximum number of results.
             certainty: Minimum similarity threshold in [0, 1].
             distance: Maximum cosine distance threshold.
 
         Returns:
-            Ranked list of :class:`RecordSearchResult`, closest first.
+            Ranked list of :class:`EvidenceSearchResult`, closest first.
         """
         collection = self._client.collections.get(RECORD_EMBEDDING_COLLECTION)
 
-        filters = _build_record_filters(record_type=record_type, cluster_id=cluster_id)
+        filters = _build_evidence_filters(evidence_type=evidence_type, cluster_id=cluster_id)
 
         response = await collection.query.near_vector(
             near_vector=vector,
@@ -96,21 +96,21 @@ class VectorSearchService:
             return_metadata=MetadataQuery(distance=True, certainty=True),
         )
 
-        results: list[RecordSearchResult] = []
+        results: list[EvidenceSearchResult] = []
         for obj in response.objects:
             props = obj.properties
             results.append(
-                RecordSearchResult(
+                EvidenceSearchResult(
                     weaviate_id=obj.uuid,
-                    record_id=UUID(str(props.get("record_id"))),
-                    record_version_id=UUID(str(props.get("record_version_id"))),
-                    record_type=RecordType(str(props.get("record_type"))),
+                    evidence_id=UUID(str(props.get("evidence_id"))),
+                    evidence_version_id=UUID(str(props.get("evidence_version_id"))),
+                    evidence_type=EvidenceType(str(props.get("evidence_type"))),
                     source_id=UUID(str(props.get("source_id"))),
+                    producer_id=UUID(str(props["producer_id"])) if props.get("producer_id") else None,
                     cluster_id=UUID(str(props["cluster_id"])) if props.get("cluster_id") else None,
                     confidence=cast(float | None, props.get("confidence")),
                     model_version=cast(str | None, props.get("model_version")),
                     membership_weight=cast(float | None, props.get("membership_weight")),
-                    membership_reason=cast(str | None, props.get("membership_reason")),
                     distance=cast(float | None, getattr(obj.metadata, "distance", None)) if obj.metadata else None,
                     certainty=cast(float | None, getattr(obj.metadata, "certainty", None)) if obj.metadata else None,
                 )
@@ -272,15 +272,15 @@ class VectorSearchService:
 # ---------------------------------------------------------------------------
 
 
-def _build_record_filters(
+def _build_evidence_filters(
     *,
-    record_type: RecordType | None,
+    evidence_type: EvidenceType | None,
     cluster_id: UUID | None,
 ) -> Any:
-    """Compose a Weaviate filter from optional record search constraints."""
+    """Compose a Weaviate filter from optional evidence search constraints."""
     clauses: list[Any] = []
-    if record_type is not None:
-        clauses.append(Filter.by_property("record_type").equal(record_type.value))
+    if evidence_type is not None:
+        clauses.append(Filter.by_property("evidence_type").equal(evidence_type.value))
     if cluster_id is not None:
         clauses.append(Filter.by_property("cluster_id").equal(str(cluster_id)))
     if not clauses:

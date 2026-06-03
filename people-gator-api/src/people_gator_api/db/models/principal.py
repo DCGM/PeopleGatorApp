@@ -10,7 +10,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 from people_gator_api.db.models.base import Base, new_uuid6
-from people_gator_api.db.models.enums import PrincipalType
+from people_gator_api.db.models.enums import EvidenceType, PrincipalType, RegistrySource
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,15 @@ class Principal(Base):
     @classmethod
     def is_service_agent(cls) -> sa.ColumnElement[bool]:
         return cls.principal_type == PrincipalType.service_agent.value
+
+    @hybrid_property
+    def is_model_agent(self) -> bool:  # pyright: ignore[reportRedeclaration]
+        return self.principal_type == PrincipalType.model_agent
+
+    @is_model_agent.expression
+    @classmethod
+    def is_model_agent(cls) -> sa.ColumnElement[bool]:
+        return cls.principal_type == PrincipalType.model_agent.value
 
     # -------------------------------------------------------------------------
     # Class-level queries
@@ -197,16 +206,12 @@ class User(Principal):
 
 
 class ServiceAgent(Principal):
-    """An autonomous process principal.
+    """A named autonomous process that drives ingestion and synchronisation pipelines.
 
-    Identified by a unique ``agent_slug`` following the convention
-    ``<category>:<name>``, e.g. ``system:kramerius-ingest`` or
-    ``agent:face-detector-v2``.
-
-    Conventional categories:
-    - ``system``   — infrastructure-level processes (ingestion, sync)
-    - ``agent``    — ML model inference pipelines
-    - ``pipeline`` — multi-step processing workflows
+    SERVICE_AGENTs produce AUTHORITY_EVIDENCE and create SOURCE records during
+    ingest.  They are identified by a unique ``agent_slug`` following the
+    convention ``<category>:<name>``, e.g. ``system:kramerius-ingest``.
+    ML model agents are registered as MODEL_AGENT instead.
     """
 
     __tablename__ = "service_agent"
@@ -218,7 +223,6 @@ class ServiceAgent(Principal):
     )
     # Convention: "<category>:<name>"  e.g. "system:kramerius-ingest"
     agent_slug: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    agent_version: Mapped[str | None] = mapped_column(String, nullable=True)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __mapper_args__ = {"polymorphic_identity": PrincipalType.service_agent}
@@ -244,14 +248,9 @@ class ServiceAgent(Principal):
         session: AsyncSession,
         agent_slug: str,
         display_name: str,
-        agent_version: str | None = None,
         description: str | None = None,
     ) -> tuple["ServiceAgent", bool]:
-        """Return ``(agent, created)`` — create if the slug is not registered.
-
-        ``agent_version`` is updated when the agent already exists and the
-        version string has changed, keeping the record current.
-        """
+        """Return ``(agent, created)`` — create if the slug is not registered."""
         if not _AGENT_SLUG_RE.match(agent_slug):
             raise ValueError(
                 f"agent_slug must match '<category>:<name>' (lowercase, hyphens allowed), got: {agent_slug!r}"
@@ -259,17 +258,6 @@ class ServiceAgent(Principal):
 
         agent = await cls.get_by_slug(session, agent_slug)
         if agent is not None:
-            if agent_version is not None and agent.agent_version != agent_version:
-                agent.agent_version = agent_version
-                session.add(agent)
-                logger.info(
-                    "Updated service agent version",
-                    extra={
-                        "principal_id": str(agent.principal_id),
-                        "agent_slug": agent_slug,
-                        "new_version": agent_version,
-                    },
-                )
             return agent, False
 
         agent = cls(
@@ -278,7 +266,6 @@ class ServiceAgent(Principal):
             display_name=display_name,
             is_active=True,
             agent_slug=agent_slug,
-            agent_version=agent_version,
             description=description,
         )
         session.add(agent)
@@ -287,7 +274,92 @@ class ServiceAgent(Principal):
             extra={
                 "principal_id": str(agent.principal_id),
                 "agent_slug": agent_slug,
-                "agent_version": agent_version,
             },
         )
         return agent, True
+
+
+class ModelAgent(Principal):
+    """A registered ML model agent principal that produces DERIVED_EVIDENCE.
+
+    Every model that produces EVIDENCE must be pre-registered as a MODEL_AGENT.
+    The ``(evidence_type, role, model_slug)`` triple uniquely identifies the
+    vector slot this agent populates in the vector store.
+
+    The slot name follows the pattern ``<role>:<model_slug>``, e.g.
+    ``face:arcface-r100-v2`` or ``text:multilingual-e5-large-v1``.
+    """
+
+    __tablename__ = "model_agent"
+
+    principal_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("principal.principal_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    evidence_type: Mapped[EvidenceType] = mapped_column(
+        SAEnum(EvidenceType, name="evidence_type_enum"),
+        nullable=False,
+    )
+    # Vector slot role prefix, e.g. "face", "text", "layout", "authority".
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    # Suffix component of the slot name: <role>:<model_slug>.
+    model_slug: Mapped[str] = mapped_column(String, nullable=False)
+    # Semantic version of the underlying model artifact for staleness detection.
+    model_version: Mapped[str] = mapped_column(String, nullable=False)
+    registry_source: Mapped[RegistrySource] = mapped_column(
+        SAEnum(RegistrySource, name="registry_source_enum"),
+        nullable=False,
+    )
+    # Fully-qualified URI for this model version in its registry.
+    registry_uri: Mapped[str] = mapped_column(String, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "evidence_type", "role", "model_slug",
+            name="uq_model_agent_evidence_role_slug",
+        ),
+        sa.Index("ix_model_agent_evidence_type", "evidence_type"),
+    )
+
+    __mapper_args__ = {"polymorphic_identity": PrincipalType.model_agent}
+
+    @property
+    def slot_name(self) -> str:
+        """Full vector slot name as stored in the vector store."""
+        return f"{self.role}:{self.model_slug}"
+
+    # -------------------------------------------------------------------------
+    # Class-level queries
+    # -------------------------------------------------------------------------
+
+    @classmethod
+    async def get_active_for_evidence_type(
+        cls,
+        session: AsyncSession,
+        evidence_type: EvidenceType,
+    ) -> list["ModelAgent"]:
+        result = await session.execute(
+            select(cls).where(
+                cls.evidence_type == evidence_type,
+                cls.is_active.is_(True),
+            )
+        )
+        return list(result.scalars().all())
+
+    @classmethod
+    async def get_by_slot(
+        cls,
+        session: AsyncSession,
+        evidence_type: EvidenceType,
+        role: str,
+        model_slug: str,
+    ) -> "ModelAgent | None":
+        result = await session.scalars(
+            select(cls).where(
+                cls.evidence_type == evidence_type,
+                cls.role == role,
+                cls.model_slug == model_slug,
+            )
+        )
+        return result.one_or_none()

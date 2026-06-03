@@ -14,6 +14,7 @@ dependencies = [
     "aiohttp>=3.13.5",
     "alembic>=1.18.4",
     "asyncpg>=0.31.0",
+    "blake3>=1.0.8",
     "fastapi[standard]>=0.136.1",
     "joserfc>=1.6.4",
     "opentelemetry-api>=1.41.0",

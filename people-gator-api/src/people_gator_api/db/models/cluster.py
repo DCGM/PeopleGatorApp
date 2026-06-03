@@ -1,79 +1,52 @@
 import logging
 import uuid
+from typing import Any, cast
 
 import sqlalchemy as sa
-from sqlalchemy import Enum as SAEnum, ForeignKey, select
+from sqlalchemy import ForeignKey, select
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 from people_gator_api.db.models.base import Base, new_uuid6
-from people_gator_api.db.models.enums import ClusterRole, HeadConstraint
 
 logger = logging.getLogger(__name__)
 
 
 class Cluster(Base):
+    """Stable identity for a cluster across its entire version history.
+
+    ``cluster_role`` is **not** stored here — it is computed on read from
+    ``VERSION.cluster_role`` via ``head_version_id``.  This eliminates the
+    dual-write invariant that required application-level enforcement.
+
+    The ``head_version_id`` is advanced using an optimistic CAS UPDATE:
+
+        UPDATE cluster
+        SET head_version_id = :new_id
+        WHERE cluster_id = :id AND head_version_id = :expected_id
+
+    If zero rows are updated a concurrent write raced ahead and the caller
+    must re-read before retrying.
+    """
+
     __tablename__ = "cluster"
 
     cluster_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=new_uuid6
     )
-    cluster_role: Mapped[ClusterRole] = mapped_column(
-        SAEnum(ClusterRole, name="cluster_role_enum"), nullable=False
-    )
     # Circular reference resolved with use_alter — cluster points to its head
-    # commit, and commit points back to cluster. The FK is deferred to ALTER
-    # TABLE so both tables can be created first.
+    # version, and version points back to cluster.
     head_version_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("version.version_id", use_alter=True, name="fk_cluster_head_version_id"),
+        ForeignKey(
+            "version.version_id",
+            use_alter=True,
+            name="fk_cluster_head_version_id",
+        ),
         nullable=True,
     )
-    head_constraints: Mapped[HeadConstraint] = mapped_column(
-        SAEnum(HeadConstraint, name="head_constraint_enum"), nullable=False
-    )
-
-    # -------------------------------------------------------------------------
-    # Hybrid predicates — work in Python and as SQL expressions
-    # -------------------------------------------------------------------------
-
-    @hybrid_property
-    def is_grounded(self) -> bool:  # pyright: ignore[reportRedeclaration]
-        return self.cluster_role == ClusterRole.grounded_cluster
-
-    @is_grounded.expression
-    @classmethod
-    def is_grounded(cls) -> sa.ColumnElement[bool]:
-        return cls.cluster_role == ClusterRole.grounded_cluster.value
-
-    @hybrid_property
-    def is_mutable(self) -> bool:  # pyright: ignore[reportRedeclaration]
-        return self.cluster_role == ClusterRole.mutable_cluster
-
-    @is_mutable.expression
-    @classmethod
-    def is_mutable(cls) -> sa.ColumnElement[bool]:
-        return cls.cluster_role == ClusterRole.mutable_cluster.value
-
-    @hybrid_property
-    def is_under_review(self) -> bool:  # pyright: ignore[reportRedeclaration]
-        return self.cluster_role == ClusterRole.review_cluster
-
-    @is_under_review.expression
-    @classmethod
-    def is_under_review(cls) -> sa.ColumnElement[bool]:
-        return cls.cluster_role == ClusterRole.review_cluster.value
-
-    @hybrid_property
-    def is_authority(self) -> bool:  # pyright: ignore[reportRedeclaration]
-        return self.cluster_role == ClusterRole.authority_cluster
-
-    @is_authority.expression
-    @classmethod
-    def is_authority(cls) -> sa.ColumnElement[bool]:
-        return cls.cluster_role == ClusterRole.authority_cluster.value
 
     # -------------------------------------------------------------------------
     # Class-level queries
@@ -91,62 +64,51 @@ class Cluster(Base):
         return result.one_or_none()
 
     @classmethod
-    async def get_by_role(
+    async def list_page(
         cls,
         session: AsyncSession,
-        role: ClusterRole,
+        after_id: uuid.UUID | None = None,
+        limit: int = 50,
     ) -> list["Cluster"]:
-        result = await session.execute(
-            select(cls).where(cls.cluster_role == role)
-        )
+        stmt = select(cls).order_by(cls.cluster_id.asc()).limit(limit)
+        if after_id is not None:
+            stmt = stmt.where(cls.cluster_id > after_id)
+        result = await session.execute(stmt)
         return list(result.scalars().all())
 
     @classmethod
     async def create(
         cls,
         session: AsyncSession,
-        cluster_role: ClusterRole,
-        head_constraints: HeadConstraint,
-        cluster_id: uuid.UUID | None = None,
     ) -> "Cluster":
-        cluster = cls(
-            cluster_id=cluster_id or new_uuid6(),
-            cluster_role=cluster_role,
-            head_version_id=None,
-            head_constraints=head_constraints,
-        )
+        cluster = cls(cluster_id=new_uuid6(), head_version_id=None)
         session.add(cluster)
-        logger.info(
-            "Created cluster",
-            extra={
-                "cluster_id": str(cluster.cluster_id),
-                "cluster_role": cluster_role.value,
-                "head_constraints": head_constraints.value,
-            },
-        )
+        logger.info("Created cluster", extra={"cluster_id": str(cluster.cluster_id)})
         return cluster
 
-    # -------------------------------------------------------------------------
-    # Instance-level operations
-    # -------------------------------------------------------------------------
-
-    async def update_head_version(
+    async def advance_head(
         self,
         session: AsyncSession,
-        version_id: uuid.UUID,
-        cluster_role: ClusterRole | None = None,
-    ) -> None:
-        old_head = self.head_version_id
-        self.head_version_id = version_id
-        if cluster_role is not None:
-            self.cluster_role = cluster_role
-        session.add(self)
-        logger.info(
-            "Updated cluster head version",
-            extra={
-                "cluster_id": str(self.cluster_id),
-                "old_head_version_id": str(old_head) if old_head else None,
-                "new_head_version_id": str(version_id),
-                "new_role": cluster_role.value if cluster_role else None,
-            },
+        new_version_id: uuid.UUID,
+        expected_current_id: uuid.UUID | None,
+    ) -> bool:
+        """Optimistic CAS update for head_version_id.
+
+        Returns True when the update succeeded, False when a concurrent write
+        raced ahead (caller should re-read and retry).
+        """
+        stmt = (
+            sa.update(Cluster)
+            .where(
+                Cluster.cluster_id == self.cluster_id,
+                Cluster.head_version_id == expected_current_id,
+            )
+            .values(head_version_id=new_version_id)
         )
+        result = cast(CursorResult[Any], await session.execute(stmt))
+        if result.rowcount == 0:
+            return False
+        self.head_version_id = new_version_id
+        return True
+
+

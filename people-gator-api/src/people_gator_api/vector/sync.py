@@ -2,17 +2,18 @@
 
 ClusterSyncService maintains two Weaviate collections:
 
-RecordEmbedding
-    One document per (record_id, record_version_id) pair.  Callers are
+EvidenceEmbedding
+    One document per (evidence_id, evidence_version_id) pair.  Callers are
     responsible for supplying the pre-computed embedding vector at upsert
     time; this service does not generate embeddings.  The Weaviate UUID
-    assigned to each document is deterministic (UUID5 from record_id) so
-    it can be stored back on RECORD.embedding_id.
+    assigned to each document is deterministic (UUID5 from evidence_id +
+    evidence_version_id) and requires no back-reference stored on EVIDENCE.
+    ``producer_id`` is stored as a filterable payload property.
 
 ClusterSnapshot
     One document per cluster.  Synced by reading the materialised
     MEMBERSHIP table from Postgres, fetching the per-member vectors from
-    RecordEmbedding, computing per-modality centroid vectors, and
+    EvidenceEmbedding, computing per-modality centroid vectors, and
     upserting a ClusterSnapshot document with named vectors for face and
     name modalities.
 """
@@ -29,9 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from weaviate import WeaviateAsyncClient
 
 from people_gator_api.db.models.cluster import Cluster
-from people_gator_api.db.models.enums import RecordType
+from people_gator_api.db.models.enums import EvidenceType
+from people_gator_api.db.models.evidence import Evidence
 from people_gator_api.db.models.membership import Membership
-from people_gator_api.db.models.record import Record
 from people_gator_api.vector.schema import (
     CLUSTER_SNAPSHOT_COLLECTION,
     FACE_VECTOR,
@@ -41,14 +42,13 @@ from people_gator_api.vector.schema import (
 
 logger = logging.getLogger(__name__)
 
-# Namespace for deterministic UUID generation.
-_RECORD_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # UUID URL namespace
+_EVIDENCE_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 _CLUSTER_NS = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
 
-def record_weaviate_uuid(record_id: uuid.UUID) -> uuid.UUID:
-    """Deterministic Weaviate UUID for a RecordEmbedding document."""
-    return uuid.uuid5(_RECORD_NS, f"record:{record_id}")
+def evidence_weaviate_uuid(evidence_id: uuid.UUID, evidence_version_id: uuid.UUID) -> uuid.UUID:
+    """Deterministic Weaviate UUID for an EvidenceEmbedding document."""
+    return uuid.uuid5(_EVIDENCE_NS, f"evidence:{evidence_id}:{evidence_version_id}")
 
 
 def cluster_weaviate_uuid(cluster_id: uuid.UUID) -> uuid.UUID:
@@ -57,107 +57,52 @@ def cluster_weaviate_uuid(cluster_id: uuid.UUID) -> uuid.UUID:
 
 
 class ClusterSyncService:
-    """Async service that mirrors Postgres cluster state into Weaviate.
-
-    Instantiate with a connected :class:`~weaviate.WeaviateAsyncClient`.
-    """
+    """Async service that mirrors Postgres cluster state into Weaviate."""
 
     def __init__(self, client: WeaviateAsyncClient) -> None:
         super().__init__()
         self._client = client
 
-    # ------------------------------------------------------------------
-    # Record embedding management
-    # ------------------------------------------------------------------
-
-    async def upsert_record_embedding(
+    async def upsert_evidence_embedding(
         self,
-        record: Record,
+        evidence: Evidence,
         vector: list[float],
         *,
         cluster_id: uuid.UUID | None = None,
         membership_weight: float | None = None,
-        membership_reason: str | None = None,
     ) -> uuid.UUID:
-        """Upsert a RecordEmbedding document and return its Weaviate UUID.
-
-        The returned UUID is deterministic and equals
-        ``record_weaviate_uuid(record.record_id)``.  Callers should persist
-        this value to ``RECORD.embedding_id`` so searches can be linked back
-        to the originating Postgres row.
-
-        Args:
-            record: The SQLAlchemy Record ORM instance.
-            vector: Pre-computed embedding vector.
-            cluster_id: Optional current cluster membership.
-            membership_weight: Optional membership weight.
-            membership_reason: Optional membership reason string.
-
-        Returns:
-            The Weaviate UUID (deterministic, based on record_id).
-        """
-        wv_uuid = record_weaviate_uuid(record.record_id)
+        """Upsert an EvidenceEmbedding document and return its Weaviate UUID."""
+        wv_uuid = evidence_weaviate_uuid(evidence.evidence_id, evidence.evidence_version_id)
         props: dict[str, Any] = {
-            "record_id": str(record.record_id),
-            "record_version_id": str(record.record_version_id),
-            "record_type": record.record_type.value,
-            "source_id": str(record.source_id),
+            "evidence_id": str(evidence.evidence_id),
+            "evidence_version_id": str(evidence.evidence_version_id),
+            "evidence_type": evidence.evidence_type.value,
+            "source_id": str(evidence.source_id),
         }
         if cluster_id is not None:
             props["cluster_id"] = str(cluster_id)
         if membership_weight is not None:
             props["membership_weight"] = membership_weight
-        if membership_reason is not None:
-            props["membership_reason"] = membership_reason
-
-        # Extract confidence and model_version from metadata_ if present.
-        if record.metadata_:
-            if "confidence" in record.metadata_:
-                props["confidence"] = float(record.metadata_["confidence"])
-            if "model_version" in record.metadata_:
-                props["model_version"] = str(record.metadata_["model_version"])
 
         collection = self._client.collections.get(RECORD_EMBEDDING_COLLECTION)
         await _upsert_object(collection, wv_uuid=wv_uuid, properties=props, vector=vector)
-        logger.debug(
-            "Upserted RecordEmbedding %s (record_id=%s)", wv_uuid, record.record_id
-        )
+        logger.debug("Upserted EvidenceEmbedding %s (evidence_id=%s)", wv_uuid, evidence.evidence_id)
         return wv_uuid
 
-    async def remove_record_embedding(self, record_id: uuid.UUID) -> None:
-        """Delete a RecordEmbedding document by record_id.
-
-        No-ops if the document does not exist.
-        """
-        wv_uuid = record_weaviate_uuid(record_id)
+    async def remove_evidence_embedding(
+        self, evidence_id: uuid.UUID, evidence_version_id: uuid.UUID
+    ) -> None:
+        """Delete an EvidenceEmbedding document. No-ops if not found."""
+        wv_uuid = evidence_weaviate_uuid(evidence_id, evidence_version_id)
         collection = self._client.collections.get(RECORD_EMBEDDING_COLLECTION)
         await collection.data.delete_by_id(wv_uuid)
-        logger.debug("Removed RecordEmbedding for record_id=%s", record_id)
-
-    # ------------------------------------------------------------------
-    # Cluster snapshot management
-    # ------------------------------------------------------------------
 
     async def sync_cluster(
         self,
         cluster_id: uuid.UUID,
         session: AsyncSession,
     ) -> None:
-        """Sync a cluster's materialised MEMBERSHIP state to Weaviate.
-
-        Reads the MEMBERSHIP table from Postgres, fetches per-member
-        vectors from RecordEmbedding in Weaviate, computes per-modality
-        centroid vectors, and upserts a ClusterSnapshot document.
-
-        If the cluster has no members with indexed vectors, the snapshot
-        is still written so that the cluster is discoverable via metadata
-        filters.  In that case the named vectors are omitted and searches
-        over that modality will not return this cluster.
-
-        Args:
-            cluster_id: UUID of the cluster to sync.
-            session: Active async SQLAlchemy session.
-        """
+        """Sync a cluster's materialised MEMBERSHIP state to Weaviate."""
         cluster = await Cluster.get(session, cluster_id)
         if cluster is None:
             logger.warning("sync_cluster called for unknown cluster_id=%s", cluster_id)
@@ -165,55 +110,41 @@ class ClusterSyncService:
 
         memberships = await Membership.get_for_cluster(session, cluster_id)
 
-        # Fetch Record rows for all members in one round-trip.
-        record_ids = {m.record_id for m in memberships}
-        record_map: dict[uuid.UUID, Record] = {}
-        if record_ids:
+        evidence_ids = {m.evidence_id for m in memberships}
+        evidence_map: dict[uuid.UUID, Evidence] = {}
+        if evidence_ids:
             result = await session.execute(
-                select(Record).where(Record.record_id.in_(record_ids))
+                select(Evidence).where(Evidence.evidence_id.in_(evidence_ids))
             )
-            for rec in result.scalars().all():
-                record_map[rec.record_id] = rec
+            for ev in result.scalars().all():
+                evidence_map[ev.evidence_id] = ev
 
-        # Partition member record_ids by modality for vector fetching.
-        face_record_ids = [
-            m.record_id
+        face_items = [
+            evidence_map[m.evidence_id]
             for m in memberships
-            if record_map.get(m.record_id) is not None
-            and record_map[m.record_id].record_type == RecordType.face_detection
-            and record_map[m.record_id].embedding_id is not None
+            if evidence_map.get(m.evidence_id) is not None
+            and evidence_map[m.evidence_id].evidence_type == EvidenceType.face_detection
         ]
-        name_record_ids = [
-            m.record_id
+        name_items = [
+            evidence_map[m.evidence_id]
             for m in memberships
-            if record_map.get(m.record_id) is not None
-            and record_map[m.record_id].record_type == RecordType.named_entity
-            and record_map[m.record_id].embedding_id is not None
+            if evidence_map.get(m.evidence_id) is not None
+            and evidence_map[m.evidence_id].evidence_type == EvidenceType.named_entity
         ]
 
-        face_centroid = await self._compute_centroid_from_weaviate(face_record_ids)
-        name_centroid = await self._compute_centroid_from_weaviate(name_record_ids)
+        face_centroid = await self._compute_centroid_from_weaviate(face_items)
+        name_centroid = await self._compute_centroid_from_weaviate(name_items)
 
-        # Count members per modality.
-        face_count = sum(
-            1 for m in memberships
-            if record_map.get(m.record_id) is not None
-            and record_map[m.record_id].record_type == RecordType.face_detection
-        )
-        named_entity_count = sum(
-            1 for m in memberships
-            if record_map.get(m.record_id) is not None
-            and record_map[m.record_id].record_type == RecordType.named_entity
-        )
+        face_count = len(face_items)
+        named_entity_count = len(name_items)
         text_region_count = sum(
             1 for m in memberships
-            if record_map.get(m.record_id) is not None
-            and record_map[m.record_id].record_type == RecordType.text_region
+            if evidence_map.get(m.evidence_id) is not None
+            and evidence_map[m.evidence_id].evidence_type == EvidenceType.text_region
         )
 
         props: dict[str, Any] = {
             "cluster_id": str(cluster_id),
-            "cluster_role": cluster.cluster_role.value,
             "face_count": face_count,
             "named_entity_count": named_entity_count,
             "text_region_count": text_region_count,
@@ -237,101 +168,66 @@ class ClusterSyncService:
         )
         logger.info(
             "Synced ClusterSnapshot %s (cluster_id=%s, face=%d, name=%d)",
-            wv_uuid,
-            cluster_id,
-            face_count,
-            named_entity_count,
+            wv_uuid, cluster_id, face_count, named_entity_count,
         )
 
     async def remove_cluster_snapshot(self, cluster_id: uuid.UUID) -> None:
-        """Delete a ClusterSnapshot document.
-
-        No-ops if the document does not exist.
-        """
+        """Delete a ClusterSnapshot document. No-ops if not found."""
         wv_uuid = cluster_weaviate_uuid(cluster_id)
         collection = self._client.collections.get(CLUSTER_SNAPSHOT_COLLECTION)
         await collection.data.delete_by_id(wv_uuid)
-        logger.debug("Removed ClusterSnapshot for cluster_id=%s", cluster_id)
 
-    async def sync_record_cluster_membership(
+    async def sync_evidence_cluster_membership(
         self,
-        record_id: uuid.UUID,
+        evidence_id: uuid.UUID,
+        evidence_version_id: uuid.UUID,
         cluster_id: uuid.UUID | None,
     ) -> None:
-        """Update the cluster_id property on an existing RecordEmbedding.
-
-        Used after a cluster membership change to keep the denormalised
-        cluster_id on RecordEmbedding consistent with MEMBERSHIP.
-
-        Args:
-            record_id: The record whose membership changed.
-            cluster_id: The new cluster_id, or None to clear membership.
-        """
-        wv_uuid = record_weaviate_uuid(record_id)
+        """Update the cluster_id property on an existing EvidenceEmbedding."""
+        wv_uuid = evidence_weaviate_uuid(evidence_id, evidence_version_id)
         collection = self._client.collections.get(RECORD_EMBEDDING_COLLECTION)
-        props: dict[str, Any] = {}
-        if cluster_id is not None:
-            props["cluster_id"] = str(cluster_id)
-        else:
-            props["cluster_id"] = None
+        props: dict[str, Any] = {
+            "cluster_id": str(cluster_id) if cluster_id is not None else None,
+        }
         try:
             await collection.data.update(uuid=wv_uuid, properties=props)
         except weaviate.exceptions.UnexpectedStatusCodeError as exc:
             if exc.status_code == 404:
                 logger.debug(
-                    "RecordEmbedding %s not found during membership sync (record_id=%s)",
-                    wv_uuid,
-                    record_id,
+                    "EvidenceEmbedding %s not found during membership sync (evidence_id=%s)",
+                    wv_uuid, evidence_id,
                 )
             else:
                 raise
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     async def _compute_centroid_from_weaviate(
         self,
-        record_ids: list[uuid.UUID],
+        evidence_items: list[Evidence],
     ) -> list[float] | None:
-        """Fetch vectors from RecordEmbedding and return their centroid.
-
-        Args:
-            record_ids: List of record UUIDs to fetch vectors for.
-
-        Returns:
-            Centroid vector, or None if no records have indexed vectors.
-        """
-        if not record_ids:
+        """Fetch vectors from EvidenceEmbedding and return their centroid."""
+        if not evidence_items:
             return None
 
         collection = self._client.collections.get(RECORD_EMBEDDING_COLLECTION)
-
-        # Fetch each object by its deterministic Weaviate UUID and collect vectors.
         vectors: list[list[float]] = []
-        for record_id in record_ids:
-            wv_uuid = record_weaviate_uuid(record_id)
+        for ev in evidence_items:
+            wv_uuid = evidence_weaviate_uuid(ev.evidence_id, ev.evidence_version_id)
             try:
                 obj = await collection.query.fetch_object_by_id(
                     uuid=wv_uuid,
                     include_vector=True,
                 )
                 if obj.vector:
-                    # For un-named vector collections the key is "default"
                     raw = obj.vector.get("default")
                     if isinstance(raw, list) and raw and isinstance(raw[0], float):
                         vectors.append(cast(list[float], raw))
             except Exception:
                 logger.debug(
-                    "Failed to fetch vector for record_id=%s from Weaviate", record_id
+                    "Failed to fetch vector for evidence_id=%s evidence_version_id=%s from Weaviate",
+                    ev.evidence_id, ev.evidence_version_id,
                 )
 
         return _centroid(vectors)
-
-
-# ---------------------------------------------------------------------------
-# Module-level helpers
-# ---------------------------------------------------------------------------
 
 
 def _centroid(vectors: list[list[float]]) -> list[float] | None:
@@ -350,11 +246,7 @@ async def _upsert_object(
     properties: dict[str, Any],
     vector: list[float] | dict[str, list[float]] | None,
 ) -> None:
-    """Insert or replace a Weaviate object with the given UUID.
-
-    Weaviate does not have native upsert semantics: insert raises HTTP 409
-    on duplicate UUIDs.  We catch that error and fall back to replace().
-    """
+    """Insert or replace a Weaviate object (upsert semantics)."""
     try:
         await collection.data.insert(
             uuid=wv_uuid,
@@ -363,7 +255,6 @@ async def _upsert_object(
         )
     except weaviate.exceptions.UnexpectedStatusCodeError as exc:
         if exc.status_code == 409:
-            # Object already exists — replace it entirely.
             await collection.data.replace(
                 uuid=wv_uuid,
                 properties=properties,

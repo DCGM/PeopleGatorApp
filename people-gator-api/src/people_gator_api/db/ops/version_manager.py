@@ -5,16 +5,15 @@ All public functions accept an ``AsyncSession`` and must be called inside an
 active transaction (the caller is responsible for commit / rollback).
 
 Algorithms implemented:
-  - initialize_cluster        spec §5.2 initial version
-  - advance_cluster           spec §5.4 ``next`` transition
-  - branch_cluster            spec §5.4 ``branch`` transition
-  - merge_versions            spec §5.4 ``merge`` / ``cluster-merge`` transition
-  - split_cluster             spec §5.4 ``split`` transition
-  - resolve_membership        spec §5.5.1 DAG walk membership resolution
-  - resolve_pending_diff      spec §5.5.2 pending diff for a working version
-  - resolve_head_version      spec §5.5.3 head resolution by head_constraints
-  - materialize_membership    spec §5.6 persist resolved state to MEMBERSHIP
-  - apply_action_to_membership  incremental MEMBERSHIP update on single ACTION
+  - initialize_cluster        spec §4.5 empty operation
+  - stage_cluster             spec §4.5 stage operation (advance head)
+  - branch_cluster            spec §4.5 branch operation
+  - merge_clusters            spec §4.5 union / intersection / conflict_free_join
+  - split_cluster             spec §4.5 split operation
+  - resolve_membership        spec §4.8.1 DAG walk membership resolution
+  - resolve_pending_diff      spec §4.8.2 pending diff for a working version
+  - materialize_membership    persist resolved state to MEMBERSHIP
+  - apply_delta_to_membership incremental MEMBERSHIP update on single DELTA
 """
 
 import logging
@@ -23,45 +22,37 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.db.models.action import Action
 from people_gator_api.db.models.cluster import Cluster
-from people_gator_api.db.models.version import Version
-from people_gator_api.db.models.enums import (
-    ActionReason,
-    ActionType,
-    ClusterRole,
-    HeadConstraint,
-    TransitionType,
-)
-from people_gator_api.db.models.transition import Transition
+from people_gator_api.db.models.delta import Delta
+from people_gator_api.db.models.enums import ClusterRole, DeltaType, OperationType
 from people_gator_api.db.models.membership import Membership
+from people_gator_api.db.models.operation import Operation
+from people_gator_api.db.models.version import Version
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Internal data-transfer type
+# Internal data-transfer types
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class RecordRef:
-    """Minimal reference to a specific record version with association weight."""
+class EvidenceRef:
+    """Minimal reference to a specific evidence version with association weight."""
 
-    record_id: uuid.UUID
-    record_version_id: uuid.UUID
+    evidence_id: uuid.UUID
+    evidence_version_id: uuid.UUID
     weight: float = 1.0
-    reason: ActionReason = ActionReason.automatic_linking
 
 
 @dataclass
 class ResolvedMember:
     """One entry in a resolved cluster membership snapshot."""
 
-    record_id: uuid.UUID
-    record_version_id: uuid.UUID
+    evidence_id: uuid.UUID
+    evidence_version_id: uuid.UUID
     weight: float
-    reason: str
 
 
 # ---------------------------------------------------------------------------
@@ -72,72 +63,84 @@ class ResolvedMember:
 async def initialize_cluster(
     session: AsyncSession,
     cluster_role: ClusterRole,
-    head_constraints: HeadConstraint,
     actor_id: uuid.UUID,
-    initial_records: list[RecordRef] | None = None,
+    initial_evidence: list[EvidenceRef] | None = None,
+    search_profile_id: uuid.UUID | None = None,
 ) -> tuple[Cluster, Version]:
-    """Create a brand-new cluster with its initial version and transition.
+    """Create a brand-new cluster with its initial version.
 
     Atomically:
     1. Creates CLUSTER (no head yet).
     2. Creates the initial VERSION authored by ``actor_id``.
-    3. Creates TRANSITION(initial).
-    4. Creates ACTION(add) rows for each record in ``initial_records``.
+    3. Creates an ``empty`` OPERATION row.
+    4. Creates DELTA(add) rows for each item in ``initial_evidence``.
     5. Updates CLUSTER.head_version_id.
     6. Materializes MEMBERSHIP.
 
     Returns ``(cluster, version)``.
     """
-    cluster = await Cluster.create(session, cluster_role, head_constraints)
-    version = await Version.create(session, cluster.cluster_id, cluster_role, actor_id)
-    await Transition.create_initial(session, cluster.cluster_id, version.version_id)
+    cluster = Cluster(cluster_id=_new_id())
+    session.add(cluster)
 
-    if initial_records:
-        for ref in initial_records:
-            action = await Action.create(
-                session,
-                cluster_id=cluster.cluster_id,
-                version_id=version.version_id,
-                record_id=ref.record_id,
-                record_version_id=ref.record_version_id,
-                action_type=ActionType.add,
-                reason=ref.reason,
-                weight=ref.weight,
-                actor_id=actor_id,
-            )
-            await apply_action_to_membership(session, action)
+    version = Version(
+        version_id=_new_id(),
+        cluster_id=cluster.cluster_id,
+        cluster_role=cluster_role,
+        actor_id=actor_id,
+        search_profile_id=search_profile_id,
+    )
+    session.add(version)
 
-    await cluster.update_head_version(session, version.version_id)
+    op_id = _new_id()
+    await Operation.create_single(
+        session,
+        operation_id=op_id,
+        operation_type=OperationType.empty,
+        target_cluster_id=cluster.cluster_id,
+        target_version_id=version.version_id,
+        source_cluster_id=None,
+        source_version_id=None,
+    )
+
+    for ref in initial_evidence or []:
+        await Delta.create(
+            session,
+            cluster_id=cluster.cluster_id,
+            version_id=version.version_id,
+            evidence_id=ref.evidence_id,
+            evidence_version_id=ref.evidence_version_id,
+            delta_type=DeltaType.add,
+            actor_id=actor_id,
+            weight=ref.weight,
+        )
+
+    cluster.head_version_id = version.version_id
+    await materialize_membership(session, cluster, version.version_id)
 
     logger.info(
-        "Initialized cluster",
-        extra={
-            "cluster_id": str(cluster.cluster_id),
-            "version_id": str(version.version_id),
-            "cluster_role": cluster_role.value,
-            "actor_id": str(actor_id),
-            "initial_record_count": len(initial_records) if initial_records else 0,
-        },
+        "Initialized cluster %s version %s role=%s",
+        cluster.cluster_id, version.version_id, cluster_role.value,
     )
     return cluster, version
 
 
-async def advance_cluster(
+async def stage_cluster(
     session: AsyncSession,
     cluster: Cluster,
     actor_id: uuid.UUID,
-    added_records: list[RecordRef] | None = None,
-    removed_records: list[RecordRef] | None = None,
+    added_evidence: list[EvidenceRef] | None = None,
+    removed_evidence: list[EvidenceRef] | None = None,
     new_role: ClusterRole | None = None,
+    search_profile_id: uuid.UUID | None = None,
 ) -> Version:
-    """Create the next version of a cluster via a ``next`` transition entry.
+    """Advance a cluster to a new VERSION via a ``stage`` operation.
 
     Atomically:
     1. Creates a new VERSION authored by ``actor_id``.
-    2. Creates TRANSITION(next) from current head to new version.
-    3. Creates ACTION rows for all adds and removes.
-    4. Updates CLUSTER.head_version_id (and role if provided).
-    5. Re-materializes MEMBERSHIP from the full DAG.
+    2. Creates a ``stage`` OPERATION from the current head.
+    3. Creates DELTA rows for all adds and removes.
+    4. Updates CLUSTER.head_version_id.
+    5. Re-materializes MEMBERSHIP.
 
     Returns the new VERSION.
     """
@@ -146,54 +149,71 @@ async def advance_cluster(
             f"Cluster {cluster.cluster_id} has no head version — use initialize_cluster first."
         )
 
-    role = new_role or cluster.cluster_role
     old_head = cluster.head_version_id
+    role = new_role or ClusterRole.manual_cluster  # caller-supplied role wins
 
-    new_version = await Version.create(session, cluster.cluster_id, role, actor_id)
-    await Transition.create_next(
-        session, cluster.cluster_id, old_head, new_version.version_id
+    # Read current role from head version if not supplied.
+    if new_role is None:
+        head_version = await Version.get(session, old_head)
+        if head_version is not None:
+            role = head_version.cluster_role
+
+    new_version = Version(
+        version_id=_new_id(),
+        cluster_id=cluster.cluster_id,
+        cluster_role=role,
+        actor_id=actor_id,
+        search_profile_id=search_profile_id,
+    )
+    session.add(new_version)
+
+    op_id = _new_id()
+    await Operation.create_single(
+        session,
+        operation_id=op_id,
+        operation_type=OperationType.stage,
+        source_cluster_id=cluster.cluster_id,
+        source_version_id=old_head,
+        target_cluster_id=cluster.cluster_id,
+        target_version_id=new_version.version_id,
     )
 
-    for ref in added_records or []:
-        await Action.create(
+    for ref in added_evidence or []:
+        await Delta.create(
             session,
             cluster_id=cluster.cluster_id,
             version_id=new_version.version_id,
-            record_id=ref.record_id,
-            record_version_id=ref.record_version_id,
-            action_type=ActionType.add,
-            reason=ref.reason,
-            weight=ref.weight,
+            evidence_id=ref.evidence_id,
+            evidence_version_id=ref.evidence_version_id,
+            delta_type=DeltaType.add,
             actor_id=actor_id,
+            weight=ref.weight,
         )
 
-    for ref in removed_records or []:
-        await Action.create(
+    for ref in removed_evidence or []:
+        await Delta.create(
             session,
             cluster_id=cluster.cluster_id,
             version_id=new_version.version_id,
-            record_id=ref.record_id,
-            record_version_id=ref.record_version_id,
-            action_type=ActionType.remove,
-            reason=ref.reason,
-            weight=ref.weight,
+            evidence_id=ref.evidence_id,
+            evidence_version_id=ref.evidence_version_id,
+            delta_type=DeltaType.remove,
             actor_id=actor_id,
+            weight=ref.weight,
         )
 
-    await cluster.update_head_version(session, new_version.version_id, role if new_role else None)
+    # CAS advance head — conditioned on current head == old_head.
+    advanced = await cluster.advance_head(session, old_head, new_version.version_id)
+    if not advanced:
+        raise RuntimeError(
+            f"Concurrent write on cluster {cluster.cluster_id}: head_version_id changed since read — retry after re-reading."
+        )
+
     await materialize_membership(session, cluster, new_version.version_id)
 
     logger.info(
-        "Advanced cluster to next version",
-        extra={
-            "cluster_id": str(cluster.cluster_id),
-            "old_version_id": str(old_head),
-            "new_version_id": str(new_version.version_id),
-            "actor_id": str(actor_id),
-            "added": len(added_records) if added_records else 0,
-            "removed": len(removed_records) if removed_records else 0,
-            "new_role": new_role.value if new_role else None,
-        },
+        "Staged cluster %s: %s -> %s",
+        cluster.cluster_id, old_head, new_version.version_id,
     )
     return new_version
 
@@ -204,9 +224,9 @@ async def branch_cluster(
     actor_id: uuid.UUID,
     from_version_id: uuid.UUID | None = None,
 ) -> Version:
-    """Create a branch version off a given (or head) version.
+    """Create a branch VERSION off a given (or head) version.
 
-    ``CLUSTER.head_version_id`` is NOT updated per spec §5.2.
+    ``CLUSTER.head_version_id`` is NOT updated per spec §4.5.
 
     Returns the new branch VERSION.
     """
@@ -216,110 +236,173 @@ async def branch_cluster(
             f"Cluster {cluster.cluster_id} has no head version and no from_version_id was provided."
         )
 
-    branch_version = await Version.create(
-        session, cluster.cluster_id, cluster.cluster_role, actor_id
+    # Inherit role from the source version.
+    source_version = await Version.get(session, source_version_id)
+    role = source_version.cluster_role if source_version is not None else ClusterRole.manual_cluster
+
+    branch_version = Version(
+        version_id=_new_id(),
+        cluster_id=cluster.cluster_id,
+        cluster_role=role,
+        actor_id=actor_id,
     )
-    await Transition.create_branch(
-        session, cluster.cluster_id, source_version_id, branch_version.version_id
+    session.add(branch_version)
+
+    op_id = _new_id()
+    await Operation.create_single(
+        session,
+        operation_id=op_id,
+        operation_type=OperationType.branch,
+        source_cluster_id=cluster.cluster_id,
+        source_version_id=source_version_id,
+        target_cluster_id=cluster.cluster_id,
+        target_version_id=branch_version.version_id,
     )
 
     logger.info(
-        "Created branch version",
-        extra={
-            "cluster_id": str(cluster.cluster_id),
-            "source_version_id": str(source_version_id),
-            "branch_version_id": str(branch_version.version_id),
-            "actor_id": str(actor_id),
-        },
+        "Branched cluster %s from version %s -> %s",
+        cluster.cluster_id, source_version_id, branch_version.version_id,
     )
     return branch_version
 
 
-async def merge_versions(
+async def merge_clusters(
     session: AsyncSession,
     source_versions: list[tuple[uuid.UUID, uuid.UUID]],
     target_cluster: Cluster,
     actor_id: uuid.UUID,
+    operation_type: OperationType,
     new_role: ClusterRole | None = None,
-    added_records: list[RecordRef] | None = None,
-    removed_records: list[RecordRef] | None = None,
+    extra_add: list[EvidenceRef] | None = None,
+    extra_remove: list[EvidenceRef] | None = None,
 ) -> Version:
-    """Merge one or more source versions into a single new target version.
+    """Merge one or more source versions into a new target VERSION.
 
     ``source_versions`` is a list of ``(cluster_id, version_id)`` pairs.
+    ``operation_type`` must be ``union``, ``intersection``, or
+    ``conflict_free_join``.
 
-    Transition type:
-    - ``merge``         when all sources belong to the same cluster as the target.
-    - ``cluster-merge`` when any source is from a different cluster.
+    For ``conflict_free_join`` this function performs the conflict check and
+    raises ``ConflictError`` listing conflicting evidence_ids before writing
+    anything.
 
     Atomically:
-    1. Creates the target VERSION authored by ``actor_id``.
-    2. Creates one TRANSITION row per source version.
-    3. Creates ACTION rows.
-    4. Updates CLUSTER.head_version_id if the current head is among the sources.
-    5. Re-materializes MEMBERSHIP.
+    1. [conflict_free_join only] checks for conflicts.
+    2. Creates the target VERSION.
+    3. Creates one OPERATION row per source version.
+    4. Writes caller-supplied extra DELTA rows.
+    5. Updates CLUSTER.head_version_id (CAS).
+    6. Re-materializes MEMBERSHIP.
 
     Returns the new target VERSION.
     """
-    role = new_role or target_cluster.cluster_role
-    merge_version = await Version.create(session, target_cluster.cluster_id, role, actor_id)
+    if operation_type not in (
+        OperationType.union,
+        OperationType.intersection,
+        OperationType.conflict_free_join,
+    ):
+        raise ValueError(f"operation_type must be union/intersection/conflict_free_join, got {operation_type}")
 
+    # Resolve memberships for all sources to determine result membership.
+    source_memberships: list[dict[uuid.UUID, ResolvedMember]] = []
     for src_cluster_id, src_version_id in source_versions:
-        is_cross = src_cluster_id != target_cluster.cluster_id
-        ltype = TransitionType.cluster_merge if is_cross else TransitionType.merge
-        await Transition.create_merge_entry(
+        resolved = await resolve_membership(session, src_cluster_id, src_version_id)
+        source_memberships.append({m.evidence_id: m for m in resolved})
+
+    if operation_type == OperationType.conflict_free_join:
+        # Detect conflicts: evidence present in some sources as add, removed in others.
+        all_ids: set[uuid.UUID] = {eid for sm in source_memberships for eid in sm}
+        conflicts: list[uuid.UUID] = []
+        for eid in all_ids:
+            present_in = [eid in sm for sm in source_memberships]
+            if any(present_in) and not all(present_in):
+                conflicts.append(eid)
+        if conflicts:
+            raise ConflictError(conflicts)
+
+    # Compute the new membership depending on operation type.
+    if operation_type in (OperationType.union, OperationType.conflict_free_join):
+        result_members: dict[uuid.UUID, ResolvedMember] = {}
+        for sm in source_memberships:
+            for eid, member in sm.items():
+                if eid not in result_members or member.weight > result_members[eid].weight:
+                    result_members[eid] = member
+    else:  # intersection
+        if not source_memberships:
+            result_members = {}
+        else:
+            common_ids = set(source_memberships[0].keys())
+            for sm in source_memberships[1:]:
+                common_ids &= sm.keys()
+            result_members = {
+                eid: source_memberships[0][eid] for eid in common_ids
+            }
+
+    # Current role fallback.
+    role = new_role
+    if role is None and target_cluster.head_version_id is not None:
+        head_v = await Version.get(session, target_cluster.head_version_id)
+        role = head_v.cluster_role if head_v is not None else ClusterRole.manual_cluster
+    if role is None:
+        role = ClusterRole.manual_cluster
+
+    merge_version = Version(
+        version_id=_new_id(),
+        cluster_id=target_cluster.cluster_id,
+        cluster_role=role,
+        actor_id=actor_id,
+    )
+    session.add(merge_version)
+
+    op_id = _new_id()
+    for src_cluster_id, src_version_id in source_versions:
+        await Operation.create_single(
             session,
+            operation_id=op_id,
+            operation_type=operation_type,
             source_cluster_id=src_cluster_id,
             source_version_id=src_version_id,
             target_cluster_id=target_cluster.cluster_id,
             target_version_id=merge_version.version_id,
-            transition_type=ltype,
         )
 
-    for ref in added_records or []:
-        await Action.create(
+    for ref in extra_add or []:
+        await Delta.create(
             session,
             cluster_id=target_cluster.cluster_id,
             version_id=merge_version.version_id,
-            record_id=ref.record_id,
-            record_version_id=ref.record_version_id,
-            action_type=ActionType.add,
-            reason=ref.reason,
-            weight=ref.weight,
+            evidence_id=ref.evidence_id,
+            evidence_version_id=ref.evidence_version_id,
+            delta_type=DeltaType.add,
             actor_id=actor_id,
+            weight=ref.weight,
         )
-
-    for ref in removed_records or []:
-        await Action.create(
+    for ref in extra_remove or []:
+        await Delta.create(
             session,
             cluster_id=target_cluster.cluster_id,
             version_id=merge_version.version_id,
-            record_id=ref.record_id,
-            record_version_id=ref.record_version_id,
-            action_type=ActionType.remove,
-            reason=ref.reason,
-            weight=ref.weight,
+            evidence_id=ref.evidence_id,
+            evidence_version_id=ref.evidence_version_id,
+            delta_type=DeltaType.remove,
             actor_id=actor_id,
+            weight=ref.weight,
         )
 
-    # Update head if current head is one of the merged sources.
+    # The caller is responsible for explicitly setting head_version_id for
+    # merge operations (reviewer decides); we do it here only if the current
+    # head is among the sources.
     source_version_ids = {vid for _, vid in source_versions}
     if target_cluster.head_version_id in source_version_ids:
-        await target_cluster.update_head_version(
-            session, merge_version.version_id, role if new_role else None
-        )
+        old_head = target_cluster.head_version_id
+        assert old_head is not None  # narrowing
+        await target_cluster.advance_head(session, old_head, merge_version.version_id)
 
     await materialize_membership(session, target_cluster, merge_version.version_id)
 
     logger.info(
-        "Merged versions",
-        extra={
-            "target_cluster_id": str(target_cluster.cluster_id),
-            "target_version_id": str(merge_version.version_id),
-            "actor_id": str(actor_id),
-            "source_count": len(source_versions),
-            "new_role": new_role.value if new_role else None,
-        },
+        "Merged %d source versions into cluster %s version %s (op=%s)",
+        len(source_versions), target_cluster.cluster_id, merge_version.version_id, operation_type.value,
     )
     return merge_version
 
@@ -329,18 +412,19 @@ async def split_cluster(
     source_cluster: Cluster,
     actor_id: uuid.UUID,
     source_version_id: uuid.UUID | None = None,
-    new_cluster_memberships: list[tuple[ClusterRole, HeadConstraint, list[RecordRef]]] | None = None,
+    new_cluster_memberships: list[tuple[ClusterRole, list[EvidenceRef]]] | None = None,
 ) -> list[tuple[Cluster, Version]]:
     """Split a cluster into two or more new clusters.
 
-    ``new_cluster_memberships`` is a list of ``(role, constraints, records)``
-    tuples, one per split target.
+    ``new_cluster_memberships`` is a list of ``(role, evidence_refs)`` tuples,
+    one per split target.
 
     Atomically:
-    1. For each target: creates a new CLUSTER + VERSION authored by ``actor_id``.
-    2. Creates TRANSITION(split) from the source version to each target version.
-    3. Creates ACTION(add) rows for each target's initial records.
-    4. Materializes MEMBERSHIP for each new cluster.
+    1. For each target: creates a new CLUSTER + VERSION + ``empty`` OPERATION.
+    2. Creates one ``split`` OPERATION row per target (all sharing one op_id).
+    3. Creates DELTA(add) rows for each target's initial evidence.
+    4. Updates each new CLUSTER.head_version_id.
+    5. Materializes MEMBERSHIP for each new cluster.
 
     Returns a list of ``(cluster, version)`` for each split target.
     """
@@ -350,55 +434,66 @@ async def split_cluster(
             f"Cluster {source_cluster.cluster_id} has no head version and no source_version_id was provided."
         )
 
+    op_id = _new_id()
     results: list[tuple[Cluster, Version]] = []
-    for role, constraints, records in (new_cluster_memberships or []):
-        new_cluster = await Cluster.create(session, role, constraints)
-        new_version = await Version.create(session, new_cluster.cluster_id, role, actor_id)
 
-        await Transition.create_split_entry(
+    for role, evidence_refs in (new_cluster_memberships or []):
+        new_cluster = Cluster(cluster_id=_new_id())
+        session.add(new_cluster)
+
+        new_version = Version(
+            version_id=_new_id(),
+            cluster_id=new_cluster.cluster_id,
+            cluster_role=role,
+            actor_id=actor_id,
+        )
+        session.add(new_version)
+
+        # empty bootstrap for the new cluster.
+        await Operation.create_single(
             session,
+            operation_id=_new_id(),
+            operation_type=OperationType.empty,
+            target_cluster_id=new_cluster.cluster_id,
+            target_version_id=new_version.version_id,
+        )
+
+        # split edge from source to this new cluster's version.
+        await Operation.create_single(
+            session,
+            operation_id=op_id,
+            operation_type=OperationType.cluster_split,
             source_cluster_id=source_cluster.cluster_id,
             source_version_id=src_version_id,
             target_cluster_id=new_cluster.cluster_id,
             target_version_id=new_version.version_id,
         )
 
-        # Initial transition entry for the new cluster.
-        await Transition.create_initial(
-            session, new_cluster.cluster_id, new_version.version_id
-        )
-
-        for ref in records:
-            await Action.create(
+        for ref in evidence_refs:
+            await Delta.create(
                 session,
                 cluster_id=new_cluster.cluster_id,
                 version_id=new_version.version_id,
-                record_id=ref.record_id,
-                record_version_id=ref.record_version_id,
-                action_type=ActionType.add,
-                reason=ref.reason,
-                weight=ref.weight,
+                evidence_id=ref.evidence_id,
+                evidence_version_id=ref.evidence_version_id,
+                delta_type=DeltaType.add,
                 actor_id=actor_id,
+                weight=ref.weight,
             )
 
-        await new_cluster.update_head_version(session, new_version.version_id)
+        new_cluster.head_version_id = new_version.version_id
         await materialize_membership(session, new_cluster, new_version.version_id)
         results.append((new_cluster, new_version))
 
     logger.info(
-        "Split cluster",
-        extra={
-            "source_cluster_id": str(source_cluster.cluster_id),
-            "source_version_id": str(src_version_id),
-            "actor_id": str(actor_id),
-            "split_count": len(results),
-        },
+        "Split cluster %s source_version=%s into %d new clusters",
+        source_cluster.cluster_id, src_version_id, len(results),
     )
     return results
 
 
 # ---------------------------------------------------------------------------
-# Membership resolution — spec §5.5.1
+# Membership resolution — spec §4.8.1
 # ---------------------------------------------------------------------------
 
 
@@ -409,13 +504,12 @@ async def resolve_membership(
 ) -> list[ResolvedMember]:
     """Resolve the full membership for a cluster at a specific version.
 
-    Implements the DAG walk algorithm from spec §5.5.1:
-    1. Walk all ancestor (cluster_id, version_id) pairs via TRANSITION.
-    2. Collect all ACTION rows for those pairs.
-    3. Sort by action_id ascending (UUID v6 = creation-time order).
-    4. Apply each action to build the final member set.
+    Implements the DAG walk algorithm from spec §4.8.1:
+    1. Walk all ancestor (cluster_id, version_id) pairs via OPERATION.
+    2. Collect all DELTA rows for those pairs.
+    3. Sort by delta_id ascending (UUID v6 = creation-time order).
+    4. Apply each delta to build the final member set.
     """
-    # BFS/DFS ancestor walk
     visited: set[tuple[uuid.UUID, uuid.UUID]] = set()
     to_visit: list[tuple[uuid.UUID, uuid.UUID]] = [(cluster_id, version_id)]
 
@@ -425,48 +519,40 @@ async def resolve_membership(
             continue
         visited.add((curr_cid, curr_vid))
 
-        ancestor_entries = await Transition.get_ancestors_of(session, curr_cid, curr_vid)
-        for entry in ancestor_entries:
-            if entry.source_version_id is not None and entry.source_cluster_id is not None:
-                key = (entry.source_cluster_id, entry.source_version_id)
+        ancestor_ops = await Operation.get_ancestors_of(session, curr_cid, curr_vid)
+        for op in ancestor_ops:
+            if op.source_version_id is not None and op.source_cluster_id is not None:
+                key = (op.source_cluster_id, op.source_version_id)
                 if key not in visited:
                     to_visit.append(key)
 
-    # Collect and sort all actions across the DAG
-    all_actions: list[Action] = []
+    all_deltas: list[Delta] = []
     for cid, vid in visited:
-        actions = await Action.get_for_version(session, cid, vid)
-        all_actions.extend(actions)
+        deltas = await Delta.get_for_version(session, cid, vid)
+        all_deltas.extend(deltas)
 
-    all_actions.sort(key=lambda a: a.action_id)
+    all_deltas.sort(key=lambda d: d.delta_id)
 
-    # Apply sequentially
     members: dict[uuid.UUID, ResolvedMember] = {}
-    for action in all_actions:
-        if action.action_type == ActionType.add:
-            members[action.record_id] = ResolvedMember(
-                record_id=action.record_id,
-                record_version_id=action.record_version_id,
-                weight=action.weight,
-                reason=action.reason,
+    for delta in all_deltas:
+        if delta.delta_type == DeltaType.add:
+            members[delta.evidence_id] = ResolvedMember(
+                evidence_id=delta.evidence_id,
+                evidence_version_id=delta.evidence_version_id,
+                weight=delta.weight,
             )
         else:
-            members.pop(action.record_id, None)
+            members.pop(delta.evidence_id, None)
 
     logger.debug(
-        "Resolved cluster membership",
-        extra={
-            "cluster_id": str(cluster_id),
-            "version_id": str(version_id),
-            "ancestor_versions": len(visited),
-            "member_count": len(members),
-        },
+        "Resolved membership cluster=%s version=%s ancestors=%d members=%d",
+        cluster_id, version_id, len(visited), len(members),
     )
     return list(members.values())
 
 
 # ---------------------------------------------------------------------------
-# Uncommitted diff — spec §5.5.2
+# Uncommitted diff — spec §4.8.2
 # ---------------------------------------------------------------------------
 
 
@@ -474,145 +560,28 @@ async def resolve_pending_diff(
     session: AsyncSession,
     cluster_id: uuid.UUID,
     version_id: uuid.UUID,
-) -> list[Action]:
-    """Return the net pending actions on a working version.
+) -> list[Delta]:
+    """Return the net pending deltas on a working (unsealed) version.
 
-    Spec §5.5.2:
-    1. Fetch all actions for the given version.
-    2. Sort by action_id ascending.
-    3. Deduplicate — keep only the latest action per record_id.
+    Spec §4.8.2:
+    1. Fetch all deltas for the given version.
+    2. Sort by delta_id ascending (creation-time order).
+    3. Deduplicate — keep only the latest delta per evidence_id.
     """
-    actions = await Action.get_for_version(session, cluster_id, version_id)
-    # actions are already sorted ascending from get_for_version
-    latest: dict[uuid.UUID, Action] = {}
-    for action in actions:
-        latest[action.record_id] = action
+    deltas = await Delta.get_for_version(session, cluster_id, version_id)
+    latest: dict[uuid.UUID, Delta] = {}
+    for delta in deltas:
+        latest[delta.evidence_id] = delta
 
     logger.debug(
-        "Resolved pending diff",
-        extra={
-            "cluster_id": str(cluster_id),
-            "version_id": str(version_id),
-            "action_count": len(actions),
-            "net_diff_count": len(latest),
-        },
+        "Resolved pending diff cluster=%s version=%s raw=%d net=%d",
+        cluster_id, version_id, len(deltas), len(latest),
     )
     return list(latest.values())
 
 
 # ---------------------------------------------------------------------------
-# Head commit resolution — spec §5.5.3
-# ---------------------------------------------------------------------------
-
-
-async def resolve_head_version(
-    session: AsyncSession,
-    cluster: Cluster,
-) -> uuid.UUID:
-    """Return the effective head version_id for a cluster.
-
-    Behaviour depends on ``cluster.head_constraints``:
-    - ``locked``: always the initial version.
-    - ``main``:   follow the ``next``/``merge`` chain from initial.
-    - ``any``:    the spec says to return all leaf versions; here we return the
-                  latest leaf (highest version_id) for a single-value interface.
-                  Callers that need all leaves should use
-                  ``resolve_all_head_versions``.
-    """
-    if cluster.head_constraints == HeadConstraint.locked:
-        initial_id = await Transition.get_initial_version_id(
-            session, cluster.cluster_id
-        )
-        if initial_id is None:
-            raise LookupError(
-                f"Cluster {cluster.cluster_id} has no initial transition entry."
-            )
-        return initial_id
-
-    if cluster.head_constraints == HeadConstraint.main:
-        return await _resolve_main_head(session, cluster.cluster_id)
-
-    # HeadConstraint.any — return the most recent leaf
-    leaves = await resolve_all_head_versions(session, cluster)
-    if not leaves:
-        raise LookupError(
-            f"Cluster {cluster.cluster_id} has no leaf versions."
-        )
-    return max(leaves)
-
-
-async def resolve_all_head_versions(
-    session: AsyncSession,
-    cluster: Cluster,
-) -> list[uuid.UUID]:
-    """Return all leaf version IDs for a cluster (used with ``any`` constraint).
-
-    A leaf version has no outgoing ``next`` or ``merge`` transition entry.
-    """
-    all_entries = await Transition.get_for_cluster(session, cluster.cluster_id)
-
-    # Build set of version IDs that have an outgoing next/merge edge.
-    has_successor: set[uuid.UUID] = set()
-    for entry in all_entries:
-        if (
-            entry.source_cluster_id == cluster.cluster_id
-            and entry.transition_type in (TransitionType.next, TransitionType.merge)
-            and entry.source_version_id is not None
-        ):
-            has_successor.add(entry.source_version_id)
-
-    leaves = [
-        entry.target_version_id
-        for entry in all_entries
-        if entry.target_version_id not in has_successor
-    ]
-    return list(set(leaves))  # deduplicate
-
-
-async def _resolve_main_head(
-    session: AsyncSession,
-    cluster_id: uuid.UUID,
-) -> uuid.UUID:
-    """Walk the ``next``/``merge`` chain to find the main-line head.
-
-    Implements spec §5.5.3 case ``main``.
-    """
-    all_entries = await Transition.get_for_cluster(session, cluster_id)
-    # Sort ascending by target_version_id (UUID v6 = time order).
-    all_entries.sort(key=lambda e: e.target_version_id)
-
-    initial = next(
-        (e for e in all_entries if e.transition_type == TransitionType.initial),
-        None,
-    )
-    if initial is None:
-        raise LookupError(f"Cluster {cluster_id} has no initial transition entry.")
-
-    head = initial.target_version_id
-
-    for entry in all_entries:
-        if (
-            entry.transition_type == TransitionType.next
-            and entry.source_version_id == head
-        ):
-            head = entry.target_version_id
-        elif (
-            entry.transition_type == TransitionType.merge
-            and entry.source_version_id == head
-        ):
-            head = entry.target_version_id
-        elif (
-            entry.transition_type == TransitionType.cluster_merge
-            and entry.source_cluster_id == cluster_id
-            and entry.source_version_id == head
-        ):
-            head = entry.target_version_id
-
-    return head
-
-
-# ---------------------------------------------------------------------------
-# Membership materialization — spec §5.6
+# Membership materialization
 # ---------------------------------------------------------------------------
 
 
@@ -627,52 +596,60 @@ async def materialize_membership(
     ``resolve_membership``.  Must be called in the same transaction as the
     triggering change.
     """
-    resolved = await resolve_membership(
-        session, cluster.cluster_id, as_of_version_id
-    )
-    await Membership.delete_all_for_cluster(session, cluster.cluster_id)
+    resolved = await resolve_membership(session, cluster.cluster_id, as_of_version_id)
+    await Membership.delete_for_cluster(session, cluster.cluster_id)
 
     for member in resolved:
         await Membership.upsert(
             session,
             cluster_id=cluster.cluster_id,
-            record_id=member.record_id,
-            record_version_id=member.record_version_id,
+            evidence_id=member.evidence_id,
+            evidence_version_id=member.evidence_version_id,
             weight=member.weight,
-            reason=member.reason,
             as_of_version_id=as_of_version_id,
         )
 
     logger.info(
-        "Materialized membership",
-        extra={
-            "cluster_id": str(cluster.cluster_id),
-            "as_of_version_id": str(as_of_version_id),
-            "member_count": len(resolved),
-        },
+        "Materialized membership cluster=%s as_of=%s members=%d",
+        cluster.cluster_id, as_of_version_id, len(resolved),
     )
 
 
-async def apply_action_to_membership(
+async def apply_delta_to_membership(
     session: AsyncSession,
-    action: Action,
+    delta: Delta,
 ) -> None:
-    """Incrementally update MEMBERSHIP for a single ACTION.
+    """Incrementally update MEMBERSHIP for a single DELTA.
 
-    Called immediately after writing an ACTION to keep MEMBERSHIP current
+    Called immediately after writing a DELTA to keep MEMBERSHIP current
     without a full re-materialization.  Must be called in the same transaction.
     """
-    if action.action_type == ActionType.add:
+    if delta.delta_type == DeltaType.add:
         await Membership.upsert(
             session,
-            cluster_id=action.cluster_id,
-            record_id=action.record_id,
-            record_version_id=action.record_version_id,
-            weight=action.weight,
-            reason=action.reason,
-            as_of_version_id=action.version_id,
+            cluster_id=delta.cluster_id,
+            evidence_id=delta.evidence_id,
+            evidence_version_id=delta.evidence_version_id,
+            weight=delta.weight,
+            as_of_version_id=delta.version_id,
         )
     else:
-        await Membership.delete_record(
-            session, action.cluster_id, action.record_id
-        )
+        await Membership.remove_entry(session, delta.cluster_id, delta.evidence_id)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+class ConflictError(Exception):
+    """Raised by merge_clusters when a conflict_free_join detects conflicts."""
+
+    def __init__(self, evidence_ids: list[uuid.UUID]) -> None:
+        super().__init__(f"Conflicting evidence items: {evidence_ids}")
+        self.evidence_ids = evidence_ids
+
+
+def _new_id() -> uuid.UUID:
+    from people_gator_api.db.models.base import new_uuid6
+    return new_uuid6()

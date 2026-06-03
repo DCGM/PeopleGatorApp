@@ -3,23 +3,24 @@ import uuid
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import ForeignKey, String, UniqueConstraint, select
+from sqlalchemy import Enum as SAEnum, ForeignKey, String, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from people_gator_api.db.models.base import Base, new_uuid6
+from people_gator_api.db.models.enums import ProviderType
 
 logger = logging.getLogger(__name__)
 
 
 class Source(Base):
-    """A specific document, scan, or artifact from which RECORDs are derived.
+    """A specific document, scan, or artifact from which EVIDENCEs are derived.
 
-    Belongs to one SOURCE_SCHEMA that determines how its storage paths are
-    resolved.  The ``(provider, provider_id)`` pair is unique and serves as
-    the natural deduplication key for re-ingestion runs.
+    Belongs to one SOURCE_SCHEMA (referenced by name) that determines how its
+    storage paths are resolved.  The ``source`` field is an opaque string
+    identifier for the original artifact, parsable via ``source_schema_name``.
     """
 
     __tablename__ = "source"
@@ -27,22 +28,29 @@ class Source(Base):
     source_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=new_uuid6
     )
-    # FK to source_schema — determines path resolution for all records in this source.
-    source_schema_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("source_schema.schema_id"),
+    # Opaque string identifier for the original source, e.g. a filename.
+    # Parsable via the associated SOURCE_SCHEMA's resolver logic.
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    # FK to SOURCE_SCHEMA by string name — determines path resolution.
+    source_schema_name: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("source_schema.schema_name"),
         nullable=False,
     )
-    # Originating system, e.g. "kramerius", "nkcr", "local-ingest".
-    provider: Mapped[str] = mapped_column(String, nullable=False)
-    # The external system's stable identifier for this artifact.
-    provider_id: Mapped[str] = mapped_column(String, nullable=False)
+    # Coarse provenance identifier — set at ingest time.
+    provider: Mapped[ProviderType] = mapped_column(
+        SAEnum(ProviderType, name="provider_type_enum"), nullable=False
+    )
     # Source-level descriptive metadata: title, publication date, page number,
-    # language, collection name, etc.
+    # language, collection name, etc.  Structure conforms to the SOURCE_SCHEMA's
+    # resolver config placeholder rules.
     metadata_: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata", JSONB, nullable=True
     )
-    # FK to PRINCIPAL — the user or service agent that ingested this source.
+    # BLAKE3 hash of the raw source bytes — used for application-layer
+    # staleness detection and deduplication.  No DB UNIQUE constraint.
+    content_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    # FK → PRINCIPAL — the service agent or user that ingested this source.
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("principal.principal_id"),
@@ -50,8 +58,9 @@ class Source(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("provider", "provider_id", name="uq_source_provider_id"),
         sa.Index("ix_source_provider", "provider"),
+        sa.Index("ix_source_schema_name", "source_schema_name"),
+        sa.Index("ix_source_content_hash", "content_hash"),
     )
 
     # -------------------------------------------------------------------------
@@ -70,67 +79,45 @@ class Source(Base):
         return result.one_or_none()
 
     @classmethod
-    async def get_by_provider(
+    async def get_by_content_hash(
         cls,
         session: AsyncSession,
-        provider: str,
-        provider_id: str,
+        content_hash: str,
     ) -> "Source | None":
         result = await session.scalars(
-            select(cls).where(
-                cls.provider == provider,
-                cls.provider_id == provider_id,
-            )
+            select(cls).where(cls.content_hash == content_hash)
         )
-        return result.one_or_none()
+        return result.first()
 
     @classmethod
-    async def get_or_create(
+    async def create(
         cls,
         session: AsyncSession,
-        source_schema_id: uuid.UUID,
-        provider: str,
-        provider_id: str,
+        source: str,
+        source_schema_name: str,
+        provider: ProviderType,
         metadata: dict[str, Any] | None = None,
+        content_hash: str | None = None,
         created_by: uuid.UUID | None = None,
-    ) -> tuple["Source", bool]:
-        """Return ``(source, created)`` — idempotent for re-ingestion runs.
-
-        If the source already exists its ``metadata_`` is refreshed when a
-        new value is provided.
-        """
-        source = await cls.get_by_provider(session, provider, provider_id)
-        if source is not None:
-            if metadata is not None and source.metadata_ != metadata:
-                source.metadata_ = metadata
-                session.add(source)
-                logger.debug(
-                    "Refreshed source metadata",
-                    extra={
-                        "source_id": str(source.source_id),
-                        "provider": provider,
-                        "provider_id": provider_id,
-                    },
-                )
-            return source, False
-
-        source = cls(
+    ) -> "Source":
+        obj = cls(
             source_id=new_uuid6(),
-            source_schema_id=source_schema_id,
+            source=source,
+            source_schema_name=source_schema_name,
             provider=provider,
-            provider_id=provider_id,
             metadata_=metadata,
+            content_hash=content_hash,
             created_by=created_by,
         )
-        session.add(source)
+        session.add(obj)
         logger.info(
             "Created source",
             extra={
-                "source_id": str(source.source_id),
-                "source_schema_id": str(source_schema_id),
-                "provider": provider,
-                "provider_id": provider_id,
-                "created_by": str(created_by) if created_by else None,
+                "source_id": str(obj.source_id),
+                "source_schema_name": source_schema_name,
+                "provider": provider.value,
             },
         )
-        return source, True
+        return obj
+
+

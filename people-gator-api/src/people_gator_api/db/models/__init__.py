@@ -1,103 +1,94 @@
-from people_gator_api.db.models.action import Action
-from people_gator_api.db.models.base import Base, new_uuid6
-from people_gator_api.db.models.cluster import Cluster
-from people_gator_api.db.models.version import Version
+"""DB model package — exports all SQLAlchemy mapped classes.
+
+Import order matters: Base must be imported first so that the metadata registry
+is populated before any migration tooling (Alembic) imports the models.
+"""
+
+from people_gator_api.db.models.base import Base
 from people_gator_api.db.models.enums import (
-    ActionReason,
-    ActionType,
     ClusterRole,
-    HeadConstraint,
-    TransitionType,
+    DeltaType,
+    EvidenceType,
+    OperationType,
+    ProcessingStatus,
+    ProviderType,
     PrincipalType,
-    RecordType,
     RegistrySource,
     ResolverType,
+    TaskRole,
+    TaskStatus,
 )
-from people_gator_api.db.models.modality_model import ModalityModel
-from people_gator_api.db.models.search_profile import SearchProfile, SearchProfileModality
-from people_gator_api.db.models.transition import Transition
-from people_gator_api.db.models.membership import Membership
-from people_gator_api.db.models.metadata_schema import MetadataSchema
-from people_gator_api.db.models.principal import Principal, ServiceAgent, User
-from people_gator_api.db.models.record import Record
-from people_gator_api.db.models.source import Source
-from people_gator_api.db.models.record_metadata import (
-    BoundingBox,
-    FaceDetectionMetadata,
-    GroundedDescriptionMetadata,
-    GroundedNameMetadata,
-    Image,
-    Keypoint,
-    NamedEntityMetadata,
-    PhysicalTextRegion,
-    PhysicalTextSpan,
-    Point,
-    Polygon,
-    PolyLine,
-    Rectangle,
-    TextRegionMetadata,
-    TextSpan,
-)
-from people_gator_api.db.models.source_resolver_config import (
-    HTTPResolverConfig,
-    IIIFResolverConfig,
-    LocalFilesystemResolverConfig,
-    ResolverConfig,
-    S3ResolverConfig,
-    SparqlResolverConfig,
-    SupportsResolve,
+from people_gator_api.db.models.principal import (
+    ModelAgent,
+    Principal,
+    ServiceAgent,
+    User,
 )
 from people_gator_api.db.models.source_schema import SourceSchema
+from people_gator_api.db.models.source import Source
+from people_gator_api.db.models.evidence import (
+    AuthorityEvidence,
+    AuthorityIdentifierEvidence,
+    DerivedEvidence,
+    Evidence,
+    FaceDetectionEvidence,
+    GroundedDescriptionEvidence,
+    GroundedNameEvidence,
+    NamedEntityEvidence,
+    TextRegionEvidence,
+)
+from people_gator_api.db.models.search_profile import SearchProfile, SearchProfileModality
+from people_gator_api.db.models.cluster import Cluster
+from people_gator_api.db.models.version import Version
+from people_gator_api.db.models.operation import Operation
+from people_gator_api.db.models.delta import Delta
+from people_gator_api.db.models.membership import Membership
+from people_gator_api.db.models.task import Task
+from people_gator_api.db.models.source_processing import SourceProcessing
 
 __all__ = [
-    "Action",
-    "ActionReason",
-    "ActionType",
     "Base",
-    "Cluster",
+    # enums
     "ClusterRole",
-    "Version",
-    "HeadConstraint",
-    "ModalityModel",
-    "Transition",
-    "TransitionType",
-    "Membership",
-    "MetadataSchema",
-    "Principal",
+    "DeltaType",
+    "EvidenceType",
+    "OperationType",
+    "ProcessingStatus",
+    "ProviderType",
     "PrincipalType",
-    "Record",
-    "RecordType",
     "RegistrySource",
     "ResolverType",
+    "TaskRole",
+    "TaskStatus",
+    # principals
+    "Principal",
+    "User",
+    "ServiceAgent",
+    "ModelAgent",
+    # sources
+    "SourceSchema",
+    "Source",
+    # evidence
+    "Evidence",
+    "DerivedEvidence",
+    "FaceDetectionEvidence",
+    "NamedEntityEvidence",
+    "TextRegionEvidence",
+    "AuthorityEvidence",
+    "GroundedNameEvidence",
+    "GroundedDescriptionEvidence",
+    "AuthorityIdentifierEvidence",
+    # search
     "SearchProfile",
     "SearchProfileModality",
-    "ServiceAgent",
-    "Source",
-    "SourceSchema",
-    "User",
-    "new_uuid6",
-    # Record metadata schemas
-    "BoundingBox",
-    "FaceDetectionMetadata",
-    "GroundedDescriptionMetadata",
-    "GroundedNameMetadata",
-    "Image",
-    "Keypoint",
-    "NamedEntityMetadata",
-    "PhysicalTextRegion",
-    "PhysicalTextSpan",
-    "Point",
-    "Polygon",
-    "PolyLine",
-    "Rectangle",
-    "TextRegionMetadata",
-    "TextSpan",
-    # Source resolver config schemas
-    "HTTPResolverConfig",
-    "IIIFResolverConfig",
-    "LocalFilesystemResolverConfig",
-    "ResolverConfig",
-    "S3ResolverConfig",
-    "SparqlResolverConfig",
-    "SupportsResolve",
+    # cluster versioning
+    "Cluster",
+    "Version",
+    "Operation",
+    "Delta",
+    "Membership",
+    # tasks
+    "Task",
+    # processing
+    "SourceProcessing",
 ]

@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from people_gator_api.db.models.base import Base, new_uuid6
-from people_gator_api.db.models.enums import RecordType
+from people_gator_api.db.models.enums import EvidenceType
 
 
 class SearchProfile(Base):
@@ -52,12 +52,13 @@ class SearchProfile(Base):
 class SearchProfileModality(Base):
     """Per-modality configuration row for a SearchProfile.
 
-    Composite primary key on ``(profile_id, record_type)`` enforces the
+    Composite primary key on ``(profile_id, evidence_type)`` enforces the
     one-row-per-modality-per-profile constraint at the database level.
 
-    ``model_id`` is a nullable FK to ``ModalityModel``.  When null the
-    highest-priority active model for the ``record_type`` is resolved at query
-    time.  When set the query is pinned to that specific model's vector slot.
+    ``model_id`` is a nullable FK to ``ModelAgent.principal_id``.  When null
+    the highest-priority active MODEL_AGENT for the ``evidence_type`` is
+    resolved at query time.  When set the query is pinned to that specific
+    agent's vector slot.
     """
 
     __tablename__ = "search_profile_modality"
@@ -67,13 +68,14 @@ class SearchProfileModality(Base):
         sa.ForeignKey("search_profile.profile_id", ondelete="CASCADE"),
         primary_key=True,
     )
-    record_type: Mapped[RecordType] = mapped_column(
-        SAEnum(RecordType, name="record_type_enum"), primary_key=True
+    evidence_type: Mapped[EvidenceType] = mapped_column(
+        SAEnum(EvidenceType, name="evidence_type_enum"), primary_key=True
     )
     # Nullable — null means "use best active model at query time".
+    # FK → model_agent.principal_id (MODEL_AGENT subtype table).
     model_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        sa.ForeignKey("modality_model.model_id"),
+        sa.ForeignKey("model_agent.principal_id"),
         nullable=True,
     )
     # Relative contribution to the combined score; normalised to sum=1 at
@@ -81,7 +83,7 @@ class SearchProfileModality(Base):
     weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     # Allows toggling a modality off without deleting the row.
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # Records below this confidence are excluded before scoring; null = no filter.
+    # Evidence below this confidence is excluded before scoring; null = no filter.
     min_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     profile: Mapped["SearchProfile"] = relationship(
@@ -91,3 +93,4 @@ class SearchProfileModality(Base):
     __table_args__ = (
         sa.Index("ix_search_profile_modality_model", "model_id"),
     )
+

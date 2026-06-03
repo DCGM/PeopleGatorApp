@@ -15,6 +15,16 @@ logger = logging.getLogger(__name__)
 
 
 class Version(Base):
+    """An immutable snapshot of cluster membership state.
+
+    Created by copy-on-write on any membership change.  The ``version_id``
+    is a UUIDv6 whose embedded timestamp serves as creation time — there is
+    no separate ``created_at`` column.
+
+    ``search_profile_id`` is non-null only for versions with
+    ``cluster_role = saved_search``.
+    """
+
     __tablename__ = "version"
 
     version_id: Mapped[uuid.UUID] = mapped_column(
@@ -25,20 +35,34 @@ class Version(Base):
         ForeignKey("cluster.cluster_id"),
         nullable=False,
     )
-    # Source of truth for cluster_role at this commit version.
+    # Source of truth for cluster_role — readable via cluster.head_version_id.
     cluster_role: Mapped[ClusterRole] = mapped_column(
         SAEnum(ClusterRole, name="cluster_role_enum"),
         nullable=False,
     )
-    # The principal (user or service agent) that created this commit version.
+    # The principal that created this version.
     actor_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("principal.principal_id"),
         nullable=False,
     )
+    # Non-null only when cluster_role = saved_search.  Enables reproducible
+    # re-execution of the saved search with its original profile configuration.
+    search_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("search_profile.profile_id"),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        sa.Index("ix_version_cluster_id", "cluster_id"),
+        sa.Index("ix_version_actor_id", "actor_id"),
+        # Unique index required for the composite FK from DELTA.
+        sa.UniqueConstraint("version_id", "cluster_id", name="uq_version_cluster"),
+    )
 
     # -------------------------------------------------------------------------
-    # Hybrid predicates — work in Python and as SQL expressions
+    # Hybrid predicates
     # -------------------------------------------------------------------------
 
     @hybrid_method
@@ -85,6 +109,7 @@ class Version(Base):
         cluster_id: uuid.UUID,
         cluster_role: ClusterRole,
         actor_id: uuid.UUID,
+        search_profile_id: uuid.UUID | None = None,
         version_id: uuid.UUID | None = None,
     ) -> "Version":
         version = cls(
@@ -92,6 +117,7 @@ class Version(Base):
             cluster_id=cluster_id,
             cluster_role=cluster_role,
             actor_id=actor_id,
+            search_profile_id=search_profile_id,
         )
         session.add(version)
         logger.info(
@@ -104,3 +130,5 @@ class Version(Base):
             },
         )
         return version
+
+
