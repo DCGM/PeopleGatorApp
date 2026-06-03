@@ -6,7 +6,7 @@ logger: Logger = getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/api/v1/")
+@router.get("/")
 async def home() -> RootResponse:
     response = RootResponse(message="Hello from people-gator-api!")
     logger.info("Root endpoint called", extra={"model": response.model_dump()})

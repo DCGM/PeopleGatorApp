@@ -119,10 +119,7 @@ async def _ensure_record_embedding(client: WeaviateAsyncClient) -> None:
             "named-entity spans."
         ),
         properties=RECORD_EMBEDDING_PROPERTIES,
-        vectorizer_config=record_embedding_vector_config(),
-        vector_index_config=weaviate.classes.config.Configure.VectorIndex.hnsw(
-            distance_metric=weaviate.classes.config.VectorDistances.COSINE,
-        ),
+        vector_config=record_embedding_vector_config(),
     )
     logger.info("Created Weaviate collection: %s", RECORD_EMBEDDING_COLLECTION)
 
@@ -140,6 +137,6 @@ async def _ensure_cluster_snapshot(client: WeaviateAsyncClient) -> None:
             "to enable weighted multi-modal cluster similarity search."
         ),
         properties=CLUSTER_SNAPSHOT_PROPERTIES,
-        vectorizer_config=cluster_snapshot_named_vector_configs(),
+        vector_config=cluster_snapshot_named_vector_configs(),
     )
     logger.info("Created Weaviate collection: %s", CLUSTER_SNAPSHOT_COLLECTION)

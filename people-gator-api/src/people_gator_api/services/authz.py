@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import cast
+from typing import TypeGuard, cast
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -29,6 +29,23 @@ class AuthContext:
     scopes: set[str]
 
 
+def _is_string_list(claim: object) -> TypeGuard[list[str]]:
+    if not isinstance(claim, list):
+        return False
+    values: list[object] = cast(list[object], claim)  # Pyright cannot infer list element type here.
+    return all(isinstance(value, str) for value in values)
+
+
+def _parse_string_set(claim: object, separator: str | None = None) -> set[str]:
+    if isinstance(claim, str):
+        if separator is None:
+            return {claim} if claim else set()
+        return {value for value in claim.split(separator) if value}
+    if _is_string_list(claim):
+        return {value for value in claim if value}
+    return set()
+
+
 async def _resolve_principal_from_token(raw_token: str, session: AsyncSession) -> AuthContext:
     claims: dict[str, object]
     try:
@@ -44,22 +61,19 @@ async def _resolve_principal_from_token(raw_token: str, session: AsyncSession) -
     if iss != settings.keycloak.issuer:
         raise_api_error(401, "token_invalid", "Token issuer not trusted")
 
+    expected_audience: str | None = settings.keycloak.audience
+    if not expected_audience:
+        raise_api_error(500, "server_misconfigured", "Token audience is not configured")
+
+    audiences: set[str] = _parse_string_set(claims.get("aud"))
+    if expected_audience not in audiences:
+        raise_api_error(401, "token_invalid", "Token audience not accepted")
+
     sub: str = str(claims.get("sub") or "")
     if not sub:
         raise_api_error(401, "token_invalid", "Token missing subject")
 
-    scope_claim: object = claims.get("scope", "")
-    scopes: set[str]
-    if isinstance(scope_claim, str):
-        scopes = {value for value in scope_claim.split(" ") if value}
-    elif isinstance(scope_claim, list):
-        parsed_scopes: set[str] = set()
-        for value in cast(list[object], scope_claim):
-            if isinstance(value, str) and value:
-                parsed_scopes.add(value)
-        scopes = parsed_scopes
-    else:
-        scopes = set()
+    scopes: set[str] = _parse_string_set(claims.get("scope", ""), separator=" ")
 
     display_name: str = str(claims.get("preferred_username") or claims.get("name") or sub)
     email: str | None = str(claims["email"]) if "email" in claims else None

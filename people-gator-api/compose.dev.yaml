@@ -3,23 +3,12 @@ services:
     image: quay.io/keycloak/keycloak:26.6
     restart: unless-stopped
     command: start-dev
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: https://auth.dev.people-gator.capturemyhand.com
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: true
-      KC_PROXY_HEADERS: xforwarded
-      ### Telemetry
-      KC_TELEMETRY_ENDPOINT: http://lgtm:4317
-      KC_TELEMETRY_SERVICE_NAME: people-gator-keycloak-dev
-      KC_FEATURE_OPENTELEMETRY: enabled
-      KC_FEATURE_OPENTELEMETRY_METRICS: enabled
-      KC_FEATURE_OPENTELEMETRY_LOGS: enabled
-      KC_TELEMETRY_METRICS_ENABLED: true
-      KC_TELEMETRY_LOGS_ENABLED: true
-      KC_TELEMETRY_LOGS_LEVEL: info
-      KC_METRICS_ENABLED: true
-      KC_TRACING_ENABLED: true
+    depends_on:
+      people-gator-postgres-dev:
+        condition: service_healthy
+      people-gator-db-init-dev:
+        condition: service_completed_successfully
+    env_file: .env
     labels:
       traefik.enable: true
       traefik.http.routers.people-gator-keycloak-dev.rule: Host(`auth.dev.people-gator.capturemyhand.com`)
@@ -38,6 +27,60 @@ services:
     env_file: .env
     volumes:
       - /mnt/hdd/Data/people-gator-dev/postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  people-gator-db-init-dev:
+    image: postgres:18
+    restart: "no"
+    depends_on:
+      people-gator-postgres-dev:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        until PGPASSWORD=$$POSTGRES_PASSWORD pg_isready -h people-gator-postgres-dev -p 5432 -U $$POSTGRES_USER; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        PGPASSWORD=$$POSTGRES_PASSWORD psql -h people-gator-postgres-dev -U $$POSTGRES_USER -d postgres -c "CREATE DATABASE keycloak;" || true
+        PGPASSWORD=$$POSTGRES_PASSWORD psql -h people-gator-postgres-dev -U $$POSTGRES_USER -d postgres -c "CREATE DATABASE people_gator;" || true
+    networks:
+      - default
+
+  people-gator-pgadmin-dev:
+    image: dpage/pgadmin4:9
+    restart: unless-stopped
+    depends_on:
+      - people-gator-postgres-dev
+    env_file: .env
+    volumes:
+      - /mnt/hdd/Data/people-gator-dev/pgadmin:/var/lib/pgadmin
+    networks:
+      - default
+      - web
+    user: root
+    labels:
+      traefik.enable: true
+      traefik.http.routers.people-gator-pgadmin-dev.rule: Host(`pgadmin.dev.people-gator.capturemyhand.com`)
+      traefik.http.routers.people-gator-pgadmin-dev.entrypoints: websecure
+      traefik.http.services.people-gator-pgadmin-dev.loadbalancer.server.port: 80
+      traefik.http.routers.people-gator-pgadmin-dev.tls: true
+      traefik.http.routers.people-gator-pgadmin-dev.tls.certresolver: tlschallenge
+
+  people-gator-weaviate-dev:
+    image: semitechnologies/weaviate:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /mnt/hdd/Data/people-gator-dev/weaviate:/var/lib/weaviate
     networks:
       - default
   people-gator-api-dev:
@@ -46,6 +89,13 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.dev
+    depends_on:
+      people-gator-postgres-dev:
+        condition: service_healthy
+      people-gator-db-init-dev:
+        condition: service_completed_successfully
+      people-gator-keycloak-dev:
+        condition: service_started
     ports:
       - 5679:5678 # debugger
     user: root

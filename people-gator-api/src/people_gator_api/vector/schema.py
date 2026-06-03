@@ -134,7 +134,11 @@ def record_embedding_vector_config():
     the standard metric for normalised face and text embedding models.
     Vectorizer is NONE because all vectors are provided by the caller.
     """
-    return Configure.Vectorizer.none()
+    return Configure.Vectors.self_provided(
+        vector_index_config=Configure.VectorIndex.hnsw(
+            distance_metric=VectorDistances.COSINE,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -207,13 +211,13 @@ def cluster_snapshot_named_vector_configs():
     vectors are computed by ClusterSyncService and injected at upsert time.
     """
     return [
-        Configure.NamedVectors.none(
+        Configure.Vectors.self_provided(
             name=FACE_VECTOR,
             vector_index_config=Configure.VectorIndex.hnsw(
                 distance_metric=VectorDistances.COSINE,
             ),
         ),
-        Configure.NamedVectors.none(
+        Configure.Vectors.self_provided(
             name=NAME_VECTOR,
             vector_index_config=Configure.VectorIndex.hnsw(
                 distance_metric=VectorDistances.COSINE,
