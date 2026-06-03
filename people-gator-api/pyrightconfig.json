@@ -8,5 +8,6 @@
   "reportImplicitStringConcatenation": "error",
   "reportMissingSuperCall": "error",
   "reportUnreachable": "error",
-  "reportMissingTypeStubs": false
+  "reportMissingTypeStubs": false,
+  "deprecateTypingAliases": true
 }

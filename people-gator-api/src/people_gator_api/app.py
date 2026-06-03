@@ -6,6 +6,7 @@ from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
 from people_gator_api.routes.root import router as root_router
 from people_gator_api.routes.auth import router as auth_router
+from people_gator_api.routes.v1 import router as v1_router
 from people_gator_api.vector.client import init_weaviate, close_weaviate
 import dotenv
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
@@ -42,6 +43,7 @@ def get_app() -> FastAPI:
 
     app.include_router(root_router)
     app.include_router(auth_router)
+    app.include_router(v1_router)
     return app
 
 app = get_app()

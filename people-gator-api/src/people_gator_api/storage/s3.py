@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, cast
+from collections.abc import AsyncGenerator
+from typing import cast
 
 import aioboto3
 from types_aiobotocore_s3 import S3Client

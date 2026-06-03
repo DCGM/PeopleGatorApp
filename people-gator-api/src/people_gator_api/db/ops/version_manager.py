@@ -203,7 +203,7 @@ async def stage_cluster(
         )
 
     # CAS advance head — conditioned on current head == old_head.
-    advanced = await cluster.advance_head(session, old_head, new_version.version_id)
+    advanced = await cluster.advance_head(session, new_version.version_id, old_head)
     if not advanced:
         raise RuntimeError(
             f"Concurrent write on cluster {cluster.cluster_id}: head_version_id changed since read — retry after re-reading."
