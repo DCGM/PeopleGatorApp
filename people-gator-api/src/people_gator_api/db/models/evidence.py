@@ -94,7 +94,8 @@ class Evidence(Base):
         sa.Index("ix_evidence_source_id", "source_id"),
         sa.Index("ix_evidence_type", "evidence_type"),
         sa.Index("ix_evidence_content_hash", "content_hash"),
-        sa.Index("ix_evidence_version", "evidence_id", "evidence_version_id"),
+        # UNIQUE required so Delta and Membership can FK against (evidence_id, evidence_version_id).
+        sa.UniqueConstraint("evidence_id", "evidence_version_id", name="uq_evidence_version"),
     )
 
     # -------------------------------------------------------------------------
@@ -188,23 +189,12 @@ class DerivedEvidence(Evidence):
 
     __table_args__ = (
         sa.Index("ix_derived_evidence_producer", "producer_id"),
-        # Partial GIN indexes per evidence_type for modality-specific faceting.
+        # GIN index on produced_metadata for JSONB faceting across all derived evidence types.
+        # evidence_type lives on the parent 'evidence' table (joined inheritance) so a
+        # cross-table WHERE predicate cannot be used here.
         sa.Index(
-            "ix_derived_evidence_face_metadata_gin",
+            "ix_derived_evidence_metadata_gin",
             "produced_metadata",
-            postgresql_where=sa.text("evidence_type = 'face_detection'"),
-            postgresql_using="gin",
-        ),
-        sa.Index(
-            "ix_derived_evidence_ner_metadata_gin",
-            "produced_metadata",
-            postgresql_where=sa.text("evidence_type = 'named_entity'"),
-            postgresql_using="gin",
-        ),
-        sa.Index(
-            "ix_derived_evidence_text_region_metadata_gin",
-            "produced_metadata",
-            postgresql_where=sa.text("evidence_type = 'text_region'"),
             postgresql_using="gin",
         ),
     )
@@ -264,23 +254,12 @@ class AuthorityEvidence(Evidence):
 
     __table_args__ = (
         sa.Index("ix_authority_evidence_producer", "producer_id"),
-        # Partial GIN indexes per evidence_type.
+        # GIN index on metadata for JSONB faceting across all authority evidence types.
+        # evidence_type lives on the parent 'evidence' table (joined inheritance) so a
+        # cross-table WHERE predicate cannot be used here.
         sa.Index(
-            "ix_authority_evidence_gname_metadata_gin",
+            "ix_authority_evidence_metadata_gin",
             "metadata",
-            postgresql_where=sa.text("evidence_type = 'grounded_name'"),
-            postgresql_using="gin",
-        ),
-        sa.Index(
-            "ix_authority_evidence_gdesc_metadata_gin",
-            "metadata",
-            postgresql_where=sa.text("evidence_type = 'grounded_description'"),
-            postgresql_using="gin",
-        ),
-        sa.Index(
-            "ix_authority_evidence_auth_id_metadata_gin",
-            "metadata",
-            postgresql_where=sa.text("evidence_type = 'authority_identifier'"),
             postgresql_using="gin",
         ),
     )
