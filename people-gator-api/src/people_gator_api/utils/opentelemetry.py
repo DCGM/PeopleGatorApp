@@ -76,6 +76,9 @@ def initialize_opentelemetry():
     aiohttp_client_instrumentor = AioHttpClientInstrumentor()
     weaviate_instrumentor = WeaviateInstrumentor()
     system_metric_instrumentator.instrument()
+    sqlalchemy_instrumentor.instrument()
+    aiohttp_client_instrumentor.instrument()
+    weaviate_instrumentor.instrument()
 
     return (
         tracer,
