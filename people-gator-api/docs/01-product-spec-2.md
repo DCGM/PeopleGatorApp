@@ -120,6 +120,7 @@ Indices:
 |------------|------|-------------|
 | `type` | enum | Eighter of the following operations: `add_evidence` or `remove_evidence`. |
 | `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item being added or removed. |
+| `weight` | float | A weight associated with the modification, indicating the strength of the evidence being added or removed. This can be used to influence the scoring of clusters during search and retrieval. |
 | `instance_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this modification applies to.|
 | `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) responsible for this modification. |
 
@@ -241,6 +242,7 @@ Unique constraint: `source_id`, `principal_id` (i.e., the same source cannot be 
 |------------|------|-------------|
 | `instance_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this membership applies to. |
 | `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item that is a member of the instance. |
+| `weight` | float | A weight associated with the membership, indicating the strength of the evidence's association with the instance. This can be used to influence the scoring of clusters during search and retrieval. |
 
 ## 4. Vector Search Architecture
 The general principles defined in this section can be applied to any kind of vector documesnt store db, that is able to have multiple vector indicies for same document, mainly to handle different.
@@ -292,13 +294,13 @@ The search and retrieval is a bit more complicated. Because we have these issues
     2. The vector db is queried to retrive top-k most similar evidence of the same `type`.
     3. Evidence items and their IDs are retrieved from the vector db.
     5. Last `evidence_id` is saved as a pointer for pagination e.g. `last_evidences[evidence_id] = evidence_id`.
-    6. The main db is queried to retrieve `cluster_id` information about all that any `instance_id` of retrieved evidence items is `head_instance_id` of any [CLUSTER](#21-information-cluster-cluster).
+    6. The main db is queried to retrieve `cluster_id` if evidence is in `head_instance_id` of any [CLUSTER](#21-information-cluster-cluster), also `weight` of association is retrieved.
     7. Only evidence that is a member of the cluster instance is kept, the rest is filtered out.
     8. For each `evidence_id`, `query_vector` and `cluster_id` of retrieved evidence item the following is done:
         1. Create mapping of modalities for `cluster_id` if this list does not exist e.g. `clusters[cluster_id] = {}`.
         2. Create a mapping `cluster_id` under key of `type` for evidences if it does not exist e.g. `clusters[cluster_id][type] = {}`.
         3. Create a list of evidence items int the clusters-moadlity-evidence mapping if it does not exist e.g. `clusters[cluster_id][type][query.evidence_id] = []`.
-        3. Add retrieved `evidence_id` to the list of evidence items of `type` for `cluster_id` e.g. `clusters[cluster_id][type][query.evidence_id].append({'evidence_id': evidence_id, 'score': score})`.
+        3. Add retrieved `evidence_id` to the list of evidence items of `type` for `cluster_id` e.g. `clusters[cluster_id][type][query.evidence_id].append({'evidence_id': evidence_id, 'score': score, 'weight': weight})`.
 4. Chech size of `clusters` mapping and if it is larger than `k`. If not repeat step 3 with pointer starting from `last_evidences`.
 5. Optionally enrich clusters with similarities of other evidence items associated with the head instance of the cluster.
 6. Foe each cluster and moalyty, apply fusion strategy to get single score for the modality for the cluster.
@@ -312,6 +314,7 @@ I mean we have defined what we get from the pure db search so here are a just to
 class RetrievedEvidenceItem(BaseModel):
     evidence_id: UUID
     score: float
+    weight: float
 
 class ClusterModalityEvidence(BaseModel):
     query_evidence_id: UUID
@@ -330,4 +333,23 @@ The fusion strategies can be defined as follows:
 5. **CombSUM**: The score of the cluster for a modality is the sum of the similarity scores of all evidence items of that modality in the cluster.
 6. **CombMNZ**: The score of the cluster for a modality is the sum of the similarity scores of all evidence items of that modality in the cluster multiplied by the number of evidence items of that modality in the cluster.
 7. **Borda Count**: The score of the cluster for a modality is calculated based on the ranks of the evidence items, where each item contributes a score based on its rank (e.g., if there are N items, the top-ranked item contributes N points, the second-ranked item contributes N-1 points, etc.).
+
+### 4.3.3 User choice of fusion strategy
+The user can specify the desired fusion strategy for each modality and for the overall cluster scoring as part of the search query parameters.
+
+The so called `SEARCH_PROFILES` are then save to the db.
+
+The following schema is there but fall more into userspace:
+
+| Field Name | Type | Description |
+|------------|------|-------------|
+| `profile_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
+| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who created this search profile. |
+| `strategy` | enum | Eighter of the following strategies: `max`, `average`, `weighted_average`, `reciprocal_rank_fusion`, `comb_sum`, `comb_mnz`, `borda_count`. |
+| `configuration` | JSON | Configuration for the fusion strategy, such as weights for the weighted average strategy. |
+
+Indices:
+- `profile_id`
+- `principal_id`
+
 
