@@ -5,7 +5,7 @@ The PeopleGator API is designed to enable effective person-centric search and re
 
 We also manage the dataset of clusters and allow users to automatically, semi-automatically, or manually change evidence within clusters. This includes adding and removing evidence items from clusters, merging clusters, and splitting clusters. The API also allows multiple parallel instance branches of the same cluster to be presented so that annotators can independently work on the same person and reviewers can evaluate how people agree on evidence about the same person.
 
-Each evidence item has both a type but also a source metadata. which links it for physical sources as books, urls and other documents. Thus app has a simple interface for source data management and tracking of processing state for each source.
+Each evidence item has both a type but also a source metadata. which links it to physical sources such as books, urls and other documents. Thus the app has a simple interface for source data management and tracking of processing state for each source.
 
 ### 1.1 The API provides an interface for:
 1. Search for information clusters based on similarity to query containing any number of the following evidence items:
@@ -32,14 +32,14 @@ Each evidence item has both a type but also a source metadata. which links it fo
     - Intersection of all evidence items from the merged clusters.
     - Disambiguated join of all evidence items from the merged clusters (all conflicting evidence is resolved prior to merging).
 5. Split an information cluster instance into multiple instances with new cluster identifiers.
-6. Next operation to create a edge beween two cluster instances, and to deine instance linieage or branching.
+6. Next operation to create a edge beween two cluster instances, and to define instance lineage or branching.
 
-Uppon a instance operation the instance becomes immutable to preserve the history.
+Upon an instance operation the instance becomes immutable to preserve the history.
 
-Evidence operation are append-only, if once a evidence is added/removed the operation cannot be undone.
+Evidence operations are append-only,Once an evidence item is added/removed,d the operation cannot be undone.
 
 Cluster Instance operation are thus separated into two categories:
-- **Data transferable** operations: union, intersection, disambiguated join, nex. The result is always a product of members from two or more instances. How is defined by the type of operation.
+- **Data transferable** operations: union, intersection, disambiguated join, next. The result is always a product of members from two or more instances. How is defined by the type of operation.
 - **Data non-transferable** operations: split. The members are defined in resulting instances.
 
 ### 1.3 So what is the source?
@@ -52,7 +52,7 @@ Cluster Instance operation are thus separated into two categories:
     - a url... `{'url': 'https://api.kramerius.mzk.cz/search/iiif/uuid:91493cea-563c-4e9e-96da-284cc7264914/full/max/0/default.jpg'}`
     - a file in the filesystem... `{'file': '/data/images/91493cea-563c-4e9e-96da-284cc7264914.jpg'}`
     - a row from csv table... `{'csv': 'data.csv'; 'row': 123}`
-3. Now both the physical-abstract source have to have a schema that defines a mapping that will give a mapping
+3. Now both the physical and abstract source have to have a schema that defines a mapping that will give a mapping
 
 
 ## 2. Core Data Architecture
@@ -118,7 +118,7 @@ Indices:
 ### 2.4 Cluster Instance Modification `MODIFICATION`
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `type` | enum | Eighter of the following operations: `add_evidence` or `remove_evidence`. |
+| `type` | enum | Either of the following operations: `add_evidence` or `remove_evidence`. |
 | `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item being added or removed. |
 | `weight` | float | A weight associated with the modification, indicating the strength of the evidence being added or removed. This can be used to influence the scoring of clusters during search and retrieval. |
 | `instance_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this modification applies to.|
@@ -138,7 +138,7 @@ Indices:
 |------------|------|-------------|
 | `result_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) resulting from this operation. |
 | `operand_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this operation is applied to. |
-| `type` | enum | Eighter of the following operations: `union`, `intersection`, `disambiguated_join`, `split`, `next`. |
+| `type` | enum | Either of the following operations: `union`, `intersection`, `disambiguated_join`, `split`, `next`. |
 
 Constraints
 - entire row is always unique (i.e., the same operation cannot be applied multiple times to the same operand instance with the same result instance).
@@ -211,9 +211,9 @@ Indices:
 | Field Name | Type | Description |
 |------------|------|-------------|
 | `principal_id` | UUID | Exact as in [PRINCIPAL](#27-principal-principal).|
-| `source` | enum | Eighter of the following targets: `evidence`, `source`. |
+| `source` | enum | Either of the following targets: `evidence`, `source`. |
 | `source_type` | enum | Joined enum of evidence and source types defines what type of sources this model can process eg `book_page`, `wikidata_entity`, etc. |
-| `target` | enum | Eighter of the following targets: `evidence`, `embedding`. |
+| `target` | enum | Either of the following targets: `evidence`, `embedding`. |
 | `slug` | string | Unique slug of the model agent. |
 | `registry_type` | string | Name of the model used by the agent. |
 | `registry_url` | string | URL of the model registry. |
@@ -230,7 +230,7 @@ Constraints:
 | `processing_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
 | `source_id` | UUID | [UUIDv6](#20-ids) of the [SOURCE](#26-source-source) this processing applies to. |
 | `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) responsible for this processing. |
-| `state` | enum | Eighter of the following states: `pending`, `processing`, `completed`, `failed`. |
+| `state` | enum | Either of the following states: `pending`, `processing`, `completed`, `failed`. |
 | `evidence_id` | UUID or NULL | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item that is derived from this source. |
 
 Unique constraint: `source_id`, `principal_id` (i.e., the same source cannot be processed multiple times by the same principal).
@@ -248,14 +248,14 @@ Unique constraint: `source_id`, `principal_id` (i.e., the same source cannot be 
 The general principles defined in this section can be applied to any kind of vector documesnt store db, that is able to have multiple vector indicies for same document, mainly to handle different.
 
 ### 4.1 What to store and how?
-The major challange is that we have evidence and we can embed it. Now what should be stored in the vector database? The decision is mainly guided by few principles:
+The major challenge is that we have evidence and we can embed it. Now what should be stored in the vector database? The decision is mainly guided by few principles:
 1. Can database handle only vectors? 
 2. Can there be more vectors per record?
 3. Can DB store additional data?
 
 The answers then guide the design of structures stored in the db. In general we want to make as little as possible roundtrips to vector db and relational db. Thus our ideal db such as [weaviate](https://weaviate.io/) or [qdrant](https://qdrant.tech/) allow us to store both multiple vectors and metadata.
 
-Multiple vectors allow multi-versioned sotrage of processed vectors.
+Multiple vectors allow multi-versioned storage of processed vectors.
 
 Medatada allow efficient faceting and grouping of results.
 
@@ -274,20 +274,20 @@ Each evidence items is stored as a document in the vector database with the foll
 Each evidence item then has zero or more named vectors that in the names point to [MODEL_AGENT](#313-model-agent-model-agent)s `slug` that created the vector. Dimensionality of vector is diven by the model used.
 
 
-Additionaly if vector db allows efficiet fintering of related idem, the materialized membership of evidence items can be stored as `cluster_id` and list of `evidence_id` of all items in the cluster.
+Additionally if vector db allows efficient filtering of related items, the materialized membership of evidence items can be stored as `cluster_id` and list of `evidence_id` of all items in the cluster.
 
 ## 4.3 Search and Retrieval
 The search and retrieval is a bit more complicated. Because we have these issues to solve:
 1. We have multiple source query vectors, see [1.1 The API provides an interface for](#11-the-api-provides-an-interface-for) for reference. Meaning:
     - We have to fuse per-modality results from vector db.
-2. We want to retireve scored information clusters, which are also **filtered** [1.1 The API provides an interface for](#11-the-api-provides-an-interface-for) for reference. Meaning:
+2. We want to retrieve scored information clusters, which are also **filtered** [1.1 The API provides an interface for](#11-the-api-provides-an-interface-for) for reference. Meaning:
     - We have to aggregate evidence item scores into cluster scores.
-3. After the two previous problms are solve. The single modality search becomes trivial. 
+3. After the two previous problems are solved. The single modality search becomes trivial. 
 
 
 ### 4.3.1 General Search and Retrieval Procedure
 0. Initialize collector for clusters and query pointers e.g. `clusters = {}` and `last_evidences = {}`.
-1. The query is processed by relevant [MODEL_AGENT](#313-model-agent-model-agent)s to create one or more query vectors. Or if applicable the query is gathered from database documetn of specific [EVIDENCE](#23-evidence-item-evidence).
+1. The query is processed by relevant [MODEL_AGENT](#313-model-agent-model-agent)s to create one or more query vectors. Or if applicable the query is gathered from database document of specific [EVIDENCE](#23-evidence-item-evidence).
 2. Each `query_vector` is associated with its `type` and unique `evidence_id` (either created or retrieved).
 3. For each `query_vector` and `type` of query vector and unique query `evidence_id` do:
     1. If the vector db does support it. A query is enriched with user-specified filters that filter any metadata.
@@ -299,11 +299,11 @@ The search and retrieval is a bit more complicated. Because we have these issues
     8. For each `evidence_id`, `query_vector` and `cluster_id` of retrieved evidence item the following is done:
         1. Create mapping of modalities for `cluster_id` if this list does not exist e.g. `clusters[cluster_id] = {}`.
         2. Create a mapping `cluster_id` under key of `type` for evidences if it does not exist e.g. `clusters[cluster_id][type] = {}`.
-        3. Create a list of evidence items int the clusters-moadlity-evidence mapping if it does not exist e.g. `clusters[cluster_id][type][query.evidence_id] = []`.
+        3. Create a list of evidence items in the clusters-modality-evidence mapping if it does not exist e.g. `clusters[cluster_id][type][query.evidence_id] = []`.
         3. Add retrieved `evidence_id` to the list of evidence items of `type` for `cluster_id` e.g. `clusters[cluster_id][type][query.evidence_id].append({'evidence_id': evidence_id, 'score': score, 'weight': weight})`.
-4. Chech size of `clusters` mapping and if it is larger than `k`. If not repeat step 3 with pointer starting from `last_evidences`.
+4. Check size of `clusters` mapping and if it is larger than `k`. If not repeat step 3 with pointer starting from `last_evidences`.
 5. Optionally enrich clusters with similarities of other evidence items associated with the head instance of the cluster.
-6. Foe each cluster and moalyty, apply fusion strategy to get single score for the modality for the cluster.
+6. For each cluster and modality, apply fusion strategy to get single score for the modality for the cluster.
 7. For each cluster, apply fusion strategy to get single score for the cluster.
 8. Sort clusters by their score and return top-k.
 
@@ -345,7 +345,7 @@ The following schema is there but fall more into userspace:
 |------------|------|-------------|
 | `profile_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
 | `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who created this search profile. |
-| `strategy` | enum | Eighter of the following strategies: `max`, `average`, `weighted_average`, `reciprocal_rank_fusion`, `comb_sum`, `comb_mnz`, `borda_count`. |
+| `strategy` | enum | Either of the following strategies: `max`, `average`, `weighted_average`, `reciprocal_rank_fusion`, `comb_sum`, `comb_mnz`, `borda_count`. |
 | `configuration` | JSON | Configuration for the fusion strategy, such as weights for the weighted average strategy. |
 
 Indices:
