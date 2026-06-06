@@ -94,9 +94,12 @@ Indices:
 - `principal_id`
 
 ### 2.3 Evidence Item `EVIDENCE`
+> Evidence is any detection, ner etc. It can be modified, but existing records are imutable. Thus a new version has to be created.
+
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `evidence_id` | UUID | [UUIDv6](#20-ids) time driven identifier if this exact evidence item. |
+| `version_id` | UUID | [UUIDv6](#20-ids) time driven identifier created every time a new version is created. |
+| `evidence_id` | UUID | [UUIDv6](#20-ids) time driven unique identifier for this evidence item. |
 | `source_id` | UUID | [UUIDv6](#20-ids) of the [SOURCE](#26-source-source) this evidence item is derived from.|
 | `type` | string | Type of the evidence item (e.g., name mention, face detection, physically located named entity, authority record, etc.). |
 | `initial_data` | JSON | Everything about the evidence item, including its content and any additional metadata. |
@@ -107,6 +110,7 @@ Indices:
 | `deletor_id` | UUID or NULL | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) responsible for marking this evidence item as deleted. |
 
 Indices:
+- `version_id`
 - `evidence_id`
 - `source_id`
 - `initial_data` GIN index for efficient search based on content and metadata of the evidence item.
@@ -142,17 +146,25 @@ Indices:
 
 Constraints
 - entire row is always unique (i.e., the same operation cannot be applied multiple times to the same operand instance with the same result instance).
-- `result_id` is not present as `operand_id` in any different [OPERATION](#25-operation-on-top-of-cluster-instances-operation) (i.e., the operation result in directed acyclic graph).
+- As written `result_id` is not present as `operand_id` in any other [OPERATION](#25-operation-on-top-of-cluster-instances-operation) (i.e., the operation result in directed acyclic graph).
 - `type`, `result_id` (i.e., .e.g., the same instance cannot be the result of multiple different operations).
 - For different `types` of operations:
     - `union`, `intersection`, `disambiguated_join`: `operand_id` is always different for same `type` and `result_id`.
-    - `split`: `result_id` is different for same `type` and `operand_id` (i.e., the same instance can be split into multiple different instances). `operand_id` has different `cluster_id` than `result_id` (i.e., the resulting instance belongs to a different cluster than the operand instance).
+    - `split`: `result_id` is different for same `type` and `operand_id` (i.e., the same instance can be split into multiple different instances). `result_id` has different `cluster_id` than `operand_id` (i.e., the resulting instance belongs to a different cluster than the operand instance).
     - `next`: `operand_id` is always same but `result_id` is different for same `type` (i.e., the same instance can have multiple different next instances). `operand_id` has same `cluster_id` as `result_id` (i.e., the resulting instance belongs to the same cluster as the operand instance).
 
 Indices:
 - `result_id`
 - `operand_id`
 - `type`
+
+#### 2.5.1 Thorough description of operation `split`
+The `split` operation is quite obfuscated right now and the process might not be completely clear. It is basically a way to create new clusters from old ones. The overall mechanism is as follows:
+1. we have [INSTANCE](#22-information-cluster-instance-instance) `A` and new instances (completely new [CLUSTER](#21-information-cluster-cluster) with new `cluster_id`) here labeled as `B1`, `B2`, ..., `Bn` are created with `head_instance_id` pointing to themselves. (e.g. `A` contains evidence for 2 different people of the same name)
+2. We create clusters `B1`, `B2`, ..., `Bn` with `head_instance_id` pointing to the respective instance created in step 1.
+3. Add modifications are applied to `B1`, `B2`, ..., `Bn` according to definition of the split i.e. according to what should be in separated clusters.
+4. Split [OPERATION](#25-operation-on-top-of-cluster-instances-operation) is created with `type` equal to `split`, `operand_id` equal to `A` and `result_id` equal to each of `B1`, `B2`, ..., `Bn`.
+
 
 ### 2.6 Source `SOURCE`
 | Field Name | Type | Description |

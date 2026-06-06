@@ -974,6 +974,56 @@ Triggered when a user uploads a face image or submits a name or text string as a
 
 User-uploaded face images are registered as `s3-image` sources with `provider = local`. The resulting detection is a `face_detection` DERIVED_EVIDENCE produced by the default active MODEL_AGENT for `face_detection`.
 
+### 9.3.1 Embedding server expectations
+
+The embedding server is a dedicated service that converts caller-provided image and text inputs into embeddings consumable by the search pipeline.
+
+Response contract (Pydantic models):
+
+```python
+class DetectionResult(BaseModel):
+    class_id: int
+    confidence: float
+    image_width: int
+    image_height: int
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+    keypoints: list[tuple[float, float, float]] | None = None
+    embedding: list[float] | None = None
+
+
+class AllFacesResult(BaseModel):
+    faces: list[DetectionResult]
+
+
+class TimmImageEmbeddingResponse(BaseModel):
+    embedding: list[float]
+
+
+class TextEmbeddingResponse(BaseModel):
+    embedding: list[float]
+```
+
+Supported query-time modes:
+
+| Mode | Input | Expected response model | Notes |
+|---|---|---|---|
+| Face detection + embedding from upload | Single binary image file (`multipart/form-data`) | `AllFacesResult` | `faces[*].embedding` is used for face-search vectors; bounding box and keypoints are preserved as evidence metadata |
+| Image embedding from upload | Single binary image file (`multipart/form-data`) | `TimmImageEmbeddingResponse` | Used when the caller needs one global image embedding instead of per-face detections |
+| Image embedding from links | One URL or multiple URLs in one request | `TimmImageEmbeddingResponse` per URL | Batch endpoint returns one result entry per URL and per-item error state for partial failures |
+| Text embedding | One text string | `TextEmbeddingResponse` | Used for named-entity and free-text query signals |
+
+People Gator API expectations when integrating these responses:
+
+1. `AllFacesResult.faces` may be empty; this is a valid no-detection result and must not be treated as transport failure.
+2. `DetectionResult.embedding` may be null if detection is requested without embedding; in that case the API must either call an embedding endpoint or skip vector retrieval for that item.
+3. Bounding coordinates from `DetectionResult` (`x_min`, `y_min`, `x_max`, `y_max`) are converted to canonical normalized rectangle metadata used by `face_detection` evidence.
+4. `TimmImageEmbeddingResponse.embedding` and `TextEmbeddingResponse.embedding` are treated as ordered float vectors and validated against the expected model dimension before ANN query.
+5. For URL-based embedding, network and validation failures are handled per item so successful embeddings in the same batch remain usable.
+
+
 ### 9.4 Batched extraction (SERVICE_AGENT import)
 
 Triggered by ingestion pipelines such as `system:kramerius-ingest`, `pipeline:authority-sync-wikidata`, or `pipeline:authority-sync-nkcr`.
