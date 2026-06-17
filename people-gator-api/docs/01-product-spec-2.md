@@ -3,7 +3,7 @@
 ## 1. Introduction
 The PeopleGator API is designed to enable effective person-centric search and retrieval across Czech libraries. The central unit is an **information cluster** — a grouping of typed evidence items (name mentions, face detections, authority records, biographical text, photos, etc.). A person **emerges** from the evidence gathered in their information cluster.
 
-We also manage the dataset of clusters and allow users to automatically, semi-automatically, or manually change evidence within clusters. This includes adding and removing evidence items from clusters, merging clusters, and splitting clusters. The API also allows multiple parallel instance branches of the same cluster to be presented so that annotators can independently work on the same person and reviewers can evaluate how people agree on evidence about the same person.
+We also manage the dataset of clusters and allow users to automatically, semi-automatically, or manually change evidence within clusters. This includes adding and removing evidence items from clusters, merging clusters, and splitting clusters. The API also allows multiple parallel version branches of the same cluster to be presented so that annotators can independently work on the same person and reviewers can evaluate how people agree on evidence about the same person.
 
 Each evidence item has both a type but also a source metadata. which links it to physical sources such as books, urls and other documents. Thus the app has a simple interface for source data management and tracking of processing state for each source.
 
@@ -23,26 +23,73 @@ Each evidence item has both a type but also a source metadata. which links it to
     - face-detection
 
 
-### 1.2 Operations defined on top of information clusters and evidence
-1. Create a new information cluster, just an identifier with info about its head instance.
-2. Add evidence items to an information cluster instance.
-3. Remove evidence items from an information cluster instance.
-4. Merge two or more information cluster instances into one. Via:
-    - Union of all evidence items from the merged clusters.
-    - Intersection of all evidence items from the merged clusters.
-    - Disambiguated join of all evidence items from the merged clusters (all conflicting evidence is resolved prior to merging).
-5. Split an information cluster instance into multiple instances with new cluster identifiers.
-6. Next operation to create a edge beween two cluster instances, and to define instance lineage or branching.
+### 1.2 Version Control Model
 
-Upon an instance operation the instance becomes immutable to preserve the history.
+The API implements **stateless version control** for information clusters. This means:
 
-Evidence operations are append-only,Once an evidence item is added/removed,d the operation cannot be undone.
+1. **Versions are immutable snapshots** — once created, a version cannot be modified. It represents a fixed point in the cluster's evolution.
+2. **Deltas are stateless modifications** — deltas can be applied on top of any version to propose changes, but they never modify the base version itself.
+3. **Commits create new versions** — when deltas are acknowledged via a commit operation, a new immutable version is created with those changes applied.
+4. **Parallel branches are supported** — multiple independent delta sets can be applied to the same base version, enabling collaborative annotation and experimentation.
 
-Cluster Instance operation are thus separated into two categories:
-- **Data transferable** operations: union, intersection, disambiguated join, next. The result is always a product of members from two or more instances. How is defined by the type of operation.
-- **Data non-transferable** operations: split. The members are defined in resulting instances.
+#### Core Principles:
+- **Immutability**: Every version is permanent and cannot be altered after creation.
+- **Statelessness**: Deltas exist independently and can be applied to any version without locking or mutating the base.
+- **Traceability**: All operations preserve complete lineage — which version was the parent, which deltas were applied, and what the result is.
+- **Append-only history**: The version graph only grows; no version or delta is ever deleted.
 
-### 1.3 So what is the source?
+### 1.3 Operations defined on top of information clusters and evidence
+
+#### Version Operations:
+1. **Create a new cluster** — initializes a cluster with its first version (point).
+2. **Apply deltas to create a new version** — acknowledges proposed changes and creates a new immutable version.
+3. **Create parallel branch** — creates an independent delta set from an existing version without committing.
+
+#### Delta Operations (stateless, do not modify base version):
+4. **Add evidence items** — propose adding evidence to a version via delta.
+5. **Remove evidence items** — propose removing evidence from a version via delta.
+
+#### Multi-Version Operations:
+6. **Merge versions** — combine two or more versions into a new version via:
+    - Union of all evidence items from merged versions.
+    - Intersection of all evidence items from merged versions.
+    - Disambiguated join (conflicts resolved prior to merge).
+7. **Split a version** — create multiple new clusters from a single version, each with its own head version.
+8. **Create next version** — establish lineage by creating a successor version from a single parent.
+
+All operations preserve immutability: the source versions remain unchanged, and results are always new versions.
+
+#### 1.3.1 Example Workflows
+
+**Creating a new cluster with initial version:**
+```
+1. CREATE CLUSTER C1 → creates cluster with no versions
+2. CREATE VERSION V1 (cluster_id=C1, parent=NULL) → initial version
+3. CREATE DELTA D1 (version_id=V1, type=add_evidence, evidence_id=E1)
+4. CREATE DELTA D2 (version_id=V1, type=add_evidence, evidence_id=E2)
+5. COMMIT (base_version_id=V1, delta_ids=[D1, D2]) → creates V2
+```
+
+**Parallel branching for collaborative annotation:**
+```
+1. Start with VERSION V2 from CLUSTER C1
+2. Annotator A creates DELTA set DA1, DA2 on V2 (not yet committed)
+3. Annotator B creates DELTA set DB1 on V2 (not yet committed)
+4. Annotator A commits → creates VERSION V3A
+5. Annotator B commits → creates VERSION V3B
+6. Both V3A and V3B have V2 as parent but are independent branches
+```
+
+**Merging parallel branches:**
+```
+1. Have VERSION V3A and V3B (both from same cluster C1)
+2. Perform UNION operation → creates VERSION V4
+3. V4 contains all evidence from both V3A and V3B
+4. Update CLUSTER C1 head_version_id to V4
+```
+
+
+### 1.4 So what is the source?
 1. Saves information about some abstract form of the data e.g.:
     - a page in a book... `{'library': 'xyz'; 'document': 'abc'; 'page': 123}`
     - a unique wikidata identifier of a person... `{'wikidata': 'Q12345'}`
@@ -70,30 +117,56 @@ We use UUIDv6 as the base with a exact definition of number in the sequence and 
 | Field Name | Type | Description |
 |------------|------|-------------|
 | `cluster_id` | UUID | Unique global time driven identifier. See [UUIDv6](#20-ids) for details. |
-| `head_instance_id` | UUID or NULL | Identifier of the head instance of the cluster or none if cluster is irrelevant. |
-| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who created the cluster. |
+| `head_version_id` | UUID or NULL | Identifier of the head (latest committed) [VERSION](#22-information-cluster-version-version) of the cluster or NULL if cluster has no versions yet. |
+| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#28-principal-principal) who created the cluster. |
 
 Constraints:
-- `head_instance_id` must be an instance that belongs to the cluster.
+- `head_version_id` must be a version that belongs to the cluster.
 
 Indices:
 - `cluster_id`
-- `head_instance_id`
+- `head_version_id`
 - `principal_id`
 
-### 2.2 Information Cluster Instance `INSTANCE`
+### 2.2 Information Cluster Version `VERSION`
+> A version is an immutable snapshot of a cluster at a point in time. It cannot be modified after creation.
+
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `instance_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
-| `cluster_id` | UUID | [UUIDv6](#20-ids) of the [CLUSTER](#21-information-cluster-cluster) this instance belongs to.|
-| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who created the cluster instance. |
+| `version_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
+| `cluster_id` | UUID | [UUIDv6](#20-ids) of the [CLUSTER](#21-information-cluster-cluster) this version belongs to.|
+| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who created this version (via commit). |
+| `parent_version_id` | UUID or NULL | [UUIDv6](#20-ids) of the parent [VERSION](#22-information-cluster-version-version) this version was derived from, or NULL for initial versions. |
+| `operation_type` | enum or NULL | Type of operation that created this version: `apply`, `union`, `intersection`, `disambiguated_join`, `split`, `parallel`, or NULL for initial versions. |
 
 Indices:
-- `instance_id`
+- `version_id`
 - `cluster_id`
+- `parent_version_id`
 - `principal_id`
 
-### 2.3 Evidence Item `EVIDENCE`
+### 2.3 Cluster Delta `DELTA`
+> Deltas are stateless modifications that propose changes to a version. They do not modify the base version and can be applied to any version.
+
+| Field Name | Type | Description |
+|------------|------|-------------|
+| `delta_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
+| `version_id` | UUID | [UUIDv6](#20-ids) of the [VERSION](#22-information-cluster-version-version) this delta is applied on top of.|
+| `type` | enum | Either `add_evidence` or `remove_evidence`. |
+| `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#24-evidence-item-evidence) item being added or removed. |
+| `weight` | float | A weight associated with the delta, indicating the strength of the evidence being added or removed. |
+| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who created this delta. |
+
+Constraints: 
+- Unique constraint on (`version_id`, `type`, `evidence_id`) — the same evidence cannot be added/removed multiple times via deltas to the same version.
+
+Indices:
+- `delta_id`
+- `version_id`
+- `evidence_id`
+- `principal_id`
+
+### 2.4 Evidence Item `EVIDENCE`
 > Evidence is any detection, ner etc. It can be modified, but existing records are imutable. Thus a new version has to be created.
 
 | Field Name | Type | Description |
@@ -119,54 +192,62 @@ Indices:
 - `modifier_id`
 - `deletor_id`
 
-### 2.4 Cluster Instance Modification `MODIFICATION`
+### 2.5 Cluster Version Commit `COMMIT`
+> A commit acknowledges deltas applied to a base version and creates a new immutable version. This is the only way to create new versions from deltas.
+
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `type` | enum | Either of the following operations: `add_evidence` or `remove_evidence`. |
-| `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item being added or removed. |
-| `weight` | float | A weight associated with the modification, indicating the strength of the evidence being added or removed. This can be used to influence the scoring of clusters during search and retrieval. |
-| `instance_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this modification applies to.|
-| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) responsible for this modification. |
+| `commit_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
+| `result_version_id` | UUID | [UUIDv6](#20-ids) of the new [VERSION](#22-information-cluster-version-version) created by this commit. |
+| `base_version_id` | UUID | [UUIDv6](#20-ids) of the base [VERSION](#22-information-cluster-version-version) that deltas were applied to. |
+| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#27-principal-principal) who executed this commit. |
+| `delta_ids` | JSON | List of [UUIDv6](#20-ids) of all [DELTA](#23-cluster-delta-delta) records acknowledged by this commit. |
 
-Constraints: 
-- `type`, `evidence_id`, `instance_id` (i.e., the same evidence item cannot be added or removed multiple times from the same instance).
-- `instance_id` cannot be present as `operand_id` in any [OPERATION](#25-operation-on-top-of-cluster-instances-operation).
+Constraints:
+- `result_version_id` must be unique and must reference a valid VERSION.
+- `base_version_id` cannot equal `result_version_id` (a version cannot be its own parent).
+- All `delta_ids` must reference deltas that have `version_id` equal to `base_version_id`.
 
 Indices:
-- `evidence_id`
-- `instance_id`
+- `commit_id`
+- `result_version_id`
+- `base_version_id`
 - `principal_id`
 
-### 2.5 Operation on top of Cluster Instances `OPERATION`
+### 2.6 Version Lineage Operation `VERSION_OPERATION`
+> Tracks how versions are related through multi-version operations (union, intersection, split, etc.).
+
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `result_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) resulting from this operation. |
-| `operand_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this operation is applied to. |
-| `type` | enum | Either of the following operations: `union`, `intersection`, `disambiguated_join`, `split`, `next`. |
+| `operation_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
+| `result_version_id` | UUID | [UUIDv6](#20-ids) of the [VERSION](#22-information-cluster-version-version) resulting from this operation. |
+| `operand_version_id` | UUID | [UUIDv6](#20-ids) of the [VERSION](#22-information-cluster-version-version) this operation is applied to. |
+| `type` | enum | One of: `union`, `intersection`, `disambiguated_join`, `split`, `parallel`. |
 
-Constraints
-- entire row is always unique (i.e., the same operation cannot be applied multiple times to the same operand instance with the same result instance).
-- As written `result_id` is not present as `operand_id` in any other [OPERATION](#25-operation-on-top-of-cluster-instances-operation) (i.e., the operation result in directed acyclic graph).
-- `type`, `result_id` (i.e., .e.g., the same instance cannot be the result of multiple different operations).
-- For different `types` of operations:
-    - `union`, `intersection`, `disambiguated_join`: `operand_id` is always different for same `type` and `result_id`.
-    - `split`: `result_id` is different for same `type` and `operand_id` (i.e., the same instance can be split into multiple different instances). `result_id` has different `cluster_id` than `operand_id` (i.e., the resulting instance belongs to a different cluster than the operand instance).
-    - `next`: `operand_id` is always same but `result_id` is different for same `type` (i.e., the same instance can have multiple different next instances). `operand_id` has same `cluster_id` as `result_id` (i.e., the resulting instance belongs to the same cluster as the operand instance).
+Constraints:
+- Unique constraint on (`result_version_id`, `operand_version_id`, `type`).
+- `result_version_id` cannot appear as `operand_version_id` in any other operation (ensures DAG structure).
+- For `union`, `intersection`, `disambiguated_join`: `operand_version_id` must be different for same `type` and `result_version_id`.
+- For `split`: `result_version_id` must be different for same `type` and `operand_version_id`. The resulting version has different `cluster_id` than operand (creates new cluster).
+- For `parallel`: creates independent branch from same cluster. Result has same `cluster_id` as operand.
 
 Indices:
-- `result_id`
-- `operand_id`
+- `operation_id`
+- `result_version_id`
+- `operand_version_id`
 - `type`
 
-#### 2.5.1 Thorough description of operation `split`
-The `split` operation is quite obfuscated right now and the process might not be completely clear. It is basically a way to create new clusters from old ones. The overall mechanism is as follows:
-1. we have [INSTANCE](#22-information-cluster-instance-instance) `A` and new instances (completely new [CLUSTER](#21-information-cluster-cluster) with new `cluster_id`) here labeled as `B1`, `B2`, ..., `Bn` are created with `head_instance_id` pointing to themselves. (e.g. `A` contains evidence for 2 different people of the same name)
-2. We create clusters `B1`, `B2`, ..., `Bn` with `head_instance_id` pointing to the respective instance created in step 1.
-3. Add modifications are applied to `B1`, `B2`, ..., `Bn` according to definition of the split i.e. according to what should be in separated clusters.
-4. Split [OPERATION](#25-operation-on-top-of-cluster-instances-operation) is created with `type` equal to `split`, `operand_id` equal to `A` and `result_id` equal to each of `B1`, `B2`, ..., `Bn`.
+#### 2.6.1 Thorough description of operation `split`
+The `split` operation creates new clusters from an existing version. The process:
+1. Start with [VERSION](#22-information-cluster-version-version) `A` from cluster `X`.
+2. Create new clusters `B1`, `B2`, ..., `Bn` (each with new `cluster_id`).
+3. For each new cluster, create an initial version with `parent_version_id` = `A.version_id` and `operation_type` = `split`.
+4. Create deltas for each new version according to split logic (which evidence goes to which cluster).
+5. Commit the deltas to create fixed versions for each new cluster.
+6. Record [VERSION_OPERATION](#26-version-lineage-operation-version_operation) with `type` = `split`, `operand_version_id` = `A`, and `result_version_id` = each new version.
 
 
-### 2.6 Source `SOURCE`
+### 2.7 Source `SOURCE`
 | Field Name | Type | Description |
 |------------|------|-------------|
 | `source_id` | UUID | Unique [UUIDv6](#20-ids) time driven identifier.|
@@ -182,7 +263,7 @@ Constraints:
 Indices:
 - `source_id`
 
-### 2.7 Principal `PRINCIPAL`
+### 2.8 Principal `PRINCIPAL`
 > I.e. anything that modifies anything else in the system.
 
 | Field Name | Type | Description |
@@ -247,14 +328,23 @@ Constraints:
 
 Unique constraint: `source_id`, `principal_id` (i.e., the same source cannot be processed multiple times by the same principal).
 
-### 3.3 Membership of all evidence items in cluster instances `MEMBERSHIP`
-> To make the current state of all cluster instances materialized.
+### 3.4 Membership of Evidence Items in Cluster Versions `MEMBERSHIP`
+> Materialized view of which evidence items belong to which cluster version. This is computed from commits and deltas, but stored for efficient querying.
 
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `instance_id` | UUID | [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this membership applies to. |
-| `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item that is a member of the instance. |
-| `weight` | float | A weight associated with the membership, indicating the strength of the evidence's association with the instance. This can be used to influence the scoring of clusters during search and retrieval. |
+| `version_id` | UUID | [UUIDv6](#20-ids) of the [VERSION](#22-information-cluster-version-version) this membership applies to. |
+| `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#24-evidence-item-evidence) item that is a member of the version. |
+| `weight` | float | A weight associated with the membership, indicating the strength of the evidence's association with the version. This can be used to influence the scoring of clusters during search and retrieval. |
+
+Constraints:
+- Unique constraint on (`version_id`, `evidence_id`) — same evidence cannot appear multiple times in same version.
+
+Indices:
+- `version_id`
+- `evidence_id`
+
+> **Note**: Membership is derived from the commit history. When a commit is created, it applies all referenced deltas to the base version's membership to produce the new version's membership. This table provides a materialized view for efficient querying.
 
 ## 4. Vector Search Architecture
 The general principles defined in this section can be applied to any kind of vector documesnt store db, that is able to have multiple vector indicies for same document, mainly to handle different.
@@ -276,12 +366,12 @@ Each evidence items is stored as a document in the vector database with the foll
 
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#23-evidence-item-evidence) item this document represents. |
-| `instance_id` | list[UUID] | | List of [UUIDv6](#20-ids) of the [INSTANCE](#22-information-cluster-instance-instance) this evidence item is a member of. |
+| `evidence_id` | UUID | [UUIDv6](#20-ids) of the [EVIDENCE](#24-evidence-item-evidence) item this document represents. |
+| `version_id` | list[UUID] | List of [UUIDv6](#20-ids) of the [VERSION](#22-information-cluster-version-version) this evidence item is a member of. |
 | `type` | string | Type of the evidence item (e.g., name mention, face detection, physically located named entity, authority record, etc.). |
-| `initial_data` | JSON | Metadata from `initial_data` of [EVIDENCE](#23-evidence-item-evidence) item. |
-| `modified_data` | JSON or NULL | Metadata from `modified_data` of [EVIDENCE](#23-evidence-item-evidence) item, if any. |
-| `abstract_source` | JSON | Metadata `abstract_source` from relevant [SOURCE](#26-source-source) items. |
+| `initial_data` | JSON | Metadata from `initial_data` of [EVIDENCE](#24-evidence-item-evidence) item. |
+| `modified_data` | JSON or NULL | Metadata from `modified_data` of [EVIDENCE](#24-evidence-item-evidence) item, if any. |
+| `abstract_source` | JSON | Metadata `abstract_source` from relevant [SOURCE](#27-source-source) items. |
 
 Each evidence item then has zero or more named vectors that in the names point to [MODEL_AGENT](#313-model-agent-model-agent)s `slug` that created the vector. Dimensionality of vector is diven by the model used.
 
@@ -299,22 +389,22 @@ The search and retrieval is a bit more complicated. Because we have these issues
 
 ### 4.3.1 General Search and Retrieval Procedure
 0. Initialize collector for clusters and query pointers e.g. `clusters = {}` and `last_evidences = {}`.
-1. The query is processed by relevant [MODEL_AGENT](#313-model-agent-model-agent)s to create one or more query vectors. Or if applicable the query is gathered from database document of specific [EVIDENCE](#23-evidence-item-evidence).
+1. The query is processed by relevant [MODEL_AGENT](#313-model-agent-model-agent)s to create one or more query vectors. Or if applicable the query is gathered from database document of specific [EVIDENCE](#24-evidence-item-evidence).
 2. Each `query_vector` is associated with its `type` and unique `evidence_id` (either created or retrieved).
 3. For each `query_vector` and `type` of query vector and unique query `evidence_id` do:
     1. If the vector db does support it. A query is enriched with user-specified filters that filter any metadata.
     2. The vector db is queried to retrive top-k most similar evidence of the same `type`.
     3. Evidence items and their IDs are retrieved from the vector db.
     5. Last `evidence_id` is saved as a pointer for pagination e.g. `last_evidences[evidence_id] = evidence_id`.
-    6. The main db is queried to retrieve `cluster_id` if evidence is in `head_instance_id` of any [CLUSTER](#21-information-cluster-cluster), also `weight` of association is retrieved.
-    7. Only evidence that is a member of the cluster instance is kept, the rest is filtered out.
+    6. The main db is queried to retrieve `cluster_id` if evidence is in the head [VERSION](#22-information-cluster-version-version) of any [CLUSTER](#21-information-cluster-cluster), also `weight` of association is retrieved.
+    7. Only evidence that is a member of the cluster version is kept, the rest is filtered out.
     8. For each `evidence_id`, `query_vector` and `cluster_id` of retrieved evidence item the following is done:
         1. Create mapping of modalities for `cluster_id` if this list does not exist e.g. `clusters[cluster_id] = {}`.
         2. Create a mapping `cluster_id` under key of `type` for evidences if it does not exist e.g. `clusters[cluster_id][type] = {}`.
         3. Create a list of evidence items in the clusters-modality-evidence mapping if it does not exist e.g. `clusters[cluster_id][type][query.evidence_id] = []`.
         3. Add retrieved `evidence_id` to the list of evidence items of `type` for `cluster_id` e.g. `clusters[cluster_id][type][query.evidence_id].append({'evidence_id': evidence_id, 'score': score, 'weight': weight})`.
 4. Check size of `clusters` mapping and if it is larger than `k`. If not repeat step 3 with pointer starting from `last_evidences`.
-5. Optionally enrich clusters with similarities of other evidence items associated with the head instance of the cluster.
+5. Optionally enrich clusters with similarities of other evidence items associated with the head version of the cluster.
 6. For each cluster and modality, apply fusion strategy to get single score for the modality for the cluster.
 7. For each cluster, apply fusion strategy to get single score for the cluster.
 8. Sort clusters by their score and return top-k.
