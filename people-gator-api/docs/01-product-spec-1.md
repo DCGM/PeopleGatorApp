@@ -217,113 +217,42 @@ Principals are entities that create or modify records in the system. See [PRINCI
 
 ### 3.2 Relationship Semantics
 
-#### 3.2.1 1-to-N Relationships (Single Identity)
+#### 3.2.1 N-to-N Relationships (Single Identity) between annotations and identities
 
 The most common case: an annotation links to exactly one identity.
 
 ```
 IDENTITY (identity_id=I1)
-  ├─ NAMED_ENTITY (entity_id=E1) via IDENTITY_LINK
-  ├─ DETECTION (detection_id=D1) via IDENTITY_LINK
-  ├─ DESCRIPTION (description_id=DS1) via IDENTITY_LINK
-  └─ ALTERNATIVE_NAME (alt_name_id=AN1) via IDENTITY_LINK
+  ├─ NAMED_ENTITY (entity_id=E1) via NAMED_ENTITY_LINK
+  ├─ DETECTION (detection_id=D1) via DETECTION_LINK
+  ├─ DESCRIPTION (description_id=DS1) via DESCRIPTION_LINK
+  └─ ALTERNATIVE_NAME (alt_name_id=AN1) via ALTERNATIVE_NAME_LINK
 ```
-
-#### 3.2.2 N-to-N Relationships (Identity Variants)
-
-Multiple identities can link to the same annotation, representing uncertainty or variant interpretations:
-
-```
-ANNOTATION (e.g., NAMED_ENTITY E1)
-  ├─ IDENTITY (I1) via IDENTITY_LINK L1 (confidence=0.8)
-  ├─ IDENTITY (I2) via IDENTITY_LINK L2 (confidence=0.6)
-  └─ IDENTITY (I3) via IDENTITY_LINK L3 (confidence=0.3)
-```
-
-This allows:
-- **Uncertainty representation** — Multiple candidate identities with confidence scores
-- **Variant tracking** — Different interpretations by different annotators
-- **Evolution over time** — New links added as more evidence emerges
 
 #### 3.2.3 Future: Identity Relationships
 
 While not implemented in this version, future extensions may include:
 - **Same-as relationships** — Linking identities believed to represent the same person
-- **Hierarchical relationships** — Parent-child, family, organizational connections
 - **Temporal relationships** — Identities valid in different time periods
 
-## 4. Usage Examples
+## 4. Implementation Notes
 
-### 4.1 Creating a New Identity with Annotations
-
-```
-1. CREATE IDENTITY I1 (principal_id=P1)
-2. CREATE NAMED_ENTITY E1 (text="Jan Neruda", source_id=S1, offset_start=42, offset_end=52)
-3. CREATE IDENTITY_LINK L1 (identity_id=I1, annotation_type="named_entity", annotation_id=E1)
-4. CREATE DETECTION D1 (source_id=S2, bounding_box={...}, keypoints=[...])
-5. CREATE IDENTITY_LINK L2 (identity_id=I1, annotation_type="detection", annotation_id=D1)
-6. CREATE ALTERNATIVE_NAME AN1 (name="Jan Nepomuk Neruda", name_type="BIRTH_NAME", source_type="WIKIDATA")
-7. CREATE IDENTITY_LINK L3 (identity_id=I1, annotation_type="alternative_name", annotation_id=AN1)
-```
-
-### 4.2 Linking Multiple Identities to One Annotation
-
-```
-1. CREATE NAMED_ENTITY E1 (text="Neruda", source_id=S1, ...)
-2. CREATE IDENTITY I1 (principal_id=P1)  -- Jan Neruda (poet)
-3. CREATE IDENTITY I2 (principal_id=P1)  -- Jan Neruda (politician)
-4. CREATE IDENTITY_LINK L1 (identity_id=I1, annotation_type="named_entity", annotation_id=E1, confidence=0.7)
-5. CREATE IDENTITY_LINK L2 (identity_id=I2, annotation_type="named_entity", annotation_id=E1, confidence=0.3)
-```
-
-### 4.3 Search by Annotation
-
-```
--- Find all identities linked to named entities containing "Neruda"
-SELECT DISTINCT i.* 
-FROM IDENTITY i
-JOIN IDENTITY_LINK il ON i.identity_id = il.identity_id
-JOIN NAMED_ENTITY ne ON il.annotation_id = ne.entity_id
-WHERE il.annotation_type = 'named_entity'
-  AND ne.text ILIKE '%Neruda%';
-
--- Find identities with face detections from a specific source
-SELECT DISTINCT i.*
-FROM IDENTITY i
-JOIN IDENTITY_LINK il ON i.identity_id = il.identity_id
-JOIN DETECTION d ON il.annotation_id = d.detection_id
-WHERE il.annotation_type = 'detection'
-  AND d.source_id = 'S2';
-```
-
-## 5. Implementation Notes
-
-### 5.1 Immutability
+### 4.1 Immutability
 
 All annotation records are immutable once created. Updates require:
 1. Creating a new annotation record with updated data
 2. Creating a new identity link to the new annotation
 3. Optionally marking the old link as superseded (via metadata)
 
-### 5.2 Confidence Scoring
+### 4.2 Confidence Scoring
 
 Both annotations and identity links support confidence scores:
 - **Annotation confidence** — How certain the model/detector is about the detection
 - **Link confidence** — How certain we are that the annotation refers to this identity
 
-### 5.3 Provenance Tracking
+### 4.3 Provenance Tracking
 
 Every record tracks its origin:
 - **Model agents** — Automated detections include model version and parameters
 - **Principal agents** — Manual curation includes user/service identity
 - **External sources** — Wikidata and authority references include source IDs
-
-### 5.4 Indexing Strategy
-
-Key indices for common query patterns:
-- `IDENTITY_LINK(identity_id)` — Find all annotations for an identity
-- `IDENTITY_LINK(annotation_type, annotation_id)` — Find all identities for an annotation
-- `NAMED_ENTITY(text)` — Exact name lookups
-- `ALTERNATIVE_NAME(name)` — Name variant searches
-- `DETECTION(source_id)` — Find all faces in an image
-- `DESCRIPTION(source_ref)` — Authority record lookups 
