@@ -157,30 +157,83 @@ Indices:
 - `language`
 - `principal_id`
 
-### 2.6 Identity Link `IDENTITY_LINK`
+## 2.6 Multi-Annotator Identity Annotation and Consensus
 
-> Links annotations to identities, supporting both 1-to-N and N-to-N relationships.
+The system supports multi-annotator annotation of evidence items belonging to an identity. Annotators do not directly modify the current identity state. Instead, they create immutable annotation decisions. A separate explicit consensus snapshot is then created from these decisions and attached to the identity as its current state.
+
+This design preserves individual annotator decisions, supports multiple consensus methods, and allows annotators to inspect whether their decisions were included in, contradicted by, or ignored by the current consensus.
+
+### 2.6.1 Annotation Decision `LINK_DECISION`
+> An immutable decision by one annotator about whether a specific item belongs to an identity.
 
 | Field Name | Type | Description |
 |------------|------|-------------|
-| `link_id` | UUID | Unique [UUIDv6](#20-ids) time-driven identifier for this link. |
-| `identity_id` | UUID | [UUIDv6](#20-ids) of the [IDENTITY](#21-identity-identity) being linked to. |
-| `annotation_type` | STRING | Type of annotation being linked: `named_entity`, `detection`, `description`, `alternative_name`. |
-| `annotation_id` | UUID | [UUIDv6](#20-ids) of the specific annotation record (entity_id, detection_id, etc.). |
-| `confidence` | FLOAT | Confidence score of this link (0.0 to 1.0). |
-| `principal_id` | UUID | [UUIDv6](#20-ids) of the [PRINCIPAL](#28-principal-principal) who created this link. |
-| `created_at` | TIMESTAMP | Creation timestamp of this link record. |
+| `decision_id` | UUID | Unique UUIDv6 identifier for this decision. |
+| `identity_id` | UUID | UUIDv6 of the IDENTITY being annotated. |
+| `annotation_type` | ENUM | Type of annotation being judged: `named_entity`, `detection`, `description`, `alternative_name`. |
+| `annotation_id` | UUID | UUIDv6 of the specific annotation record. |
+| `principal_id` | UUID | UUIDv6 of the annotator who created this decision. |
+| `decision` | ENUM | One of: `include`, `exclude`, `uncertain`, `garbage`. |
+| `confidence` | FLOAT or NULL | Optional confidence score assigned by the annotator. |
+| `created_at` | TIMESTAMP | Creation timestamp of this decision. |
 
 Constraints:
-- `link_id` is unique across all identity links.
-- Unique constraint on (`identity_id`, `annotation_type`, `annotation_id`) — same annotation cannot link to same identity multiple times.
+
+- `decision_id` is unique.
+- `identity_id` must reference an existing IDENTITY.
+- `principal_id` must reference an existing PRINCIPAL.
+- `annotation_type` must refer to a supported annotation table.
+- Multiple annotators may create decisions for the same (identity_id, annotation_type, annotation_id).
+- The same annotator may create multiple decisions over time; the latest decision is used when generating a new consensus.
 
 Indices:
-- `link_id`
+
+- `decision_id`
 - `identity_id`
-- `annotation_type`
-- `annotation_id`
 - `principal_id`
+- (`identity_id`, `annotation_type`, `annotation_id`)
+- (`identity_id`, `annotation_type`, `annotation_id`, `principal_id`)
+- `created_at`
+
+### 2.6.2 Consensus Method Enum
+> Consensus creation is controlled by a simple enum, not a separate strategy table.
+
+Allowed values:
+
+| Value | Meaning |
+|-------|---------|
+| `union` | Include an item if at least one annotator included it. |
+| `majority` | Include an item if include decisions are stronger than exclude decisions. |
+| `strict` | Include an item only if all relevant annotators included it. |
+| `reviewer` | Include or exclude items according to a reviewer/adjudicator decision. |
+
+The exact implementation of each method is application logic. The method used for a consensus snapshot is stored directly on the consensus record.
+
+### 2.6.3 Identity Consensus `LINK_CONSENSUS`
+> An explicitly created consensus for single evidence annotation.
+
+| Field Name | Type | Description |
+|------------|------|-------------|
+| `consensus_id` | UUID | Unique UUIDv6 identifier for this consensus snapshot. |
+| `identity_id` | UUID | UUIDv6 of the IDENTITY this consensus belongs to. |
+| `annotation_type` | ENUM | Type of annotation being judged: `named_entity`, `detection`, `description`, `alternative_name`. |
+| `annotation_id` | UUID | UUIDv6 of the specific annotation record. |
+| `decision` | ENUM | One of: `include`, `exclude`, `uncertain`, `garbage`. |
+| `method` | ENUM | Consensus method used: union, majority, strict, or reviewer. |
+| `created_by` | UUID | UUIDv6 of the PRINCIPAL who created this consensus snapshot. |
+| `created_at` | TIMESTAMP | Creation timestamp of this consensus snapshot. |
+| `decision_cutoff_at` | TIMESTAMP or NULL | Optional cutoff time; only decisions created at or before this time are considered. |
+
+Constraints:
+
+- `consensus_id` is unique.
+- `identity_id` must reference an existing IDENTITY.
+Indices:
+- `consensus_id`
+- `identity_id`
+- `method`
+- `created_by`
+- `created_at`
 
 ### 2.7 Source `SOURCE`
 
