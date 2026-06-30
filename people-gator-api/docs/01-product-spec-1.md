@@ -204,7 +204,6 @@ Allowed values:
 |-------|---------|
 | `union` | Include an item if at least one annotator included it. |
 | `majority` | Include an item if include decisions are stronger than exclude decisions. |
-| `strict` | Include an item only if all relevant annotators included it. |
 | `reviewer` | Include or exclude items according to a reviewer/adjudicator decision. |
 
 The exact implementation of each method is application logic. The method used for a consensus snapshot is stored directly on the consensus record.
@@ -219,7 +218,7 @@ The exact implementation of each method is application logic. The method used fo
 | `annotation_type` | ENUM | Type of annotation being judged: `named_entity`, `detection`, `description`, `alternative_name`. |
 | `annotation_id` | UUID | UUIDv6 of the specific annotation record. |
 | `decision` | ENUM | One of: `include`, `exclude`, `uncertain`, `garbage`. |
-| `method` | ENUM | Consensus method used: union, majority, strict, or reviewer. |
+| `method` | ENUM | Consensus method used: `union`, `majority`, or `reviewer`. |
 | `created_by` | UUID | UUIDv6 of the PRINCIPAL who created this consensus snapshot. |
 | `created_at` | TIMESTAMP | Creation timestamp of this consensus snapshot. |
 | `decision_cutoff_at` | TIMESTAMP or NULL | Optional cutoff time; only decisions created at or before this time are considered. |
@@ -228,6 +227,8 @@ Constraints:
 
 - `consensus_id` is unique.
 - `identity_id` must reference an existing IDENTITY.
+- `annotation_id` should be only one consensus per evidence item. This avoids assigning multiple conflicting consensus decisions to the same evidence item. Thus it is unique.
+
 Indices:
 - `consensus_id`
 - `identity_id`
