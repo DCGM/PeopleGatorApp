@@ -32,6 +32,11 @@ from people_gator_api.schemas.identities import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Mentions
+# ---------------------------------------------------------------------------
+
+
 def _mention_out(item: Mention) -> MentionResponse:
     return MentionResponse(
         mention_id=item.mention_id,
@@ -42,7 +47,6 @@ def _mention_out(item: Mention) -> MentionResponse:
         model_agent_id=item.model_agent_id,
         confidence=item.confidence,
     )
-
 
 async def create_mention(
     session: AsyncSession,
@@ -83,6 +87,12 @@ async def list_mentions(
         limit=limit,
     )
     return [_mention_out(item) for item in items]
+
+
+
+# ---------------------------------------------------------------------------
+# Information
+# ---------------------------------------------------------------------------
 
 
 def _information_out(item: Information) -> InformationResponse:
@@ -132,6 +142,11 @@ async def list_information(
     return [_information_out(item) for item in items]
 
 
+# ---------------------------------------------------------------------------
+# Document Mentions
+# ---------------------------------------------------------------------------
+
+
 def _document_mention_out(item: DocumentMention) -> DocumentMentionResponse:
     return DocumentMentionResponse(
         document_mention_id=item.document_mention_id,
@@ -179,6 +194,11 @@ async def list_document_mentions(
         limit=limit,
     )
     return [_document_mention_out(item) for item in items]
+
+
+# ---------------------------------------------------------------------------
+# Faces
+# ---------------------------------------------------------------------------
 
 
 def _face_out(item: Face) -> FaceResponse:
@@ -256,6 +276,11 @@ async def list_faces(
     return [_face_out(item) for item in items]
 
 
+# ---------------------------------------------------------------------------
+# Descriptions
+# ---------------------------------------------------------------------------
+
+
 def _description_out(item: Description) -> DescriptionResponse:
     return DescriptionResponse(
         description_id=item.description_id,
@@ -303,6 +328,11 @@ async def list_descriptions(
         limit=limit,
     )
     return [_description_out(item) for item in items]
+
+
+# ---------------------------------------------------------------------------
+# Names
+# ---------------------------------------------------------------------------
 
 
 def _name_out(item: Name) -> NameResponse:
