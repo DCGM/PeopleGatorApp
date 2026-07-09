@@ -34,8 +34,8 @@ from people_gator_api.services.vector_service.schemas import (
     AnnotationSearchResult,
     IdentitySearchResult,
 )
-from people_gator_api.services.vector_service.weaviate.schema import (
-    ANNOTATION_EMBEDDING_COLLECTION,
+from people_gator_api.services.vector_service.schema import (
+    ANNOTATION_COLLECTION_BY_TYPE,
     FACE_VECTOR,
     IDENTITY_SNAPSHOT_COLLECTION,
     NAME_VECTOR,
@@ -87,46 +87,38 @@ class VectorSearchService:
         Returns:
             Ranked list of :class:`AnnotationSearchResult`, closest first.
         """
-        collection = self._client.collections.get(ANNOTATION_EMBEDDING_COLLECTION)
-
-        filters = _build_annotation_filters(
-            annotation_type=annotation_type, identity_id=identity_id,
-        )
-
-        response = await collection.query.near_vector(
-            near_vector=vector,
-            limit=limit,
-            certainty=certainty,
-            distance=distance,
-            filters=filters,
-            return_metadata=MetadataQuery(distance=True, certainty=True),
-        )
-
         results: list[AnnotationSearchResult] = []
-        for obj in response.objects:
-            props = obj.properties
-            results.append(
-                AnnotationSearchResult(
-                    weaviate_id=obj.uuid,
-                    annotation_type=AnnotationType(str(props.get("annotation_type"))),
-                    annotation_id=UUID(str(props.get("annotation_id"))),
-                    source_id=UUID(str(props.get("source_id"))),
-                    model_agent_id=(
-                        UUID(str(props["model_agent_id"]))
-                        if props.get("model_agent_id")
-                        else None
-                    ),
-                    confidence=cast(float | None, props.get("confidence")),
-                    identity_id=(
-                        UUID(str(props["identity_id"]))
-                        if props.get("identity_id")
-                        else None
-                    ),
-                    distance=cast(float | None, getattr(obj.metadata, "distance", None)) if obj.metadata else None,
-                    certainty=cast(float | None, getattr(obj.metadata, "certainty", None)) if obj.metadata else None,
-                )
+        annotation_types: list[AnnotationType]
+        if annotation_type is not None:
+            annotation_types = [annotation_type]
+        else:
+            annotation_types = list(ANNOTATION_COLLECTION_BY_TYPE.keys())
+
+        for candidate_type in annotation_types:
+            collection = self._client.collections.get(
+                ANNOTATION_COLLECTION_BY_TYPE[candidate_type]
             )
-        return results
+            filters = _build_annotation_filters(
+                annotation_type=candidate_type,
+                identity_id=identity_id,
+            )
+
+            response = await collection.query.near_vector(
+                near_vector=vector,
+                limit=limit,
+                certainty=certainty,
+                distance=distance,
+                filters=filters,
+                return_metadata=MetadataQuery(distance=True, certainty=True),
+            )
+            results.extend(
+                _annotation_objects_to_results(response.objects, candidate_type)
+            )
+
+        return sorted(
+            results,
+            key=lambda item: item.distance if item.distance is not None else float("inf"),
+        )[:limit]
 
     # ------------------------------------------------------------------
     # Identity-level search — single modality
@@ -278,9 +270,12 @@ def _build_annotation_filters(
 ) -> Any:
     """Compose a Weaviate filter from optional annotation search constraints."""
     clauses: list[Any] = []
-    if annotation_type is not None:
-        clauses.append(Filter.by_property("annotation_type").equal(annotation_type.value))
-    if identity_id is not None:
+    if identity_id is not None and annotation_type in {
+        AnnotationType.person_name,
+        AnnotationType.description,
+        AnnotationType.face,
+        AnnotationType.document_mention,
+    }:
         clauses.append(Filter.by_property("identity_id").equal(str(identity_id)))
     if not clauses:
         return None
@@ -312,3 +307,48 @@ def _object_to_identity_result(
         name_distance=distance if primary_named_vector == NAME_VECTOR else None,
         combined_distance=distance if primary_named_vector is None else None,
     )
+
+
+def _annotation_id_property(annotation_type: AnnotationType) -> str:
+    if annotation_type is AnnotationType.person_name:
+        return "name_id"
+    if annotation_type is AnnotationType.description:
+        return "description_id"
+    if annotation_type is AnnotationType.information:
+        return "information_id"
+    if annotation_type is AnnotationType.mention:
+        return "mention_id"
+    if annotation_type is AnnotationType.face:
+        return "detection_id"
+    return "document_mention_id"
+
+
+def _annotation_objects_to_results(objects: list[Any], annotation_type: AnnotationType) -> list[AnnotationSearchResult]:
+    id_property = _annotation_id_property(annotation_type)
+    results: list[AnnotationSearchResult] = []
+
+    for obj in objects:
+        props = obj.properties
+        source_id_value = props.get("source_id")
+        model_agent_value = props.get("model_agent_id")
+        confidence_value = props.get("confidence")
+        identity_value = props.get("identity_id")
+
+        if source_id_value is None:
+            continue
+
+        results.append(
+            AnnotationSearchResult(
+                weaviate_id=obj.uuid,
+                annotation_type=annotation_type,
+                annotation_id=UUID(str(props.get(id_property))),
+                source_id=UUID(str(source_id_value)),
+                model_agent_id=UUID(str(model_agent_value)) if model_agent_value else None,
+                confidence=cast(float | None, confidence_value),
+                identity_id=UUID(str(identity_value)) if identity_value else None,
+                distance=cast(float | None, getattr(obj.metadata, "distance", None)) if obj.metadata else None,
+                certainty=cast(float | None, getattr(obj.metadata, "certainty", None)) if obj.metadata else None,
+            )
+        )
+
+    return results

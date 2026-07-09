@@ -26,16 +26,15 @@ from people_gator_api.schemas.search_profiles import (
 from people_gator_api.services.auth_service import AuthContext, require_scopes
 from people_gator_api.services.database_service import get_session
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.crud_services.search_profile_service import (
+from people_gator_api.services.crud_services.profile_service import (
     clone_profile,
     create_profile,
     delete_profile,
     get_profile,
     list_profiles,
-    search,
-    search_facets,
     update_profile,
 )
+from people_gator_api.services.crud_services.search_service import search, search_facets
 
 router = APIRouter(tags=["search"])
 

@@ -12,18 +12,17 @@ variables without any hard-coded defaults in application code.
 """
 
 import logging
+from typing import Any, cast
 
 import weaviate
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.init import Auth
 
 from people_gator_api.settings import settings
-from people_gator_api.services.vector_service.weaviate.schema import (
-    ANNOTATION_EMBEDDING_COLLECTION,
-    IDENTITY_SNAPSHOT_COLLECTION,
-    ANNOTATION_EMBEDDING_PROPERTIES,
+from people_gator_api.services.vector_service.schema import (
+    ANNOTATION_COLLECTION_SPECS,
     IDENTITY_SNAPSHOT_PROPERTIES,
-    annotation_embedding_vector_config,
+    IDENTITY_SNAPSHOT_COLLECTION,
     identity_snapshot_named_vector_configs,
 )
 
@@ -101,27 +100,26 @@ async def _ensure_collections(client: WeaviateAsyncClient) -> None:
     ``client.collections.exists()`` to avoid the overhead of recreating
     or patching schemas on every application restart.
     """
-    await _ensure_annotation_embedding(client)
+    await _ensure_annotation_collections(client)
     await _ensure_identity_snapshot(client)
 
 
-async def _ensure_annotation_embedding(client: WeaviateAsyncClient) -> None:
-    if await client.collections.exists(ANNOTATION_EMBEDDING_COLLECTION):
-        logger.debug("Collection %s already exists", ANNOTATION_EMBEDDING_COLLECTION)
-        return
+async def _ensure_annotation_collections(client: WeaviateAsyncClient) -> None:
+    for collection_name, (properties, vector_config) in ANNOTATION_COLLECTION_SPECS.items():
+        if await client.collections.exists(collection_name):
+            logger.debug("Collection %s already exists", collection_name)
+            continue
 
-    await client.collections.create(
-        name=ANNOTATION_EMBEDDING_COLLECTION,
-        description=(
-            "One document per (annotation_type, annotation_id) pair that "
-            "carries an externally-computed embedding vector.  Supports "
-            "nearest-neighbour lookup for individual face detections and "
-            "named-entity spans."
-        ),
-        properties=ANNOTATION_EMBEDDING_PROPERTIES,
-        vector_config=annotation_embedding_vector_config(),
-    )
-    logger.info("Created Weaviate collection: %s", ANNOTATION_EMBEDDING_COLLECTION)
+        await client.collections.create(
+            name=collection_name,
+            description=(
+                "Relational annotation mirror collection with filterable metadata "
+                "and caller-supplied vectors for nearest-neighbour search."
+            ),
+            properties=properties,
+            vector_config=cast(Any, vector_config),
+        )
+        logger.info("Created Weaviate collection: %s", collection_name)
 
 
 async def _ensure_identity_snapshot(client: WeaviateAsyncClient) -> None:

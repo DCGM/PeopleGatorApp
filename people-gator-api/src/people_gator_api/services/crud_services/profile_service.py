@@ -1,35 +1,17 @@
-"""Service for search and search-profile endpoints.
-
-The cluster/version graph has been removed.  Search profiles remain reusable
-multi-modality configurations.  The ``search()`` function returns identity and
-annotation-level results via the vector service (stubbed until the vector
-layer retarget is complete).
-"""
+"""Service for search profile CRUD endpoints."""
 
 import uuid
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.models.enums import AnnotationType
-from people_gator_api.models.search_profile import (
-    SearchProfile, 
-    SearchProfileModality,
-)
-from people_gator_api.schemas.search import (
-    SearchFacetsResponse,
-    SearchFilters,
-    SearchQuery,
-    SearchRequest,
-    SearchResponse,
-)
-
+from people_gator_api.models.search_profile import SearchProfile, SearchProfileModality
 from people_gator_api.schemas.search_profiles import (
     SearchProfileCloneRequest,
     SearchProfileCreateRequest,
     SearchProfileModalityOut,
-    SearchProfileResponse,
     SearchProfilePatchRequest,
+    SearchProfileResponse,
 )
 
 
@@ -75,8 +57,13 @@ async def list_profiles(
     return filtered
 
 
-async def get_profile(session: AsyncSession, profile_id: uuid.UUID) -> SearchProfileResponse | None:
-    profile = await session.scalar(select(SearchProfile).where(SearchProfile.profile_id == profile_id))
+async def get_profile(
+    session: AsyncSession,
+    profile_id: uuid.UUID,
+) -> SearchProfileResponse | None:
+    profile = await session.scalar(
+        select(SearchProfile).where(SearchProfile.profile_id == profile_id)
+    )
     if profile is None:
         return None
     return _profile_to_response(profile)
@@ -116,18 +103,24 @@ async def update_profile(
     profile_id: uuid.UUID,
     request: SearchProfilePatchRequest,
 ) -> SearchProfileResponse | None:
-    profile = await session.scalar(select(SearchProfile).where(SearchProfile.profile_id == profile_id))
+    profile = await session.scalar(
+        select(SearchProfile).where(SearchProfile.profile_id == profile_id)
+    )
     if profile is None:
         return None
+
     if request.profile_name is not None:
         profile.profile_name = request.profile_name
     if request.description is not None:
         profile.description = request.description
     if request.is_public is not None:
         profile.is_public = request.is_public
+
     if request.modalities is not None:
         await session.execute(
-            delete(SearchProfileModality).where(SearchProfileModality.profile_id == profile_id)
+            delete(SearchProfileModality).where(
+                SearchProfileModality.profile_id == profile_id
+            )
         )
         for modality in request.modalities:
             session.add(
@@ -139,13 +132,16 @@ async def update_profile(
                     min_confidence=modality.min_confidence,
                 )
             )
+
     await session.flush()
     await session.refresh(profile)
     return _profile_to_response(profile)
 
 
 async def delete_profile(session: AsyncSession, profile_id: uuid.UUID) -> bool:
-    profile = await session.scalar(select(SearchProfile).where(SearchProfile.profile_id == profile_id))
+    profile = await session.scalar(
+        select(SearchProfile).where(SearchProfile.profile_id == profile_id)
+    )
     if profile is None:
         return False
     await session.delete(profile)
@@ -158,9 +154,12 @@ async def clone_profile(
     owner_id: uuid.UUID,
     request: SearchProfileCloneRequest,
 ) -> SearchProfileResponse | None:
-    source = await session.scalar(select(SearchProfile).where(SearchProfile.profile_id == profile_id))
+    source = await session.scalar(
+        select(SearchProfile).where(SearchProfile.profile_id == profile_id)
+    )
     if source is None:
         return None
+
     cloned = SearchProfile(
         profile_id=uuid.uuid4(),
         profile_name=request.profile_name or f"{source.profile_name}-clone",
@@ -170,6 +169,7 @@ async def clone_profile(
         is_system=False,
     )
     session.add(cloned)
+
     for modality in source.modalities:
         session.add(
             SearchProfileModality(
@@ -180,45 +180,7 @@ async def clone_profile(
                 min_confidence=modality.min_confidence,
             )
         )
+
     await session.flush()
     await session.refresh(cloned)
     return _profile_to_response(cloned)
-
-
-async def search(
-    session: AsyncSession,
-    request: SearchRequest,
-) -> SearchResponse:
-    _ = session
-    facets = await search_facets(session, request.query, request.filters)
-    return SearchResponse(
-        total=0,
-        limit=request.limit,
-        next_after_id=None,
-        results=[],
-        facets={
-            "annotation_types": facets.annotation_types,
-            "source_kinds": facets.source_kinds,
-            "result_types": facets.result_types,
-            "has_face": facets.has_face,
-            "has_authority_link": facets.has_authority_link,
-        },
-        query=request.query,
-        filters=request.filters,
-        profile_id=request.profile_id,
-    )
-
-
-async def search_facets(
-    session: AsyncSession,
-    query: SearchQuery,
-    filters: SearchFilters,
-) -> SearchFacetsResponse:
-    _ = (session, query, filters)
-    return SearchFacetsResponse(
-        annotation_types={annotation_type.value: 0 for annotation_type in AnnotationType},
-        source_kinds={},
-        result_types={"identity": 0},
-        has_face={"true": 0, "false": 0},
-        has_authority_link={"true": 0, "false": 0},
-    )
