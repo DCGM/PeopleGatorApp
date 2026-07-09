@@ -310,3 +310,113 @@ Every record tracks its origin:
 - **Model agents** — Automated detections include model version and parameters
 - **Principal agents** — Manual curation includes user/service identity
 - **External sources** — Wikidata and authority references include source IDs
+
+## 5. Entity Relationship Diagram
+
+```mermaid
+erDiagram
+  PRINCIPAL ||--o{ IDENTITY : creates
+  PRINCIPAL ||--o{ DESCRIPTION : adds
+  PRINCIPAL ||--o{ ALTERNATIVE_NAME : adds
+  PRINCIPAL ||--o{ SOURCE : registers
+  PRINCIPAL ||--o{ LINK_DECISION : makes
+  PRINCIPAL ||--o{ LINK_CONSENSUS : creates
+  PRINCIPAL ||--o{ NAMED_ENTITY : detects
+  PRINCIPAL ||--o{ DETECTION : detects
+
+  SOURCE ||--o{ NAMED_ENTITY : contains
+  SOURCE ||--o{ DETECTION : contains
+
+  IDENTITY ||--o{ LINK_DECISION : has
+  IDENTITY ||--o{ LINK_CONSENSUS : has
+
+  NAMED_ENTITY ||--o{ LINK_DECISION : reviewed_by
+  NAMED_ENTITY ||--o{ LINK_CONSENSUS : summarized_by
+  DETECTION ||--o{ LINK_DECISION : reviewed_by
+  DETECTION ||--o{ LINK_CONSENSUS : summarized_by
+  DESCRIPTION ||--o{ LINK_DECISION : reviewed_by
+  DESCRIPTION ||--o{ LINK_CONSENSUS : summarized_by
+  ALTERNATIVE_NAME ||--o{ LINK_DECISION : reviewed_by
+  ALTERNATIVE_NAME ||--o{ LINK_CONSENSUS : summarized_by
+
+  IDENTITY {
+    uuid identity_id
+    timestamp created_at
+    uuid principal_id
+  }
+
+  NAMED_ENTITY {
+    uuid entity_id
+    text text
+    uuid source_id
+    int offset_start
+    int offset_end
+    string entity_type
+    uuid model_agent_id
+    float confidence
+    timestamp created_at
+  }
+
+  DETECTION {
+    uuid detection_id
+    uuid source_id
+    json bounding_box
+    json keypoints
+    uuid model_agent_id
+    float confidence
+    timestamp created_at
+  }
+
+  DESCRIPTION {
+    uuid description_id
+    text text
+    string source_type
+    string source_ref
+    string language
+    uuid principal_id
+    timestamp created_at
+  }
+
+  ALTERNATIVE_NAME {
+    uuid alt_name_id
+    text name
+    string name_type
+    string source_type
+    string source_ref
+    string language
+    uuid principal_id
+    timestamp created_at
+  }
+
+  SOURCE {
+    uuid source_id
+    string source_type
+    text uri
+    json metadata
+    uuid principal_id
+    timestamp created_at
+  }
+
+  LINK_DECISION {
+    uuid decision_id
+    uuid identity_id
+    string annotation_type
+    uuid annotation_id
+    uuid principal_id
+    string decision
+    float confidence
+    timestamp created_at
+  }
+
+  LINK_CONSENSUS {
+    uuid consensus_id
+    uuid identity_id
+    string annotation_type
+    uuid annotation_id
+    string decision
+    string method
+    uuid created_by
+    timestamp created_at
+    timestamp decision_cutoff_at
+  }
+```
