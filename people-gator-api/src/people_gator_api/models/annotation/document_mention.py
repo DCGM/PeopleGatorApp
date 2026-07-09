@@ -33,6 +33,9 @@ class DocumentMention(Base):
     model_agent_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("principal.principal_id"), nullable=False
     )
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("source.source_id"), nullable=False
+    )
     identity_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("identity.identity_id"), nullable=False
     )
@@ -50,6 +53,7 @@ class DocumentMention(Base):
 
     __table_args__ = (
         sa.Index("ix_document_mention_model_agent_id", "model_agent_id"),
+        sa.Index("ix_document_mention_source_id", "source_id"),
         sa.Index("ix_document_mention_identity_id", "identity_id"),
     )
 
@@ -69,12 +73,15 @@ class DocumentMention(Base):
         cls,
         session: AsyncSession,
         identity_id: uuid.UUID | None = None,
+        source_id: uuid.UUID | None = None,
         after_id: uuid.UUID | None = None,
         limit: int = 50,
     ) -> list["DocumentMention"]:
         stmt = select(cls).order_by(cls.document_mention_id.asc()).limit(limit)
         if identity_id is not None:
             stmt = stmt.where(cls.identity_id == identity_id)
+        if source_id is not None:
+            stmt = stmt.where(cls.source_id == source_id)
         if after_id is not None:
             stmt = stmt.where(cls.document_mention_id > after_id)
         result = await session.execute(stmt)
@@ -87,6 +94,7 @@ class DocumentMention(Base):
         name: str,
         information: str,
         model_agent_id: uuid.UUID,
+        source_id: uuid.UUID,
         identity_id: uuid.UUID,
     ) -> "DocumentMention":
         item = cls(
@@ -94,6 +102,7 @@ class DocumentMention(Base):
             name=name,
             information=information,
             model_agent_id=model_agent_id,
+            source_id=source_id,
             identity_id=identity_id,
         )
         session.add(item)

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import sqlalchemy as sa
 from sqlalchemy import Float, ForeignKey, Integer, Text, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,6 +17,15 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 
 if TYPE_CHECKING:
     from people_gator_api.models.annotation.document_mention import DocumentMention
+
+
+class PolygonPoint(TypedDict):
+    x: float
+    y: float
+
+
+class Polygon(TypedDict):
+    points: list[PolygonPoint]
 
 
 class Mention(Base):
@@ -29,6 +39,7 @@ class Mention(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     offset_start: Mapped[int] = mapped_column(Integer, nullable=False)
     offset_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    polygons: Mapped[list[Polygon] | None] = mapped_column(JSONB, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     document_mention_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -86,6 +97,7 @@ class Mention(Base):
         source_id: uuid.UUID,
         offset_start: int,
         offset_end: int,
+        polygons: list[Polygon] | None,
         model_agent_id: uuid.UUID,
         confidence: float,
     ) -> "Mention":
@@ -96,6 +108,7 @@ class Mention(Base):
             source_id=source_id,
             offset_start=offset_start,
             offset_end=offset_end,
+            polygons=polygons,
             model_agent_id=model_agent_id,
             confidence=confidence,
         )

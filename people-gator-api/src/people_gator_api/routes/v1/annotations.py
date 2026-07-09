@@ -122,12 +122,13 @@ async def create_document_mention_route(
 @router.get("/document-mentions", response_model=list[DocumentMentionResponse])
 async def list_document_mentions_route(
     identity_id: uuid.UUID | None = None,
+    source_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> list[DocumentMentionResponse]:
-    return await list_document_mentions(session, identity_id, after_id, limit)
+    return await list_document_mentions(session, identity_id, source_id, after_id, limit)
 
 
 @router.get("/document-mentions/{document_mention_id}", response_model=DocumentMentionResponse)

@@ -12,7 +12,7 @@ from people_gator_api.models.annotation.face import (
     FaceKeypoint as FaceModelKeypoint,
 )
 from people_gator_api.models.annotation.information import Information
-from people_gator_api.models.annotation.mention import Mention
+from people_gator_api.models.annotation.mention import Mention, Polygon as MentionModelPolygon
 from people_gator_api.models.annotation.name import Name
 from people_gator_api.schemas.identities import (
     BoundingBox,
@@ -26,6 +26,8 @@ from people_gator_api.schemas.identities import (
     InformationCreateRequest,
     InformationResponse,
     MentionCreateRequest,
+    MentionPolygon,
+    MentionPolygonPoint,
     MentionResponse,
     NameCreateRequest,
     NameResponse,
@@ -38,6 +40,18 @@ from people_gator_api.schemas.identities import (
 
 
 def _mention_out(item: Mention) -> MentionResponse:
+    polygons = None
+    if item.polygons is not None:
+        polygons = [
+            MentionPolygon(
+                points=[
+                    MentionPolygonPoint(x=point["x"], y=point["y"])
+                    for point in polygon["points"]
+                ]
+            )
+            for polygon in item.polygons
+        ]
+
     return MentionResponse(
         mention_id=item.mention_id,
         text=item.text,
@@ -45,6 +59,7 @@ def _mention_out(item: Mention) -> MentionResponse:
         source_id=item.source_id,
         offset_start=item.offset_start,
         offset_end=item.offset_end,
+        polygons=polygons,
         model_agent_id=item.model_agent_id,
         confidence=item.confidence,
     )
@@ -53,6 +68,18 @@ async def create_mention(
     session: AsyncSession,
     payload: MentionCreateRequest,
 ) -> MentionResponse:
+    polygons: list[MentionModelPolygon] | None = None
+    if payload.polygons is not None:
+        polygons = [
+            {
+                "points": [
+                    {"x": point.x, "y": point.y}
+                    for point in polygon.points
+                ]
+            }
+            for polygon in payload.polygons
+        ]
+
     item = await Mention.create(
         session=session,
         text=payload.text,
@@ -60,6 +87,7 @@ async def create_mention(
         source_id=payload.source_id,
         offset_start=payload.offset_start,
         offset_end=payload.offset_end,
+        polygons=polygons,
         model_agent_id=payload.model_agent_id,
         confidence=payload.confidence,
     )
@@ -157,6 +185,7 @@ def _document_mention_out(item: DocumentMention) -> DocumentMentionResponse:
         name=item.name,
         information=item.information,
         model_agent_id=item.model_agent_id,
+        source_id=item.source_id,
         identity_id=item.identity_id,
     )
 
@@ -170,6 +199,7 @@ async def create_document_mention(
         name=payload.name,
         information=payload.information,
         model_agent_id=payload.model_agent_id,
+        source_id=payload.source_id,
         identity_id=payload.identity_id,
     )
     return _document_mention_out(item)
@@ -188,12 +218,14 @@ async def get_document_mention(
 async def list_document_mentions(
     session: AsyncSession,
     identity_id: uuid.UUID | None,
+    source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DocumentMentionResponse]:
     items = await DocumentMention.list_page(
         session,
         identity_id=identity_id,
+        source_id=source_id,
         after_id=after_id,
         limit=limit,
     )

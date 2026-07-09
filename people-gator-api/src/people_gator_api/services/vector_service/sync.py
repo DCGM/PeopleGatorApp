@@ -183,6 +183,7 @@ class IdentitySyncService:
         text: str,
         offset_start: int,
         offset_end: int,
+        polygons: list[dict[str, list[dict[str, float]]]] | None,
         confidence: float,
         source_id: uuid.UUID,
         model_agent_id: uuid.UUID,
@@ -194,6 +195,11 @@ class IdentitySyncService:
             "offset_start": offset_start,
             "offset_end": offset_end,
             "confidence": confidence,
+            "polygons_json": (
+                json.dumps(polygons, separators=(",", ":"))
+                if polygons is not None
+                else None
+            ),
             "source_id": str(source_id),
             "model_agent_id": str(model_agent_id),
         }
@@ -248,6 +254,7 @@ class IdentitySyncService:
         name: str,
         information: str,
         model_agent_id: uuid.UUID,
+        source_id: uuid.UUID,
         identity_id: uuid.UUID,
         name_vector: list[float] | None,
         information_vector: list[float] | None,
@@ -257,6 +264,7 @@ class IdentitySyncService:
             "name": name,
             "information": information,
             "model_agent_id": str(model_agent_id),
+            "source_id": str(source_id),
             "identity_id": str(identity_id),
         }
         vectors: dict[str, list[float]] = {}

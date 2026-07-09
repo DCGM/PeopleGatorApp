@@ -1,5 +1,7 @@
 """Pydantic schemas for identity and annotation endpoints."""
 
+from __future__ import annotations
+
 import uuid
 
 from pydantic import BaseModel, Field
@@ -42,6 +44,7 @@ class MentionCreateRequest(BaseModel):
     source_id: uuid.UUID
     offset_start: int
     offset_end: int
+    polygons: list[MentionPolygon] | None = None
     model_agent_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
 
@@ -55,6 +58,7 @@ class MentionResponse(BaseModel):
     source_id: uuid.UUID
     offset_start: int
     offset_end: int
+    polygons: list[MentionPolygon] | None
     model_agent_id: uuid.UUID
     confidence: float
 
@@ -94,6 +98,7 @@ class DocumentMentionCreateRequest(BaseModel):
     name: str
     information: str
     model_agent_id: uuid.UUID
+    source_id: uuid.UUID
     identity_id: uuid.UUID
 
 
@@ -104,7 +109,21 @@ class DocumentMentionResponse(BaseModel):
     name: str
     information: str
     model_agent_id: uuid.UUID
+    source_id: uuid.UUID
     identity_id: uuid.UUID
+
+
+class MentionPolygonPoint(BaseModel):
+    """A polygon point in source-space coordinates."""
+
+    x: float
+    y: float
+
+
+class MentionPolygon(BaseModel):
+    """One mention polygon represented by ordered points."""
+
+    points: list[MentionPolygonPoint] = Field(min_length=3)
 
 
 # ---------------------------------------------------------------------------
