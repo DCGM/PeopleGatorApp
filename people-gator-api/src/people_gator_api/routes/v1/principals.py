@@ -7,15 +7,13 @@ from people_gator_api.services.database_service import get_session
 from people_gator_api.models.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
+    ModelAgentPatchRequest,
     PrincipalResponse,
-    ServiceAgentPatchRequest,
-    ServiceAgentCreateRequest,
 )
 from people_gator_api.services.auth_service import AuthContext, require_scopes
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.principal_service import (
     create_model_agent,
-    create_service_agent,
     get_principal,
     list_principals,
     update_principal,
@@ -63,15 +61,6 @@ async def get_me_route(
     )
 
 
-@router.post("/principals/service-agents", response_model=PrincipalResponse)
-async def create_service_agent_route(
-    payload: ServiceAgentCreateRequest,
-    _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
-    session: AsyncSession = Depends(get_session),
-) -> PrincipalResponse:
-    return await create_service_agent(session, payload)
-
-
 @router.post("/principals/model-agents", response_model=PrincipalResponse)
 async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
@@ -84,7 +73,7 @@ async def create_model_agent_route(
 @router.patch("/principals/model-agents/{principal_id}", response_model=PrincipalResponse)
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
-    payload: ServiceAgentPatchRequest,
+    payload: ModelAgentPatchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
     session: AsyncSession = Depends(get_session),
 ) -> PrincipalResponse:

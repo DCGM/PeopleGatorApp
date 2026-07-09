@@ -15,7 +15,6 @@ from people_gator_api.models.enums import (
 from people_gator_api.models.principal import (
     ModelAgent,
     Principal,
-    ServiceAgent,
     User,
 )
 from people_gator_api.models.source import Source
@@ -41,7 +40,6 @@ __all__ = [
     # principals
     "Principal",
     "User",
-    "ServiceAgent",
     "ModelAgent",
     # sources
     "Source",

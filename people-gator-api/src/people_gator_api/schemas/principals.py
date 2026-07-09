@@ -24,25 +24,6 @@ class UserResponse(BaseModel):
     is_active: bool
 
 # ---------------------------------------------------------------------------
-# Service agent schemas
-# ---------------------------------------------------------------------------
-
-class ServiceAgentCreateRequest(BaseModel):
-    agent_slug: str
-    display_name: str
-
-class ServiceAgentPatchRequest(BaseModel):
-    is_active: bool | None = None
-    display_name: str | None = None
-
-class ServiceAgentResponse(BaseModel):
-    principal_id: uuid.UUID
-    principal_type: PrincipalType
-    agent_slug: str
-    display_name: str | None = None
-    is_active: bool
-
-# ---------------------------------------------------------------------------
 # Model agent schemas
 # ---------------------------------------------------------------------------
 
@@ -55,7 +36,11 @@ class ModelAgentCreateRequest(BaseModel):
     registry_source: RegistrySource
     registry_uri: str
     is_active: bool
-    
+
+class ModelAgentPatchRequest(BaseModel):
+    display_name: str | None = None
+    is_active: bool | None = None
+
 class ModelAgentResponse(BaseModel):
     principal_id: uuid.UUID
     principal_type: PrincipalType

@@ -4,8 +4,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from people_gator_api.models.enums import PrincipalType
-from people_gator_api.models.principal import ModelAgent, Principal, ServiceAgent
-from people_gator_api.schemas.principals import ModelAgentCreateRequest, PrincipalResponse, ServiceAgentCreateRequest
+from people_gator_api.models.principal import ModelAgent, Principal
+from people_gator_api.schemas.principals import ModelAgentCreateRequest, PrincipalResponse
 
 
 async def list_principals(
@@ -47,23 +47,6 @@ async def get_principal(
         principal_type=principal.principal_type,
         display_name=principal.display_name,
         is_active=principal.is_active,
-    )
-
-
-async def create_service_agent(
-    session: AsyncSession, 
-    payload: ServiceAgentCreateRequest
-) -> PrincipalResponse:
-    agent, _ = await ServiceAgent.get_or_create(
-        session=session,
-        agent_slug=payload.agent_slug,
-        display_name=payload.display_name,
-    )
-    return PrincipalResponse(
-        principal_id=agent.principal_id,
-        principal_type=agent.principal_type,
-        display_name=agent.display_name,
-        is_active=agent.is_active,
     )
 
 
