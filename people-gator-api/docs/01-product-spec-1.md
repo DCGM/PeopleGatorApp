@@ -313,79 +313,87 @@ Every record tracks its origin:
 
 ## 5. Entity Relationship Diagram
 
+```
+  # PRINCIPAL ||--o{ MENTION : detects
+  # PRINCIPAL ||--o{ INFORMATION : detects
+  # PRINCIPAL ||--o{ DOCUMENT_MENTION : detects
+  # PRINCIPAL ||--o{ FACE : detects
+  # PRINCIPAL ||--o{ DESCRIPTION : can_add
+  # PRINCIPAL ||--o{ NAME : can_add
+  # PRINCIPAL ||--o{ SOURCE : registers
+```
+
 ```mermaid
 erDiagram
   PRINCIPAL ||--o{ IDENTITY : creates
-  PRINCIPAL ||--o{ DESCRIPTION : adds
-  PRINCIPAL ||--o{ ALTERNATIVE_NAME : adds
-  PRINCIPAL ||--o{ SOURCE : registers
-  PRINCIPAL ||--o{ LINK_DECISION : makes
-  PRINCIPAL ||--o{ LINK_CONSENSUS : creates
-  PRINCIPAL ||--o{ NAMED_ENTITY : detects
-  PRINCIPAL ||--o{ DETECTION : detects
 
-  SOURCE ||--o{ NAMED_ENTITY : contains
-  SOURCE ||--o{ DETECTION : contains
+  DOCUMENT_MENTION ||--o{ MENTION : consists_of
+  DOCUMENT_MENTION ||--o{ INFORMATION : consists_of
 
-  IDENTITY ||--o{ LINK_DECISION : has
-  IDENTITY ||--o{ LINK_CONSENSUS : has
 
-  NAMED_ENTITY ||--o{ LINK_DECISION : reviewed_by
-  NAMED_ENTITY ||--o{ LINK_CONSENSUS : summarized_by
-  DETECTION ||--o{ LINK_DECISION : reviewed_by
-  DETECTION ||--o{ LINK_CONSENSUS : summarized_by
-  DESCRIPTION ||--o{ LINK_DECISION : reviewed_by
-  DESCRIPTION ||--o{ LINK_CONSENSUS : summarized_by
-  ALTERNATIVE_NAME ||--o{ LINK_DECISION : reviewed_by
-  ALTERNATIVE_NAME ||--o{ LINK_CONSENSUS : summarized_by
+  SOURCE ||--o{ MENTION : contains
+  SOURCE ||--o{ INFORMATION : contains
+  SOURCE ||--o{ DOCUMENT_MENTION : contains
+  SOURCE ||--o{ FACE : contains
+
+  IDENTITY ||--o{ DOCUMENT_MENTION : has
+  IDENTITY ||--o{ FACE : has
+  IDENTITY ||--o{ DESCRIPTION : has
+  IDENTITY ||--o{ NAME : has
 
   IDENTITY {
     uuid identity_id
-    timestamp created_at
     uuid principal_id
   }
 
-  NAMED_ENTITY {
-    uuid entity_id
+  MENTION {
+    uuid mention_id
     text text
     uuid source_id
     int offset_start
     int offset_end
-    string entity_type
-    uuid model_agent_id
     float confidence
-    timestamp created_at
+    uuid model_agent_id
+  }
+  
+  INFORMATION {
+    uuid information_id
+    text text
+    uuid source_id
+    uuid model_agent_id
   }
 
-  DETECTION {
+  DOCUMENT_MENTION {
+    uuid document_mention_id
+    string name
+    string information
+    uuid model_agent_id
+    uuid identity_id
+  }
+
+  FACE {
     uuid detection_id
-    uuid source_id
     json bounding_box
     json keypoints
-    uuid model_agent_id
     float confidence
-    timestamp created_at
+    uuid source_id
+    uuid model_agent_id
+    uuid identity_id
   }
 
   DESCRIPTION {
     uuid description_id
     text text
-    string source_type
-    string source_ref
     string language
-    uuid principal_id
-    timestamp created_at
+    uuid source_id
+    uuid identity_id
   }
 
-  ALTERNATIVE_NAME {
-    uuid alt_name_id
+  NAME {
+    uuid name_id
     text name
-    string name_type
-    string source_type
-    string source_ref
-    string language
-    uuid principal_id
-    timestamp created_at
+    uuid source_id
+    uuid identity_id
   }
 
   SOURCE {
@@ -393,30 +401,5 @@ erDiagram
     string source_type
     text uri
     json metadata
-    uuid principal_id
-    timestamp created_at
-  }
-
-  LINK_DECISION {
-    uuid decision_id
-    uuid identity_id
-    string annotation_type
-    uuid annotation_id
-    uuid principal_id
-    string decision
-    float confidence
-    timestamp created_at
-  }
-
-  LINK_CONSENSUS {
-    uuid consensus_id
-    uuid identity_id
-    string annotation_type
-    uuid annotation_id
-    string decision
-    string method
-    uuid created_by
-    timestamp created_at
-    timestamp decision_cutoff_at
   }
 ```
