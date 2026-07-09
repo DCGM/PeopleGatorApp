@@ -349,10 +349,10 @@ erDiagram
   MENTION {
     uuid mention_id
     text text
-    uuid source_id
     int offset_start
     int offset_end
     float confidence
+    uuid source_id
     uuid model_agent_id
   }
   
