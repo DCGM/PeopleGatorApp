@@ -32,14 +32,14 @@ class Source(Base):
         SAEnum(SourceKind, name="source_kind_enum"), nullable=False
     )
     uri: Mapped[str] = mapped_column(String, nullable=False)
-    metadata: Mapped[dict[str, JsonValue] | None] = mapped_column(
+    metadata_: Mapped[dict[str, JsonValue] | None] = mapped_column(
         "metadata", JSONB, nullable=True
     )
     __table_args__ = (
         UniqueConstraint("source_type", "uri", name="uq_source_type_uri"),
         sa.Index("ix_source_source_type", "source_type"),
         sa.Index("ix_source_uri", "uri"),
-        sa.Index("ix_metadata", "metadata", postgresql_using="gin")
+        sa.Index("ix_source_metadata", "metadata", postgresql_using="gin")
     )
 
     # -------------------------------------------------------------------------
@@ -100,7 +100,7 @@ class Source(Base):
             source_id=new_uuid6(),
             source_type=source_type,
             uri=uri,
-            metadata=metadata,
+            metadata_=metadata,
         )
         session.add(obj)
         logger.info(

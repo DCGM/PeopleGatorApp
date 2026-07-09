@@ -19,7 +19,7 @@ def _source_out(item: Source) -> SourceResponse:
         source_id=item.source_id,
         source_type=item.source_type,
         uri=item.uri,
-        metadata=item.metadata,
+        metadata=item.metadata_,
     )
 
 
