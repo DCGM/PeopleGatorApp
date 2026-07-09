@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from people_gator_api.models.enums import SourceKind
 from people_gator_api.services.auth_service import AuthContext, require_scopes
 from people_gator_api.services.database_service import get_session
 from people_gator_api.services.http_errors import raise_api_error
@@ -24,7 +25,7 @@ router = APIRouter(tags=["sources"])
 
 @router.get("/sources", response_model=SourceListResponse)
 async def list_sources_route(
-    source_type: str | None = None,
+    source_type: SourceKind | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),

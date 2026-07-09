@@ -1,30 +1,25 @@
-"""Service for identity endpoints (spec §2.1).
-
-Identities are the central entity representing distinct persons.  Each
-identity is created by a principal and accrues annotations through the
-consensus model.
-"""
+"""Service for identity endpoints."""
 
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.models.link import LinkConsensus
+from people_gator_api.models.annotation.description import Description
+from people_gator_api.models.annotation.document_mention import DocumentMention
+from people_gator_api.models.annotation.face import Face
+from people_gator_api.models.annotation.name import Name
 from people_gator_api.models.identity import Identity
 from people_gator_api.schemas.identities import (
-    IdentityAnnotationEntry,
     IdentityCreateRequest,
     IdentityListResponse,
     IdentityResponse,
     IdentityViewResponse,
 )
-from people_gator_api.utils.uuid_utils import uuid6_to_datetime
 
 
 def _identity_out(item: Identity) -> IdentityResponse:
     return IdentityResponse(
         identity_id=item.identity_id,
-        created_at=uuid6_to_datetime(item.created_at),
         principal_id=item.principal_id,
     )
 
@@ -55,6 +50,7 @@ async def create_identity(
     payload: IdentityCreateRequest,
     principal_id: uuid.UUID,
 ) -> IdentityResponse:
+    _ = payload
     identity = await Identity.create(session, principal_id=principal_id)
     return _identity_out(identity)
 
@@ -63,18 +59,26 @@ async def get_identity_view(
     session: AsyncSession,
     identity_id: uuid.UUID,
 ) -> IdentityViewResponse | None:
-    """Return an identity's current view from consensus-linked annotations."""
     identity = await Identity.get(session, identity_id)
     if identity is None:
         return None
-    included = await LinkConsensus.list_for_identity(session, identity_id)
-    entries = [
-        IdentityAnnotationEntry(
-            annotation_id=row.annotation_id,
-        )
-        for row in included
-    ]
-    return IdentityViewResponse(identity_id=identity_id, included=entries)
+
+    document_mentions = await DocumentMention.list_page(
+        session, identity_id=identity_id, limit=500
+    )
+    faces = await Face.list_page(session, identity_id=identity_id, limit=500)
+    descriptions = await Description.list_page(
+        session, identity_id=identity_id, limit=500
+    )
+    names = await Name.list_page(session, identity_id=identity_id, limit=500)
+
+    return IdentityViewResponse(
+        identity_id=identity_id,
+        document_mention_ids=[item.document_mention_id for item in document_mentions],
+        face_ids=[item.detection_id for item in faces],
+        description_ids=[item.description_id for item in descriptions],
+        name_ids=[item.name_id for item in names],
+    )
 
 
 async def delete_identity(session: AsyncSession, identity_id: uuid.UUID) -> bool:

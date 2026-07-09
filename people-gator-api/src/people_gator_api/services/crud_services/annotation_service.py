@@ -1,247 +1,352 @@
-"""Service for annotation endpoints (spec §2.2–§2.5).
+"""CRUD service for simplified annotation entities."""
 
-Annotations are the four evidence types: named entities, detections,
-descriptions, and alternative names.  Each is a flat table with a FK to
-SOURCE.  This service provides create + list operations for each type.
-"""
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.models.annotation.alternative_name import AlternativeName
 from people_gator_api.models.annotation.description import Description
-from people_gator_api.models.annotation.detection import Detection
-from people_gator_api.models.annotation.named_entity import NamedEntity
+from people_gator_api.models.annotation.document_mention import DocumentMention
+from people_gator_api.models.annotation.face import (
+    BoundingBox as FaceBoundingBox,
+    Face,
+    FaceKeypoint as FaceModelKeypoint,
+)
+from people_gator_api.models.annotation.information import Information
+from people_gator_api.models.annotation.mention import Mention
+from people_gator_api.models.annotation.name import Name
 from people_gator_api.schemas.identities import (
-    AlternativeNameCreateRequest,
-    AlternativeNameResponse,
+    BoundingBox,
     DescriptionCreateRequest,
     DescriptionResponse,
-    DetectionCreateRequest,
-    DetectionResponse,
-    NamedEntityCreateRequest,
-    NamedEntityResponse,
+    DocumentMentionCreateRequest,
+    DocumentMentionResponse,
+    FaceCreateRequest,
+    FaceKeypoint,
+    FaceResponse,
+    InformationCreateRequest,
+    InformationResponse,
+    MentionCreateRequest,
+    MentionResponse,
+    NameCreateRequest,
+    NameResponse,
 )
-from people_gator_api.utils.uuid_utils import uuid6_to_datetime
 
 
-
-
-# ---------------------------------------------------------------------------
-# Named entities
-# ---------------------------------------------------------------------------
-
-
-def _named_entity_out(item: NamedEntity) -> NamedEntityResponse:
-    return NamedEntityResponse(
-        annotation_id=item.annotation_id,
+def _mention_out(item: Mention) -> MentionResponse:
+    return MentionResponse(
+        mention_id=item.mention_id,
         text=item.text,
         source_id=item.source_id,
         offset_start=item.offset_start,
         offset_end=item.offset_end,
-        entity_type=item.entity_type,
-        principal_id=item.principal_id,
+        model_agent_id=item.model_agent_id,
         confidence=item.confidence,
-        created_at=uuid6_to_datetime(item.created_at),
     )
 
 
-async def create_named_entity(
+async def create_mention(
     session: AsyncSession,
-    payload: NamedEntityCreateRequest,
-) -> NamedEntityResponse:
-    entity = await NamedEntity.create(
+    payload: MentionCreateRequest,
+) -> MentionResponse:
+    item = await Mention.create(
         session=session,
         text=payload.text,
         source_id=payload.source_id,
         offset_start=payload.offset_start,
         offset_end=payload.offset_end,
-        entity_type=payload.entity_type,
-        principal_id=payload.principal_id,
+        model_agent_id=payload.model_agent_id,
         confidence=payload.confidence,
     )
-    return _named_entity_out(entity)
+    return _mention_out(item)
 
 
-async def get_named_entity(
+async def get_mention(
     session: AsyncSession,
-    entity_id: uuid.UUID,
-) -> NamedEntityResponse | None:
-    entity = await NamedEntity.get(session, entity_id)
-    if entity is None:
+    mention_id: uuid.UUID,
+) -> MentionResponse | None:
+    item = await Mention.get(session, mention_id)
+    if item is None:
         return None
-    return _named_entity_out(entity)
+    return _mention_out(item)
 
 
-async def list_named_entities(
+async def list_mentions(
     session: AsyncSession,
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[NamedEntityResponse]:
-    items = await NamedEntity.list_page(
+) -> list[MentionResponse]:
+    items = await Mention.list_page(
         session,
         source_id=source_id,
         after_id=after_id,
         limit=limit,
     )
-    return [_named_entity_out(item) for item in items]
+    return [_mention_out(item) for item in items]
 
 
-# ---------------------------------------------------------------------------
-# Detections
-# ---------------------------------------------------------------------------
-
-
-def _detection_out(item: Detection) -> DetectionResponse:
-    return DetectionResponse(
-        annotation_id=item.annotation_id,
+def _information_out(item: Information) -> InformationResponse:
+    return InformationResponse(
+        information_id=item.information_id,
+        text=item.text,
         source_id=item.source_id,
-        bounding_box=item.bounding_box,
-        keypoints=item.keypoints,
-        principal_id=item.principal_id,
-        confidence=item.confidence,
-        created_at=uuid6_to_datetime(item.created_at),
+        model_agent_id=item.model_agent_id,
     )
 
 
-async def create_detection(
+async def create_information(
     session: AsyncSession,
-    payload: DetectionCreateRequest,
-) -> DetectionResponse:
-    detection = await Detection.create(
+    payload: InformationCreateRequest,
+) -> InformationResponse:
+    item = await Information.create(
+        session=session,
+        text=payload.text,
+        source_id=payload.source_id,
+        model_agent_id=payload.model_agent_id,
+    )
+    return _information_out(item)
+
+
+async def get_information(
+    session: AsyncSession,
+    information_id: uuid.UUID,
+) -> InformationResponse | None:
+    item = await Information.get(session, information_id)
+    if item is None:
+        return None
+    return _information_out(item)
+
+
+async def list_information(
+    session: AsyncSession,
+    source_id: uuid.UUID | None,
+    after_id: uuid.UUID | None,
+    limit: int,
+) -> list[InformationResponse]:
+    items = await Information.list_page(
+        session,
+        source_id=source_id,
+        after_id=after_id,
+        limit=limit,
+    )
+    return [_information_out(item) for item in items]
+
+
+def _document_mention_out(item: DocumentMention) -> DocumentMentionResponse:
+    return DocumentMentionResponse(
+        document_mention_id=item.document_mention_id,
+        name=item.name,
+        information=item.information,
+        model_agent_id=item.model_agent_id,
+        identity_id=item.identity_id,
+    )
+
+
+async def create_document_mention(
+    session: AsyncSession,
+    payload: DocumentMentionCreateRequest,
+) -> DocumentMentionResponse:
+    item = await DocumentMention.create(
+        session=session,
+        name=payload.name,
+        information=payload.information,
+        model_agent_id=payload.model_agent_id,
+        identity_id=payload.identity_id,
+    )
+    return _document_mention_out(item)
+
+
+async def get_document_mention(
+    session: AsyncSession,
+    document_mention_id: uuid.UUID,
+) -> DocumentMentionResponse | None:
+    item = await DocumentMention.get(session, document_mention_id)
+    if item is None:
+        return None
+    return _document_mention_out(item)
+
+
+async def list_document_mentions(
+    session: AsyncSession,
+    identity_id: uuid.UUID | None,
+    after_id: uuid.UUID | None,
+    limit: int,
+) -> list[DocumentMentionResponse]:
+    items = await DocumentMention.list_page(
+        session,
+        identity_id=identity_id,
+        after_id=after_id,
+        limit=limit,
+    )
+    return [_document_mention_out(item) for item in items]
+
+
+def _face_out(item: Face) -> FaceResponse:
+    bounding_box = BoundingBox(
+        x=item.bounding_box["x"],
+        y=item.bounding_box["y"],
+        width=item.bounding_box["width"],
+        height=item.bounding_box["height"],
+    )
+    keypoints = [
+        FaceKeypoint(type=keypoint["type"], x=keypoint["x"], y=keypoint["y"])
+        for keypoint in item.keypoints
+    ]
+    return FaceResponse(
+        detection_id=item.detection_id,
+        source_id=item.source_id,
+        bounding_box=bounding_box,
+        keypoints=keypoints,
+        model_agent_id=item.model_agent_id,
+        identity_id=item.identity_id,
+        confidence=item.confidence,
+    )
+
+
+async def create_face(
+    session: AsyncSession,
+    payload: FaceCreateRequest,
+) -> FaceResponse:
+    bounding_box: FaceBoundingBox = {
+        "x": payload.bounding_box.x,
+        "y": payload.bounding_box.y,
+        "width": payload.bounding_box.width,
+        "height": payload.bounding_box.height,
+    }
+    keypoints: list[FaceModelKeypoint] = [
+        {"type": keypoint.type, "x": keypoint.x, "y": keypoint.y}
+        for keypoint in payload.keypoints
+    ]
+    item = await Face.create(
         session=session,
         source_id=payload.source_id,
-        bounding_box=payload.bounding_box,
-        keypoints=payload.keypoints,
-        principal_id=payload.principal_id,
+        bounding_box=bounding_box,
+        keypoints=keypoints,
+        model_agent_id=payload.model_agent_id,
+        identity_id=payload.identity_id,
         confidence=payload.confidence,
     )
-    return _detection_out(detection)
+    return _face_out(item)
 
 
-async def get_detection(
+async def get_face(
     session: AsyncSession,
     detection_id: uuid.UUID,
-) -> DetectionResponse | None:
-    detection = await Detection.get(session, detection_id)
-    if detection is None:
+) -> FaceResponse | None:
+    item = await Face.get(session, detection_id)
+    if item is None:
         return None
-    return _detection_out(detection)
+    return _face_out(item)
 
 
-async def list_detections(
+async def list_faces(
     session: AsyncSession,
     source_id: uuid.UUID | None,
+    identity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[DetectionResponse]:
-    items = await Detection.list_page(
+) -> list[FaceResponse]:
+    items = await Face.list_page(
         session,
         source_id=source_id,
+        identity_id=identity_id,
         after_id=after_id,
         limit=limit,
     )
-    return [_detection_out(item) for item in items]
-
-
-# ---------------------------------------------------------------------------
-# Descriptions
-# ---------------------------------------------------------------------------
+    return [_face_out(item) for item in items]
 
 
 def _description_out(item: Description) -> DescriptionResponse:
     return DescriptionResponse(
-        annotation_id=item.annotation_id,
+        description_id=item.description_id,
         text=item.text,
-        source_id=item.source_id,
         language=item.language,
-        principal_id=item.principal_id,
-        created_at=uuid6_to_datetime(item.created_at),
+        source_id=item.source_id,
+        identity_id=item.identity_id,
     )
 
 
 async def create_description(
     session: AsyncSession,
     payload: DescriptionCreateRequest,
-    principal_id: uuid.UUID,
 ) -> DescriptionResponse:
-    description = await Description.create(
+    item = await Description.create(
         session=session,
         text=payload.text,
-        source_id=payload.source_id,
         language=payload.language,
-        principal_id=principal_id,
+        source_id=payload.source_id,
+        identity_id=payload.identity_id,
     )
-    return _description_out(description)
+    return _description_out(item)
 
 
 async def get_description(
     session: AsyncSession,
     description_id: uuid.UUID,
 ) -> DescriptionResponse | None:
-    description = await Description.get(session, description_id)
-    if description is None:
+    item = await Description.get(session, description_id)
+    if item is None:
         return None
-    return _description_out(description)
+    return _description_out(item)
 
 
 async def list_descriptions(
     session: AsyncSession,
+    identity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DescriptionResponse]:
-    items = await Description.list_page(session, after_id=after_id, limit=limit)
+    items = await Description.list_page(
+        session,
+        identity_id=identity_id,
+        after_id=after_id,
+        limit=limit,
+    )
     return [_description_out(item) for item in items]
 
 
-# ---------------------------------------------------------------------------
-# Alternative names
-# ---------------------------------------------------------------------------
-
-
-def _alt_name_out(item: AlternativeName) -> AlternativeNameResponse:
-    return AlternativeNameResponse(
-        annotation_id=item.annotation_id,
+def _name_out(item: Name) -> NameResponse:
+    return NameResponse(
+        name_id=item.name_id,
         name=item.name,
-        name_type=item.name_type,
         source_id=item.source_id,
-        language=item.language,
-        principal_id=item.principal_id,
-        created_at=uuid6_to_datetime(item.created_at),
+        identity_id=item.identity_id,
     )
 
 
-async def create_alternative_name(
+async def create_name(
     session: AsyncSession,
-    payload: AlternativeNameCreateRequest,
-    principal_id: uuid.UUID,
-) -> AlternativeNameResponse:
-    alt_name = await AlternativeName.create(
+    payload: NameCreateRequest,
+) -> NameResponse:
+    item = await Name.create(
         session=session,
         name=payload.name,
-        name_type=payload.name_type,
         source_id=payload.source_id,
-        language=payload.language,
-        principal_id=principal_id,
+        identity_id=payload.identity_id,
     )
-    return _alt_name_out(alt_name)
+    return _name_out(item)
 
 
-async def get_alternative_name(
+async def get_name(
     session: AsyncSession,
-    alt_name_id: uuid.UUID,
-) -> AlternativeNameResponse | None:
-    alt_name = await AlternativeName.get(session, alt_name_id)
-    if alt_name is None:
+    name_id: uuid.UUID,
+) -> NameResponse | None:
+    item = await Name.get(session, name_id)
+    if item is None:
         return None
-    return _alt_name_out(alt_name)
+    return _name_out(item)
 
 
-async def list_alternative_names(
+async def list_names(
     session: AsyncSession,
+    identity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[AlternativeNameResponse]:
-    items = await AlternativeName.list_page(session, after_id=after_id, limit=limit)
-    return [_alt_name_out(item) for item in items]
+) -> list[NameResponse]:
+    items = await Name.list_page(
+        session,
+        identity_id=identity_id,
+        after_id=after_id,
+        limit=limit,
+    )
+    return [_name_out(item) for item in items]

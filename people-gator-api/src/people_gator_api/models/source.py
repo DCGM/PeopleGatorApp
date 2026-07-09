@@ -1,21 +1,10 @@
-"""SOURCE table — metadata about the origin of annotations (spec §2.7).
-
-A simplified source model: every annotation (named entity, detection,
-description, alternative name) references exactly one SOURCE that records
-where the annotation was found.  The source tracks its physical type, a
-URI, and opaque metadata.
-
-Replaces the previous SOURCE + SOURCE_SCHEMA + SOURCE_PROCESSING trio.
-Path resolution is no longer modelled in the database — the ``uri`` field
-is the canonical locator and consumers interpret it directly.
-"""
+"""SOURCE table model."""
 
 import logging
 import uuid
-from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import Enum as SAEnum, ForeignKey, String, UniqueConstraint, select
+from sqlalchemy import Enum as SAEnum, String, UniqueConstraint, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,13 +16,13 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 
 logger = logging.getLogger(__name__)
 
+type JsonValue = (
+    str | int | float | bool | None | dict[str, "JsonValue"] | list["JsonValue"]
+)
+
 
 class Source(Base):
-    """A specific document, scan, or authority record that annotations derive from.
-
-    Uniqueness is enforced on ``(source_type, uri)`` so the same physical
-    artifact cannot be registered twice (spec §2.7 constraints).
-    """
+    """A source document or media record."""
 
     __tablename__ = "source"
     source_id: Mapped[uuid.UUID] = mapped_column(
@@ -42,27 +31,14 @@ class Source(Base):
     source_type: Mapped[SourceKind] = mapped_column(
         SAEnum(SourceKind, name="source_kind_enum"), nullable=False
     )
-    # Canonical locator — URL, file path, or authority identifier.
     uri: Mapped[str] = mapped_column(String, nullable=False)
-    # Source-specific metadata: page number, image dimensions, publication
-    # info, etc.  Free-form JSONB; structure is not DB-enforced.
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(
+    metadata: Mapped[dict[str, JsonValue] | None] = mapped_column(
         "metadata", JSONB, nullable=True
-    )
-    # FK → PRINCIPAL — who registered this source.
-    principal_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("principal.principal_id"),
-        nullable=True,
-    )
-    created_at: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False
     )
     __table_args__ = (
         UniqueConstraint("source_type", "uri", name="uq_source_type_uri"),
         sa.Index("ix_source_source_type", "source_type"),
         sa.Index("ix_source_uri", "uri"),
-        sa.Index("ix_source_principal_id", "principal_id"),
         sa.Index("ix_metadata", "metadata", postgresql_using="gin")
     )
 
@@ -118,17 +94,13 @@ class Source(Base):
         session: AsyncSession,
         source_type: SourceKind,
         uri: str,
-        metadata: dict[str, Any] | None = None,
-        principal_id: uuid.UUID | None = None,
+        metadata: dict[str, JsonValue] | None = None,
     ) -> "Source":
-        new_id = new_uuid6()
         obj = cls(
-            source_id=new_id,
+            source_id=new_uuid6(),
             source_type=source_type,
             uri=uri,
             metadata=metadata,
-            principal_id=principal_id,
-            created_at=new_id,
         )
         session.add(obj)
         logger.info(

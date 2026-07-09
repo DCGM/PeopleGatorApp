@@ -29,8 +29,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from weaviate import WeaviateAsyncClient
 
-from people_gator_api.models.annotation.base_annotation import BaseAnnotation
-from people_gator_api.models.link import LinkConsensus
+from people_gator_api.models.annotation.description import Description
+from people_gator_api.models.annotation.document_mention import DocumentMention
+from people_gator_api.models.annotation.face import Face
+from people_gator_api.models.annotation.name import Name
 from people_gator_api.models.enums import AnnotationType
 from people_gator_api.models.identity import Identity
 from people_gator_api.services.vector_service.weaviate.schema import (
@@ -116,58 +118,65 @@ class IdentitySyncService:
     ) -> None:
         """Sync an identity's materialised LINK_CONSENSUS state to Weaviate.
 
-        Reads all LINK_CONSENSUS rows with decision=include for this identity,
-        groups them by annotation type, fetches the per-annotation vectors from
-        AnnotationEmbedding, computes per-modality centroid vectors, and upserts
-        an IdentitySnapshot document.
+        Reads simplified identity-linked entities for this identity, fetches
+        per-annotation vectors from AnnotationEmbedding, computes per-modality
+        centroid vectors, and upserts an IdentitySnapshot document.
         """
         identity = await Identity.get(session, identity_id)
         if identity is None:
             logger.warning("sync_identity called for unknown identity_id=%s", identity_id)
             return
 
-        included = await LinkConsensus.list_for_identity(session, identity_id)
-        annotation_ids = [row.annotation_id for row in included]
-        annotation_rows = []
-        if annotation_ids:
-            annotation_rows = list(
-                (
-                    await session.execute(
-                        select(BaseAnnotation).where(BaseAnnotation.annotation_id.in_(annotation_ids))
-                    )
-                )
-                .scalars()
-                .all()
+        faces = list(
+            (
+                await session.execute(select(Face).where(Face.identity_id == identity_id))
             )
-
-        detections: list[uuid.UUID] = []
-        named_entities: list[uuid.UUID] = []
-        descriptions: int = 0
-        alternative_names: int = 0
-
-        for row in annotation_rows:
-            if row.type == AnnotationType.detection:
-                detections.append(row.annotation_id)
-            elif row.type == AnnotationType.named_entity:
-                named_entities.append(row.annotation_id)
-            elif row.type == AnnotationType.description:
-                descriptions += 1
-            elif row.type == AnnotationType.alternative_name:
-                alternative_names += 1
+            .scalars()
+            .all()
+        )
+        descriptions = list(
+            (
+                await session.execute(
+                    select(Description).where(Description.identity_id == identity_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        names = list(
+            (
+                await session.execute(select(Name).where(Name.identity_id == identity_id))
+            )
+            .scalars()
+            .all()
+        )
+        document_mentions = list(
+            (
+                await session.execute(
+                    select(DocumentMention).where(DocumentMention.identity_id == identity_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         face_centroid = await self._compute_centroid_from_weaviate(
-            AnnotationType.detection, detections,
+            AnnotationType.face,
+            [item.detection_id for item in faces],
         )
         name_centroid = await self._compute_centroid_from_weaviate(
-            AnnotationType.named_entity, named_entities,
+            AnnotationType.person_name,
+            [item.name_id for item in names],
         )
 
         props: dict[str, Any] = {
             "identity_id": str(identity_id),
-            "detection_count": len(detections),
-            "named_entity_count": len(named_entities),
-            "description_count": descriptions,
-            "alternative_name_count": alternative_names,
+            "face_count": len(faces),
+            "mention_count": 0,
+            "information_count": 0,
+            "document_mention_count": len(document_mentions),
+            "description_count": len(descriptions),
+            "name_count": len(names),
         }
 
         named_vectors: dict[str, list[float]] = {}
@@ -186,7 +195,10 @@ class IdentitySyncService:
         )
         logger.info(
             "Synced IdentitySnapshot %s (identity_id=%s, face=%d, name=%d)",
-            wv_uuid, identity_id, len(detections), len(named_entities),
+            wv_uuid,
+            identity_id,
+            len(faces),
+            len(names),
         )
 
     async def remove_identity_snapshot(self, identity_id: uuid.UUID) -> None:

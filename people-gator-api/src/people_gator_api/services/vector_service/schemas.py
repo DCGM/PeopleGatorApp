@@ -41,10 +41,12 @@ class IdentitySearchResult(BaseModel):
         description="Weaviate object UUID for this identity snapshot."
     )
     identity_id: UUID
-    detection_count: int
-    named_entity_count: int
+    face_count: int
+    mention_count: int
+    information_count: int
+    document_mention_count: int
     description_count: int
-    alternative_name_count: int
+    name_count: int
     face_distance: float | None = Field(
         default=None,
         description="Cosine distance from the query in the face named-vector space.",

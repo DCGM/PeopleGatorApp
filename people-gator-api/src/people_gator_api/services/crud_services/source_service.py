@@ -1,11 +1,11 @@
 """Service for source endpoints (spec §2.7 simplified source model)."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from people_gator_api.models.enums import SourceKind
 from people_gator_api.models.source import Source
 from people_gator_api.schemas.sources import (
     SourceCreateRequest,
@@ -14,27 +14,18 @@ from people_gator_api.schemas.sources import (
 )
 
 
-def _uuid6_to_datetime(value: uuid.UUID) -> datetime:
-    """Convert a UUIDv6's embedded timestamp to a timezone-aware datetime."""
-    # UUIDv6 .time is 100-ns intervals since 1582-10-15 (Gregorian epoch).
-    gregorian_epoch = datetime(1582, 10, 15, tzinfo=timezone.utc)
-    return gregorian_epoch + timedelta(microseconds=value.time // 10)
-
-
 def _source_out(item: Source) -> SourceResponse:
     return SourceResponse(
         source_id=item.source_id,
         source_type=item.source_type,
         uri=item.uri,
         metadata=item.metadata,
-        principal_id=item.principal_id,
-        created_at=_uuid6_to_datetime(item.created_at),
     )
 
 
 async def list_sources(
     session: AsyncSession,
-    source_type: str | None,
+    source_type: SourceKind | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> SourceListResponse:
@@ -63,7 +54,7 @@ async def get_source(session: AsyncSession, source_id: uuid.UUID) -> SourceRespo
 async def create_source(
     session: AsyncSession,
     payload: SourceCreateRequest,
-    created_by: uuid.UUID | None,
+    _created_by: uuid.UUID | None,
 ) -> tuple[SourceResponse, bool]:
     """Create a source, returning (response, created).
 
@@ -79,6 +70,5 @@ async def create_source(
         source_type=payload.source_type,
         uri=payload.uri,
         metadata=payload.metadata,
-        principal_id=created_by,
     )
     return _source_out(source), True

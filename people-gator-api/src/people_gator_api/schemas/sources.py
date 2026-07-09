@@ -1,11 +1,14 @@
 """Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
 
 import uuid
-from datetime import datetime
 
 from pydantic import BaseModel
 
 from people_gator_api.models.enums import SourceKind
+
+type JsonValue = (
+    str | int | float | bool | None | dict[str, "JsonValue"] | list["JsonValue"]
+)
 
 
 class SourceCreateRequest(BaseModel):
@@ -13,7 +16,7 @@ class SourceCreateRequest(BaseModel):
 
     source_type: SourceKind
     uri: str
-    metadata: dict[str, str] | None = None
+    metadata: dict[str, JsonValue] | None = None
 
 
 class SourceResponse(BaseModel):
@@ -22,9 +25,7 @@ class SourceResponse(BaseModel):
     source_id: uuid.UUID
     source_type: SourceKind
     uri: str
-    metadata: dict[str, str] | None
-    principal_id: uuid.UUID | None
-    created_at: datetime
+    metadata: dict[str, JsonValue] | None
 
 
 class SourceListResponse(BaseModel):

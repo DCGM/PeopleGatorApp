@@ -1,20 +1,8 @@
 """Pydantic schemas for identity and annotation endpoints."""
 
 import uuid
-from datetime import datetime
 
 from pydantic import BaseModel, Field
-
-from people_gator_api.models.enums import (
-    ConsensusMethod,
-    EntityType,
-    NameType,
-)
-
-
-# ---------------------------------------------------------------------------
-# Identity
-# ---------------------------------------------------------------------------
 
 
 class IdentityCreateRequest(BaseModel):
@@ -23,188 +11,159 @@ class IdentityCreateRequest(BaseModel):
 
 class IdentityResponse(BaseModel):
     """A single identity record."""
+
     identity_id: uuid.UUID
-    created_at: datetime
     principal_id: uuid.UUID
 
 
 class IdentityListResponse(BaseModel):
     """A paginated list of identities."""
+
     items: list[IdentityResponse]
     total: int
     next_after_id: uuid.UUID | None = None
 
 
-# ---------------------------------------------------------------------------
-# Named entity
-# ---------------------------------------------------------------------------
+class MentionCreateRequest(BaseModel):
+    """Request body for ingesting a mention."""
 
-
-class NamedEntityCreateRequest(BaseModel):
-    """Request body for ingesting a named entity mention."""
     text: str
     source_id: uuid.UUID
     offset_start: int
     offset_end: int
-    entity_type: EntityType
-    principal_id: uuid.UUID
+    model_agent_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-class NamedEntityResponse(BaseModel):
-    """A single named entity record."""
-    annotation_id: uuid.UUID
+class MentionResponse(BaseModel):
+    """A single mention record."""
+
+    mention_id: uuid.UUID
     text: str
     source_id: uuid.UUID
     offset_start: int
     offset_end: int
-    entity_type: EntityType
-    principal_id: uuid.UUID
+    model_agent_id: uuid.UUID
     confidence: float
-    created_at: datetime
 
 
-# ---------------------------------------------------------------------------
-# Detection
-# ---------------------------------------------------------------------------
+class InformationCreateRequest(BaseModel):
+    """Request body for ingesting information."""
+
+    text: str
+    source_id: uuid.UUID
+    model_agent_id: uuid.UUID
 
 
-class DetectionCreateRequest(BaseModel):
+class InformationResponse(BaseModel):
+    """A single information record."""
+
+    information_id: uuid.UUID
+    text: str
+    source_id: uuid.UUID
+    model_agent_id: uuid.UUID
+
+
+class DocumentMentionCreateRequest(BaseModel):
+    """Request body for creating a document-level mention aggregator."""
+
+    name: str
+    information: str
+    model_agent_id: uuid.UUID
+    identity_id: uuid.UUID
+
+
+class DocumentMentionResponse(BaseModel):
+    """A single document mention record."""
+
+    document_mention_id: uuid.UUID
+    name: str
+    information: str
+    model_agent_id: uuid.UUID
+    identity_id: uuid.UUID
+
+
+class BoundingBox(BaseModel):
+    """Face detection bounding box."""
+
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+class FaceKeypoint(BaseModel):
+    """One keypoint of a face detection."""
+
+    type: str
+    x: float
+    y: float
+
+
+class FaceCreateRequest(BaseModel):
     """Request body for ingesting a face detection."""
+
     source_id: uuid.UUID
-    bounding_box: dict[str, int]
-    keypoints: list[dict[str, object]] | None = None
-    principal_id: uuid.UUID
+    bounding_box: BoundingBox
+    keypoints: list[FaceKeypoint]
+    model_agent_id: uuid.UUID
+    identity_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-class DetectionResponse(BaseModel):
-    """A single detection record."""
-    annotation_id: uuid.UUID
+class FaceResponse(BaseModel):
+    """A single face detection record."""
+
+    detection_id: uuid.UUID
     source_id: uuid.UUID
-    bounding_box: dict[str, int]
-    keypoints: list[dict[str, object]] | None
-    principal_id: uuid.UUID
+    bounding_box: BoundingBox
+    keypoints: list[FaceKeypoint]
+    model_agent_id: uuid.UUID
+    identity_id: uuid.UUID
     confidence: float
-    created_at: datetime
-
-
-# ---------------------------------------------------------------------------
-# Description
-# ---------------------------------------------------------------------------
 
 
 class DescriptionCreateRequest(BaseModel):
     """Request body for adding a description."""
+
     text: str
+    language: str
     source_id: uuid.UUID
-    language: str | None = None
+    identity_id: uuid.UUID
 
 
 class DescriptionResponse(BaseModel):
     """A single description record."""
-    annotation_id: uuid.UUID
+
+    description_id: uuid.UUID
     text: str
-    source_id: uuid.UUID
-    language: str | None
-    principal_id: uuid.UUID
-    created_at: datetime
-
-
-# ---------------------------------------------------------------------------
-# Alternative name
-# ---------------------------------------------------------------------------
-
-
-class AlternativeNameCreateRequest(BaseModel):
-    """Request body for adding an alternative name."""
-    name: str
-    name_type: NameType
-    source_id: uuid.UUID
     language: str
-
-
-class AlternativeNameResponse(BaseModel):
-    """A single alternative name record."""
-
-    annotation_id: uuid.UUID
-    name: str
-    name_type: NameType
     source_id: uuid.UUID
-    language: str
-    principal_id: uuid.UUID
-    created_at: datetime
-
-
-# ---------------------------------------------------------------------------
-# Consensus — annotation decisions and consensus snapshots
-# ---------------------------------------------------------------------------
-
-
-class LinkDecisionCreateRequest(BaseModel):
-    """Request body for an annotator's decision on an annotation."""
-    annotation_id: uuid.UUID
     identity_id: uuid.UUID
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-
-class LinkDecisionUpdateRequest(BaseModel):
-    """Request body for updating an annotator's decision on an annotation."""
-    annotation_id: uuid.UUID
-    identity_id: uuid.UUID | None = None
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
-class LinkDecisionResponse(BaseModel):
-    """A single annotator decision."""
-    annotation_id: uuid.UUID
+class NameCreateRequest(BaseModel):
+    """Request body for adding a name."""
+
+    name: str
+    source_id: uuid.UUID
     identity_id: uuid.UUID
-    principal_id: uuid.UUID
-    confidence: float | None
-    created_at: datetime
 
 
-class LinkConsensusCreateRequest(BaseModel):
-    """Request body for creating a consensus snapshot.
+class NameResponse(BaseModel):
+    """A single name record."""
 
-    ``decision_cutoff_at`` optionally restricts which LINK_DECISION rows are
-    considered to those created at or before this time (spec §2.6.3).
-    """
-
+    name_id: uuid.UUID
+    name: str
+    source_id: uuid.UUID
     identity_id: uuid.UUID
-    annotation_id: uuid.UUID
-    method: ConsensusMethod
-
-
-class LinkConsensusResponse(BaseModel):
-    """A single consensus snapshot."""
-    identity_id: uuid.UUID
-    annotation_id: uuid.UUID
-    principal_id: uuid.UUID
-    method: ConsensusMethod
-    created_at: datetime
-
-
-class IdentityAnnotationEntry(BaseModel):
-    """One included annotation in an identity's current view."""
-    annotation_id: uuid.UUID
 
 
 class IdentityViewResponse(BaseModel):
-    """An identity's current view — the annotations with an ``include`` consensus."""
+    """Current identity view grouped by attached entity IDs."""
+
     identity_id: uuid.UUID
-    included: list[IdentityAnnotationEntry]
-
-
-# ---------------------------------------------------------------------------
-# Bulk link decision create
-# ---------------------------------------------------------------------------
-
-
-class BulkLinkDecisionRequest(BaseModel):
-    """Bulk wrapper for creating multiple annotator decisions at once."""
-    decisions: list[LinkDecisionCreateRequest] = Field(max_length=500)
-
-
-class BulkLinkDecisionResponse(BaseModel):
-    """Result of a bulk decision create."""
-    created: list[LinkDecisionResponse]
+    document_mention_ids: list[uuid.UUID]
+    face_ids: list[uuid.UUID]
+    description_ids: list[uuid.UUID]
+    name_ids: list[uuid.UUID]

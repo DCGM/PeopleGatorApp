@@ -1,46 +1,38 @@
-"""DESCRIPTION table — biographical text from authorities (spec §2.4).
+"""DESCRIPTION table model."""
 
-Stores descriptive text from Wikidata, authority records, or manual
-curation, with an external source reference and language.  Immutable once
-created (spec §4.1).
-"""
-
-import logging
 import uuid
 
 import sqlalchemy as sa
-from sqlalchemy import Enum as String, Text, select
+from sqlalchemy import ForeignKey, String, Text, select
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
-from people_gator_api.models.annotation.base_annotation import BaseAnnotation
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.models.base import Base
 from people_gator_api.utils.uuid_utils import new_uuid6
 
-logger = logging.getLogger(__name__)
 
-
-class Description(BaseAnnotation):
-    """Biographical or descriptive text attributed to an external source.
-    or authority ID) for provenance (spec §2.4).
-    """
+class Description(Base):
+    """Description record linked to an identity."""
 
     __tablename__ = "description"
-    text: Mapped[str] = mapped_column(Text, nullable=False)
-    language: Mapped[str | None] = mapped_column(String, nullable=True)
-    __table_args__ = (
-        sa.Index("ix_description_source_type", "source_type"),
-        sa.Index("ix_description_source_ref", "source_ref"),
-        sa.Index("ix_description_language", "language"),
-        sa.Index("ix_description_principal_id", "principal_id"),
-    )
-    __mapped_args__ = {
-        "polymorphic_identity": AnnotationType.description,
-    }
 
-    # -------------------------------------------------------------------------
-    # Class-level queries
-    # -------------------------------------------------------------------------
+    description_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=new_uuid6
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    language: Mapped[str] = mapped_column(String, nullable=False)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("source.source_id"), nullable=False
+    )
+    identity_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("identity.identity_id"), nullable=False
+    )
+
+    __table_args__ = (
+        sa.Index("ix_description_source_id", "source_id"),
+        sa.Index("ix_description_identity_id", "identity_id"),
+    )
 
     @classmethod
     async def get(
@@ -49,7 +41,7 @@ class Description(BaseAnnotation):
         description_id: uuid.UUID,
     ) -> "Description | None":
         result = await session.scalars(
-            select(cls).where(cls.annotation_id == description_id)
+            select(cls).where(cls.description_id == description_id)
         )
         return result.one_or_none()
 
@@ -57,15 +49,15 @@ class Description(BaseAnnotation):
     async def list_page(
         cls,
         session: AsyncSession,
-        source_id: uuid.UUID | None = None,
+        identity_id: uuid.UUID | None = None,
         after_id: uuid.UUID | None = None,
         limit: int = 50,
     ) -> list["Description"]:
-        stmt = select(cls).order_by(cls.annotation_id.asc()).limit(limit)
-        if source_id is not None:
-            stmt = stmt.where(cls.source_id == source_id)
+        stmt = select(cls).order_by(cls.description_id.asc()).limit(limit)
+        if identity_id is not None:
+            stmt = stmt.where(cls.identity_id == identity_id)
         if after_id is not None:
-            stmt = stmt.where(cls.annotation_id > after_id)
+            stmt = stmt.where(cls.description_id > after_id)
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
@@ -74,22 +66,16 @@ class Description(BaseAnnotation):
         cls,
         session: AsyncSession,
         text: str,
+        language: str,
         source_id: uuid.UUID,
-        principal_id: uuid.UUID,
-        language: str | None = None,
+        identity_id: uuid.UUID,
     ) -> "Description":
-        new_id = new_uuid6()
-        obj = cls(
-            id=new_id,
+        item = cls(
+            description_id=new_uuid6(),
             text=text,
-            source_id=source_id,
             language=language,
-            principal_id=principal_id,
-            created_at=new_id,
+            source_id=source_id,
+            identity_id=identity_id,
         )
-        session.add(obj)
-        logger.info(
-            "Created description",
-            extra={"description_id": str(obj.annotation_id)},
-        )
-        return obj
+        session.add(item)
+        return item

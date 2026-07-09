@@ -43,8 +43,8 @@ ANNOTATION_EMBEDDING_PROPERTIES: list[Property] = [
         name="annotation_type",
         data_type=DataType.TEXT,
         description=(
-            "Annotation type enum value: named_entity, detection, "
-            "description, alternative_name."
+            "Annotation type enum value: mention, information, document_mention, "
+            "face, description, name."
         ),
         index_filterable=True,
         index_searchable=False,
@@ -124,17 +124,33 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
-        name="detection_count",
+        name="face_count",
         data_type=DataType.INT,
-        description="Number of detection annotations in this identity snapshot.",
+        description="Number of face annotations in this identity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
     ),
     Property(
-        name="named_entity_count",
+        name="mention_count",
         data_type=DataType.INT,
-        description="Number of named_entity annotations in this identity snapshot.",
+        description="Number of mention annotations in this identity snapshot.",
+        index_filterable=True,
+        index_range_filters=True,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="information_count",
+        data_type=DataType.INT,
+        description="Number of information annotations in this identity snapshot.",
+        index_filterable=True,
+        index_range_filters=True,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="document_mention_count",
+        data_type=DataType.INT,
+        description="Number of document_mention annotations in this identity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -148,9 +164,9 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
-        name="alternative_name_count",
+        name="name_count",
         data_type=DataType.INT,
-        description="Number of alternative_name annotations in this identity snapshot.",
+        description="Number of name annotations in this identity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,

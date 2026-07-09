@@ -86,4 +86,4 @@ class Settings(BaseSettings):
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
 
-settings = Settings() # type: ignore
+settings = Settings()  # pyright: ignore[reportCallIssue] - BaseSettings values come from env sources.
