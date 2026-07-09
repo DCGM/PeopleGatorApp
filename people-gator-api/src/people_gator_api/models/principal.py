@@ -114,6 +114,11 @@ class User(Principal):
     """
 
     __tablename__ = "user"
+    principal_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        sa.ForeignKey("principal.principal_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
     # OIDC sub — stable, provider-scoped user identifier.
     external_subject: Mapped[str] = mapped_column(String, nullable=False)
     # OIDC iss — identifies the identity provider.
@@ -213,6 +218,11 @@ class ModelAgent(Principal):
     """
 
     __tablename__ = "model_agent"
+    principal_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        sa.ForeignKey("principal.principal_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
     annotation_type: Mapped[AnnotationType] = mapped_column(
         SAEnum(AnnotationType, name="annotation_type_enum"),
         nullable=False,

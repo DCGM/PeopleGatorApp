@@ -38,6 +38,7 @@ class MentionCreateRequest(BaseModel):
     """Request body for ingesting a mention."""
 
     text: str
+    document_mention_id: uuid.UUID
     source_id: uuid.UUID
     offset_start: int
     offset_end: int
@@ -50,6 +51,7 @@ class MentionResponse(BaseModel):
 
     mention_id: uuid.UUID
     text: str
+    document_mention_id: uuid.UUID
     source_id: uuid.UUID
     offset_start: int
     offset_end: int
@@ -66,6 +68,7 @@ class InformationCreateRequest(BaseModel):
     """Request body for ingesting information."""
 
     text: str
+    document_mention_id: uuid.UUID
     source_id: uuid.UUID
     model_agent_id: uuid.UUID
 
@@ -75,6 +78,7 @@ class InformationResponse(BaseModel):
 
     information_id: uuid.UUID
     text: str
+    document_mention_id: uuid.UUID
     source_id: uuid.UUID
     model_agent_id: uuid.UUID
 

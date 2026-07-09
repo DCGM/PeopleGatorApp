@@ -1,15 +1,23 @@
 """DOCUMENT_MENTION table model."""
 
+from __future__ import annotations
+
 import uuid
+from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from sqlalchemy import ForeignKey, String, select
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from people_gator_api.models.base import Base
 from people_gator_api.utils.uuid_utils import new_uuid6
+
+if TYPE_CHECKING:
+    class Mention: ...
+
+    class Information: ...
 
 
 class DocumentMention(Base):
@@ -27,6 +35,17 @@ class DocumentMention(Base):
     )
     identity_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("identity.identity_id"), nullable=False
+    )
+
+    mentions: Mapped[list["Mention"]] = relationship(
+        "Mention",
+        back_populates="document_mention",
+        lazy="selectin",
+    )
+    information_records: Mapped[list["Information"]] = relationship(
+        "Information",
+        back_populates="document_mention",
+        lazy="selectin",
     )
 
     __table_args__ = (

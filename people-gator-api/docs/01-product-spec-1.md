@@ -59,7 +59,7 @@ IDs are globally unique identifiers using UUIDv6 format.
 
 ### 2.2 Mention `MENTION`
 
-> Text mention extracted from a source.
+> Text mention extracted from a source and strictly attached to one `DOCUMENT_MENTION`.
 
 | Field Name | Type | Description |
 |------------|------|-------------|
@@ -68,17 +68,19 @@ IDs are globally unique identifiers using UUIDv6 format.
 | `offset_start` | INTEGER | Start character offset in source text. |
 | `offset_end` | INTEGER | End character offset in source text. |
 | `confidence` | FLOAT | Extraction confidence. |
+| `document_mention_id` | UUID | Required foreign key to the owning document mention. |
 | `source_id` | UUID | Source containing the mention. |
 | `model_agent_id` | UUID | Model agent that extracted the mention. |
 
 ### 2.3 Information `INFORMATION`
 
-> Relevant information extracted at page/document level.
+> Relevant information extracted at page/document level and strictly attached to one `DOCUMENT_MENTION`.
 
 | Field Name | Type | Description |
 |------------|------|-------------|
 | `information_id` | UUID | Unique identifier for the information record. |
 | `text` | TEXT | Extracted information text. |
+| `document_mention_id` | UUID | Required foreign key to the owning document mention. |
 | `source_id` | UUID | Source containing the information. |
 | `model_agent_id` | UUID | Model agent that extracted the information. |
 
@@ -146,7 +148,7 @@ IDs are globally unique identifiers using UUIDv6 format.
 
 - `PRINCIPAL` creates `IDENTITY`.
 - `SOURCE` contains `MENTION`, `INFORMATION`, `DOCUMENT_MENTION`, and `FACE`.
-- `DOCUMENT_MENTION` consists of `MENTION` and `INFORMATION`.
+- Every `MENTION` and every `INFORMATION` row must reference exactly one `DOCUMENT_MENTION` via `document_mention_id`.
 - `IDENTITY` has `DOCUMENT_MENTION`, `FACE`, `DESCRIPTION`, and `NAME`.
 
 ## 4. Entity Relationship Diagram
@@ -180,6 +182,7 @@ erDiagram
     int offset_start
     int offset_end
     float confidence
+    uuid document_mention_id
     uuid source_id
     uuid model_agent_id
   }
@@ -187,6 +190,7 @@ erDiagram
   INFORMATION {
     uuid information_id
     text text
+    uuid document_mention_id
     uuid source_id
     uuid model_agent_id
   }

@@ -41,6 +41,7 @@ def _mention_out(item: Mention) -> MentionResponse:
     return MentionResponse(
         mention_id=item.mention_id,
         text=item.text,
+        document_mention_id=item.document_mention_id,
         source_id=item.source_id,
         offset_start=item.offset_start,
         offset_end=item.offset_end,
@@ -55,6 +56,7 @@ async def create_mention(
     item = await Mention.create(
         session=session,
         text=payload.text,
+        document_mention_id=payload.document_mention_id,
         source_id=payload.source_id,
         offset_start=payload.offset_start,
         offset_end=payload.offset_end,
@@ -99,6 +101,7 @@ def _information_out(item: Information) -> InformationResponse:
     return InformationResponse(
         information_id=item.information_id,
         text=item.text,
+        document_mention_id=item.document_mention_id,
         source_id=item.source_id,
         model_agent_id=item.model_agent_id,
     )
@@ -111,6 +114,7 @@ async def create_information(
     item = await Information.create(
         session=session,
         text=payload.text,
+        document_mention_id=payload.document_mention_id,
         source_id=payload.source_id,
         model_agent_id=payload.model_agent_id,
     )
