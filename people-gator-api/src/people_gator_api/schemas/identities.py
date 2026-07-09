@@ -5,6 +5,11 @@ import uuid
 from pydantic import BaseModel, Field
 
 
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+
 class IdentityCreateRequest(BaseModel):
     """Request body for creating a new identity."""
 
@@ -22,6 +27,11 @@ class IdentityListResponse(BaseModel):
     items: list[IdentityResponse]
     total: int
     next_after_id: uuid.UUID | None = None
+
+
+# ---------------------------------------------------------------------------
+# Mentions
+# ---------------------------------------------------------------------------
 
 
 class MentionCreateRequest(BaseModel):
@@ -47,6 +57,11 @@ class MentionResponse(BaseModel):
     confidence: float
 
 
+# ---------------------------------------------------------------------------
+# Information
+# ---------------------------------------------------------------------------
+
+
 class InformationCreateRequest(BaseModel):
     """Request body for ingesting information."""
 
@@ -62,6 +77,11 @@ class InformationResponse(BaseModel):
     text: str
     source_id: uuid.UUID
     model_agent_id: uuid.UUID
+
+
+# ---------------------------------------------------------------------------
+# Document Mentions
+# ---------------------------------------------------------------------------
 
 
 class DocumentMentionCreateRequest(BaseModel):
@@ -81,6 +101,11 @@ class DocumentMentionResponse(BaseModel):
     information: str
     model_agent_id: uuid.UUID
     identity_id: uuid.UUID
+
+
+# ---------------------------------------------------------------------------
+# Faces
+# ---------------------------------------------------------------------------
 
 
 class BoundingBox(BaseModel):
@@ -123,6 +148,11 @@ class FaceResponse(BaseModel):
     confidence: float
 
 
+# ---------------------------------------------------------------------------
+# Descriptions
+# ---------------------------------------------------------------------------
+
+
 class DescriptionCreateRequest(BaseModel):
     """Request body for adding a description."""
 
@@ -142,6 +172,11 @@ class DescriptionResponse(BaseModel):
     identity_id: uuid.UUID
 
 
+# ---------------------------------------------------------------------------
+# Names
+# ---------------------------------------------------------------------------
+
+
 class NameCreateRequest(BaseModel):
     """Request body for adding a name."""
 
@@ -157,6 +192,11 @@ class NameResponse(BaseModel):
     name: str
     source_id: uuid.UUID
     identity_id: uuid.UUID
+
+
+# ---------------------------------------------------------------------------
+# Identity View
+# ---------------------------------------------------------------------------
 
 
 class IdentityViewResponse(BaseModel):
