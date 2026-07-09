@@ -2,6 +2,32 @@
 
 Core concept is to define bare minimum system specs that define just the data model shown in the ER diagram.
 
+## 0. Core functionality
+
+We want to facilitate search, addition of new mention and information, search for similar identities, and user modification of whether a mention was correctly assigned to some identity.
+
+There are 2 types of user, a model or agent user, who automaticallu annotated pages in a document and triest to link them to the correct identity. And a human user, who can review the annotations and make corrections.
+
+The agent can:
+- Create a new document mention, mention and information
+- Take a document mention, which is an aggregation of mentions and information, and link it to an identity
+- Link a face detection to an identity
+
+The user can:
+- Retrieve and identity from a list
+- Display document mentions for identity
+- Check if document mention matches
+- Display faces for identity
+- Check if face matches
+- Show similar identities based on current identity
+- Merge identities
+
+Low priority functionality for future user:
+- Display mentions for identity
+- Search for similar identities based on face, name, or description.
+
+
+
 ## 1. Introduction
 
 This specification defines a simplified identity-centric annotation model.
