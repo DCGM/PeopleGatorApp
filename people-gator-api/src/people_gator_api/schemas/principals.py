@@ -2,39 +2,79 @@ import uuid
 
 from pydantic import BaseModel
 
-from people_gator_api.db.models.enums import EvidenceType, PrincipalType, RegistrySource
+from people_gator_api.models.enums import AnnotationType, PrincipalType, RegistrySource
 
 
-class PrincipalResponse(BaseModel):
+# ---------------------------------------------------------------------------
+# User schemas
+# ---------------------------------------------------------------------------
+
+class UserPatchRequest(BaseModel):
+    display_name: str | None = None
+    email: str | None = None
+    is_active: bool | None = None
+
+class UserResponse(BaseModel):
     principal_id: uuid.UUID
     principal_type: PrincipalType
     display_name: str
+    external_subject: str
+    external_issuer: str
+    email: str | None
     is_active: bool
 
+# ---------------------------------------------------------------------------
+# Service agent schemas
+# ---------------------------------------------------------------------------
 
 class ServiceAgentCreateRequest(BaseModel):
     agent_slug: str
     display_name: str
-    description: str | None = None
 
+class ServiceAgentPatchRequest(BaseModel):
+    is_active: bool | None = None
+    display_name: str | None = None
+
+class ServiceAgentResponse(BaseModel):
+    principal_id: uuid.UUID
+    principal_type: PrincipalType
+    agent_slug: str
+    display_name: str | None = None
+    is_active: bool
+
+# ---------------------------------------------------------------------------
+# Model agent schemas
+# ---------------------------------------------------------------------------
 
 class ModelAgentCreateRequest(BaseModel):
     display_name: str
-    evidence_type: EvidenceType
+    annotation_type: AnnotationType
     role: str
     model_slug: str
     model_version: str
     registry_source: RegistrySource
     registry_uri: str
-    is_active: bool = True
-
-
-class ModelAgentPatchRequest(BaseModel):
+    is_active: bool
+    
+class ModelAgentResponse(BaseModel):
+    principal_id: uuid.UUID
+    principal_type: PrincipalType
+    display_name: str
+    annotation_type: AnnotationType
+    role: str
+    model_slug: str
+    model_version: str
+    registry_source: RegistrySource
+    registry_uri: str
     is_active: bool
 
 
-class MeResponse(BaseModel):
+# ---------------------------------------------------------------------------
+# Me schema
+# ---------------------------------------------------------------------------
+
+class PrincipalResponse(BaseModel):
     principal_id: uuid.UUID
-    principal_type: str
+    principal_type: PrincipalType
     display_name: str
     is_active: bool

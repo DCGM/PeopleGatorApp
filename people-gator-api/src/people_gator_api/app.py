@@ -1,19 +1,25 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from people_gator_api.services.embedding_service.http_service import (
+    close_embedding_service,
+    init_embedding_service,
+)
 from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
 from people_gator_api.routes.v1 import router as v1_router
-from people_gator_api.vector.client import init_weaviate, close_weaviate
+from people_gator_api.services.vector_service.client import init_weaviate, close_weaviate
 import dotenv
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_embedding_service()
     await init_weaviate()
     yield
+    await close_embedding_service()
     await close_weaviate()
 
 

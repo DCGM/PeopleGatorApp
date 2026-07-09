@@ -3,22 +3,22 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.db.engine import get_session
-from people_gator_api.db.models.enums import PrincipalType
+from people_gator_api.services.database_service import get_session
+from people_gator_api.models.enums import PrincipalType
 from people_gator_api.schemas.principals import (
-    MeResponse,
     ModelAgentCreateRequest,
-    ModelAgentPatchRequest,
     PrincipalResponse,
+    ServiceAgentPatchRequest,
     ServiceAgentCreateRequest,
 )
-from people_gator_api.services.authz import AuthContext, require_scopes
+from people_gator_api.services.auth_service import AuthContext, require_scopes
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.principal_service import (
+from people_gator_api.services.crud_services.principal_service import (
     create_model_agent,
     create_service_agent,
     get_principal,
     list_principals,
+    update_principal,
 )
 
 router = APIRouter(tags=["principals"])
@@ -48,16 +48,16 @@ async def get_principal_route(
     return principal
 
 
-@router.get("/principals/me", response_model=MeResponse)
+@router.get("/principals/me", response_model=PrincipalResponse)
 async def get_me_route(
     auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-) -> MeResponse:
+) -> PrincipalResponse:
     if auth.principal is None:
         raise_api_error(401, "token_missing", "Authentication required")
     assert auth.principal is not None
-    return MeResponse(
+    return PrincipalResponse(
         principal_id=auth.principal.principal_id,
-        principal_type=auth.principal.principal_type.value,
+        principal_type=auth.principal.principal_type,
         display_name=auth.principal.display_name,
         is_active=auth.principal.is_active,
     )
@@ -84,16 +84,16 @@ async def create_model_agent_route(
 @router.patch("/principals/model-agents/{principal_id}", response_model=PrincipalResponse)
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
-    payload: ModelAgentPatchRequest,
+    payload: ServiceAgentPatchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
     session: AsyncSession = Depends(get_session),
 ) -> PrincipalResponse:
-    principal = await get_principal(session, principal_id)
+    principal = await update_principal(
+        session,
+        principal_id,
+        payload.display_name,
+        payload.is_active,
+    )
     if principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    return PrincipalResponse(
-        principal_id=principal.principal_id,
-        principal_type=principal.principal_type,
-        display_name=principal.display_name,
-        is_active=payload.is_active,
-    )
+    return principal

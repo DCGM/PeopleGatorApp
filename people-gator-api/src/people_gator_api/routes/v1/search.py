@@ -1,23 +1,32 @@
+"""Search and search-profile endpoints.
+
+Cluster/version concepts have been removed; search returns identity and
+annotation-level results.
+"""
+
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.db.engine import get_session
+from people_gator_api.models.enums import AnnotationType
 from people_gator_api.schemas.search import (
     SearchFacetsResponse,
     SearchFilters,
-    SearchProfileCloneRequest,
-    SearchProfileCreateRequest,
-    SearchProfileResponse,
-    SearchProfileUpdateRequest,
     SearchQuery,
     SearchRequest,
     SearchResponse,
 )
-from people_gator_api.services.authz import AuthContext, require_scopes
+from people_gator_api.schemas.search_profiles import (
+    SearchProfileCloneRequest,
+    SearchProfileCreateRequest,
+    SearchProfilePatchRequest,
+    SearchProfileResponse,
+)
+from people_gator_api.services.auth_service import AuthContext, require_scopes
+from people_gator_api.services.database_service import get_session
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.search_service import (
+from people_gator_api.services.crud_services.search_profile_service import (
     clone_profile,
     create_profile,
     delete_profile,
@@ -66,7 +75,7 @@ async def create_search_profile(
 @router.patch("/search-profiles/{profile_id}", response_model=SearchProfileResponse)
 async def patch_search_profile(
     profile_id: uuid.UUID,
-    payload: SearchProfileUpdateRequest,
+    payload: SearchProfilePatchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
     session: AsyncSession = Depends(get_session),
 ) -> SearchProfileResponse:
@@ -105,14 +114,12 @@ async def clone_search_profile(
 
 @router.get("/search", response_model=SearchResponse)
 async def search_get(
-    name: list[str] = Query(default_factory=list),
-    text: list[str] = Query(default_factory=list),
-    evidence_id: list[uuid.UUID] = Query(default_factory=list),
-    reference_cluster_id: uuid.UUID | None = None,
+    annotation_id: list[uuid.UUID] = Query(default_factory=list),
+    reference_identity_id: uuid.UUID | None = None,
     profile_id: uuid.UUID | None = None,
-    result_type: list[str] = Query(default_factory=lambda: ["cluster"]),
-    cluster_role: list[str] = Query(default_factory=list),
-    provider: list[str] = Query(default_factory=list),
+    result_type: list[str] = Query(default_factory=lambda: ["identity"]),
+    annotation_type: list[AnnotationType] = Query(default_factory=list),
+    source_kind: list[str] = Query(default_factory=list),
     has_face: bool | None = None,
     has_authority_link: bool | None = None,
     language: list[str] = Query(default_factory=list),
@@ -123,26 +130,21 @@ async def search_get(
 ) -> SearchResponse:
     request = SearchRequest(
         query=SearchQuery(
-            names=name or None,
-            texts=text or None,
-            evidence_ids=evidence_id or None,
-            reference_cluster_id=reference_cluster_id,
+            annotation_ids=annotation_id or None,
+            reference_identity_id=reference_identity_id,
         ),
         profile_id=profile_id,
         result_types=result_type,
         filters=SearchFilters(
-            cluster_roles=[],
-            provider=[],
+            annotation_types=annotation_type,
+            source_kinds=source_kind,
             has_face=has_face,
             has_authority_link=has_authority_link,
             languages=language,
         ),
         limit=limit,
         after_id=after_id,
-        save=False,
     )
-    _ = cluster_role
-    _ = provider
     return await search(session, request)
 
 
@@ -157,20 +159,16 @@ async def search_post(
 
 @router.get("/search/facets", response_model=SearchFacetsResponse)
 async def search_facets_get(
-    name: list[str] = Query(default_factory=list),
-    text: list[str] = Query(default_factory=list),
-    evidence_id: list[uuid.UUID] = Query(default_factory=list),
-    reference_cluster_id: uuid.UUID | None = None,
+    annotation_id: list[uuid.UUID] = Query(default_factory=list),
+    reference_identity_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> SearchFacetsResponse:
     return await search_facets(
         session,
         SearchQuery(
-            names=name or None,
-            texts=text or None,
-            evidence_ids=evidence_id or None,
-            reference_cluster_id=reference_cluster_id,
+            annotation_ids=annotation_id or None,
+            reference_identity_id=reference_identity_id,
         ),
         SearchFilters(),
     )

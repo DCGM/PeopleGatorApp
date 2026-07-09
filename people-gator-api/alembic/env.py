@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from people_gator_api.db.models import Base
+from people_gator_api.models import Base
 from people_gator_api.settings import settings
 
 # this is the Alembic Config object, which provides

@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class OpenTelemetrySettings(BaseModel):
@@ -38,10 +38,17 @@ class WeaviateSettings(BaseModel):
     api_key: str | None = None
 
 
+class EmbeddingServiceSettings(BaseModel):
+    detect_and_embed_image_url: str = "http://localhost:8001/v1/faces/detect"
+    embed_image_url: str = "http://localhost:8001/v1/embeddings/image"
+    embed_text_url: str = "http://localhost:8001/v1/embeddings/text"
+    request_timeout_seconds: float = Field(default=30.0, gt=0)
+
+
 class KeycloakSettings(BaseModel):
-    url: str = Field(validation_alias=AliasChoices("url", "server_url"))
+    url: str
     realm: str
-    audience: str | None = None
+    audience: str
 
     @computed_field
     @property
@@ -52,6 +59,11 @@ class KeycloakSettings(BaseModel):
     @property
     def jwks_uri(self) -> str:
         return f"{self.url}/realms/{self.realm}/protocol/openid-connect/certs"
+    
+    @computed_field
+    @property
+    def openid_configuration(self) -> str:
+        return f"{self.url}/realms/{self.realm}/.well-known/openid-configuration"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -72,5 +84,6 @@ class Settings(BaseSettings):
     storage: StorageSettings
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
+    embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
 
 settings = Settings() # type: ignore

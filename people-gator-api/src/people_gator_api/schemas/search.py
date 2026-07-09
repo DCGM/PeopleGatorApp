@@ -1,126 +1,95 @@
+"""
+Pydantic schemas for search and search endpoints.
+
+Search now returns identity and
+evidence-level results keyed by ``AnnotationType``.  Search profiles remain
+reusable multi-modality configurations.
+"""
+from pydantic import Field, BaseModel
 import uuid
 
-from pydantic import BaseModel, Field
 
-from people_gator_api.db.models.enums import ClusterRole, EvidenceType, ProviderType
+from people_gator_api.models.enums import AnnotationType
 
+# ---------------------------------------------------------------------------
+# Search signal contribution schemas
+# ---------------------------------------------------------------------------
 
 class SearchSignalContribution(BaseModel):
-    raw_score: float
+    """Per-modality score breakdown for a search result."""
+    score: float
     normalised_score: float
     weight: float
-    top_evidence_id: uuid.UUID | None
 
 
-class SearchClusterMembersSummaryEntry(BaseModel):
-    total: int
+class SearchIdentityResult(BaseModel):
+    """An identity search result — an identity with a combined score.
 
-
-class SearchClusterResult(BaseModel):
-    result_type: str = "cluster"
-    cluster_id: uuid.UUID
-    head_version_id: uuid.UUID | None
-    cluster_role: ClusterRole | None
+    ``included_annotations`` summarises which annotations contributed to the
+    identity's current view (those with an ``include`` consensus).
+    """
+    result_type: str = "identity"
+    identity_id: uuid.UUID
     score: float
-    signal_contributions: dict[EvidenceType, SearchSignalContribution]
-    members: dict[EvidenceType, SearchClusterMembersSummaryEntry]
+    signal_contributions: dict[AnnotationType, SearchSignalContribution]
 
 
-class SearchEvidenceResult(BaseModel):
-    result_type: EvidenceType
-    evidence_id: uuid.UUID
-    evidence_version_id: uuid.UUID
+class SearchAnnotationResult(BaseModel):
+    """An annotation-level search result: a single matched annotation."""
+    result_type: AnnotationType
+    annotation_id: uuid.UUID
     source_id: uuid.UUID
     score: float
-    signal_contributions: dict[EvidenceType, SearchSignalContribution]
-    cluster_memberships: SearchClusterMembersSummaryEntry
+    signal_contributions: dict[AnnotationType, SearchSignalContribution]
 
+# ---------------------------------------------------------------------------
+# Search request and response schemas
+# ---------------------------------------------------------------------------
 
 class SearchQuery(BaseModel):
-    names: list[str] | None = None
-    texts: list[str] | None = None
-    evidence_ids: list[uuid.UUID] | None = None
-    reference_cluster_id: uuid.UUID | None = None
-
+    """Typed query signals the caller wants to find matches for."""
+    annotation_ids: list[uuid.UUID] | None = None
+    reference_identity_id: uuid.UUID | None = None
 
 class SearchFilters(BaseModel):
-    cluster_roles: list[ClusterRole] = []
-    provider: list[ProviderType] = []
+    """Filters applied to search results."""
+    annotation_types: list[AnnotationType] = []
+    source_kinds: list[str] = []
     has_face: bool | None = None
     has_authority_link: bool | None = None
     languages: list[str] = []
 
-
 class SearchRequest(BaseModel):
+    """Full search request (query + profile + result types + filters + pagination)."""
     query: SearchQuery
-    profile_id: uuid.UUID | None = None
-    result_types: list[str] = Field(default_factory=lambda: ["cluster"])
     filters: SearchFilters = Field(default_factory=SearchFilters)
+    profile_id: uuid.UUID | None = None
+    result_types: list[str] = Field(default_factory=lambda: ["identity"])
     limit: int = 20
     after_id: uuid.UUID | None = None
-    save: bool = False
 
 
 class SearchResponse(BaseModel):
+    """Search results union plus facets and echo of the request."""
+
     total: int
     limit: int
     next_after_id: uuid.UUID | None
-    results: list[SearchClusterResult | SearchEvidenceResult]
+    results: list[SearchIdentityResult | SearchAnnotationResult]
     facets: dict[str, dict[str, int]]
     query: SearchQuery
     filters: SearchFilters
     profile_id: uuid.UUID | None
-    search_cluster_id: uuid.UUID | None
 
+# ---------------------------------------------------------------------------
+# Search facets response schema
+# ---------------------------------------------------------------------------
 
 class SearchFacetsResponse(BaseModel):
-    cluster_roles: dict[str, int]
-    provider: dict[str, int]
+    """Facet counts returned alongside or independently of a search response."""
+
+    annotation_types: dict[str, int]
+    source_kinds: dict[str, int]
     result_types: dict[str, int]
-    evidence_types: dict[str, int]
     has_face: dict[str, int]
     has_authority_link: dict[str, int]
-
-
-class SearchProfileModalityIn(BaseModel):
-    evidence_type: EvidenceType
-    weight: float
-    model_id: uuid.UUID | None = None
-    enabled: bool = True
-    min_confidence: float | None = None
-
-
-class SearchProfileCreateRequest(BaseModel):
-    profile_name: str
-    description: str | None = None
-    is_public: bool = False
-    modalities: list[SearchProfileModalityIn]
-
-
-class SearchProfileUpdateRequest(BaseModel):
-    profile_name: str | None = None
-    description: str | None = None
-    is_public: bool | None = None
-    modalities: list[SearchProfileModalityIn] | None = None
-
-
-class SearchProfileCloneRequest(BaseModel):
-    profile_name: str | None = None
-
-
-class SearchProfileModalityOut(BaseModel):
-    evidence_type: EvidenceType
-    weight: float
-    model_id: uuid.UUID | None
-    enabled: bool
-    min_confidence: float | None
-
-
-class SearchProfileResponse(BaseModel):
-    profile_id: uuid.UUID
-    profile_name: str
-    description: str | None
-    owner_id: uuid.UUID | None
-    is_public: bool
-    is_system: bool
-    modalities: list[SearchProfileModalityOut]

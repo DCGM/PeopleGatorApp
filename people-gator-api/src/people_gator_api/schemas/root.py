@@ -1,5 +1,8 @@
 from pydantic import BaseModel
 
+# ---------------------------------------------------------------------------
+# Just a simple root response for the API
+# ---------------------------------------------------------------------------
 
 class RootResponse(BaseModel):
     message: str

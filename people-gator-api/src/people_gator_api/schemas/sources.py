@@ -1,47 +1,35 @@
+"""Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
+
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel
 
-from people_gator_api.db.models.enums import ProcessingStatus, ProviderType, ResolverType
-
-
-class SourceSchemaCreateRequest(BaseModel):
-    schema_name: str
-    resolver_type: ResolverType
-    resolver_config: dict[str, object]
-
-
-class SourceSchemaResponse(BaseModel):
-    schema_name: str
-    resolver_type: ResolverType
-    resolver_config: dict[str, object]
+from people_gator_api.models.enums import SourceKind
 
 
 class SourceCreateRequest(BaseModel):
-    source_schema_name: str
-    source: str
-    provider: ProviderType
-    content_hash: str
-    metadata: dict[str, object] | None = None
+    """Request body for registering a source."""
+
+    source_type: SourceKind
+    uri: str
+    metadata: dict[str, str] | None = None
 
 
 class SourceResponse(BaseModel):
+    """A single source record."""
+
     source_id: uuid.UUID
-    source_schema_name: str
-    source: str
-    provider: ProviderType
-    content_hash: str | None
-    metadata: dict[str, object] | None
+    source_type: SourceKind
+    uri: str
+    metadata: dict[str, str] | None
+    principal_id: uuid.UUID | None
+    created_at: datetime
 
 
-class SourceProcessingEntry(BaseModel):
-    producer_id: uuid.UUID
-    processing_status: ProcessingStatus
-    started_at: str | None
-    completed_at: str | None
-    error_message: str | None
+class SourceListResponse(BaseModel):
+    """A paginated list of sources."""
 
-
-class SourceProcessingResponse(BaseModel):
-    source_id: uuid.UUID
-    processing: list[SourceProcessingEntry]
+    items: list[SourceResponse]
+    total: int
+    next_after_id: uuid.UUID | None = None

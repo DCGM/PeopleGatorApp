@@ -2,7 +2,7 @@ import asyncio
 
 import uvicorn
 
-from people_gator_api.db import init_db as init_db_tables
+from people_gator_api.services.database_service import init_db as init_db_tables
 from people_gator_api.settings import settings
 
 
