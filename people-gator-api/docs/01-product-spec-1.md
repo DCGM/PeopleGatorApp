@@ -15,18 +15,18 @@ The agent can:
 
 The user can:
 - Retrieve and identity from a list
-- Display document mentions for identity
-- Check if document mention matches
 - Display faces for identity
 - Check if face matches
 - Show similar identities based on current identity
 - Merge identities
 
 Low priority functionality for future user:
+- Display document mentions for identity
 - Display mentions for identity
 - Search for similar identities based on face, name, or description.
 
-
+Ultra low priority:
+- Text search for mentions and information, with ability to link to identity.
 
 ## 1. Introduction
 
@@ -67,6 +67,7 @@ IDs are globally unique identifiers using UUIDv6 format.
 | `text` | TEXT | Mention text span. |
 | `offset_start` | INTEGER | Start character offset in source text. |
 | `offset_end` | INTEGER | End character offset in source text. |
+| `polygons` | JSON | Optional polygon coordinates for mention in source. |
 | `confidence` | FLOAT | Extraction confidence. |
 | `document_mention_id` | UUID | Required foreign key to the owning document mention. |
 | `source_id` | UUID | Source containing the mention. |
