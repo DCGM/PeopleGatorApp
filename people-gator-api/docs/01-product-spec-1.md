@@ -155,7 +155,7 @@ IDs are globally unique identifiers using UUIDv6 format.
 
 ```mermaid
 erDiagram
-  PRINCIPAL ||--o{ IDENTITY : creates
+  PRINCIPAL ||--o{ ENTITY : creates
 
   DOCUMENT_MENTION ||--o{ MENTION : consists_of
   DOCUMENT_MENTION ||--o{ INFORMATION : consists_of
@@ -166,14 +166,19 @@ erDiagram
   SOURCE ||--o{ DOCUMENT_MENTION : contains
   SOURCE ||--o{ FACE : contains
 
-  IDENTITY ||--o{ DOCUMENT_MENTION : has
-  IDENTITY ||--o{ FACE : has
-  IDENTITY ||--o{ DESCRIPTION : has
-  IDENTITY ||--o{ NAME : has
+  ENTITY ||--o{ DOCUMENT_MENTION : has
+  ENTITY ||--o{ FACE : has
+  ENTITY ||--o{ DESCRIPTION : has
+  ENTITY ||--o{ NAME : has
 
-  IDENTITY {
+  ENTITY {
     uuid identity_id
     uuid principal_id
+    enum type
+    string name
+    string description
+    string wikidata_url
+    string nlcr_url
   }
 
   MENTION {
@@ -216,15 +221,12 @@ erDiagram
   DESCRIPTION {
     uuid description_id
     text text
-    string language
-    uuid source_id
     uuid identity_id
   }
 
   NAME {
     uuid name_id
     text name
-    uuid source_id
     uuid identity_id
   }
 
