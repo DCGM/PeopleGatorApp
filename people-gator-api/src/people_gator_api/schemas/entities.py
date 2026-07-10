@@ -1,4 +1,4 @@
-"""Pydantic schemas for identity and annotation endpoints."""
+"""Pydantic schemas for entity and annotation endpoints."""
 
 from __future__ import annotations
 
@@ -7,26 +7,38 @@ import uuid
 from pydantic import BaseModel, Field
 
 
+class ModificationMetadata(BaseModel):
+    """Optional model metadata attached to mutable evidence records."""
+
+    embedding: list[float] | None = None
+    model_identifier: str | None = None
+
+
 # ---------------------------------------------------------------------------
-# Identity
+# Entity
 # ---------------------------------------------------------------------------
 
 
-class IdentityCreateRequest(BaseModel):
-    """Request body for creating a new identity."""
+class EntityCreateRequest(BaseModel):
+    """Request body for creating a new entity."""
+
+    name: str | None = None
+    description: str | None = None
 
 
-class IdentityResponse(BaseModel):
-    """A single identity record."""
+class EntityResponse(BaseModel):
+    """A single entity record."""
 
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
     principal_id: uuid.UUID
+    name: str | None
+    description: str | None
 
 
-class IdentityListResponse(BaseModel):
-    """A paginated list of identities."""
+class EntityListResponse(BaseModel):
+    """A paginated list of entities."""
 
-    items: list[IdentityResponse]
+    items: list[EntityResponse]
     total: int
     next_after_id: uuid.UUID | None = None
 
@@ -36,7 +48,20 @@ class IdentityListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class MentionCreateRequest(BaseModel):
+class MentionPolygonPoint(BaseModel):
+    """A polygon point in source-space coordinates."""
+
+    x: float
+    y: float
+
+
+class MentionPolygon(BaseModel):
+    """One mention polygon represented by ordered points."""
+
+    points: list[MentionPolygonPoint] = Field(min_length=3)
+
+
+class MentionCreateRequest(ModificationMetadata):
     """Request body for ingesting a mention."""
 
     text: str
@@ -49,7 +74,7 @@ class MentionCreateRequest(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-class MentionResponse(BaseModel):
+class MentionResponse(ModificationMetadata):
     """A single mention record."""
 
     mention_id: uuid.UUID
@@ -68,7 +93,7 @@ class MentionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class InformationCreateRequest(BaseModel):
+class InformationCreateRequest(ModificationMetadata):
     """Request body for ingesting information."""
 
     text: str
@@ -77,7 +102,7 @@ class InformationCreateRequest(BaseModel):
     model_agent_id: uuid.UUID
 
 
-class InformationResponse(BaseModel):
+class InformationResponse(ModificationMetadata):
     """A single information record."""
 
     information_id: uuid.UUID
@@ -92,17 +117,17 @@ class InformationResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class DocumentMentionCreateRequest(BaseModel):
+class DocumentMentionCreateRequest(ModificationMetadata):
     """Request body for creating a document-level mention aggregator."""
 
     name: str
     information: str
     model_agent_id: uuid.UUID
     source_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
 
 
-class DocumentMentionResponse(BaseModel):
+class DocumentMentionResponse(ModificationMetadata):
     """A single document mention record."""
 
     document_mention_id: uuid.UUID
@@ -110,20 +135,7 @@ class DocumentMentionResponse(BaseModel):
     information: str
     model_agent_id: uuid.UUID
     source_id: uuid.UUID
-    identity_id: uuid.UUID
-
-
-class MentionPolygonPoint(BaseModel):
-    """A polygon point in source-space coordinates."""
-
-    x: float
-    y: float
-
-
-class MentionPolygon(BaseModel):
-    """One mention polygon represented by ordered points."""
-
-    points: list[MentionPolygonPoint] = Field(min_length=3)
+    entity_id: uuid.UUID
 
 
 # ---------------------------------------------------------------------------
@@ -148,18 +160,18 @@ class FaceKeypoint(BaseModel):
     y: float
 
 
-class FaceCreateRequest(BaseModel):
+class FaceCreateRequest(ModificationMetadata):
     """Request body for ingesting a face detection."""
 
     source_id: uuid.UUID
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
     model_agent_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-class FaceResponse(BaseModel):
+class FaceResponse(ModificationMetadata):
     """A single face detection record."""
 
     detection_id: uuid.UUID
@@ -167,7 +179,7 @@ class FaceResponse(BaseModel):
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
     model_agent_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
     confidence: float
 
 
@@ -176,23 +188,23 @@ class FaceResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class DescriptionCreateRequest(BaseModel):
+class DescriptionCreateRequest(ModificationMetadata):
     """Request body for adding a description."""
 
     text: str
     language: str
     source_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
 
 
-class DescriptionResponse(BaseModel):
+class DescriptionResponse(ModificationMetadata):
     """A single description record."""
 
     description_id: uuid.UUID
     text: str
     language: str
     source_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
 
 
 # ---------------------------------------------------------------------------
@@ -200,33 +212,40 @@ class DescriptionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class NameCreateRequest(BaseModel):
+class NameCreateRequest(ModificationMetadata):
     """Request body for adding a name."""
 
     name: str
     source_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
 
 
-class NameResponse(BaseModel):
+class NameResponse(ModificationMetadata):
     """A single name record."""
 
     name_id: uuid.UUID
     name: str
     source_id: uuid.UUID
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
 
 
 # ---------------------------------------------------------------------------
-# Identity View
+# Entity View
 # ---------------------------------------------------------------------------
 
 
-class IdentityViewResponse(BaseModel):
-    """Current identity view grouped by attached entity IDs."""
+class EntityViewResponse(BaseModel):
+    """Current entity view grouped by attached entity IDs."""
 
-    identity_id: uuid.UUID
+    entity_id: uuid.UUID
     document_mention_ids: list[uuid.UUID]
     face_ids: list[uuid.UUID]
     description_ids: list[uuid.UUID]
     name_ids: list[uuid.UUID]
+
+
+# Backward-compatible aliases for identity naming.
+IdentityCreateRequest = EntityCreateRequest
+IdentityResponse = EntityResponse
+IdentityListResponse = EntityListResponse
+IdentityViewResponse = EntityViewResponse

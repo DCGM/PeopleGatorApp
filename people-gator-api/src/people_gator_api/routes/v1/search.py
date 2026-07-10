@@ -1,6 +1,6 @@
 """Search endpoints.
 
-Cluster/version concepts have been removed; search returns identity and
+Cluster/version concepts have been removed; search returns entity and
 annotation-level results.
 """
 
@@ -27,9 +27,9 @@ router = APIRouter(tags=["search"])
 @router.get("/search", response_model=SearchResponse)
 async def search_get(
     annotation_id: list[uuid.UUID] = Query(default_factory=list),
-    reference_identity_id: uuid.UUID | None = None,
+    reference_entity_id: uuid.UUID | None = None,
     profile_id: uuid.UUID | None = None,
-    result_type: list[str] = Query(default_factory=lambda: ["identity"]),
+    result_type: list[str] = Query(default_factory=lambda: ["entity"]),
     annotation_type: list[AnnotationType] = Query(default_factory=list),
     source_kind: list[str] = Query(default_factory=list),
     has_face: bool | None = None,
@@ -43,7 +43,7 @@ async def search_get(
     request = SearchRequest(
         query=SearchQuery(
             annotation_ids=annotation_id or None,
-            reference_identity_id=reference_identity_id,
+            reference_entity_id=reference_entity_id,
         ),
         profile_id=profile_id,
         result_types=result_type,
@@ -72,7 +72,7 @@ async def search_post(
 @router.get("/search/facets", response_model=SearchFacetsResponse)
 async def search_facets_get(
     annotation_id: list[uuid.UUID] = Query(default_factory=list),
-    reference_identity_id: uuid.UUID | None = None,
+    reference_entity_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> SearchFacetsResponse:
@@ -80,7 +80,7 @@ async def search_facets_get(
         session,
         SearchQuery(
             annotation_ids=annotation_id or None,
-            reference_identity_id=reference_identity_id,
+            reference_entity_id=reference_entity_id,
         ),
         SearchFilters(),
     )

@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from people_gator_api.schemas.identities import (
+from people_gator_api.schemas.entities import (
     DescriptionCreateRequest,
     DescriptionResponse,
     DocumentMentionCreateRequest,
@@ -121,14 +121,14 @@ async def create_document_mention_route(
 
 @router.get("/document-mentions", response_model=list[DocumentMentionResponse])
 async def list_document_mentions_route(
-    identity_id: uuid.UUID | None = None,
+    entity_id: uuid.UUID | None = None,
     source_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> list[DocumentMentionResponse]:
-    return await list_document_mentions(session, identity_id, source_id, after_id, limit)
+    return await list_document_mentions(session, entity_id, source_id, after_id, limit)
 
 
 @router.get("/document-mentions/{document_mention_id}", response_model=DocumentMentionResponse)
@@ -155,13 +155,13 @@ async def create_face_route(
 @router.get("/faces", response_model=list[FaceResponse])
 async def list_faces_route(
     source_id: uuid.UUID | None = None,
-    identity_id: uuid.UUID | None = None,
+    entity_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> list[FaceResponse]:
-    return await list_faces(session, source_id, identity_id, after_id, limit)
+    return await list_faces(session, source_id, entity_id, after_id, limit)
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)
@@ -187,13 +187,13 @@ async def create_description_route(
 
 @router.get("/descriptions", response_model=list[DescriptionResponse])
 async def list_descriptions_route(
-    identity_id: uuid.UUID | None = None,
+    entity_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> list[DescriptionResponse]:
-    return await list_descriptions(session, identity_id, after_id, limit)
+    return await list_descriptions(session, entity_id, after_id, limit)
 
 
 @router.get("/descriptions/{description_id}", response_model=DescriptionResponse)
@@ -219,13 +219,13 @@ async def create_name_route(
 
 @router.get("/names", response_model=list[NameResponse])
 async def list_names_route(
-    identity_id: uuid.UUID | None = None,
+    entity_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: AsyncSession = Depends(get_session),
 ) -> list[NameResponse]:
-    return await list_names(session, identity_id, after_id, limit)
+    return await list_names(session, entity_id, after_id, limit)
 
 
 @router.get("/names/{name_id}", response_model=NameResponse)

@@ -4,7 +4,7 @@ import uuid
 from typing import TypedDict
 
 import sqlalchemy as sa
-from sqlalchemy import Float, ForeignKey, select
+from sqlalchemy import Float, ForeignKey, String, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +28,7 @@ class FaceKeypoint(TypedDict):
 
 
 class Face(Base):
-    """Face detection linked to identity and source."""
+    """Face detection linked to entity and source."""
 
     __tablename__ = "face"
 
@@ -44,14 +44,16 @@ class Face(Base):
     model_agent_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("principal.principal_id"), nullable=False
     )
-    identity_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("identity.identity_id"), nullable=False
+    entity_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("entity.entity_id"), nullable=False
     )
+    embedding: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+    model_identifier: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         sa.Index("ix_face_source_id", "source_id"),
         sa.Index("ix_face_model_agent_id", "model_agent_id"),
-        sa.Index("ix_face_identity_id", "identity_id"),
+        sa.Index("ix_face_entity_id", "entity_id"),
     )
 
     @classmethod
@@ -68,15 +70,15 @@ class Face(Base):
         cls,
         session: AsyncSession,
         source_id: uuid.UUID | None = None,
-        identity_id: uuid.UUID | None = None,
+        entity_id: uuid.UUID | None = None,
         after_id: uuid.UUID | None = None,
         limit: int = 50,
     ) -> list["Face"]:
         stmt = select(cls).order_by(cls.detection_id.asc()).limit(limit)
         if source_id is not None:
             stmt = stmt.where(cls.source_id == source_id)
-        if identity_id is not None:
-            stmt = stmt.where(cls.identity_id == identity_id)
+        if entity_id is not None:
+            stmt = stmt.where(cls.entity_id == entity_id)
         if after_id is not None:
             stmt = stmt.where(cls.detection_id > after_id)
         result = await session.execute(stmt)
@@ -90,8 +92,10 @@ class Face(Base):
         bounding_box: BoundingBox,
         keypoints: list[FaceKeypoint],
         model_agent_id: uuid.UUID,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
         confidence: float,
+        embedding: list[float] | None = None,
+        model_identifier: str | None = None,
     ) -> "Face":
         item = cls(
             detection_id=new_uuid6(),
@@ -99,8 +103,10 @@ class Face(Base):
             bounding_box=bounding_box,
             keypoints=keypoints,
             model_agent_id=model_agent_id,
-            identity_id=identity_id,
+            entity_id=entity_id,
             confidence=confidence,
+            embedding=embedding,
+            model_identifier=model_identifier,
         )
         session.add(item)
         return item

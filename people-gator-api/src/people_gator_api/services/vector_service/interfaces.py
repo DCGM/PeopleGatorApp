@@ -4,7 +4,7 @@ from uuid import UUID
 from people_gator_api.models.enums import AnnotationType
 from people_gator_api.services.vector_service.schemas import (
     AnnotationSearchResult,
-    IdentitySearchResult,
+    EntitySearchResult,
 )
 
 DEFAULT_LIMIT = 10
@@ -17,7 +17,7 @@ class SearchAnnotationsByVector(Protocol):
         after_id: UUID | None = None,
         *,
         annotation_type: AnnotationType | None = None,
-        identity_id: UUID | None = None,
+        entity_id: UUID | None = None,
         limit: int = DEFAULT_LIMIT,
         certainty: float | None = None,
         distance: float | None = None,
@@ -34,7 +34,7 @@ class SearchIdentitiesByVector(Protocol):
         face_distance: float | None = None,
         name_distance: float | None = None,
         combined_distance: float | None = None,
-    ) -> list[IdentitySearchResult]:
+    ) -> list[EntitySearchResult]:
         ...
 
 

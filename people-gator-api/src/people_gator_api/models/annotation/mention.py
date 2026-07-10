@@ -6,7 +6,7 @@ import uuid
 from typing import TYPE_CHECKING, TypedDict
 
 import sqlalchemy as sa
-from sqlalchemy import Float, ForeignKey, Integer, Text, select
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +52,8 @@ class Mention(Base):
     model_agent_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("principal.principal_id"), nullable=False
     )
+    embedding: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+    model_identifier: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document_mention: Mapped["DocumentMention"] = relationship(
         "DocumentMention",
@@ -100,6 +102,8 @@ class Mention(Base):
         polygons: list[Polygon] | None,
         model_agent_id: uuid.UUID,
         confidence: float,
+        embedding: list[float] | None = None,
+        model_identifier: str | None = None,
     ) -> "Mention":
         item = cls(
             mention_id=new_uuid6(),
@@ -111,6 +115,8 @@ class Mention(Base):
             polygons=polygons,
             model_agent_id=model_agent_id,
             confidence=confidence,
+            embedding=embedding,
+            model_identifier=model_identifier,
         )
         session.add(item)
         return item

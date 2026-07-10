@@ -14,7 +14,8 @@ from people_gator_api.models.annotation.face import (
 from people_gator_api.models.annotation.information import Information
 from people_gator_api.models.annotation.mention import Mention, Polygon as MentionModelPolygon
 from people_gator_api.models.annotation.name import Name
-from people_gator_api.schemas.identities import (
+from people_gator_api.models.entities import Entity
+from people_gator_api.schemas.entities import (
     BoundingBox,
     DescriptionCreateRequest,
     DescriptionResponse,
@@ -62,6 +63,8 @@ def _mention_out(item: Mention) -> MentionResponse:
         polygons=polygons,
         model_agent_id=item.model_agent_id,
         confidence=item.confidence,
+        embedding=item.embedding,
+        model_identifier=item.model_identifier,
     )
 
 async def create_mention(
@@ -90,6 +93,8 @@ async def create_mention(
         polygons=polygons,
         model_agent_id=payload.model_agent_id,
         confidence=payload.confidence,
+        embedding=payload.embedding,
+        model_identifier=payload.model_identifier,
     )
     return _mention_out(item)
 
@@ -132,6 +137,8 @@ def _information_out(item: Information) -> InformationResponse:
         document_mention_id=item.document_mention_id,
         source_id=item.source_id,
         model_agent_id=item.model_agent_id,
+        embedding=item.embedding,
+        model_identifier=item.model_identifier,
     )
 
 
@@ -145,6 +152,8 @@ async def create_information(
         document_mention_id=payload.document_mention_id,
         source_id=payload.source_id,
         model_agent_id=payload.model_agent_id,
+        embedding=payload.embedding,
+        model_identifier=payload.model_identifier,
     )
     return _information_out(item)
 
@@ -186,7 +195,9 @@ def _document_mention_out(item: DocumentMention) -> DocumentMentionResponse:
         information=item.information,
         model_agent_id=item.model_agent_id,
         source_id=item.source_id,
-        identity_id=item.identity_id,
+        entity_id=item.entity_id,
+        embedding=item.embedding,
+        model_identifier=item.model_identifier,
     )
 
 
@@ -200,7 +211,9 @@ async def create_document_mention(
         information=payload.information,
         model_agent_id=payload.model_agent_id,
         source_id=payload.source_id,
-        identity_id=payload.identity_id,
+        entity_id=payload.entity_id,
+        embedding=payload.embedding,
+        model_identifier=payload.model_identifier,
     )
     return _document_mention_out(item)
 
@@ -217,14 +230,14 @@ async def get_document_mention(
 
 async def list_document_mentions(
     session: AsyncSession,
-    identity_id: uuid.UUID | None,
+    entity_id: uuid.UUID | None,
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DocumentMentionResponse]:
     items = await DocumentMention.list_page(
         session,
-        identity_id=identity_id,
+        entity_id=entity_id,
         source_id=source_id,
         after_id=after_id,
         limit=limit,
@@ -254,8 +267,10 @@ def _face_out(item: Face) -> FaceResponse:
         bounding_box=bounding_box,
         keypoints=keypoints,
         model_agent_id=item.model_agent_id,
-        identity_id=item.identity_id,
+        entity_id=item.entity_id,
         confidence=item.confidence,
+        embedding=item.embedding,
+        model_identifier=item.model_identifier,
     )
 
 
@@ -279,8 +294,10 @@ async def create_face(
         bounding_box=bounding_box,
         keypoints=keypoints,
         model_agent_id=payload.model_agent_id,
-        identity_id=payload.identity_id,
+        entity_id=payload.entity_id,
         confidence=payload.confidence,
+        embedding=payload.embedding,
+        model_identifier=payload.model_identifier,
     )
     return _face_out(item)
 
@@ -298,14 +315,14 @@ async def get_face(
 async def list_faces(
     session: AsyncSession,
     source_id: uuid.UUID | None,
-    identity_id: uuid.UUID | None,
+    entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[FaceResponse]:
     items = await Face.list_page(
         session,
         source_id=source_id,
-        identity_id=identity_id,
+        entity_id=entity_id,
         after_id=after_id,
         limit=limit,
     )
@@ -323,7 +340,9 @@ def _description_out(item: Description) -> DescriptionResponse:
         text=item.text,
         language=item.language,
         source_id=item.source_id,
-        identity_id=item.identity_id,
+        entity_id=item.entity_id,
+        embedding=item.embedding,
+        model_identifier=item.model_identifier,
     )
 
 
@@ -336,8 +355,11 @@ async def create_description(
         text=payload.text,
         language=payload.language,
         source_id=payload.source_id,
-        identity_id=payload.identity_id,
+        entity_id=payload.entity_id,
+        embedding=payload.embedding,
+        model_identifier=payload.model_identifier,
     )
+    await Entity.refresh_aggregates(session, payload.entity_id)
     return _description_out(item)
 
 
@@ -353,13 +375,13 @@ async def get_description(
 
 async def list_descriptions(
     session: AsyncSession,
-    identity_id: uuid.UUID | None,
+    entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DescriptionResponse]:
     items = await Description.list_page(
         session,
-        identity_id=identity_id,
+        entity_id=entity_id,
         after_id=after_id,
         limit=limit,
     )
@@ -376,7 +398,9 @@ def _name_out(item: Name) -> NameResponse:
         name_id=item.name_id,
         name=item.name,
         source_id=item.source_id,
-        identity_id=item.identity_id,
+        entity_id=item.entity_id,
+        embedding=item.embedding,
+        model_identifier=item.model_identifier,
     )
 
 
@@ -388,8 +412,11 @@ async def create_name(
         session=session,
         name=payload.name,
         source_id=payload.source_id,
-        identity_id=payload.identity_id,
+        entity_id=payload.entity_id,
+        embedding=payload.embedding,
+        model_identifier=payload.model_identifier,
     )
+    await Entity.refresh_aggregates(session, payload.entity_id)
     return _name_out(item)
 
 
@@ -405,13 +432,13 @@ async def get_name(
 
 async def list_names(
     session: AsyncSession,
-    identity_id: uuid.UUID | None,
+    entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[NameResponse]:
     items = await Name.list_page(
         session,
-        identity_id=identity_id,
+        entity_id=entity_id,
         after_id=after_id,
         limit=limit,
     )

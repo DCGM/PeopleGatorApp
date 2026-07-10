@@ -1,8 +1,8 @@
-"""Vector sync service for annotation and identity mirrors in Weaviate.
+"""Vector sync service for annotation and entity mirrors in Weaviate.
 
 This service mirrors relational annotation rows into dedicated Weaviate
 collections (Name, Description, Information, Mention, Face, DocumentMention)
-and maintains IdentitySnapshot as a derived read model.
+and maintains EntitySnapshot and Entity as derived read models.
 """
 
 from __future__ import annotations
@@ -25,15 +25,17 @@ from people_gator_api.models.annotation.information import Information
 from people_gator_api.models.annotation.mention import Mention
 from people_gator_api.models.annotation.name import Name
 from people_gator_api.models.enums import AnnotationType
-from people_gator_api.models.identity import Identity
+from people_gator_api.models.entities import Entity
 from people_gator_api.services.vector_service.schema import (
     DESCRIPTION_COLLECTION,
+    DESCRIPTION_VECTOR,
     DOCUMENT_MENTION_COLLECTION,
     DOCUMENT_MENTION_INFORMATION_VECTOR,
     DOCUMENT_MENTION_NAME_VECTOR,
+    ENTITY_COLLECTION,
+    ENTITY_SNAPSHOT_COLLECTION,
     FACE_COLLECTION,
     FACE_VECTOR,
-    IDENTITY_SNAPSHOT_COLLECTION,
     INFORMATION_COLLECTION,
     MENTION_COLLECTION,
     NAME_COLLECTION,
@@ -47,7 +49,7 @@ logger = logging.getLogger(__name__)
 PropertyValue = str | float | int | None
 
 _VECTOR_OBJECT_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-_IDENTITY_NS = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+_ENTITY_NS = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
 
 def vector_object_uuid(collection_name: str, row_id: uuid.UUID) -> uuid.UUID:
@@ -64,9 +66,9 @@ def annotation_weaviate_uuid(
     return vector_object_uuid(collection_name, annotation_id)
 
 
-def identity_weaviate_uuid(identity_id: uuid.UUID) -> uuid.UUID:
-    """Deterministic Weaviate UUID for an IdentitySnapshot document."""
-    return uuid.uuid5(_IDENTITY_NS, f"identity:{identity_id}")
+def entity_weaviate_uuid(entity_id: uuid.UUID) -> uuid.UUID:
+    """Deterministic Weaviate UUID for an EntitySnapshot/Entity document."""
+    return uuid.uuid5(_ENTITY_NS, f"entity:{entity_id}")
 
 
 def _annotation_id_field(annotation_type: AnnotationType) -> str:
@@ -83,7 +85,7 @@ def _annotation_id_field(annotation_type: AnnotationType) -> str:
     return "document_mention_id"
 
 
-def _supports_identity_update(annotation_type: AnnotationType) -> bool:
+def _supports_entity_update(annotation_type: AnnotationType) -> bool:
     return annotation_type in {
         AnnotationType.person_name,
         AnnotationType.description,
@@ -92,7 +94,7 @@ def _supports_identity_update(annotation_type: AnnotationType) -> bool:
     }
 
 
-class IdentitySyncService:
+class EntitySyncService:
     """Async service that mirrors Postgres state into Weaviate."""
 
     def __init__(self, client: WeaviateAsyncClient) -> None:
@@ -105,14 +107,14 @@ class IdentitySyncService:
         name_id: uuid.UUID,
         name: str,
         source_id: uuid.UUID,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
         vector: list[float] | None,
     ) -> uuid.UUID:
         props = {
             "name_id": str(name_id),
             "name": name,
             "source_id": str(source_id),
-            "identity_id": str(identity_id),
+            "entity_id": str(entity_id),
         }
         return await self._upsert_collection_object(
             collection_name=NAME_COLLECTION,
@@ -131,7 +133,7 @@ class IdentitySyncService:
         text: str,
         language: str,
         source_id: uuid.UUID,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
         vector: list[float] | None,
     ) -> uuid.UUID:
         props = {
@@ -139,7 +141,7 @@ class IdentitySyncService:
             "text": text,
             "language": language,
             "source_id": str(source_id),
-            "identity_id": str(identity_id),
+            "entity_id": str(entity_id),
         }
         return await self._upsert_collection_object(
             collection_name=DESCRIPTION_COLLECTION,
@@ -219,7 +221,7 @@ class IdentitySyncService:
         detection_id: uuid.UUID,
         source_id: uuid.UUID,
         model_agent_id: uuid.UUID,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
         confidence: float,
         bounding_box: dict[str, int],
         keypoints: list[dict[str, float | str]],
@@ -229,7 +231,7 @@ class IdentitySyncService:
             "detection_id": str(detection_id),
             "source_id": str(source_id),
             "model_agent_id": str(model_agent_id),
-            "identity_id": str(identity_id),
+            "entity_id": str(entity_id),
             "confidence": confidence,
             "bbox_x": int(bounding_box["x"]),
             "bbox_y": int(bounding_box["y"]),
@@ -255,7 +257,7 @@ class IdentitySyncService:
         information: str,
         model_agent_id: uuid.UUID,
         source_id: uuid.UUID,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
         name_vector: list[float] | None,
         information_vector: list[float] | None,
     ) -> uuid.UUID:
@@ -265,7 +267,7 @@ class IdentitySyncService:
             "information": information,
             "model_agent_id": str(model_agent_id),
             "source_id": str(source_id),
-            "identity_id": str(identity_id),
+            "entity_id": str(entity_id),
         }
         vectors: dict[str, list[float]] = {}
         if name_vector is not None:
@@ -292,7 +294,7 @@ class IdentitySyncService:
         source_id: uuid.UUID,
         model_agent_id: uuid.UUID | None = None,
         confidence: float | None = None,
-        identity_id: uuid.UUID | None = None,
+        entity_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
         """Backward-compatible generic upsert command for single-vector annotations."""
         collection_name = collection_for_annotation_type(annotation_type)
@@ -306,8 +308,8 @@ class IdentitySyncService:
             properties["model_agent_id"] = str(model_agent_id)
         if confidence is not None:
             properties["confidence"] = confidence
-        if identity_id is not None and _supports_identity_update(annotation_type):
-            properties["identity_id"] = str(identity_id)
+        if entity_id is not None and _supports_entity_update(annotation_type):
+            properties["entity_id"] = str(entity_id)
 
         row_uuid = vector_object_uuid(collection_name, annotation_id)
         collection = self._client.collections.get(collection_name)
@@ -328,20 +330,20 @@ class IdentitySyncService:
         collection_name = collection_for_annotation_type(annotation_type)
         await self._remove_collection_object(collection_name, annotation_id)
 
-    async def sync_identity(
+    async def sync_entity(
         self,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
         session: AsyncSession,
     ) -> None:
-        """Sync an identity snapshot document from relational source state."""
-        identity = await Identity.get(session, identity_id)
-        if identity is None:
-            logger.warning("sync_identity called for unknown identity_id=%s", identity_id)
+        """Sync entity snapshot and entity search documents from relational state."""
+        entity = await Entity.get(session, entity_id)
+        if entity is None:
+            logger.warning("sync_entity called for unknown entity_id=%s", entity_id)
             return
 
         faces = list(
             (
-                await session.execute(select(Face).where(Face.identity_id == identity_id))
+                await session.execute(select(Face).where(Face.entity_id == entity_id))
             )
             .scalars()
             .all()
@@ -365,7 +367,7 @@ class IdentitySyncService:
         descriptions = list(
             (
                 await session.execute(
-                    select(Description).where(Description.identity_id == identity_id)
+                    select(Description).where(Description.entity_id == entity_id)
                 )
             )
             .scalars()
@@ -373,7 +375,7 @@ class IdentitySyncService:
         )
         names = list(
             (
-                await session.execute(select(Name).where(Name.identity_id == identity_id))
+                await session.execute(select(Name).where(Name.entity_id == entity_id))
             )
             .scalars()
             .all()
@@ -381,7 +383,7 @@ class IdentitySyncService:
         document_mentions = list(
             (
                 await session.execute(
-                    select(DocumentMention).where(DocumentMention.identity_id == identity_id)
+                    select(DocumentMention).where(DocumentMention.entity_id == entity_id)
                 )
             )
             .scalars()
@@ -396,9 +398,13 @@ class IdentitySyncService:
             collection_name=NAME_COLLECTION,
             row_ids=[item.name_id for item in names],
         )
+        description_centroid = await self._compute_centroid_from_collection(
+            collection_name=DESCRIPTION_COLLECTION,
+            row_ids=[item.description_id for item in descriptions],
+        )
 
         props: dict[str, str | int] = {
-            "identity_id": str(identity_id),
+            "entity_id": str(entity_id),
             "face_count": len(faces),
             "mention_count": len(mentions),
             "information_count": len(information),
@@ -412,9 +418,11 @@ class IdentitySyncService:
             named_vectors[FACE_VECTOR] = face_centroid
         if name_centroid is not None:
             named_vectors[NAME_VECTOR] = name_centroid
+        if description_centroid is not None:
+            named_vectors[DESCRIPTION_VECTOR] = description_centroid
 
-        wv_uuid = identity_weaviate_uuid(identity_id)
-        collection = self._client.collections.get(IDENTITY_SNAPSHOT_COLLECTION)
+        wv_uuid = entity_weaviate_uuid(entity_id)
+        collection = self._client.collections.get(ENTITY_SNAPSHOT_COLLECTION)
         await _upsert_object(
             collection=collection,
             wv_uuid=wv_uuid,
@@ -422,21 +430,43 @@ class IdentitySyncService:
             vector=named_vectors if named_vectors else None,
         )
 
-    async def remove_identity_snapshot(self, identity_id: uuid.UUID) -> None:
-        wv_uuid = identity_weaviate_uuid(identity_id)
-        collection = self._client.collections.get(IDENTITY_SNAPSHOT_COLLECTION)
-        await collection.data.delete_by_id(wv_uuid)
+        await _upsert_object(
+            collection=self._client.collections.get(ENTITY_COLLECTION),
+            wv_uuid=wv_uuid,
+            properties={
+                "entity_id": str(entity_id),
+                "principal_id": str(entity.principal_id),
+                "name": entity.name,
+                "description": entity.description,
+                "name_count": len(names),
+                "description_count": len(descriptions),
+            },
+            vector={
+                key: value
+                for key, value in {
+                    NAME_VECTOR: name_centroid,
+                    DESCRIPTION_VECTOR: description_centroid,
+                }.items()
+                if value is not None
+            }
+            or None,
+        )
 
-    async def sync_annotation_identity_link(
+    async def remove_entity_snapshot(self, entity_id: uuid.UUID) -> None:
+        wv_uuid = entity_weaviate_uuid(entity_id)
+        await self._client.collections.get(ENTITY_SNAPSHOT_COLLECTION).data.delete_by_id(wv_uuid)
+        await self._client.collections.get(ENTITY_COLLECTION).data.delete_by_id(wv_uuid)
+
+    async def sync_annotation_entity_link(
         self,
         annotation_type: AnnotationType,
         annotation_id: uuid.UUID,
-        identity_id: uuid.UUID | None,
+        entity_id: uuid.UUID | None,
     ) -> None:
-        """Update identity_id property on mirrored annotation documents."""
-        if not _supports_identity_update(annotation_type):
+        """Update entity_id property on mirrored annotation documents."""
+        if not _supports_entity_update(annotation_type):
             logger.debug(
-                "Annotation type %s does not support identity_id updates",
+                "Annotation type %s does not support entity_id updates",
                 annotation_type.value,
             )
             return
@@ -446,14 +476,14 @@ class IdentitySyncService:
         collection = self._client.collections.get(collection_name)
 
         props = {
-            "identity_id": str(identity_id) if identity_id is not None else None,
+            "entity_id": str(entity_id) if entity_id is not None else None,
         }
         try:
             await collection.data.update(uuid=row_uuid, properties=props)
         except weaviate.exceptions.UnexpectedStatusCodeError as exc:
             if exc.status_code == 404:
                 logger.debug(
-                    "Object %s not found in %s during identity link sync",
+                    "Object %s not found in %s during entity link sync",
                     row_uuid,
                     collection_name,
                 )
@@ -572,3 +602,8 @@ async def _upsert_object(
             )
         else:
             raise
+
+
+# Backward-compatible aliases for identity naming.
+IdentitySyncService = EntitySyncService
+identity_weaviate_uuid = entity_weaviate_uuid

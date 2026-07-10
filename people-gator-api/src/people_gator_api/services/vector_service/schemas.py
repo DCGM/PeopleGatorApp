@@ -23,7 +23,7 @@ class AnnotationSearchResult(BaseModel):
     source_id: UUID
     model_agent_id: UUID | None
     confidence: float | None
-    identity_id: UUID | None
+    entity_id: UUID | None
     distance: float | None = Field(
         default=None,
         description="Cosine distance from the query vector.  Lower is more similar.",
@@ -34,13 +34,13 @@ class AnnotationSearchResult(BaseModel):
     )
 
 
-class IdentitySearchResult(BaseModel):
-    """A single result from a nearest-neighbour search over IdentitySnapshot."""
+class EntitySearchResult(BaseModel):
+    """A single result from a nearest-neighbour search over entity collections."""
 
     weaviate_id: UUID = Field(
         description="Weaviate object UUID for this identity snapshot."
     )
-    identity_id: UUID
+    entity_id: UUID
     face_count: int
     mention_count: int
     information_count: int
@@ -59,3 +59,11 @@ class IdentitySearchResult(BaseModel):
         default=None,
         description="Weighted combined distance used to rank this result.",
     )
+    description_distance: float | None = Field(
+        default=None,
+        description="Cosine distance from the query in the description named-vector space.",
+    )
+
+
+# Backward-compatible alias.
+IdentitySearchResult = EntitySearchResult

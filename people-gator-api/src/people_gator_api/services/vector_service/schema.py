@@ -11,7 +11,7 @@ lookup roundtrip:
 - Face
 - DocumentMention (with named vectors for name and information)
 
-IdentitySnapshot remains as a derived read model for weighted identity-level
+EntitySnapshot remains as a derived read model for weighted entity-level
 search over face/name centroids.
 """
 
@@ -28,12 +28,14 @@ INFORMATION_COLLECTION: str = "Information"
 MENTION_COLLECTION: str = "Mention"
 FACE_COLLECTION: str = "Face"
 DOCUMENT_MENTION_COLLECTION: str = "DocumentMention"
+ENTITY_COLLECTION: str = "Entity"
 
-IDENTITY_SNAPSHOT_COLLECTION: str = "IdentitySnapshot"
+ENTITY_SNAPSHOT_COLLECTION: str = "EntitySnapshot"
 
-# Named-vector keys used inside IdentitySnapshot
+# Named-vector keys used inside EntitySnapshot
 FACE_VECTOR: str = "face"
 NAME_VECTOR: str = "name"
+DESCRIPTION_VECTOR: str = "description"
 
 # Named-vector keys used inside DocumentMention
 DOCUMENT_MENTION_NAME_VECTOR: str = "name"
@@ -78,9 +80,9 @@ NAME_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
-        name="identity_id",
+        name="entity_id",
         data_type=DataType.UUID,
-        description="Foreign key to IDENTITY.identity_id.",
+        description="Foreign key to ENTITY.entity_id.",
         index_filterable=True,
         index_searchable=False,
         skip_vectorization=True,
@@ -121,9 +123,9 @@ DESCRIPTION_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
-        name="identity_id",
+        name="entity_id",
         data_type=DataType.UUID,
-        description="Foreign key to IDENTITY.identity_id.",
+        description="Foreign key to ENTITY.entity_id.",
         index_filterable=True,
         index_searchable=False,
         skip_vectorization=True,
@@ -266,9 +268,9 @@ FACE_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
-        name="identity_id",
+        name="entity_id",
         data_type=DataType.UUID,
-        description="Foreign key to IDENTITY.identity_id.",
+        description="Foreign key to ENTITY.entity_id.",
         index_filterable=True,
         index_searchable=False,
         skip_vectorization=True,
@@ -357,9 +359,9 @@ DOCUMENT_MENTION_PROPERTIES: list[Property] = [
         skip_vectorization=True,
     ),
     Property(
-        name="identity_id",
+        name="entity_id",
         data_type=DataType.UUID,
-        description="Foreign key to IDENTITY.identity_id.",
+        description="Foreign key to ENTITY.entity_id.",
         index_filterable=True,
         index_searchable=False,
         skip_vectorization=True,
@@ -411,14 +413,14 @@ ANNOTATION_COLLECTION_SPECS: dict[
 
 
 # ---------------------------------------------------------------------------
-# IdentitySnapshot schema
+# EntitySnapshot schema
 # ---------------------------------------------------------------------------
 
-IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
+ENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
-        name="identity_id",
+        name="entity_id",
         data_type=DataType.UUID,
-        description="FK to IDENTITY.identity_id - stable identity of the person.",
+        description="FK to ENTITY.entity_id - stable identity of the person.",
         index_filterable=True,
         index_searchable=False,
         skip_vectorization=True,
@@ -426,7 +428,7 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
         name="face_count",
         data_type=DataType.INT,
-        description="Number of face annotations in this identity snapshot.",
+        description="Number of face annotations in this entity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -434,7 +436,7 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
         name="mention_count",
         data_type=DataType.INT,
-        description="Number of mention annotations in this identity snapshot.",
+        description="Number of mention annotations in this entity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -442,7 +444,7 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
         name="information_count",
         data_type=DataType.INT,
-        description="Number of information annotations in this identity snapshot.",
+        description="Number of information annotations in this entity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -450,7 +452,7 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
         name="document_mention_count",
         data_type=DataType.INT,
-        description="Number of document_mention annotations in this identity snapshot.",
+        description="Number of document_mention annotations in this entity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -458,7 +460,7 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
         name="description_count",
         data_type=DataType.INT,
-        description="Number of description annotations in this identity snapshot.",
+        description="Number of description annotations in this entity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -466,7 +468,7 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
     Property(
         name="name_count",
         data_type=DataType.INT,
-        description="Number of name annotations in this identity snapshot.",
+        description="Number of name annotations in this entity snapshot.",
         index_filterable=True,
         index_range_filters=True,
         skip_vectorization=True,
@@ -474,8 +476,8 @@ IDENTITY_SNAPSHOT_PROPERTIES: list[Property] = [
 ]
 
 
-def identity_snapshot_named_vector_configs():
-    """Return named-vector configuration list for IdentitySnapshot."""
+def entity_snapshot_named_vector_configs():
+    """Return named-vector configuration list for EntitySnapshot."""
     return [
         Configure.Vectors.self_provided(
             name=FACE_VECTOR,
@@ -490,6 +492,82 @@ def identity_snapshot_named_vector_configs():
             ),
         ),
     ]
+
+
+ENTITY_PROPERTIES: list[Property] = [
+    Property(
+        name="entity_id",
+        data_type=DataType.UUID,
+        description="Primary key of ENTITY.entity_id.",
+        index_filterable=True,
+        index_searchable=False,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="principal_id",
+        data_type=DataType.UUID,
+        description="Foreign key to PRINCIPAL.principal_id.",
+        index_filterable=True,
+        index_searchable=False,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="name",
+        data_type=DataType.TEXT,
+        description="Entity-level aggregated name value.",
+        index_filterable=True,
+        index_searchable=True,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="description",
+        data_type=DataType.TEXT,
+        description="Entity-level aggregated description value.",
+        index_filterable=True,
+        index_searchable=True,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="name_count",
+        data_type=DataType.INT,
+        description="Number of linked NAME rows.",
+        index_filterable=True,
+        index_range_filters=True,
+        skip_vectorization=True,
+    ),
+    Property(
+        name="description_count",
+        data_type=DataType.INT,
+        description="Number of linked DESCRIPTION rows.",
+        index_filterable=True,
+        index_range_filters=True,
+        skip_vectorization=True,
+    ),
+]
+
+
+def entity_named_vector_configs() -> list[object]:
+    """Return named vectors for entity-level name and description search."""
+    return [
+        Configure.Vectors.self_provided(
+            name=NAME_VECTOR,
+            vector_index_config=Configure.VectorIndex.hnsw(
+                distance_metric=VectorDistances.COSINE,
+            ),
+        ),
+        Configure.Vectors.self_provided(
+            name=DESCRIPTION_VECTOR,
+            vector_index_config=Configure.VectorIndex.hnsw(
+                distance_metric=VectorDistances.COSINE,
+            ),
+        ),
+    ]
+
+
+# Backward compatibility alias for older imports.
+IDENTITY_SNAPSHOT_COLLECTION = ENTITY_SNAPSHOT_COLLECTION
+IDENTITY_SNAPSHOT_PROPERTIES = ENTITY_SNAPSHOT_PROPERTIES
+identity_snapshot_named_vector_configs = entity_snapshot_named_vector_configs
 
 
 def collection_for_annotation_type(annotation_type: AnnotationType) -> str:

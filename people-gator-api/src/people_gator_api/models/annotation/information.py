@@ -6,7 +6,8 @@ import uuid
 from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
-from sqlalchemy import ForeignKey, Text, select
+from sqlalchemy import ForeignKey, String, Text, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,6 +39,8 @@ class Information(Base):
     model_agent_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("principal.principal_id"), nullable=False
     )
+    embedding: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+    model_identifier: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document_mention: Mapped["DocumentMention"] = relationship(
         "DocumentMention",
@@ -84,6 +87,8 @@ class Information(Base):
         document_mention_id: uuid.UUID,
         source_id: uuid.UUID,
         model_agent_id: uuid.UUID,
+        embedding: list[float] | None = None,
+        model_identifier: str | None = None,
     ) -> "Information":
         item = cls(
             information_id=new_uuid6(),
@@ -91,6 +96,8 @@ class Information(Base):
             document_mention_id=document_mention_id,
             source_id=source_id,
             model_agent_id=model_agent_id,
+            embedding=embedding,
+            model_identifier=model_identifier,
         )
         session.add(item)
         return item

@@ -17,9 +17,9 @@ from people_gator_api.models.enums import AnnotationType
 from people_gator_api.models.search_profile import SearchProfile
 from people_gator_api.schemas.search import (
     SearchAnnotationResult,
+    SearchEntityResult,
     SearchFacetsResponse,
     SearchFilters,
-    SearchIdentityResult,
     SearchQuery,
     SearchRequest,
     SearchResponse,
@@ -28,15 +28,15 @@ from people_gator_api.schemas.search import (
 from people_gator_api.services.vector_service.client import get_weaviate_client
 from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
+    ENTITY_SNAPSHOT_COLLECTION,
     FACE_VECTOR,
-    IDENTITY_SNAPSHOT_COLLECTION,
     NAME_VECTOR,
 )
 from people_gator_api.services.vector_service.search import VectorSearchService
 
 _DEFAULT_MODALITY_WEIGHT = 1.0
 _VECTOR_OBJECT_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-_IDENTITY_NS = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+_ENTITY_NS = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
 
 async def search(
@@ -47,7 +47,7 @@ async def search(
     modality_vectors = await _resolve_query_vectors(request.query)
 
     vector_search = VectorSearchService(get_weaviate_client())
-    identity_results = await _search_identities(
+    entity_results = await _search_entities(
         vector_search=vector_search,
         request=request,
         modality_vectors=modality_vectors,
@@ -60,7 +60,7 @@ async def search(
         profile_modalities=profile_modalities,
     )
 
-    merged_results = _merge_results(identity_results, annotation_results, request.limit)
+    merged_results = _merge_results(entity_results, annotation_results, request.limit)
     facets = _compute_facets(merged_results)
 
     return SearchResponse(
@@ -89,7 +89,7 @@ async def search_facets(
     probe_request = SearchRequest(
         query=query,
         filters=filters,
-        result_types=["identity", "annotation"],
+        result_types=["entity", "annotation"],
         limit=200,
     )
     probe_response = await search(session, probe_request)
@@ -140,19 +140,19 @@ async def _resolve_query_vectors(
             annotation_type, _ = collection_items[index]
             vectors[annotation_type].extend(result)
 
-    if query.reference_identity_id is not None:
-        snapshot_collection = client.collections.get(IDENTITY_SNAPSHOT_COLLECTION)
+    if query.reference_entity_id is not None:
+        snapshot_collection = client.collections.get(ENTITY_SNAPSHOT_COLLECTION)
         try:
-            identity_obj = await snapshot_collection.query.fetch_object_by_id(
-                uuid=identity_weaviate_uuid(query.reference_identity_id),
+            entity_obj = await snapshot_collection.query.fetch_object_by_id(
+                uuid=entity_weaviate_uuid(query.reference_entity_id),
                 include_vector=True,
             )
         except Exception:
-            identity_obj = None
+            entity_obj = None
 
-        if identity_obj is not None and identity_obj.vector:
-            raw_face = identity_obj.vector.get(FACE_VECTOR)
-            raw_name = identity_obj.vector.get(NAME_VECTOR)
+        if entity_obj is not None and entity_obj.vector:
+            raw_face = entity_obj.vector.get(FACE_VECTOR)
+            raw_name = entity_obj.vector.get(NAME_VECTOR)
             if _is_float_vector(raw_face):
                 vectors[AnnotationType.face].append(raw_face)
             if _is_float_vector(raw_name):
@@ -195,34 +195,44 @@ async def _fetch_vectors_by_annotation_ids(
     return vectors
 
 
-async def _search_identities(
+async def _search_entities(
     *,
     vector_search: VectorSearchService,
     request: SearchRequest,
     modality_vectors: dict[AnnotationType, list[list[float]]],
     profile_modalities: dict[AnnotationType, float],
-) -> list[SearchIdentityResult]:
-    if "identity" not in request.result_types:
+) -> list[SearchEntityResult]:
+    if "entity" not in request.result_types:
         return []
 
     face_vector = _average_vectors(modality_vectors.get(AnnotationType.face, []))
     name_vector = _average_vectors(modality_vectors.get(AnnotationType.person_name, []))
-
-    if face_vector is None and name_vector is None:
-        return []
+    description_vector = _average_vectors(modality_vectors.get(AnnotationType.description, []))
 
     face_weight = profile_modalities.get(AnnotationType.face, _DEFAULT_MODALITY_WEIGHT)
     name_weight = profile_modalities.get(AnnotationType.person_name, _DEFAULT_MODALITY_WEIGHT)
+    description_weight = profile_modalities.get(AnnotationType.description, _DEFAULT_MODALITY_WEIGHT)
 
-    raw_results = await vector_search.search_identities_weighted(
-        face_vector=face_vector,
-        name_vector=name_vector,
-        face_weight=face_weight,
-        name_weight=name_weight,
-        limit=request.limit,
-    )
+    if face_vector is None and name_vector is None:
+        if description_vector is None:
+            return []
+        raw_results = await vector_search.search_entities_by_name_description(
+            name_vector=name_vector,
+            description_vector=description_vector,
+            name_weight=name_weight,
+            description_weight=description_weight,
+            limit=request.limit,
+        )
+    else:
+        raw_results = await vector_search.search_entities_weighted(
+            face_vector=face_vector,
+            name_vector=name_vector,
+            face_weight=face_weight,
+            name_weight=name_weight,
+            limit=request.limit,
+        )
 
-    results: list[SearchIdentityResult] = []
+    results: list[SearchEntityResult] = []
     for item in raw_results:
         score = _distance_to_score(item.combined_distance)
         contributions: dict[AnnotationType, SearchSignalContribution] = {}
@@ -240,10 +250,17 @@ async def _search_identities(
                 normalised_score=name_score,
                 weight=name_weight,
             )
+        if item.description_distance is not None:
+            description_score = _distance_to_score(item.description_distance)
+            contributions[AnnotationType.description] = SearchSignalContribution(
+                score=description_score,
+                normalised_score=description_score,
+                weight=description_weight,
+            )
 
         results.append(
-            SearchIdentityResult(
-                identity_id=item.identity_id,
+            SearchEntityResult(
+                entity_id=item.entity_id,
                 score=score,
                 signal_contributions=contributions,
             )
@@ -260,7 +277,7 @@ async def _search_annotations(
 ) -> list[SearchAnnotationResult]:
     wants_annotation_results = (
         "annotation" in request.result_types
-        or any(result_type != "identity" for result_type in request.result_types)
+        or any(result_type != "entity" for result_type in request.result_types)
     )
     if not wants_annotation_results:
         return []
@@ -269,7 +286,7 @@ async def _search_annotations(
     requested_annotation_types = {
         result_type
         for result_type in request.result_types
-        if result_type != "identity"
+        if result_type != "entity"
     }
 
     accumulator: dict[
@@ -322,12 +339,12 @@ async def _search_annotations(
 
 
 def _merge_results(
-    identity_results: list[SearchIdentityResult],
+    entity_results: list[SearchEntityResult],
     annotation_results: list[SearchAnnotationResult],
     limit: int,
-) -> list[SearchIdentityResult | SearchAnnotationResult]:
-    merged: list[SearchIdentityResult | SearchAnnotationResult] = [
-        *identity_results,
+) -> list[SearchEntityResult | SearchAnnotationResult]:
+    merged: list[SearchEntityResult | SearchAnnotationResult] = [
+        *entity_results,
         *annotation_results,
     ]
     merged.sort(key=lambda item: item.score, reverse=True)
@@ -335,15 +352,15 @@ def _merge_results(
 
 
 def _compute_facets(
-    results: Iterable[SearchIdentityResult | SearchAnnotationResult],
+    results: Iterable[SearchEntityResult | SearchAnnotationResult],
 ) -> SearchFacetsResponse:
     annotation_type_counts = {annotation_type.value: 0 for annotation_type in AnnotationType}
-    result_type_counts = {"identity": 0, "annotation": 0}
+    result_type_counts = {"entity": 0, "annotation": 0}
     has_face_counts = {"true": 0, "false": 0}
 
     for result in results:
-        if isinstance(result, SearchIdentityResult):
-            result_type_counts["identity"] += 1
+        if isinstance(result, SearchEntityResult):
+            result_type_counts["entity"] += 1
             has_face = AnnotationType.face in result.signal_contributions
             has_face_counts["true" if has_face else "false"] += 1
             continue
@@ -410,5 +427,5 @@ def vector_object_uuid(collection_name: str, row_id: uuid.UUID) -> uuid.UUID:
     return uuid.uuid5(_VECTOR_OBJECT_NS, f"{collection_name}:{row_id}")
 
 
-def identity_weaviate_uuid(identity_id: uuid.UUID) -> uuid.UUID:
-    return uuid.uuid5(_IDENTITY_NS, f"identity:{identity_id}")
+def entity_weaviate_uuid(entity_id: uuid.UUID) -> uuid.UUID:
+    return uuid.uuid5(_ENTITY_NS, f"entity:{entity_id}")

@@ -18,7 +18,7 @@ from people_gator_api.models.principal import (
     User,
 )
 from people_gator_api.models.source import Source
-from people_gator_api.models.identity import Identity
+from people_gator_api.models.entities import Entity, Identity
 from people_gator_api.models.annotation import (
     Mention,
     Information,
@@ -43,7 +43,8 @@ __all__ = [
     "ModelAgent",
     # sources
     "Source",
-    # identity + annotations
+    # entity + annotations
+    "Entity",
     "Identity",
     "Mention",
     "Information",

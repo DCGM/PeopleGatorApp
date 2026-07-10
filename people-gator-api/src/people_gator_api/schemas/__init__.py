@@ -1,9 +1,13 @@
-from people_gator_api.schemas.identities import (
+from people_gator_api.schemas.entities import (
     BoundingBox,
     DescriptionCreateRequest,
     DescriptionResponse,
     DocumentMentionCreateRequest,
     DocumentMentionResponse,
+    EntityCreateRequest,
+    EntityListResponse,
+    EntityResponse,
+    EntityViewResponse,
     FaceCreateRequest,
     FaceKeypoint,
     FaceResponse,
@@ -28,6 +32,7 @@ from people_gator_api.schemas.principals import (
 from people_gator_api.schemas.root import RootResponse
 from people_gator_api.schemas.search import (
     SearchAnnotationResult,
+    SearchEntityResult,
     SearchFacetsResponse,
     SearchFilters,
     SearchIdentityResult,
@@ -51,6 +56,10 @@ __all__ = [
     "DescriptionResponse",
     "DocumentMentionCreateRequest",
     "DocumentMentionResponse",
+    "EntityCreateRequest",
+    "EntityListResponse",
+    "EntityResponse",
+    "EntityViewResponse",
     "FaceCreateRequest",
     "FaceKeypoint",
     "FaceResponse",
@@ -71,6 +80,7 @@ __all__ = [
     "PrincipalResponse",
     "RootResponse",
     "SearchAnnotationResult",
+    "SearchEntityResult",
     "SearchFacetsResponse",
     "SearchFilters",
     "SearchQuery",

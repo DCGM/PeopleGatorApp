@@ -21,9 +21,12 @@ from weaviate.classes.init import Auth
 from people_gator_api.settings import settings
 from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_SPECS,
-    IDENTITY_SNAPSHOT_PROPERTIES,
-    IDENTITY_SNAPSHOT_COLLECTION,
-    identity_snapshot_named_vector_configs,
+    ENTITY_COLLECTION,
+    ENTITY_PROPERTIES,
+    ENTITY_SNAPSHOT_COLLECTION,
+    ENTITY_SNAPSHOT_PROPERTIES,
+    entity_named_vector_configs,
+    entity_snapshot_named_vector_configs,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,7 +104,8 @@ async def _ensure_collections(client: WeaviateAsyncClient) -> None:
     or patching schemas on every application restart.
     """
     await _ensure_annotation_collections(client)
-    await _ensure_identity_snapshot(client)
+    await _ensure_entity_snapshot(client)
+    await _ensure_entity_collection(client)
 
 
 async def _ensure_annotation_collections(client: WeaviateAsyncClient) -> None:
@@ -122,19 +126,36 @@ async def _ensure_annotation_collections(client: WeaviateAsyncClient) -> None:
         logger.info("Created Weaviate collection: %s", collection_name)
 
 
-async def _ensure_identity_snapshot(client: WeaviateAsyncClient) -> None:
-    if await client.collections.exists(IDENTITY_SNAPSHOT_COLLECTION):
-        logger.debug("Collection %s already exists", IDENTITY_SNAPSHOT_COLLECTION)
+async def _ensure_entity_snapshot(client: WeaviateAsyncClient) -> None:
+    if await client.collections.exists(ENTITY_SNAPSHOT_COLLECTION):
+        logger.debug("Collection %s already exists", ENTITY_SNAPSHOT_COLLECTION)
         return
 
     await client.collections.create(
-        name=IDENTITY_SNAPSHOT_COLLECTION,
+        name=ENTITY_SNAPSHOT_COLLECTION,
         description=(
-            "One document per identity, updated on every LINK_CONSENSUS sync.  "
+            "One document per entity, updated on every LINK_CONSENSUS sync.  "
             "Stores named vectors per modality (face centroid, name centroid) "
-            "to enable weighted multi-modal identity similarity search."
+            "to enable weighted multi-modal entity similarity search."
         ),
-        properties=IDENTITY_SNAPSHOT_PROPERTIES,
-        vector_config=identity_snapshot_named_vector_configs(),
+        properties=ENTITY_SNAPSHOT_PROPERTIES,
+        vector_config=entity_snapshot_named_vector_configs(),
     )
-    logger.info("Created Weaviate collection: %s", IDENTITY_SNAPSHOT_COLLECTION)
+    logger.info("Created Weaviate collection: %s", ENTITY_SNAPSHOT_COLLECTION)
+
+
+async def _ensure_entity_collection(client: WeaviateAsyncClient) -> None:
+    if await client.collections.exists(ENTITY_COLLECTION):
+        logger.debug("Collection %s already exists", ENTITY_COLLECTION)
+        return
+
+    await client.collections.create(
+        name=ENTITY_COLLECTION,
+        description=(
+            "Entity-level searchable aggregate with normalized name and description "
+            "plus named vectors for name and description similarity."
+        ),
+        properties=ENTITY_PROPERTIES,
+        vector_config=cast(Any, entity_named_vector_configs()),
+    )
+    logger.info("Created Weaviate collection: %s", ENTITY_COLLECTION)

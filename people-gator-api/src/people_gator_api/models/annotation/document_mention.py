@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import sqlalchemy as sa
 from sqlalchemy import ForeignKey, String, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -36,9 +37,11 @@ class DocumentMention(Base):
     source_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("source.source_id"), nullable=False
     )
-    identity_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("identity.identity_id"), nullable=False
+    entity_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("entity.entity_id"), nullable=False
     )
+    embedding: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+    model_identifier: Mapped[str | None] = mapped_column(String, nullable=True)
 
     mentions: Mapped[list["Mention"]] = relationship(
         "Mention",
@@ -54,7 +57,7 @@ class DocumentMention(Base):
     __table_args__ = (
         sa.Index("ix_document_mention_model_agent_id", "model_agent_id"),
         sa.Index("ix_document_mention_source_id", "source_id"),
-        sa.Index("ix_document_mention_identity_id", "identity_id"),
+        sa.Index("ix_document_mention_entity_id", "entity_id"),
     )
 
     @classmethod
@@ -72,14 +75,14 @@ class DocumentMention(Base):
     async def list_page(
         cls,
         session: AsyncSession,
-        identity_id: uuid.UUID | None = None,
+        entity_id: uuid.UUID | None = None,
         source_id: uuid.UUID | None = None,
         after_id: uuid.UUID | None = None,
         limit: int = 50,
     ) -> list["DocumentMention"]:
         stmt = select(cls).order_by(cls.document_mention_id.asc()).limit(limit)
-        if identity_id is not None:
-            stmt = stmt.where(cls.identity_id == identity_id)
+        if entity_id is not None:
+            stmt = stmt.where(cls.entity_id == entity_id)
         if source_id is not None:
             stmt = stmt.where(cls.source_id == source_id)
         if after_id is not None:
@@ -95,7 +98,9 @@ class DocumentMention(Base):
         information: str,
         model_agent_id: uuid.UUID,
         source_id: uuid.UUID,
-        identity_id: uuid.UUID,
+        entity_id: uuid.UUID,
+        embedding: list[float] | None = None,
+        model_identifier: str | None = None,
     ) -> "DocumentMention":
         item = cls(
             document_mention_id=new_uuid6(),
@@ -103,7 +108,9 @@ class DocumentMention(Base):
             information=information,
             model_agent_id=model_agent_id,
             source_id=source_id,
-            identity_id=identity_id,
+            entity_id=entity_id,
+            embedding=embedding,
+            model_identifier=model_identifier,
         )
         session.add(item)
         return item
