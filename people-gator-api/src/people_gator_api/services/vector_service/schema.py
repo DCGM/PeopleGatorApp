@@ -27,11 +27,11 @@ SEARCH_PROFILE_COLLECTION = "SearchProfile"
 SEARCH_PROFILE_MODALITY_COLLECTION = "SearchProfileModality"
 
 # Named vectors
-FACE_VECTOR = "face"
-NAME_VECTOR = "name"
-DESCRIPTION_VECTOR = "description"
-DOCUMENT_MENTION_NAME_VECTOR = "name"
-DOCUMENT_MENTION_INFORMATION_VECTOR = "information"
+FACE_VECTOR = "face:default"
+NAME_VECTOR = "name:default"
+DESCRIPTION_VECTOR = "description:default"
+DOCUMENT_MENTION_NAME_VECTOR = "name:default"
+DOCUMENT_MENTION_INFORMATION_VECTOR = "information:default"
 
 ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
     AnnotationType.person_name: NAME_COLLECTION,
@@ -150,8 +150,11 @@ def _object_array_property(
     )
 
 
-def default_vector_config() -> object:
-    return Configure.Vectors.self_provided(
+def default_vector_config(
+    name: str
+) -> object:
+    return Configure.NamedVectors.none(
+        name=name,
         vector_index_config=Configure.VectorIndex.hnsw(
             distance_metric=VectorDistances.COSINE,
         )
@@ -161,12 +164,6 @@ def default_vector_config() -> object:
 def entity_named_vector_configs() -> list[object]:
     return [
         Configure.Vectors.self_provided(
-            name=FACE_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
-        Configure.Vectors.self_provided(
             name=NAME_VECTOR,
             vector_index_config=Configure.VectorIndex.hnsw(
                 distance_metric=VectorDistances.COSINE,
@@ -174,12 +171,6 @@ def entity_named_vector_configs() -> list[object]:
         ),
         Configure.Vectors.self_provided(
             name=DESCRIPTION_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
-        Configure.Vectors.self_provided(
-            name=NAME_VECTOR,
             vector_index_config=Configure.VectorIndex.hnsw(
                 distance_metric=VectorDistances.COSINE,
             ),
@@ -258,10 +249,6 @@ ENTITY_PROPERTIES: list[Property] = [
     _uuid_property("principal_id", "Foreign key to PRINCIPAL.principal_id."),
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
-    _int_property("face_count", "Number of face annotations linked to the entity."),
-    _int_property("mention_count", "Number of mention annotations linked through document mentions."),
-    _int_property("information_count", "Number of information annotations linked through document mentions."),
-    _int_property("document_mention_count", "Number of document mentions linked to the entity."),
     _int_property("name_count", "Number of linked NAME rows."),
     _int_property("description_count", "Number of linked DESCRIPTION rows."),
 ]
@@ -486,19 +473,31 @@ SEARCH_PROFILE_MODALITY_REFERENCES: list[ReferenceProperty] = [
 type CollectionSpec = tuple[list[Property], list[ReferenceProperty], object]
 
 ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    NAME_COLLECTION: (NAME_PROPERTIES, NAME_REFERENCES, default_vector_config()),
+    NAME_COLLECTION: (
+        NAME_PROPERTIES, 
+        NAME_REFERENCES, 
+        default_vector_config(name=NAME_VECTOR)
+    ),
     DESCRIPTION_COLLECTION: (
         DESCRIPTION_PROPERTIES,
         DESCRIPTION_REFERENCES,
-        default_vector_config(),
+        default_vector_config(name=DESCRIPTION_VECTOR),
     ),
     INFORMATION_COLLECTION: (
         INFORMATION_PROPERTIES,
         INFORMATION_REFERENCES,
-        default_vector_config(),
+        default_vector_config(name=DOCUMENT_MENTION_INFORMATION_VECTOR),
     ),
-    MENTION_COLLECTION: (MENTION_PROPERTIES, MENTION_REFERENCES, default_vector_config()),
-    FACE_COLLECTION: (FACE_PROPERTIES, FACE_REFERENCES, default_vector_config()),
+    MENTION_COLLECTION: (
+        MENTION_PROPERTIES, 
+        MENTION_REFERENCES, 
+        default_vector_config(name=DOCUMENT_MENTION_NAME_VECTOR)
+    ),
+    FACE_COLLECTION: (
+        FACE_PROPERTIES, 
+        FACE_REFERENCES, 
+        default_vector_config(name=FACE_VECTOR)
+    ),
     DOCUMENT_MENTION_COLLECTION: (
         DOCUMENT_MENTION_PROPERTIES,
         DOCUMENT_MENTION_REFERENCES,
@@ -507,18 +506,30 @@ ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 }
 
 NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    PRINCIPAL_COLLECTION: (PRINCIPAL_PROPERTIES, PRINCIPAL_REFERENCES, default_vector_config()),
-    SOURCE_COLLECTION: (SOURCE_PROPERTIES, SOURCE_REFERENCES, default_vector_config()),
-    ENTITY_COLLECTION: (ENTITY_PROPERTIES, ENTITY_REFERENCES, entity_named_vector_configs()),
+    PRINCIPAL_COLLECTION: (
+        PRINCIPAL_PROPERTIES, 
+        PRINCIPAL_REFERENCES, 
+        None
+    ),
+    SOURCE_COLLECTION: (
+        SOURCE_PROPERTIES, 
+        SOURCE_REFERENCES, 
+        None
+    ),
+    ENTITY_COLLECTION: (
+        ENTITY_PROPERTIES, 
+        ENTITY_REFERENCES, 
+        entity_named_vector_configs()
+    ),
     SEARCH_PROFILE_COLLECTION: (
         SEARCH_PROFILE_PROPERTIES,
         SEARCH_PROFILE_REFERENCES,
-        default_vector_config(),
+        None
     ),
     SEARCH_PROFILE_MODALITY_COLLECTION: (
         SEARCH_PROFILE_MODALITY_PROPERTIES,
         SEARCH_PROFILE_MODALITY_REFERENCES,
-        default_vector_config(),
+        None
     ),
 }
 
