@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.models.enums import SourceKind
 from people_gator_api.services.auth_service import AuthContext, require_scopes
@@ -29,7 +29,7 @@ async def list_sources_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SourceListResponse:
     return await list_sources(session, source_type, after_id, limit)
 
@@ -38,7 +38,7 @@ async def list_sources_route(
 async def get_source_route(
     source_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SourceResponse:
     source = await get_source(session, source_id)
     if source is None:
@@ -50,7 +50,7 @@ async def get_source_route(
 async def create_source_route(
     payload: SourceCreateRequest,
     auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SourceResponse:
     created_by = auth.principal.principal_id if auth.principal is not None else None
     source, created = await create_source(session, payload, created_by)

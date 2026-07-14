@@ -7,13 +7,14 @@ from fastapi.security import HTTPAuthorizationCredentials, OpenIdConnect
 from joserfc import jwt
 from joserfc.errors import JoseError
 from joserfc.jwt import JWTClaimsRegistry
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.auth.jwks import JwksCache
+from people_gator_api.services.crud_services.principal_service import get_or_create_user
 from people_gator_api.services.database_service import get_session
-from people_gator_api.models.principal import Principal, User
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.settings import settings
+from people_gator_api.services.weaviate_utils import StoredPrincipal
 
 logger = logging.getLogger(__name__)
 _jwks_cache: JwksCache = JwksCache(settings.keycloak.jwks_uri)
@@ -39,7 +40,7 @@ _KNOWN_SCOPES = {
 
 @dataclass
 class AuthContext:
-    principal: Principal | None
+    principal: StoredPrincipal | None
     scopes: set[str]
 
 
@@ -60,7 +61,10 @@ def _parse_string_set(claim: object, separator: str | None = None) -> set[str]:
     return set()
 
 
-async def _resolve_principal_from_token(raw_token: str, session: AsyncSession) -> AuthContext:
+async def _resolve_principal_from_token(
+    raw_token: str,
+    session: WeaviateAsyncClient,
+) -> AuthContext:
     claims: dict[str, object]
     try:
         key_set = await _jwks_cache.get_key_set()
@@ -92,8 +96,8 @@ async def _resolve_principal_from_token(raw_token: str, session: AsyncSession) -
     display_name: str = str(claims.get("preferred_username") or claims.get("name") or sub)
     email: str | None = str(claims["email"]) if "email" in claims else None
 
-    user, _ = await User.get_or_create(
-        session=session,
+    user = await get_or_create_user(
+        session,
         external_subject=sub,
         external_issuer=iss,
         display_name=display_name,
@@ -117,7 +121,7 @@ def empty_depends_on_openid_connect(
 
 async def get_auth_context(
     credentials: HTTPAuthorizationCredentials | None = Depends(empty_depends_on_openid_connect),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> AuthContext:
     if credentials is None:
         return AuthContext(principal=None, scopes=_KNOWN_SCOPES) # TODO: This is a temporary measure to allow unauthenticated access.
@@ -127,7 +131,7 @@ async def get_auth_context(
 
 async def get_optional_auth_context(
     credentials: HTTPAuthorizationCredentials | None = Depends(empty_depends_on_openid_connect),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> AuthContext:
     return AuthContext(principal=None, scopes={"people-gator:browse"})
 

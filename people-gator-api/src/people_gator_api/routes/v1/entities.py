@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
@@ -30,7 +30,7 @@ async def list_entities_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityListResponse:
     return await list_entities(session, after_id, limit)
 
@@ -39,7 +39,7 @@ async def list_entities_route(
 async def get_entity_route(
     entity_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityResponse:
     entity = await get_entity(session, entity_id)
     if entity is None:
@@ -51,7 +51,7 @@ async def get_entity_route(
 async def get_entity_view_route(
     entity_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityViewResponse:
     view = await get_entity_view(session, entity_id)
     if view is None:
@@ -63,7 +63,7 @@ async def get_entity_view_route(
 async def create_entity_route(
     payload: EntityCreateRequest,
     auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityResponse:
     if auth.principal is None:
         raise_api_error(401, "token_missing", "Authentication required")
@@ -74,7 +74,7 @@ async def create_entity_route(
 async def delete_entity_route(
     entity_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> None:
     deleted = await delete_entity(session, entity_id)
     if not deleted:

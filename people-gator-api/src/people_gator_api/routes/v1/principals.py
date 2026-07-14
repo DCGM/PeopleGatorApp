@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.services.database_service import get_session
 from people_gator_api.models.enums import PrincipalType
@@ -29,7 +29,7 @@ async def list_principals_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[PrincipalResponse]:
     return await list_principals(session, principal_type, is_active, after_id, limit)
 
@@ -38,7 +38,7 @@ async def list_principals_route(
 async def get_principal_route(
     principal_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> PrincipalResponse:
     principal = await get_principal(session, principal_id)
     if principal is None:
@@ -65,7 +65,7 @@ async def get_me_route(
 async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> PrincipalResponse:
     return await create_model_agent(session, payload)
 
@@ -75,7 +75,7 @@ async def patch_model_agent_route(
     principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> PrincipalResponse:
     principal = await update_principal(
         session,

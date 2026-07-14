@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.entities import (
     DescriptionCreateRequest,
@@ -50,7 +50,7 @@ router = APIRouter(tags=["annotations"])
 async def create_mention_route(
     payload: MentionCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> MentionResponse:
     return await create_mention(session, payload)
 
@@ -61,7 +61,7 @@ async def list_mentions_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[MentionResponse]:
     return await list_mentions(session, source_id, after_id, limit)
 
@@ -70,7 +70,7 @@ async def list_mentions_route(
 async def get_mention_route(
     mention_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> MentionResponse:
     mention = await get_mention(session, mention_id)
     if mention is None:
@@ -82,7 +82,7 @@ async def get_mention_route(
 async def create_information_route(
     payload: InformationCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> InformationResponse:
     return await create_information(session, payload)
 
@@ -93,7 +93,7 @@ async def list_information_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[InformationResponse]:
     return await list_information(session, source_id, after_id, limit)
 
@@ -102,7 +102,7 @@ async def list_information_route(
 async def get_information_route(
     information_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> InformationResponse:
     information = await get_information(session, information_id)
     if information is None:
@@ -114,7 +114,7 @@ async def get_information_route(
 async def create_document_mention_route(
     payload: DocumentMentionCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> DocumentMentionResponse:
     return await create_document_mention(session, payload)
 
@@ -126,7 +126,7 @@ async def list_document_mentions_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[DocumentMentionResponse]:
     return await list_document_mentions(session, entity_id, source_id, after_id, limit)
 
@@ -135,7 +135,7 @@ async def list_document_mentions_route(
 async def get_document_mention_route(
     document_mention_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> DocumentMentionResponse:
     item = await get_document_mention(session, document_mention_id)
     if item is None:
@@ -147,7 +147,7 @@ async def get_document_mention_route(
 async def create_face_route(
     payload: FaceCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> FaceResponse:
     return await create_face(session, payload)
 
@@ -159,7 +159,7 @@ async def list_faces_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[FaceResponse]:
     return await list_faces(session, source_id, entity_id, after_id, limit)
 
@@ -168,7 +168,7 @@ async def list_faces_route(
 async def get_face_route(
     detection_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> FaceResponse:
     face = await get_face(session, detection_id)
     if face is None:
@@ -180,7 +180,7 @@ async def get_face_route(
 async def create_description_route(
     payload: DescriptionCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> DescriptionResponse:
     return await create_description(session, payload)
 
@@ -191,7 +191,7 @@ async def list_descriptions_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[DescriptionResponse]:
     return await list_descriptions(session, entity_id, after_id, limit)
 
@@ -200,7 +200,7 @@ async def list_descriptions_route(
 async def get_description_route(
     description_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> DescriptionResponse:
     description = await get_description(session, description_id)
     if description is None:
@@ -212,7 +212,7 @@ async def get_description_route(
 async def create_name_route(
     payload: NameCreateRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:ingest")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> NameResponse:
     return await create_name(session, payload)
 
@@ -223,7 +223,7 @@ async def list_names_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[NameResponse]:
     return await list_names(session, entity_id, after_id, limit)
 
@@ -232,7 +232,7 @@ async def list_names_route(
 async def get_name_route(
     name_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> NameResponse:
     name = await get_name(session, name_id)
     if name is None:

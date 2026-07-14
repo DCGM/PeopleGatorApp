@@ -19,15 +19,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.init import Auth
 
 from people_gator_api.settings import settings
-from people_gator_api.services.vector_service.schema import (
-    ANNOTATION_COLLECTION_SPECS,
-    ENTITY_COLLECTION,
-    ENTITY_PROPERTIES,
-    ENTITY_SNAPSHOT_COLLECTION,
-    ENTITY_SNAPSHOT_PROPERTIES,
-    entity_named_vector_configs,
-    entity_snapshot_named_vector_configs,
-)
+from people_gator_api.services.vector_service.schema import ALL_COLLECTION_SPECS
 
 logger = logging.getLogger(__name__)
 
@@ -97,65 +89,17 @@ def get_weaviate_client() -> WeaviateAsyncClient:
 
 
 async def _ensure_collections(client: WeaviateAsyncClient) -> None:
-    """Create Weaviate collections if they do not already exist.
-
-    This function is idempotent — calling it repeatedly is safe.  It uses
-    ``client.collections.exists()`` to avoid the overhead of recreating
-    or patching schemas on every application restart.
-    """
-    await _ensure_annotation_collections(client)
-    await _ensure_entity_snapshot(client)
-    await _ensure_entity_collection(client)
-
-
-async def _ensure_annotation_collections(client: WeaviateAsyncClient) -> None:
-    for collection_name, (properties, vector_config) in ANNOTATION_COLLECTION_SPECS.items():
+    """Create Weaviate collections if they do not already exist."""
+    for collection_name, (properties, references, vector_config) in ALL_COLLECTION_SPECS.items():
         if await client.collections.exists(collection_name):
             logger.debug("Collection %s already exists", collection_name)
             continue
 
         await client.collections.create(
             name=collection_name,
-            description=(
-                "Relational annotation mirror collection with filterable metadata "
-                "and caller-supplied vectors for nearest-neighbour search."
-            ),
+            description="Canonical People Gator persistence collection.",
             properties=properties,
+            references=cast(Any, references),
             vector_config=cast(Any, vector_config),
         )
         logger.info("Created Weaviate collection: %s", collection_name)
-
-
-async def _ensure_entity_snapshot(client: WeaviateAsyncClient) -> None:
-    if await client.collections.exists(ENTITY_SNAPSHOT_COLLECTION):
-        logger.debug("Collection %s already exists", ENTITY_SNAPSHOT_COLLECTION)
-        return
-
-    await client.collections.create(
-        name=ENTITY_SNAPSHOT_COLLECTION,
-        description=(
-            "One document per entity, updated on every LINK_CONSENSUS sync.  "
-            "Stores named vectors per modality (face centroid, name centroid) "
-            "to enable weighted multi-modal entity similarity search."
-        ),
-        properties=ENTITY_SNAPSHOT_PROPERTIES,
-        vector_config=entity_snapshot_named_vector_configs(),
-    )
-    logger.info("Created Weaviate collection: %s", ENTITY_SNAPSHOT_COLLECTION)
-
-
-async def _ensure_entity_collection(client: WeaviateAsyncClient) -> None:
-    if await client.collections.exists(ENTITY_COLLECTION):
-        logger.debug("Collection %s already exists", ENTITY_COLLECTION)
-        return
-
-    await client.collections.create(
-        name=ENTITY_COLLECTION,
-        description=(
-            "Entity-level searchable aggregate with normalized name and description "
-            "plus named vectors for name and description similarity."
-        ),
-        properties=ENTITY_PROPERTIES,
-        vector_config=cast(Any, entity_named_vector_configs()),
-    )
-    logger.info("Created Weaviate collection: %s", ENTITY_COLLECTION)

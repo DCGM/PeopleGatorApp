@@ -10,7 +10,7 @@ search_annotations_by_vector
     scores.
 
 search_entities_by_named_vector
-    Nearest-neighbour lookup over EntitySnapshot using a single named
+    Nearest-neighbour lookup over Entity using a single named
     vector (face or name).  Returns EntitySearchResult objects.
 
 search_entities_weighted
@@ -38,7 +38,6 @@ from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
     DESCRIPTION_VECTOR,
     ENTITY_COLLECTION,
-    ENTITY_SNAPSHOT_COLLECTION,
     FACE_VECTOR,
     NAME_VECTOR,
 )
@@ -135,7 +134,7 @@ class VectorSearchService:
         certainty: float | None = None,
         distance: float | None = None,
     ) -> list[EntitySearchResult]:
-        """Return nearest EntitySnapshot objects using a single named vector.
+        """Return nearest Entity objects using a single named vector.
 
         Args:
             vector: The query embedding vector.
@@ -149,7 +148,7 @@ class VectorSearchService:
         Returns:
             Ranked list of :class:`EntitySearchResult`, closest first.
         """
-        collection = self._client.collections.get(ENTITY_SNAPSHOT_COLLECTION)
+        collection = self._client.collections.get(ENTITY_COLLECTION)
 
         response = await collection.query.near_vector(
             near_vector={named_vector: vector},
@@ -233,7 +232,7 @@ class VectorSearchService:
         if face_vector is None and name_vector is None:
             raise ValueError("At least one of face_vector or name_vector must be supplied.")
 
-        collection = self._client.collections.get(ENTITY_SNAPSHOT_COLLECTION)
+        collection = self._client.collections.get(ENTITY_COLLECTION)
 
         query_vector: dict[str, list[float]] = {}
         weights: dict[str, float | list[float]] = {}

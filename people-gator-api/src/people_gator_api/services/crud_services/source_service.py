@@ -1,42 +1,42 @@
-"""Service for source endpoints (spec §2.7 simplified source model)."""
+"""Service for source endpoints."""
 
 import uuid
 
-import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
+from weaviate.classes.query import Filter
+from weaviate.classes.query import Sort
 
 from people_gator_api.models.enums import SourceKind
-from people_gator_api.models.source import Source
-from people_gator_api.schemas.sources import (
-    SourceCreateRequest,
-    SourceListResponse,
-    SourceResponse,
-)
-
-
-def _source_out(item: Source) -> SourceResponse:
-    return SourceResponse(
-        source_id=item.source_id,
-        source_type=item.source_type,
-        uri=item.uri,
-        metadata=item.metadata_,
-    )
+from people_gator_api.schemas.sources import SourceCreateRequest
+from people_gator_api.schemas.sources import SourceListResponse
+from people_gator_api.schemas.sources import SourceResponse
+from people_gator_api.services.vector_service.schema import SOURCE_COLLECTION
+from people_gator_api.services.weaviate_utils import combine_filters
+from people_gator_api.services.weaviate_utils import fetch_by_id
+from people_gator_api.services.weaviate_utils import fetch_single
+from people_gator_api.services.weaviate_utils import source_response
+from people_gator_api.services.weaviate_utils import upsert
+from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 async def list_sources(
-    session: AsyncSession,
+    client: WeaviateAsyncClient,
     source_type: SourceKind | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> SourceListResponse:
-    stmt = sa.select(Source).order_by(Source.source_id.asc()).limit(limit)
+    filters: list[object] = []
     if source_type is not None:
-        stmt = stmt.where(Source.source_type == source_type)
+        filters.append(Filter.by_property("source_type").equal(source_type.value))
     if after_id is not None:
-        stmt = stmt.where(Source.source_id > after_id)
+        filters.append(Filter.by_property("source_id").greater_than(str(after_id)))
 
-    result = await session.execute(stmt)
-    items = [_source_out(item) for item in result.scalars().all()]
+    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
+        filters=combine_filters(filters),
+        sort=Sort.by_property("source_id", ascending=True),
+        limit=limit,
+    )
+    items = [source_response(item.properties) for item in response.objects]
     return SourceListResponse(
         items=items,
         total=len(items),
@@ -44,31 +44,63 @@ async def list_sources(
     )
 
 
-async def get_source(session: AsyncSession, source_id: uuid.UUID) -> SourceResponse | None:
-    source = await Source.get(session, source_id)
-    if source is None:
+async def get_source(
+    client: WeaviateAsyncClient,
+    source_id: uuid.UUID,
+) -> SourceResponse | None:
+    obj = await fetch_by_id(client, SOURCE_COLLECTION, "source_id", source_id)
+    if obj is None:
         return None
-    return _source_out(source)
+    return source_response(obj.properties)
+
+
+async def get_source_by_type_uri(
+    client: WeaviateAsyncClient,
+    source_type: SourceKind,
+    uri: str,
+) -> SourceResponse | None:
+    obj = await fetch_single(
+        client,
+        SOURCE_COLLECTION,
+        Filter.all_of(
+            [
+                Filter.by_property("source_type").equal(source_type.value),
+                Filter.by_property("uri").equal(uri),
+            ]
+        ),
+    )
+    if obj is None:
+        return None
+    return source_response(obj.properties)
 
 
 async def create_source(
-    session: AsyncSession,
+    client: WeaviateAsyncClient,
     payload: SourceCreateRequest,
     _created_by: uuid.UUID | None,
 ) -> tuple[SourceResponse, bool]:
-    """Create a source, returning (response, created).
-
-    If a source with the same ``(source_type, uri)`` already exists, return it
-    with ``created=False`` (idempotent ingest).
-    """
-    existing = await Source.get_by_type_uri(session, payload.source_type, payload.uri)
+    existing = await get_source_by_type_uri(client, payload.source_type, payload.uri)
     if existing is not None:
-        return _source_out(existing), False
+        return existing, False
 
-    source = await Source.create(
-        session=session,
-        source_type=payload.source_type,
-        uri=payload.uri,
-        metadata=payload.metadata,
+    source_id = new_uuid6()
+    await upsert(
+        client,
+        SOURCE_COLLECTION,
+        source_id,
+        properties={
+            "source_id": source_id,
+            "source_type": payload.source_type.value,
+            "uri": payload.uri,
+            "metadata": payload.metadata,
+        },
     )
-    return _source_out(source), True
+    return (
+        SourceResponse(
+            source_id=source_id,
+            source_type=payload.source_type,
+            uri=payload.uri,
+            metadata=payload.metadata,
+        ),
+        True,
+    )

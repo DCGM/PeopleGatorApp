@@ -8,13 +8,10 @@ import uuid
 from collections.abc import Iterable
 from typing import Any, TypeGuard
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 
 from people_gator_api.models.enums import AnnotationType
-from people_gator_api.models.search_profile import SearchProfile
 from people_gator_api.schemas.search import (
     SearchAnnotationResult,
     SearchEntityResult,
@@ -28,19 +25,16 @@ from people_gator_api.schemas.search import (
 from people_gator_api.services.vector_service.client import get_weaviate_client
 from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
-    ENTITY_SNAPSHOT_COLLECTION,
+    ENTITY_COLLECTION,
     FACE_VECTOR,
     NAME_VECTOR,
 )
 from people_gator_api.services.vector_service.search import VectorSearchService
+from people_gator_api.services.crud_services.profile_service import get_profile
 
 _DEFAULT_MODALITY_WEIGHT = 1.0
-_VECTOR_OBJECT_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-_ENTITY_NS = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
-
-
 async def search(
-    session: AsyncSession,
+    session: WeaviateAsyncClient,
     request: SearchRequest,
 ) -> SearchResponse:
     profile_modalities = await _resolve_profile_modalities(session, request.profile_id)
@@ -82,7 +76,7 @@ async def search(
 
 
 async def search_facets(
-    session: AsyncSession,
+    session: WeaviateAsyncClient,
     query: SearchQuery,
     filters: SearchFilters,
 ) -> SearchFacetsResponse:
@@ -97,15 +91,13 @@ async def search_facets(
 
 
 async def _resolve_profile_modalities(
-    session: AsyncSession,
+    session: WeaviateAsyncClient,
     profile_id: uuid.UUID | None,
 ) -> dict[AnnotationType, float]:
     if profile_id is None:
         return {}
 
-    profile = await session.scalar(
-        select(SearchProfile).where(SearchProfile.profile_id == profile_id)
-    )
+    profile = await get_profile(session, profile_id)
     if profile is None:
         return {}
 
@@ -141,9 +133,9 @@ async def _resolve_query_vectors(
             vectors[annotation_type].extend(result)
 
     if query.reference_entity_id is not None:
-        snapshot_collection = client.collections.get(ENTITY_SNAPSHOT_COLLECTION)
+        entity_collection = client.collections.get(ENTITY_COLLECTION)
         try:
-            entity_obj = await snapshot_collection.query.fetch_object_by_id(
+            entity_obj = await entity_collection.query.fetch_object_by_id(
                 uuid=entity_weaviate_uuid(query.reference_entity_id),
                 include_vector=True,
             )
@@ -424,8 +416,9 @@ def _is_float_vector(value: object) -> TypeGuard[list[float]]:
 
 
 def vector_object_uuid(collection_name: str, row_id: uuid.UUID) -> uuid.UUID:
-    return uuid.uuid5(_VECTOR_OBJECT_NS, f"{collection_name}:{row_id}")
+    _ = collection_name
+    return row_id
 
 
 def entity_weaviate_uuid(entity_id: uuid.UUID) -> uuid.UUID:
-    return uuid.uuid5(_ENTITY_NS, f"entity:{entity_id}")
+    return entity_id

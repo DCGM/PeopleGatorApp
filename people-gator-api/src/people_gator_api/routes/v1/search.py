@@ -7,7 +7,7 @@ annotation-level results.
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.models.enums import AnnotationType
 from people_gator_api.schemas.search import (
@@ -38,7 +38,7 @@ async def search_get(
     limit: int = 20,
     after_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchResponse:
     request = SearchRequest(
         query=SearchQuery(
@@ -64,7 +64,7 @@ async def search_get(
 async def search_post(
     payload: SearchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchResponse:
     return await search(session, payload)
 
@@ -74,7 +74,7 @@ async def search_facets_get(
     annotation_id: list[uuid.UUID] = Query(default_factory=list),
     reference_entity_id: uuid.UUID | None = None,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchFacetsResponse:
     return await search_facets(
         session,
@@ -90,6 +90,6 @@ async def search_facets_get(
 async def search_facets_post(
     payload: SearchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchFacetsResponse:
     return await search_facets(session, payload.query, payload.filters)

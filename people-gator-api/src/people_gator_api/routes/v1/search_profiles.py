@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.search_profiles import (
     SearchProfileCloneRequest,
@@ -29,7 +29,7 @@ router = APIRouter(tags=["search"])
 @router.get("/search-profiles", response_model=list[SearchProfileResponse])
 async def list_search_profiles(
     auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[SearchProfileResponse]:
     owner_id = auth.principal.principal_id if auth.principal is not None else None
     return await list_profiles(session, owner_id, include_system=True, include_public=True)
@@ -39,7 +39,7 @@ async def list_search_profiles(
 async def get_search_profile(
     profile_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchProfileResponse:
     profile = await get_profile(session, profile_id)
     if profile is None:
@@ -51,7 +51,7 @@ async def get_search_profile(
 async def create_search_profile(
     payload: SearchProfileCreateRequest,
     auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchProfileResponse:
     if auth.principal is None:
         raise_api_error(401, "token_missing", "Authentication required")
@@ -63,7 +63,7 @@ async def patch_search_profile(
     profile_id: uuid.UUID,
     payload: SearchProfilePatchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchProfileResponse:
     resolved = await update_profile(session, profile_id, payload)
     if resolved is None:
@@ -75,7 +75,7 @@ async def patch_search_profile(
 async def delete_search_profile(
     profile_id: uuid.UUID,
     _auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> Response:
     deleted = await delete_profile(session, profile_id)
     if not deleted:
@@ -88,7 +88,7 @@ async def clone_search_profile(
     profile_id: uuid.UUID,
     payload: SearchProfileCloneRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
-    session: AsyncSession = Depends(get_session),
+    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchProfileResponse:
     if _auth.principal is None:
         raise_api_error(401, "token_missing", "Authentication required")
