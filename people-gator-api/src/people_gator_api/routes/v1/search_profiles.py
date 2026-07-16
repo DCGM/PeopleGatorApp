@@ -23,7 +23,7 @@ from people_gator_api.services.crud_services.profile_service import (
 from people_gator_api.services.database_service import get_session
 from people_gator_api.services.http_errors import raise_api_error
 
-router = APIRouter(tags=["search"])
+router = APIRouter(tags=["search-profiles"])
 
 
 @router.get("/search-profiles", response_model=list[SearchProfileResponse])
