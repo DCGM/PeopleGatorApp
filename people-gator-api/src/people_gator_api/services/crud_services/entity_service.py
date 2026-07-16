@@ -3,8 +3,6 @@
 import uuid
 
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter
-from weaviate.classes.query import Sort
 
 from people_gator_api.schemas.entities import EntityCreateRequest
 from people_gator_api.schemas.entities import EntityListResponse
@@ -32,21 +30,23 @@ async def list_entities(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> EntityListResponse:
-    filters = (
-        [Filter.by_property("entity_id").greater_than(str(after_id))]
-        if after_id is not None
-        else []
-    )
+    scan_limit = max(limit * 10, 1000)
+    filters: list[object] = []
     response = await client.collections.get(ENTITY_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("entity_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    items = [entity_response(item.properties) for item in response.objects]
+    items = sorted(
+        [entity_response(item.properties) for item in response.objects],
+        key=lambda item: item.entity_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.entity_id > after_id]
+    page_items = items[:limit]
     return EntityListResponse(
-        items=items,
-        total=len(items),
-        next_after_id=items[-1].entity_id if len(items) == limit and items else None,
+        items=page_items,
+        total=len(page_items),
+        next_after_id=page_items[-1].entity_id if len(page_items) == limit and page_items else None,
     )
 
 

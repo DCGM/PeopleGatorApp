@@ -133,6 +133,17 @@ def _object_property(
     )
 
 
+def _json_text_property(name: str, description: str) -> Property:
+    return Property(
+        name=name,
+        data_type=DataType.TEXT,
+        description=description,
+        index_filterable=False,
+        index_searchable=False,
+        skip_vectorization=True,
+    )
+
+
 def _object_array_property(
     name: str,
     description: str,
@@ -241,7 +252,7 @@ SOURCE_PROPERTIES: list[Property] = [
     _uuid_property("source_id", "Primary key of SOURCE.source_id."),
     _text_property("source_type", "Source kind.", searchable=False),
     _text_property("uri", "Source URI."),
-    _object_property("metadata", "Arbitrary source metadata."),
+    _json_text_property("metadata", "Arbitrary source metadata."),
 ]
 
 ENTITY_PROPERTIES: list[Property] = [
@@ -534,8 +545,19 @@ NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 }
 
 ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    **NON_ANNOTATION_COLLECTION_SPECS,
-    **ANNOTATION_COLLECTION_SPECS,
+    PRINCIPAL_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[PRINCIPAL_COLLECTION],
+    SOURCE_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[SOURCE_COLLECTION],
+    ENTITY_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[ENTITY_COLLECTION],
+    SEARCH_PROFILE_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[SEARCH_PROFILE_COLLECTION],
+    SEARCH_PROFILE_MODALITY_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[
+        SEARCH_PROFILE_MODALITY_COLLECTION
+    ],
+    DOCUMENT_MENTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[DOCUMENT_MENTION_COLLECTION],
+    FACE_COLLECTION: ANNOTATION_COLLECTION_SPECS[FACE_COLLECTION],
+    DESCRIPTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[DESCRIPTION_COLLECTION],
+    NAME_COLLECTION: ANNOTATION_COLLECTION_SPECS[NAME_COLLECTION],
+    MENTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[MENTION_COLLECTION],
+    INFORMATION_COLLECTION: ANNOTATION_COLLECTION_SPECS[INFORMATION_COLLECTION],
 }
 
 

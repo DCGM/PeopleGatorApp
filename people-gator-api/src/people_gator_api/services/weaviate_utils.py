@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+import json
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
-from weaviate.classes.query import Sort
 from weaviate.collections.classes.types import WeaviateField
 from weaviate.collections.classes.types import WeaviateProperties
 
@@ -159,10 +159,12 @@ async def list_mentions_for_document_mention(
 ) -> list[MentionResponse]:
     response = await client.collections.get(MENTION_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("document_mention_id").equal(str(document_mention_id)),
-        sort=Sort.by_property("mention_id", ascending=True),
         limit=1000,
     )
-    return [mention_response(item.properties) for item in response.objects]
+    return sorted(
+        [mention_response(item.properties) for item in response.objects],
+        key=lambda item: item.mention_id,
+    )
 
 
 async def list_information_for_document_mention(
@@ -171,10 +173,12 @@ async def list_information_for_document_mention(
 ) -> list[InformationResponse]:
     response = await client.collections.get(INFORMATION_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("document_mention_id").equal(str(document_mention_id)),
-        sort=Sort.by_property("information_id", ascending=True),
         limit=1000,
     )
-    return [information_response(item.properties) for item in response.objects]
+    return sorted(
+        [information_response(item.properties) for item in response.objects],
+        key=lambda item: item.information_id,
+    )
 
 
 async def delete_document_mention_tree(
@@ -652,6 +656,11 @@ def optional_json_dict(
         return None
     if isinstance(raw_value, Mapping):
         return json_dict_from_mapping(raw_value)
+    if isinstance(raw_value, str):
+        decoded = json.loads(raw_value)
+        if isinstance(decoded, Mapping):
+            return json_dict_from_mapping(cast(Mapping[str, WeaviateField], decoded))
+        raise TypeError(f"Property {key!r} is not a JSON object.")
     raise TypeError(f"Property {key!r} is not an object.")
 
 
@@ -677,10 +686,12 @@ async def _list_document_mentions(
 ) -> list[DocumentMentionResponse]:
     response = await client.collections.get(DOCUMENT_MENTION_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
-        sort=Sort.by_property("document_mention_id", ascending=True),
         limit=1000,
     )
-    return [document_mention_response(item.properties) for item in response.objects]
+    return sorted(
+        [document_mention_response(item.properties) for item in response.objects],
+        key=lambda item: item.document_mention_id,
+    )
 
 
 async def _list_faces(
@@ -689,10 +700,12 @@ async def _list_faces(
 ) -> list[FaceResponse]:
     response = await client.collections.get(FACE_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
-        sort=Sort.by_property("detection_id", ascending=True),
         limit=1000,
     )
-    return [face_response(item.properties) for item in response.objects]
+    return sorted(
+        [face_response(item.properties) for item in response.objects],
+        key=lambda item: item.detection_id,
+    )
 
 
 async def _list_descriptions(
@@ -701,10 +714,12 @@ async def _list_descriptions(
 ) -> list[DescriptionResponse]:
     response = await client.collections.get(DESCRIPTION_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
-        sort=Sort.by_property("description_id", ascending=True),
         limit=1000,
     )
-    return [description_response(item.properties) for item in response.objects]
+    return sorted(
+        [description_response(item.properties) for item in response.objects],
+        key=lambda item: item.description_id,
+    )
 
 
 async def _list_names(
@@ -713,7 +728,9 @@ async def _list_names(
 ) -> list[NameResponse]:
     response = await client.collections.get(NAME_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
-        sort=Sort.by_property("name_id", ascending=True),
         limit=1000,
     )
-    return [name_response(item.properties) for item in response.objects]
+    return sorted(
+        [name_response(item.properties) for item in response.objects],
+        key=lambda item: item.name_id,
+    )

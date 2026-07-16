@@ -1,10 +1,10 @@
 """Service for source endpoints."""
 
+import json
 import uuid
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
-from weaviate.classes.query import Sort
 
 from people_gator_api.models.enums import SourceKind
 from people_gator_api.schemas.sources import SourceCreateRequest
@@ -25,22 +25,26 @@ async def list_sources(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> SourceListResponse:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if source_type is not None:
         filters.append(Filter.by_property("source_type").equal(source_type.value))
-    if after_id is not None:
-        filters.append(Filter.by_property("source_id").greater_than(str(after_id)))
 
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("source_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    items = [source_response(item.properties) for item in response.objects]
+    items = sorted(
+        [source_response(item.properties) for item in response.objects],
+        key=lambda item: item.source_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.source_id > after_id]
+    page_items = items[:limit]
     return SourceListResponse(
-        items=items,
-        total=len(items),
-        next_after_id=items[-1].source_id if len(items) == limit and items else None,
+        items=page_items,
+        total=len(page_items),
+        next_after_id=page_items[-1].source_id if len(page_items) == limit and page_items else None,
     )
 
 
@@ -92,7 +96,7 @@ async def create_source(
             "source_id": source_id,
             "source_type": payload.source_type.value,
             "uri": payload.uri,
-            "metadata": payload.metadata,
+            "metadata": json.dumps(payload.metadata) if payload.metadata is not None else None,
         },
     )
     return (

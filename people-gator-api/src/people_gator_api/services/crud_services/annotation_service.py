@@ -4,7 +4,6 @@ import uuid
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
-from weaviate.classes.query import Sort
 
 from people_gator_api.schemas.entities import DescriptionCreateRequest
 from people_gator_api.schemas.entities import DescriptionResponse
@@ -114,17 +113,21 @@ async def list_mentions(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[MentionResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
-    if after_id is not None:
-        filters.append(Filter.by_property("mention_id").greater_than(str(after_id)))
     response = await client.collections.get(MENTION_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("mention_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [mention_response(item.properties) for item in response.objects]
+    items = sorted(
+        [mention_response(item.properties) for item in response.objects],
+        key=lambda item: item.mention_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.mention_id > after_id]
+    return items[:limit]
 
 
 async def create_information(
@@ -181,17 +184,21 @@ async def list_information(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[InformationResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
-    if after_id is not None:
-        filters.append(Filter.by_property("information_id").greater_than(str(after_id)))
     response = await client.collections.get(INFORMATION_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("information_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [information_response(item.properties) for item in response.objects]
+    items = sorted(
+        [information_response(item.properties) for item in response.objects],
+        key=lambda item: item.information_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.information_id > after_id]
+    return items[:limit]
 
 
 async def create_document_mention(
@@ -260,19 +267,23 @@ async def list_document_mentions(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DocumentMentionResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
-    if after_id is not None:
-        filters.append(Filter.by_property("document_mention_id").greater_than(str(after_id)))
     response = await client.collections.get(DOCUMENT_MENTION_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("document_mention_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [document_mention_response(item.properties) for item in response.objects]
+    items = sorted(
+        [document_mention_response(item.properties) for item in response.objects],
+        key=lambda item: item.document_mention_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.document_mention_id > after_id]
+    return items[:limit]
 
 
 async def create_face(
@@ -341,19 +352,23 @@ async def list_faces(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[FaceResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
-    if after_id is not None:
-        filters.append(Filter.by_property("detection_id").greater_than(str(after_id)))
     response = await client.collections.get(FACE_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("detection_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [face_response(item.properties) for item in response.objects]
+    items = sorted(
+        [face_response(item.properties) for item in response.objects],
+        key=lambda item: item.detection_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.detection_id > after_id]
+    return items[:limit]
 
 
 async def create_description(
@@ -405,17 +420,21 @@ async def list_descriptions(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DescriptionResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
-    if after_id is not None:
-        filters.append(Filter.by_property("description_id").greater_than(str(after_id)))
     response = await client.collections.get(DESCRIPTION_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("description_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [description_response(item.properties) for item in response.objects]
+    items = sorted(
+        [description_response(item.properties) for item in response.objects],
+        key=lambda item: item.description_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.description_id > after_id]
+    return items[:limit]
 
 
 async def create_name(
@@ -465,14 +484,18 @@ async def list_names(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[NameResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
-    if after_id is not None:
-        filters.append(Filter.by_property("name_id").greater_than(str(after_id)))
     response = await client.collections.get(NAME_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("name_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [name_response(item.properties) for item in response.objects]
+    items = sorted(
+        [name_response(item.properties) for item in response.objects],
+        key=lambda item: item.name_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.name_id > after_id]
+    return items[:limit]

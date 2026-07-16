@@ -2,7 +2,6 @@ import uuid
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
-from weaviate.classes.query import Sort
 
 from people_gator_api.models.enums import PrincipalType
 from people_gator_api.schemas.principals import ModelAgentCreateRequest
@@ -27,20 +26,24 @@ async def list_principals(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[PrincipalResponse]:
+    scan_limit = max(limit * 10, 1000)
     filters: list[object] = []
     if principal_type is not None:
         filters.append(Filter.by_property("principal_type").equal(principal_type.value))
     if is_active is not None:
         filters.append(Filter.by_property("is_active").equal(is_active))
-    if after_id is not None:
-        filters.append(Filter.by_property("principal_id").greater_than(str(after_id)))
 
     response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        sort=Sort.by_property("principal_id", ascending=True),
-        limit=limit,
+        limit=scan_limit,
     )
-    return [principal_response(item.properties) for item in response.objects]
+    items = sorted(
+        [principal_response(item.properties) for item in response.objects],
+        key=lambda item: item.principal_id,
+    )
+    if after_id is not None:
+        items = [item for item in items if item.principal_id > after_id]
+    return items[:limit]
 
 
 async def get_principal(
