@@ -6,7 +6,7 @@ import uuid
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 
-from people_gator_api.models.enums import SourceKind
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import SourceCreateRequest
 from people_gator_api.schemas.sources import SourceListResponse
 from people_gator_api.schemas.sources import SourceResponse

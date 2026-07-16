@@ -14,9 +14,9 @@ from weaviate.classes.query import Filter
 from weaviate.collections.classes.types import WeaviateField
 from weaviate.collections.classes.types import WeaviateProperties
 
-from people_gator_api.models.enums import AnnotationType
-from people_gator_api.models.enums import PrincipalType
-from people_gator_api.models.enums import SourceKind
+from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import PrincipalType
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.entities import BoundingBox
 from people_gator_api.schemas.entities import DescriptionResponse
 from people_gator_api.schemas.entities import DocumentMentionResponse

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from weaviate import WeaviateAsyncClient
 
 from people_gator_api.services.database_service import get_session
-from people_gator_api.models.enums import PrincipalType
+from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     ModelAgentPatchRequest,

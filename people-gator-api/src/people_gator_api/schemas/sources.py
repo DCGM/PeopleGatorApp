@@ -4,7 +4,7 @@ import uuid
 
 from pydantic import BaseModel
 
-from people_gator_api.models.enums import SourceKind
+from people_gator_api.schemas.enums import SourceKind
 
 type JsonValue = (
     str | int | float | bool | None | dict[str, "JsonValue"] | list["JsonValue"]

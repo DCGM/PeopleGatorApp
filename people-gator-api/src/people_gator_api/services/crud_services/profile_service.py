@@ -7,7 +7,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.classes.query import Sort
 
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.schemas.enums import AnnotationType
 from people_gator_api.schemas.search_profiles import SearchProfileCloneRequest
 from people_gator_api.schemas.search_profiles import SearchProfileCreateRequest
 from people_gator_api.schemas.search_profiles import SearchProfileModalityOut

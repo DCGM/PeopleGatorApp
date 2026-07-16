@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.schemas.enums import AnnotationType
 
 
 class AnnotationSearchResult(BaseModel):

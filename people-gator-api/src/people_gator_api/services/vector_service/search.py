@@ -29,7 +29,7 @@ from uuid import UUID
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter, MetadataQuery, TargetVectors
 
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.schemas.enums import AnnotationType
 from people_gator_api.services.vector_service.schemas import (
     AnnotationSearchResult,
     EntitySearchResult,

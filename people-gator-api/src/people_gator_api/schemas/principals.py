@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel
 
-from people_gator_api.models.enums import AnnotationType, PrincipalType, RegistrySource
+from people_gator_api.schemas.enums import AnnotationType, PrincipalType, RegistrySource
 
 
 # ---------------------------------------------------------------------------

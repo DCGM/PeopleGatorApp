@@ -11,7 +11,7 @@ from typing import Any, TypeGuard
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.schemas.enums import AnnotationType
 from people_gator_api.schemas.search import (
     SearchAnnotationResult,
     SearchEntityResult,

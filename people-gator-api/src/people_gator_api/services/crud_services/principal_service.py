@@ -3,7 +3,7 @@ import uuid
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 
-from people_gator_api.models.enums import PrincipalType
+from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import ModelAgentCreateRequest
 from people_gator_api.schemas.principals import PrincipalResponse
 from people_gator_api.services.vector_service.schema import PRINCIPAL_COLLECTION

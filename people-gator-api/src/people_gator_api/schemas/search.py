@@ -4,7 +4,7 @@ import uuid
 
 from pydantic import AliasChoices, BaseModel, Field
 
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.schemas.enums import AnnotationType
 
 
 class SearchSignalContribution(BaseModel):

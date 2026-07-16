@@ -4,7 +4,7 @@
 import uuid
 from pydantic import BaseModel
 
-from people_gator_api.models.enums import AnnotationType
+from people_gator_api.schemas.enums import AnnotationType
 
 # ---------------------------------------------------------------------------
 # Search profile modality schemas
