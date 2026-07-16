@@ -38,7 +38,6 @@ def get_app() -> FastAPI:
             fastapi_instrumentor,
             _,
             _,
-            _
         ) = initialize_opentelemetry()    
         fastapi_instrumentor.instrument_app(app)
         configure_logging(logging_handler)  # Initialize structlog with OpenTelemetry integration

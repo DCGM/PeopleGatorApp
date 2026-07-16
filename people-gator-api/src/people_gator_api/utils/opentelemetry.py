@@ -20,7 +20,6 @@ from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 
 from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.weaviate import WeaviateInstrumentor
 
@@ -72,11 +71,9 @@ def initialize_opentelemetry():
 
     system_metric_instrumentator = SystemMetricsInstrumentor()
     fastapi_instrumentor = FastAPIInstrumentor()
-    sqlalchemy_instrumentor = SQLAlchemyInstrumentor()
     aiohttp_client_instrumentor = AioHttpClientInstrumentor()
     weaviate_instrumentor = WeaviateInstrumentor()
     system_metric_instrumentator.instrument()
-    sqlalchemy_instrumentor.instrument()
     aiohttp_client_instrumentor.instrument()
     weaviate_instrumentor.instrument()
 
@@ -86,7 +83,6 @@ def initialize_opentelemetry():
         logger,
         logging_handler,
         fastapi_instrumentor,
-        sqlalchemy_instrumentor,
         aiohttp_client_instrumentor,
         weaviate_instrumentor,
     )
