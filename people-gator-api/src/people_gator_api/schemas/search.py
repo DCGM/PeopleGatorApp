@@ -87,6 +87,3 @@ class SearchFacetsResponse(BaseModel):
     has_face: dict[str, int]
     has_authority_link: dict[str, int]
 
-
-# Backward-compatible alias.
-SearchIdentityResult = SearchEntityResult

@@ -6,12 +6,22 @@ from fastapi import APIRouter, Depends, status
 from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.entities import (
+    DescriptionResponse,
     EntityCreateRequest,
     EntityListResponse,
     EntityResponse,
     EntityViewResponse,
+    DocumentMentionResponse,
+    FaceResponse,
+    NameResponse,
 )
 from people_gator_api.services.auth_service import AuthContext, require_scopes
+from people_gator_api.services.crud_services.annotation_service import (
+    list_descriptions,
+    list_document_mentions,
+    list_faces,
+    list_names,
+)
 from people_gator_api.services.database_service import get_session
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.entity_service import (
@@ -57,6 +67,50 @@ async def get_entity_view_route(
     if view is None:
         raise_api_error(404, "not_found", "Entity not found")
     return view
+
+
+@router.get("/entities/{entity_id}/document-mentions", response_model=list[DocumentMentionResponse])
+async def list_entity_document_mentions_route(
+    entity_id: uuid.UUID,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
+    session: WeaviateAsyncClient = Depends(get_session),
+) -> list[DocumentMentionResponse]:
+    return await list_document_mentions(session, entity_id, None, after_id, limit)
+
+
+@router.get("/entities/{entity_id}/faces", response_model=list[FaceResponse])
+async def list_entity_faces_route(
+    entity_id: uuid.UUID,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
+    session: WeaviateAsyncClient = Depends(get_session),
+) -> list[FaceResponse]:
+    return await list_faces(session, None, entity_id, after_id, limit)
+
+
+@router.get("/entities/{entity_id}/descriptions", response_model=list[DescriptionResponse])
+async def list_entity_descriptions_route(
+    entity_id: uuid.UUID,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
+    session: WeaviateAsyncClient = Depends(get_session),
+) -> list[DescriptionResponse]:
+    return await list_descriptions(session, entity_id, after_id, limit)
+
+
+@router.get("/entities/{entity_id}/names", response_model=list[NameResponse])
+async def list_entity_names_route(
+    entity_id: uuid.UUID,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
+    session: WeaviateAsyncClient = Depends(get_session),
+) -> list[NameResponse]:
+    return await list_names(session, entity_id, after_id, limit)
 
 
 @router.post("/entities", response_model=EntityResponse, status_code=status.HTTP_201_CREATED)

@@ -243,9 +243,3 @@ class EntityViewResponse(BaseModel):
     description_ids: list[uuid.UUID]
     name_ids: list[uuid.UUID]
 
-
-# Backward-compatible aliases for identity naming.
-IdentityCreateRequest = EntityCreateRequest
-IdentityResponse = EntityResponse
-IdentityListResponse = EntityListResponse
-IdentityViewResponse = EntityViewResponse
