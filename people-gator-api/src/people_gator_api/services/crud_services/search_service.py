@@ -38,6 +38,7 @@ from people_gator_api.services.vector_service.search import search_by_vector
 
 _DIRECT_ENTITY_ANNOTATION_TYPES = frozenset(
     {
+        AnnotationType.entity,
         AnnotationType.entity_name,
         AnnotationType.description,
         AnnotationType.face,

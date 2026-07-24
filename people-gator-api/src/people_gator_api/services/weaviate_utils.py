@@ -37,6 +37,10 @@ from people_gator_api.schemas.sources import (
     WikidataSourceMetadata,
     WikimediaImageSourceMetadata,
 )
+from people_gator_api.services.embedding_service.http_service import EmbeddingServiceError
+from people_gator_api.services.embedding_service.http_service import get_embedding_service
+from people_gator_api.services.vector_service.schema import DEFAULT_FULLTEXT_VECTOR
+from people_gator_api.services.vector_service.schema import DEFAULT_NAME_VECTOR
 from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
 from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_COLLECTION
 from people_gator_api.services.vector_service.schema import ENTITY_COLLECTION
@@ -243,6 +247,12 @@ async def refresh_entity_aggregates(
     aggregated_descriptions = [item.text for item in descriptions] + [
         item.information for item in document_mentions
     ]
+    aggregated_name = most_common_normalized(aggregated_names)
+    aggregated_description = most_common_normalized(aggregated_descriptions)
+    name_embedding, fulltext_embedding = await _embed_entity_aggregate_text(
+        aggregated_name,
+        aggregated_description,
+    )
 
     await upsert(
         client,
@@ -252,13 +262,58 @@ async def refresh_entity_aggregates(
             "entity_id": entity.entity_id,
             "principal_id": entity.principal_id,
             "entity_type": entity.entity_type,
-            "name": most_common_normalized(aggregated_names),
-            "description": most_common_normalized(aggregated_descriptions),
+            "name": aggregated_name,
+            "description": aggregated_description,
             "wikidata_id": entity.wikidata_id,
             "nlcr_authority_id": entity.nlcr_authority_id,
         },
         references={"principal": entity.principal_id},
+        vector=dual_named_vector_payload(
+            name_embedding=name_embedding,
+            fulltext_embedding=fulltext_embedding,
+            name_vector_name=DEFAULT_NAME_VECTOR,
+            fulltext_vector_name=DEFAULT_FULLTEXT_VECTOR,
+        ),
     )
+
+
+async def _embed_entity_aggregate_text(
+    aggregated_name: str | None,
+    aggregated_description: str | None,
+) -> tuple[list[float] | None, list[float] | None]:
+    if aggregated_name is None and aggregated_description is None:
+        return None, None
+
+    try:
+        embedding_service = get_embedding_service()
+    except RuntimeError:
+        return None, None
+
+    if aggregated_name is not None:
+        name_source = aggregated_name
+    else:
+        name_source = aggregated_description
+
+    if aggregated_description is not None:
+        fulltext_source = aggregated_description
+    else:
+        fulltext_source = aggregated_name
+
+    if name_source is None or fulltext_source is None:
+        return None, None
+
+    async def _embed_text(text: str) -> list[float]:
+        response = await embedding_service.embed_text(text)
+        return response.embedding
+
+    try:
+        name_embedding, fulltext_embedding = await _embed_text(name_source), await _embed_text(
+            fulltext_source
+        )
+    except EmbeddingServiceError:
+        return None, None
+
+    return name_embedding, fulltext_embedding
 
 
 def combine_filters(filters: list[FilterReturn]) -> FilterReturn | None:

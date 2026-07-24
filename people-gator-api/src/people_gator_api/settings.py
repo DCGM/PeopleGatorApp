@@ -103,6 +103,12 @@ class SearchProfileSettings(BaseModel):
                 vector_name=DEFAULT_FULLTEXT_VECTOR,
                 aggregation=SearchEntityAggregationMode.best_annotation,
             ),
+            SearchModalitySettings(
+                annotation_type=AnnotationType.entity,
+                weight=0.1,
+                vector_name=DEFAULT_FULLTEXT_VECTOR,
+                aggregation=SearchEntityAggregationMode.best_annotation,
+            ),
         ]
     )
 

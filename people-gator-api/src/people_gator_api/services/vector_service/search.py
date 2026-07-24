@@ -66,6 +66,7 @@ def _build_annotation_filters(
 ) -> FilterReturn | None:
     clauses: list[FilterReturn] = []
     if entity_id is not None and annotation_type in {
+        AnnotationType.entity,
         AnnotationType.document_mention,
         AnnotationType.span,
         AnnotationType.face,
@@ -86,6 +87,8 @@ def _build_annotation_filters(
 
 
 def _annotation_id_property(annotation_type: AnnotationType) -> str:
+    if annotation_type is AnnotationType.entity:
+        return "entity_id"
     if annotation_type is AnnotationType.page_mention:
         return "page_mention_id"
     if annotation_type is AnnotationType.span:

@@ -49,6 +49,7 @@ ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
     AnnotationType.span: SPAN_COLLECTION,
     AnnotationType.face: FACE_COLLECTION,
     AnnotationType.description: DESCRIPTION_COLLECTION,
+        AnnotationType.entity: ENTITY_COLLECTION,
     AnnotationType.entity_name: ENTITY_NAME_COLLECTION,
 }
 
@@ -453,7 +454,7 @@ NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     ENTITY_COLLECTION: (
         ENTITY_PROPERTIES,
         ENTITY_REFERENCES,
-        None,
+            default_name_plus_fulltext_vector_config(),
     ),
 }
 
