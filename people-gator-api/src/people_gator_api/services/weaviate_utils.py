@@ -14,7 +14,6 @@ from weaviate.classes.query import Filter
 from weaviate.collections.classes.types import WeaviateField
 from weaviate.collections.classes.types import WeaviateProperties
 
-from people_gator_api.schemas.enums import AnnotationType
 from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.entities import BoundingBox
@@ -41,11 +40,7 @@ from people_gator_api.services.vector_service.schema import MENTION_COLLECTION
 from people_gator_api.services.vector_service.schema import NAME_COLLECTION
 from people_gator_api.services.vector_service.schema import NAME_VECTOR
 from people_gator_api.services.vector_service.schema import PRINCIPAL_COLLECTION
-from people_gator_api.services.vector_service.schema import SEARCH_PROFILE_COLLECTION
-from people_gator_api.services.vector_service.schema import SEARCH_PROFILE_MODALITY_COLLECTION
 from people_gator_api.services.vector_service.schema import SOURCE_COLLECTION
-
-_PROFILE_MODALITY_NS = uuid.UUID("50c5b391-e4cc-4f2d-8c24-459deca56f85")
 
 type MutableProperties = dict[str, Any]  # Third-party Weaviate nested property typing is too imprecise here.
 type ReferenceMap = dict[str, uuid.UUID]
@@ -234,6 +229,7 @@ async def refresh_entity_aggregates(
         properties={
             "entity_id": entity.entity_id,
             "principal_id": entity.principal_id,
+            "entity_type": entity.entity_type,
             "name": most_common_normalized([item.name for item in names]),
             "description": most_common_normalized([item.text for item in descriptions]),
             "face_count": len(faces),
@@ -271,17 +267,8 @@ def collection_id_property(collection_name: str) -> str:
         FACE_COLLECTION: "detection_id",
         DESCRIPTION_COLLECTION: "description_id",
         NAME_COLLECTION: "name_id",
-        SEARCH_PROFILE_COLLECTION: "profile_id",
-        SEARCH_PROFILE_MODALITY_COLLECTION: "modality_id",
     }
     return collection_to_id_property[collection_name]
-
-
-def profile_modality_uuid(
-    profile_id: uuid.UUID,
-    annotation_type: AnnotationType,
-) -> uuid.UUID:
-    return uuid.uuid5(_PROFILE_MODALITY_NS, f"{profile_id}:{annotation_type.value}")
 
 
 def named_vector_payload(
@@ -357,6 +344,7 @@ def entity_response(
     return EntityResponse(
         entity_id=require_uuid(properties, "entity_id"),
         principal_id=require_uuid(properties, "principal_id"),
+        entity_type=optional_str(properties, "entity_type"),
         name=optional_str(properties, "name"),
         description=optional_str(properties, "description"),
     )

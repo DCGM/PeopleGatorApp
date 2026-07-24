@@ -72,6 +72,7 @@ async def create_entity(
         properties={
             "entity_id": entity_id,
             "principal_id": principal_id,
+            "entity_type": payload.entity_type,
             "name": payload.name,
             "description": payload.description,
             "face_count": 0,
@@ -88,6 +89,7 @@ async def create_entity(
     return EntityResponse(
         entity_id=entity_id,
         principal_id=principal_id,
+        entity_type=payload.entity_type,
         name=payload.name,
         description=payload.description,
     )

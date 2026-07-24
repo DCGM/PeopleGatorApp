@@ -23,8 +23,6 @@ DOCUMENT_MENTION_COLLECTION = "DocumentMention"
 FACE_COLLECTION = "Face"
 DESCRIPTION_COLLECTION = "Description"
 NAME_COLLECTION = "Name"
-SEARCH_PROFILE_COLLECTION = "SearchProfile"
-SEARCH_PROFILE_MODALITY_COLLECTION = "SearchProfileModality"
 
 # Named vectors
 FACE_VECTOR = "face"
@@ -250,6 +248,7 @@ SOURCE_PROPERTIES: list[Property] = [
 ENTITY_PROPERTIES: list[Property] = [
     _uuid_property("entity_id", "Primary key of ENTITY.entity_id."),
     _uuid_property("principal_id", "Foreign key to PRINCIPAL.principal_id."),
+    _text_property("entity_type", "Entity type discriminator.", searchable=False),
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
     _int_property("face_count", "Number of face annotations linked to the entity."),
@@ -336,24 +335,6 @@ NAME_PROPERTIES: list[Property] = [
     _uuid_property("entity_id", "Entity id."),
     _number_array_property("embedding", "Stored name embedding."),
     _text_property("model_identifier", "Embedding model identifier.", searchable=False),
-]
-
-SEARCH_PROFILE_PROPERTIES: list[Property] = [
-    _uuid_property("profile_id", "Primary key of SEARCH_PROFILE.profile_id."),
-    _text_property("profile_name", "Search profile name."),
-    _text_property("description", "Search profile description."),
-    _uuid_property("owner_id", "Owning principal id."),
-    _bool_property("is_public", "Whether the profile is public."),
-    _bool_property("is_system", "Whether the profile is system-managed."),
-]
-
-SEARCH_PROFILE_MODALITY_PROPERTIES: list[Property] = [
-    _uuid_property("modality_id", "Synthetic primary key for SEARCH_PROFILE_MODALITY."),
-    _uuid_property("profile_id", "Owning profile id."),
-    _text_property("annotation_type", "Annotation type for this modality.", searchable=False),
-    _uuid_property("model_id", "Pinned model-agent principal id."),
-    _number_property("weight", "Relative modality weight."),
-    _number_property("min_confidence", "Optional minimum annotation confidence."),
 ]
 
 PRINCIPAL_REFERENCES: list[ReferenceProperty] = []
@@ -457,26 +438,6 @@ NAME_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the name.",
     ),
 ]
-SEARCH_PROFILE_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="owner",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Owner of the search profile.",
-    )
-]
-SEARCH_PROFILE_MODALITY_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="profile",
-        target_collection=SEARCH_PROFILE_COLLECTION,
-        description="Owning search profile.",
-    ),
-    ReferenceProperty(
-        name="model_agent",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Pinned model-agent principal.",
-    ),
-]
-
 type CollectionSpec = tuple[list[Property], list[ReferenceProperty], object]
 
 ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
@@ -528,26 +489,12 @@ NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
         ENTITY_REFERENCES,
         entity_named_vector_configs()
     ),
-    SEARCH_PROFILE_COLLECTION: (
-        SEARCH_PROFILE_PROPERTIES,
-        SEARCH_PROFILE_REFERENCES,
-        default_vector_config(),
-    ),
-    SEARCH_PROFILE_MODALITY_COLLECTION: (
-        SEARCH_PROFILE_MODALITY_PROPERTIES,
-        SEARCH_PROFILE_MODALITY_REFERENCES,
-        default_vector_config(),
-    ),
 }
 
 ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     PRINCIPAL_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[PRINCIPAL_COLLECTION],
     SOURCE_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[SOURCE_COLLECTION],
     ENTITY_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[ENTITY_COLLECTION],
-    SEARCH_PROFILE_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[SEARCH_PROFILE_COLLECTION],
-    SEARCH_PROFILE_MODALITY_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[
-        SEARCH_PROFILE_MODALITY_COLLECTION
-    ],
     DOCUMENT_MENTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[DOCUMENT_MENTION_COLLECTION],
     FACE_COLLECTION: ANNOTATION_COLLECTION_SPECS[FACE_COLLECTION],
     DESCRIPTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[DESCRIPTION_COLLECTION],

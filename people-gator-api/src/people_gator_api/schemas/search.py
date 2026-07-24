@@ -7,6 +7,10 @@ from pydantic import AliasChoices, BaseModel, Field
 from people_gator_api.schemas.enums import AnnotationType
 
 
+def _annotation_type_list() -> list[AnnotationType]:
+    return []
+
+
 class SearchSignalContribution(BaseModel):
     """Per-modality score breakdown for a search result."""
 
@@ -47,11 +51,12 @@ class SearchQuery(BaseModel):
 class SearchFilters(BaseModel):
     """Filters applied to search results."""
 
-    annotation_types: list[AnnotationType] = []
-    source_kinds: list[str] = []
+    annotation_types: list[AnnotationType] = Field(default_factory=_annotation_type_list)
+    entity_types: list[str] = Field(default_factory=list)
+    source_kinds: list[str] = Field(default_factory=list)
     has_face: bool | None = None
     has_authority_link: bool | None = None
-    languages: list[str] = []
+    languages: list[str] = Field(default_factory=list)
 
 
 class SearchRequest(BaseModel):
@@ -59,7 +64,6 @@ class SearchRequest(BaseModel):
 
     query: SearchQuery
     filters: SearchFilters = Field(default_factory=SearchFilters)
-    profile_id: uuid.UUID | None = None
     result_types: list[str] = Field(default_factory=lambda: ["entity"])
     limit: int = 20
     after_id: uuid.UUID | None = None
@@ -75,7 +79,6 @@ class SearchResponse(BaseModel):
     facets: dict[str, dict[str, int]]
     query: SearchQuery
     filters: SearchFilters
-    profile_id: uuid.UUID | None
 
 
 class SearchFacetsResponse(BaseModel):
@@ -86,4 +89,3 @@ class SearchFacetsResponse(BaseModel):
     result_types: dict[str, int]
     has_face: dict[str, int]
     has_authority_link: dict[str, int]
-

@@ -1,12 +1,13 @@
-"""Service for vector-backed search endpoints.
+"""Service for vector-backed search endpoints."""
 
-Contains search execution and facet computation only.
-"""
+from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Iterable
-from typing import Any, TypeGuard
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import TypeGuard
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
@@ -22,36 +23,65 @@ from people_gator_api.schemas.search import (
     SearchResponse,
     SearchSignalContribution,
 )
-from people_gator_api.services.vector_service.client import get_weaviate_client
+from people_gator_api.settings import (
+    SearchEntityAggregationMode,
+    SearchModalitySettings,
+    SearchProfileSettings,
+)
 from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
     ENTITY_COLLECTION,
-    FACE_VECTOR,
-    NAME_VECTOR,
+)
+from people_gator_api.services.vector_service.schemas import AnnotationSearchResult
+from people_gator_api.services.vector_service.schemas import (
+    EntitySearchResult as VectorEntitySearchResult,
 )
 from people_gator_api.services.vector_service.search import VectorSearchService
-from people_gator_api.services.crud_services.profile_service import get_profile
 
-_DEFAULT_MODALITY_WEIGHT = 1.0
+_DIRECT_ENTITY_ANNOTATION_TYPES = frozenset(
+    {
+        AnnotationType.person_name,
+        AnnotationType.description,
+        AnnotationType.face,
+        AnnotationType.document_mention,
+    }
+)
+
+
+@dataclass(slots=True, frozen=True)
+class ModalityScoreSet:
+    raw_scores: dict[uuid.UUID, float]
+    normalized_scores: dict[uuid.UUID, float]
+
+
 async def search(
     session: WeaviateAsyncClient,
     request: SearchRequest,
+    profile: SearchProfileSettings,
 ) -> SearchResponse:
-    profile_modalities = await _resolve_profile_modalities(session, request.profile_id)
-    modality_vectors = await _resolve_query_vectors(request.query)
+    modalities = list(profile.modalities)
+    modality_vectors = await _resolve_query_vectors(session, request.query, modalities)
+    resolved_modalities = [
+        modality
+        for modality in modalities
+        if modality_vectors.get(modality.annotation_type)
+    ]
+    vector_search = VectorSearchService(session)
 
-    vector_search = VectorSearchService(get_weaviate_client())
     entity_results = await _search_entities(
+        session=session,
         vector_search=vector_search,
         request=request,
         modality_vectors=modality_vectors,
-        profile_modalities=profile_modalities,
+        modalities=resolved_modalities,
+        profile=profile,
     )
     annotation_results = await _search_annotations(
         vector_search=vector_search,
         request=request,
         modality_vectors=modality_vectors,
-        profile_modalities=profile_modalities,
+        modalities=resolved_modalities,
+        profile=profile,
     )
 
     merged_results = _merge_results(entity_results, annotation_results, request.limit)
@@ -71,7 +101,6 @@ async def search(
         },
         query=request.query,
         filters=request.filters,
-        profile_id=request.profile_id,
     )
 
 
@@ -79,6 +108,7 @@ async def search_facets(
     session: WeaviateAsyncClient,
     query: SearchQuery,
     filters: SearchFilters,
+    profile: SearchProfileSettings,
 ) -> SearchFacetsResponse:
     probe_request = SearchRequest(
         query=query,
@@ -86,178 +116,261 @@ async def search_facets(
         result_types=["entity", "annotation"],
         limit=200,
     )
-    probe_response = await search(session, probe_request)
+    probe_response = await search(session, probe_request, profile)
     return _compute_facets(probe_response.results)
 
 
-async def _resolve_profile_modalities(
-    session: WeaviateAsyncClient,
-    profile_id: uuid.UUID | None,
-) -> dict[AnnotationType, float]:
-    if profile_id is None:
-        return {}
-
-    profile = await get_profile(session, profile_id)
-    if profile is None:
-        return {}
-
-    return {
-        modality.annotation_type: modality.weight
-        for modality in profile.modalities
-    }
-
-
 async def _resolve_query_vectors(
+    session: WeaviateAsyncClient,
     query: SearchQuery,
+    modalities: Sequence[SearchModalitySettings],
 ) -> dict[AnnotationType, list[list[float]]]:
-    client = get_weaviate_client()
     vectors: dict[AnnotationType, list[list[float]]] = {
-        annotation_type: [] for annotation_type in AnnotationType
+        modality.annotation_type: [] for modality in modalities
     }
+    modalities_by_collection = _group_modalities_by_collection(modalities)
 
     if query.annotation_ids:
         annotation_ids = list(dict.fromkeys(query.annotation_ids))
-        collection_items = list(ANNOTATION_COLLECTION_BY_TYPE.items())
-        jobs = [
-            _fetch_vectors_by_annotation_ids(
-                client=client,
-                annotation_type=annotation_type,
+        annotation_jobs = [
+            _fetch_query_vectors_for_annotation_ids(
+                client=session,
                 collection_name=collection_name,
+                modalities=collection_modalities,
                 annotation_ids=annotation_ids,
             )
-            for annotation_type, collection_name in collection_items
+            for collection_name, collection_modalities in modalities_by_collection.items()
         ]
-        job_results = await asyncio.gather(*jobs)
-        for index, result in enumerate(job_results):
-            annotation_type, _ = collection_items[index]
-            vectors[annotation_type].extend(result)
+        for job_result in await asyncio.gather(*annotation_jobs):
+            for annotation_type, resolved_vectors in job_result.items():
+                vectors[annotation_type].extend(resolved_vectors)
 
     if query.reference_entity_id is not None:
-        entity_collection = client.collections.get(ENTITY_COLLECTION)
-        try:
+        entity_jobs = [
+            _fetch_query_vectors_for_entity(
+                client=session,
+                collection_name=collection_name,
+                modalities=collection_modalities,
+                entity_id=query.reference_entity_id,
+            )
+            for collection_name, collection_modalities in modalities_by_collection.items()
+            if any(
+                modality.annotation_type in _DIRECT_ENTITY_ANNOTATION_TYPES
+                for modality in collection_modalities
+            )
+        ]
+        for job_result in await asyncio.gather(*entity_jobs):
+            for annotation_type, resolved_vectors in job_result.items():
+                vectors[annotation_type].extend(resolved_vectors)
+
+        unresolved_modalities = [
+            modality
+            for modality in modalities
+            if not vectors[modality.annotation_type]
+            and modality.aggregation is SearchEntityAggregationMode.entity_named_vector
+            and modality.vector_name is not None
+        ]
+        if unresolved_modalities:
+            entity_collection = session.collections.get(ENTITY_COLLECTION)
             entity_obj = await entity_collection.query.fetch_object_by_id(
-                uuid=entity_weaviate_uuid(query.reference_entity_id),
+                uuid=query.reference_entity_id,
                 include_vector=True,
             )
-        except Exception:
-            entity_obj = None
-
-        if entity_obj is not None and entity_obj.vector:
-            raw_face = entity_obj.vector.get(FACE_VECTOR)
-            raw_name = entity_obj.vector.get(NAME_VECTOR)
-            if _is_float_vector(raw_face):
-                vectors[AnnotationType.face].append(raw_face)
-            if _is_float_vector(raw_name):
-                vectors[AnnotationType.person_name].append(raw_name)
+            for modality in unresolved_modalities:
+                vector = _extract_named_vector(entity_obj.vector, modality.vector_name)
+                if vector is not None:
+                    vectors[modality.annotation_type].append(vector)
 
     return {
-        annotation_type: value
-        for annotation_type, value in vectors.items()
-        if value
+        annotation_type: resolved_vectors
+        for annotation_type, resolved_vectors in vectors.items()
+        if resolved_vectors
     }
 
 
-async def _fetch_vectors_by_annotation_ids(
+async def _fetch_query_vectors_for_annotation_ids(
     *,
     client: WeaviateAsyncClient,
-    annotation_type: AnnotationType,
     collection_name: str,
-    annotation_ids: list[uuid.UUID],
-) -> list[list[float]]:
-    _ = annotation_type
+    modalities: Sequence[SearchModalitySettings],
+    annotation_ids: Sequence[uuid.UUID],
+) -> dict[AnnotationType, list[list[float]]]:
     if not annotation_ids:
-        return []
+        return {}
 
-    collection: Any = client.collections.get(collection_name)
-    row_uuids = [vector_object_uuid(collection_name, annotation_id) for annotation_id in annotation_ids]
-    try:
-        response: Any = await collection.query.fetch_objects(
-            filters=Filter.by_id().contains_any([str(row_uuid) for row_uuid in row_uuids]),
-            include_vector=True,
-            limit=len(row_uuids),
-        )
-    except Exception:
-        return []
-
-    vectors: list[list[float]] = []
+    collection = client.collections.get(collection_name)
+    response = await collection.query.fetch_objects(
+        filters=Filter.by_id().contains_any([str(annotation_id) for annotation_id in annotation_ids]),
+        include_vector=True,
+        limit=len(annotation_ids),
+    )
+    vectors: dict[AnnotationType, list[list[float]]] = defaultdict(list)
     for obj in response.objects:
-        vector = _extract_primary_vector(obj.vector)
-        if vector is not None:
-            vectors.append(vector)
-    return vectors
+        for modality in modalities:
+            vector = _extract_named_vector(obj.vector, modality.vector_name)
+            if vector is not None:
+                vectors[modality.annotation_type].append(vector)
+    return dict(vectors)
+
+
+async def _fetch_query_vectors_for_entity(
+    *,
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    modalities: Sequence[SearchModalitySettings],
+    entity_id: uuid.UUID,
+) -> dict[AnnotationType, list[list[float]]]:
+    collection = client.collections.get(collection_name)
+    response = await collection.query.fetch_objects(
+        filters=Filter.by_property("entity_id").equal(str(entity_id)),
+        include_vector=True,
+        limit=500,
+    )
+    vectors: dict[AnnotationType, list[list[float]]] = defaultdict(list)
+    for obj in response.objects:
+        for modality in modalities:
+            vector = _extract_named_vector(obj.vector, modality.vector_name)
+            if vector is not None:
+                vectors[modality.annotation_type].append(vector)
+    return dict(vectors)
 
 
 async def _search_entities(
     *,
+    session: WeaviateAsyncClient,
     vector_search: VectorSearchService,
     request: SearchRequest,
     modality_vectors: dict[AnnotationType, list[list[float]]],
-    profile_modalities: dict[AnnotationType, float],
+    modalities: Sequence[SearchModalitySettings],
+    profile: SearchProfileSettings,
 ) -> list[SearchEntityResult]:
     if "entity" not in request.result_types:
         return []
 
-    face_vector = _average_vectors(modality_vectors.get(AnnotationType.face, []))
-    name_vector = _average_vectors(modality_vectors.get(AnnotationType.person_name, []))
-    description_vector = _average_vectors(modality_vectors.get(AnnotationType.description, []))
+    used_modalities = [
+        modality for modality in modalities if modality_vectors.get(modality.annotation_type)
+    ]
+    if not used_modalities:
+        return []
 
-    face_weight = profile_modalities.get(AnnotationType.face, _DEFAULT_MODALITY_WEIGHT)
-    name_weight = profile_modalities.get(AnnotationType.person_name, _DEFAULT_MODALITY_WEIGHT)
-    description_weight = profile_modalities.get(AnnotationType.description, _DEFAULT_MODALITY_WEIGHT)
-
-    if face_vector is None and name_vector is None:
-        if description_vector is None:
-            return []
-        raw_results = await vector_search.search_entities_by_name_description(
-            name_vector=name_vector,
-            description_vector=description_vector,
-            name_weight=name_weight,
-            description_weight=description_weight,
-            limit=request.limit,
+    candidate_limit = max(request.limit * profile.entity_candidate_multiplier, request.limit)
+    modality_scores: dict[AnnotationType, ModalityScoreSet] = {}
+    for modality in used_modalities:
+        raw_scores = await _entity_modality_scores(
+            vector_search=vector_search,
+            modality=modality,
+            query_vectors=modality_vectors[modality.annotation_type],
+            entity_types=request.filters.entity_types,
+            limit=candidate_limit,
         )
-    else:
-        raw_results = await vector_search.search_entities_weighted(
-            face_vector=face_vector,
-            name_vector=name_vector,
-            face_weight=face_weight,
-            name_weight=name_weight,
-            limit=request.limit,
-        )
+        if raw_scores:
+            modality_scores[modality.annotation_type] = ModalityScoreSet(
+                raw_scores=raw_scores,
+                normalized_scores=_normalise_scores(raw_scores),
+            )
 
+    if not modality_scores:
+        return []
+
+    total_weight = sum(
+        modality.weight
+        for modality in used_modalities
+        if modality.annotation_type in modality_scores
+    )
+    entity_ids = {
+        entity_id
+        for score_set in modality_scores.values()
+        for entity_id in score_set.raw_scores
+    }
+    allowed_entity_ids = await _resolve_allowed_entity_ids(
+        client=session,
+        requested_entity_types=request.filters.entity_types,
+        candidate_entity_ids=entity_ids,
+    )
     results: list[SearchEntityResult] = []
-    for item in raw_results:
-        score = _distance_to_score(item.combined_distance)
+    for entity_id in entity_ids:
+        if allowed_entity_ids is not None and entity_id not in allowed_entity_ids:
+            continue
         contributions: dict[AnnotationType, SearchSignalContribution] = {}
-        if item.face_distance is not None:
-            face_score = _distance_to_score(item.face_distance)
-            contributions[AnnotationType.face] = SearchSignalContribution(
-                score=face_score,
-                normalised_score=face_score,
-                weight=face_weight,
+        weighted_score = 0.0
+        for modality in used_modalities:
+            score_set = modality_scores.get(modality.annotation_type)
+            if score_set is None:
+                continue
+            raw_score = score_set.raw_scores.get(entity_id)
+            normalized_score = score_set.normalized_scores.get(entity_id, 0.0)
+            weighted_score += modality.weight * normalized_score
+            if raw_score is None:
+                continue
+            contributions[modality.annotation_type] = SearchSignalContribution(
+                score=raw_score,
+                normalised_score=normalized_score,
+                weight=modality.weight,
             )
-        if item.name_distance is not None:
-            name_score = _distance_to_score(item.name_distance)
-            contributions[AnnotationType.person_name] = SearchSignalContribution(
-                score=name_score,
-                normalised_score=name_score,
-                weight=name_weight,
-            )
-        if item.description_distance is not None:
-            description_score = _distance_to_score(item.description_distance)
-            contributions[AnnotationType.description] = SearchSignalContribution(
-                score=description_score,
-                normalised_score=description_score,
-                weight=description_weight,
-            )
-
+        if not contributions:
+            continue
         results.append(
             SearchEntityResult(
-                entity_id=item.entity_id,
-                score=score,
+                entity_id=entity_id,
+                score=weighted_score / total_weight if total_weight > 0 else 0.0,
                 signal_contributions=contributions,
             )
         )
-    return results
+
+    return sorted(results, key=lambda item: item.score, reverse=True)[: request.limit]
+
+
+async def _entity_modality_scores(
+    *,
+    vector_search: VectorSearchService,
+    modality: SearchModalitySettings,
+    query_vectors: list[list[float]],
+    entity_types: Sequence[str],
+    limit: int,
+) -> dict[uuid.UUID, float]:
+    query_vector = _average_vectors(query_vectors)
+    if query_vector is None:
+        return {}
+
+    if modality.aggregation is SearchEntityAggregationMode.entity_named_vector:
+        if modality.vector_name is None:
+            return {}
+        entity_results = await vector_search.search_entities_by_named_vector(
+            vector=query_vector,
+            named_vector=modality.vector_name,
+            entity_types=entity_types,
+            limit=limit,
+        )
+        return {
+            result.entity_id: _distance_to_score(_primary_entity_distance(result))
+            for result in entity_results
+            if _primary_entity_distance(result) is not None
+        }
+
+    annotation_results = await vector_search.search_annotations_by_vector(
+        vector=query_vector,
+        annotation_type=modality.annotation_type,
+        limit=limit,
+        named_vector=modality.vector_name,
+        min_confidence=modality.min_confidence,
+    )
+    grouped_scores: dict[uuid.UUID, list[float]] = defaultdict(list)
+    for result in annotation_results:
+        if result.entity_id is None:
+            continue
+        grouped_scores[result.entity_id].append(_distance_to_score(result.distance))
+
+    if modality.aggregation is SearchEntityAggregationMode.average_annotation:
+        return {
+            entity_id: sum(scores) / len(scores)
+            for entity_id, scores in grouped_scores.items()
+            if scores
+        }
+    return {
+        entity_id: max(scores)
+        for entity_id, scores in grouped_scores.items()
+        if scores
+    }
 
 
 async def _search_annotations(
@@ -265,7 +378,8 @@ async def _search_annotations(
     vector_search: VectorSearchService,
     request: SearchRequest,
     modality_vectors: dict[AnnotationType, list[list[float]]],
-    profile_modalities: dict[AnnotationType, float],
+    modalities: Sequence[SearchModalitySettings],
+    profile: SearchProfileSettings,
 ) -> list[SearchAnnotationResult]:
     wants_annotation_results = (
         "annotation" in request.result_types
@@ -274,60 +388,81 @@ async def _search_annotations(
     if not wants_annotation_results:
         return []
 
+    selected_modalities = [
+        modality
+        for modality in modalities
+        if modality_vectors.get(modality.annotation_type)
+        and _annotation_result_requested(request, modality.annotation_type)
+    ]
+    if not selected_modalities:
+        return []
+
+    total_weight = sum(modality.weight for modality in selected_modalities)
+    candidate_limit = max(request.limit * profile.annotation_candidate_multiplier, request.limit)
+    accumulator: dict[tuple[AnnotationType, uuid.UUID], SearchAnnotationResult] = {}
+    for modality in selected_modalities:
+        query_vector = _average_vectors(modality_vectors[modality.annotation_type])
+        if query_vector is None:
+            continue
+        raw_hits = await vector_search.search_annotations_by_vector(
+            vector=query_vector,
+            annotation_type=modality.annotation_type,
+            limit=candidate_limit,
+            named_vector=modality.vector_name,
+            min_confidence=modality.min_confidence,
+        )
+        raw_scores = {
+            _annotation_hit_key(hit): _distance_to_score(hit.distance)
+            for hit in raw_hits
+        }
+        normalized_scores = _normalise_scores(raw_scores)
+        for hit in raw_hits:
+            key = _annotation_hit_key(hit)
+            raw_score = raw_scores[key]
+            normalized_score = normalized_scores[key]
+            weighted_score = (
+                modality.weight * normalized_score / total_weight if total_weight > 0 else 0.0
+            )
+            contribution = SearchSignalContribution(
+                score=raw_score,
+                normalised_score=normalized_score,
+                weight=modality.weight,
+            )
+            existing = accumulator.get(key)
+            if existing is None:
+                accumulator[key] = SearchAnnotationResult(
+                    result_type=hit.annotation_type,
+                    annotation_id=hit.annotation_id,
+                    source_id=hit.source_id,
+                    score=weighted_score,
+                    signal_contributions={modality.annotation_type: contribution},
+                )
+                continue
+
+            existing.score += weighted_score
+            existing.signal_contributions[modality.annotation_type] = contribution
+
+    return sorted(accumulator.values(), key=lambda item: item.score, reverse=True)[
+        : request.limit
+    ]
+
+
+def _annotation_result_requested(
+    request: SearchRequest,
+    annotation_type: AnnotationType,
+) -> bool:
     annotation_filters = set(request.filters.annotation_types)
+    if annotation_filters and annotation_type not in annotation_filters:
+        return False
+
     requested_annotation_types = {
         result_type
         for result_type in request.result_types
-        if result_type != "entity"
+        if result_type not in {"entity", "annotation"}
     }
-
-    accumulator: dict[
-        tuple[AnnotationType, uuid.UUID],
-        SearchAnnotationResult,
-    ] = {}
-
-    for annotation_type, vectors in modality_vectors.items():
-        if annotation_filters and annotation_type not in annotation_filters:
-            continue
-        if requested_annotation_types and annotation_type.value not in requested_annotation_types:
-            continue
-
-        weight = profile_modalities.get(annotation_type, _DEFAULT_MODALITY_WEIGHT)
-
-        for vector in vectors:
-            raw_hits = await vector_search.search_annotations_by_vector(
-                vector=vector,
-                annotation_type=annotation_type,
-                limit=request.limit,
-            )
-            for hit in raw_hits:
-                score = _distance_to_score(hit.distance)
-                contribution = SearchSignalContribution(
-                    score=score,
-                    normalised_score=score,
-                    weight=weight,
-                )
-                key = (annotation_type, hit.annotation_id)
-                existing = accumulator.get(key)
-                if existing is None:
-                    accumulator[key] = SearchAnnotationResult(
-                        result_type=annotation_type,
-                        annotation_id=hit.annotation_id,
-                        source_id=hit.source_id,
-                        score=score,
-                        signal_contributions={annotation_type: contribution},
-                    )
-                    continue
-
-                if score > existing.score:
-                    existing.score = score
-                existing.signal_contributions[annotation_type] = contribution
-
-    return sorted(
-        accumulator.values(),
-        key=lambda item: item.score,
-        reverse=True,
-    )[:request.limit]
+    if requested_annotation_types and annotation_type.value not in requested_annotation_types:
+        return False
+    return True
 
 
 def _merge_results(
@@ -388,24 +523,83 @@ def _average_vectors(vectors: list[list[float]]) -> list[float] | None:
     return [sum(vector[idx] for vector in vectors) / n_vectors for idx in range(dimension)]
 
 
-def _extract_primary_vector(
-    raw_vector: list[float] | dict[str, object] | None,
+def _normalise_scores[TKey](scores: dict[TKey, float]) -> dict[TKey, float]:
+    if not scores:
+        return {}
+    minimum = min(scores.values())
+    maximum = max(scores.values())
+    if maximum == minimum:
+        return dict(scores)
+    scale = maximum - minimum
+    return {key: (value - minimum) / scale for key, value in scores.items()}
+
+
+def _group_modalities_by_collection(
+    modalities: Sequence[SearchModalitySettings],
+) -> dict[str, list[SearchModalitySettings]]:
+    grouped: dict[str, list[SearchModalitySettings]] = defaultdict(list)
+    for modality in modalities:
+        grouped[ANNOTATION_COLLECTION_BY_TYPE[modality.annotation_type]].append(modality)
+    return dict(grouped)
+
+
+async def _resolve_allowed_entity_ids(
+    *,
+    client: WeaviateAsyncClient,
+    requested_entity_types: Sequence[str],
+    candidate_entity_ids: set[uuid.UUID],
+) -> set[uuid.UUID] | None:
+    if not requested_entity_types:
+        return None
+    if not candidate_entity_ids:
+        return set()
+
+    type_filters = [Filter.by_property("entity_type").equal(entity_type) for entity_type in requested_entity_types]
+    entity_collection = client.collections.get(ENTITY_COLLECTION)
+    response = await entity_collection.query.fetch_objects(
+        filters=Filter.all_of(
+            [
+                Filter.by_property("entity_id").contains_any(
+                    [str(entity_id) for entity_id in candidate_entity_ids]
+                ),
+                type_filters[0] if len(type_filters) == 1 else Filter.any_of(type_filters),
+            ]
+        ),
+        limit=len(candidate_entity_ids),
+    )
+    resolved: set[uuid.UUID] = set()
+    for obj in response.objects:
+        entity_id_value = obj.properties.get("entity_id")
+        if entity_id_value is None:
+            continue
+        resolved.add(uuid.UUID(str(entity_id_value)))
+    return resolved
+
+
+def _extract_named_vector(
+    raw_vector: list[float] | Mapping[str, object] | None,
+    vector_name: str | None,
 ) -> list[float] | None:
     if raw_vector is None:
         return None
     if _is_float_vector(raw_vector):
-        return raw_vector
+        return list(raw_vector)
+    if not isinstance(raw_vector, Mapping):
+        return None
 
-    if not isinstance(raw_vector, dict):
+    if vector_name is not None:
+        named_vector = raw_vector.get(vector_name)
+        if _is_float_vector(named_vector):
+            return list(named_vector)
         return None
 
     default_vector = raw_vector.get("default")
     if _is_float_vector(default_vector):
-        return [item for item in default_vector]
+        return list(default_vector)
 
     for value in raw_vector.values():
         if _is_float_vector(value):
-            return [item for item in value]
+            return list(value)
     return None
 
 
@@ -415,10 +609,17 @@ def _is_float_vector(value: object) -> TypeGuard[list[float]]:
     return isinstance(value[0], float)
 
 
-def vector_object_uuid(collection_name: str, row_id: uuid.UUID) -> uuid.UUID:
-    _ = collection_name
-    return row_id
+def _primary_entity_distance(result: VectorEntitySearchResult) -> float | None:
+    for distance in (
+        result.face_distance,
+        result.name_distance,
+        result.description_distance,
+        result.combined_distance,
+    ):
+        if distance is not None:
+            return distance
+    return None
 
 
-def entity_weaviate_uuid(entity_id: uuid.UUID) -> uuid.UUID:
-    return entity_id
+def _annotation_hit_key(hit: AnnotationSearchResult) -> tuple[AnnotationType, uuid.UUID]:
+    return hit.annotation_type, hit.annotation_id

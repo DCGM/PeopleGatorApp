@@ -18,6 +18,7 @@ The user can:
 - Display faces for identity
 - Check if face matches
 - Show similar identities based on current identity
+- Search directly for identities using one or more modalities
 - Merge identities
 
 Low priority functionality for future user:
@@ -56,6 +57,9 @@ IDs are globally unique identifiers using UUIDv6 format.
 |------------|------|-------------|
 | `identity_id` | UUID | Unique identifier for the identity. |
 | `principal_id` | UUID | Identifier of the principal that created the identity. |
+| `entity_type` | STRING | Entity type discriminator used for filtering search results. |
+| `name` | STRING | Best available aggregated name for the identity. |
+| `description` | STRING | Best available aggregated description for the identity. |
 
 ### 2.2 Mention `MENTION`
 
@@ -145,6 +149,31 @@ IDs are globally unique identifiers using UUIDv6 format.
 | `uri` | TEXT | Source URI. |
 | `metadata` | JSON | Source metadata. |
 
+## 2.9 Search behaviour
+
+Search must support both unimodal and multimodal retrieval over identities and annotations.
+
+- A search query may be based on existing annotation vectors, a reference identity, or a combination of available modalities.
+- Identity search must support per-modality aggregation over the annotations belonging to one identity.
+- Supported aggregation modes for an identity are:
+  - best matching annotation of the modality,
+  - average score across all annotations of the modality,
+  - direct search against an identity-level named vector when such a vector is maintained.
+- Final multimodal ranking is a weighted combination of the enabled modality scores.
+- Identities must be filterable by `entity_type`.
+
+The MVP uses a single hardcoded search profile stored in service configuration rather than user-managed profiles in the database.
+
+That configured profile must define:
+
+- which modalities are enabled,
+- which annotation collection each modality targets,
+- which named vector is used for each annotation collection when relevant,
+- which named vector is used for identity-level search when relevant,
+- which aggregation mode is used for identity scoring per modality,
+- the modality weights used for multimodal ranking,
+- optional confidence thresholds for confidence-bearing annotations.
+
 ## 3. Relationship Summary
 
 - `PRINCIPAL` creates `IDENTITY`.
@@ -175,7 +204,7 @@ erDiagram
   ENTITY {
     uuid identity_id
     uuid principal_id
-    enum type
+    string entity_type
     string name
     string description
     string wikidata_url

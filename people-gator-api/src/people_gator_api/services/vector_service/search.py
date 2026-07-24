@@ -23,6 +23,7 @@ search_entities_weighted
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Any, cast
 from uuid import UUID
 
@@ -71,9 +72,11 @@ class VectorSearchService:
         *,
         annotation_type: AnnotationType | None = None,
         entity_id: UUID | None = None,
+        named_vector: str | None = None,
         limit: int = _DEFAULT_LIMIT,
         certainty: float | None = None,
         distance: float | None = None,
+        min_confidence: float | None = None,
     ) -> list[AnnotationSearchResult]:
         """Return the nearest AnnotationEmbedding objects to *vector*.
 
@@ -81,9 +84,11 @@ class VectorSearchService:
             vector: The query embedding vector.
             annotation_type: When supplied, only annotations of this type are returned.
             entity_id: When supplied, only annotations linked to this entity are returned.
+            named_vector: Named vector slot to query for multi-vector collections.
             limit: Maximum number of results.
             certainty: Minimum similarity threshold in [0, 1].
             distance: Maximum cosine distance threshold.
+            min_confidence: Optional minimum confidence threshold for annotations.
 
         Returns:
             Ranked list of :class:`AnnotationSearchResult`, closest first.
@@ -102,10 +107,12 @@ class VectorSearchService:
             filters = _build_annotation_filters(
                 annotation_type=candidate_type,
                 entity_id=entity_id,
+                min_confidence=min_confidence,
             )
 
             response = await collection.query.near_vector(
                 near_vector=vector,
+                target_vector=named_vector,
                 limit=limit,
                 certainty=certainty,
                 distance=distance,
@@ -130,6 +137,7 @@ class VectorSearchService:
         vector: list[float],
         named_vector: str,
         *,
+        entity_types: Sequence[str] = (),
         limit: int = _DEFAULT_LIMIT,
         certainty: float | None = None,
         distance: float | None = None,
@@ -141,6 +149,7 @@ class VectorSearchService:
             named_vector: Which named vector to search; use constants
                 :data:`~people_gator_api.vector.schema.FACE_VECTOR` or
                 :data:`~people_gator_api.vector.schema.NAME_VECTOR`.
+            entity_types: Optional entity type filter.
             limit: Maximum number of results.
             certainty: Minimum similarity threshold.
             distance: Maximum cosine distance.
@@ -152,6 +161,7 @@ class VectorSearchService:
 
         response = await collection.query.near_vector(
             near_vector={named_vector: vector},
+            filters=_build_entity_filters(entity_types),
             limit=limit,
             certainty=certainty,
             distance=distance,
@@ -311,6 +321,7 @@ def _build_annotation_filters(
     *,
     annotation_type: AnnotationType | None,
     entity_id: UUID | None,
+    min_confidence: float | None,
 ) -> Any:
     """Compose a Weaviate filter from optional annotation search constraints."""
     clauses: list[Any] = []
@@ -321,11 +332,25 @@ def _build_annotation_filters(
         AnnotationType.document_mention,
     }:
         clauses.append(Filter.by_property("entity_id").equal(str(entity_id)))
+    if min_confidence is not None and annotation_type in {
+        AnnotationType.face,
+        AnnotationType.mention,
+    }:
+        clauses.append(Filter.by_property("confidence").greater_or_equal(min_confidence))
     if not clauses:
         return None
     if len(clauses) == 1:
         return clauses[0]
     return Filter.all_of(clauses)
+
+
+def _build_entity_filters(entity_types: Sequence[str]) -> Any:
+    if not entity_types:
+        return None
+    clauses = [Filter.by_property("entity_type").equal(entity_type) for entity_type in entity_types]
+    if len(clauses) == 1:
+        return clauses[0]
+    return Filter.any_of(clauses)
 
 
 def _object_to_entity_result(

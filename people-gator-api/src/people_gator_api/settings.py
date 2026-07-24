@@ -1,5 +1,15 @@
+from enum import StrEnum
+
 from pydantic import BaseModel, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from people_gator_api.schemas.enums import AnnotationType
+
+
+class SearchEntityAggregationMode(StrEnum):
+    best_annotation = "best_annotation"
+    average_annotation = "average_annotation"
+    entity_named_vector = "entity_named_vector"
 
 class OpenTelemetrySettings(BaseModel):
     enabled: bool = True
@@ -45,6 +55,48 @@ class EmbeddingServiceSettings(BaseModel):
     request_timeout_seconds: float = Field(default=30.0, gt=0)
 
 
+class SearchModalitySettings(BaseModel):
+    annotation_type: AnnotationType
+    weight: float = Field(default=1.0, gt=0)
+    vector_name: str | None = None
+    aggregation: SearchEntityAggregationMode = (
+        SearchEntityAggregationMode.best_annotation
+    )
+    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class SearchProfileSettings(BaseModel):
+    entity_candidate_multiplier: int = Field(default=5, ge=1, le=50)
+    annotation_candidate_multiplier: int = Field(default=3, ge=1, le=50)
+    modalities: list[SearchModalitySettings] = Field(
+        default_factory=lambda: [
+            SearchModalitySettings(
+                annotation_type=AnnotationType.face,
+                weight=0.7,
+                vector_name="face",
+                aggregation=SearchEntityAggregationMode.best_annotation,
+                min_confidence=0.6,
+            ),
+            SearchModalitySettings(
+                annotation_type=AnnotationType.person_name,
+                weight=0.2,
+                vector_name="name",
+                aggregation=SearchEntityAggregationMode.entity_named_vector,
+            ),
+            SearchModalitySettings(
+                annotation_type=AnnotationType.description,
+                weight=0.1,
+                vector_name="description",
+                aggregation=SearchEntityAggregationMode.entity_named_vector,
+            ),
+        ]
+    )
+
+
+class SearchSettings(BaseModel):
+    profile: SearchProfileSettings = SearchProfileSettings()
+
+
 class KeycloakSettings(BaseModel):
     url: str
     realm: str
@@ -85,5 +137,6 @@ class Settings(BaseSettings):
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
+    search: SearchSettings = SearchSettings()
 
 settings = Settings()  # pyright: ignore[reportCallIssue] - BaseSettings values come from env sources.

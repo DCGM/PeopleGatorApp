@@ -453,5 +453,3 @@ The following schema is there but fall more into userspace:
 Indices:
 - `profile_id`
 - `principal_id`
-
-

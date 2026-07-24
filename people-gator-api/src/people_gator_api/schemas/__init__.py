@@ -35,14 +35,6 @@ from people_gator_api.schemas.search import (
     SearchRequest,
     SearchResponse,
 )
-from people_gator_api.schemas.search_profiles import (
-    SearchProfileCloneRequest,
-    SearchProfileCreateRequest,
-    SearchProfileModalityIn,
-    SearchProfileModalityOut,
-    SearchProfilePatchRequest,
-    SearchProfileResponse,
-)
 from people_gator_api.schemas.sources import SourceCreateRequest, SourceListResponse, SourceResponse
 
 __all__ = [
@@ -77,12 +69,6 @@ __all__ = [
     "SearchQuery",
     "SearchRequest",
     "SearchResponse",
-    "SearchProfileCloneRequest",
-    "SearchProfileCreateRequest",
-    "SearchProfileModalityIn",
-    "SearchProfileModalityOut",
-    "SearchProfileResponse",
-    "SearchProfilePatchRequest",
     "SourceCreateRequest",
     "SourceListResponse",
     "SourceResponse",

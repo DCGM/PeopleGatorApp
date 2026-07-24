@@ -22,6 +22,7 @@ class ModificationMetadata(BaseModel):
 class EntityCreateRequest(BaseModel):
     """Request body for creating a new entity."""
 
+    entity_type: str | None = None
     name: str | None = None
     description: str | None = None
 
@@ -31,6 +32,7 @@ class EntityResponse(BaseModel):
 
     entity_id: uuid.UUID
     principal_id: uuid.UUID
+    entity_type: str | None
     name: str | None
     description: str | None
 
@@ -242,4 +244,3 @@ class EntityViewResponse(BaseModel):
     face_ids: list[uuid.UUID]
     description_ids: list[uuid.UUID]
     name_ids: list[uuid.UUID]
-
