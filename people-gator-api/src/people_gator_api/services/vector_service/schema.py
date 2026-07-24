@@ -17,27 +17,39 @@ from people_gator_api.schemas.enums import AnnotationType
 PRINCIPAL_COLLECTION = "Principal"
 SOURCE_COLLECTION = "Source"
 ENTITY_COLLECTION = "Entity"
-MENTION_COLLECTION = "Mention"
-INFORMATION_COLLECTION = "Information"
+PAGE_MENTION_COLLECTION = "PageMention"
 DOCUMENT_MENTION_COLLECTION = "DocumentMention"
+SPAN_COLLECTION = "Span"
 FACE_COLLECTION = "Face"
+ENTITY_NAME_COLLECTION = "EntityName"
 DESCRIPTION_COLLECTION = "Description"
-NAME_COLLECTION = "Name"
 
-# Named vectors
-FACE_VECTOR = "face"
-NAME_VECTOR = "name"
-DESCRIPTION_VECTOR = "description"
-DOCUMENT_MENTION_NAME_VECTOR = "name"
-DOCUMENT_MENTION_INFORMATION_VECTOR = "information"
+# ---------------------------------------------------------------------------
+# Named vector names
+# ---------------------------------------------------------------------------
+
+FACE_VECTOR_PREFIX = "face:"
+NAME_VECTOR_PREFIX = "name:"
+FULLTEXT_VECTOR_PREFIX = "fulltext:"
+
+MICROSOFT_HARRIER_OSS_V1_0_6B = "harrier-oss-v1-0.6b"
+GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3 = (
+    "vit_small_patch8_gap_112.cosface_ms1mv3"
+)
+
+DEFAULT_FACE_VECTOR = (
+    FACE_VECTOR_PREFIX + GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3
+)
+DEFAULT_NAME_VECTOR = NAME_VECTOR_PREFIX + MICROSOFT_HARRIER_OSS_V1_0_6B
+DEFAULT_FULLTEXT_VECTOR = FULLTEXT_VECTOR_PREFIX + MICROSOFT_HARRIER_OSS_V1_0_6B
 
 ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
-    AnnotationType.person_name: NAME_COLLECTION,
-    AnnotationType.description: DESCRIPTION_COLLECTION,
-    AnnotationType.information: INFORMATION_COLLECTION,
-    AnnotationType.mention: MENTION_COLLECTION,
-    AnnotationType.face: FACE_COLLECTION,
     AnnotationType.document_mention: DOCUMENT_MENTION_COLLECTION,
+    AnnotationType.page_mention: PAGE_MENTION_COLLECTION,
+    AnnotationType.span: SPAN_COLLECTION,
+    AnnotationType.face: FACE_COLLECTION,
+    AnnotationType.description: DESCRIPTION_COLLECTION,
+    AnnotationType.entity_name: ENTITY_NAME_COLLECTION,
 }
 
 
@@ -103,17 +115,6 @@ def _number_property(name: str, description: str) -> Property:
     )
 
 
-def _number_array_property(name: str, description: str) -> Property:
-    return Property(
-        name=name,
-        data_type=DataType.NUMBER_ARRAY,
-        description=description,
-        index_filterable=False,
-        index_searchable=False,
-        skip_vectorization=True,
-    )
-
-
 def _object_property(
     name: str,
     description: str,
@@ -148,52 +149,32 @@ def _object_array_property(
     )
 
 
-def default_vector_config() -> object:
+def _named_vector(name: str) -> object:
     return Configure.Vectors.self_provided(
+        name=name,
         vector_index_config=Configure.VectorIndex.hnsw(
             distance_metric=VectorDistances.COSINE,
-        )
+        ),
     )
 
 
-def entity_named_vector_configs() -> list[object]:
+def default_name_plus_fulltext_vector_config() -> list[object]:
     return [
-        Configure.Vectors.self_provided(
-            name=FACE_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
-        Configure.Vectors.self_provided(
-            name=NAME_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
-        Configure.Vectors.self_provided(
-            name=DESCRIPTION_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
+        _named_vector(DEFAULT_NAME_VECTOR),
+        _named_vector(DEFAULT_FULLTEXT_VECTOR),
     ]
 
 
-def document_mention_named_vector_config() -> list[object]:
-    return [
-        Configure.Vectors.self_provided(
-            name=DOCUMENT_MENTION_NAME_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
-        Configure.Vectors.self_provided(
-            name=DOCUMENT_MENTION_INFORMATION_VECTOR,
-            vector_index_config=Configure.VectorIndex.hnsw(
-                distance_metric=VectorDistances.COSINE,
-            ),
-        ),
-    ]
+def default_fulltext_vector_config() -> list[object]:
+    return [_named_vector(DEFAULT_FULLTEXT_VECTOR)]
+
+
+def default_name_vector_config() -> list[object]:
+    return [_named_vector(DEFAULT_NAME_VECTOR)]
+
+
+def default_face_vector_config() -> list[object]:
+    return [_named_vector(DEFAULT_FACE_VECTOR)]
 
 
 POINT_PROPERTIES = [
@@ -251,40 +232,18 @@ ENTITY_PROPERTIES: list[Property] = [
     _text_property("entity_type", "Entity type discriminator.", searchable=False),
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
-    _int_property("face_count", "Number of face annotations linked to the entity."),
-    _int_property("mention_count", "Number of mention annotations linked through document mentions."),
-    _int_property("information_count", "Number of information annotations linked through document mentions."),
-    _int_property("document_mention_count", "Number of document mentions linked to the entity."),
-    _int_property("name_count", "Number of linked NAME rows."),
-    _int_property("description_count", "Number of linked DESCRIPTION rows."),
+    _text_property("wikidata_id", "Entity-level aggregated Wikidata ID."),
+    _text_property("nlcr_authority_id", "Entity-level aggregated NLCR authority ID."),
 ]
 
-MENTION_PROPERTIES: list[Property] = [
-    _uuid_property("mention_id", "Primary key of MENTION.mention_id."),
-    _text_property("text", "Mention text span."),
-    _int_property("offset_start", "Source text start offset."),
-    _int_property("offset_end", "Source text end offset."),
-    _object_array_property(
-        "polygons",
-        "Optional mention polygons.",
-        nested_properties=POLYGON_PROPERTIES,
-    ),
+PAGE_MENTION_PROPERTIES: list[Property] = [
+    _uuid_property("page_mention_id", "Primary key of PAGE_MENTION.page_mention_id."),
+    _text_property("name", "Name of the page mention."),
+    _text_property("information", "Information of the page mention."),
     _number_property("confidence", "Extraction confidence."),
     _uuid_property("document_mention_id", "Owning document mention id."),
     _uuid_property("source_id", "Source id."),
     _uuid_property("model_agent_id", "Model-agent principal id."),
-    _number_array_property("embedding", "Stored mention embedding."),
-    _text_property("model_identifier", "Embedding model identifier.", searchable=False),
-]
-
-INFORMATION_PROPERTIES: list[Property] = [
-    _uuid_property("information_id", "Primary key of INFORMATION.information_id."),
-    _text_property("text", "Information text."),
-    _uuid_property("document_mention_id", "Owning document mention id."),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("model_agent_id", "Model-agent principal id."),
-    _number_array_property("embedding", "Stored information embedding."),
-    _text_property("model_identifier", "Embedding model identifier.", searchable=False),
 ]
 
 DOCUMENT_MENTION_PROPERTIES: list[Property] = [
@@ -294,8 +253,19 @@ DOCUMENT_MENTION_PROPERTIES: list[Property] = [
     _uuid_property("model_agent_id", "Model-agent principal id."),
     _uuid_property("source_id", "Source id."),
     _uuid_property("entity_id", "Entity id."),
-    _number_array_property("embedding", "Stored document-mention embedding."),
-    _text_property("model_identifier", "Embedding model identifier.", searchable=False),
+]
+
+SPAN_PROPERTIES: list[Property] = [
+    _uuid_property("span_id", "Primary key of SPAN.span_id."),
+    _text_property("text", "Span text."),
+    _object_array_property(
+        "polygons",
+        "Ordered span polygons.",
+        nested_properties=POLYGON_PROPERTIES,
+    ),
+    _uuid_property("page_mention_id", "Owning page mention id."),
+    _uuid_property("source_id", "Source id."),
+    _uuid_property("entity_id", "Entity id."),
 ]
 
 FACE_PROPERTIES: list[Property] = [
@@ -314,8 +284,6 @@ FACE_PROPERTIES: list[Property] = [
     _uuid_property("source_id", "Source id."),
     _uuid_property("model_agent_id", "Model-agent principal id."),
     _uuid_property("entity_id", "Entity id."),
-    _number_array_property("embedding", "Stored face embedding."),
-    _text_property("model_identifier", "Embedding model identifier.", searchable=False),
 ]
 
 DESCRIPTION_PROPERTIES: list[Property] = [
@@ -324,17 +292,13 @@ DESCRIPTION_PROPERTIES: list[Property] = [
     _text_property("language", "Language code.", searchable=False),
     _uuid_property("source_id", "Source id."),
     _uuid_property("entity_id", "Entity id."),
-    _number_array_property("embedding", "Stored description embedding."),
-    _text_property("model_identifier", "Embedding model identifier.", searchable=False),
 ]
 
-NAME_PROPERTIES: list[Property] = [
-    _uuid_property("name_id", "Primary key of NAME.name_id."),
+ENTITY_NAME_PROPERTIES: list[Property] = [
+    _uuid_property("entity_name_id", "Primary key of ENTITY_NAME.entity_name_id."),
     _text_property("name", "Name value."),
     _uuid_property("source_id", "Source id."),
     _uuid_property("entity_id", "Entity id."),
-    _number_array_property("embedding", "Stored name embedding."),
-    _text_property("model_identifier", "Embedding model identifier.", searchable=False),
 ]
 
 PRINCIPAL_REFERENCES: list[ReferenceProperty] = []
@@ -346,7 +310,7 @@ ENTITY_REFERENCES: list[ReferenceProperty] = [
         description="Principal that created the entity.",
     )
 ]
-MENTION_REFERENCES: list[ReferenceProperty] = [
+PAGE_MENTION_REFERENCES: list[ReferenceProperty] = [
     ReferenceProperty(
         name="document_mention",
         target_collection=DOCUMENT_MENTION_COLLECTION,
@@ -355,29 +319,12 @@ MENTION_REFERENCES: list[ReferenceProperty] = [
     ReferenceProperty(
         name="source",
         target_collection=SOURCE_COLLECTION,
-        description="Source containing the mention.",
+        description="Source containing the page mention.",
     ),
     ReferenceProperty(
         name="model_agent",
         target_collection=PRINCIPAL_COLLECTION,
-        description="Model agent that extracted the mention.",
-    ),
-]
-INFORMATION_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="document_mention",
-        target_collection=DOCUMENT_MENTION_COLLECTION,
-        description="Owning document mention.",
-    ),
-    ReferenceProperty(
-        name="source",
-        target_collection=SOURCE_COLLECTION,
-        description="Source containing the information.",
-    ),
-    ReferenceProperty(
-        name="model_agent",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Model agent that extracted the information.",
+        description="Model agent that extracted the page mention.",
     ),
 ]
 DOCUMENT_MENTION_REFERENCES: list[ReferenceProperty] = [
@@ -395,6 +342,23 @@ DOCUMENT_MENTION_REFERENCES: list[ReferenceProperty] = [
         name="model_agent",
         target_collection=PRINCIPAL_COLLECTION,
         description="Model agent that produced the aggregation.",
+    ),
+]
+SPAN_REFERENCES: list[ReferenceProperty] = [
+    ReferenceProperty(
+        name="page_mention",
+        target_collection=PAGE_MENTION_COLLECTION,
+        description="Owning page mention.",
+    ),
+    ReferenceProperty(
+        name="source",
+        target_collection=SOURCE_COLLECTION,
+        description="Source containing the span.",
+    ),
+    ReferenceProperty(
+        name="entity",
+        target_collection=ENTITY_COLLECTION,
+        description="Entity associated with the span.",
     ),
 ]
 FACE_REFERENCES: list[ReferenceProperty] = [
@@ -426,7 +390,7 @@ DESCRIPTION_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the description.",
     ),
 ]
-NAME_REFERENCES: list[ReferenceProperty] = [
+ENTITY_NAME_REFERENCES: list[ReferenceProperty] = [
     ReferenceProperty(
         name="entity",
         target_collection=ENTITY_COLLECTION,
@@ -438,38 +402,40 @@ NAME_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the name.",
     ),
 ]
-type CollectionSpec = tuple[list[Property], list[ReferenceProperty], object]
+
+type CollectionVectorConfig = list[object] | None
+type CollectionSpec = tuple[list[Property], list[ReferenceProperty], CollectionVectorConfig]
 
 ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    NAME_COLLECTION: (
-        NAME_PROPERTIES,
-        NAME_REFERENCES,
-        default_vector_config()
-    ),
-    DESCRIPTION_COLLECTION: (
-        DESCRIPTION_PROPERTIES,
-        DESCRIPTION_REFERENCES,
-        default_vector_config(),
-    ),
-    INFORMATION_COLLECTION: (
-        INFORMATION_PROPERTIES,
-        INFORMATION_REFERENCES,
-        default_vector_config(),
-    ),
-    MENTION_COLLECTION: (
-        MENTION_PROPERTIES,
-        MENTION_REFERENCES,
-        default_vector_config()
-    ),
-    FACE_COLLECTION: (
-        FACE_PROPERTIES,
-        FACE_REFERENCES,
-        default_vector_config()
+    PAGE_MENTION_COLLECTION: (
+        PAGE_MENTION_PROPERTIES,
+        PAGE_MENTION_REFERENCES,
+        default_name_plus_fulltext_vector_config(),
     ),
     DOCUMENT_MENTION_COLLECTION: (
         DOCUMENT_MENTION_PROPERTIES,
         DOCUMENT_MENTION_REFERENCES,
-        document_mention_named_vector_config(),
+        default_name_plus_fulltext_vector_config(),
+    ),
+    SPAN_COLLECTION: (
+        SPAN_PROPERTIES,
+        SPAN_REFERENCES,
+        default_name_vector_config(),
+    ),
+    ENTITY_NAME_COLLECTION: (
+        ENTITY_NAME_PROPERTIES,
+        ENTITY_NAME_REFERENCES,
+        default_name_vector_config(),
+    ),
+    DESCRIPTION_COLLECTION: (
+        DESCRIPTION_PROPERTIES,
+        DESCRIPTION_REFERENCES,
+        default_fulltext_vector_config(),
+    ),
+    FACE_COLLECTION: (
+        FACE_PROPERTIES,
+        FACE_REFERENCES,
+        default_face_vector_config(),
     ),
 }
 
@@ -477,30 +443,23 @@ NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     PRINCIPAL_COLLECTION: (
         PRINCIPAL_PROPERTIES,
         PRINCIPAL_REFERENCES,
-        default_vector_config()
+        None,
     ),
     SOURCE_COLLECTION: (
         SOURCE_PROPERTIES,
         SOURCE_REFERENCES,
-        default_vector_config()
+        None,
     ),
     ENTITY_COLLECTION: (
         ENTITY_PROPERTIES,
         ENTITY_REFERENCES,
-        entity_named_vector_configs()
+        None,
     ),
 }
 
 ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    PRINCIPAL_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[PRINCIPAL_COLLECTION],
-    SOURCE_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[SOURCE_COLLECTION],
-    ENTITY_COLLECTION: NON_ANNOTATION_COLLECTION_SPECS[ENTITY_COLLECTION],
-    DOCUMENT_MENTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[DOCUMENT_MENTION_COLLECTION],
-    FACE_COLLECTION: ANNOTATION_COLLECTION_SPECS[FACE_COLLECTION],
-    DESCRIPTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[DESCRIPTION_COLLECTION],
-    NAME_COLLECTION: ANNOTATION_COLLECTION_SPECS[NAME_COLLECTION],
-    MENTION_COLLECTION: ANNOTATION_COLLECTION_SPECS[MENTION_COLLECTION],
-    INFORMATION_COLLECTION: ANNOTATION_COLLECTION_SPECS[INFORMATION_COLLECTION],
+    **NON_ANNOTATION_COLLECTION_SPECS,
+    **ANNOTATION_COLLECTION_SPECS,
 }
 
 

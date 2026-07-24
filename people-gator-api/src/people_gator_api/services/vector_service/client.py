@@ -1,18 +1,6 @@
-"""Weaviate async client lifecycle management.
-
-Follows the same module-level singleton pattern as storage/s3.py:
-
-    await init_weaviate()          # at application startup
-    client = get_weaviate_client() # during request handling
-    await close_weaviate()         # at application shutdown
-
-The client is built from WeaviateSettings and uses the custom-endpoint
-helper so that the connection target is fully configurable via environment
-variables without any hard-coded defaults in application code.
-"""
+"""Weaviate async client lifecycle management."""
 
 import logging
-from typing import Any, cast
 
 import weaviate
 from weaviate import WeaviateAsyncClient
@@ -90,16 +78,25 @@ def get_weaviate_client() -> WeaviateAsyncClient:
 
 async def _ensure_collections(client: WeaviateAsyncClient) -> None:
     """Create Weaviate collections if they do not already exist."""
+
     for collection_name, (properties, references, vector_config) in ALL_COLLECTION_SPECS.items():
         if await client.collections.exists(collection_name):
             logger.debug("Collection %s already exists", collection_name)
             continue
 
-        await client.collections.create(
-            name=collection_name,
-            description="Canonical People Gator persistence collection.",
-            properties=properties,
-            references=cast(Any, references),
-            vector_config=cast(Any, vector_config),
-        )
+        if vector_config is not None:
+            await client.collections.create(
+                name=collection_name,
+                description="Canonical People Gator persistence collection.",
+                properties=properties,
+                references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
+                vector_config=vector_config,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
+            )
+        else:
+            await client.collections.create(
+                name=collection_name,
+                description="Canonical People Gator persistence collection.",
+                properties=properties,
+                references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
+            )
         logger.info("Created Weaviate collection: %s", collection_name)

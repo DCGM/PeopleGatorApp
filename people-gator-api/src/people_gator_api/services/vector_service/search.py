@@ -1,340 +1,81 @@
-"""Vector search interface over Weaviate.
-
-VectorSearchService exposes three search operations that map to the
-product-spec search requirements:
-
-search_annotations_by_vector
-    Nearest-neighbour lookup over AnnotationEmbedding.  Optionally filtered
-    by annotation_type and entity_id.  Returns ranked
-    AnnotationSearchResult objects with per-result distance and certainty
-    scores.
-
-search_entities_by_named_vector
-    Nearest-neighbour lookup over Entity using a single named
-    vector (face or name).  Returns EntitySearchResult objects.
-
-search_entities_weighted
-    Multi-modal entity search that combines face and name signals with
-    caller-supplied weights via Weaviate TargetVectors.manual_weights().
-    This is the primary search path for weighted multi-modal entity
-    resolution.
-"""
+"""Vector search helpers over Weaviate annotation collections."""
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import cast
 from uuid import UUID
 
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter, MetadataQuery, TargetVectors
+from weaviate.classes.query import Filter, MetadataQuery
+from weaviate.collections.classes.filters import FilterReturn
+from weaviate.collections.classes.types import WeaviateField
 
 from people_gator_api.schemas.enums import AnnotationType
-from people_gator_api.services.vector_service.schemas import (
-    AnnotationSearchResult,
-    EntitySearchResult,
-)
+from people_gator_api.services.weaviate_utils import WeaviateObjectLike
+from people_gator_api.services.weaviate_utils import query_objects
 from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
-    DESCRIPTION_VECTOR,
-    ENTITY_COLLECTION,
-    FACE_VECTOR,
-    NAME_VECTOR,
 )
-
-logger = logging.getLogger(__name__)
+from people_gator_api.services.vector_service.schemas import AnnotationSearchResult
 
 _DEFAULT_LIMIT = 20
-_FACE_WEIGHT_DEFAULT = 0.7
-_NAME_WEIGHT_DEFAULT = 0.3
 
 
-class VectorSearchService:
-    """Async service for vector search over Weaviate collections.
+async def search_by_vector(
+    client: WeaviateAsyncClient,
+    vector: list[float],
+    annotation_type: AnnotationType,
+    target_named_vector: str,
+    *,
+    entity_id: UUID | None = None,
+    limit: int = _DEFAULT_LIMIT,
+    certainty: float | None = None,
+    distance: float | None = None,
+    min_confidence: float | None = None,
+) -> list[AnnotationSearchResult]:
+    """Return the nearest annotation objects to *vector*."""
 
-    Instantiate with a connected :class:`~weaviate.WeaviateAsyncClient`.
-    Use :func:`~people_gator_api.vector.client.get_weaviate_client` to
-    obtain the application-scoped client instance.
-    """
+    collection = client.collections.get(ANNOTATION_COLLECTION_BY_TYPE[annotation_type])
+    filters = _build_annotation_filters(
+        annotation_type=annotation_type,
+        entity_id=entity_id,
+        min_confidence=min_confidence,
+    )
 
-    def __init__(self, client: WeaviateAsyncClient) -> None:
-        super().__init__()
-        self._client = client
-
-    # ------------------------------------------------------------------
-    # Annotation-level search
-    # ------------------------------------------------------------------
-
-    async def search_annotations_by_vector(
-        self,
-        vector: list[float],
-        *,
-        annotation_type: AnnotationType | None = None,
-        entity_id: UUID | None = None,
-        named_vector: str | None = None,
-        limit: int = _DEFAULT_LIMIT,
-        certainty: float | None = None,
-        distance: float | None = None,
-        min_confidence: float | None = None,
-    ) -> list[AnnotationSearchResult]:
-        """Return the nearest AnnotationEmbedding objects to *vector*.
-
-        Args:
-            vector: The query embedding vector.
-            annotation_type: When supplied, only annotations of this type are returned.
-            entity_id: When supplied, only annotations linked to this entity are returned.
-            named_vector: Named vector slot to query for multi-vector collections.
-            limit: Maximum number of results.
-            certainty: Minimum similarity threshold in [0, 1].
-            distance: Maximum cosine distance threshold.
-            min_confidence: Optional minimum confidence threshold for annotations.
-
-        Returns:
-            Ranked list of :class:`AnnotationSearchResult`, closest first.
-        """
-        results: list[AnnotationSearchResult] = []
-        annotation_types: list[AnnotationType]
-        if annotation_type is not None:
-            annotation_types = [annotation_type]
-        else:
-            annotation_types = list(ANNOTATION_COLLECTION_BY_TYPE.keys())
-
-        for candidate_type in annotation_types:
-            collection = self._client.collections.get(
-                ANNOTATION_COLLECTION_BY_TYPE[candidate_type]
-            )
-            filters = _build_annotation_filters(
-                annotation_type=candidate_type,
-                entity_id=entity_id,
-                min_confidence=min_confidence,
-            )
-
-            response = await collection.query.near_vector(
-                near_vector=vector,
-                target_vector=named_vector,
-                limit=limit,
-                certainty=certainty,
-                distance=distance,
-                filters=filters,
-                return_metadata=MetadataQuery(distance=True, certainty=True),
-            )
-            results.extend(
-                _annotation_objects_to_results(response.objects, candidate_type)
-            )
-
-        return sorted(
-            results,
-            key=lambda item: item.distance if item.distance is not None else float("inf"),
-        )[:limit]
-
-    # ------------------------------------------------------------------
-    # Identity-level search — single modality
-    # ------------------------------------------------------------------
-
-    async def search_entities_by_named_vector(
-        self,
-        vector: list[float],
-        named_vector: str,
-        *,
-        entity_types: Sequence[str] = (),
-        limit: int = _DEFAULT_LIMIT,
-        certainty: float | None = None,
-        distance: float | None = None,
-    ) -> list[EntitySearchResult]:
-        """Return nearest Entity objects using a single named vector.
-
-        Args:
-            vector: The query embedding vector.
-            named_vector: Which named vector to search; use constants
-                :data:`~people_gator_api.vector.schema.FACE_VECTOR` or
-                :data:`~people_gator_api.vector.schema.NAME_VECTOR`.
-            entity_types: Optional entity type filter.
-            limit: Maximum number of results.
-            certainty: Minimum similarity threshold.
-            distance: Maximum cosine distance.
-
-        Returns:
-            Ranked list of :class:`EntitySearchResult`, closest first.
-        """
-        collection = self._client.collections.get(ENTITY_COLLECTION)
-
-        response = await collection.query.near_vector(
-            near_vector={named_vector: vector},
-            filters=_build_entity_filters(entity_types),
+    response = cast(
+        object,
+        await collection.query.near_vector(
+            near_vector=vector,
+            target_vector=target_named_vector,
             limit=limit,
             certainty=certainty,
             distance=distance,
+            filters=filters,
             return_metadata=MetadataQuery(distance=True, certainty=True),
-        )
-
-        return [_object_to_entity_result(obj, named_vector) for obj in response.objects]
-
-    async def search_entities_by_face(
-        self,
-        face_vector: list[float],
-        *,
-        limit: int = _DEFAULT_LIMIT,
-        certainty: float | None = None,
-        distance: float | None = None,
-    ) -> list[EntitySearchResult]:
-        """Shorthand for a face-modality entity search."""
-        return await self.search_entities_by_named_vector(
-            vector=face_vector,
-            named_vector=FACE_VECTOR,
-            limit=limit,
-            certainty=certainty,
-            distance=distance,
-        )
-
-    async def search_entities_by_name(
-        self,
-        name_vector: list[float],
-        *,
-        limit: int = _DEFAULT_LIMIT,
-        certainty: float | None = None,
-        distance: float | None = None,
-    ) -> list[EntitySearchResult]:
-        """Shorthand for a name-modality entity search."""
-        return await self.search_entities_by_named_vector(
-            vector=name_vector,
-            named_vector=NAME_VECTOR,
-            limit=limit,
-            certainty=certainty,
-            distance=distance,
-        )
-
-    # ------------------------------------------------------------------
-    # Identity-level search — weighted multi-modal
-    # ------------------------------------------------------------------
-
-    async def search_entities_weighted(
-        self,
-        face_vector: list[float] | None = None,
-        name_vector: list[float] | None = None,
-        *,
-        face_weight: float = _FACE_WEIGHT_DEFAULT,
-        name_weight: float = _NAME_WEIGHT_DEFAULT,
-        limit: int = _DEFAULT_LIMIT,
-    ) -> list[EntitySearchResult]:
-        """Multi-modal entity search with caller-supplied modality weights.
-
-        At least one of *face_vector* or *name_vector* must be supplied.
-        Weights do not need to sum to 1.0 — Weaviate applies them as
-        relative multipliers on the per-modality cosine distances.
-
-        This is the primary search path for weighted multi-modal entity
-        resolution per the product specification.
-
-        Args:
-            face_vector: Query vector in the face embedding space.
-            name_vector: Query vector in the name embedding space.
-            face_weight: Relative weight for face-signal distance.
-            name_weight: Relative weight for name-signal distance.
-            limit: Maximum number of results.
-
-        Returns:
-            Ranked list of :class:`EntitySearchResult`, best first.
-
-        Raises:
-            ValueError: If neither vector is provided.
-        """
-        if face_vector is None and name_vector is None:
-            raise ValueError("At least one of face_vector or name_vector must be supplied.")
-
-        collection = self._client.collections.get(ENTITY_COLLECTION)
-
-        query_vector: dict[str, list[float]] = {}
-        weights: dict[str, float | list[float]] = {}
-        if face_vector is not None:
-            query_vector[FACE_VECTOR] = face_vector
-            weights[FACE_VECTOR] = face_weight
-        if name_vector is not None:
-            query_vector[NAME_VECTOR] = name_vector
-            weights[NAME_VECTOR] = name_weight
-
-        target = (
-            TargetVectors.manual_weights(weights)
-            if len(weights) > 1
-            else list(weights.keys())[0]
-        )
-
-        response = await collection.query.near_vector(
-            near_vector=query_vector,
-            target_vector=target,
-            limit=limit,
-            return_metadata=MetadataQuery(distance=True),
-        )
-
-        return [_object_to_entity_result(obj) for obj in response.objects]
-
-    async def search_entities_by_name_description(
-        self,
-        name_vector: list[float] | None = None,
-        description_vector: list[float] | None = None,
-        *,
-        name_weight: float = _NAME_WEIGHT_DEFAULT,
-        description_weight: float = _FACE_WEIGHT_DEFAULT,
-        limit: int = _DEFAULT_LIMIT,
-    ) -> list[EntitySearchResult]:
-        """Search the dedicated Entity collection using name/description vectors."""
-        if name_vector is None and description_vector is None:
-            raise ValueError("At least one of name_vector or description_vector must be supplied.")
-
-        query_vector: dict[str, list[float]] = {}
-        weights: dict[str, float | list[float]] = {}
-        if name_vector is not None:
-            query_vector[NAME_VECTOR] = name_vector
-            weights[NAME_VECTOR] = name_weight
-        if description_vector is not None:
-            query_vector[DESCRIPTION_VECTOR] = description_vector
-            weights[DESCRIPTION_VECTOR] = description_weight
-
-        target = (
-            TargetVectors.manual_weights(weights)
-            if len(weights) > 1
-            else list(weights.keys())[0]
-        )
-
-        collection = self._client.collections.get(ENTITY_COLLECTION)
-        response = await collection.query.near_vector(
-            near_vector=query_vector,
-            target_vector=target,
-            limit=limit,
-            return_metadata=MetadataQuery(distance=True),
-        )
-        return [_object_to_entity_result(obj) for obj in response.objects]
-
-    # Backward-compatible method names.
-    search_identities_by_named_vector = search_entities_by_named_vector
-    search_identities_by_face = search_entities_by_face
-    search_identities_by_name = search_entities_by_name
-    search_identities_weighted = search_entities_weighted
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+        ),
+    )
+    return _annotation_objects_to_results(query_objects(response), annotation_type)
 
 
 def _build_annotation_filters(
     *,
-    annotation_type: AnnotationType | None,
+    annotation_type: AnnotationType,
     entity_id: UUID | None,
     min_confidence: float | None,
-) -> Any:
-    """Compose a Weaviate filter from optional annotation search constraints."""
-    clauses: list[Any] = []
+) -> FilterReturn | None:
+    clauses: list[FilterReturn] = []
     if entity_id is not None and annotation_type in {
-        AnnotationType.person_name,
-        AnnotationType.description,
-        AnnotationType.face,
         AnnotationType.document_mention,
+        AnnotationType.span,
+        AnnotationType.face,
+        AnnotationType.description,
+        AnnotationType.entity_name,
     }:
         clauses.append(Filter.by_property("entity_id").equal(str(entity_id)))
     if min_confidence is not None and annotation_type in {
+        AnnotationType.page_mention,
         AnnotationType.face,
-        AnnotationType.mention,
     }:
         clauses.append(Filter.by_property("confidence").greater_or_equal(min_confidence))
     if not clauses:
@@ -344,81 +85,74 @@ def _build_annotation_filters(
     return Filter.all_of(clauses)
 
 
-def _build_entity_filters(entity_types: Sequence[str]) -> Any:
-    if not entity_types:
-        return None
-    clauses = [Filter.by_property("entity_type").equal(entity_type) for entity_type in entity_types]
-    if len(clauses) == 1:
-        return clauses[0]
-    return Filter.any_of(clauses)
-
-
-def _object_to_entity_result(
-    obj: Any,
-    primary_named_vector: str | None = None,
-) -> EntitySearchResult:
-    """Map a Weaviate query object to an EntitySearchResult."""
-    props = obj.properties
-    meta = obj.metadata
-
-    distance = meta.distance if meta else None
-
-    return EntitySearchResult(
-        weaviate_id=obj.uuid,
-        entity_id=UUID(str(props.get("entity_id"))),
-        face_count=int(props.get("face_count", 0)),
-        mention_count=int(props.get("mention_count", 0)),
-        information_count=int(props.get("information_count", 0)),
-        document_mention_count=int(props.get("document_mention_count", 0)),
-        description_count=int(props.get("description_count", 0)),
-        name_count=int(props.get("name_count", 0)),
-        face_distance=distance if primary_named_vector == FACE_VECTOR else None,
-        name_distance=distance if primary_named_vector == NAME_VECTOR else None,
-        description_distance=distance if primary_named_vector == DESCRIPTION_VECTOR else None,
-        combined_distance=distance if primary_named_vector is None else None,
-    )
-
-
 def _annotation_id_property(annotation_type: AnnotationType) -> str:
-    if annotation_type is AnnotationType.person_name:
-        return "name_id"
-    if annotation_type is AnnotationType.description:
-        return "description_id"
-    if annotation_type is AnnotationType.information:
-        return "information_id"
-    if annotation_type is AnnotationType.mention:
-        return "mention_id"
+    if annotation_type is AnnotationType.page_mention:
+        return "page_mention_id"
+    if annotation_type is AnnotationType.span:
+        return "span_id"
     if annotation_type is AnnotationType.face:
         return "detection_id"
+    if annotation_type is AnnotationType.description:
+        return "description_id"
+    if annotation_type is AnnotationType.entity_name:
+        return "entity_name_id"
     return "document_mention_id"
 
 
-def _annotation_objects_to_results(objects: list[Any], annotation_type: AnnotationType) -> list[AnnotationSearchResult]:
+def _annotation_objects_to_results(
+    objects: Sequence[WeaviateObjectLike],
+    annotation_type: AnnotationType,
+) -> list[AnnotationSearchResult]:
     id_property = _annotation_id_property(annotation_type)
     results: list[AnnotationSearchResult] = []
 
     for obj in objects:
-        props = obj.properties
-        source_id_value = props.get("source_id")
-        model_agent_value = props.get("model_agent_id")
-        confidence_value = props.get("confidence")
-        entity_value = props.get("entity_id")
-
+        properties = obj.properties
+        source_id_value = properties.get("source_id")
         if source_id_value is None:
             continue
+
+        annotation_id_value = properties.get(id_property)
+        if annotation_id_value is None:
+            continue
+
+        model_agent_value = properties.get("model_agent_id")
+        confidence_value = properties.get("confidence")
+        entity_value = properties.get("entity_id")
+        metadata = getattr(obj, "metadata", None)
 
         results.append(
             AnnotationSearchResult(
                 weaviate_id=obj.uuid,
                 annotation_type=annotation_type,
-                annotation_id=UUID(str(props.get(id_property))),
-                source_id=UUID(str(source_id_value)),
-                model_agent_id=UUID(str(model_agent_value)) if model_agent_value else None,
-                confidence=cast(float | None, confidence_value),
-                entity_id=UUID(str(entity_value)) if entity_value else None,
-                distance=cast(float | None, getattr(obj.metadata, "distance", None)) if obj.metadata else None,
-                certainty=cast(float | None, getattr(obj.metadata, "certainty", None)) if obj.metadata else None,
+                annotation_id=_field_to_uuid(annotation_id_value),
+                source_id=_field_to_uuid(source_id_value),
+                model_agent_id=_field_to_uuid(model_agent_value)
+                if model_agent_value is not None
+                else None,
+                confidence=_field_to_float(confidence_value),
+                entity_id=_field_to_uuid(entity_value) if entity_value is not None else None,
+                distance=getattr(metadata, "distance", None) if metadata is not None else None,
+                certainty=getattr(metadata, "certainty", None) if metadata is not None else None,
             )
         )
 
     return results
+
+
+def _field_to_uuid(value: WeaviateField) -> UUID:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        return UUID(value)
+    raise TypeError("Expected UUID-compatible Weaviate field.")
+
+
+def _field_to_float(value: WeaviateField | None) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, float):
+        return value
+    raise TypeError("Expected numeric Weaviate field.")

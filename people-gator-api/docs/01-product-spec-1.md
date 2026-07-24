@@ -1,269 +1,247 @@
-# A product for PeopleGator API: Simpler overview of basic functionalities
+# People Gator API product spec
 
-Core concept is to define bare minimum system specs that define just the data model shown in the ER diagram.
+This document mirrors the schema and API model currently implemented in
+`src/people_gator_api/services/vector_service/schema.py`.
 
 ## 0. Core functionality
 
-We want to facilitate search, addition of new mention and information, search for similar identities, and user modification of whether a mention was correctly assigned to some identity.
+People Gator stores person-centric evidence and supports:
 
-There are 2 types of user, a model or agent user, who automaticallu annotated pages in a document and triest to link them to the correct identity. And a human user, who can review the annotations and make corrections.
+- creating and browsing entities,
+- attaching document-level and page-level mention evidence to entities,
+- attaching face, description, and entity-name evidence to entities,
+- vector search over annotation collections,
+- entity ranking by aggregating annotation hits across enabled modalities.
 
-The agent can:
-- Create a new document mention, mention and information
-- Take a document mention, which is an aggregation of mentions and information, and link it to an identity
-- Link a face detection to an identity
+There are two principal categories:
 
-The user can:
-- Retrieve and identity from a list
-- Display faces for identity
-- Check if face matches
-- Show similar identities based on current identity
-- Search directly for identities using one or more modalities
-- Merge identities
+- **human users** who browse, review, and curate entities,
+- **model agents** that create annotations and link them to entities.
 
-Low priority functionality for future user:
-- Display document mentions for identity
-- Display mentions for identity
-- Search for similar identities based on face, name, or description.
+## 1. Collection model
 
-Ultra low priority:
-- Text search for mentions and information, with ability to link to identity.
+### 1.1 Non-annotation collections
 
-## 1. Introduction
+These collections store canonical records and **do not have vector configs**:
 
-This specification defines a simplified identity-centric annotation model.
+- `Principal`
+- `Source`
+- `Entity`
 
-The model includes:
-- Identities as the central person record
-- Mentions extracted from source text
-- Information extracted at page/document level
-- One document-level aggregator that groups mentions and information
-- Face detections
-- Descriptions
-- Names
-- Sources
+### 1.2 Annotation collections
 
-## 2. Core Data Architecture
+These collections store search evidence and carry named vectors:
+
+- `PageMention`
+- `DocumentMention`
+- `Span`
+- `Face`
+- `Description`
+- `EntityName`
+
+## 2. Data architecture
 
 ### 2.0 IDs
 
-IDs are globally unique identifiers using UUIDv6 format.
+All primary keys are UUIDs.
 
-### 2.1 Identity `IDENTITY`
+### 2.1 Principal `PRINCIPAL`
 
-> Central person record.
+Represents a human user or model agent.
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `identity_id` | UUID | Unique identifier for the identity. |
-| `principal_id` | UUID | Identifier of the principal that created the identity. |
-| `entity_type` | STRING | Entity type discriminator used for filtering search results. |
-| `name` | STRING | Best available aggregated name for the identity. |
-| `description` | STRING | Best available aggregated description for the identity. |
+| Field | Type | Description |
+| --- | --- | --- |
+| `principal_id` | UUID | Primary key. |
+| `principal_type` | STRING | `user`, `service_agent`, or `model_agent`. |
+| `display_name` | STRING | Human-readable label. |
+| `is_active` | BOOL | Active flag. |
+| `external_subject` | STRING \| NULL | OIDC subject for user principals. |
+| `external_issuer` | STRING \| NULL | OIDC issuer for user principals. |
+| `email` | STRING \| NULL | User email. |
+| `annotation_type` | STRING \| NULL | Annotation type handled by a model agent. |
+| `role` | STRING \| NULL | Model-agent role prefix. |
+| `model_slug` | STRING \| NULL | Model-agent slug. |
+| `model_version` | STRING \| NULL | Model version. |
+| `registry_source` | STRING \| NULL | Model registry source. |
+| `registry_uri` | STRING \| NULL | Model registry URI. |
 
-### 2.2 Mention `MENTION`
+### 2.2 Source `SOURCE`
 
-> Text mention extracted from a source and strictly attached to one `DOCUMENT_MENTION`.
+Represents a source document, page, or external authority record.
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `mention_id` | UUID | Unique identifier for the mention. |
-| `text` | TEXT | Mention text span. |
-| `offset_start` | INTEGER | Start character offset in source text. |
-| `offset_end` | INTEGER | End character offset in source text. |
-| `polygons` | JSON | Optional polygon coordinates for mention in source. |
-| `confidence` | FLOAT | Extraction confidence. |
-| `document_mention_id` | UUID | Required foreign key to the owning document mention. |
-| `source_id` | UUID | Source containing the mention. |
-| `model_agent_id` | UUID | Model agent that extracted the mention. |
+| Field | Type | Description |
+| --- | --- | --- |
+| `source_id` | UUID | Primary key. |
+| `source_type` | STRING | Source kind. |
+| `uri` | STRING | Stable source URI. |
+| `metadata` | OBJECT | Strict source metadata payload. |
 
-### 2.3 Information `INFORMATION`
+### 2.3 Entity `ENTITY`
 
-> Relevant information extracted at page/document level and strictly attached to one `DOCUMENT_MENTION`.
+Canonical person record.
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `information_id` | UUID | Unique identifier for the information record. |
-| `text` | TEXT | Extracted information text. |
-| `document_mention_id` | UUID | Required foreign key to the owning document mention. |
-| `source_id` | UUID | Source containing the information. |
-| `model_agent_id` | UUID | Model agent that extracted the information. |
+| Field | Type | Description |
+| --- | --- | --- |
+| `entity_id` | UUID | Primary key. |
+| `principal_id` | UUID | Creating principal. |
+| `entity_type` | STRING \| NULL | Entity discriminator. |
+| `name` | STRING \| NULL | Best aggregated entity name. |
+| `description` | STRING \| NULL | Best aggregated entity description. |
+| `wikidata_id` | STRING \| NULL | Aggregated Wikidata identifier. |
+| `nlcr_authority_id` | STRING \| NULL | Aggregated NLCR authority identifier. |
 
 ### 2.4 Document Mention `DOCUMENT_MENTION`
 
-> Single per-document aggregator that groups `MENTION` and `INFORMATION`.
+Document-level aggregation linked directly to an entity.
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `document_mention_id` | UUID | Unique identifier for the document mention record. |
-| `name` | STRING | Aggregated name value for the document-level record. |
-| `information` | STRING | Aggregated information value for the document-level record. |
-| `model_agent_id` | UUID | Model agent that produced the aggregation. |
-| `identity_id` | UUID | Identity associated with this document-level record. |
+| Field | Type | Description |
+| --- | --- | --- |
+| `document_mention_id` | UUID | Primary key. |
+| `name` | STRING | Aggregated document-level name. |
+| `information` | STRING | Aggregated document-level information. |
+| `model_agent_id` | UUID | Producing model agent. |
+| `source_id` | UUID | Source document. |
+| `entity_id` | UUID | Linked entity. |
 
-### 2.5 Face `FACE`
+Named vectors:
 
-> Face detection linked to an identity.
+- `name:harrier-oss-v1-0.6b`
+- `fulltext:harrier-oss-v1-0.6b`
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `detection_id` | UUID | Unique identifier for the face detection. |
-| `bounding_box` | JSON | Face bounding box coordinates. |
-| `keypoints` | JSON | Facial keypoints. |
-| `confidence` | FLOAT | Detection confidence. |
-| `source_id` | UUID | Source containing the face detection. |
-| `model_agent_id` | UUID | Model agent that performed detection. |
-| `identity_id` | UUID | Identity associated with this face detection. |
+### 2.5 Page Mention `PAGE_MENTION`
 
-### 2.6 Description `DESCRIPTION`
+Page-level aggregation linked to one document mention.
 
-> Description text linked to an identity.
+| Field | Type | Description |
+| --- | --- | --- |
+| `page_mention_id` | UUID | Primary key. |
+| `name` | STRING | Page-level name hypothesis. |
+| `information` | STRING | Page-level contextual information. |
+| `confidence` | NUMBER | Extraction confidence. |
+| `document_mention_id` | UUID | Owning document mention. |
+| `source_id` | UUID | Source page. |
+| `model_agent_id` | UUID | Extracting model agent. |
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `description_id` | UUID | Unique identifier for the description. |
-| `text` | TEXT | Description text. |
+Named vectors:
+
+- `name:harrier-oss-v1-0.6b`
+- `fulltext:harrier-oss-v1-0.6b`
+
+### 2.6 Span `SPAN`
+
+Text span evidence attached to one page mention.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `span_id` | UUID | Primary key. |
+| `text` | STRING | Span text. |
+| `polygons` | OBJECT_ARRAY | Ordered polygons in page space. |
+| `page_mention_id` | UUID | Owning page mention. |
+| `source_id` | UUID | Source page. |
+| `entity_id` | UUID | Linked entity. |
+
+Named vector:
+
+- `name:harrier-oss-v1-0.6b`
+
+### 2.7 Face `FACE`
+
+Face detection evidence linked to an entity.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `detection_id` | UUID | Primary key. |
+| `bounding_box` | OBJECT | Bounding box coordinates. |
+| `keypoints` | OBJECT_ARRAY | Ordered facial keypoints. |
+| `confidence` | NUMBER | Detection confidence. |
+| `source_id` | UUID | Source page or image. |
+| `model_agent_id` | UUID | Detecting model agent. |
+| `entity_id` | UUID | Linked entity. |
+
+Named vector:
+
+- `face:vit_small_patch8_gap_112.cosface_ms1mv3`
+
+### 2.8 Description `DESCRIPTION`
+
+Free-text descriptive evidence linked to an entity.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `description_id` | UUID | Primary key. |
+| `text` | STRING | Description text. |
 | `language` | STRING | Language code. |
-| `source_id` | UUID | Source containing the description. |
-| `identity_id` | UUID | Identity associated with this description. |
+| `source_id` | UUID | Source record. |
+| `entity_id` | UUID | Linked entity. |
 
-### 2.7 Name `NAME`
+Named vector:
 
-> Name linked to an identity.
+- `fulltext:harrier-oss-v1-0.6b`
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `name_id` | UUID | Unique identifier for the name. |
-| `name` | TEXT | Name value. |
-| `source_id` | UUID | Source containing the name. |
-| `identity_id` | UUID | Identity associated with this name. |
+### 2.9 Entity Name `ENTITY_NAME`
 
-### 2.8 Source `SOURCE`
+Name evidence linked to an entity.
 
-> Source document or media metadata.
+| Field | Type | Description |
+| --- | --- | --- |
+| `entity_name_id` | UUID | Primary key. |
+| `name` | STRING | Name value. |
+| `source_id` | UUID | Source record. |
+| `entity_id` | UUID | Linked entity. |
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `source_id` | UUID | Unique identifier for the source. |
-| `source_type` | STRING | Type of source. |
-| `uri` | TEXT | Source URI. |
-| `metadata` | JSON | Source metadata. |
+Named vector:
 
-## 2.9 Search behaviour
+- `name:harrier-oss-v1-0.6b`
 
-Search must support both unimodal and multimodal retrieval over identities and annotations.
+## 3. Search behavior
 
-- A search query may be based on existing annotation vectors, a reference identity, or a combination of available modalities.
-- Identity search must support per-modality aggregation over the annotations belonging to one identity.
-- Supported aggregation modes for an identity are:
-  - best matching annotation of the modality,
-  - average score across all annotations of the modality,
-  - direct search against an identity-level named vector when such a vector is maintained.
-- Final multimodal ranking is a weighted combination of the enabled modality scores.
-- Identities must be filterable by `entity_type`.
+Search operates over annotation collections only.
 
-The MVP uses a single hardcoded search profile stored in service configuration rather than user-managed profiles in the database.
+- Non-annotation collections are not vectorized.
+- Query vectors may come from:
+  - explicit annotation IDs,
+  - a reference entity, by collecting vectors from that entity's linked annotations.
+- Entity ranking is computed by aggregating annotation hits per modality.
+- Supported per-modality entity aggregation modes are:
+  - `best_annotation`
+  - `average_annotation`
+- Final ranking is a weighted combination of normalized modality scores.
+- Annotation-level results can be returned alongside entity results.
 
-That configured profile must define:
+The default configured modalities are:
 
-- which modalities are enabled,
-- which annotation collection each modality targets,
-- which named vector is used for each annotation collection when relevant,
-- which named vector is used for identity-level search when relevant,
-- which aggregation mode is used for identity scoring per modality,
-- the modality weights used for multimodal ranking,
-- optional confidence thresholds for confidence-bearing annotations.
+- `face` over `Face`,
+- `entity_name` over `EntityName`,
+- `document_mention` over `DocumentMention`,
+- `description` over `Description`.
 
-## 3. Relationship Summary
+## 4. Relationship summary
 
-- `PRINCIPAL` creates `IDENTITY`.
-- `SOURCE` contains `MENTION`, `INFORMATION`, `DOCUMENT_MENTION`, and `FACE`.
-- Every `MENTION` and every `INFORMATION` row must reference exactly one `DOCUMENT_MENTION` via `document_mention_id`.
-- `IDENTITY` has `DOCUMENT_MENTION`, `FACE`, `DESCRIPTION`, and `NAME`.
+- `Principal` creates `Entity`.
+- `Source` contains `DocumentMention`, `PageMention`, `Span`, `Face`, `Description`, and `EntityName`.
+- `DocumentMention` belongs to one `Entity`.
+- `PageMention` belongs to one `DocumentMention`.
+- `Span` belongs to one `PageMention` and one `Entity`.
+- `Face`, `Description`, and `EntityName` each belong to one `Entity`.
 
-## 4. Entity Relationship Diagram
+## 5. Entity relationship diagram
 
 ```mermaid
 erDiagram
   PRINCIPAL ||--o{ ENTITY : creates
 
-  DOCUMENT_MENTION ||--o{ MENTION : consists_of
-  DOCUMENT_MENTION ||--o{ INFORMATION : consists_of
-
-
-  SOURCE ||--o{ MENTION : contains
-  SOURCE ||--o{ INFORMATION : contains
-  SOURCE ||--o{ DOCUMENT_MENTION : contains
-  SOURCE ||--o{ FACE : contains
-
   ENTITY ||--o{ DOCUMENT_MENTION : has
+  DOCUMENT_MENTION ||--o{ PAGE_MENTION : has
+  PAGE_MENTION ||--o{ SPAN : has
+
   ENTITY ||--o{ FACE : has
   ENTITY ||--o{ DESCRIPTION : has
-  ENTITY ||--o{ NAME : has
+  ENTITY ||--o{ ENTITY_NAME : has
 
-  ENTITY {
-    uuid identity_id
-    uuid principal_id
-    string entity_type
-    string name
-    string description
-    string wikidata_url
-    string nlcr_url
-  }
-
-  MENTION {
-    uuid mention_id
-    text text
-    int offset_start
-    int offset_end
-    float confidence
-    uuid document_mention_id
-    uuid source_id
-    uuid model_agent_id
-  }
-
-  INFORMATION {
-    uuid information_id
-    text text
-    uuid document_mention_id
-    uuid source_id
-    uuid model_agent_id
-  }
-
-  DOCUMENT_MENTION {
-    uuid document_mention_id
-    string name
-    string information
-    uuid model_agent_id
-    uuid identity_id
-  }
-
-  FACE {
-    uuid detection_id
-    json bounding_box
-    json keypoints
-    float confidence
-    uuid source_id
-    uuid model_agent_id
-    uuid identity_id
-  }
-
-  DESCRIPTION {
-    uuid description_id
-    text text
-    uuid identity_id
-  }
-
-  NAME {
-    uuid name_id
-    text name
-    uuid identity_id
-  }
-
-  SOURCE {
-    uuid source_id
-    string source_type
-    text uri
-    json metadata
-  }
+  SOURCE ||--o{ DOCUMENT_MENTION : contains
+  SOURCE ||--o{ PAGE_MENTION : contains
+  SOURCE ||--o{ SPAN : contains
+  SOURCE ||--o{ FACE : contains
+  SOURCE ||--o{ DESCRIPTION : contains
+  SOURCE ||--o{ ENTITY_NAME : contains
 ```

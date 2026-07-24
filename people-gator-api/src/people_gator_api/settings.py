@@ -4,12 +4,17 @@ from pydantic import BaseModel, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.services.vector_service.schema import (
+    DEFAULT_FACE_VECTOR,
+    DEFAULT_FULLTEXT_VECTOR,
+    DEFAULT_NAME_VECTOR,
+)
 
 
 class SearchEntityAggregationMode(StrEnum):
     best_annotation = "best_annotation"
     average_annotation = "average_annotation"
-    entity_named_vector = "entity_named_vector"
+
 
 class OpenTelemetrySettings(BaseModel):
     enabled: bool = True
@@ -28,6 +33,7 @@ class PostgresSettings(BaseModel):
     password: str
     database: str
 
+
 class S3Settings(BaseModel):
     access_key_id: str
     secret_access_key: str
@@ -35,8 +41,10 @@ class S3Settings(BaseModel):
     region: str
     endpoint_url: str | None = None
 
+
 class StorageSettings(BaseModel):
     s3: S3Settings
+
 
 class WeaviateSettings(BaseModel):
     http_host: str
@@ -58,7 +66,7 @@ class EmbeddingServiceSettings(BaseModel):
 class SearchModalitySettings(BaseModel):
     annotation_type: AnnotationType
     weight: float = Field(default=1.0, gt=0)
-    vector_name: str | None = None
+    vector_name: str
     aggregation: SearchEntityAggregationMode = (
         SearchEntityAggregationMode.best_annotation
     )
@@ -72,22 +80,28 @@ class SearchProfileSettings(BaseModel):
         default_factory=lambda: [
             SearchModalitySettings(
                 annotation_type=AnnotationType.face,
-                weight=0.7,
-                vector_name="face",
+                weight=0.6,
+                vector_name=DEFAULT_FACE_VECTOR,
                 aggregation=SearchEntityAggregationMode.best_annotation,
                 min_confidence=0.6,
             ),
             SearchModalitySettings(
-                annotation_type=AnnotationType.person_name,
-                weight=0.2,
-                vector_name="name",
-                aggregation=SearchEntityAggregationMode.entity_named_vector,
+                annotation_type=AnnotationType.entity_name,
+                weight=0.25,
+                vector_name=DEFAULT_NAME_VECTOR,
+                aggregation=SearchEntityAggregationMode.best_annotation,
+            ),
+            SearchModalitySettings(
+                annotation_type=AnnotationType.document_mention,
+                weight=0.1,
+                vector_name=DEFAULT_NAME_VECTOR,
+                aggregation=SearchEntityAggregationMode.best_annotation,
             ),
             SearchModalitySettings(
                 annotation_type=AnnotationType.description,
-                weight=0.1,
-                vector_name="description",
-                aggregation=SearchEntityAggregationMode.entity_named_vector,
+                weight=0.05,
+                vector_name=DEFAULT_FULLTEXT_VECTOR,
+                aggregation=SearchEntityAggregationMode.best_annotation,
             ),
         ]
     )
@@ -111,20 +125,22 @@ class KeycloakSettings(BaseModel):
     @property
     def jwks_uri(self) -> str:
         return f"{self.url}/realms/{self.realm}/protocol/openid-connect/certs"
-    
+
     @computed_field
     @property
     def openid_configuration(self) -> str:
         return f"{self.url}/realms/{self.realm}/.well-known/openid-configuration"
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix='PEOPLE_GATOR_API__',
-        env_nested_delimiter='__',
+        env_prefix="PEOPLE_GATOR_API__",
+        env_nested_delimiter="__",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
     app_name: str = "People Gator API"
     debug: bool = True
     reload: bool = True
@@ -138,5 +154,6 @@ class Settings(BaseSettings):
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
     search: SearchSettings = SearchSettings()
+
 
 settings = Settings()  # pyright: ignore[reportCallIssue] - BaseSettings values come from env sources.

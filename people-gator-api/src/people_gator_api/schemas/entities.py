@@ -7,10 +7,18 @@ import uuid
 from pydantic import BaseModel, Field
 
 
-class ModificationMetadata(BaseModel):
-    """Optional model metadata attached to mutable evidence records."""
+class VectorInput(BaseModel):
+    """Optional vector payload supplied for a single-vector annotation write."""
 
     embedding: list[float] | None = None
+    model_identifier: str | None = None
+
+
+class MultiVectorInput(BaseModel):
+    """Optional vector payload supplied for dual-vector annotation writes."""
+
+    name_embedding: list[float] | None = None
+    fulltext_embedding: list[float] | None = None
     model_identifier: str | None = None
 
 
@@ -35,6 +43,8 @@ class EntityResponse(BaseModel):
     entity_type: str | None
     name: str | None
     description: str | None
+    wikidata_id: str | None
+    nlcr_authority_id: str | None
 
 
 class EntityListResponse(BaseModel):
@@ -46,80 +56,72 @@ class EntityListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Mentions
+# Page mentions and spans
 # ---------------------------------------------------------------------------
 
 
-class MentionPolygonPoint(BaseModel):
+class PolygonPoint(BaseModel):
     """A polygon point in source-space coordinates."""
 
     x: float
     y: float
 
 
-class MentionPolygon(BaseModel):
-    """One mention polygon represented by ordered points."""
+class Polygon(BaseModel):
+    """One polygon represented by ordered points."""
 
-    points: list[MentionPolygonPoint] = Field(min_length=3)
+    points: list[PolygonPoint] = Field(min_length=3)
 
 
-class MentionCreateRequest(ModificationMetadata):
-    """Request body for ingesting a mention."""
+class PageMentionCreateRequest(MultiVectorInput):
+    """Request body for ingesting a page-level mention aggregation."""
 
-    text: str
-    document_mention_id: uuid.UUID
-    source_id: uuid.UUID
-    offset_start: int
-    offset_end: int
-    polygons: list[MentionPolygon] | None = None
-    model_agent_id: uuid.UUID
+    name: str
+    information: str
     confidence: float = Field(ge=0.0, le=1.0)
-
-
-class MentionResponse(ModificationMetadata):
-    """A single mention record."""
-
-    mention_id: uuid.UUID
-    text: str
     document_mention_id: uuid.UUID
     source_id: uuid.UUID
-    offset_start: int
-    offset_end: int
-    polygons: list[MentionPolygon] | None
     model_agent_id: uuid.UUID
+
+
+class PageMentionResponse(BaseModel):
+    """A single page mention record."""
+
+    page_mention_id: uuid.UUID
+    name: str
+    information: str
     confidence: float
-
-
-# ---------------------------------------------------------------------------
-# Information
-# ---------------------------------------------------------------------------
-
-
-class InformationCreateRequest(ModificationMetadata):
-    """Request body for ingesting information."""
-
-    text: str
     document_mention_id: uuid.UUID
     source_id: uuid.UUID
     model_agent_id: uuid.UUID
 
 
-class InformationResponse(ModificationMetadata):
-    """A single information record."""
+class SpanCreateRequest(VectorInput):
+    """Request body for ingesting a span linked to a page mention."""
 
-    information_id: uuid.UUID
     text: str
-    document_mention_id: uuid.UUID
+    page_mention_id: uuid.UUID
     source_id: uuid.UUID
-    model_agent_id: uuid.UUID
+    polygons: list[Polygon]
+
+
+class SpanResponse(BaseModel):
+    """A single span record."""
+
+    span_id: uuid.UUID
+    text: str
+    page_mention_id: uuid.UUID
+    source_id: uuid.UUID
+    entity_id: uuid.UUID
+    polygons: list[Polygon]
 
 
 # ---------------------------------------------------------------------------
-# Document Mentions
+# Document mentions
 # ---------------------------------------------------------------------------
 
 
-class DocumentMentionCreateRequest(ModificationMetadata):
+class DocumentMentionCreateRequest(MultiVectorInput):
     """Request body for creating a document-level mention aggregator."""
 
     name: str
@@ -129,7 +131,7 @@ class DocumentMentionCreateRequest(ModificationMetadata):
     entity_id: uuid.UUID
 
 
-class DocumentMentionResponse(ModificationMetadata):
+class DocumentMentionResponse(BaseModel):
     """A single document mention record."""
 
     document_mention_id: uuid.UUID
@@ -162,7 +164,7 @@ class FaceKeypoint(BaseModel):
     y: float
 
 
-class FaceCreateRequest(ModificationMetadata):
+class FaceCreateRequest(VectorInput):
     """Request body for ingesting a face detection."""
 
     source_id: uuid.UUID
@@ -173,7 +175,7 @@ class FaceCreateRequest(ModificationMetadata):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-class FaceResponse(ModificationMetadata):
+class FaceResponse(BaseModel):
     """A single face detection record."""
 
     detection_id: uuid.UUID
@@ -190,7 +192,7 @@ class FaceResponse(ModificationMetadata):
 # ---------------------------------------------------------------------------
 
 
-class DescriptionCreateRequest(ModificationMetadata):
+class DescriptionCreateRequest(VectorInput):
     """Request body for adding a description."""
 
     text: str
@@ -199,7 +201,7 @@ class DescriptionCreateRequest(ModificationMetadata):
     entity_id: uuid.UUID
 
 
-class DescriptionResponse(ModificationMetadata):
+class DescriptionResponse(BaseModel):
     """A single description record."""
 
     description_id: uuid.UUID
@@ -210,11 +212,11 @@ class DescriptionResponse(ModificationMetadata):
 
 
 # ---------------------------------------------------------------------------
-# Names
+# Entity names
 # ---------------------------------------------------------------------------
 
 
-class NameCreateRequest(ModificationMetadata):
+class EntityNameCreateRequest(VectorInput):
     """Request body for adding a name."""
 
     name: str
@@ -222,10 +224,10 @@ class NameCreateRequest(ModificationMetadata):
     entity_id: uuid.UUID
 
 
-class NameResponse(ModificationMetadata):
-    """A single name record."""
+class EntityNameResponse(BaseModel):
+    """A single entity-name record."""
 
-    name_id: uuid.UUID
+    entity_name_id: uuid.UUID
     name: str
     source_id: uuid.UUID
     entity_id: uuid.UUID
@@ -243,4 +245,4 @@ class EntityViewResponse(BaseModel):
     document_mention_ids: list[uuid.UUID]
     face_ids: list[uuid.UUID]
     description_ids: list[uuid.UUID]
-    name_ids: list[uuid.UUID]
+    entity_name_ids: list[uuid.UUID]

@@ -1,6 +1,7 @@
 import uuid
 
 from weaviate import WeaviateAsyncClient
+from weaviate.collections.classes.filters import FilterReturn
 from weaviate.classes.query import Filter
 
 from people_gator_api.schemas.enums import PrincipalType
@@ -13,6 +14,7 @@ from people_gator_api.services.weaviate_utils import combine_filters
 from people_gator_api.services.weaviate_utils import fetch_by_id
 from people_gator_api.services.weaviate_utils import fetch_single
 from people_gator_api.services.weaviate_utils import principal_response
+from people_gator_api.services.weaviate_utils import query_objects
 from people_gator_api.services.weaviate_utils import require_bool
 from people_gator_api.services.weaviate_utils import require_uuid
 from people_gator_api.services.weaviate_utils import upsert
@@ -27,7 +29,7 @@ async def list_principals(
     limit: int,
 ) -> list[PrincipalResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     if principal_type is not None:
         filters.append(Filter.by_property("principal_type").equal(principal_type.value))
     if is_active is not None:
@@ -37,8 +39,9 @@ async def list_principals(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [principal_response(item.properties) for item in response.objects],
+        [principal_response(item.properties) for item in objects],
         key=lambda item: item.principal_id,
     )
     if after_id is not None:
@@ -180,4 +183,4 @@ async def update_principal(
     if is_active is not None:
         properties["is_active"] = is_active
     await upsert(client, PRINCIPAL_COLLECTION, principal_id, properties=properties)
-    return principal_response(properties)
+    return principal_response(dict(properties))

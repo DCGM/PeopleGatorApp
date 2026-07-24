@@ -3,22 +3,24 @@
 import uuid
 
 from weaviate import WeaviateAsyncClient
+from weaviate.collections.classes.filters import FilterReturn
 
 from people_gator_api.schemas.entities import EntityCreateRequest
 from people_gator_api.schemas.entities import EntityListResponse
 from people_gator_api.schemas.entities import EntityResponse
 from people_gator_api.services.crud_services.annotation_service import list_descriptions
 from people_gator_api.services.crud_services.annotation_service import list_document_mentions
+from people_gator_api.services.crud_services.annotation_service import list_entity_names
 from people_gator_api.services.crud_services.annotation_service import list_faces
-from people_gator_api.services.crud_services.annotation_service import list_names
 from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
 from people_gator_api.services.vector_service.schema import ENTITY_COLLECTION
+from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
 from people_gator_api.services.vector_service.schema import FACE_COLLECTION
-from people_gator_api.services.vector_service.schema import NAME_COLLECTION
 from people_gator_api.services.weaviate_utils import combine_filters
 from people_gator_api.services.weaviate_utils import delete_document_mention_tree
 from people_gator_api.services.weaviate_utils import entity_response
 from people_gator_api.services.weaviate_utils import fetch_by_id
+from people_gator_api.services.weaviate_utils import query_objects
 from people_gator_api.services.weaviate_utils import refresh_entity_aggregates
 from people_gator_api.services.weaviate_utils import upsert
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -30,13 +32,14 @@ async def list_entities(
     limit: int,
 ) -> EntityListResponse:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     response = await client.collections.get(ENTITY_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [entity_response(item.properties) for item in response.objects],
+        [entity_response(item.properties) for item in objects],
         key=lambda item: item.entity_id,
     )
     if after_id is not None:
@@ -75,15 +78,10 @@ async def create_entity(
             "entity_type": payload.entity_type,
             "name": payload.name,
             "description": payload.description,
-            "face_count": 0,
-            "mention_count": 0,
-            "information_count": 0,
-            "document_mention_count": 0,
-            "name_count": 0,
-            "description_count": 0,
+            "wikidata_id": None,
+            "nlcr_authority_id": None,
         },
         references={"principal": principal_id},
-        vector={},
     )
     await refresh_entity_aggregates(client, entity_id)
     return EntityResponse(
@@ -92,6 +90,8 @@ async def create_entity(
         entity_type=payload.entity_type,
         name=payload.name,
         description=payload.description,
+        wikidata_id=None,
+        nlcr_authority_id=None,
     )
 
 
@@ -114,9 +114,11 @@ async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bo
             description.description_id
         )
 
-    names = await list_names(client, entity_id, None, 1000)
-    for name in names:
-        await client.collections.get(NAME_COLLECTION).data.delete_by_id(name.name_id)
+    entity_names = await list_entity_names(client, entity_id, None, 1000)
+    for entity_name in entity_names:
+        await client.collections.get(ENTITY_NAME_COLLECTION).data.delete_by_id(
+            entity_name.entity_name_id
+        )
 
     await client.collections.get(ENTITY_COLLECTION).data.delete_by_id(entity_id)
     return True

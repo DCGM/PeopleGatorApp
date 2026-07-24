@@ -1,203 +1,212 @@
-"""CRUD service for simplified annotation entities."""
+"""CRUD service for annotation entities."""
 
 import uuid
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
+from weaviate.collections.classes.filters import FilterReturn
 
 from people_gator_api.schemas.entities import DescriptionCreateRequest
 from people_gator_api.schemas.entities import DescriptionResponse
 from people_gator_api.schemas.entities import DocumentMentionCreateRequest
 from people_gator_api.schemas.entities import DocumentMentionResponse
+from people_gator_api.schemas.entities import EntityNameCreateRequest
+from people_gator_api.schemas.entities import EntityNameResponse
 from people_gator_api.schemas.entities import FaceCreateRequest
 from people_gator_api.schemas.entities import FaceResponse
-from people_gator_api.schemas.entities import InformationCreateRequest
-from people_gator_api.schemas.entities import InformationResponse
-from people_gator_api.schemas.entities import MentionCreateRequest
-from people_gator_api.schemas.entities import MentionResponse
-from people_gator_api.schemas.entities import NameCreateRequest
-from people_gator_api.schemas.entities import NameResponse
+from people_gator_api.schemas.entities import PageMentionCreateRequest
+from people_gator_api.schemas.entities import PageMentionResponse
+from people_gator_api.schemas.entities import SpanCreateRequest
+from people_gator_api.schemas.entities import SpanResponse
+from people_gator_api.services.vector_service.schema import DEFAULT_FACE_VECTOR
+from people_gator_api.services.vector_service.schema import DEFAULT_FULLTEXT_VECTOR
+from people_gator_api.services.vector_service.schema import DEFAULT_NAME_VECTOR
 from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
 from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_INFORMATION_VECTOR
-from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_NAME_VECTOR
+from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
 from people_gator_api.services.vector_service.schema import FACE_COLLECTION
-from people_gator_api.services.vector_service.schema import INFORMATION_COLLECTION
-from people_gator_api.services.vector_service.schema import MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import NAME_COLLECTION
+from people_gator_api.services.vector_service.schema import PAGE_MENTION_COLLECTION
+from people_gator_api.services.vector_service.schema import SPAN_COLLECTION
 from people_gator_api.services.weaviate_utils import combine_filters
 from people_gator_api.services.weaviate_utils import description_response
 from people_gator_api.services.weaviate_utils import document_mention_response
+from people_gator_api.services.weaviate_utils import dual_named_vector_payload
+from people_gator_api.services.weaviate_utils import entity_name_response
 from people_gator_api.services.weaviate_utils import face_response
 from people_gator_api.services.weaviate_utils import fetch_by_id
-from people_gator_api.services.weaviate_utils import information_response
-from people_gator_api.services.weaviate_utils import mention_response
-from people_gator_api.services.weaviate_utils import name_response
+from people_gator_api.services.weaviate_utils import page_mention_response
+from people_gator_api.services.weaviate_utils import query_objects
 from people_gator_api.services.weaviate_utils import refresh_entity_aggregates
 from people_gator_api.services.weaviate_utils import require_document_mention
+from people_gator_api.services.weaviate_utils import require_page_mention
+from people_gator_api.services.weaviate_utils import single_named_vector_payload
+from people_gator_api.services.weaviate_utils import span_response
 from people_gator_api.services.weaviate_utils import upsert
 from people_gator_api.utils.uuid_utils import new_uuid6
 
 
-async def create_mention(
+async def create_page_mention(
     client: WeaviateAsyncClient,
-    payload: MentionCreateRequest,
-) -> MentionResponse:
-    await require_document_mention(client, payload.document_mention_id)
-    mention_id = new_uuid6()
-    polygons = (
-        [
-            {
-                "points": [{"x": point.x, "y": point.y} for point in polygon.points]
-            }
-            for polygon in payload.polygons
-        ]
-        if payload.polygons is not None
-        else None
-    )
+    payload: PageMentionCreateRequest,
+) -> PageMentionResponse:
+    document_mention = await require_document_mention(client, payload.document_mention_id)
+    page_mention_id = new_uuid6()
     await upsert(
         client,
-        MENTION_COLLECTION,
-        mention_id,
+        PAGE_MENTION_COLLECTION,
+        page_mention_id,
         properties={
-            "mention_id": mention_id,
-            "text": payload.text,
-            "offset_start": payload.offset_start,
-            "offset_end": payload.offset_end,
-            "polygons": polygons,
+            "page_mention_id": page_mention_id,
+            "name": payload.name,
+            "information": payload.information,
             "confidence": payload.confidence,
             "document_mention_id": payload.document_mention_id,
             "source_id": payload.source_id,
             "model_agent_id": payload.model_agent_id,
-            "embedding": payload.embedding,
-            "model_identifier": payload.model_identifier,
         },
         references={
             "document_mention": payload.document_mention_id,
             "source": payload.source_id,
             "model_agent": payload.model_agent_id,
         },
-        vector=payload.embedding,
+        vector=dual_named_vector_payload(
+            name_embedding=payload.name_embedding,
+            fulltext_embedding=payload.fulltext_embedding,
+            name_vector_name=DEFAULT_NAME_VECTOR,
+            fulltext_vector_name=DEFAULT_FULLTEXT_VECTOR,
+        ),
     )
-    document_mention = await get_document_mention(client, payload.document_mention_id)
-    assert document_mention is not None
     await refresh_entity_aggregates(client, document_mention.entity_id)
-    return MentionResponse(
-        mention_id=mention_id,
-        text=payload.text,
+    return PageMentionResponse(
+        page_mention_id=page_mention_id,
+        name=payload.name,
+        information=payload.information,
+        confidence=payload.confidence,
         document_mention_id=payload.document_mention_id,
         source_id=payload.source_id,
-        offset_start=payload.offset_start,
-        offset_end=payload.offset_end,
-        polygons=payload.polygons,
         model_agent_id=payload.model_agent_id,
-        confidence=payload.confidence,
-        embedding=payload.embedding,
-        model_identifier=payload.model_identifier,
     )
 
 
-async def get_mention(
+async def get_page_mention(
     client: WeaviateAsyncClient,
-    mention_id: uuid.UUID,
-) -> MentionResponse | None:
-    obj = await fetch_by_id(client, MENTION_COLLECTION, "mention_id", mention_id)
+    page_mention_id: uuid.UUID,
+) -> PageMentionResponse | None:
+    obj = await fetch_by_id(
+        client,
+        PAGE_MENTION_COLLECTION,
+        "page_mention_id",
+        page_mention_id,
+    )
     if obj is None:
         return None
-    return mention_response(obj.properties)
+    return page_mention_response(obj.properties)
 
 
-async def list_mentions(
+async def list_page_mentions(
     client: WeaviateAsyncClient,
+    document_mention_id: uuid.UUID | None,
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[MentionResponse]:
+) -> list[PageMentionResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
+    if document_mention_id is not None:
+        filters.append(
+            Filter.by_property("document_mention_id").equal(str(document_mention_id))
+        )
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
-    response = await client.collections.get(MENTION_COLLECTION).query.fetch_objects(
+    response = await client.collections.get(PAGE_MENTION_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [mention_response(item.properties) for item in response.objects],
-        key=lambda item: item.mention_id,
+        [page_mention_response(item.properties) for item in objects],
+        key=lambda item: item.page_mention_id,
     )
     if after_id is not None:
-        items = [item for item in items if item.mention_id > after_id]
+        items = [item for item in items if item.page_mention_id > after_id]
     return items[:limit]
 
 
-async def create_information(
+async def create_span(
     client: WeaviateAsyncClient,
-    payload: InformationCreateRequest,
-) -> InformationResponse:
-    document_mention = await require_document_mention(client, payload.document_mention_id)
-    information_id = new_uuid6()
+    payload: SpanCreateRequest,
+) -> SpanResponse:
+    page_mention = await require_page_mention(client, payload.page_mention_id)
+    document_mention = await require_document_mention(client, page_mention.document_mention_id)
+    span_id = new_uuid6()
     await upsert(
         client,
-        INFORMATION_COLLECTION,
-        information_id,
+        SPAN_COLLECTION,
+        span_id,
         properties={
-            "information_id": information_id,
+            "span_id": span_id,
             "text": payload.text,
-            "document_mention_id": payload.document_mention_id,
+            "polygons": [
+                {
+                    "points": [{"x": point.x, "y": point.y} for point in polygon.points]
+                }
+                for polygon in payload.polygons
+            ],
+            "page_mention_id": payload.page_mention_id,
             "source_id": payload.source_id,
-            "model_agent_id": payload.model_agent_id,
-            "embedding": payload.embedding,
-            "model_identifier": payload.model_identifier,
+            "entity_id": document_mention.entity_id,
         },
         references={
-            "document_mention": payload.document_mention_id,
+            "page_mention": payload.page_mention_id,
             "source": payload.source_id,
-            "model_agent": payload.model_agent_id,
+            "entity": document_mention.entity_id,
         },
-        vector=payload.embedding,
+        vector=single_named_vector_payload(DEFAULT_NAME_VECTOR, payload.embedding),
     )
-    await refresh_entity_aggregates(client, document_mention.entity_id)
-    return InformationResponse(
-        information_id=information_id,
+    return SpanResponse(
+        span_id=span_id,
         text=payload.text,
-        document_mention_id=payload.document_mention_id,
+        page_mention_id=payload.page_mention_id,
         source_id=payload.source_id,
-        model_agent_id=payload.model_agent_id,
-        embedding=payload.embedding,
-        model_identifier=payload.model_identifier,
+        entity_id=document_mention.entity_id,
+        polygons=payload.polygons,
     )
 
 
-async def get_information(
+async def get_span(
     client: WeaviateAsyncClient,
-    information_id: uuid.UUID,
-) -> InformationResponse | None:
-    obj = await fetch_by_id(client, INFORMATION_COLLECTION, "information_id", information_id)
+    span_id: uuid.UUID,
+) -> SpanResponse | None:
+    obj = await fetch_by_id(client, SPAN_COLLECTION, "span_id", span_id)
     if obj is None:
         return None
-    return information_response(obj.properties)
+    return span_response(obj.properties)
 
 
-async def list_information(
+async def list_spans(
     client: WeaviateAsyncClient,
+    page_mention_id: uuid.UUID | None,
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[InformationResponse]:
+) -> list[SpanResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
+    if page_mention_id is not None:
+        filters.append(Filter.by_property("page_mention_id").equal(str(page_mention_id)))
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
-    response = await client.collections.get(INFORMATION_COLLECTION).query.fetch_objects(
+    response = await client.collections.get(SPAN_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [information_response(item.properties) for item in response.objects],
-        key=lambda item: item.information_id,
+        [span_response(item.properties) for item in objects],
+        key=lambda item: item.span_id,
     )
     if after_id is not None:
-        items = [item for item in items if item.information_id > after_id]
+        items = [item for item in items if item.span_id > after_id]
     return items[:limit]
 
 
@@ -217,20 +226,18 @@ async def create_document_mention(
             "model_agent_id": payload.model_agent_id,
             "source_id": payload.source_id,
             "entity_id": payload.entity_id,
-            "embedding": payload.embedding,
-            "model_identifier": payload.model_identifier,
         },
         references={
             "entity": payload.entity_id,
             "source": payload.source_id,
             "model_agent": payload.model_agent_id,
         },
-        vector={
-            DOCUMENT_MENTION_NAME_VECTOR: payload.embedding or [],
-            DOCUMENT_MENTION_INFORMATION_VECTOR: payload.embedding or [],
-        }
-        if payload.embedding is not None
-        else {},
+        vector=dual_named_vector_payload(
+            name_embedding=payload.name_embedding,
+            fulltext_embedding=payload.fulltext_embedding,
+            name_vector_name=DEFAULT_NAME_VECTOR,
+            fulltext_vector_name=DEFAULT_FULLTEXT_VECTOR,
+        ),
     )
     await refresh_entity_aggregates(client, payload.entity_id)
     return DocumentMentionResponse(
@@ -240,8 +247,6 @@ async def create_document_mention(
         model_agent_id=payload.model_agent_id,
         source_id=payload.source_id,
         entity_id=payload.entity_id,
-        embedding=payload.embedding,
-        model_identifier=payload.model_identifier,
     )
 
 
@@ -268,7 +273,7 @@ async def list_document_mentions(
     limit: int,
 ) -> list[DocumentMentionResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
     if source_id is not None:
@@ -277,8 +282,9 @@ async def list_document_mentions(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [document_mention_response(item.properties) for item in response.objects],
+        [document_mention_response(item.properties) for item in objects],
         key=lambda item: item.document_mention_id,
     )
     if after_id is not None:
@@ -311,15 +317,13 @@ async def create_face(
             "source_id": payload.source_id,
             "model_agent_id": payload.model_agent_id,
             "entity_id": payload.entity_id,
-            "embedding": payload.embedding,
-            "model_identifier": payload.model_identifier,
         },
         references={
             "entity": payload.entity_id,
             "source": payload.source_id,
             "model_agent": payload.model_agent_id,
         },
-        vector=payload.embedding,
+        vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
     )
     await refresh_entity_aggregates(client, payload.entity_id)
     return FaceResponse(
@@ -330,8 +334,6 @@ async def create_face(
         model_agent_id=payload.model_agent_id,
         entity_id=payload.entity_id,
         confidence=payload.confidence,
-        embedding=payload.embedding,
-        model_identifier=payload.model_identifier,
     )
 
 
@@ -353,7 +355,7 @@ async def list_faces(
     limit: int,
 ) -> list[FaceResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     if source_id is not None:
         filters.append(Filter.by_property("source_id").equal(str(source_id)))
     if entity_id is not None:
@@ -362,8 +364,9 @@ async def list_faces(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [face_response(item.properties) for item in response.objects],
+        [face_response(item.properties) for item in objects],
         key=lambda item: item.detection_id,
     )
     if after_id is not None:
@@ -386,11 +389,9 @@ async def create_description(
             "language": payload.language,
             "source_id": payload.source_id,
             "entity_id": payload.entity_id,
-            "embedding": payload.embedding,
-            "model_identifier": payload.model_identifier,
         },
         references={"entity": payload.entity_id, "source": payload.source_id},
-        vector=payload.embedding,
+        vector=single_named_vector_payload(DEFAULT_FULLTEXT_VECTOR, payload.embedding),
     )
     await refresh_entity_aggregates(client, payload.entity_id)
     return DescriptionResponse(
@@ -399,8 +400,6 @@ async def create_description(
         language=payload.language,
         source_id=payload.source_id,
         entity_id=payload.entity_id,
-        embedding=payload.embedding,
-        model_identifier=payload.model_identifier,
     )
 
 
@@ -421,15 +420,16 @@ async def list_descriptions(
     limit: int,
 ) -> list[DescriptionResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
     response = await client.collections.get(DESCRIPTION_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [description_response(item.properties) for item in response.objects],
+        [description_response(item.properties) for item in objects],
         key=lambda item: item.description_id,
     )
     if after_id is not None:
@@ -437,65 +437,67 @@ async def list_descriptions(
     return items[:limit]
 
 
-async def create_name(
+async def create_entity_name(
     client: WeaviateAsyncClient,
-    payload: NameCreateRequest,
-) -> NameResponse:
-    name_id = new_uuid6()
+    payload: EntityNameCreateRequest,
+) -> EntityNameResponse:
+    entity_name_id = new_uuid6()
     await upsert(
         client,
-        NAME_COLLECTION,
-        name_id,
+        ENTITY_NAME_COLLECTION,
+        entity_name_id,
         properties={
-            "name_id": name_id,
+            "entity_name_id": entity_name_id,
             "name": payload.name,
             "source_id": payload.source_id,
             "entity_id": payload.entity_id,
-            "embedding": payload.embedding,
-            "model_identifier": payload.model_identifier,
         },
         references={"entity": payload.entity_id, "source": payload.source_id},
-        vector=payload.embedding,
+        vector=single_named_vector_payload(DEFAULT_NAME_VECTOR, payload.embedding),
     )
     await refresh_entity_aggregates(client, payload.entity_id)
-    return NameResponse(
-        name_id=name_id,
+    return EntityNameResponse(
+        entity_name_id=entity_name_id,
         name=payload.name,
         source_id=payload.source_id,
         entity_id=payload.entity_id,
-        embedding=payload.embedding,
-        model_identifier=payload.model_identifier,
     )
 
 
-async def get_name(
+async def get_entity_name(
     client: WeaviateAsyncClient,
-    name_id: uuid.UUID,
-) -> NameResponse | None:
-    obj = await fetch_by_id(client, NAME_COLLECTION, "name_id", name_id)
+    entity_name_id: uuid.UUID,
+) -> EntityNameResponse | None:
+    obj = await fetch_by_id(
+        client,
+        ENTITY_NAME_COLLECTION,
+        "entity_name_id",
+        entity_name_id,
+    )
     if obj is None:
         return None
-    return name_response(obj.properties)
+    return entity_name_response(obj.properties)
 
 
-async def list_names(
+async def list_entity_names(
     client: WeaviateAsyncClient,
     entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[NameResponse]:
+) -> list[EntityNameResponse]:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     if entity_id is not None:
         filters.append(Filter.by_property("entity_id").equal(str(entity_id)))
-    response = await client.collections.get(NAME_COLLECTION).query.fetch_objects(
+    response = await client.collections.get(ENTITY_NAME_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [name_response(item.properties) for item in response.objects],
-        key=lambda item: item.name_id,
+        [entity_name_response(item.properties) for item in objects],
+        key=lambda item: item.entity_name_id,
     )
     if after_id is not None:
-        items = [item for item in items if item.name_id > after_id]
+        items = [item for item in items if item.entity_name_id > after_id]
     return items[:limit]

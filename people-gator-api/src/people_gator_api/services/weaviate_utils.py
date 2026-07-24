@@ -7,10 +7,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import json
 import uuid
-from typing import Any, cast
+from typing import Protocol, cast
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
+from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.types import WeaviateField
 from weaviate.collections.classes.types import WeaviateProperties
 
@@ -19,30 +20,34 @@ from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.entities import BoundingBox
 from people_gator_api.schemas.entities import DescriptionResponse
 from people_gator_api.schemas.entities import DocumentMentionResponse
+from people_gator_api.schemas.entities import EntityNameResponse
 from people_gator_api.schemas.entities import EntityResponse
 from people_gator_api.schemas.entities import FaceKeypoint
 from people_gator_api.schemas.entities import FaceResponse
-from people_gator_api.schemas.entities import InformationResponse
-from people_gator_api.schemas.entities import MentionPolygon
-from people_gator_api.schemas.entities import MentionPolygonPoint
-from people_gator_api.schemas.entities import MentionResponse
-from people_gator_api.schemas.entities import NameResponse
+from people_gator_api.schemas.entities import PageMentionResponse
+from people_gator_api.schemas.entities import Polygon
+from people_gator_api.schemas.entities import PolygonPoint
+from people_gator_api.schemas.entities import SpanResponse
 from people_gator_api.schemas.principals import PrincipalResponse
-from people_gator_api.schemas.sources import DocumentSourceMetadata, NlcrAuthoritySourceMetadata, PageSourceMetadata, SourceResponse, WikidataSourceMetadata, WikimediaImageSourceMetadata
+from people_gator_api.schemas.sources import (
+    DocumentSourceMetadata,
+    NlcrAuthoritySourceMetadata,
+    PageSourceMetadata,
+    SourceResponse,
+    WikidataSourceMetadata,
+    WikimediaImageSourceMetadata,
+)
 from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
-from people_gator_api.services.vector_service.schema import DESCRIPTION_VECTOR
 from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_COLLECTION
 from people_gator_api.services.vector_service.schema import ENTITY_COLLECTION
+from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
 from people_gator_api.services.vector_service.schema import FACE_COLLECTION
-from people_gator_api.services.vector_service.schema import FACE_VECTOR
-from people_gator_api.services.vector_service.schema import INFORMATION_COLLECTION
-from people_gator_api.services.vector_service.schema import MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import NAME_COLLECTION
-from people_gator_api.services.vector_service.schema import NAME_VECTOR
+from people_gator_api.services.vector_service.schema import PAGE_MENTION_COLLECTION
 from people_gator_api.services.vector_service.schema import PRINCIPAL_COLLECTION
 from people_gator_api.services.vector_service.schema import SOURCE_COLLECTION
+from people_gator_api.services.vector_service.schema import SPAN_COLLECTION
 
-type MutableProperties = dict[str, Any]  # Third-party Weaviate nested property typing is too imprecise here.
+type MutableProperties = dict[str, WeaviateField]
 type ReferenceMap = dict[str, uuid.UUID]
 type VectorPayload = list[float] | dict[str, list[float]]
 type JsonValue = (
@@ -54,6 +59,13 @@ type JsonValue = (
     | dict[str, "JsonValue"]
     | list["JsonValue"]
 )
+
+
+class WeaviateObjectLike(Protocol):
+    uuid: uuid.UUID
+    properties: Mapping[str, WeaviateField]
+    vector: list[float] | Mapping[str, object] | None
+    metadata: object | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -74,7 +86,7 @@ class StoredUser(StoredPrincipal):
 @dataclass(slots=True, frozen=True)
 class StoredObject:
     object_uuid: uuid.UUID
-    properties: WeaviateProperties
+    properties: Mapping[str, WeaviateField]
 
 
 async def fetch_by_id(
@@ -93,15 +105,16 @@ async def fetch_by_id(
 async def fetch_single(
     client: WeaviateAsyncClient,
     collection_name: str,
-    filters: Any,  # Third-party Weaviate filter expression type is not exported precisely.
+    filters: FilterReturn,
 ) -> StoredObject | None:
     response = await client.collections.get(collection_name).query.fetch_objects(
         filters=filters,
         limit=1,
     )
-    if not response.objects:
+    objects = query_objects(response)
+    if not objects:
         return None
-    item = response.objects[0]
+    item = objects[0]
     return StoredObject(object_uuid=item.uuid, properties=item.properties)
 
 
@@ -148,31 +161,48 @@ async def require_document_mention(
     return document_mention_response(obj.properties)
 
 
-async def list_mentions_for_document_mention(
+async def require_page_mention(
+    client: WeaviateAsyncClient,
+    page_mention_id: uuid.UUID,
+) -> PageMentionResponse:
+    obj = await fetch_by_id(
+        client,
+        PAGE_MENTION_COLLECTION,
+        "page_mention_id",
+        page_mention_id,
+    )
+    if obj is None:
+        raise ValueError(f"Page mention {page_mention_id} does not exist.")
+    return page_mention_response(obj.properties)
+
+
+async def list_page_mentions_for_document_mention(
     client: WeaviateAsyncClient,
     document_mention_id: uuid.UUID,
-) -> list[MentionResponse]:
-    response = await client.collections.get(MENTION_COLLECTION).query.fetch_objects(
+) -> list[PageMentionResponse]:
+    response = await client.collections.get(PAGE_MENTION_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("document_mention_id").equal(str(document_mention_id)),
         limit=1000,
     )
+    objects = query_objects(response)
     return sorted(
-        [mention_response(item.properties) for item in response.objects],
-        key=lambda item: item.mention_id,
+        [page_mention_response(item.properties) for item in objects],
+        key=lambda item: item.page_mention_id,
     )
 
 
-async def list_information_for_document_mention(
+async def list_spans_for_page_mention(
     client: WeaviateAsyncClient,
-    document_mention_id: uuid.UUID,
-) -> list[InformationResponse]:
-    response = await client.collections.get(INFORMATION_COLLECTION).query.fetch_objects(
-        filters=Filter.by_property("document_mention_id").equal(str(document_mention_id)),
+    page_mention_id: uuid.UUID,
+) -> list[SpanResponse]:
+    response = await client.collections.get(SPAN_COLLECTION).query.fetch_objects(
+        filters=Filter.by_property("page_mention_id").equal(str(page_mention_id)),
         limit=1000,
     )
+    objects = query_objects(response)
     return sorted(
-        [information_response(item.properties) for item in response.objects],
-        key=lambda item: item.information_id,
+        [span_response(item.properties) for item in objects],
+        key=lambda item: item.span_id,
     )
 
 
@@ -180,14 +210,13 @@ async def delete_document_mention_tree(
     client: WeaviateAsyncClient,
     document_mention_id: uuid.UUID,
 ) -> None:
-    mentions = await list_mentions_for_document_mention(client, document_mention_id)
-    for mention in mentions:
-        await client.collections.get(MENTION_COLLECTION).data.delete_by_id(mention.mention_id)
-
-    information_records = await list_information_for_document_mention(client, document_mention_id)
-    for information in information_records:
-        await client.collections.get(INFORMATION_COLLECTION).data.delete_by_id(
-            information.information_id
+    page_mentions = await list_page_mentions_for_document_mention(client, document_mention_id)
+    for page_mention in page_mentions:
+        spans = await list_spans_for_page_mention(client, page_mention.page_mention_id)
+        for span in spans:
+            await client.collections.get(SPAN_COLLECTION).data.delete_by_id(span.span_id)
+        await client.collections.get(PAGE_MENTION_COLLECTION).data.delete_by_id(
+            page_mention.page_mention_id
         )
 
     await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.delete_by_id(
@@ -204,23 +233,16 @@ async def refresh_entity_aggregates(
         return
     entity = entity_response(entity_obj.properties)
 
-    names = await _list_names(client, entity_id)
+    entity_names = await _list_entity_names(client, entity_id)
     descriptions = await _list_descriptions(client, entity_id)
-    faces = await _list_faces(client, entity_id)
     document_mentions = await _list_document_mentions(client, entity_id)
 
-    mention_count = 0
-    information_count = 0
-    for document_mention in document_mentions:
-        mention_count += len(
-            await list_mentions_for_document_mention(client, document_mention.document_mention_id)
-        )
-        information_count += len(
-            await list_information_for_document_mention(
-                client,
-                document_mention.document_mention_id,
-            )
-        )
+    aggregated_names = [item.name for item in entity_names] + [
+        item.name for item in document_mentions
+    ]
+    aggregated_descriptions = [item.text for item in descriptions] + [
+        item.information for item in document_mentions
+    ]
 
     await upsert(
         client,
@@ -230,25 +252,16 @@ async def refresh_entity_aggregates(
             "entity_id": entity.entity_id,
             "principal_id": entity.principal_id,
             "entity_type": entity.entity_type,
-            "name": most_common_normalized([item.name for item in names]),
-            "description": most_common_normalized([item.text for item in descriptions]),
-            "face_count": len(faces),
-            "mention_count": mention_count,
-            "information_count": information_count,
-            "document_mention_count": len(document_mentions),
-            "description_count": len(descriptions),
-            "name_count": len(names),
+            "name": most_common_normalized(aggregated_names),
+            "description": most_common_normalized(aggregated_descriptions),
+            "wikidata_id": entity.wikidata_id,
+            "nlcr_authority_id": entity.nlcr_authority_id,
         },
         references={"principal": entity.principal_id},
-        vector=named_vector_payload(
-            face_vector=mean_embedding([item.embedding for item in faces]),
-            name_vector=mean_embedding([item.embedding for item in names]),
-            description_vector=mean_embedding([item.embedding for item in descriptions]),
-        ),
     )
 
 
-def combine_filters(filters: list[Any]) -> Any | None:
+def combine_filters(filters: list[FilterReturn]) -> FilterReturn | None:
     if not filters:
         return None
     if len(filters) == 1:
@@ -261,45 +274,51 @@ def collection_id_property(collection_name: str) -> str:
         PRINCIPAL_COLLECTION: "principal_id",
         SOURCE_COLLECTION: "source_id",
         ENTITY_COLLECTION: "entity_id",
-        MENTION_COLLECTION: "mention_id",
-        INFORMATION_COLLECTION: "information_id",
+        PAGE_MENTION_COLLECTION: "page_mention_id",
         DOCUMENT_MENTION_COLLECTION: "document_mention_id",
+        SPAN_COLLECTION: "span_id",
         FACE_COLLECTION: "detection_id",
         DESCRIPTION_COLLECTION: "description_id",
-        NAME_COLLECTION: "name_id",
+        ENTITY_NAME_COLLECTION: "entity_name_id",
     }
     return collection_to_id_property[collection_name]
 
 
-def named_vector_payload(
-    *,
-    face_vector: list[float] | None = None,
-    name_vector: list[float] | None = None,
-    description_vector: list[float] | None = None,
-) -> dict[str, list[float]]:
-    payload: dict[str, list[float]] = {}
-    if face_vector is not None:
-        payload[FACE_VECTOR] = face_vector
-    if name_vector is not None:
-        payload[NAME_VECTOR] = name_vector
-    if description_vector is not None:
-        payload[DESCRIPTION_VECTOR] = description_vector
-    return payload
+def query_objects(response: object) -> list[WeaviateObjectLike]:
+    # Weaviate response stubs don't preserve the concrete object container shape here.
+    return cast(list[WeaviateObjectLike], getattr(response, "objects"))
 
 
-def mean_embedding(vectors: Sequence[list[float] | None]) -> list[float] | None:
-    present = [vector for vector in vectors if vector is not None]
-    if not present:
+def single_named_vector_payload(
+    vector_name: str,
+    embedding: list[float] | None,
+) -> dict[str, list[float]] | None:
+    if embedding is None:
         return None
-    dimension = len(present[0])
-    return [
-        sum(vector[index] for vector in present) / len(present)
-        for index in range(dimension)
+    return {vector_name: embedding}
+
+
+def dual_named_vector_payload(
+    *,
+    name_embedding: list[float] | None = None,
+    fulltext_embedding: list[float] | None = None,
+    name_vector_name: str,
+    fulltext_vector_name: str,
+) -> dict[str, list[float]] | None:
+    payload: dict[str, list[float]] = {}
+    if name_embedding is not None:
+        payload[name_vector_name] = name_embedding
+    if fulltext_embedding is not None:
+        payload[fulltext_vector_name] = fulltext_embedding
+    return payload or None
+
+
+def most_common_normalized(values: Sequence[str | None]) -> str | None:
+    normalized = [
+        " ".join(value.split()).strip().lower()
+        for value in values
+        if value is not None
     ]
-
-
-def most_common_normalized(values: Sequence[str]) -> str | None:
-    normalized = [" ".join(value.split()).strip().lower() for value in values]
     filtered = [value for value in normalized if value]
     if not filtered:
         return None
@@ -323,18 +342,23 @@ def source_response(
 ) -> SourceResponse:
     source_type = SourceKind(require_str(properties, "source_type"))
     metadata = optional_json_dict(properties, "metadata")
-    casted_metadata = {
+    metadata_model_by_source_type: dict[SourceKind, type] = {
         SourceKind.page: PageSourceMetadata,
         SourceKind.document: DocumentSourceMetadata,
         SourceKind.wikidata: WikidataSourceMetadata,
         SourceKind.wikimedia: WikimediaImageSourceMetadata,
         SourceKind.nlcr: NlcrAuthoritySourceMetadata,
-    }[source_type](**metadata) if metadata is not None else None # type: ignore
+    }
+    resolved_metadata = (
+        metadata_model_by_source_type[source_type](**metadata)
+        if metadata is not None
+        else None
+    )
     return SourceResponse(
         source_id=require_uuid(properties, "source_id"),
-        source_type=SourceKind(require_str(properties, "source_type")),
+        source_type=source_type,
         uri=require_str(properties, "uri"),
-        metadata=casted_metadata,
+        metadata=resolved_metadata,
     )
 
 
@@ -347,18 +371,39 @@ def entity_response(
         entity_type=optional_str(properties, "entity_type"),
         name=optional_str(properties, "name"),
         description=optional_str(properties, "description"),
+        wikidata_id=optional_str(properties, "wikidata_id"),
+        nlcr_authority_id=optional_str(properties, "nlcr_authority_id"),
     )
 
 
-def mention_response(
+def page_mention_response(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
-) -> MentionResponse:
-    polygons = optional_sequence_of_mappings(properties, "polygons")
-    resolved_polygons = (
-        [
-            MentionPolygon(
+) -> PageMentionResponse:
+    return PageMentionResponse(
+        page_mention_id=require_uuid(properties, "page_mention_id"),
+        name=require_str(properties, "name"),
+        information=require_str(properties, "information"),
+        confidence=require_float(properties, "confidence"),
+        document_mention_id=require_uuid(properties, "document_mention_id"),
+        source_id=require_uuid(properties, "source_id"),
+        model_agent_id=require_uuid(properties, "model_agent_id"),
+    )
+
+
+def span_response(
+    properties: WeaviateProperties | Mapping[str, WeaviateField],
+) -> SpanResponse:
+    polygons = sequence_of_mappings(properties, "polygons")
+    return SpanResponse(
+        span_id=require_uuid(properties, "span_id"),
+        text=require_str(properties, "text"),
+        page_mention_id=require_uuid(properties, "page_mention_id"),
+        source_id=require_uuid(properties, "source_id"),
+        entity_id=require_uuid(properties, "entity_id"),
+        polygons=[
+            Polygon(
                 points=[
-                    MentionPolygonPoint(
+                    PolygonPoint(
                         x=require_number(point, "x"),
                         y=require_number(point, "y"),
                     )
@@ -366,36 +411,7 @@ def mention_response(
                 ]
             )
             for polygon in polygons
-        ]
-        if polygons is not None
-        else None
-    )
-    return MentionResponse(
-        mention_id=require_uuid(properties, "mention_id"),
-        text=require_str(properties, "text"),
-        document_mention_id=require_uuid(properties, "document_mention_id"),
-        source_id=require_uuid(properties, "source_id"),
-        offset_start=require_int(properties, "offset_start"),
-        offset_end=require_int(properties, "offset_end"),
-        polygons=resolved_polygons,
-        model_agent_id=require_uuid(properties, "model_agent_id"),
-        confidence=require_float(properties, "confidence"),
-        embedding=optional_float_sequence(properties, "embedding"),
-        model_identifier=optional_str(properties, "model_identifier"),
-    )
-
-
-def information_response(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-) -> InformationResponse:
-    return InformationResponse(
-        information_id=require_uuid(properties, "information_id"),
-        text=require_str(properties, "text"),
-        document_mention_id=require_uuid(properties, "document_mention_id"),
-        source_id=require_uuid(properties, "source_id"),
-        model_agent_id=require_uuid(properties, "model_agent_id"),
-        embedding=optional_float_sequence(properties, "embedding"),
-        model_identifier=optional_str(properties, "model_identifier"),
+        ],
     )
 
 
@@ -409,8 +425,6 @@ def document_mention_response(
         model_agent_id=require_uuid(properties, "model_agent_id"),
         source_id=require_uuid(properties, "source_id"),
         entity_id=require_uuid(properties, "entity_id"),
-        embedding=optional_float_sequence(properties, "embedding"),
-        model_identifier=optional_str(properties, "model_identifier"),
     )
 
 
@@ -439,8 +453,6 @@ def face_response(
         model_agent_id=require_uuid(properties, "model_agent_id"),
         entity_id=require_uuid(properties, "entity_id"),
         confidence=require_float(properties, "confidence"),
-        embedding=optional_float_sequence(properties, "embedding"),
-        model_identifier=optional_str(properties, "model_identifier"),
     )
 
 
@@ -453,21 +465,17 @@ def description_response(
         language=require_str(properties, "language"),
         source_id=require_uuid(properties, "source_id"),
         entity_id=require_uuid(properties, "entity_id"),
-        embedding=optional_float_sequence(properties, "embedding"),
-        model_identifier=optional_str(properties, "model_identifier"),
     )
 
 
-def name_response(
+def entity_name_response(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
-) -> NameResponse:
-    return NameResponse(
-        name_id=require_uuid(properties, "name_id"),
+) -> EntityNameResponse:
+    return EntityNameResponse(
+        entity_name_id=require_uuid(properties, "entity_name_id"),
         name=require_str(properties, "name"),
         source_id=require_uuid(properties, "source_id"),
         entity_id=require_uuid(properties, "entity_id"),
-        embedding=optional_float_sequence(properties, "embedding"),
-        model_identifier=optional_str(properties, "model_identifier"),
     )
 
 
@@ -485,20 +493,6 @@ def require_uuid(
     key: str,
 ) -> uuid.UUID:
     raw_value = value(properties, key)
-    if isinstance(raw_value, uuid.UUID):
-        return raw_value
-    if isinstance(raw_value, str):
-        return uuid.UUID(raw_value)
-    raise TypeError(f"Property {key!r} is not a UUID.")
-
-
-def optional_uuid(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-    key: str,
-) -> uuid.UUID | None:
-    raw_value = properties.get(key)
-    if raw_value is None:
-        return None
     if isinstance(raw_value, uuid.UUID):
         return raw_value
     if isinstance(raw_value, str):
@@ -560,46 +554,11 @@ def require_float(
     raise TypeError(f"Property {key!r} is not a float.")
 
 
-def optional_float(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-    key: str,
-) -> float | None:
-    raw_value = properties.get(key)
-    if raw_value is None:
-        return None
-    if isinstance(raw_value, int) and not isinstance(raw_value, bool):
-        return float(raw_value)
-    if isinstance(raw_value, float):
-        return raw_value
-    raise TypeError(f"Property {key!r} is not a float.")
-
-
 def require_number(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
     key: str,
 ) -> float:
     return require_float(properties, key)
-
-
-def optional_float_sequence(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-    key: str,
-) -> list[float] | None:
-    raw_value = properties.get(key)
-    if raw_value is None:
-        return None
-    if not isinstance(raw_value, Sequence) or isinstance(raw_value, (str, bytes)):
-        raise TypeError(f"Property {key!r} is not a number sequence.")
-    floats: list[float] = []
-    for item in raw_value:
-        if isinstance(item, int) and not isinstance(item, bool):
-            floats.append(float(item))
-            continue
-        if isinstance(item, float):
-            floats.append(item)
-            continue
-        raise TypeError(f"Property {key!r} contains a non-numeric item.")
-    return floats
 
 
 def mapping_value(
@@ -617,16 +576,6 @@ def sequence_of_mappings(
     key: str,
 ) -> list[Mapping[str, WeaviateField]]:
     raw_value = value(properties, key)
-    return as_mapping_sequence(raw_value, key)
-
-
-def optional_sequence_of_mappings(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-    key: str,
-) -> list[Mapping[str, WeaviateField]] | None:
-    raw_value = properties.get(key)
-    if raw_value is None:
-        return None
     return as_mapping_sequence(raw_value, key)
 
 
@@ -685,23 +634,10 @@ async def _list_document_mentions(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
         limit=1000,
     )
+    objects = query_objects(response)
     return sorted(
-        [document_mention_response(item.properties) for item in response.objects],
+        [document_mention_response(item.properties) for item in objects],
         key=lambda item: item.document_mention_id,
-    )
-
-
-async def _list_faces(
-    client: WeaviateAsyncClient,
-    entity_id: uuid.UUID,
-) -> list[FaceResponse]:
-    response = await client.collections.get(FACE_COLLECTION).query.fetch_objects(
-        filters=Filter.by_property("entity_id").equal(str(entity_id)),
-        limit=1000,
-    )
-    return sorted(
-        [face_response(item.properties) for item in response.objects],
-        key=lambda item: item.detection_id,
     )
 
 
@@ -713,21 +649,23 @@ async def _list_descriptions(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
         limit=1000,
     )
+    objects = query_objects(response)
     return sorted(
-        [description_response(item.properties) for item in response.objects],
+        [description_response(item.properties) for item in objects],
         key=lambda item: item.description_id,
     )
 
 
-async def _list_names(
+async def _list_entity_names(
     client: WeaviateAsyncClient,
     entity_id: uuid.UUID,
-) -> list[NameResponse]:
-    response = await client.collections.get(NAME_COLLECTION).query.fetch_objects(
+) -> list[EntityNameResponse]:
+    response = await client.collections.get(ENTITY_NAME_COLLECTION).query.fetch_objects(
         filters=Filter.by_property("entity_id").equal(str(entity_id)),
         limit=1000,
     )
+    objects = query_objects(response)
     return sorted(
-        [name_response(item.properties) for item in response.objects],
-        key=lambda item: item.name_id,
+        [entity_name_response(item.properties) for item in objects],
+        key=lambda item: item.entity_name_id,
     )

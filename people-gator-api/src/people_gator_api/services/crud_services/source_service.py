@@ -4,6 +4,7 @@ import uuid
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
+from weaviate.collections.classes.filters import FilterReturn
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import SourceCreateRequest
@@ -13,6 +14,7 @@ from people_gator_api.services.vector_service.schema import SOURCE_COLLECTION
 from people_gator_api.services.weaviate_utils import combine_filters
 from people_gator_api.services.weaviate_utils import fetch_by_id
 from people_gator_api.services.weaviate_utils import fetch_single
+from people_gator_api.services.weaviate_utils import query_objects
 from people_gator_api.services.weaviate_utils import source_response
 from people_gator_api.services.weaviate_utils import upsert
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -25,7 +27,7 @@ async def list_sources(
     limit: int,
 ) -> SourceListResponse:
     scan_limit = max(limit * 10, 1000)
-    filters: list[object] = []
+    filters: list[FilterReturn] = []
     if source_type is not None:
         filters.append(Filter.by_property("source_type").equal(source_type.value))
 
@@ -33,8 +35,9 @@ async def list_sources(
         filters=combine_filters(filters),
         limit=scan_limit,
     )
+    objects = query_objects(response)
     items = sorted(
-        [source_response(item.properties) for item in response.objects],
+        [source_response(item.properties) for item in objects],
         key=lambda item: item.source_id,
     )
     if after_id is not None:

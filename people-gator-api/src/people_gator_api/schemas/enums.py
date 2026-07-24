@@ -2,33 +2,29 @@ from enum import StrEnum
 
 class AnnotationType(StrEnum):
     """Annotation entities in the simplified ER diagram."""
-    mention = "mention"
-    information = "information"
+
     document_mention = "document_mention"
+    page_mention = "page_mention"
+    span = "span"
     face = "face"
     description = "description"
-    person_name = "name"
+    entity_name = "entity_name"
 
 
 class SourceKind(StrEnum):
     """Physical type of a SOURCE record."""
+
     page = "page"
     document = "document"
     wikidata = "wikidata"
     wikimedia = "wikimedia"
-    nlcr = "nlcr"
-
-class RecordSource(StrEnum):
-    """Origin of external content records."""
-    wikidata = "wikidata"
-    wikicommons = "wikicommons"
-    nlcr = "nlcr"
     obalkyknih = "obalkyknih"
-    kramerius = "kramerius"
+    nlcr = "nlcr"
 
 
 class PrincipalType(StrEnum):
     """Polymorphic discriminator for PRINCIPAL rows."""
+
     user = "user"
     service_agent = "service_agent"
     model_agent = "model_agent"
@@ -36,6 +32,7 @@ class PrincipalType(StrEnum):
 
 class RegistrySource(StrEnum):
     """Model registry that hosts a MODEL_AGENT artifact."""
+
     mlflow = "mlflow"
     huggingface = "huggingface"
     local = "local"
