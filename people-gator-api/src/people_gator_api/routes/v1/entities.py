@@ -10,7 +10,6 @@ from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityListResponse,
     EntityResponse,
-    EntityViewResponse,
     DocumentMentionResponse,
     FaceResponse,
     NameResponse,
@@ -28,7 +27,6 @@ from people_gator_api.services.crud_services.entity_service import (
     create_entity,
     delete_entity,
     get_entity,
-    get_entity_view,
     list_entities,
 )
 
@@ -55,18 +53,6 @@ async def get_entity_route(
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
-
-
-@router.get("/entities/{entity_id}/view", response_model=EntityViewResponse)
-async def get_entity_view_route(
-    entity_id: uuid.UUID,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: WeaviateAsyncClient = Depends(get_session),
-) -> EntityViewResponse:
-    view = await get_entity_view(session, entity_id)
-    if view is None:
-        raise_api_error(404, "not_found", "Entity not found")
-    return view
 
 
 @router.get("/entities/{entity_id}/document-mentions", response_model=list[DocumentMentionResponse])

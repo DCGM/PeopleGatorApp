@@ -63,7 +63,3 @@ class EntitySearchResult(BaseModel):
         default=None,
         description="Cosine distance from the query in the description named-vector space.",
     )
-
-
-# Backward-compatible alias.
-IdentitySearchResult = EntitySearchResult

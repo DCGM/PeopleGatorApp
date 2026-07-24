@@ -29,7 +29,7 @@ from people_gator_api.schemas.entities import MentionPolygonPoint
 from people_gator_api.schemas.entities import MentionResponse
 from people_gator_api.schemas.entities import NameResponse
 from people_gator_api.schemas.principals import PrincipalResponse
-from people_gator_api.schemas.sources import SourceResponse
+from people_gator_api.schemas.sources import DocumentSourceMetadata, NlcrAuthoritySourceMetadata, PageSourceMetadata, SourceResponse, WikidataSourceMetadata, WikimediaImageSourceMetadata
 from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
 from people_gator_api.services.vector_service.schema import DESCRIPTION_VECTOR
 from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_COLLECTION
@@ -334,11 +334,20 @@ def principal_response(
 def source_response(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
 ) -> SourceResponse:
+    source_type = SourceKind(require_str(properties, "source_type"))
+    metadata = optional_json_dict(properties, "metadata")
+    casted_metadata = {
+        SourceKind.page: PageSourceMetadata,
+        SourceKind.document: DocumentSourceMetadata,
+        SourceKind.wikidata: WikidataSourceMetadata,
+        SourceKind.wikimedia: WikimediaImageSourceMetadata,
+        SourceKind.nlcr: NlcrAuthoritySourceMetadata,
+    }[source_type](**metadata) if metadata is not None else None # type: ignore
     return SourceResponse(
         source_id=require_uuid(properties, "source_id"),
         source_type=SourceKind(require_str(properties, "source_type")),
         uri=require_str(properties, "uri"),
-        metadata=optional_json_dict(properties, "metadata"),
+        metadata=casted_metadata,
     )
 
 

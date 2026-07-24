@@ -7,7 +7,6 @@ from weaviate import WeaviateAsyncClient
 from people_gator_api.schemas.entities import EntityCreateRequest
 from people_gator_api.schemas.entities import EntityListResponse
 from people_gator_api.schemas.entities import EntityResponse
-from people_gator_api.schemas.entities import EntityViewResponse
 from people_gator_api.services.crud_services.annotation_service import list_descriptions
 from people_gator_api.services.crud_services.annotation_service import list_document_mentions
 from people_gator_api.services.crud_services.annotation_service import list_faces
@@ -94,27 +93,6 @@ async def create_entity(
     )
 
 
-async def get_entity_view(
-    client: WeaviateAsyncClient,
-    entity_id: uuid.UUID,
-) -> EntityViewResponse | None:
-    entity = await get_entity(client, entity_id)
-    if entity is None:
-        return None
-
-    document_mentions = await list_document_mentions(client, entity_id, None, None, 500)
-    faces = await list_faces(client, None, entity_id, None, 500)
-    descriptions = await list_descriptions(client, entity_id, None, 500)
-    names = await list_names(client, entity_id, None, 500)
-    return EntityViewResponse(
-        entity_id=entity_id,
-        document_mention_ids=[item.document_mention_id for item in document_mentions],
-        face_ids=[item.detection_id for item in faces],
-        description_ids=[item.description_id for item in descriptions],
-        name_ids=[item.name_id for item in names],
-    )
-
-
 async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bool:
     entity = await get_entity(client, entity_id)
     if entity is None:
@@ -145,5 +123,4 @@ async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bo
 list_identities = list_entities
 get_identity = get_entity
 create_identity = create_entity
-get_identity_view = get_entity_view
 delete_identity = delete_entity

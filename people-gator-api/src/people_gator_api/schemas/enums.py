@@ -13,9 +13,10 @@ class AnnotationType(StrEnum):
 class SourceKind(StrEnum):
     """Physical type of a SOURCE record."""
     page = "page"
-    image = "image"
-    authority = "authority"
-
+    document = "document"
+    wikidata = "wikidata"
+    wikimedia = "wikimedia"
+    nlcr = "nlcr"
 
 class RecordSource(StrEnum):
     """Origin of external content records."""

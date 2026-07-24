@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 from aiohttp import ClientResponse, ClientSession, ClientTimeout, FormData
 
-from people_gator_api.services.embedding_service.interfaces import EmbeddingModelService
 from people_gator_api.services.embedding_service.schemas import (
     AllFacesResult,
     TextEmbeddingResponse,
@@ -86,7 +85,7 @@ async def close_embedding_service() -> None:
     _service = None
 
 
-def get_embedding_service() -> EmbeddingModelService:
+def get_embedding_service() -> HttpEmbeddingModelService:
     if _service is None:
         raise RuntimeError(
             "Embedding service is not initialised. "

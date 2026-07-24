@@ -1,6 +1,5 @@
 """Service for source endpoints."""
 
-import json
 import uuid
 
 from weaviate import WeaviateAsyncClient
@@ -96,7 +95,7 @@ async def create_source(
             "source_id": source_id,
             "source_type": payload.source_type.value,
             "uri": payload.uri,
-            "metadata": json.dumps(payload.metadata) if payload.metadata is not None else None,
+            "metadata": payload.metadata.model_dump(mode="json"),
         },
     )
     return (

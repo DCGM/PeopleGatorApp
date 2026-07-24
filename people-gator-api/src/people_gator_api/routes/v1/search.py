@@ -11,7 +11,6 @@ from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.enums import AnnotationType
 from people_gator_api.schemas.search import (
-    SearchFacetsResponse,
     SearchFilters,
     SearchQuery,
     SearchRequest,
@@ -19,9 +18,42 @@ from people_gator_api.schemas.search import (
 )
 from people_gator_api.services.auth_service import AuthContext, require_scopes
 from people_gator_api.services.database_service import get_session
-from people_gator_api.services.crud_services.search_service import search, search_facets
+from people_gator_api.services.crud_services.search_service import search
 
 router = APIRouter(tags=["search"])
+
+
+def _build_search_request(
+    *,
+    annotation_id: list[uuid.UUID],
+    reference_entity_id: uuid.UUID | None,
+    profile_id: uuid.UUID | None,
+    result_type: list[str],
+    annotation_type: list[AnnotationType],
+    source_kind: list[str],
+    has_face: bool | None,
+    has_authority_link: bool | None,
+    language: list[str],
+    limit: int,
+    after_id: uuid.UUID | None,
+) -> SearchRequest:
+    return SearchRequest(
+        query=SearchQuery(
+            annotation_ids=annotation_id or None,
+            reference_entity_id=reference_entity_id,
+        ),
+        profile_id=profile_id,
+        result_types=result_type,
+        filters=SearchFilters(
+            annotation_types=annotation_type,
+            source_kinds=source_kind,
+            has_face=has_face,
+            has_authority_link=has_authority_link,
+            languages=language,
+        ),
+        limit=limit,
+        after_id=after_id,
+    )
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -40,20 +72,16 @@ async def search_get(
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchResponse:
-    request = SearchRequest(
-        query=SearchQuery(
-            annotation_ids=annotation_id or None,
-            reference_entity_id=reference_entity_id,
-        ),
+    request = _build_search_request(
+        annotation_id=annotation_id,
+        reference_entity_id=reference_entity_id,
         profile_id=profile_id,
-        result_types=result_type,
-        filters=SearchFilters(
-            annotation_types=annotation_type,
-            source_kinds=source_kind,
-            has_face=has_face,
-            has_authority_link=has_authority_link,
-            languages=language,
-        ),
+        result_type=result_type,
+        annotation_type=annotation_type,
+        source_kind=source_kind,
+        has_face=has_face,
+        has_authority_link=has_authority_link,
+        language=language,
         limit=limit,
         after_id=after_id,
     )
@@ -62,34 +90,8 @@ async def search_get(
 
 @router.post("/search", response_model=SearchResponse)
 async def search_post(
-    payload: SearchRequest,
+    request: SearchRequest,
     _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchResponse:
-    return await search(session, payload)
-
-
-@router.get("/search/facets", response_model=SearchFacetsResponse)
-async def search_facets_get(
-    annotation_id: list[uuid.UUID] = Query(default_factory=list),
-    reference_entity_id: uuid.UUID | None = None,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: WeaviateAsyncClient = Depends(get_session),
-) -> SearchFacetsResponse:
-    return await search_facets(
-        session,
-        SearchQuery(
-            annotation_ids=annotation_id or None,
-            reference_entity_id=reference_entity_id,
-        ),
-        SearchFilters(),
-    )
-
-
-@router.post("/search/facets", response_model=SearchFacetsResponse)
-async def search_facets_post(
-    payload: SearchRequest,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: WeaviateAsyncClient = Depends(get_session),
-) -> SearchFacetsResponse:
-    return await search_facets(session, payload.query, payload.filters)
+    return await search(session, request)

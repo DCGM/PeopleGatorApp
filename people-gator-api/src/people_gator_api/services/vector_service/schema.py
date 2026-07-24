@@ -133,17 +133,6 @@ def _object_property(
     )
 
 
-def _json_text_property(name: str, description: str) -> Property:
-    return Property(
-        name=name,
-        data_type=DataType.TEXT,
-        description=description,
-        index_filterable=False,
-        index_searchable=False,
-        skip_vectorization=True,
-    )
-
-
 def _object_array_property(
     name: str,
     description: str,
@@ -255,7 +244,7 @@ SOURCE_PROPERTIES: list[Property] = [
     _uuid_property("source_id", "Primary key of SOURCE.source_id."),
     _text_property("source_type", "Source kind.", searchable=False),
     _text_property("uri", "Source URI."),
-    _json_text_property("metadata", "Arbitrary source metadata."),
+    _object_property("metadata", "Strict source metadata payload."),
 ]
 
 ENTITY_PROPERTIES: list[Property] = [
@@ -491,7 +480,11 @@ SEARCH_PROFILE_MODALITY_REFERENCES: list[ReferenceProperty] = [
 type CollectionSpec = tuple[list[Property], list[ReferenceProperty], object]
 
 ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    NAME_COLLECTION: (NAME_PROPERTIES, NAME_REFERENCES, default_vector_config()),
+    NAME_COLLECTION: (
+        NAME_PROPERTIES,
+        NAME_REFERENCES,
+        default_vector_config()
+    ),
     DESCRIPTION_COLLECTION: (
         DESCRIPTION_PROPERTIES,
         DESCRIPTION_REFERENCES,
@@ -502,8 +495,16 @@ ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
         INFORMATION_REFERENCES,
         default_vector_config(),
     ),
-    MENTION_COLLECTION: (MENTION_PROPERTIES, MENTION_REFERENCES, default_vector_config()),
-    FACE_COLLECTION: (FACE_PROPERTIES, FACE_REFERENCES, default_vector_config()),
+    MENTION_COLLECTION: (
+        MENTION_PROPERTIES,
+        MENTION_REFERENCES,
+        default_vector_config()
+    ),
+    FACE_COLLECTION: (
+        FACE_PROPERTIES,
+        FACE_REFERENCES,
+        default_vector_config()
+    ),
     DOCUMENT_MENTION_COLLECTION: (
         DOCUMENT_MENTION_PROPERTIES,
         DOCUMENT_MENTION_REFERENCES,
@@ -512,9 +513,21 @@ ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 }
 
 NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    PRINCIPAL_COLLECTION: (PRINCIPAL_PROPERTIES, PRINCIPAL_REFERENCES, default_vector_config()),
-    SOURCE_COLLECTION: (SOURCE_PROPERTIES, SOURCE_REFERENCES, default_vector_config()),
-    ENTITY_COLLECTION: (ENTITY_PROPERTIES, ENTITY_REFERENCES, entity_named_vector_configs()),
+    PRINCIPAL_COLLECTION: (
+        PRINCIPAL_PROPERTIES,
+        PRINCIPAL_REFERENCES,
+        default_vector_config()
+    ),
+    SOURCE_COLLECTION: (
+        SOURCE_PROPERTIES,
+        SOURCE_REFERENCES,
+        default_vector_config()
+    ),
+    ENTITY_COLLECTION: (
+        ENTITY_PROPERTIES,
+        ENTITY_REFERENCES,
+        entity_named_vector_configs()
+    ),
     SEARCH_PROFILE_COLLECTION: (
         SEARCH_PROFILE_PROPERTIES,
         SEARCH_PROFILE_REFERENCES,
