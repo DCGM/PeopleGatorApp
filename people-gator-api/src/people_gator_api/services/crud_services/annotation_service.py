@@ -45,6 +45,11 @@ from people_gator_api.services.weaviate_utils import upsert
 from people_gator_api.utils.uuid_utils import new_uuid6
 
 
+# ---------------------------------------------------------------------------
+# Page Mentions
+# ---------------------------------------------------------------------------
+
+
 async def create_page_mention(
     client: WeaviateAsyncClient,
     payload: PageMentionCreateRequest,
@@ -132,6 +137,11 @@ async def list_page_mentions(
     return items[:limit]
 
 
+# ---------------------------------------------------------------------------
+# Spans
+# ---------------------------------------------------------------------------
+
+
 async def create_span(
     client: WeaviateAsyncClient,
     payload: SpanCreateRequest,
@@ -208,6 +218,11 @@ async def list_spans(
     if after_id is not None:
         items = [item for item in items if item.span_id > after_id]
     return items[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Document Mentions
+# ---------------------------------------------------------------------------
 
 
 async def create_document_mention(
@@ -292,6 +307,11 @@ async def list_document_mentions(
     return items[:limit]
 
 
+# ---------------------------------------------------------------------------
+# Faces
+# ---------------------------------------------------------------------------
+
+
 async def create_face(
     client: WeaviateAsyncClient,
     payload: FaceCreateRequest,
@@ -374,6 +394,11 @@ async def list_faces(
     return items[:limit]
 
 
+# ---------------------------------------------------------------------------
+# Descriptions
+# ---------------------------------------------------------------------------
+
+
 async def create_description(
     client: WeaviateAsyncClient,
     payload: DescriptionCreateRequest,
@@ -435,6 +460,11 @@ async def list_descriptions(
     if after_id is not None:
         items = [item for item in items if item.description_id > after_id]
     return items[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Entity Names
+# ---------------------------------------------------------------------------
 
 
 async def create_entity_name(

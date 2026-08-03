@@ -241,10 +241,10 @@ async def refresh_entity_aggregates(
     descriptions = await _list_descriptions(client, entity_id)
     document_mentions = await _list_document_mentions(client, entity_id)
 
-    aggregated_names = [item.name for item in entity_names] + [
+    aggregated_names = [entity.name] + [item.name for item in entity_names] + [
         item.name for item in document_mentions
     ]
-    aggregated_descriptions = [item.text for item in descriptions] + [
+    aggregated_descriptions = [entity.description] + [item.text for item in descriptions] + [
         item.information for item in document_mentions
     ]
     aggregated_name = most_common_normalized(aggregated_names)

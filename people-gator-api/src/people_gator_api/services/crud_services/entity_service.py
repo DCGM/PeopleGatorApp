@@ -13,17 +13,25 @@ from people_gator_api.services.crud_services.annotation_service import list_docu
 from people_gator_api.services.crud_services.annotation_service import list_entity_names
 from people_gator_api.services.crud_services.annotation_service import list_faces
 from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
+from people_gator_api.services.vector_service.schema import DEFAULT_FULLTEXT_VECTOR
+from people_gator_api.services.vector_service.schema import DEFAULT_NAME_VECTOR
 from people_gator_api.services.vector_service.schema import ENTITY_COLLECTION
 from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
 from people_gator_api.services.vector_service.schema import FACE_COLLECTION
 from people_gator_api.services.weaviate_utils import combine_filters
 from people_gator_api.services.weaviate_utils import delete_document_mention_tree
+from people_gator_api.services.weaviate_utils import dual_named_vector_payload
 from people_gator_api.services.weaviate_utils import entity_response
 from people_gator_api.services.weaviate_utils import fetch_by_id
 from people_gator_api.services.weaviate_utils import query_objects
 from people_gator_api.services.weaviate_utils import refresh_entity_aggregates
 from people_gator_api.services.weaviate_utils import upsert
 from people_gator_api.utils.uuid_utils import new_uuid6
+
+
+# ---------------------------------------------------------------------------
+# Entities
+# ---------------------------------------------------------------------------
 
 
 async def list_entities(
@@ -82,6 +90,12 @@ async def create_entity(
             "nlcr_authority_id": None,
         },
         references={"principal": principal_id},
+        vector=dual_named_vector_payload(
+            name_embedding=payload.name_embedding,
+            fulltext_embedding=payload.fulltext_embedding,
+            name_vector_name=DEFAULT_NAME_VECTOR,
+            fulltext_vector_name=DEFAULT_FULLTEXT_VECTOR,
+        ),
     )
     await refresh_entity_aggregates(client, entity_id)
     return EntityResponse(
@@ -122,6 +136,11 @@ async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bo
 
     await client.collections.get(ENTITY_COLLECTION).data.delete_by_id(entity_id)
     return True
+
+
+# ---------------------------------------------------------------------------
+# Backward-Compatible Aliases
+# ---------------------------------------------------------------------------
 
 
 list_identities = list_entities

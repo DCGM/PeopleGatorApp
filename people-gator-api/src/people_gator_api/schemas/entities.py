@@ -27,7 +27,7 @@ class MultiVectorInput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class EntityCreateRequest(BaseModel):
+class EntityCreateRequest(MultiVectorInput):
     """Request body for creating a new entity."""
 
     entity_type: str | None = None
