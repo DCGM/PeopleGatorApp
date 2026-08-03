@@ -1,10 +1,17 @@
 """Pydantic models returned by vector-search helpers."""
 
-from uuid import UUID
+from uuid import (
+    UUID,
+)
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import (
+    AnnotationType,
+)
 
 
 class AnnotationSearchResult(BaseModel):

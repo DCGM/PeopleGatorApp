@@ -1,20 +1,51 @@
 import logging
-from dataclasses import dataclass
-from typing import TypeGuard, cast
+from dataclasses import (
+    dataclass,
+)
+from typing import (
+    TypeGuard,
+    cast,
+)
 
-from fastapi import Depends, Request
-from fastapi.security import HTTPAuthorizationCredentials, OpenIdConnect
-from joserfc import jwt
-from joserfc.errors import JoseError
-from joserfc.jwt import JWTClaimsRegistry
-from weaviate import WeaviateAsyncClient
+from fastapi import (
+    Depends,
+    Request,
+)
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    OpenIdConnect,
+)
+from joserfc import (
+    jwt,
+)
+from joserfc.errors import (
+    JoseError,
+)
+from joserfc.jwt import (
+    JWTClaimsRegistry,
+)
+from weaviate import (
+    WeaviateAsyncClient,
+)
 
-from people_gator_api.auth.jwks import JwksCache
-from people_gator_api.services.crud_services.principal_service import get_or_create_user
-from people_gator_api.services.database_service import get_session
-from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.settings import settings
-from people_gator_api.services.weaviate_utils import StoredPrincipal
+from people_gator_api.auth.jwks import (
+    JwksCache,
+)
+from people_gator_api.services.crud_services.principal_service import (
+    get_or_create_user,
+)
+from people_gator_api.services.database_service import (
+    get_session,
+)
+from people_gator_api.services.http_errors import (
+    raise_api_error,
+)
+from people_gator_api.settings import (
+    settings,
+)
+from people_gator_api.services.weaviate_utils import (
+    StoredPrincipal,
+)
 
 logger = logging.getLogger(__name__)
 _jwks_cache: JwksCache = JwksCache(settings.keycloak.jwks_uri)

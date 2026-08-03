@@ -4,15 +4,30 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections import defaultdict
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections import (
+    defaultdict,
+)
+from collections.abc import (
+    Iterable,
+    Sequence,
+)
+from dataclasses import (
+    dataclass,
+)
 
-from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter
-from weaviate.collections.classes.filters import FilterReturn
+from weaviate import (
+    WeaviateAsyncClient,
+)
+from weaviate.classes.query import (
+    Filter,
+)
+from weaviate.collections.classes.filters import (
+    FilterReturn,
+)
 
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import (
+    AnnotationType,
+)
 from people_gator_api.schemas.search import (
     SearchAnnotationResult,
     SearchEntityResult,
@@ -32,7 +47,9 @@ from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
     ENTITY_COLLECTION,
 )
-from people_gator_api.services.vector_service.schemas import AnnotationSearchResult
+from people_gator_api.services.vector_service.schemas import (
+    AnnotationSearchResult,
+)
 from people_gator_api.services.vector_service.search import (
     extract_named_vectors,
     fetch_collection_objects,
@@ -41,7 +58,9 @@ from people_gator_api.services.vector_service.search import (
     group_annotation_results_by_entity,
     search_by_vectors,
 )
-from people_gator_api.services.weaviate_utils import query_objects
+from people_gator_api.services.weaviate_utils import (
+    query_objects,
+)
 
 _DIRECT_ENTITY_ANNOTATION_TYPES = frozenset(
     {

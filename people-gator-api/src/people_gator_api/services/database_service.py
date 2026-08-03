@@ -1,6 +1,10 @@
-from collections.abc import AsyncGenerator
+from collections.abc import (
+    AsyncGenerator,
+)
 
-from weaviate import WeaviateAsyncClient
+from weaviate import (
+    WeaviateAsyncClient,
+)
 
 from people_gator_api.services.vector_service.client import (
     close_weaviate,

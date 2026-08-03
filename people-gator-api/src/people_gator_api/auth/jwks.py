@@ -2,7 +2,10 @@ import asyncio
 import time
 
 import httpx
-from joserfc.jwk import KeySet, KeySetSerialization
+from joserfc.jwk import (
+    KeySet,
+    KeySetSerialization,
+)
 
 
 class JwksCache:

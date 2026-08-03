@@ -2,22 +2,38 @@
 
 import uuid
 
-from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter
-from weaviate.collections.classes.filters import FilterReturn
+from weaviate import (
+    WeaviateAsyncClient,
+)
+from weaviate.classes.query import (
+    Filter,
+)
+from weaviate.collections.classes.filters import (
+    FilterReturn,
+)
 
-from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.sources import SourceCreateRequest
-from people_gator_api.schemas.sources import SourceListResponse
-from people_gator_api.schemas.sources import SourceResponse
-from people_gator_api.services.vector_service.schema import SOURCE_COLLECTION
-from people_gator_api.services.weaviate_utils import combine_filters
-from people_gator_api.services.weaviate_utils import fetch_by_id
-from people_gator_api.services.weaviate_utils import fetch_single
-from people_gator_api.services.weaviate_utils import query_objects
-from people_gator_api.services.weaviate_utils import source_response
-from people_gator_api.services.weaviate_utils import upsert
-from people_gator_api.utils.uuid_utils import new_uuid6
+from people_gator_api.schemas.enums import (
+    SourceKind,
+)
+from people_gator_api.schemas.sources import (
+    SourceCreateRequest,
+    SourceListResponse,
+    SourceResponse,
+)
+from people_gator_api.services.vector_service.schema import (
+    SOURCE_COLLECTION,
+)
+from people_gator_api.services.weaviate_utils import (
+    combine_filters,
+    fetch_by_id,
+    fetch_single,
+    query_objects,
+    source_response,
+    upsert,
+)
+from people_gator_api.utils.uuid_utils import (
+    new_uuid6,
+)
 
 
 async def list_sources(

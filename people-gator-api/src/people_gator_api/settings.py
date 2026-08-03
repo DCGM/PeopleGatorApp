@@ -1,9 +1,20 @@
-from enum import StrEnum
+from enum import (
+    StrEnum,
+)
 
-from pydantic import BaseModel, Field, computed_field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    BaseModel,
+    Field,
+    computed_field,
+)
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+)
 
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import (
+    AnnotationType,
+)
 from people_gator_api.services.vector_service.schema import (
     DEFAULT_FACE_VECTOR,
     DEFAULT_FULLTEXT_VECTOR,

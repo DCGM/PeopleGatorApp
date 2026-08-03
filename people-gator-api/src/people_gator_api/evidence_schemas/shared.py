@@ -4,7 +4,10 @@ All types are Pydantic BaseModel subclasses with strict validation enabled.
 They are composed by the derived and authority evidence schema modules.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 
 class Point(BaseModel):

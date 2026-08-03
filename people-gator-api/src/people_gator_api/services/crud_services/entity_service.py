@@ -2,31 +2,45 @@
 
 import uuid
 
-from weaviate import WeaviateAsyncClient
-from weaviate.collections.classes.filters import FilterReturn
+from weaviate import (
+    WeaviateAsyncClient,
+)
+from weaviate.collections.classes.filters import (
+    FilterReturn,
+)
 
-from people_gator_api.schemas.entities import EntityCreateRequest
-from people_gator_api.schemas.entities import EntityListResponse
-from people_gator_api.schemas.entities import EntityResponse
-from people_gator_api.services.crud_services.annotation_service import list_descriptions
-from people_gator_api.services.crud_services.annotation_service import list_document_mentions
-from people_gator_api.services.crud_services.annotation_service import list_entity_names
-from people_gator_api.services.crud_services.annotation_service import list_faces
-from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
-from people_gator_api.services.vector_service.schema import DEFAULT_FULLTEXT_VECTOR
-from people_gator_api.services.vector_service.schema import DEFAULT_NAME_VECTOR
-from people_gator_api.services.vector_service.schema import ENTITY_COLLECTION
-from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
-from people_gator_api.services.vector_service.schema import FACE_COLLECTION
-from people_gator_api.services.weaviate_utils import combine_filters
-from people_gator_api.services.weaviate_utils import delete_document_mention_tree
-from people_gator_api.services.weaviate_utils import dual_named_vector_payload
-from people_gator_api.services.weaviate_utils import entity_response
-from people_gator_api.services.weaviate_utils import fetch_by_id
-from people_gator_api.services.weaviate_utils import query_objects
-from people_gator_api.services.weaviate_utils import refresh_entity_aggregates
-from people_gator_api.services.weaviate_utils import upsert
-from people_gator_api.utils.uuid_utils import new_uuid6
+from people_gator_api.schemas.entities import (
+    EntityCreateRequest,
+    EntityListResponse,
+    EntityResponse,
+)
+from people_gator_api.services.crud_services.annotation_service import (
+    list_descriptions,
+    list_document_mentions,
+    list_entity_names,
+    list_faces,
+)
+from people_gator_api.services.vector_service.schema import (
+    DESCRIPTION_COLLECTION,
+    DEFAULT_FULLTEXT_VECTOR,
+    DEFAULT_NAME_VECTOR,
+    ENTITY_COLLECTION,
+    ENTITY_NAME_COLLECTION,
+    FACE_COLLECTION,
+)
+from people_gator_api.services.weaviate_utils import (
+    combine_filters,
+    delete_document_mention_tree,
+    dual_named_vector_payload,
+    entity_response,
+    fetch_by_id,
+    query_objects,
+    refresh_entity_aggregates,
+    upsert,
+)
+from people_gator_api.utils.uuid_utils import (
+    new_uuid6,
+)
 
 
 # ---------------------------------------------------------------------------

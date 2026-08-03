@@ -6,20 +6,37 @@ annotation-level results.
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
-from weaviate import WeaviateAsyncClient
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+)
+from weaviate import (
+    WeaviateAsyncClient,
+)
 
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import (
+    AnnotationType,
+)
 from people_gator_api.schemas.search import (
     SearchFilters,
     SearchQuery,
     SearchRequest,
     SearchResponse,
 )
-from people_gator_api.settings import settings
-from people_gator_api.services.auth_service import AuthContext, require_scopes
-from people_gator_api.services.database_service import get_session
-from people_gator_api.services.crud_services.search_service import search
+from people_gator_api.settings import (
+    settings,
+)
+from people_gator_api.services.auth_service import (
+    AuthContext,
+    require_scopes,
+)
+from people_gator_api.services.database_service import (
+    get_session,
+)
+from people_gator_api.services.crud_services.search_service import (
+    search,
+)
 
 router = APIRouter(tags=["search"])
 

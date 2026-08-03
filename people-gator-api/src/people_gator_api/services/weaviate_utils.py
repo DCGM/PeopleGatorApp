@@ -2,33 +2,51 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections import (
+    Counter,
+)
+from collections.abc import (
+    Mapping,
+    Sequence,
+)
+from dataclasses import (
+    dataclass,
+)
 import json
 import uuid
-from typing import Protocol, cast
+from typing import (
+    Protocol,
+    cast,
+)
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
-from weaviate.collections.classes.types import WeaviateField
-from weaviate.collections.classes.types import WeaviateProperties
+from weaviate.collections.classes.types import (
+    WeaviateField,
+    WeaviateProperties,
+)
 
-from people_gator_api.schemas.enums import PrincipalType
-from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.entities import BoundingBox
-from people_gator_api.schemas.entities import DescriptionResponse
-from people_gator_api.schemas.entities import DocumentMentionResponse
-from people_gator_api.schemas.entities import EntityNameResponse
-from people_gator_api.schemas.entities import EntityResponse
-from people_gator_api.schemas.entities import FaceKeypoint
-from people_gator_api.schemas.entities import FaceResponse
-from people_gator_api.schemas.entities import PageMentionResponse
-from people_gator_api.schemas.entities import Polygon
-from people_gator_api.schemas.entities import PolygonPoint
-from people_gator_api.schemas.entities import SpanResponse
-from people_gator_api.schemas.principals import PrincipalResponse
+from people_gator_api.schemas.enums import (
+    PrincipalType,
+    SourceKind,
+)
+from people_gator_api.schemas.entities import (
+    BoundingBox,
+    DescriptionResponse,
+    DocumentMentionResponse,
+    EntityNameResponse,
+    EntityResponse,
+    FaceKeypoint,
+    FaceResponse,
+    PageMentionResponse,
+    Polygon,
+    PolygonPoint,
+    SpanResponse,
+)
+from people_gator_api.schemas.principals import (
+    PrincipalResponse,
+)
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     NlcrAuthoritySourceMetadata,
@@ -37,19 +55,23 @@ from people_gator_api.schemas.sources import (
     WikidataSourceMetadata,
     WikimediaImageSourceMetadata,
 )
-from people_gator_api.services.embedding_service.http_service import EmbeddingServiceError
-from people_gator_api.services.embedding_service.http_service import get_embedding_service
-from people_gator_api.services.vector_service.schema import DEFAULT_FULLTEXT_VECTOR
-from people_gator_api.services.vector_service.schema import DEFAULT_NAME_VECTOR
-from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
-from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import ENTITY_COLLECTION
-from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
-from people_gator_api.services.vector_service.schema import FACE_COLLECTION
-from people_gator_api.services.vector_service.schema import PAGE_MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import PRINCIPAL_COLLECTION
-from people_gator_api.services.vector_service.schema import SOURCE_COLLECTION
-from people_gator_api.services.vector_service.schema import SPAN_COLLECTION
+from people_gator_api.services.embedding_service.http_service import (
+    EmbeddingServiceError,
+    get_embedding_service,
+)
+from people_gator_api.services.vector_service.schema import (
+    DEFAULT_FULLTEXT_VECTOR,
+    DEFAULT_NAME_VECTOR,
+    DESCRIPTION_COLLECTION,
+    DOCUMENT_MENTION_COLLECTION,
+    ENTITY_COLLECTION,
+    ENTITY_NAME_COLLECTION,
+    FACE_COLLECTION,
+    PAGE_MENTION_COLLECTION,
+    PRINCIPAL_COLLECTION,
+    SOURCE_COLLECTION,
+    SPAN_COLLECTION,
+)
 
 type MutableProperties = dict[str, WeaviateField]
 type ReferenceMap = dict[str, uuid.UUID]

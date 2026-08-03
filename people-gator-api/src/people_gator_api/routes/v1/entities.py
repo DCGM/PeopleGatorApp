@@ -2,8 +2,14 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
-from weaviate import WeaviateAsyncClient
+from fastapi import (
+    APIRouter,
+    Depends,
+    status,
+)
+from weaviate import (
+    WeaviateAsyncClient,
+)
 
 from people_gator_api.schemas.entities import (
     DescriptionResponse,
@@ -14,15 +20,22 @@ from people_gator_api.schemas.entities import (
     DocumentMentionResponse,
     FaceResponse,
 )
-from people_gator_api.services.auth_service import AuthContext, require_scopes
+from people_gator_api.services.auth_service import (
+    AuthContext,
+    require_scopes,
+)
 from people_gator_api.services.crud_services.annotation_service import (
     list_descriptions,
     list_document_mentions,
     list_entity_names,
     list_faces,
 )
-from people_gator_api.services.database_service import get_session
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.services.database_service import (
+    get_session,
+)
+from people_gator_api.services.http_errors import (
+    raise_api_error,
+)
 from people_gator_api.services.crud_services.entity_service import (
     create_entity,
     delete_entity,

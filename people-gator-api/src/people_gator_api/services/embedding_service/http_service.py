@@ -1,14 +1,24 @@
 import json
-from dataclasses import dataclass
+from dataclasses import (
+    dataclass,
+)
 
-from aiohttp import ClientResponse, ClientSession, ClientTimeout, FormData
+from aiohttp import (
+    ClientResponse,
+    ClientSession,
+    ClientTimeout,
+    FormData,
+)
 
 from people_gator_api.services.embedding_service.schemas import (
     AllFacesResult,
     TextEmbeddingResponse,
     TimmImageEmbeddingResponse,
 )
-from people_gator_api.settings import EmbeddingServiceSettings, settings
+from people_gator_api.settings import (
+    EmbeddingServiceSettings,
+    settings,
+)
 
 
 class EmbeddingServiceError(RuntimeError):

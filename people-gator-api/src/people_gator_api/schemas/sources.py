@@ -2,14 +2,18 @@
 
 import uuid
 
-from pydantic import AliasChoices
-from pydantic import AnyUrl
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
-from pydantic import model_validator
+from pydantic import (
+    AliasChoices,
+    AnyUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import (
+    SourceKind,
+)
 
 
 class PageSourceMetadata(BaseModel):

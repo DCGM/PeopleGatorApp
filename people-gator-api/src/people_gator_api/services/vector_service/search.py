@@ -3,24 +3,49 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import TypeGuard
-from uuid import UUID
+from collections import (
+    defaultdict,
+)
+from collections.abc import (
+    Mapping,
+    Sequence,
+)
+from dataclasses import (
+    dataclass,
+)
+from typing import (
+    TypeGuard,
+)
+from uuid import (
+    UUID,
+)
 
-from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import MetadataQuery
-from weaviate.collections.classes.filters import FilterReturn
-from weaviate.collections.classes.types import WeaviateField
+from weaviate import (
+    WeaviateAsyncClient,
+)
+from weaviate.classes.query import (
+    MetadataQuery,
+)
+from weaviate.collections.classes.filters import (
+    FilterReturn,
+)
+from weaviate.collections.classes.types import (
+    WeaviateField,
+)
 
-from people_gator_api.schemas.enums import AnnotationType
-from people_gator_api.services.weaviate_utils import WeaviateObjectLike
-from people_gator_api.services.weaviate_utils import query_objects
+from people_gator_api.schemas.enums import (
+    AnnotationType,
+)
+from people_gator_api.services.weaviate_utils import (
+    WeaviateObjectLike,
+    query_objects,
+)
 from people_gator_api.services.vector_service.schema import (
     ANNOTATION_COLLECTION_BY_TYPE,
 )
-from people_gator_api.services.vector_service.schemas import AnnotationSearchResult
+from people_gator_api.services.vector_service.schemas import (
+    AnnotationSearchResult,
+)
 
 _DEFAULT_LIMIT = 20
 

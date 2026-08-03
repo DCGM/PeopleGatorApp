@@ -2,13 +2,28 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
-from weaviate import WeaviateAsyncClient
+from fastapi import (
+    APIRouter,
+    Depends,
+    status,
+)
+from weaviate import (
+    WeaviateAsyncClient,
+)
 
-from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.services.auth_service import AuthContext, require_scopes
-from people_gator_api.services.database_service import get_session
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.schemas.enums import (
+    SourceKind,
+)
+from people_gator_api.services.auth_service import (
+    AuthContext,
+    require_scopes,
+)
+from people_gator_api.services.database_service import (
+    get_session,
+)
+from people_gator_api.services.http_errors import (
+    raise_api_error,
+)
 from people_gator_api.services.crud_services.source_service import (
     create_source,
     get_source,

@@ -1,24 +1,40 @@
 import uuid
 
-from weaviate import WeaviateAsyncClient
-from weaviate.collections.classes.filters import FilterReturn
-from weaviate.classes.query import Filter
+from weaviate import (
+    WeaviateAsyncClient,
+)
+from weaviate.collections.classes.filters import (
+    FilterReturn,
+)
+from weaviate.classes.query import (
+    Filter,
+)
 
-from people_gator_api.schemas.enums import PrincipalType
-from people_gator_api.schemas.principals import ModelAgentCreateRequest
-from people_gator_api.schemas.principals import PrincipalResponse
-from people_gator_api.services.vector_service.schema import PRINCIPAL_COLLECTION
-from people_gator_api.services.weaviate_utils import MutableProperties
-from people_gator_api.services.weaviate_utils import StoredUser
-from people_gator_api.services.weaviate_utils import combine_filters
-from people_gator_api.services.weaviate_utils import fetch_by_id
-from people_gator_api.services.weaviate_utils import fetch_single
-from people_gator_api.services.weaviate_utils import principal_response
-from people_gator_api.services.weaviate_utils import query_objects
-from people_gator_api.services.weaviate_utils import require_bool
-from people_gator_api.services.weaviate_utils import require_uuid
-from people_gator_api.services.weaviate_utils import upsert
-from people_gator_api.utils.uuid_utils import new_uuid6
+from people_gator_api.schemas.enums import (
+    PrincipalType,
+)
+from people_gator_api.schemas.principals import (
+    ModelAgentCreateRequest,
+    PrincipalResponse,
+)
+from people_gator_api.services.vector_service.schema import (
+    PRINCIPAL_COLLECTION,
+)
+from people_gator_api.services.weaviate_utils import (
+    MutableProperties,
+    StoredUser,
+    combine_filters,
+    fetch_by_id,
+    fetch_single,
+    principal_response,
+    query_objects,
+    require_bool,
+    require_uuid,
+    upsert,
+)
+from people_gator_api.utils.uuid_utils import (
+    new_uuid6,
+)
 
 
 async def list_principals(

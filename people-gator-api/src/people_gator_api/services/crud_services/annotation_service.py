@@ -2,47 +2,61 @@
 
 import uuid
 
-from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter
-from weaviate.collections.classes.filters import FilterReturn
+from weaviate import (
+    WeaviateAsyncClient,
+)
+from weaviate.classes.query import (
+    Filter,
+)
+from weaviate.collections.classes.filters import (
+    FilterReturn,
+)
 
-from people_gator_api.schemas.entities import DescriptionCreateRequest
-from people_gator_api.schemas.entities import DescriptionResponse
-from people_gator_api.schemas.entities import DocumentMentionCreateRequest
-from people_gator_api.schemas.entities import DocumentMentionResponse
-from people_gator_api.schemas.entities import EntityNameCreateRequest
-from people_gator_api.schemas.entities import EntityNameResponse
-from people_gator_api.schemas.entities import FaceCreateRequest
-from people_gator_api.schemas.entities import FaceResponse
-from people_gator_api.schemas.entities import PageMentionCreateRequest
-from people_gator_api.schemas.entities import PageMentionResponse
-from people_gator_api.schemas.entities import SpanCreateRequest
-from people_gator_api.schemas.entities import SpanResponse
-from people_gator_api.services.vector_service.schema import DEFAULT_FACE_VECTOR
-from people_gator_api.services.vector_service.schema import DEFAULT_FULLTEXT_VECTOR
-from people_gator_api.services.vector_service.schema import DEFAULT_NAME_VECTOR
-from people_gator_api.services.vector_service.schema import DESCRIPTION_COLLECTION
-from people_gator_api.services.vector_service.schema import DOCUMENT_MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import ENTITY_NAME_COLLECTION
-from people_gator_api.services.vector_service.schema import FACE_COLLECTION
-from people_gator_api.services.vector_service.schema import PAGE_MENTION_COLLECTION
-from people_gator_api.services.vector_service.schema import SPAN_COLLECTION
-from people_gator_api.services.weaviate_utils import combine_filters
-from people_gator_api.services.weaviate_utils import description_response
-from people_gator_api.services.weaviate_utils import document_mention_response
-from people_gator_api.services.weaviate_utils import dual_named_vector_payload
-from people_gator_api.services.weaviate_utils import entity_name_response
-from people_gator_api.services.weaviate_utils import face_response
-from people_gator_api.services.weaviate_utils import fetch_by_id
-from people_gator_api.services.weaviate_utils import page_mention_response
-from people_gator_api.services.weaviate_utils import query_objects
-from people_gator_api.services.weaviate_utils import refresh_entity_aggregates
-from people_gator_api.services.weaviate_utils import require_document_mention
-from people_gator_api.services.weaviate_utils import require_page_mention
-from people_gator_api.services.weaviate_utils import single_named_vector_payload
-from people_gator_api.services.weaviate_utils import span_response
-from people_gator_api.services.weaviate_utils import upsert
-from people_gator_api.utils.uuid_utils import new_uuid6
+from people_gator_api.schemas.entities import (
+    DescriptionCreateRequest,
+    DescriptionResponse,
+    DocumentMentionCreateRequest,
+    DocumentMentionResponse,
+    EntityNameCreateRequest,
+    EntityNameResponse,
+    FaceCreateRequest,
+    FaceResponse,
+    PageMentionCreateRequest,
+    PageMentionResponse,
+    SpanCreateRequest,
+    SpanResponse,
+)
+from people_gator_api.services.vector_service.schema import (
+    DEFAULT_FACE_VECTOR,
+    DEFAULT_FULLTEXT_VECTOR,
+    DEFAULT_NAME_VECTOR,
+    DESCRIPTION_COLLECTION,
+    DOCUMENT_MENTION_COLLECTION,
+    ENTITY_NAME_COLLECTION,
+    FACE_COLLECTION,
+    PAGE_MENTION_COLLECTION,
+    SPAN_COLLECTION,
+)
+from people_gator_api.services.weaviate_utils import (
+    combine_filters,
+    description_response,
+    document_mention_response,
+    dual_named_vector_payload,
+    entity_name_response,
+    face_response,
+    fetch_by_id,
+    page_mention_response,
+    query_objects,
+    refresh_entity_aggregates,
+    require_document_mention,
+    require_page_mention,
+    single_named_vector_payload,
+    span_response,
+    upsert,
+)
+from people_gator_api.utils.uuid_utils import (
+    new_uuid6,
+)
 
 
 # ---------------------------------------------------------------------------

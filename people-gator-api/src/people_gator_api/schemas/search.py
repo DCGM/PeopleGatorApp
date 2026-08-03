@@ -2,9 +2,15 @@
 
 import uuid
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    Field,
+)
 
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import (
+    AnnotationType,
+)
 
 
 def _annotation_type_list() -> list[AnnotationType]:

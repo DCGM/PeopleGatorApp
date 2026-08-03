@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from pydantic import (
+    BaseModel,
+)
 
 # ---------------------------------------------------------------------------
 # Just a simple root response for the API
