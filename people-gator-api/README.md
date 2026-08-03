@@ -17,3 +17,14 @@ This repository keeps specification content in focused documents to avoid contra
 - Search uses a single MVP endpoint: `POST /search`.
 - Fusion weights come only from saved search profiles.
 - All collection endpoints use one cursor envelope: `items`, `cursor`, `limit`, `has_more`.
+
+## Authority Import
+
+Authority ingestion CLI now lives in `people-gator-common` as `people-gator-import-authorities`.
+
+Run it from the common package:
+
+```bash
+cd ../people-gator-common
+uv run people-gator-import-authorities --help
+```

@@ -5,6 +5,9 @@ services:
     env_file: .env
     volumes:
       - /mnt/hdd/Data/people-gator-dev/weaviate:/var/lib/weaviate
+    ports:
+      - 8080:8080
+      - 50051:50051
     networks:
       - default
 

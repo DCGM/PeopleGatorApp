@@ -1,5 +1,7 @@
 """Explicit Weaviate collection schema for canonical API persistence."""
 
+import re
+
 from weaviate.classes.config import (
     Configure,
     DataType,
@@ -28,20 +30,37 @@ DESCRIPTION_COLLECTION = "Description"
 # Named vector names
 # ---------------------------------------------------------------------------
 
-FACE_VECTOR_PREFIX = "face:"
-NAME_VECTOR_PREFIX = "name:"
-FULLTEXT_VECTOR_PREFIX = "fulltext:"
+FACE_VECTOR_PREFIX = "face"
+NAME_VECTOR_PREFIX = "name"
+FULLTEXT_VECTOR_PREFIX = "fulltext"
 
 MICROSOFT_HARRIER_OSS_V1_0_6B = "harrier-oss-v1-0.6b"
 GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3 = (
     "vit_small_patch8_gap_112.cosface_ms1mv3"
 )
 
+
+def _graph_ql_safe_name(value: str) -> str:
+    sanitized = re.sub(r"[^0-9A-Za-z_]", "_", value)
+    sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+    if not sanitized:
+        raise ValueError("Named vector identifier must not be empty after sanitization.")
+    if sanitized[0].isdigit():
+        sanitized = f"v_{sanitized}"
+    return sanitized[:230]
+
+
 DEFAULT_FACE_VECTOR = (
-    FACE_VECTOR_PREFIX + GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3
+    FACE_VECTOR_PREFIX
+    + "_"
+    + _graph_ql_safe_name(GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3)
 )
-DEFAULT_NAME_VECTOR = NAME_VECTOR_PREFIX + MICROSOFT_HARRIER_OSS_V1_0_6B
-DEFAULT_FULLTEXT_VECTOR = FULLTEXT_VECTOR_PREFIX + MICROSOFT_HARRIER_OSS_V1_0_6B
+DEFAULT_NAME_VECTOR = (
+    NAME_VECTOR_PREFIX + "_" + _graph_ql_safe_name(MICROSOFT_HARRIER_OSS_V1_0_6B)
+)
+DEFAULT_FULLTEXT_VECTOR = (
+    FULLTEXT_VECTOR_PREFIX + "_" + _graph_ql_safe_name(MICROSOFT_HARRIER_OSS_V1_0_6B)
+)
 
 ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
     AnnotationType.document_mention: DOCUMENT_MENTION_COLLECTION,
@@ -224,7 +243,20 @@ SOURCE_PROPERTIES: list[Property] = [
     _uuid_property("source_id", "Primary key of SOURCE.source_id."),
     _text_property("source_type", "Source kind.", searchable=False),
     _text_property("uri", "Source URI."),
-    _object_property("metadata", "Strict source metadata payload."),
+    _object_property(
+        "metadata",
+        "Strict source metadata payload.",
+        nested_properties=[
+            _text_property("library", "Source library identifier.", searchable=False),
+            _uuid_property("document", "Document identifier."),
+            _uuid_property("page", "Page identifier."),
+            _text_property("kramerius_url", "Kramerius source URL.", searchable=False),
+            _text_property("entity_id", "Wikidata entity identifier.", searchable=False),
+            _text_property("wikidata_url", "Wikidata source URL.", searchable=False),
+            _text_property("nlcr_id", "NLCR authority identifier.", searchable=False),
+            _text_property("wikimedia_url", "Wikimedia source URL.", searchable=False),
+        ],
+    ),
 ]
 
 ENTITY_PROPERTIES: list[Property] = [

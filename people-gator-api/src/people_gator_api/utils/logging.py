@@ -5,7 +5,7 @@ from people_gator_api.settings import settings
 
 ALL_CALLSITE_PARAMETERS = list(structlog.processors.CallsiteParameter)
 
-def configure_logging(otel_handler: logging.Handler | None = None):
+def configure_logging():
     handlers: list[logging.Handler] = []
 
     class Iso8601Formatter(logging.Formatter):
@@ -27,9 +27,9 @@ def configure_logging(otel_handler: logging.Handler | None = None):
     stream_handler.setFormatter(formatter)
     handlers.append(stream_handler)
 
-    if otel_handler:
-        otel_handler.setFormatter(formatter)
-        handlers.append(otel_handler)
+    # if otel_handler:
+    #     otel_handler.setFormatter(formatter)
+    #     handlers.append(otel_handler)
     
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
 

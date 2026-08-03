@@ -4,10 +4,12 @@ import logging
 
 import weaviate
 from weaviate import WeaviateAsyncClient
+from weaviate.classes.config import ReferenceProperty
 from weaviate.classes.init import Auth
 
 from people_gator_api.settings import settings
 from people_gator_api.services.vector_service.schema import ALL_COLLECTION_SPECS
+from people_gator_api.services.vector_service.schema import CollectionSpec
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +81,9 @@ def get_weaviate_client() -> WeaviateAsyncClient:
 async def _ensure_collections(client: WeaviateAsyncClient) -> None:
     """Create Weaviate collections if they do not already exist."""
 
-    for collection_name, (properties, references, vector_config) in ALL_COLLECTION_SPECS.items():
+    for collection_name, (properties, references, vector_config) in ordered_collection_specs(
+        ALL_COLLECTION_SPECS
+    ):
         if await client.collections.exists(collection_name):
             logger.debug("Collection %s already exists", collection_name)
             continue
@@ -100,3 +104,49 @@ async def _ensure_collections(client: WeaviateAsyncClient) -> None:
                 references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
             )
         logger.info("Created Weaviate collection: %s", collection_name)
+
+
+def ordered_collection_specs(
+    collection_specs: dict[str, CollectionSpec],
+) -> list[tuple[str, CollectionSpec]]:
+    dependencies = {
+        collection_name: _collection_dependencies(collection_name, collection_specs)
+        for collection_name in collection_specs
+    }
+    remaining_specs = dict(collection_specs)
+    resolved_collections: set[str] = set()
+    ordered_specs: list[tuple[str, CollectionSpec]] = []
+
+    while remaining_specs:
+        ready_collections = [
+            collection_name
+            for collection_name in remaining_specs
+            if dependencies[collection_name] <= resolved_collections
+        ]
+        if not ready_collections:
+            unresolved_collections = ", ".join(sorted(remaining_specs))
+            raise ValueError(
+                "Weaviate collection specs contain unresolved reference dependencies: "
+                + unresolved_collections
+            )
+        for collection_name in ready_collections:
+            ordered_specs.append((collection_name, remaining_specs.pop(collection_name)))
+            resolved_collections.add(collection_name)
+
+    return ordered_specs
+
+
+def _collection_dependencies(
+    collection_name: str,
+    collection_specs: dict[str, CollectionSpec],
+) -> set[str]:
+    _, references, _ = collection_specs[collection_name]
+    return {
+        target_collection
+        for target_collection in _reference_targets(references)
+        if target_collection in collection_specs and target_collection != collection_name
+    }
+
+
+def _reference_targets(references: list[ReferenceProperty]) -> set[str]:
+    return {reference.target_collection for reference in references}

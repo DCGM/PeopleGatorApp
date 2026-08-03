@@ -19,6 +19,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 
 from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.weaviate import WeaviateInstrumentor
@@ -58,6 +59,7 @@ def initialize_opentelemetry():
     log_provider = LoggerProvider(resource=resource)
     log_provider.add_log_record_processor(log_processor)
     _logs.set_logger_provider(log_provider)
+    
     logger = _logs.get_logger(__name__)
     logging_handler = LoggingHandler(
         level={
@@ -69,10 +71,12 @@ def initialize_opentelemetry():
         logger_provider=log_provider
     )
 
+    logging_instrumentator = LoggingInstrumentor(log_level=logging.DEBUG)
     system_metric_instrumentator = SystemMetricsInstrumentor()
     fastapi_instrumentor = FastAPIInstrumentor()
     aiohttp_client_instrumentor = AioHttpClientInstrumentor()
     weaviate_instrumentor = WeaviateInstrumentor()
+    logging_instrumentator.instrument(set_logging_format=True)
     system_metric_instrumentator.instrument()
     aiohttp_client_instrumentor.instrument()
     weaviate_instrumentor.instrument()

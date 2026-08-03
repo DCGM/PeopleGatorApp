@@ -1,13 +1,16 @@
-"""Vector search helpers over Weaviate annotation collections."""
+"""Vector search primitives over Weaviate collections."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import cast
+import asyncio
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import TypeGuard
 from uuid import UUID
 
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter, MetadataQuery
+from weaviate.classes.query import MetadataQuery
 from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.types import WeaviateField
 
@@ -22,68 +25,181 @@ from people_gator_api.services.vector_service.schemas import AnnotationSearchRes
 _DEFAULT_LIMIT = 20
 
 
+type AnnotationResultKey = tuple[AnnotationType, UUID]
+
+
+@dataclass(slots=True, frozen=True)
+class AnnotationSearchBatch:
+    query_vector_index: int
+    results: list[AnnotationSearchResult]
+
+
+async def fetch_collection_objects(
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    *,
+    filters: FilterReturn | None = None,
+    include_vector: bool = False,
+    limit: int = _DEFAULT_LIMIT,
+) -> list[WeaviateObjectLike]:
+    """Fetch objects from a collection with optional vector payloads."""
+
+    response = await client.collections.get(collection_name).query.fetch_objects(
+        filters=filters,
+        include_vector=include_vector,
+        limit=limit,
+    )
+    return query_objects(response)
+
+
+async def query_collection_by_vector(
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    vector: list[float],
+    target_named_vector: str,
+    *,
+    filters: FilterReturn | None = None,
+    limit: int = _DEFAULT_LIMIT,
+    certainty: float | None = None,
+    distance: float | None = None,
+) -> list[WeaviateObjectLike]:
+    """Return raw Weaviate objects nearest to *vector* in *collection_name*."""
+
+    response = await client.collections.get(collection_name).query.near_vector(
+        near_vector=vector,
+        target_vector=target_named_vector,
+        limit=limit,
+        certainty=certainty,
+        distance=distance,
+        filters=filters,
+        return_metadata=MetadataQuery(distance=True, certainty=True),
+    )
+    return query_objects(response)
+
+
 async def search_by_vector(
     client: WeaviateAsyncClient,
     vector: list[float],
     annotation_type: AnnotationType,
     target_named_vector: str,
     *,
-    entity_id: UUID | None = None,
+    filters: FilterReturn | None = None,
     limit: int = _DEFAULT_LIMIT,
     certainty: float | None = None,
     distance: float | None = None,
-    min_confidence: float | None = None,
 ) -> list[AnnotationSearchResult]:
     """Return the nearest annotation objects to *vector*."""
-
-    collection = client.collections.get(ANNOTATION_COLLECTION_BY_TYPE[annotation_type])
-    filters = _build_annotation_filters(
-        annotation_type=annotation_type,
-        entity_id=entity_id,
-        min_confidence=min_confidence,
+    objects = await query_collection_by_vector(
+        client=client,
+        collection_name=ANNOTATION_COLLECTION_BY_TYPE[annotation_type],
+        vector=vector,
+        target_named_vector=target_named_vector,
+        filters=filters,
+        limit=limit,
+        certainty=certainty,
+        distance=distance,
     )
+    return _annotation_objects_to_results(objects, annotation_type)
 
-    response = cast(
-        object,
-        await collection.query.near_vector(
-            near_vector=vector,
-            target_vector=target_named_vector,
+
+async def search_by_vectors(
+    client: WeaviateAsyncClient,
+    vectors: Sequence[list[float]],
+    annotation_type: AnnotationType,
+    target_named_vector: str,
+    *,
+    filters: FilterReturn | None = None,
+    limit: int = _DEFAULT_LIMIT,
+    certainty: float | None = None,
+    distance: float | None = None,
+) -> list[AnnotationSearchBatch]:
+    """Run independent vector searches and keep their result batches separate."""
+
+    if not vectors:
+        return []
+
+    search_jobs = [
+        search_by_vector(
+            client=client,
+            vector=vector,
+            annotation_type=annotation_type,
+            target_named_vector=target_named_vector,
+            filters=filters,
             limit=limit,
             certainty=certainty,
             distance=distance,
-            filters=filters,
-            return_metadata=MetadataQuery(distance=True, certainty=True),
-        ),
-    )
-    return _annotation_objects_to_results(query_objects(response), annotation_type)
+        )
+        for vector in vectors
+    ]
+    resolved_batches = await asyncio.gather(*search_jobs)
+    return [
+        AnnotationSearchBatch(query_vector_index=query_vector_index, results=results)
+        for query_vector_index, results in enumerate(resolved_batches)
+    ]
 
 
-def _build_annotation_filters(
-    *,
-    annotation_type: AnnotationType,
-    entity_id: UUID | None,
-    min_confidence: float | None,
-) -> FilterReturn | None:
-    clauses: list[FilterReturn] = []
-    if entity_id is not None and annotation_type in {
-        AnnotationType.entity,
-        AnnotationType.document_mention,
-        AnnotationType.span,
-        AnnotationType.face,
-        AnnotationType.description,
-        AnnotationType.entity_name,
-    }:
-        clauses.append(Filter.by_property("entity_id").equal(str(entity_id)))
-    if min_confidence is not None and annotation_type in {
-        AnnotationType.page_mention,
-        AnnotationType.face,
-    }:
-        clauses.append(Filter.by_property("confidence").greater_or_equal(min_confidence))
-    if not clauses:
+def flatten_annotation_search_batches(
+    batches: Sequence[AnnotationSearchBatch],
+) -> list[AnnotationSearchResult]:
+    """Flatten independent vector-search batches into a single hit list."""
+
+    return [result for batch in batches for result in batch.results]
+
+
+def group_annotation_results_by_entity(
+    results: Sequence[AnnotationSearchResult],
+) -> dict[UUID, list[AnnotationSearchResult]]:
+    """Group annotation hits by linked entity identifier."""
+
+    grouped: dict[UUID, list[AnnotationSearchResult]] = defaultdict(list)
+    for result in results:
+        if result.entity_id is None:
+            continue
+        grouped[result.entity_id].append(result)
+    return dict(grouped)
+
+
+def group_annotation_results_by_annotation(
+    results: Sequence[AnnotationSearchResult],
+) -> dict[AnnotationResultKey, list[AnnotationSearchResult]]:
+    """Group hits by annotation identifier within an annotation type."""
+
+    grouped: dict[AnnotationResultKey, list[AnnotationSearchResult]] = defaultdict(list)
+    for result in results:
+        grouped[result.annotation_type, result.annotation_id].append(result)
+    return dict(grouped)
+
+
+def extract_named_vectors(
+    objects: Sequence[WeaviateObjectLike],
+    vector_name: str,
+) -> list[list[float]]:
+    """Extract all vectors named *vector_name* from fetched objects."""
+
+    vectors: list[list[float]] = []
+    for obj in objects:
+        vector = extract_named_vector(obj.vector, vector_name)
+        if vector is not None:
+            vectors.append(vector)
+    return vectors
+
+
+def extract_named_vector(
+    raw_vector: list[float] | Mapping[str, object] | None,
+    vector_name: str,
+) -> list[float] | None:
+    """Extract a single named vector from a Weaviate vector payload."""
+
+    if raw_vector is None:
         return None
-    if len(clauses) == 1:
-        return clauses[0]
-    return Filter.all_of(clauses)
+    if _is_float_vector(raw_vector):
+        return list(raw_vector)
+    if not isinstance(raw_vector, Mapping):
+        return None
+    named_vector: object | None = raw_vector.get(vector_name)
+    if _is_float_vector(named_vector):
+        return list(named_vector)
+    return None
 
 
 def _annotation_id_property(annotation_type: AnnotationType) -> str:
@@ -159,3 +275,9 @@ def _field_to_float(value: WeaviateField | None) -> float | None:
     if isinstance(value, float):
         return value
     raise TypeError("Expected numeric Weaviate field.")
+
+
+def _is_float_vector(value: object) -> TypeGuard[list[float]]:
+    if not isinstance(value, list) or not value:
+        return False
+    return isinstance(value[0], float)
