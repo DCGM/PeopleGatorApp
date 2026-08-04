@@ -28,7 +28,7 @@ from people_gator_api.services.crud_services.annotation_service import (
     list_faces,
 )
 from people_gator_api.services.database_service import (
-    get_session,
+    WeaviateSessionDependency,
 )
 from people_gator_api.services.http_errors import (
     raise_api_error,
@@ -45,10 +45,10 @@ router = APIRouter(tags=["entities"])
 
 @router.get("/entities", response_model=EntityListResponse)
 async def list_entities_route(
-    _auth: BrowseUserDependency,
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityListResponse:
     return await list_entities(session, after_id, limit)
 
@@ -56,8 +56,8 @@ async def list_entities_route(
 @router.get("/entities/{entity_id}", response_model=EntityResponse)
 async def get_entity_route(
     entity_id: uuid.UUID,
-    _auth: BrowseUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
 ) -> EntityResponse:
     entity = await get_entity(session, entity_id)
     if entity is None:
@@ -68,10 +68,10 @@ async def get_entity_route(
 @router.get("/entities/{entity_id}/document-mentions", response_model=list[DocumentMentionResponse])
 async def list_entity_document_mentions_route(
     entity_id: uuid.UUID,
-    _auth: BrowseUserDependency,
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[DocumentMentionResponse]:
     return await list_document_mentions(session, entity_id, None, after_id, limit)
 
@@ -79,27 +79,27 @@ async def list_entity_document_mentions_route(
 @router.get("/entities/{entity_id}/faces", response_model=list[FaceResponse])
 async def list_entity_faces_route(
     entity_id: uuid.UUID,
-    _auth: BrowseUserDependency,
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[FaceResponse]:
     return await list_faces(session, None, entity_id, after_id, limit)
 
 @router.post("/entities", response_model=EntityResponse, status_code=status.HTTP_201_CREATED)
 async def create_entity_route(
     payload: EntityCreateRequest,
-    auth: AnnotatorUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: AnnotatorUserDependency,
 ) -> EntityResponse:
-    return await create_entity(session, payload, auth.principal_id)
+    return await create_entity(session, payload, principal.principal_id)
 
 
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entity_route(
     entity_id: uuid.UUID,
-    _auth: AdminUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
 ) -> None:
     deleted = await delete_entity(session, entity_id)
     if not deleted:

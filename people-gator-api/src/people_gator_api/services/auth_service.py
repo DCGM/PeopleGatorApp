@@ -7,7 +7,8 @@ from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import SecurityScopes
 from typing import Annotated
 from people_gator_api.utils.uuid_utils import new_uuid6
-
+from people_gator_api.services.crud_services.principal_service import get_or_create_user
+from people_gator_api.services.database_service import WeaviateSessionDependency
 logger = logging.getLogger(__name__)
 
 
@@ -23,11 +24,6 @@ KNOWN_SCOPES = {
     ADMIN_SCOPE,
 }
 
-@lru_cache(maxsize=1)
-def single_uuid() -> uuid.UUID:
-    """Return a single UUID for testing purposes."""
-    return new_uuid6()
-
 @dataclass
 class Principal:
     """Represents an authenticated user or service principal."""
@@ -38,7 +34,7 @@ class Principal:
 security = HTTPBasic()
 
 async def get_current_user(
-    security_scopes: SecurityScopes, token: Annotated[HTTPBasicCredentials, Depends(security)]
+    security_scopes: SecurityScopes, token: Annotated[HTTPBasicCredentials, Depends(security)], session: WeaviateSessionDependency
 ):
     """Get the current user from the request context."""
     if not token:
@@ -58,6 +54,13 @@ async def get_current_user(
             detail="Invalid username or password",
             headers={"WWW-Authenticate": "Basic"},
         )
+    user = get_or_create_user(
+        session=session,
+        external_subject=username,
+        external_issuer="http://test.people-gator-api.local",
+        display_name=username,
+        email="test@test.people-gator-api.local",
+    )
     
     for scope in security_scopes.scopes:
         if scope not in scopes:
@@ -65,7 +68,11 @@ async def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Not enough permissions for scope: {scope}",
             )
-    return Principal(principal_id=single_uuid(), username=username, scopes=scopes)
+    return Principal(
+        principal_id=user.principal_id,
+        username=username,
+        scopes=scopes,
+    )
 
 
 type DataIngestUserDependency = Annotated[Principal, Security(get_current_user, scopes=[INGEST_SCOPE])]

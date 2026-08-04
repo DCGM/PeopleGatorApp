@@ -126,28 +126,12 @@ async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bo
     entity = await get_entity(client, entity_id)
     if entity is None:
         return False
-
-    document_mentions = await list_document_mentions(client, entity_id, None, None, 1000)
-    for document_mention in document_mentions:
-        await delete_document_mention_tree(client, document_mention.document_mention_id)
-        await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.delete_by_id(
-            document_mention.document_mention_id
-        )
-
-    faces = await list_faces(client, None, entity_id, None, 1000)
-    for face in faces:
-        await client.collections.get(FACE_COLLECTION).data.delete_by_id(face.detection_id)
-
-    await client.collections.get(ENTITY_COLLECTION).data.delete_by_id(entity_id)
-    return True
+    entities = client.collections.get(ENTITY_COLLECTION)
+    result = await entities.data.delete_by_id(entity_id)
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Backward-Compatible Aliases
 # ---------------------------------------------------------------------------
 
-
-list_identities = list_entities
-get_identity = get_entity
-create_identity = create_entity
-delete_identity = delete_entity

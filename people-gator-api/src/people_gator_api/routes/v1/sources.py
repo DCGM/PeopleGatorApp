@@ -19,7 +19,7 @@ from people_gator_api.services.auth_service import (
     DataIngestUserDependency,
 )
 from people_gator_api.services.database_service import (
-    get_session,
+    WeaviateSessionDependency,
 )
 from people_gator_api.services.http_errors import (
     raise_api_error,
@@ -41,11 +41,11 @@ router = APIRouter(tags=["sources"])
 
 @router.get("/sources", response_model=SourceListResponse)
 async def list_sources_route(
-    _auth: DataIngestUserDependency,
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
     source_type: SourceKind | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SourceListResponse:
     return await list_sources(session, source_type, after_id, limit)
 
@@ -53,8 +53,8 @@ async def list_sources_route(
 @router.get("/sources/{source_id}", response_model=SourceResponse)
 async def get_source_route(
     source_id: uuid.UUID,
-    _auth: DataIngestUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
 ) -> SourceResponse:
     source = await get_source(session, source_id)
     if source is None:
@@ -65,10 +65,10 @@ async def get_source_route(
 @router.post("/sources", response_model=SourceResponse, status_code=status.HTTP_201_CREATED)
 async def create_source_route(
     payload: SourceCreateRequest,
-    auth: DataIngestUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
 ) -> SourceResponse:
-    source, created = await create_source(session, payload, auth.principal_id)
+    source, created = await create_source(session, payload, principal.principal_id)
     if not created:
         raise_api_error(409, "already_exists", "Source already registered")
     return source
@@ -77,8 +77,8 @@ async def create_source_route(
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source_route(
     source_id: uuid.UUID,
-    _auth: AdminUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
 ) -> None:
     deleted = await delete_source(session, source_id)
     if not deleted:

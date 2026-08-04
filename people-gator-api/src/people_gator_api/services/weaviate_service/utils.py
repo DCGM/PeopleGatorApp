@@ -59,33 +59,6 @@ from people_gator_api.services.weaviate_service.db_schema import (
     PAGE_MENTION_COLLECTION,
 )
 
-type MutableProperties = dict[str, WeaviateField]
-type ReferenceMap = dict[str, uuid.UUID]
-type VectorPayload = list[float] | dict[str, list[float]]
-type JsonValue = (
-    str
-    | int
-    | float
-    | bool
-    | None
-    | dict[str, "JsonValue"]
-    | list["JsonValue"]
-)
-
-
-class WeaviateObjectLike(Protocol):
-    uuid: uuid.UUID
-    properties: Mapping[str, WeaviateField]
-    vector: list[float] | Mapping[str, object] | None
-    metadata: object | None
-
-
-@dataclass(slots=True, frozen=True)
-class StoredObject:
-    object_uuid: uuid.UUID
-    properties: Mapping[str, WeaviateField]
-
-
 async def upsert(
     client: WeaviateAsyncClient,
     collection_name: str,
@@ -185,11 +158,6 @@ def combine_filters(filters: list[FilterReturn]) -> FilterReturn | None:
     if len(filters) == 1:
         return filters[0]
     return Filter.all_of(filters)
-
-
-def query_objects(response: object) -> list[WeaviateObjectLike]:
-    # Weaviate response stubs don't preserve the concrete object container shape here.
-    return cast(list[WeaviateObjectLike], getattr(response, "objects"))
 
 
 def single_named_vector_payload(

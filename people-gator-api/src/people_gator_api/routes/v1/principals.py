@@ -9,7 +9,7 @@ from weaviate import (
 )
 
 from people_gator_api.services.database_service import (
-    get_session,
+    WeaviateSessionDependency,
 )
 from people_gator_api.schemas.enums import (
     PrincipalType,
@@ -38,12 +38,12 @@ router = APIRouter(tags=["principals"])
 
 @router.get("/principals", response_model=list[PrincipalResponse])
 async def list_principals_route(
-    _auth: AdminUserDependency,
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
     principal_type: PrincipalType | None = None,
     is_active: bool | None = True,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[PrincipalResponse]:
     return await list_principals(session, principal_type, is_active, after_id, limit)
 
@@ -51,23 +51,23 @@ async def list_principals_route(
 @router.get("/principals/{principal_id}", response_model=PrincipalResponse)
 async def get_principal_route(
     principal_id: uuid.UUID,
-    _auth: AnnotatorUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: AnnotatorUserDependency,
 ) -> PrincipalResponse:
-    principal = await get_principal(session, principal_id)
-    if principal is None:
+    found_principal = await get_principal(session, principal_id)
+    if found_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    return principal
+    return found_principal
 
 
 @router.get("/principals/me", response_model=PrincipalResponse)
 async def get_me_route(
-    auth: AnnotatorUserDependency,
+    principal: AnnotatorUserDependency,
 ) -> PrincipalResponse:
     return PrincipalResponse(
-        principal_id=auth.principal_id,
+        principal_id=principal.principal_id,
         principal_type=PrincipalType.user,
-        display_name=auth.username,
+        display_name=principal.username,
         is_active=True,
     )
 
@@ -75,8 +75,8 @@ async def get_me_route(
 @router.post("/principals/model-agents", response_model=PrincipalResponse)
 async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
-    _auth: AdminUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
 ) -> PrincipalResponse:
     return await create_model_agent(session, payload)
 
@@ -85,15 +85,15 @@ async def create_model_agent_route(
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
-    _auth: AdminUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
 ) -> PrincipalResponse:
-    principal = await update_principal(
+    updated_principal = await update_principal(
         session,
         principal_id,
         payload.display_name,
         payload.is_active,
     )
-    if principal is None:
+    if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    return principal
+    return updated_principal

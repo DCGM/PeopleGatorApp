@@ -29,7 +29,7 @@ from people_gator_api.services.auth_service import (
     BrowseUserDependency,
 )
 from people_gator_api.services.database_service import (
-    get_session,
+    WeaviateSessionDependency,
 )
 from people_gator_api.services.crud_services.search_service import (
     search,
@@ -40,11 +40,11 @@ router = APIRouter(tags=["search"])
 
 @router.get("/search", response_model=SearchResponse)
 async def search_get(
-    _auth: BrowseUserDependency,
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
     name: str | None = Query(default=None, alias="query_name"),
     limit: int = 20,
     after_id: uuid.UUID | None = None,
-    session: WeaviateAsyncClient = Depends(get_session),
 ) -> SearchResponse:
     return await search(session, SearchQuery(
         name=name,
@@ -56,7 +56,7 @@ async def search_get(
 @router.post("/search", response_model=SearchResponse)
 async def search_post(
     request: SearchQuery,
-    _auth: BrowseUserDependency,
-    session: WeaviateAsyncClient = Depends(get_session),
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
 ) -> SearchResponse:
     return await search(session, request)

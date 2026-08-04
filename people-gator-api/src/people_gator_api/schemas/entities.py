@@ -123,17 +123,6 @@ class DocumentMentionEntityPatchRequest(BaseModel):
     """Patch body for reassigning a document mention to a different entity."""
 
     entity_id: uuid.UUID
-    
-class DocumentMentionView(BaseModel):
-    """A single document mention record."""
-
-    document_mention_id: uuid.UUID
-    name: str
-    information: str
-    aliases: list[str]
-    principal_id: uuid.UUID
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
 
 
 # ---------------------------------------------------------------------------

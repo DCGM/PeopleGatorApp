@@ -55,34 +55,6 @@ class StoredUser:
     email: str | None
 
 
-async def _fetch_single_principal(
-    client: WeaviateAsyncClient,
-    filters: FilterReturn,
-) -> object | None:
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
-        filters=filters,
-        limit=1,
-        return_references=empty_reference_queries([]),
-    )
-    return response.objects[0] if response.objects else None
-
-
-def _map_principal(item: object) -> PrincipalResponse:
-    return principal_response(
-        getattr(item, "properties"),
-        getattr(item, "references", {}),
-        getattr(item, "uuid"),
-    )
-
-
-def _properties(item: object) -> Mapping[str, WeaviateField]:
-    raw_properties = getattr(item, "properties")
-    if not isinstance(raw_properties, Mapping):
-        raise TypeError("Expected Weaviate object properties mapping.")
-    typed_properties: Mapping[str, WeaviateField] = raw_properties  # type: ignore[reportUnknownVariableType] - Weaviate returns Mapping[Unknown, Unknown] in stubs after runtime mapping check.
-    return typed_properties
-
-
 async def list_principals(
     client: WeaviateAsyncClient,
     principal_type: PrincipalType | None,
@@ -103,7 +75,7 @@ async def list_principals(
         after=after_id,
     )
     items = sorted(
-        [_map_principal(item) for item in response.objects],
+        [principal_response(item.properties, item.references, item.uuid) for item in response.objects],
         key=lambda item: item.principal_id,
     )
     return items
@@ -130,9 +102,9 @@ async def get_or_create_user(
     display_name: str,
     email: str | None,
 ) -> StoredUser:
-    existing = await _fetch_single_principal(
-        client,
-        Filter.all_of(
+    existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+        limit=1,
+        filters=Filter.all_of(
             [
                 Filter.by_property("principal_type").equal(PrincipalType.user.value),
                 Filter.by_property("external_subject").equal(external_subject),
@@ -141,9 +113,10 @@ async def get_or_create_user(
         ),
     )
 
-    if existing is not None:
-        principal_id = getattr(existing, "uuid")
-        existing_properties = _properties(existing)
+    if existing.objects:
+        existing_item = existing.objects[0]
+        principal_id = getattr(existing_item, "uuid")
+        existing_properties = existing_item.properties
         is_active_value = require_bool(existing_properties, "is_active")
         resolved_display_name = require_str(existing_properties, "display_name")
         resolved_email = optional_str(existing_properties, "email")
@@ -155,11 +128,11 @@ async def get_or_create_user(
 
     properties: MutableProperties = {
         "principal_type": PrincipalType.user.value,
-        "display_name": display_name,
+        "display_name": resolved_display_name,
         "is_active": is_active_value,
         "external_subject": external_subject,
         "external_issuer": external_issuer,
-        "email": email,
+        "email": resolved_email,
         "annotation_type": None,
         "role": None,
         "model_slug": None,
@@ -188,9 +161,9 @@ async def create_model_agent(
     client: WeaviateAsyncClient,
     payload: ModelAgentCreateRequest,
 ) -> PrincipalResponse:
-    existing = await _fetch_single_principal(
-        client,
-        Filter.all_of(
+    existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+        limit=1,
+        filters=Filter.all_of(
             [
                 Filter.by_property("principal_type").equal(PrincipalType.model_agent.value),
                 Filter.by_property("annotation_type").equal(payload.annotation_type.value),
@@ -200,7 +173,7 @@ async def create_model_agent(
         ),
     )
 
-    principal_id = getattr(existing, "uuid") if existing is not None else new_uuid6()
+    principal_id = getattr(existing.objects[0], "uuid") if existing.objects else new_uuid6()
     await upsert(
         client,
         PRINCIPAL_COLLECTION,
