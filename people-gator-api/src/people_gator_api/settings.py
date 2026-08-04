@@ -115,7 +115,5 @@ class Settings(BaseSettings):
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
-    search: SearchSettings = SearchSettings()
-
 
 settings = Settings()  # pyright: ignore[reportCallIssue] - BaseSettings values come from env sources.
