@@ -17,16 +17,12 @@ from people_gator_api.routes.v1.root import (
 from people_gator_api.routes.v1.search import (
     router as search_router,
 )
-from people_gator_api.routes.v1.search_profile import (
-    router as search_profile_router,
-)
 from people_gator_api.routes.v1.sources import (
     router as sources_router,
 )
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(search_router)
-router.include_router(search_profile_router)
 router.include_router(identities_router)
 router.include_router(annotations_router)
 router.include_router(sources_router)
