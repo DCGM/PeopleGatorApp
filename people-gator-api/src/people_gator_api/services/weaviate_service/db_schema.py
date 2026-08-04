@@ -23,10 +23,7 @@ SOURCE_COLLECTION = "Source"
 ENTITY_COLLECTION = "Entity"
 PAGE_MENTION_COLLECTION = "PageMention"
 DOCUMENT_MENTION_COLLECTION = "DocumentMention"
-SPAN_COLLECTION = "Span"
 FACE_COLLECTION = "Face"
-ENTITY_NAME_COLLECTION = "EntityName"
-DESCRIPTION_COLLECTION = "Description"
 
 # ---------------------------------------------------------------------------
 # Named vector names
@@ -67,11 +64,8 @@ DEFAULT_FULLTEXT_VECTOR = (
 ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
     AnnotationType.document_mention: DOCUMENT_MENTION_COLLECTION,
     AnnotationType.page_mention: PAGE_MENTION_COLLECTION,
-    AnnotationType.span: SPAN_COLLECTION,
     AnnotationType.face: FACE_COLLECTION,
-    AnnotationType.description: DESCRIPTION_COLLECTION,
-        AnnotationType.entity: ENTITY_COLLECTION,
-    AnnotationType.entity_name: ENTITY_NAME_COLLECTION,
+    AnnotationType.entity: ENTITY_COLLECTION,
 }
 
 
@@ -159,15 +153,18 @@ def _object_array_property(
     description: str,
     *,
     nested_properties: list[Property],
+    index_filterable: bool = True,
+    index_searchable: bool = False,
+    skip_vectorization: bool = True,
 ) -> Property:
     return Property(
         name=name,
         data_type=DataType.OBJECT_ARRAY,
         description=description,
-        index_filterable=True,
-        index_searchable=False,
+        index_filterable=index_filterable,
+        index_searchable=index_searchable,
         nested_properties=nested_properties,
-        skip_vectorization=True,
+        skip_vectorization=skip_vectorization,
     )
 
 
@@ -226,7 +223,6 @@ POLYGON_PROPERTIES = [
 ]
 
 PRINCIPAL_PROPERTIES: list[Property] = [
-    _uuid_property("principal_id", "Primary key of PRINCIPAL.principal_id."),
     _text_property("principal_type", "Principal type discriminator.", searchable=False),
     _text_property("display_name", "Human-readable display name."),
     _bool_property("is_active", "Whether the principal is active."),
@@ -242,7 +238,6 @@ PRINCIPAL_PROPERTIES: list[Property] = [
 ]
 
 SOURCE_PROPERTIES: list[Property] = [
-    _uuid_property("source_id", "Primary key of SOURCE.source_id."),
     _text_property("source_type", "Source kind.", searchable=False),
     _text_property("uri", "Source URI."),
     _object_property(
@@ -262,49 +257,63 @@ SOURCE_PROPERTIES: list[Property] = [
 ]
 
 ENTITY_PROPERTIES: list[Property] = [
-    _uuid_property("entity_id", "Primary key of ENTITY.entity_id."),
-    _uuid_property("principal_id", "Foreign key to PRINCIPAL.principal_id."),
     _text_property("entity_type", "Entity type discriminator.", searchable=False),
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
+    _text_property("short_description", "Entity-level aggregated short description value."),
+    _object_array_property(
+        "aliases",
+        "Entity-level aggregated alias values.",
+        nested_properties=[
+            _text_property("alias", "Alias value."),
+        ],
+        index_filterable=True,
+        index_searchable=True,
+    ),
     _text_property("wikidata_id", "Entity-level aggregated Wikidata ID."),
     _text_property("nlcr_authority_id", "Entity-level aggregated NLCR authority ID."),
 ]
 
 PAGE_MENTION_PROPERTIES: list[Property] = [
-    _uuid_property("page_mention_id", "Primary key of PAGE_MENTION.page_mention_id."),
     _text_property("name", "Name of the page mention."),
     _text_property("information", "Information of the page mention."),
-    _number_property("confidence", "Extraction confidence."),
-    _uuid_property("document_mention_id", "Owning document mention id."),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("model_agent_id", "Model-agent principal id."),
+    _object_array_property(
+        "aliases",
+        "Entity-level aggregated alias values.",
+        nested_properties=[
+            _text_property("alias", "Alias value."),
+        ],
+        index_filterable=True,
+        index_searchable=True,
+    ),
+    _object_array_property(
+        "mentions",
+        "Page mention polygon lists.",
+        nested_properties=[
+            _object_array_property(
+                "polygons",
+                "Ordered page mention polygons.",
+                nested_properties=POLYGON_PROPERTIES,
+            )
+        ],
+    ),
 ]
 
 DOCUMENT_MENTION_PROPERTIES: list[Property] = [
-    _uuid_property("document_mention_id", "Primary key of DOCUMENT_MENTION.document_mention_id."),
     _text_property("name", "Aggregated document-level name."),
     _text_property("information", "Aggregated document-level information."),
-    _uuid_property("model_agent_id", "Model-agent principal id."),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("entity_id", "Entity id."),
-]
-
-SPAN_PROPERTIES: list[Property] = [
-    _uuid_property("span_id", "Primary key of SPAN.span_id."),
-    _text_property("text", "Span text."),
     _object_array_property(
-        "polygons",
-        "Ordered span polygons.",
-        nested_properties=POLYGON_PROPERTIES,
+        "aliases",
+        "Entity-level aggregated alias values.",
+        nested_properties=[
+            _text_property("alias", "Alias value."),
+        ],
+        index_filterable=True,
+        index_searchable=True,
     ),
-    _uuid_property("page_mention_id", "Owning page mention id."),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("entity_id", "Entity id."),
 ]
 
 FACE_PROPERTIES: list[Property] = [
-    _uuid_property("detection_id", "Primary key of FACE.detection_id."),
     _object_property(
         "bounding_box",
         "Bounding box coordinates.",
@@ -316,24 +325,6 @@ FACE_PROPERTIES: list[Property] = [
         nested_properties=FACE_KEYPOINT_PROPERTIES,
     ),
     _number_property("confidence", "Detection confidence."),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("model_agent_id", "Model-agent principal id."),
-    _uuid_property("entity_id", "Entity id."),
-]
-
-DESCRIPTION_PROPERTIES: list[Property] = [
-    _uuid_property("description_id", "Primary key of DESCRIPTION.description_id."),
-    _text_property("text", "Description text."),
-    _text_property("language", "Language code.", searchable=False),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("entity_id", "Entity id."),
-]
-
-ENTITY_NAME_PROPERTIES: list[Property] = [
-    _uuid_property("entity_name_id", "Primary key of ENTITY_NAME.entity_name_id."),
-    _text_property("name", "Name value."),
-    _uuid_property("source_id", "Source id."),
-    _uuid_property("entity_id", "Entity id."),
 ]
 
 PRINCIPAL_REFERENCES: list[ReferenceProperty] = []
@@ -357,9 +348,9 @@ PAGE_MENTION_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the page mention.",
     ),
     ReferenceProperty(
-        name="model_agent",
+        name="principal",
         target_collection=PRINCIPAL_COLLECTION,
-        description="Model agent that extracted the page mention.",
+        description="Principal that extracted the page mention.",
     ),
 ]
 DOCUMENT_MENTION_REFERENCES: list[ReferenceProperty] = [
@@ -374,26 +365,9 @@ DOCUMENT_MENTION_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the document mention.",
     ),
     ReferenceProperty(
-        name="model_agent",
+        name="principal",
         target_collection=PRINCIPAL_COLLECTION,
-        description="Model agent that produced the aggregation.",
-    ),
-]
-SPAN_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="page_mention",
-        target_collection=PAGE_MENTION_COLLECTION,
-        description="Owning page mention.",
-    ),
-    ReferenceProperty(
-        name="source",
-        target_collection=SOURCE_COLLECTION,
-        description="Source containing the span.",
-    ),
-    ReferenceProperty(
-        name="entity",
-        target_collection=ENTITY_COLLECTION,
-        description="Entity associated with the span.",
+        description="Principal that produced the aggregation.",
     ),
 ]
 FACE_REFERENCES: list[ReferenceProperty] = [
@@ -408,33 +382,9 @@ FACE_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the face detection.",
     ),
     ReferenceProperty(
-        name="model_agent",
+        name="principal",
         target_collection=PRINCIPAL_COLLECTION,
-        description="Model agent that performed the detection.",
-    ),
-]
-DESCRIPTION_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="entity",
-        target_collection=ENTITY_COLLECTION,
-        description="Entity associated with the description.",
-    ),
-    ReferenceProperty(
-        name="source",
-        target_collection=SOURCE_COLLECTION,
-        description="Source containing the description.",
-    ),
-]
-ENTITY_NAME_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="entity",
-        target_collection=ENTITY_COLLECTION,
-        description="Entity associated with the name.",
-    ),
-    ReferenceProperty(
-        name="source",
-        target_collection=SOURCE_COLLECTION,
-        description="Source containing the name.",
+        description="Principal that performed the detection.",
     ),
 ]
 
@@ -445,27 +395,12 @@ ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     PAGE_MENTION_COLLECTION: (
         PAGE_MENTION_PROPERTIES,
         PAGE_MENTION_REFERENCES,
-        default_name_plus_fulltext_vector_config(),
+        None,
     ),
     DOCUMENT_MENTION_COLLECTION: (
         DOCUMENT_MENTION_PROPERTIES,
         DOCUMENT_MENTION_REFERENCES,
-        default_name_plus_fulltext_vector_config(),
-    ),
-    SPAN_COLLECTION: (
-        SPAN_PROPERTIES,
-        SPAN_REFERENCES,
-        default_name_vector_config(),
-    ),
-    ENTITY_NAME_COLLECTION: (
-        ENTITY_NAME_PROPERTIES,
-        ENTITY_NAME_REFERENCES,
-        default_name_vector_config(),
-    ),
-    DESCRIPTION_COLLECTION: (
-        DESCRIPTION_PROPERTIES,
-        DESCRIPTION_REFERENCES,
-        default_fulltext_vector_config(),
+        None,
     ),
     FACE_COLLECTION: (
         FACE_PROPERTIES,
@@ -488,7 +423,7 @@ NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     ENTITY_COLLECTION: (
         ENTITY_PROPERTIES,
         ENTITY_REFERENCES,
-            default_name_plus_fulltext_vector_config(),
+        default_name_plus_fulltext_vector_config(),
     ),
 }
 

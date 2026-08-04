@@ -6,7 +6,7 @@ from weaviate import (
     WeaviateAsyncClient,
 )
 
-from people_gator_api.services.vector_service.client import (
+from people_gator_api.services.weaviate_service.client import (
     close_weaviate,
     get_weaviate_client,
     init_weaviate,

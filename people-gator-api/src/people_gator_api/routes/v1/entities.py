@@ -12,22 +12,19 @@ from weaviate import (
 )
 
 from people_gator_api.schemas.entities import (
-    DescriptionResponse,
     EntityCreateRequest,
-    EntityNameResponse,
     EntityListResponse,
     EntityResponse,
     DocumentMentionResponse,
     FaceResponse,
 )
 from people_gator_api.services.auth_service import (
-    AuthContext,
-    require_scopes,
+    AdminUserDependency,
+    AnnotatorUserDependency,
+    BrowseUserDependency,
 )
 from people_gator_api.services.crud_services.annotation_service import (
-    list_descriptions,
     list_document_mentions,
-    list_entity_names,
     list_faces,
 )
 from people_gator_api.services.database_service import (
@@ -48,9 +45,9 @@ router = APIRouter(tags=["entities"])
 
 @router.get("/entities", response_model=EntityListResponse)
 async def list_entities_route(
+    _auth: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityListResponse:
     return await list_entities(session, after_id, limit)
@@ -59,7 +56,7 @@ async def list_entities_route(
 @router.get("/entities/{entity_id}", response_model=EntityResponse)
 async def get_entity_route(
     entity_id: uuid.UUID,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
+    _auth: BrowseUserDependency,
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityResponse:
     entity = await get_entity(session, entity_id)
@@ -71,9 +68,9 @@ async def get_entity_route(
 @router.get("/entities/{entity_id}/document-mentions", response_model=list[DocumentMentionResponse])
 async def list_entity_document_mentions_route(
     entity_id: uuid.UUID,
+    _auth: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[DocumentMentionResponse]:
     return await list_document_mentions(session, entity_id, None, after_id, limit)
@@ -82,51 +79,26 @@ async def list_entity_document_mentions_route(
 @router.get("/entities/{entity_id}/faces", response_model=list[FaceResponse])
 async def list_entity_faces_route(
     entity_id: uuid.UUID,
+    _auth: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> list[FaceResponse]:
     return await list_faces(session, None, entity_id, after_id, limit)
 
-
-@router.get("/entities/{entity_id}/descriptions", response_model=list[DescriptionResponse])
-async def list_entity_descriptions_route(
-    entity_id: uuid.UUID,
-    limit: int = 50,
-    after_id: uuid.UUID | None = None,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: WeaviateAsyncClient = Depends(get_session),
-) -> list[DescriptionResponse]:
-    return await list_descriptions(session, entity_id, after_id, limit)
-
-
-@router.get("/entities/{entity_id}/entity-names", response_model=list[EntityNameResponse])
-async def list_entity_names_route(
-    entity_id: uuid.UUID,
-    limit: int = 50,
-    after_id: uuid.UUID | None = None,
-    _auth: AuthContext = Depends(require_scopes("people-gator:browse", allow_anonymous=True)),
-    session: WeaviateAsyncClient = Depends(get_session),
-) -> list[EntityNameResponse]:
-    return await list_entity_names(session, entity_id, after_id, limit)
-
-
 @router.post("/entities", response_model=EntityResponse, status_code=status.HTTP_201_CREATED)
 async def create_entity_route(
     payload: EntityCreateRequest,
-    auth: AuthContext = Depends(require_scopes("people-gator:annotate")),
+    auth: AnnotatorUserDependency,
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> EntityResponse:
-    if auth.principal is None:
-        raise_api_error(401, "token_missing", "Authentication required")
-    return await create_entity(session, payload, auth.principal.principal_id)
+    return await create_entity(session, payload, auth.principal_id)
 
 
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entity_route(
     entity_id: uuid.UUID,
-    _auth: AuthContext = Depends(require_scopes("people-gator:admin")),
+    _auth: AdminUserDependency,
     session: WeaviateAsyncClient = Depends(get_session),
 ) -> None:
     deleted = await delete_entity(session, entity_id)

@@ -16,7 +16,7 @@ from weaviate.classes.init import (
 from people_gator_api.settings import (
     settings,
 )
-from people_gator_api.services.vector_service.schema import (
+from people_gator_api.services.weaviate_service.db_schema import (
     ALL_COLLECTION_SPECS,
     CollectionSpec,
 )

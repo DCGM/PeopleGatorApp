@@ -10,50 +10,45 @@ from pydantic import (
 )
 
 
-class VectorInput(BaseModel):
-    """Optional vector payload supplied for a single-vector annotation write."""
-
-    embedding: list[float] | None = None
-    model_identifier: str | None = None
-
-
-class MultiVectorInput(BaseModel):
-    """Optional vector payload supplied for dual-vector annotation writes."""
-
-    name_embedding: list[float] | None = None
-    fulltext_embedding: list[float] | None = None
-    model_identifier: str | None = None
-
-
 # ---------------------------------------------------------------------------
 # Entity
 # ---------------------------------------------------------------------------
 
 
-class EntityCreateRequest(MultiVectorInput):
+class EntityCreateRequest(BaseModel):
     """Request body for creating a new entity."""
 
     entity_type: str | None = None
     name: str | None = None
     description: str | None = None
+    short_description: str | None = None
+    aliases: list[str] | None = None
+    wikidata_id: str | None = None
+    nlcr_authority_id: str | None = None
+    name_embedding: list[float] | None = None
+    fulltext_embedding: list[float] | None = None
+    model_identifier: str | None = None
+    principal_id: uuid.UUID
 
 
 class EntityResponse(BaseModel):
     """A single entity record."""
 
     entity_id: uuid.UUID
-    principal_id: uuid.UUID
     entity_type: str | None
     name: str | None
     description: str | None
+    short_description: str | None
+    aliases: list[str] | None
     wikidata_id: str | None
     nlcr_authority_id: str | None
+    principal_id: uuid.UUID
 
 
 class EntityListResponse(BaseModel):
     """A paginated list of entities."""
-
     items: list[EntityResponse]
+    limit: int
     total: int
     next_after_id: uuid.UUID | None = None
 
@@ -65,58 +60,36 @@ class EntityListResponse(BaseModel):
 
 class PolygonPoint(BaseModel):
     """A polygon point in source-space coordinates."""
-
     x: float
     y: float
 
 
 class Polygon(BaseModel):
     """One polygon represented by ordered points."""
-
     points: list[PolygonPoint] = Field(min_length=3)
 
 
-class PageMentionCreateRequest(MultiVectorInput):
+class PageMentionCreateRequest(BaseModel):
     """Request body for ingesting a page-level mention aggregation."""
-
     name: str
     information: str
-    confidence: float = Field(ge=0.0, le=1.0)
+    aliases: list[str]
+    polygons: list[Polygon]
     document_mention_id: uuid.UUID
     source_id: uuid.UUID
-    model_agent_id: uuid.UUID
+    principal_id: uuid.UUID
 
 
 class PageMentionResponse(BaseModel):
     """A single page mention record."""
-
     page_mention_id: uuid.UUID
     name: str
     information: str
-    confidence: float
+    aliases: list[str]
+    polygons: list[Polygon]
     document_mention_id: uuid.UUID
     source_id: uuid.UUID
-    model_agent_id: uuid.UUID
-
-
-class SpanCreateRequest(VectorInput):
-    """Request body for ingesting a span linked to a page mention."""
-
-    text: str
-    page_mention_id: uuid.UUID
-    source_id: uuid.UUID
-    polygons: list[Polygon]
-
-
-class SpanResponse(BaseModel):
-    """A single span record."""
-
-    span_id: uuid.UUID
-    text: str
-    page_mention_id: uuid.UUID
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
-    polygons: list[Polygon]
+    principal_id: uuid.UUID
 
 
 # ---------------------------------------------------------------------------
@@ -124,12 +97,12 @@ class SpanResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class DocumentMentionCreateRequest(MultiVectorInput):
+class DocumentMentionCreateRequest(BaseModel):
     """Request body for creating a document-level mention aggregator."""
-
     name: str
     information: str
-    model_agent_id: uuid.UUID
+    aliases: list[str]
+    principal_id: uuid.UUID
     source_id: uuid.UUID
     entity_id: uuid.UUID
 
@@ -140,7 +113,25 @@ class DocumentMentionResponse(BaseModel):
     document_mention_id: uuid.UUID
     name: str
     information: str
-    model_agent_id: uuid.UUID
+    aliases: list[str]
+    principal_id: uuid.UUID
+    source_id: uuid.UUID
+    entity_id: uuid.UUID
+
+
+class DocumentMentionEntityPatchRequest(BaseModel):
+    """Patch body for reassigning a document mention to a different entity."""
+
+    entity_id: uuid.UUID
+    
+class DocumentMentionView(BaseModel):
+    """A single document mention record."""
+
+    document_mention_id: uuid.UUID
+    name: str
+    information: str
+    aliases: list[str]
+    principal_id: uuid.UUID
     source_id: uuid.UUID
     entity_id: uuid.UUID
 
@@ -167,13 +158,15 @@ class FaceKeypoint(BaseModel):
     y: float
 
 
-class FaceCreateRequest(VectorInput):
+class FaceCreateRequest(BaseModel):
     """Request body for ingesting a face detection."""
 
     source_id: uuid.UUID
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
-    model_agent_id: uuid.UUID
+    embedding: list[float] | None = None
+    model_identifier: str | None = None
+    principal_id: uuid.UUID
     entity_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
 
@@ -185,67 +178,12 @@ class FaceResponse(BaseModel):
     source_id: uuid.UUID
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
-    model_agent_id: uuid.UUID
-    entity_id: uuid.UUID
+    principal_id: uuid.UUID
+    entity_id: uuid.UUID | None = Field(default=None)
     confidence: float
 
 
-# ---------------------------------------------------------------------------
-# Descriptions
-# ---------------------------------------------------------------------------
-
-
-class DescriptionCreateRequest(VectorInput):
-    """Request body for adding a description."""
-
-    text: str
-    language: str
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
-
-
-class DescriptionResponse(BaseModel):
-    """A single description record."""
-
-    description_id: uuid.UUID
-    text: str
-    language: str
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
-
-
-# ---------------------------------------------------------------------------
-# Entity names
-# ---------------------------------------------------------------------------
-
-
-class EntityNameCreateRequest(VectorInput):
-    """Request body for adding a name."""
-
-    name: str
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
-
-
-class EntityNameResponse(BaseModel):
-    """A single entity-name record."""
-
-    entity_name_id: uuid.UUID
-    name: str
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
-
-
-# ---------------------------------------------------------------------------
-# Entity View
-# ---------------------------------------------------------------------------
-
-
-class EntityViewResponse(BaseModel):
-    """Current entity view grouped by attached entity IDs."""
+class FaceEntityPatchRequest(BaseModel):
+    """Patch body for reassigning a face annotation to a different entity."""
 
     entity_id: uuid.UUID
-    document_mention_ids: list[uuid.UUID]
-    face_ids: list[uuid.UUID]
-    description_ids: list[uuid.UUID]
-    entity_name_ids: list[uuid.UUID]

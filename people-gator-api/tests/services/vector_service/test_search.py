@@ -5,8 +5,8 @@ import uuid
 import pytest
 
 from people_gator_api.schemas.enums import AnnotationType
-from people_gator_api.services.vector_service.schemas import AnnotationSearchResult
-from people_gator_api.services.vector_service import search as vector_search
+from people_gator_api.services.weaviate_service.schemas import EntitySearchResult
+from people_gator_api.services.weaviate_service import search as vector_search
 
 
 def _annotation_result(
@@ -14,9 +14,9 @@ def _annotation_result(
     annotation_id: uuid.UUID | None = None,
     entity_id: uuid.UUID | None = None,
     distance: float | None = None,
-) -> AnnotationSearchResult:
+) -> EntitySearchResult:
     resolved_annotation_id = annotation_id or uuid.uuid4()
-    return AnnotationSearchResult(
+    return EntitySearchResult(
         weaviate_id=uuid.uuid4(),
         annotation_type=AnnotationType.face,
         annotation_id=resolved_annotation_id,
@@ -36,7 +36,7 @@ async def test_search_by_vectors_keeps_independent_batches(
     first_hit = _annotation_result(distance=0.1)
     second_hit = _annotation_result(distance=0.2)
 
-    async def fake_search_by_vector(**kwargs: object) -> list[AnnotationSearchResult]:
+    async def fake_search_by_vector(**kwargs: object) -> list[EntitySearchResult]:
         vector = kwargs["vector"]
         assert isinstance(vector, list)
         return [first_hit] if vector[0] == 1.0 else [second_hit]

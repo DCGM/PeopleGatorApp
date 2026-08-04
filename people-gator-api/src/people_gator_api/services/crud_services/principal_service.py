@@ -1,4 +1,10 @@
 import uuid
+from collections.abc import (
+    Mapping,
+)
+from dataclasses import (
+    dataclass,
+)
 
 from weaviate import (
     WeaviateAsyncClient,
@@ -9,6 +15,9 @@ from weaviate.collections.classes.filters import (
 from weaviate.classes.query import (
     Filter,
 )
+from weaviate.collections.classes.types import (
+    WeaviateField,
+)
 
 from people_gator_api.schemas.enums import (
     PrincipalType,
@@ -17,24 +26,61 @@ from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     PrincipalResponse,
 )
-from people_gator_api.services.vector_service.schema import (
+from people_gator_api.services.weaviate_service.db_schema import (
     PRINCIPAL_COLLECTION,
 )
-from people_gator_api.services.weaviate_utils import (
+from people_gator_api.services.weaviate_service.utils import (
     MutableProperties,
-    StoredUser,
     combine_filters,
-    fetch_by_id,
-    fetch_single,
+    empty_reference_queries,
     principal_response,
-    query_objects,
     require_bool,
-    require_uuid,
+    require_str,
+    optional_str,
     upsert,
 )
 from people_gator_api.utils.uuid_utils import (
     new_uuid6,
 )
+
+
+@dataclass(slots=True, frozen=True)
+class StoredUser:
+    principal_id: uuid.UUID
+    principal_type: PrincipalType
+    display_name: str
+    is_active: bool
+    external_subject: str
+    external_issuer: str
+    email: str | None
+
+
+async def _fetch_single_principal(
+    client: WeaviateAsyncClient,
+    filters: FilterReturn,
+) -> object | None:
+    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+        filters=filters,
+        limit=1,
+        return_references=empty_reference_queries([]),
+    )
+    return response.objects[0] if response.objects else None
+
+
+def _map_principal(item: object) -> PrincipalResponse:
+    return principal_response(
+        getattr(item, "properties"),
+        getattr(item, "references", {}),
+        getattr(item, "uuid"),
+    )
+
+
+def _properties(item: object) -> Mapping[str, WeaviateField]:
+    raw_properties = getattr(item, "properties")
+    if not isinstance(raw_properties, Mapping):
+        raise TypeError("Expected Weaviate object properties mapping.")
+    typed_properties: Mapping[str, WeaviateField] = raw_properties  # type: ignore[reportUnknownVariableType] - Weaviate returns Mapping[Unknown, Unknown] in stubs after runtime mapping check.
+    return typed_properties
 
 
 async def list_principals(
@@ -44,7 +90,6 @@ async def list_principals(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[PrincipalResponse]:
-    scan_limit = max(limit * 10, 1000)
     filters: list[FilterReturn] = []
     if principal_type is not None:
         filters.append(Filter.by_property("principal_type").equal(principal_type.value))
@@ -53,26 +98,28 @@ async def list_principals(
 
     response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        limit=scan_limit,
+        limit=limit,
+        return_references=empty_reference_queries([]),
+        after=after_id,
     )
-    objects = query_objects(response)
     items = sorted(
-        [principal_response(item.properties) for item in objects],
+        [_map_principal(item) for item in response.objects],
         key=lambda item: item.principal_id,
     )
-    if after_id is not None:
-        items = [item for item in items if item.principal_id > after_id]
-    return items[:limit]
+    return items
 
 
 async def get_principal(
     client: WeaviateAsyncClient,
     principal_id: uuid.UUID,
 ) -> PrincipalResponse | None:
-    obj = await fetch_by_id(client, PRINCIPAL_COLLECTION, "principal_id", principal_id)
-    if obj is None:
+    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+        principal_id,
+        return_references=empty_reference_queries([]),
+    )
+    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
         return None
-    return principal_response(obj.properties)
+    return principal_response(response.properties, response.references, response.uuid)
 
 
 async def get_or_create_user(
@@ -83,9 +130,8 @@ async def get_or_create_user(
     display_name: str,
     email: str | None,
 ) -> StoredUser:
-    existing = await fetch_single(
+    existing = await _fetch_single_principal(
         client,
-        PRINCIPAL_COLLECTION,
         Filter.all_of(
             [
                 Filter.by_property("principal_type").equal(PrincipalType.user.value),
@@ -95,18 +141,19 @@ async def get_or_create_user(
         ),
     )
 
-    principal_id = (
-        require_uuid(existing.properties, "principal_id")
-        if existing is not None
-        else new_uuid6()
-    )
-    is_active_value = (
-        require_bool(existing.properties, "is_active")
-        if existing is not None
-        else True
-    )
+    if existing is not None:
+        principal_id = getattr(existing, "uuid")
+        existing_properties = _properties(existing)
+        is_active_value = require_bool(existing_properties, "is_active")
+        resolved_display_name = require_str(existing_properties, "display_name")
+        resolved_email = optional_str(existing_properties, "email")
+    else:
+        principal_id = new_uuid6()
+        is_active_value = True
+        resolved_display_name = display_name
+        resolved_email = email
+
     properties: MutableProperties = {
-        "principal_id": principal_id,
         "principal_type": PrincipalType.user.value,
         "display_name": display_name,
         "is_active": is_active_value,
@@ -129,11 +176,11 @@ async def get_or_create_user(
     return StoredUser(
         principal_id=principal_id,
         principal_type=PrincipalType.user,
-        display_name=display_name,
+        display_name=resolved_display_name,
         is_active=is_active_value,
         external_subject=external_subject,
         external_issuer=external_issuer,
-        email=email,
+        email=resolved_email,
     )
 
 
@@ -141,9 +188,8 @@ async def create_model_agent(
     client: WeaviateAsyncClient,
     payload: ModelAgentCreateRequest,
 ) -> PrincipalResponse:
-    existing = await fetch_single(
+    existing = await _fetch_single_principal(
         client,
-        PRINCIPAL_COLLECTION,
         Filter.all_of(
             [
                 Filter.by_property("principal_type").equal(PrincipalType.model_agent.value),
@@ -154,17 +200,12 @@ async def create_model_agent(
         ),
     )
 
-    principal_id = (
-        require_uuid(existing.properties, "principal_id")
-        if existing is not None
-        else new_uuid6()
-    )
+    principal_id = getattr(existing, "uuid") if existing is not None else new_uuid6()
     await upsert(
         client,
         PRINCIPAL_COLLECTION,
         principal_id,
         properties={
-            "principal_id": principal_id,
             "principal_type": PrincipalType.model_agent.value,
             "display_name": payload.display_name,
             "is_active": payload.is_active,
@@ -190,13 +231,16 @@ async def update_principal(
     display_name: str | None,
     is_active: bool | None,
 ) -> PrincipalResponse | None:
-    obj = await fetch_by_id(client, PRINCIPAL_COLLECTION, "principal_id", principal_id)
-    if obj is None:
+    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+        principal_id,
+        return_references=empty_reference_queries([]),
+    )
+    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
         return None
-    properties: MutableProperties = dict(obj.properties)
+    properties = dict(response.properties)
     if display_name is not None:
         properties["display_name"] = display_name
     if is_active is not None:
         properties["is_active"] = is_active
     await upsert(client, PRINCIPAL_COLLECTION, principal_id, properties=properties)
-    return principal_response(dict(properties))
+    return await get_principal(client, principal_id)

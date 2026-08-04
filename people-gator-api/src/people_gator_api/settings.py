@@ -15,7 +15,7 @@ from pydantic_settings import (
 from people_gator_api.schemas.enums import (
     AnnotationType,
 )
-from people_gator_api.services.vector_service.schema import (
+from people_gator_api.services.weaviate_service.db_schema import (
     DEFAULT_FACE_VECTOR,
     DEFAULT_FULLTEXT_VECTOR,
     DEFAULT_NAME_VECTOR,

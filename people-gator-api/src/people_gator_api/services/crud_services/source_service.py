@@ -20,14 +20,12 @@ from people_gator_api.schemas.sources import (
     SourceListResponse,
     SourceResponse,
 )
-from people_gator_api.services.vector_service.schema import (
+from people_gator_api.services.weaviate_service.db_schema import (
     SOURCE_COLLECTION,
 )
-from people_gator_api.services.weaviate_utils import (
+from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
-    fetch_by_id,
-    fetch_single,
-    query_objects,
+    empty_reference_queries,
     source_response,
     upsert,
 )
@@ -42,27 +40,24 @@ async def list_sources(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> SourceListResponse:
-    scan_limit = max(limit * 10, 1000)
     filters: list[FilterReturn] = []
     if source_type is not None:
         filters.append(Filter.by_property("source_type").equal(source_type.value))
 
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=combine_filters(filters),
-        limit=scan_limit,
+        limit=limit,
+        return_references=empty_reference_queries([]),
+        after=after_id,
     )
-    objects = query_objects(response)
     items = sorted(
-        [source_response(item.properties) for item in objects],
+        [source_response(item.properties, item.references, item.uuid) for item in response.objects],
         key=lambda item: item.source_id,
     )
-    if after_id is not None:
-        items = [item for item in items if item.source_id > after_id]
-    page_items = items[:limit]
     return SourceListResponse(
-        items=page_items,
-        total=len(page_items),
-        next_after_id=page_items[-1].source_id if len(page_items) == limit and page_items else None,
+        items=items,
+        total=len(items),
+        next_after_id=items[-1].source_id if len(items) == limit and items else None,
     )
 
 
@@ -70,10 +65,13 @@ async def get_source(
     client: WeaviateAsyncClient,
     source_id: uuid.UUID,
 ) -> SourceResponse | None:
-    obj = await fetch_by_id(client, SOURCE_COLLECTION, "source_id", source_id)
-    if obj is None:
+    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_object_by_id(
+        source_id,
+        return_references=empty_reference_queries([]),
+    )
+    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
         return None
-    return source_response(obj.properties)
+    return source_response(response.properties, response.references, response.uuid)
 
 
 async def get_source_by_type_uri(
@@ -81,19 +79,20 @@ async def get_source_by_type_uri(
     source_type: SourceKind,
     uri: str,
 ) -> SourceResponse | None:
-    obj = await fetch_single(
-        client,
-        SOURCE_COLLECTION,
-        Filter.all_of(
+    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
+        filters=Filter.all_of(
             [
                 Filter.by_property("source_type").equal(source_type.value),
                 Filter.by_property("uri").equal(uri),
             ]
         ),
+        limit=1,
+        return_references=empty_reference_queries([]),
     )
-    if obj is None:
+    if not response.objects:
         return None
-    return source_response(obj.properties)
+    item = response.objects[0]
+    return source_response(item.properties, item.references, item.uuid)
 
 
 async def create_source(
@@ -111,7 +110,6 @@ async def create_source(
         SOURCE_COLLECTION,
         source_id,
         properties={
-            "source_id": source_id,
             "source_type": payload.source_type.value,
             "uri": payload.uri,
             "metadata": payload.metadata.model_dump(mode="json"),
@@ -126,3 +124,12 @@ async def create_source(
         ),
         True,
     )
+
+
+async def delete_source(client: WeaviateAsyncClient, source_id: uuid.UUID) -> bool:
+    source = await get_source(client, source_id)
+    if source is None:
+        return False
+
+    await client.collections.get(SOURCE_COLLECTION).data.delete_by_id(source_id)
+    return True

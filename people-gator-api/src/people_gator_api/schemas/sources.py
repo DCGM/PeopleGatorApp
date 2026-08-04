@@ -3,11 +3,9 @@
 import uuid
 
 from pydantic import (
-    AliasChoices,
     AnyUrl,
     BaseModel,
     ConfigDict,
-    Field,
     model_validator,
 )
 
@@ -42,7 +40,7 @@ class WikidataSourceMetadata(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    entity_id: str = Field(validation_alias=AliasChoices("entity_id", "enitity_id"))
+    entity_id: str
     wikidata_url: AnyUrl
 
 
@@ -52,6 +50,13 @@ class NlcrAuthoritySourceMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nlcr_id: str
+    
+class ObalkyKnihSourceMetadata(BaseModel):
+    """Metadata for a source imported from ObalkyKnih.cz."""
+    model_config = ConfigDict(extra="forbid")
+    
+    obalkyknih_id: str
+    obalkyknih_url: AnyUrl
 
 
 class WikimediaImageSourceMetadata(BaseModel):
@@ -68,6 +73,7 @@ type SourceMetadata = (
     | WikidataSourceMetadata
     | NlcrAuthoritySourceMetadata
     | WikimediaImageSourceMetadata
+    | ObalkyKnihSourceMetadata
 )
 
 
@@ -81,6 +87,7 @@ def _metadata_allowed_for_source_type(
         SourceKind.wikidata: (WikidataSourceMetadata,),
         SourceKind.wikimedia: (WikimediaImageSourceMetadata,),
         SourceKind.nlcr: (NlcrAuthoritySourceMetadata,),
+        SourceKind.obalkyknih: (ObalkyKnihSourceMetadata,),
     }
     return isinstance(metadata, source_type_to_metadata_classes[source_type])
 

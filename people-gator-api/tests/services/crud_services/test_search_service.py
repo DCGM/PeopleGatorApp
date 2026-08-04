@@ -4,7 +4,7 @@ import os
 import uuid
 
 from people_gator_api.schemas.enums import AnnotationType
-from people_gator_api.services.vector_service.schemas import AnnotationSearchResult
+from people_gator_api.services.weaviate_service.schemas import EntitySearchResult
 
 os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__HOST", "localhost")
 os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__USER", "user")
@@ -33,8 +33,8 @@ def _annotation_result(
     entity_id: uuid.UUID | None = None,
     annotation_id: uuid.UUID | None = None,
     distance: float | None = None,
-) -> AnnotationSearchResult:
-    return AnnotationSearchResult(
+) -> EntitySearchResult:
+    return EntitySearchResult(
         weaviate_id=uuid.uuid4(),
         annotation_type=AnnotationType.face,
         annotation_id=annotation_id or uuid.uuid4(),

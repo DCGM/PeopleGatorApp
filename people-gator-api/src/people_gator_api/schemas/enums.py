@@ -7,10 +7,7 @@ class AnnotationType(StrEnum):
     entity = "entity"
     document_mention = "document_mention"
     page_mention = "page_mention"
-    span = "span"
     face = "face"
-    description = "description"
-    entity_name = "entity_name"
 
 
 class SourceKind(StrEnum):

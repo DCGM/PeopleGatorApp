@@ -21,7 +21,7 @@ from people_gator_api.settings import (
 from people_gator_api.routes.v1 import (
     router as v1_router,
 )
-from people_gator_api.services.vector_service.client import (
+from people_gator_api.services.weaviate_service.client import (
     init_weaviate,
     close_weaviate,
 )

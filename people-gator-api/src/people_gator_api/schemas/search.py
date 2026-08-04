@@ -8,90 +8,47 @@ from pydantic import (
     Field,
 )
 
-from people_gator_api.schemas.enums import (
-    AnnotationType,
-)
+# ---------------------------------------------------------------------------
+# Search result type
+# ---------------------------------------------------------------------------
+
+class EntitySearchResult(BaseModel):
+    """A single result from a nearest-neighbour search over an annotation collection."""
+    entity_id: uuid.UUID = Field(..., description="The entity ID of the annotation.")
+    entity_type: str = Field(..., description="The entity type of the annotation.")
+    name: str = Field(..., description="The name of the annotation.")
+    description: str = Field(..., description="The description of the annotation.")
+    short_description: str = Field(..., description="The short description of the annotation.")
+    aliases: list[str] = Field(..., description="The aliases of the annotation.")
+    matching_score: float = Field(..., description="The matching score of the annotation.")
 
 
-def _annotation_type_list() -> list[AnnotationType]:
-    return []
-
-
-class SearchSignalContribution(BaseModel):
-    """Per-modality score breakdown for a search result."""
-
-    score: float
-    normalised_score: float
-    weight: float
-
-
-class SearchEntityResult(BaseModel):
-    """An entity search result with a combined score."""
-
-    result_type: str = "entity"
-    entity_id: uuid.UUID
-    score: float
-    signal_contributions: dict[AnnotationType, SearchSignalContribution]
-
-
-class SearchAnnotationResult(BaseModel):
-    """An annotation-level search result."""
-
-    result_type: AnnotationType
-    annotation_id: uuid.UUID
-    source_id: uuid.UUID
-    score: float
-    signal_contributions: dict[AnnotationType, SearchSignalContribution]
-
+# ---------------------------------------------------------------------------
+# Search request and response
+# ---------------------------------------------------------------------------
 
 class SearchQuery(BaseModel):
     """Typed query signals the caller wants to find matches for."""
-
-    annotation_ids: list[uuid.UUID] | None = None
-    reference_entity_id: uuid.UUID | None = Field(
+    name: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("reference_entity_id", "reference_identity_id"),
+        validation_alias=AliasChoices("name", "query_name"),
+        description="The name to search for.",
     )
-
-
-class SearchFilters(BaseModel):
-    """Filters applied to search results."""
-
-    annotation_types: list[AnnotationType] = Field(default_factory=_annotation_type_list)
-    entity_types: list[str] = Field(default_factory=list)
-    source_kinds: list[str] = Field(default_factory=list)
-    has_face: bool | None = None
-    has_authority_link: bool | None = None
-    languages: list[str] = Field(default_factory=list)
-
-
-class SearchRequest(BaseModel):
-    """Full search request payload."""
-
-    query: SearchQuery
-    filters: SearchFilters = Field(default_factory=SearchFilters)
-    result_types: list[str] = Field(default_factory=lambda: ["entity"])
-    limit: int = 20
-    after_id: uuid.UUID | None = None
-
+    limit: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("limit", "query_limit"),
+        description="The maximum number of results to return.",
+    )
+    after_id: uuid.UUID | None = Field(
+        default=None,
+        validation_alias=AliasChoices("after_id", "query_after_id"),
+        description="The ID of the last result from the previous page of results.",
+    )
 
 class SearchResponse(BaseModel):
     """Search results union plus facets and request echo."""
-
+    results: list[EntitySearchResult]
     total: int
     limit: int
     next_after_id: uuid.UUID | None
-    results: list[SearchEntityResult | SearchAnnotationResult]
-    facets: dict[str, dict[str, int]]
     query: SearchQuery
-    filters: SearchFilters
-
-
-class SearchFacetsResponse(BaseModel):
-    """Facet counts returned alongside search results."""
-
-    annotation_types: dict[str, int]
-    source_kinds: dict[str, int]
-    result_types: dict[str, int]
-    has_face: dict[str, int]
-    has_authority_link: dict[str, int]
