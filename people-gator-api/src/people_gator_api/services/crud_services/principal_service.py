@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -20,7 +21,11 @@ from people_gator_api.services.weaviate_service.utils import (
     optional_str,
     upsert,
 )
+from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True, frozen=True)
@@ -34,6 +39,7 @@ class StoredUser:
     email: str | None
 
 
+@trace()
 async def list_principals(
     client: WeaviateAsyncClient,
     principal_type: PrincipalType | None,
@@ -41,6 +47,15 @@ async def list_principals(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[PrincipalResponse]:
+    logger.debug(
+        "list_principals called",
+        extra={
+            "principal_type": principal_type.value if principal_type is not None else None,
+            "is_active": is_active,
+            "after_id": after_id,
+            "limit": limit,
+        },
+    )
     filters: list[FilterReturn] = []
     if principal_type is not None:
         filters.append(Filter.by_property("principal_type").equal(principal_type.value))
@@ -60,19 +75,24 @@ async def list_principals(
     return items
 
 
+@trace()
 async def get_principal(
     client: WeaviateAsyncClient,
     principal_id: uuid.UUID,
 ) -> PrincipalResponse | None:
+    logger.debug("get_principal called", extra={"principal_id": principal_id})
     response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
         principal_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("principal not found", extra={"principal_id": principal_id})
         return None
+    logger.debug("principal found", extra={"principal_id": principal_id})
     return principal_response(response.properties, response.references, response.uuid)
 
 
+@trace()
 async def get_or_create_user(
     client: WeaviateAsyncClient,
     *,
@@ -81,6 +101,10 @@ async def get_or_create_user(
     display_name: str,
     email: str | None,
 ) -> StoredUser:
+    logger.info(
+        "get_or_create_user called",
+        extra={"external_subject": external_subject, "external_issuer": external_issuer},
+    )
     existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
         limit=1,
         filters=Filter.all_of(
@@ -99,11 +123,13 @@ async def get_or_create_user(
         is_active_value = require_bool(existing_properties, "is_active")
         resolved_display_name = require_str(existing_properties, "display_name")
         resolved_email = optional_str(existing_properties, "email")
+        logger.debug("existing user principal found", extra={"principal_id": principal_id})
     else:
         principal_id = new_uuid6()
         is_active_value = True
         resolved_display_name = display_name
         resolved_email = email
+        logger.debug("creating new user principal", extra={"principal_id": principal_id})
 
     properties = {
         "principal_type": PrincipalType.user.value,
@@ -136,10 +162,19 @@ async def get_or_create_user(
     )
 
 
+@trace()
 async def create_model_agent(
     client: WeaviateAsyncClient,
     payload: ModelAgentCreateRequest,
 ) -> PrincipalResponse:
+    logger.info(
+        "create_model_agent called",
+        extra={
+            "annotation_type": payload.annotation_type.value,
+            "role": payload.role,
+            "model_slug": payload.model_slug,
+        },
+    )
     existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
         limit=1,
         filters=Filter.all_of(
@@ -174,20 +209,24 @@ async def create_model_agent(
     )
     resolved = await get_principal(client, principal_id)
     assert resolved is not None
+    logger.info("create_model_agent completed", extra={"principal_id": principal_id})
     return resolved
 
 
+@trace()
 async def update_principal(
     client: WeaviateAsyncClient,
     principal_id: uuid.UUID,
     display_name: str | None,
     is_active: bool | None,
 ) -> PrincipalResponse | None:
+    logger.info("update_principal called", extra={"principal_id": principal_id})
     response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
         principal_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("update_principal skipped missing principal", extra={"principal_id": principal_id})
         return None
     properties = dict(response.properties)
     if display_name is not None:
@@ -195,4 +234,5 @@ async def update_principal(
     if is_active is not None:
         properties["is_active"] = is_active
     await upsert(client, PRINCIPAL_COLLECTION, principal_id, properties=properties)
+    logger.debug("update_principal persisted", extra={"principal_id": principal_id})
     return await get_principal(client, principal_id)

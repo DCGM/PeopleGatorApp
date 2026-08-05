@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Protocol
 
@@ -12,6 +13,10 @@ from people_gator_api.schemas.search import (
     SearchResponse,
 )
 from people_gator_api.services.weaviate_service.search import search_entities_by_name_or_aliases
+from people_gator_api.utils.opentelemetry import trace
+
+
+logger = logging.getLogger(__name__)
 
 
 class SearchRequestLike(Protocol):
@@ -20,14 +25,17 @@ class SearchRequestLike(Protocol):
     after_id: uuid.UUID | None
 
 
+@trace()
 async def search(
     session: WeaviateAsyncClient,
     query: SearchQuery,
 ) -> SearchResponse:
     """Run entity search using the configured Weaviate BM25 helper."""
+    logger.debug("search called", extra={"query_name": query.name})
 
     query_name = _resolve_query_name(query)
     if query_name is None:
+        logger.info("search skipped empty query")
         return SearchResponse(
             results=[],
             total=0,
@@ -43,6 +51,7 @@ async def search(
     )
     page = results
     next_after_id = page[-1].entity_id if page else None
+    logger.info("search completed", extra={"query_name": query_name, "total": len(page)})
     return SearchResponse(
         results=page,
         total=len(page),

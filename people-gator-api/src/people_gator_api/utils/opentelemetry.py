@@ -1,9 +1,12 @@
 import logging
 import os
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import ParamSpec, TypeVar
 
 from opentelemetry.sdk.resources import Resource
 
-from opentelemetry import trace
+from opentelemetry import trace as otel_trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -31,6 +34,26 @@ from urllib.parse import urljoin
 
 from people_gator_api.settings import settings
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def trace(name: str | None = None) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    """Create a decorator that wraps an async function call in an OpenTelemetry span."""
+
+    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        span_name = name or f"{func.__module__}.{func.__qualname__}"
+        tracer = otel_trace.get_tracer(func.__module__)
+
+        @wraps(func)
+        async def wrapped_async(*args: P.args, **kwargs: P.kwargs) -> R:
+            with tracer.start_as_current_span(span_name):
+                return await func(*args, **kwargs)
+
+        return wrapped_async
+
+    return decorator
+
 def initialize_opentelemetry():
     resource = Resource.create({
         "service.name": "dev.people-gator-api",
@@ -44,8 +67,8 @@ def initialize_opentelemetry():
     trace_processor = BatchSpanProcessor(trace_exporter)
     trace_provider = TracerProvider(resource=resource)
     trace_provider.add_span_processor(trace_processor)
-    trace.set_tracer_provider(trace_provider)
-    tracer = trace.get_tracer(__name__)
+    otel_trace.set_tracer_provider(trace_provider)
+    tracer = otel_trace.get_tracer(__name__)
 
     meter_exporter = OTLPMetricExporter(
         endpoint=urljoin(settings.otel.http_endpoint, settings.otel.metrics_path)

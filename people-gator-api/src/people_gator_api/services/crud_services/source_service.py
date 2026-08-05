@@ -1,5 +1,6 @@
 """Service for source endpoints."""
 
+import logging
 import uuid
 
 from weaviate import WeaviateAsyncClient
@@ -19,15 +20,28 @@ from people_gator_api.services.weaviate_service.utils import (
     source_response,
     upsert,
 )
+from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
 
 
+logger = logging.getLogger(__name__)
+
+
+@trace()
 async def list_sources(
     client: WeaviateAsyncClient,
     source_type: SourceKind | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> SourceListResponse:
+    logger.debug(
+        "list_sources called",
+        extra={
+            "source_type": source_type.value if source_type is not None else None,
+            "after_id": after_id,
+            "limit": limit,
+        },
+    )
     filters: list[FilterReturn] = []
     if source_type is not None:
         filters.append(Filter.by_property("source_type").equal(source_type.value))
@@ -49,24 +63,30 @@ async def list_sources(
     )
 
 
+@trace()
 async def get_source(
     client: WeaviateAsyncClient,
     source_id: uuid.UUID,
 ) -> SourceResponse | None:
+    logger.debug("get_source called", extra={"source_id": source_id})
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_object_by_id(
         source_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("source not found", extra={"source_id": source_id})
         return None
+    logger.debug("source found", extra={"source_id": source_id})
     return source_response(response.properties, response.references, response.uuid)
 
 
+@trace()
 async def get_source_by_type_uri(
     client: WeaviateAsyncClient,
     source_type: SourceKind,
     uri: str,
 ) -> SourceResponse | None:
+    logger.debug("get_source_by_type_uri called", extra={"source_type": source_type.value, "uri": uri})
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=Filter.all_of(
             [
@@ -78,18 +98,23 @@ async def get_source_by_type_uri(
         return_references=empty_reference_queries([]),
     )
     if not response.objects:
+        logger.info("source by type and uri not found", extra={"source_type": source_type.value, "uri": uri})
         return None
     item = response.objects[0]
+    logger.debug("source by type and uri found", extra={"source_id": item.uuid})
     return source_response(item.properties, item.references, item.uuid)
 
 
+@trace()
 async def create_source(
     client: WeaviateAsyncClient,
     payload: SourceCreateRequest,
     _created_by: uuid.UUID | None,
 ) -> tuple[SourceResponse, bool]:
+    logger.info("create_source called", extra={"source_type": payload.source_type.value, "uri": payload.uri})
     existing = await get_source_by_type_uri(client, payload.source_type, payload.uri)
     if existing is not None:
+        logger.info("create_source reused existing source", extra={"source_id": existing.source_id})
         return existing, False
 
     source_id = new_uuid6()
@@ -114,10 +139,14 @@ async def create_source(
     )
 
 
+@trace()
 async def delete_source(client: WeaviateAsyncClient, source_id: uuid.UUID) -> bool:
+    logger.info("delete_source called", extra={"source_id": source_id})
     source = await get_source(client, source_id)
     if source is None:
+        logger.info("delete_source skipped missing source", extra={"source_id": source_id})
         return False
 
     await client.collections.get(SOURCE_COLLECTION).data.delete_by_id(source_id)
+    logger.info("delete_source completed", extra={"source_id": source_id})
     return True

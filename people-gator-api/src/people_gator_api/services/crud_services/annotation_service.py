@@ -1,5 +1,6 @@
 """CRUD service for annotation entities."""
 
+import logging
 import uuid
 from typing import TypeGuard
 
@@ -31,7 +32,11 @@ from people_gator_api.services.weaviate_service.utils import (
     single_named_vector_payload,
     upsert,
 )
+from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
+
+
+logger = logging.getLogger(__name__)
 
 
 def _is_flat_float_vector(value: list[float] | list[list[float]]) -> TypeGuard[list[float]]:
@@ -43,10 +48,15 @@ def _is_flat_float_vector(value: list[float] | list[list[float]]) -> TypeGuard[l
 # ---------------------------------------------------------------------------
 
 
+@trace()
 async def create_page_mention(
     client: WeaviateAsyncClient,
     payload: PageMentionCreateRequest,
 ) -> PageMentionResponse:
+    logger.info(
+        "create_page_mention called",
+        extra={"source_id": payload.source_id, "document_mention_id": payload.document_mention_id},
+    )
     page_mention_id = new_uuid6()
     await upsert(
         client,
@@ -84,16 +94,20 @@ async def create_page_mention(
     )
 
 
+@trace()
 async def get_page_mention(
     client: WeaviateAsyncClient,
     page_mention_id: uuid.UUID,
 ) -> PageMentionResponse | None:
+    logger.debug("get_page_mention called", extra={"page_mention_id": page_mention_id})
     response = await client.collections.get(PAGE_MENTION_COLLECTION).query.fetch_object_by_id(
         page_mention_id,
         return_references=empty_reference_queries(["principal", "document_mention", "source"]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("page_mention not found", extra={"page_mention_id": page_mention_id})
         return None
+    logger.debug("page_mention found", extra={"page_mention_id": page_mention_id})
     return page_mention_response(
         response.properties,
         response.references,
@@ -101,6 +115,7 @@ async def get_page_mention(
     )
 
 
+@trace()
 async def list_page_mentions(
     client: WeaviateAsyncClient,
     document_mention_id: uuid.UUID | None,
@@ -108,6 +123,15 @@ async def list_page_mentions(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[PageMentionResponse]:
+    logger.debug(
+        "list_page_mentions called",
+        extra={
+            "document_mention_id": document_mention_id,
+            "source_id": source_id,
+            "after_id": after_id,
+            "limit": limit,
+        },
+    )
     filters: list[FilterReturn] = []
     if document_mention_id is not None:
         filters.append(reference_id_filter(link_on="document_mention", reference_id=document_mention_id))
@@ -137,10 +161,15 @@ async def list_page_mentions(
 # ---------------------------------------------------------------------------
 
 
+@trace()
 async def create_document_mention(
     client: WeaviateAsyncClient,
     payload: DocumentMentionCreateRequest,
 ) -> DocumentMentionResponse:
+    logger.info(
+        "create_document_mention called",
+        extra={"source_id": payload.source_id, "entity_id": payload.entity_id},
+    )
     document_mention_id = new_uuid6()
     await upsert(
         client,
@@ -168,16 +197,20 @@ async def create_document_mention(
     )
 
 
+@trace()
 async def get_document_mention(
     client: WeaviateAsyncClient,
     document_mention_id: uuid.UUID,
 ) -> DocumentMentionResponse | None:
+    logger.debug("get_document_mention called", extra={"document_mention_id": document_mention_id})
     response = await client.collections.get(DOCUMENT_MENTION_COLLECTION).query.fetch_object_by_id(
         document_mention_id,
         return_references=empty_reference_queries(["principal", "entity", "source"]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("document_mention not found", extra={"document_mention_id": document_mention_id})
         return None
+    logger.debug("document_mention found", extra={"document_mention_id": document_mention_id})
     return document_mention_response(
         response.properties,
         response.references,
@@ -185,16 +218,25 @@ async def get_document_mention(
     )
 
 
+@trace()
 async def patch_document_mention_entity(
     client: WeaviateAsyncClient,
     document_mention_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> DocumentMentionResponse | None:
+    logger.info(
+        "patch_document_mention_entity called",
+        extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
+    )
     response = await client.collections.get(DOCUMENT_MENTION_COLLECTION).query.fetch_object_by_id(
         document_mention_id,
         return_references=empty_reference_queries(["principal", "entity", "source"]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info(
+            "patch_document_mention_entity skipped missing document_mention",
+            extra={"document_mention_id": document_mention_id},
+        )
         return None
 
     await upsert(
@@ -214,7 +256,15 @@ async def patch_document_mention_entity(
         return_references=empty_reference_queries(["principal", "entity", "source"]),
     )
     if updated is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.warning(
+            "patch_document_mention_entity could not read updated object",
+            extra={"document_mention_id": document_mention_id},
+        )
         return None
+    logger.info(
+        "patch_document_mention_entity completed",
+        extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
+    )
     return document_mention_response(
         updated.properties,
         updated.references,
@@ -222,6 +272,7 @@ async def patch_document_mention_entity(
     )
 
 
+@trace()
 async def list_document_mentions(
     client: WeaviateAsyncClient,
     entity_id: uuid.UUID | None,
@@ -229,6 +280,15 @@ async def list_document_mentions(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[DocumentMentionResponse]:
+    logger.debug(
+        "list_document_mentions called",
+        extra={
+            "entity_id": entity_id,
+            "source_id": source_id,
+            "after_id": after_id,
+            "limit": limit,
+        },
+    )
     filters: list[FilterReturn] = []
     if entity_id is not None:
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
@@ -259,10 +319,15 @@ async def list_document_mentions(
 # ---------------------------------------------------------------------------
 
 
+@trace()
 async def create_face(
     client: WeaviateAsyncClient,
     payload: FaceCreateRequest,
 ) -> FaceResponse:
+    logger.info(
+        "create_face called",
+        extra={"source_id": payload.source_id, "entity_id": payload.entity_id},
+    )
     detection_id = new_uuid6()
     await upsert(
         client,
@@ -299,16 +364,20 @@ async def create_face(
     )
 
 
+@trace()
 async def get_face(
     client: WeaviateAsyncClient,
     detection_id: uuid.UUID,
 ) -> FaceResponse | None:
+    logger.debug("get_face called", extra={"detection_id": detection_id})
     response = await client.collections.get(FACE_COLLECTION).query.fetch_object_by_id(
         detection_id,
         return_references=empty_reference_queries(["principal", "entity", "source"]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("face not found", extra={"detection_id": detection_id})
         return None
+    logger.debug("face found", extra={"detection_id": detection_id})
     return face_response(
         response.properties,
         response.references,
@@ -316,17 +385,23 @@ async def get_face(
     )
 
 
+@trace()
 async def patch_face_entity(
     client: WeaviateAsyncClient,
     detection_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> FaceResponse | None:
+    logger.info(
+        "patch_face_entity called",
+        extra={"detection_id": detection_id, "entity_id": entity_id},
+    )
     response = await client.collections.get(FACE_COLLECTION).query.fetch_object_by_id(
         detection_id,
         include_vector=True,
         return_references=empty_reference_queries(["principal", "entity", "source"]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("patch_face_entity skipped missing face", extra={"detection_id": detection_id})
         return None
 
     vector_payload: dict[str, list[float]] | None = None
@@ -355,7 +430,9 @@ async def patch_face_entity(
         return_references=empty_reference_queries(["principal", "entity", "source"]),
     )
     if updated is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.warning("patch_face_entity could not read updated face", extra={"detection_id": detection_id})
         return None
+    logger.info("patch_face_entity completed", extra={"detection_id": detection_id, "entity_id": entity_id})
     return face_response(
         updated.properties,
         updated.references,
@@ -363,6 +440,7 @@ async def patch_face_entity(
     )
 
 
+@trace()
 async def list_faces(
     client: WeaviateAsyncClient,
     source_id: uuid.UUID | None,
@@ -370,6 +448,10 @@ async def list_faces(
     after_id: uuid.UUID | None,
     limit: int,
 ) -> list[FaceResponse]:
+    logger.debug(
+        "list_faces called",
+        extra={"source_id": source_id, "entity_id": entity_id, "after_id": after_id, "limit": limit},
+    )
     filters: list[FilterReturn] = []
     if source_id is not None:
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
@@ -392,4 +474,5 @@ async def list_faces(
         ],
         key=lambda item: item.detection_id,
     )
+    logger.debug("list_faces completed", extra={"count": len(items)})
     return items
