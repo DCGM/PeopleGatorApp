@@ -9,15 +9,9 @@ from collections.abc import (
     Mapping,
     Sequence,
 )
-from dataclasses import (
-    dataclass,
-)
 import json
 import uuid
-from typing import (
-    Protocol,
-    cast,
-)
+from typing import cast
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter, QueryReference
@@ -26,7 +20,12 @@ from weaviate.collections.classes.types import (
     WeaviateField,
     WeaviateProperties,
 )
-from weaviate.collections.classes.internal import CrossReferences
+from weaviate.collections.classes.internal import (
+    CrossReferences,
+    ReferenceInputs
+)
+
+type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 from people_gator_api.schemas.enums import (
     PrincipalType,
@@ -64,9 +63,9 @@ async def upsert(
     collection_name: str,
     object_uuid: uuid.UUID,
     *,
-    properties: MutableProperties,
-    references: ReferenceMap | None = None,
-    vector: VectorPayload | None = None,
+    properties: WeaviateProperties,
+    references: ReferenceInputs | None = None,
+    vector: dict[str, list[float]] | None = None,
 ) -> None:
     collection = client.collections.get(collection_name)
     exists = await collection.data.exists(object_uuid)

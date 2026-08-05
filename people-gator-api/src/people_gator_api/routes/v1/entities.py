@@ -4,11 +4,7 @@ import uuid
 
 from fastapi import (
     APIRouter,
-    Depends,
     status,
-)
-from weaviate import (
-    WeaviateAsyncClient,
 )
 
 from people_gator_api.schemas.entities import (

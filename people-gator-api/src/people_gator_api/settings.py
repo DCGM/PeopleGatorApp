@@ -12,16 +12,6 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from people_gator_api.schemas.enums import (
-    AnnotationType,
-)
-from people_gator_api.services.weaviate_service.db_schema import (
-    DEFAULT_FACE_VECTOR,
-    DEFAULT_FULLTEXT_VECTOR,
-    DEFAULT_NAME_VECTOR,
-)
-
-
 class SearchEntityAggregationMode(StrEnum):
     best_annotation = "best_annotation"
     average_annotation = "average_annotation"

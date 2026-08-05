@@ -2,12 +2,7 @@ import uuid
 
 from fastapi import (
     APIRouter,
-    Depends,
 )
-from weaviate import (
-    WeaviateAsyncClient,
-)
-
 from people_gator_api.services.database_service import (
     WeaviateSessionDependency,
 )

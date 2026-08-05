@@ -8,22 +8,11 @@ import uuid
 
 from fastapi import (
     APIRouter,
-    Depends,
     Query,
-)
-from weaviate import (
-    WeaviateAsyncClient,
-)
-
-from people_gator_api.schemas.enums import (
-    AnnotationType,
 )
 from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResponse,
-)
-from people_gator_api.settings import (
-    settings,
 )
 from people_gator_api.services.auth_service import (
     BrowseUserDependency,

@@ -15,9 +15,6 @@ from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResponse,
 )
-from people_gator_api.settings import (
-    SearchProfileSettings,
-)
 from people_gator_api.services.weaviate_service.search import (
     search_entities_by_name_or_aliases,
 )

@@ -53,3 +53,12 @@ def test_face_response_raises_clear_error_for_empty_reference_links() -> None:
             references,
             uuid.uuid4(),
         )
+
+
+def test_optional_json_dict_decodes_nested_json_objects() -> None:
+    metadata = module.optional_json_dict(
+        {"metadata": '{"foo": {"bar": 1}, "baz": [true, null]}'},
+        "metadata",
+    )
+
+    assert metadata == {"foo": {"bar": 1}, "baz": [True, None]}

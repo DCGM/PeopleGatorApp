@@ -1,7 +1,4 @@
 import uuid
-from collections.abc import (
-    Mapping,
-)
 from dataclasses import (
     dataclass,
 )
@@ -15,9 +12,6 @@ from weaviate.collections.classes.filters import (
 from weaviate.classes.query import (
     Filter,
 )
-from weaviate.collections.classes.types import (
-    WeaviateField,
-)
 
 from people_gator_api.schemas.enums import (
     PrincipalType,
@@ -30,7 +24,6 @@ from people_gator_api.services.weaviate_service.db_schema import (
     PRINCIPAL_COLLECTION,
 )
 from people_gator_api.services.weaviate_service.utils import (
-    MutableProperties,
     combine_filters,
     empty_reference_queries,
     principal_response,
@@ -126,7 +119,7 @@ async def get_or_create_user(
         resolved_display_name = display_name
         resolved_email = email
 
-    properties: MutableProperties = {
+    properties = {
         "principal_type": PrincipalType.user.value,
         "display_name": resolved_display_name,
         "is_active": is_active_value,

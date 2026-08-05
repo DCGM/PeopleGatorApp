@@ -14,20 +14,13 @@ from people_gator_api.schemas.entities import (
     EntityListResponse,
     EntityResponse,
 )
-from people_gator_api.services.crud_services.annotation_service import (
-    list_document_mentions,
-    list_faces,
-)
 from people_gator_api.services.weaviate_service.db_schema import (
     DEFAULT_FULLTEXT_VECTOR,
     DEFAULT_NAME_VECTOR,
-    DOCUMENT_MENTION_COLLECTION,
     ENTITY_COLLECTION,
-    FACE_COLLECTION,
 )
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
-    delete_document_mention_tree,
     empty_reference_queries,
     entity_response,
     upsert,
