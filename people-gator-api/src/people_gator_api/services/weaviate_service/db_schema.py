@@ -93,6 +93,20 @@ def _text_property(
         skip_vectorization=True,
     )
 
+def _text_array_property(
+    name: str,
+    description: str,
+    *,
+    searchable: bool = True,
+) -> Property:
+    return Property(
+        name=name,
+        data_type=DataType.TEXT_ARRAY,
+        description=description,
+        index_filterable=True,
+        index_searchable=searchable,
+        skip_vectorization=True,
+    )
 
 def _bool_property(name: str, description: str) -> Property:
     return Property(
@@ -152,7 +166,6 @@ def _object_array_property(
     *,
     nested_properties: list[Property],
     index_filterable: bool = True,
-    index_searchable: bool = False,
     skip_vectorization: bool = True,
 ) -> Property:
     return Property(
@@ -160,7 +173,6 @@ def _object_array_property(
         data_type=DataType.OBJECT_ARRAY,
         description=description,
         index_filterable=index_filterable,
-        index_searchable=index_searchable,
         nested_properties=nested_properties,
         skip_vectorization=skip_vectorization,
     )
@@ -259,14 +271,10 @@ ENTITY_PROPERTIES: list[Property] = [
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
     _text_property("short_description", "Entity-level aggregated short description value."),
-    _object_array_property(
+    _text_array_property(
         "aliases",
         "Entity-level aggregated alias values.",
-        nested_properties=[
-            _text_property("alias", "Alias value."),
-        ],
-        index_filterable=True,
-        index_searchable=True,
+        searchable=True,
     ),
     _text_property("wikidata_id", "Entity-level aggregated Wikidata ID."),
     _text_property("nlcr_authority_id", "Entity-level aggregated NLCR authority ID."),
@@ -275,14 +283,10 @@ ENTITY_PROPERTIES: list[Property] = [
 PAGE_MENTION_PROPERTIES: list[Property] = [
     _text_property("name", "Name of the page mention."),
     _text_property("information", "Information of the page mention."),
-    _object_array_property(
+    _text_array_property(
         "aliases",
         "Entity-level aggregated alias values.",
-        nested_properties=[
-            _text_property("alias", "Alias value."),
-        ],
-        index_filterable=True,
-        index_searchable=True,
+        searchable=True,
     ),
     _object_array_property(
         "mentions",
@@ -300,14 +304,10 @@ PAGE_MENTION_PROPERTIES: list[Property] = [
 DOCUMENT_MENTION_PROPERTIES: list[Property] = [
     _text_property("name", "Aggregated document-level name."),
     _text_property("information", "Aggregated document-level information."),
-    _object_array_property(
+    _text_array_property(
         "aliases",
         "Entity-level aggregated alias values.",
-        nested_properties=[
-            _text_property("alias", "Alias value."),
-        ],
-        index_filterable=True,
-        index_searchable=True,
+        searchable=True,
     ),
 ]
 
