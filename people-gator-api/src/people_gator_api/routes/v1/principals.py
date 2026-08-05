@@ -7,6 +7,7 @@ from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     ModelAgentPatchRequest,
     PrincipalResponse,
+    UserPatchRequest,
 )
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
@@ -35,6 +36,19 @@ async def list_principals_route(
     return await list_principals(session, principal_type, is_active, after_id, limit)
 
 
+@router.get("/me", response_model=PrincipalResponse)
+async def get_me_route(
+    principal: AnnotatorUserDependency,
+) -> PrincipalResponse:
+    response = PrincipalResponse(
+        principal_id=principal.principal_id,
+        principal_type=PrincipalType.user,
+        display_name=principal.username,
+        is_active=True,
+    )
+    return response
+
+
 @router.get("/principals/{principal_id}", response_model=PrincipalResponse)
 async def get_principal_route(
     principal_id: uuid.UUID,
@@ -47,19 +61,17 @@ async def get_principal_route(
     return found_principal
 
 
-@router.get("/principals/me", response_model=PrincipalResponse)
-async def get_me_route(
-    principal: AnnotatorUserDependency,
-) -> PrincipalResponse:
-    return PrincipalResponse(
-        principal_id=principal.principal_id,
-        principal_type=PrincipalType.user,
-        display_name=principal.username,
-        is_active=True,
-    )
+@router.get("/model-agents", response_model=list[PrincipalResponse])
+async def list_model_agents_route(
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+    is_active: bool | None = True,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+) -> list[PrincipalResponse]:
+    return await list_principals(session, PrincipalType.model_agent, is_active, after_id, limit)
 
-
-@router.post("/principals/model-agents", response_model=PrincipalResponse)
+@router.post("/model-agents", response_model=PrincipalResponse)
 async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
     session: WeaviateSessionDependency,
@@ -68,10 +80,37 @@ async def create_model_agent_route(
     return await create_model_agent(session, payload)
 
 
-@router.patch("/principals/model-agents/{principal_id}", response_model=PrincipalResponse)
+@router.patch("/model-agents/{principal_id}", response_model=PrincipalResponse)
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+) -> PrincipalResponse:
+    updated_principal = await update_principal(
+        session,
+        principal_id,
+        payload.display_name,
+        payload.is_active,
+    )
+    if updated_principal is None:
+        raise_api_error(404, "not_found", "Principal not found")
+    return updated_principal
+
+@router.get("/users", response_model=list[PrincipalResponse])
+async def list_users_route(
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+    is_active: bool | None = True,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+) -> list[PrincipalResponse]:
+    return await list_principals(session, PrincipalType.user, is_active, after_id, limit)
+
+@router.patch("/users/{principal_id}", response_model=PrincipalResponse)
+async def patch_user_route(
+    principal_id: uuid.UUID,
+    payload: UserPatchRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
 ) -> PrincipalResponse:

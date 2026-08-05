@@ -17,8 +17,6 @@ from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
     principal_response,
     require_bool,
-    require_str,
-    optional_str,
     upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
@@ -98,8 +96,6 @@ async def get_or_create_user(
     *,
     external_subject: str,
     external_issuer: str,
-    display_name: str,
-    email: str | None,
 ) -> StoredUser:
     logger.info(
         "get_or_create_user called",
@@ -118,26 +114,22 @@ async def get_or_create_user(
 
     if existing.objects:
         existing_item = existing.objects[0]
-        principal_id = getattr(existing_item, "uuid")
+        principal_id = existing_item.uuid
         existing_properties = existing_item.properties
         is_active_value = require_bool(existing_properties, "is_active")
-        resolved_display_name = require_str(existing_properties, "display_name")
-        resolved_email = optional_str(existing_properties, "email")
-        logger.debug("existing user principal found", extra={"principal_id": principal_id})
+        logger.info("existing user principal found", extra={"principal_id": principal_id})
     else:
         principal_id = new_uuid6()
         is_active_value = True
-        resolved_display_name = display_name
-        resolved_email = email
-        logger.debug("creating new user principal", extra={"principal_id": principal_id})
+        logger.info("creating new user principal", extra={"principal_id": principal_id})
 
     properties = {
         "principal_type": PrincipalType.user.value,
-        "display_name": resolved_display_name,
+        "display_name": external_subject,
         "is_active": is_active_value,
         "external_subject": external_subject,
         "external_issuer": external_issuer,
-        "email": resolved_email,
+        "email": None,
         "annotation_type": None,
         "role": None,
         "model_slug": None,
@@ -154,11 +146,11 @@ async def get_or_create_user(
     return StoredUser(
         principal_id=principal_id,
         principal_type=PrincipalType.user,
-        display_name=resolved_display_name,
+        display_name=external_subject,
         is_active=is_active_value,
         external_subject=external_subject,
         external_issuer=external_issuer,
-        email=resolved_email,
+        email=None,
     )
 
 

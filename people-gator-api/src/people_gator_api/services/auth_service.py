@@ -32,7 +32,9 @@ class Principal:
 security = HTTPBasic()
 
 async def get_current_user(
-    security_scopes: SecurityScopes, token: Annotated[HTTPBasicCredentials, Depends(security)], session: WeaviateSessionDependency
+    security_scopes: SecurityScopes, 
+    token: Annotated[HTTPBasicCredentials, Depends(security)], 
+    session: WeaviateSessionDependency
 ):
     """Get the current user from the request context."""
     username = token.username
@@ -50,8 +52,6 @@ async def get_current_user(
         client=session,
         external_subject=username,
         external_issuer="http://test.people-gator-api.local",
-        display_name=username,
-        email="test@test.people-gator-api.local",
     )
     
     for scope in security_scopes.scopes:
@@ -60,11 +60,12 @@ async def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Not enough permissions for scope: {scope}",
             )
-    return Principal(
-        principal_id=user.principal_id,
+    returned_user = Principal(
+        principal_id=uuid.UUID(str(user.principal_id)),
         username=username,
         scopes=scopes,
     )
+    return returned_user
 
 
 type DataIngestUserDependency = Annotated[Principal, Security(get_current_user, scopes=[INGEST_SCOPE])]
