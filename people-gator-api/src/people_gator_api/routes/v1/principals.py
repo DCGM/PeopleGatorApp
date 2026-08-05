@@ -1,14 +1,8 @@
 import uuid
 
-from fastapi import (
-    APIRouter,
-)
-from people_gator_api.services.database_service import (
-    WeaviateSessionDependency,
-)
-from people_gator_api.schemas.enums import (
-    PrincipalType,
-)
+from fastapi import APIRouter
+from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     ModelAgentPatchRequest,
@@ -18,9 +12,7 @@ from people_gator_api.services.auth_service import (
     AdminUserDependency,
     AnnotatorUserDependency,
 )
-from people_gator_api.services.http_errors import (
-    raise_api_error,
-)
+from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.principal_service import (
     create_model_agent,
     get_principal,

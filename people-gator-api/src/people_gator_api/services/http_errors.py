@@ -1,9 +1,5 @@
-from fastapi import (
-    HTTPException,
-)
-from typing import (
-    NoReturn,
-)
+from fastapi import HTTPException
+from typing import NoReturn
 
 
 def raise_api_error(status_code: int, code: str, message: str) -> NoReturn:

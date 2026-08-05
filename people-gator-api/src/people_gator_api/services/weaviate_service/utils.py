@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections import (
-    Counter,
-)
+from collections import Counter
 from collections.abc import (
     Mapping,
     Sequence,
@@ -41,9 +39,7 @@ from people_gator_api.schemas.entities import (
     Polygon,
     PolygonPoint,
 )
-from people_gator_api.schemas.principals import (
-    PrincipalResponse,
-)
+from people_gator_api.schemas.principals import PrincipalResponse
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     NlcrAuthoritySourceMetadata,

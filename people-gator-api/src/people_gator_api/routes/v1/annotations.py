@@ -35,12 +35,8 @@ from people_gator_api.services.crud_services.annotation_service import (
     patch_document_mention_entity,
     patch_face_entity,
 )
-from people_gator_api.services.database_service import (
-    WeaviateSessionDependency,
-)
-from people_gator_api.services.http_errors import (
-    raise_api_error,
-)
+from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.http_errors import raise_api_error
 
 router = APIRouter(tags=["annotations"])
 

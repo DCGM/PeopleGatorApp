@@ -4,9 +4,7 @@ from datetime import (
     datetime,
     timezone,
 )
-from people_gator_api.settings import (
-    settings,
-)
+from people_gator_api.settings import settings
 
 ALL_CALLSITE_PARAMETERS = list(structlog.processors.CallsiteParameter)
 

@@ -1,26 +1,14 @@
-from contextlib import (
-    asynccontextmanager,
-)
+from contextlib import asynccontextmanager
 
-from fastapi import (
-    FastAPI,
-)
+from fastapi import FastAPI
 from people_gator_api.services.embedding_service.http_service import (
     close_embedding_service,
     init_embedding_service,
 )
-from people_gator_api.utils.opentelemetry import (
-    initialize_opentelemetry,
-)
-from people_gator_api.utils.logging import (
-    configure_logging,
-)
-from people_gator_api.settings import (
-    settings,
-)
-from people_gator_api.routes.v1 import (
-    router as v1_router,
-)
+from people_gator_api.utils.opentelemetry import initialize_opentelemetry
+from people_gator_api.utils.logging import configure_logging
+from people_gator_api.settings import settings
+from people_gator_api.routes.v1 import router as v1_router
 from people_gator_api.services.weaviate_service.client import (
     init_weaviate,
     close_weaviate,
@@ -53,11 +41,11 @@ def get_app() -> FastAPI:
             fastapi_instrumentor,
             _,
             _,
-        ) = initialize_opentelemetry()    
+        ) = initialize_opentelemetry()
         fastapi_instrumentor.instrument_app(app)
-        configure_logging()  # Initialize structlog with OpenTelemetry integration
+        configure_logging()
     else:
-        configure_logging()  # Initialize structlog without OpenTelemetry integration
+        configure_logging()
     app.include_router(v1_router)
     return app
 

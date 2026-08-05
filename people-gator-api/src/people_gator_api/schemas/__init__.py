@@ -20,9 +20,7 @@ from people_gator_api.schemas.principals import (
     UserPatchRequest,
     UserResponse,
 )
-from people_gator_api.schemas.root import (
-    RootResponse,
-)
+from people_gator_api.schemas.root import RootResponse
 from people_gator_api.schemas.search import (
     EntitySearchResult,
     SearchQuery,

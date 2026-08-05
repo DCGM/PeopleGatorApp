@@ -1,12 +1,8 @@
-from collections.abc import (
-    AsyncGenerator,
-)
+from collections.abc import AsyncGenerator
 from fastapi import Depends
 from typing import Annotated
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.services.weaviate_service.client import (
     close_weaviate,

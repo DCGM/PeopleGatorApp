@@ -1,7 +1,5 @@
 import json
-from dataclasses import (
-    dataclass,
-)
+from dataclasses import dataclass
 
 from aiohttp import (
     ClientResponse,

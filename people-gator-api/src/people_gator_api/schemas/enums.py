@@ -1,6 +1,4 @@
-from enum import (
-    StrEnum,
-)
+from enum import StrEnum
 
 class AnnotationType(StrEnum):
     """Annotation entities in the simplified ER diagram."""

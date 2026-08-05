@@ -10,9 +10,7 @@ from weaviate.classes.config import (
     VectorDistances,
 )
 
-from people_gator_api.schemas.enums import (
-    AnnotationType,
-)
+from people_gator_api.schemas.enums import AnnotationType
 
 # ---------------------------------------------------------------------------
 # Collection names

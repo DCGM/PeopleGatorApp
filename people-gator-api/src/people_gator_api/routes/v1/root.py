@@ -1,13 +1,9 @@
-from fastapi import (
-    APIRouter,
-)
+from fastapi import APIRouter
 from logging import (
     getLogger,
     Logger,
 )
-from people_gator_api.schemas.root import (
-    RootResponse,
-)
+from people_gator_api.schemas.root import RootResponse
 
 logger: Logger = getLogger(__name__)
 

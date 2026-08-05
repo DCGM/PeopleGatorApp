@@ -2,28 +2,14 @@
 
 from __future__ import annotations
 
-from uuid import (
-    UUID,
-)
+from uuid import UUID
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
-from weaviate.classes.query import (
-    MetadataQuery,
-)
-from weaviate.collections.classes.filters import (
-    FilterReturn,
-)
-from weaviate.collections.classes.types import (
-    WeaviateField,
-)
-from people_gator_api.services.weaviate_service.db_schema import (
-    ENTITY_COLLECTION,
-)
-from people_gator_api.schemas.search import (
-    EntitySearchResult,
-)
+from weaviate import WeaviateAsyncClient
+from weaviate.classes.query import MetadataQuery
+from weaviate.collections.classes.filters import FilterReturn
+from weaviate.collections.classes.types import WeaviateField
+from people_gator_api.services.weaviate_service.db_schema import ENTITY_COLLECTION
+from people_gator_api.schemas.search import EntitySearchResult
 from people_gator_api.services.weaviate_service.utils import (
     optional_sequence_of_mappings,
     optional_str,

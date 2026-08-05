@@ -2,36 +2,24 @@
 
 import uuid
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
-from weaviate.classes.query import (
-    Filter,
-)
-from weaviate.collections.classes.filters import (
-    FilterReturn,
-)
+from weaviate import WeaviateAsyncClient
+from weaviate.classes.query import Filter
+from weaviate.collections.classes.filters import FilterReturn
 
-from people_gator_api.schemas.enums import (
-    SourceKind,
-)
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
     SourceCreateRequest,
     SourceListResponse,
     SourceResponse,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
-    SOURCE_COLLECTION,
-)
+from people_gator_api.services.weaviate_service.db_schema import SOURCE_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
     source_response,
     upsert,
 )
-from people_gator_api.utils.uuid_utils import (
-    new_uuid6,
-)
+from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 async def list_sources(

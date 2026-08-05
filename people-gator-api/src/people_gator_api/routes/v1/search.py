@@ -14,15 +14,9 @@ from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResponse,
 )
-from people_gator_api.services.auth_service import (
-    BrowseUserDependency,
-)
-from people_gator_api.services.database_service import (
-    WeaviateSessionDependency,
-)
-from people_gator_api.services.crud_services.search_service import (
-    search,
-)
+from people_gator_api.services.auth_service import BrowseUserDependency
+from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.crud_services.search_service import search
 
 router = APIRouter(tags=["search"])
 

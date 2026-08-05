@@ -23,12 +23,8 @@ from people_gator_api.services.crud_services.annotation_service import (
     list_document_mentions,
     list_faces,
 )
-from people_gator_api.services.database_service import (
-    WeaviateSessionDependency,
-)
-from people_gator_api.services.http_errors import (
-    raise_api_error,
-)
+from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.entity_service import (
     create_entity,
     delete_entity,

@@ -2,12 +2,8 @@
 
 import uuid
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
-from weaviate.collections.classes.filters import (
-    FilterReturn,
-)
+from weaviate import WeaviateAsyncClient
+from weaviate.collections.classes.filters import FilterReturn
 
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
@@ -25,9 +21,7 @@ from people_gator_api.services.weaviate_service.utils import (
     entity_response,
     upsert,
 )
-from people_gator_api.utils.uuid_utils import (
-    new_uuid6,
-)
+from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 # ---------------------------------------------------------------------------

@@ -1,28 +1,16 @@
 import uuid
-from dataclasses import (
-    dataclass,
-)
+from dataclasses import dataclass
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
-from weaviate.collections.classes.filters import (
-    FilterReturn,
-)
-from weaviate.classes.query import (
-    Filter,
-)
+from weaviate import WeaviateAsyncClient
+from weaviate.collections.classes.filters import FilterReturn
+from weaviate.classes.query import Filter
 
-from people_gator_api.schemas.enums import (
-    PrincipalType,
-)
+from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     PrincipalResponse,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
-    PRINCIPAL_COLLECTION,
-)
+from people_gator_api.services.weaviate_service.db_schema import PRINCIPAL_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
@@ -32,9 +20,7 @@ from people_gator_api.services.weaviate_service.utils import (
     optional_str,
     upsert,
 )
-from people_gator_api.utils.uuid_utils import (
-    new_uuid6,
-)
+from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 @dataclass(slots=True, frozen=True)

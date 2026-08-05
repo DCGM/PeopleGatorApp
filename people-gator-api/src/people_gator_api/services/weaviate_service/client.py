@@ -3,19 +3,11 @@
 import logging
 
 import weaviate
-from weaviate import (
-    WeaviateAsyncClient,
-)
-from weaviate.classes.config import (
-    ReferenceProperty,
-)
-from weaviate.classes.init import (
-    Auth,
-)
+from weaviate import WeaviateAsyncClient
+from weaviate.classes.config import ReferenceProperty
+from weaviate.classes.init import Auth
 
-from people_gator_api.settings import (
-    settings,
-)
+from people_gator_api.settings import settings
 from people_gator_api.services.weaviate_service.db_schema import (
     ALL_COLLECTION_SPECS,
     CollectionSpec,

@@ -1,14 +1,10 @@
-from collections.abc import (
-    Callable,
-)
+from collections.abc import Callable
 from datetime import (
     datetime,
     timedelta,
     timezone,
 )
-from functools import (
-    lru_cache,
-)
+from functools import lru_cache
 import uuid
 import uuid6
 

@@ -1,73 +1,35 @@
 import logging
 import os
 
-from opentelemetry.sdk.resources import (
-    Resource,
-)
+from opentelemetry.sdk.resources import Resource
 
-from opentelemetry import (
-    trace,
-)
-from opentelemetry.sdk.trace import (
-    TracerProvider,
-)
-from opentelemetry.sdk.trace.export import (
-    BatchSpanProcessor,
-)
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
-from opentelemetry import (
-    metrics,
-)
-from opentelemetry.sdk.metrics import (
-    MeterProvider,
-)
-from opentelemetry.sdk.metrics.export import (
-    PeriodicExportingMetricReader,
-)
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
-    OTLPMetricExporter,
-)
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 
-from opentelemetry import (
-    _logs,
-)
+from opentelemetry import _logs
 from opentelemetry.sdk._logs import (
     LoggerProvider,
     LoggingHandler,
 )
-from opentelemetry.sdk._logs.export import (
-    BatchLogRecordProcessor,
-)
-from opentelemetry.exporter.otlp.proto.http._log_exporter import (
-    OTLPLogExporter,
-)
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 
-from opentelemetry.instrumentation.system_metrics import (
-    SystemMetricsInstrumentor,
-)
-from opentelemetry.instrumentation.logging import (
-    LoggingInstrumentor,
-)
-from opentelemetry.instrumentation.fastapi import (
-    FastAPIInstrumentor,
-)
-from opentelemetry.instrumentation.aiohttp_client import (
-    AioHttpClientInstrumentor,
-)
-from opentelemetry.instrumentation.weaviate import (
-    WeaviateInstrumentor,
-)
+from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+from opentelemetry.instrumentation.weaviate import WeaviateInstrumentor
 
-from urllib.parse import (
-    urljoin,
-)
+from urllib.parse import urljoin
 
-from people_gator_api.settings import (
-    settings,
-)
+from people_gator_api.settings import settings
 
 def initialize_opentelemetry():
     resource = Resource.create({

@@ -3,21 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from typing import (
-    Protocol,
-)
+from typing import Protocol
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
+from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResponse,
 )
-from people_gator_api.services.weaviate_service.search import (
-    search_entities_by_name_or_aliases,
-)
+from people_gator_api.services.weaviate_service.search import search_entities_by_name_or_aliases
 
 
 class SearchRequestLike(Protocol):

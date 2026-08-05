@@ -1,16 +1,10 @@
 """CRUD service for annotation entities."""
 
 import uuid
-from typing import (
-    TypeGuard,
-)
+from typing import TypeGuard
 
-from weaviate import (
-    WeaviateAsyncClient,
-)
-from weaviate.collections.classes.filters import (
-    FilterReturn,
-)
+from weaviate import WeaviateAsyncClient
+from weaviate.collections.classes.filters import FilterReturn
 
 from people_gator_api.schemas.entities import (
     DocumentMentionCreateRequest,
@@ -37,9 +31,7 @@ from people_gator_api.services.weaviate_service.utils import (
     single_named_vector_payload,
     upsert,
 )
-from people_gator_api.utils.uuid_utils import (
-    new_uuid6,
-)
+from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 def _is_flat_float_vector(value: list[float] | list[list[float]]) -> TypeGuard[list[float]]:

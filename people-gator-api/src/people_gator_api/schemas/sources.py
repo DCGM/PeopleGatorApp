@@ -9,9 +9,7 @@ from pydantic import (
     model_validator,
 )
 
-from people_gator_api.schemas.enums import (
-    SourceKind,
-)
+from people_gator_api.schemas.enums import SourceKind
 
 
 class PageSourceMetadata(BaseModel):

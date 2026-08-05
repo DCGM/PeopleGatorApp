@@ -7,19 +7,13 @@ from fastapi import (
     status,
 )
 
-from people_gator_api.schemas.enums import (
-    SourceKind,
-)
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     DataIngestUserDependency,
 )
-from people_gator_api.services.database_service import (
-    WeaviateSessionDependency,
-)
-from people_gator_api.services.http_errors import (
-    raise_api_error,
-)
+from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.source_service import (
     create_source,
     delete_source,
