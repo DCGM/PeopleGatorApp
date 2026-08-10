@@ -37,10 +37,6 @@ def get_app() -> FastAPI:
 
     if settings.otel.enabled:
         (
-            _,
-            _,
-            _,
-            _,
             fastapi_instrumentor,
             _,
             _,

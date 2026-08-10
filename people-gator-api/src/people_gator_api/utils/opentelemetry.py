@@ -19,7 +19,6 @@ from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExp
 from opentelemetry import _logs
 from opentelemetry.sdk._logs import (
     LoggerProvider,
-    LoggingHandler,
 )
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
@@ -73,7 +72,6 @@ def initialize_opentelemetry():
     trace_provider = TracerProvider(resource=resource)
     trace_provider.add_span_processor(trace_processor)
     otel_trace.set_tracer_provider(trace_provider)
-    tracer = otel_trace.get_tracer(__name__)
 
     meter_exporter = OTLPMetricExporter(
         endpoint=urljoin(settings.otel.http_endpoint, settings.otel.metrics_path)
@@ -81,7 +79,6 @@ def initialize_opentelemetry():
     meter_reader = PeriodicExportingMetricReader(meter_exporter)
     meter_provider = MeterProvider([meter_reader], resource=resource)
     metrics.set_meter_provider(meter_provider)
-    meter = metrics.get_meter(__name__)
 
     log_exporter = OTLPLogExporter(
         endpoint=urljoin(settings.otel.http_endpoint, settings.otel.logs_path)
@@ -90,17 +87,6 @@ def initialize_opentelemetry():
     log_provider = LoggerProvider(resource=resource)
     log_provider.add_log_record_processor(log_processor)
     _logs.set_logger_provider(log_provider)
-
-    logger = _logs.get_logger(__name__)
-    logging_handler = LoggingHandler(
-        level={
-            "DEBUG": logging.DEBUG,
-            "INFO": logging.INFO,
-            "WARNING": logging.WARNING,
-            "ERROR": logging.ERROR,
-        }[settings.log_level],
-        logger_provider=log_provider,
-    )
 
     logging_instrumentator = LoggingInstrumentor(log_level=logging.DEBUG)
     system_metric_instrumentator = SystemMetricsInstrumentor()
@@ -113,10 +99,6 @@ def initialize_opentelemetry():
     weaviate_instrumentor.instrument()
 
     return (
-        tracer,
-        meter,
-        logger,
-        logging_handler,
         fastapi_instrumentor,
         aiohttp_client_instrumentor,
         weaviate_instrumentor,
