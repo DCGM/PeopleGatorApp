@@ -543,6 +543,29 @@ async def update_model_agent(
 
 
 @trace()
+async def delete_model_agent(
+    client: WeaviateAsyncClient,
+    actor_principal_id: uuid.UUID,
+    target_principal_id: uuid.UUID,
+) -> bool:
+    logger.info("delete_model_agent called", extra={"principal_id": target_principal_id})
+    model_agent = await get_model_agent(client, actor_principal_id, target_principal_id)
+    if model_agent is None:
+        logger.info(
+            "delete_model_agent skipped missing model agent",
+            extra={"principal_id": target_principal_id},
+        )
+        return False
+
+    await client.collections.get(PRINCIPAL_COLLECTION).data.delete_by_id(target_principal_id)
+    logger.info(
+        "delete_model_agent completed",
+        extra={"principal_id": target_principal_id},
+    )
+    return True
+
+
+@trace()
 async def update_principal(
     client: WeaviateAsyncClient,
     actor_principal_id: uuid.UUID,

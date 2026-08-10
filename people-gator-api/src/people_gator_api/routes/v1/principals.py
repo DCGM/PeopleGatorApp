@@ -21,6 +21,7 @@ from people_gator_api.services.auth_service import (
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.principal_service import (
     create_model_agent,
+    delete_model_agent,
     get_model_agent,
     get_principal,
     get_user,
@@ -138,6 +139,17 @@ async def patch_model_agent_route(
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
     return updated_principal
+
+
+@router.delete("/model-agents/{principal_id}", status_code=204)
+async def delete_model_agent_route(
+    principal_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+) -> None:
+    deleted = await delete_model_agent(session, principal.principal_id, principal_id)
+    if not deleted:
+        raise_api_error(404, "not_found", "Principal not found")
 
 
 @router.get("/users", response_model=UserListResponse)
