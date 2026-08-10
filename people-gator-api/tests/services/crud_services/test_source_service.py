@@ -35,13 +35,16 @@ async def test_delete_source_returns_false_for_unknown_source() -> None:
         async def fetch_objects(self, **_kwargs: object) -> SimpleNamespace:
             return SimpleNamespace(objects=[])
 
+        async def fetch_object_by_id(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
     class _Collection:
         query = _Query()
         data = SimpleNamespace(delete_by_id=lambda _object_id: None)
 
     client = SimpleNamespace(collections=SimpleNamespace(get=lambda _name: _Collection()))
 
-    deleted = await source_service.delete_source(client, uuid.uuid4())
+    deleted = await source_service.delete_source(client, uuid.uuid4(), uuid.uuid4())
 
     assert deleted is False
 
@@ -70,7 +73,11 @@ async def test_delete_source_removes_existing_source() -> None:
 
     client = SimpleNamespace(collections=_Collections())
 
-    async def fake_get_source(_client: object, _source_id: uuid.UUID) -> SourceResponse:
+    async def fake_get_source(
+        _client: object,
+        _principal_id: uuid.UUID,
+        _source_id: uuid.UUID,
+    ) -> SourceResponse:
         return SourceResponse(
             source_id=source_id,
             source_type=SourceKind.document,
@@ -80,7 +87,7 @@ async def test_delete_source_removes_existing_source() -> None:
 
     source_service.get_source = fake_get_source  # type: ignore[assignment]
 
-    deleted = await source_service.delete_source(client, source_id)
+    deleted = await source_service.delete_source(client, uuid.uuid4(), source_id)
 
     assert deleted is True
     assert deleted_ids == [source_id]

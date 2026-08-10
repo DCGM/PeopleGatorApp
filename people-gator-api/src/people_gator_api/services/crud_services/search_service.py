@@ -30,9 +30,11 @@ class SearchRequestLike(Protocol):
 @trace()
 async def search(
     session: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     query: SearchQuery,
 ) -> SearchResultListResponse:
     """Run entity search using the configured Weaviate BM25 helper."""
+    del principal_id
     logger.debug("search called", extra={"query_name": query.name})
 
     query_name = _resolve_query_name(query)

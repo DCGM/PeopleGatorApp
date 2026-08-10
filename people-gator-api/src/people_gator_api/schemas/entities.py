@@ -29,7 +29,6 @@ class EntityCreateRequest(BaseModel):
     name_embedding: list[float] | None = None
     fulltext_embedding: list[float] | None = None
     model_identifier: str | None = None
-    principal_id: uuid.UUID
 
 
 class EntityResponse(BaseModel):
@@ -79,7 +78,6 @@ class PageMentionCreateRequest(BaseModel):
     polygons: list[Polygon]
     document_mention_id: uuid.UUID
     source_id: uuid.UUID
-    principal_id: uuid.UUID
 
 
 class PageMentionResponse(BaseModel):
@@ -110,8 +108,7 @@ class PageMentionInlineCreateRequest(BaseModel):
     """Page mention embedded directly inside a DocumentMentionCreateRequest.
 
     `document_mention_id` is omitted — it is assigned automatically from the
-    owning document mention.  `principal_id` is optional and falls back to the
-    document mention's `principal_id` when not supplied.
+    owning document mention.
     """
 
     name: str
@@ -119,7 +116,6 @@ class PageMentionInlineCreateRequest(BaseModel):
     aliases: list[str]
     polygons: list[Polygon]
     source_id: uuid.UUID
-    principal_id: uuid.UUID | None = None
 
 
 class DocumentMentionCreateRequest(BaseModel):
@@ -128,7 +124,6 @@ class DocumentMentionCreateRequest(BaseModel):
     name: str
     information: str
     aliases: list[str]
-    principal_id: uuid.UUID
     source_id: uuid.UUID
     entity_id: uuid.UUID
     page_mentions: list[PageMentionInlineCreateRequest] = []
@@ -188,7 +183,6 @@ class FaceCreateRequest(BaseModel):
     keypoints: list[FaceKeypoint]
     embedding: list[float] | None = None
     model_identifier: str | None = None
-    principal_id: uuid.UUID
     entity_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
 

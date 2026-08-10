@@ -42,7 +42,14 @@ async def test_list_page_mentions_returns_paginated_response(monkeypatch: pytest
         ),
     )
 
-    result = await annotation_service.list_page_mentions(client, None, None, None, 10)
+    result = await annotation_service.list_page_mentions(
+        client,
+        uuid.uuid4(),
+        None,
+        None,
+        None,
+        10,
+    )
 
     assert isinstance(result, PageMentionListResponse)
     assert result.limit == 10
@@ -74,7 +81,14 @@ async def test_list_document_mentions_returns_paginated_response(monkeypatch: py
         ),
     )
 
-    result = await annotation_service.list_document_mentions(client, None, None, None, 10)
+    result = await annotation_service.list_document_mentions(
+        client,
+        uuid.uuid4(),
+        None,
+        None,
+        None,
+        10,
+    )
 
     assert isinstance(result, DocumentMentionListResponse)
     assert result.limit == 10
@@ -106,7 +120,14 @@ async def test_list_faces_returns_paginated_response(monkeypatch: pytest.MonkeyP
         ),
     )
 
-    result = await annotation_service.list_faces(client, None, None, None, 10)
+    result = await annotation_service.list_faces(
+        client,
+        uuid.uuid4(),
+        None,
+        None,
+        None,
+        10,
+    )
 
     assert isinstance(result, FaceListResponse)
     assert result.limit == 10

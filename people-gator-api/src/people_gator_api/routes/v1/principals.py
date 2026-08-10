@@ -53,7 +53,14 @@ async def list_principals_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> PrincipalListResponse:
-    return await list_principals(session, principal_type, is_active, after_id, limit)
+    return await list_principals(
+        session,
+        principal.principal_id,
+        principal_type,
+        is_active,
+        after_id,
+        limit,
+    )
 
 
 @router.get("/principals/{principal_id}", response_model=PrincipalResponse)
@@ -62,7 +69,11 @@ async def get_principal_route(
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
 ) -> PrincipalResponse:
-    found_principal = await get_principal(session, principal_id)
+    found_principal = await get_principal(
+        session,
+        principal.principal_id,
+        principal_id,
+    )
     if found_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
     return found_principal
@@ -76,7 +87,13 @@ async def list_model_agents_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> ModelAgentListResponse:
-    return await list_model_agents(session, is_active, after_id, limit)
+    return await list_model_agents(
+        session,
+        principal.principal_id,
+        is_active,
+        after_id,
+        limit,
+    )
 
 
 @router.post("/model-agents", response_model=PrincipalResponse)
@@ -85,12 +102,10 @@ async def create_model_agent_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
 ) -> PrincipalResponse:
-    return await create_model_agent(session, payload)
+    return await create_model_agent(session, payload, principal.principal_id)
 
 
-@router.patch(
-    "/model-agents/{principal_id}", response_model=PrincipalResponse
-)
+@router.patch("/model-agents/{principal_id}", response_model=PrincipalResponse)
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
@@ -99,6 +114,7 @@ async def patch_model_agent_route(
 ) -> PrincipalResponse:
     updated_principal = await update_principal(
         session,
+        principal.principal_id,
         principal_id,
         payload.display_name,
         payload.is_active,
@@ -116,7 +132,13 @@ async def list_users_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> UserListResponse:
-    return await list_users(session, is_active, after_id, limit)
+    return await list_users(
+        session,
+        principal.principal_id,
+        is_active,
+        after_id,
+        limit,
+    )
 
 
 @router.get("/users/{principal_id}", response_model=UserResponse)
@@ -125,7 +147,11 @@ async def get_user_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
 ) -> UserResponse:
-    found_user = await get_user(session, principal_id)
+    found_user = await get_user(
+        session,
+        principal.principal_id,
+        principal_id,
+    )
     if found_user is None:
         raise_api_error(404, "not_found", "User not found")
     return found_user
@@ -140,6 +166,7 @@ async def patch_user_route(
 ) -> PrincipalResponse:
     updated_principal = await update_principal(
         session,
+        principal.principal_id,
         principal_id,
         payload.display_name,
         payload.is_active,

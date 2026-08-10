@@ -30,10 +30,12 @@ logger = logging.getLogger(__name__)
 @trace()
 async def list_sources(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     source_type: SourceKind | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> SourceListResponse:
+    del principal_id
     logger.debug(
         "list_sources called",
         extra={
@@ -70,8 +72,10 @@ async def list_sources(
 @trace()
 async def get_source(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     source_id: uuid.UUID,
 ) -> SourceResponse | None:
+    del principal_id
     logger.debug("get_source called", extra={"source_id": source_id})
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_object_by_id(
         source_id,
@@ -87,9 +91,11 @@ async def get_source(
 @trace()
 async def get_source_by_type_uri(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     source_type: SourceKind,
     uri: str,
 ) -> SourceResponse | None:
+    del principal_id
     logger.debug(
         "get_source_by_type_uri called",
         extra={"source_type": source_type.value, "uri": uri},
@@ -119,13 +125,18 @@ async def get_source_by_type_uri(
 async def create_source(
     client: WeaviateAsyncClient,
     payload: SourceCreateRequest,
-    _created_by: uuid.UUID | None,
+    principal_id: uuid.UUID,
 ) -> tuple[SourceResponse, bool]:
     logger.info(
         "create_source called",
         extra={"source_type": payload.source_type.value, "uri": payload.uri},
     )
-    existing = await get_source_by_type_uri(client, payload.source_type, payload.uri)
+    existing = await get_source_by_type_uri(
+        client,
+        principal_id,
+        payload.source_type,
+        payload.uri,
+    )
     if existing is not None:
         logger.info(
             "create_source reused existing source",
@@ -156,9 +167,13 @@ async def create_source(
 
 
 @trace()
-async def delete_source(client: WeaviateAsyncClient, source_id: uuid.UUID) -> bool:
+async def delete_source(
+    client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
+    source_id: uuid.UUID,
+) -> bool:
     logger.info("delete_source called", extra={"source_id": source_id})
-    source = await get_source(client, source_id)
+    source = await get_source(client, principal_id, source_id)
     if source is None:
         logger.info(
             "delete_source skipped missing source", extra={"source_id": source_id}

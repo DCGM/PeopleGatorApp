@@ -42,7 +42,7 @@ async def list_entities_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
-    return await list_entities(session, after_id, limit)
+    return await list_entities(session, principal.principal_id, after_id, limit)
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)
@@ -51,7 +51,7 @@ async def get_entity_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> EntityResponse:
-    entity = await get_entity(session, entity_id)
+    entity = await get_entity(session, principal.principal_id, entity_id)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
@@ -68,7 +68,14 @@ async def list_entity_document_mentions_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> DocumentMentionListResponse:
-    return await list_document_mentions(session, entity_id, None, after_id, limit)
+    return await list_document_mentions(
+        session,
+        principal.principal_id,
+        entity_id,
+        None,
+        after_id,
+        limit,
+    )
 
 
 @router.get("/entities/{entity_id}/faces", response_model=FaceListResponse)
@@ -79,7 +86,14 @@ async def list_entity_faces_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> FaceListResponse:
-    return await list_faces(session, None, entity_id, after_id, limit)
+    return await list_faces(
+        session,
+        principal.principal_id,
+        None,
+        entity_id,
+        after_id,
+        limit,
+    )
 
 
 @router.post(
@@ -99,6 +113,6 @@ async def delete_entity_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
 ) -> None:
-    deleted = await delete_entity(session, entity_id)
+    deleted = await delete_entity(session, principal.principal_id, entity_id)
     if not deleted:
         raise_api_error(404, "not_found", "Entity not found")

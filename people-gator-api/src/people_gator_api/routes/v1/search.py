@@ -31,6 +31,7 @@ async def search_get(
 ) -> SearchResultListResponse:
     return await search(
         session,
+        principal.principal_id,
         SearchQuery(
             name=name,
             limit=limit,
@@ -45,4 +46,4 @@ async def search_post(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> SearchResultListResponse:
-    return await search(session, request)
+    return await search(session, principal.principal_id, request)

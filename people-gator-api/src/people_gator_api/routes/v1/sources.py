@@ -37,7 +37,13 @@ async def list_sources_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
-    return await list_sources(session, source_type, after_id, limit)
+    return await list_sources(
+        session,
+        principal.principal_id,
+        source_type,
+        after_id,
+        limit,
+    )
 
 
 @router.get("/sources/{source_id}", response_model=SourceResponse)
@@ -46,7 +52,7 @@ async def get_source_route(
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
 ) -> SourceResponse:
-    source = await get_source(session, source_id)
+    source = await get_source(session, principal.principal_id, source_id)
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
     return source
@@ -72,6 +78,6 @@ async def delete_source_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
 ) -> None:
-    deleted = await delete_source(session, source_id)
+    deleted = await delete_source(session, principal.principal_id, source_id)
     if not deleted:
         raise_api_error(404, "not_found", "Source not found")

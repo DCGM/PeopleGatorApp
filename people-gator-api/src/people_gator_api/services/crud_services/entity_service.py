@@ -37,9 +37,11 @@ logger = logging.getLogger(__name__)
 @trace()
 async def list_entities(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> EntityListResponse:
+    del principal_id
     logger.debug("list_entities called", extra={"after_id": after_id, "limit": limit})
     filters: list[FilterReturn] = []
     response = await client.collections.get(ENTITY_COLLECTION).query.fetch_objects(
@@ -66,8 +68,10 @@ async def list_entities(
 @trace()
 async def get_entity(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> EntityResponse | None:
+    del principal_id
     logger.debug("get_entity called", extra={"entity_id": entity_id})
     response = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
         entity_id,
@@ -129,9 +133,13 @@ async def create_entity(
 
 
 @trace()
-async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bool:
+async def delete_entity(
+    client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
+    entity_id: uuid.UUID,
+) -> bool:
     logger.info("delete_entity called", extra={"entity_id": entity_id})
-    entity = await get_entity(client, entity_id)
+    entity = await get_entity(client, principal_id, entity_id)
     if entity is None:
         logger.info(
             "delete_entity skipped missing entity", extra={"entity_id": entity_id}

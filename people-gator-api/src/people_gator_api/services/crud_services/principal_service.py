@@ -46,11 +46,13 @@ class StoredUser:
 @trace()
 async def list_principals(
     client: WeaviateAsyncClient,
+    actor_principal_id: uuid.UUID,
     principal_type: PrincipalType | None,
     is_active: bool | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> PrincipalListResponse:
+    del actor_principal_id
     logger.debug(
         "list_principals called",
         extra={
@@ -92,10 +94,12 @@ async def list_principals(
 @trace()
 async def list_model_agents(
     client: WeaviateAsyncClient,
+    actor_principal_id: uuid.UUID,
     is_active: bool | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> ModelAgentListResponse:
+    del actor_principal_id
     logger.debug(
         "list_model_agents called",
         extra={
@@ -134,10 +138,12 @@ async def list_model_agents(
 @trace()
 async def list_users(
     client: WeaviateAsyncClient,
+    actor_principal_id: uuid.UUID,
     is_active: bool | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> UserListResponse:
+    del actor_principal_id
     logger.debug(
         "list_users called",
         extra={
@@ -159,7 +165,10 @@ async def list_users(
         after=after_id,
     )
     items = sorted(
-        [user_response(item.properties, item.references, item.uuid) for item in response.objects],
+        [
+            user_response(item.properties, item.references, item.uuid)
+            for item in response.objects
+        ],
         key=lambda item: item.principal_id,
     )
     return UserListResponse(
@@ -173,44 +182,48 @@ async def list_users(
 @trace()
 async def get_principal(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    actor_principal_id: uuid.UUID,
+    target_principal_id: uuid.UUID,
 ) -> PrincipalResponse | None:
-    logger.debug("get_principal called", extra={"principal_id": principal_id})
+    del actor_principal_id
+    logger.debug("get_principal called", extra={"principal_id": target_principal_id})
     response = await client.collections.get(
         PRINCIPAL_COLLECTION
     ).query.fetch_object_by_id(
-        principal_id,
+        target_principal_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.info("principal not found", extra={"principal_id": principal_id})
+        logger.info("principal not found", extra={"principal_id": target_principal_id})
         return None
-    logger.debug("principal found", extra={"principal_id": principal_id})
+    logger.debug("principal found", extra={"principal_id": target_principal_id})
     return principal_response(response.properties, response.references, response.uuid)
 
 
 @trace()
 async def get_user(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    actor_principal_id: uuid.UUID,
+    target_principal_id: uuid.UUID,
 ) -> UserResponse | None:
-    logger.debug("get_user called", extra={"principal_id": principal_id})
+    del actor_principal_id
+    logger.debug("get_user called", extra={"principal_id": target_principal_id})
     response = await client.collections.get(
         PRINCIPAL_COLLECTION
     ).query.fetch_object_by_id(
-        principal_id,
+        target_principal_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.info("user not found", extra={"principal_id": principal_id})
+        logger.info("user not found", extra={"principal_id": target_principal_id})
         return None
     if response.properties.get("principal_type") != PrincipalType.user.value:
         logger.info(
             "principal is not a user",
-            extra={"principal_id": principal_id},
+            extra={"principal_id": target_principal_id},
         )
         return None
-    logger.debug("user found", extra={"principal_id": principal_id})
+    logger.debug("user found", extra={"principal_id": target_principal_id})
     return user_response(response.properties, response.references, response.uuid)
 
 
@@ -287,6 +300,7 @@ async def get_or_create_user(
 async def create_model_agent(
     client: WeaviateAsyncClient,
     payload: ModelAgentCreateRequest,
+    actor_principal_id: uuid.UUID,
 ) -> PrincipalResponse:
     logger.info(
         "create_model_agent called",
@@ -308,13 +322,13 @@ async def create_model_agent(
         ),
     )
 
-    principal_id = (
+    created_principal_id = (
         getattr(existing.objects[0], "uuid") if existing.objects else new_uuid6()
     )
     await upsert(
         client,
         PRINCIPAL_COLLECTION,
-        principal_id,
+        created_principal_id,
         properties={
             "principal_type": PrincipalType.model_agent.value,
             "display_name": payload.display_name,
@@ -330,37 +344,58 @@ async def create_model_agent(
             "registry_uri": None,
         },
     )
-    resolved = await get_principal(client, principal_id)
+    resolved = await get_principal(
+        client,
+        actor_principal_id,
+        created_principal_id,
+    )
     assert resolved is not None
-    logger.info("create_model_agent completed", extra={"principal_id": principal_id})
+    logger.info(
+        "create_model_agent completed",
+        extra={"principal_id": created_principal_id},
+    )
     return resolved
 
 
 @trace()
 async def update_principal(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    actor_principal_id: uuid.UUID,
+    target_principal_id: uuid.UUID,
     display_name: str | None,
     is_active: bool | None,
 ) -> PrincipalResponse | None:
-    logger.info("update_principal called", extra={"principal_id": principal_id})
+    logger.info("update_principal called", extra={"principal_id": target_principal_id})
     response = await client.collections.get(
         PRINCIPAL_COLLECTION
     ).query.fetch_object_by_id(
-        principal_id,
+        target_principal_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
         logger.info(
             "update_principal skipped missing principal",
-            extra={"principal_id": principal_id},
+            extra={"principal_id": target_principal_id},
         )
         return None
+    if response.uuid != target_principal_id:
+        logger.error(
+            "refusing principal update due to UUID mismatch",
+            extra={
+                "expected_principal_id": target_principal_id,
+                "loaded_principal_id": response.uuid,
+            },
+        )
+        raise RuntimeError("Principal ID is immutable and cannot be changed")
     properties = dict(response.properties)
     if display_name is not None:
         properties["display_name"] = display_name
     if is_active is not None:
         properties["is_active"] = is_active
-    await upsert(client, PRINCIPAL_COLLECTION, principal_id, properties=properties)
-    logger.debug("update_principal persisted", extra={"principal_id": principal_id})
-    return await get_principal(client, principal_id)
+    await upsert(
+        client, PRINCIPAL_COLLECTION, target_principal_id, properties=properties
+    )
+    logger.debug(
+        "update_principal persisted", extra={"principal_id": target_principal_id}
+    )
+    return await get_principal(client, actor_principal_id, target_principal_id)

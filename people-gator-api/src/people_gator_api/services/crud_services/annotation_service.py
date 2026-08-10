@@ -60,6 +60,7 @@ def _is_flat_float_vector(
 async def create_page_mention(
     client: WeaviateAsyncClient,
     payload: PageMentionCreateRequest,
+    principal_id: uuid.UUID,
 ) -> PageMentionResponse:
     logger.info(
         "create_page_mention called",
@@ -85,7 +86,7 @@ async def create_page_mention(
         references={
             "document_mention": payload.document_mention_id,
             "source": payload.source_id,
-            "principal": payload.principal_id,
+            "principal": principal_id,
         },
     )
     return PageMentionResponse(
@@ -96,7 +97,7 @@ async def create_page_mention(
         polygons=payload.polygons,
         document_mention_id=payload.document_mention_id,
         source_id=payload.source_id,
-        principal_id=payload.principal_id,
+        principal_id=principal_id,
     )
 
 
@@ -104,6 +105,7 @@ async def create_page_mention(
 async def create_many_page_mentions(
     client: WeaviateAsyncClient,
     payloads: list[PageMentionCreateRequest],
+    principal_id: uuid.UUID,
 ) -> list[PageMentionResponse]:
     logger.info("create_many_page_mentions called", extra={"count": len(payloads)})
     if not payloads:
@@ -129,7 +131,7 @@ async def create_many_page_mentions(
             references={
                 "document_mention": payload.document_mention_id,
                 "source": payload.source_id,
-                "principal": payload.principal_id,
+                "principal": principal_id,
             },
         )
         for page_mention_id, payload in zip(ids, payloads)
@@ -149,7 +151,7 @@ async def create_many_page_mentions(
             polygons=payload.polygons,
             document_mention_id=payload.document_mention_id,
             source_id=payload.source_id,
-            principal_id=payload.principal_id,
+            principal_id=principal_id,
         )
         for page_mention_id, payload in zip(ids, payloads)
     ]
@@ -158,8 +160,10 @@ async def create_many_page_mentions(
 @trace()
 async def get_page_mention(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     page_mention_id: uuid.UUID,
 ) -> PageMentionResponse | None:
+    del principal_id
     logger.debug("get_page_mention called", extra={"page_mention_id": page_mention_id})
     response = await client.collections.get(
         PAGE_MENTION_COLLECTION
@@ -185,11 +189,13 @@ async def get_page_mention(
 @trace()
 async def list_page_mentions(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     document_mention_id: uuid.UUID | None,
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> PageMentionListResponse:
+    del principal_id
     logger.debug(
         "list_page_mentions called",
         extra={
@@ -246,6 +252,7 @@ async def list_page_mentions(
 async def create_document_mention(
     client: WeaviateAsyncClient,
     payload: DocumentMentionCreateRequest,
+    principal_id: uuid.UUID,
 ) -> DocumentMentionResponse:
     logger.info(
         "create_document_mention called",
@@ -264,7 +271,7 @@ async def create_document_mention(
         references={
             "entity": payload.entity_id,
             "source": payload.source_id,
-            "principal": payload.principal_id,
+            "principal": principal_id,
         },
     )
     dm_response = DocumentMentionResponse(
@@ -272,7 +279,7 @@ async def create_document_mention(
         name=payload.name,
         information=payload.information,
         aliases=payload.aliases,
-        principal_id=payload.principal_id,
+        principal_id=principal_id,
         source_id=payload.source_id,
         entity_id=payload.entity_id,
     )
@@ -285,21 +292,20 @@ async def create_document_mention(
                 polygons=pm.polygons,
                 source_id=pm.source_id,
                 document_mention_id=document_mention_id,
-                principal_id=pm.principal_id
-                if pm.principal_id is not None
-                else payload.principal_id,
             )
             for pm in payload.page_mentions
         ]
-        await create_many_page_mentions(client, pm_payloads)
+        await create_many_page_mentions(client, pm_payloads, principal_id)
     return dm_response
 
 
 @trace()
 async def get_document_mention(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     document_mention_id: uuid.UUID,
 ) -> DocumentMentionResponse | None:
+    del principal_id
     logger.debug(
         "get_document_mention called",
         extra={"document_mention_id": document_mention_id},
@@ -329,9 +335,11 @@ async def get_document_mention(
 @trace()
 async def patch_document_mention_entity(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     document_mention_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> DocumentMentionResponse | None:
+    del principal_id
     logger.info(
         "patch_document_mention_entity called",
         extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
@@ -387,11 +395,13 @@ async def patch_document_mention_entity(
 @trace()
 async def list_document_mentions(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     entity_id: uuid.UUID | None,
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> DocumentMentionListResponse:
+    del principal_id
     logger.debug(
         "list_document_mentions called",
         extra={
@@ -444,6 +454,7 @@ async def list_document_mentions(
 async def create_face(
     client: WeaviateAsyncClient,
     payload: FaceCreateRequest,
+    principal_id: uuid.UUID,
 ) -> FaceResponse:
     logger.info(
         "create_face called",
@@ -470,7 +481,7 @@ async def create_face(
         references={
             "entity": payload.entity_id,
             "source": payload.source_id,
-            "principal": payload.principal_id,
+            "principal": principal_id,
         },
         vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
     )
@@ -479,7 +490,7 @@ async def create_face(
         source_id=payload.source_id,
         bounding_box=payload.bounding_box,
         keypoints=payload.keypoints,
-        principal_id=payload.principal_id,
+        principal_id=principal_id,
         entity_id=payload.entity_id,
         confidence=payload.confidence,
     )
@@ -488,8 +499,10 @@ async def create_face(
 @trace()
 async def get_face(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     detection_id: uuid.UUID,
 ) -> FaceResponse | None:
+    del principal_id
     logger.debug("get_face called", extra={"detection_id": detection_id})
     response = await client.collections.get(FACE_COLLECTION).query.fetch_object_by_id(
         detection_id,
@@ -509,9 +522,11 @@ async def get_face(
 @trace()
 async def patch_face_entity(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     detection_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> FaceResponse | None:
+    del principal_id
     logger.info(
         "patch_face_entity called",
         extra={"detection_id": detection_id, "entity_id": entity_id},
@@ -573,11 +588,13 @@ async def patch_face_entity(
 @trace()
 async def list_faces(
     client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
     source_id: uuid.UUID | None,
     entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
 ) -> FaceListResponse:
+    del principal_id
     logger.debug(
         "list_faces called",
         extra={

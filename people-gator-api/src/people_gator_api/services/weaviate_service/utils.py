@@ -20,10 +20,6 @@ from weaviate.collections.classes.types import (
 )
 from weaviate.collections.classes.internal import CrossReferences, ReferenceInputs
 
-type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
-)
-
 from people_gator_api.schemas.enums import (
     PrincipalType,
     SourceKind,
@@ -50,6 +46,10 @@ from people_gator_api.schemas.sources import (
     SourceResponse,
     WikidataSourceMetadata,
     WikimediaImageSourceMetadata,
+)
+
+type JsonValue = (
+    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 )
 
 
