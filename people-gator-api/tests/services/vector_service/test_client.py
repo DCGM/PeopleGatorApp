@@ -5,6 +5,40 @@ from people_gator_api.services.weaviate_service import client
 from people_gator_api.services.weaviate_service import db_schema
 
 
+class _FakeCollections:
+    def __init__(self, existing_collections: set[str]) -> None:
+        super().__init__()
+        self._existing_collections = set(existing_collections)
+        self.operation_log: list[tuple[str, str]] = []
+        self.created_collections: list[str] = []
+
+    async def exists(self, collection_name: str) -> bool:
+        self.operation_log.append(("exists", collection_name))
+        return collection_name in self._existing_collections
+
+    async def create(
+        self,
+        *,
+        name: str,
+        description: str,
+        properties: list[object],
+        references: list[ReferenceProperty],
+        vector_config: list[object] | None = None,
+    ) -> None:
+        del description
+        del properties
+        del references
+        del vector_config
+        self.operation_log.append(("create", name))
+        self.created_collections.append(name)
+
+
+class _FakeWeaviateClient:
+    def __init__(self, existing_collections: set[str]) -> None:
+        super().__init__()
+        self.collections = _FakeCollections(existing_collections)
+
+
 def test_ordered_collection_specs_respect_reference_dependencies() -> None:
     ordered_collection_names = [
         collection_name
@@ -17,8 +51,8 @@ def test_ordered_collection_specs_respect_reference_dependencies() -> None:
     assert ordered_collection_names.index(db_schema.DOCUMENT_MENTION_COLLECTION) < ordered_collection_names.index(
         db_schema.PAGE_MENTION_COLLECTION
     )
-    assert ordered_collection_names.index(db_schema.PAGE_MENTION_COLLECTION) < ordered_collection_names.index(
-        db_schema.SPAN_COLLECTION
+    assert ordered_collection_names.index(db_schema.ENTITY_COLLECTION) < ordered_collection_names.index(
+        db_schema.DOCUMENT_MENTION_COLLECTION
     )
 
 
@@ -50,3 +84,50 @@ def test_ordered_collection_specs_reject_cycles() -> None:
 
     with pytest.raises(ValueError, match="unresolved reference dependencies"):
         client.ordered_collection_specs(cyclic_specs)
+
+
+@pytest.mark.asyncio
+async def test_ensure_collections_creates_only_missing_collections() -> None:
+    collection_names_in_order = [
+        collection_name
+        for collection_name, _ in client.ordered_collection_specs(db_schema.ALL_COLLECTION_SPECS)
+    ]
+    existing_collections = set(collection_names_in_order[:2])
+    fake_client = _FakeWeaviateClient(existing_collections)
+
+    await client._ensure_collections(fake_client)  # type: ignore[arg-type]
+
+    expected_created = [
+        collection_name
+        for collection_name in collection_names_in_order
+        if collection_name not in existing_collections
+    ]
+    assert fake_client.collections.created_collections == expected_created
+
+
+@pytest.mark.asyncio
+async def test_ensure_collections_runs_existence_checks_before_create_calls() -> None:
+    fake_client = _FakeWeaviateClient(existing_collections=set())
+
+    await client._ensure_collections(fake_client)  # type: ignore[arg-type]
+
+    first_create_index = next(
+        index
+        for index, (operation, _) in enumerate(fake_client.collections.operation_log)
+        if operation == "create"
+    )
+    assert all(
+        operation == "exists"
+        for operation, _ in fake_client.collections.operation_log[:first_create_index]
+    )
+
+    existence_checks = [
+        collection_name
+        for operation, collection_name in fake_client.collections.operation_log
+        if operation == "exists"
+    ]
+    expected_collection_names = [
+        collection_name
+        for collection_name, _ in client.ordered_collection_specs(db_schema.ALL_COLLECTION_SPECS)
+    ]
+    assert existence_checks == expected_collection_names

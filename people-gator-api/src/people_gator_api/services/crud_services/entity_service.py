@@ -4,10 +4,13 @@ import logging
 import uuid
 
 from weaviate import WeaviateAsyncClient
+from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
+    EntityDeleteManyRequest,
+    EntityDeleteManyResponse,
     EntityListResponse,
     EntityResponse,
 )
@@ -68,10 +71,8 @@ async def list_entities(
 @trace()
 async def get_entity(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> EntityResponse | None:
-    del principal_id
     logger.debug("get_entity called", extra={"entity_id": entity_id})
     response = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
         entity_id,
@@ -135,11 +136,10 @@ async def create_entity(
 @trace()
 async def delete_entity(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> bool:
     logger.info("delete_entity called", extra={"entity_id": entity_id})
-    entity = await get_entity(client, principal_id, entity_id)
+    entity = await get_entity(client, entity_id)
     if entity is None:
         logger.info(
             "delete_entity skipped missing entity", extra={"entity_id": entity_id}
@@ -151,6 +151,65 @@ async def delete_entity(
         "delete_entity completed", extra={"entity_id": entity_id, "deleted": result}
     )
     return result
+
+
+@trace()
+async def delete_entities(
+    client: WeaviateAsyncClient,
+    payload: EntityDeleteManyRequest,
+) -> EntityDeleteManyResponse:
+    logger.info(
+        "delete_entities called",
+        extra={
+            "delete_all": payload.delete_all,
+            "entity_type": payload.entity_type,
+            "entity_ids_count": len(payload.entity_ids or []),
+        },
+    )
+
+    if payload.delete_all:
+        deleted_count = await _delete_entities_by_filters(client, [])
+        return EntityDeleteManyResponse(mode="all", deleted_count=deleted_count)
+
+    if payload.entity_ids:
+        unique_ids = sorted(set(payload.entity_ids))
+        deleted_count = 0
+        for entity_id in unique_ids:
+            deleted = await delete_entity(client, entity_id)
+            deleted_count += int(deleted)
+        return EntityDeleteManyResponse(mode="entity_ids", deleted_count=deleted_count)
+
+    # Schema validation ensures entity_type is present when not delete_all/entity_ids.
+    filters: list[FilterReturn] = [
+        Filter.by_property("entity_type").equal(payload.entity_type)
+    ]
+    deleted_count = await _delete_entities_by_filters(client, filters)
+    return EntityDeleteManyResponse(mode="entity_type", deleted_count=deleted_count)
+
+
+async def _delete_entities_by_filters(
+    client: WeaviateAsyncClient,
+    filters: list[FilterReturn],
+    batch_limit: int = 200,
+) -> int:
+    entities = client.collections.get(ENTITY_COLLECTION)
+    deleted_count = 0
+
+    while True:
+        response = await entities.query.fetch_objects(
+            filters=combine_filters(filters),
+            limit=batch_limit,
+            return_references=empty_reference_queries([]),
+        )
+        if not response.objects:
+            break
+
+        for item in response.objects:
+            deleted = await entities.data.delete_by_id(item.uuid)
+            deleted_count += int(deleted)
+
+    logger.info("delete_entities completed", extra={"deleted_count": deleted_count})
+    return deleted_count
 
 
 # ---------------------------------------------------------------------------

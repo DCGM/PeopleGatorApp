@@ -10,6 +10,8 @@ from fastapi import (
 from people_gator_api.schemas.entities import (
     DocumentMentionListResponse,
     EntityCreateRequest,
+    EntityDeleteManyRequest,
+    EntityDeleteManyResponse,
     EntityListResponse,
     EntityResponse,
     FaceListResponse,
@@ -27,6 +29,7 @@ from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.entity_service import (
     create_entity,
+    delete_entities,
     delete_entity,
     get_entity,
     list_entities,
@@ -51,7 +54,7 @@ async def get_entity_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> EntityResponse:
-    entity = await get_entity(session, principal.principal_id, entity_id)
+    entity = await get_entity(session, entity_id)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
@@ -111,8 +114,20 @@ async def create_entity_route(
 async def delete_entity_route(
     entity_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: AdminUserDependency,
 ) -> None:
-    deleted = await delete_entity(session, principal.principal_id, entity_id)
+    deleted = await delete_entity(session, entity_id)
     if not deleted:
         raise_api_error(404, "not_found", "Entity not found")
+
+
+@router.delete(
+    "/entities",
+    response_model=EntityDeleteManyResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def delete_entities_route(
+    payload: EntityDeleteManyRequest,
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+) -> EntityDeleteManyResponse:
+    return await delete_entities(session, payload)

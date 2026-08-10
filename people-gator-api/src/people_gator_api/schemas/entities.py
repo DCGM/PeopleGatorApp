@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from typing import Literal
 
 from pydantic import (
     BaseModel,
     Field,
+    model_validator,
 )
 
 from people_gator_api.schemas.common import GenericListResponse
@@ -48,6 +50,39 @@ class EntityListResponse(GenericListResponse[EntityResponse]):
     """A paginated list of entities."""
 
     items: list[EntityResponse]
+
+
+class EntityDeleteManyRequest(BaseModel):
+    """Request body for deleting multiple entities by selector."""
+
+    delete_all: bool = False
+    entity_type: str | None = None
+    entity_ids: list[uuid.UUID] | None = None
+
+    @model_validator(mode="after")
+    def validate_selector(self) -> EntityDeleteManyRequest:
+        has_type = self.entity_type is not None and self.entity_type.strip() != ""
+        has_ids = bool(self.entity_ids)
+
+        if self.delete_all:
+            if has_type or has_ids:
+                raise ValueError(
+                    "When delete_all is true, entity_type and entity_ids must be omitted"
+                )
+            return self
+
+        if not has_type and not has_ids:
+            raise ValueError(
+                "Provide at least one selector: delete_all, entity_type, or entity_ids"
+            )
+        return self
+
+
+class EntityDeleteManyResponse(BaseModel):
+    """Summary of a bulk entity delete operation."""
+
+    mode: Literal["all", "entity_type", "entity_ids"]
+    deleted_count: int = Field(ge=0)
 
 
 # ---------------------------------------------------------------------------

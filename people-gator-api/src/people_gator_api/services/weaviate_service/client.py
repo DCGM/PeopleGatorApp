@@ -81,17 +81,34 @@ def get_weaviate_client() -> WeaviateAsyncClient:
 
 
 async def _ensure_collections(client: WeaviateAsyncClient) -> None:
-    """Create Weaviate collections if they do not already exist."""
+    """Create missing Weaviate collections without mutating existing schemas.
 
+    Startup intentionally performs existence checks and creates only missing
+    collections. Schema migration or drift reconciliation must be handled by
+    dedicated tooling outside this lifecycle path.
+    """
+
+    ordered_specs = ordered_collection_specs(ALL_COLLECTION_SPECS)
+    exists_by_collection: dict[str, bool] = {}
+
+    # First pass: explicitly sanity-check existence for every collection.
+    for collection_name, _ in ordered_specs:
+        exists = await client.collections.exists(collection_name)
+        exists_by_collection[collection_name] = exists
+        if exists:
+            logger.debug(
+                "Collection %s already exists; leaving schema unchanged",
+                collection_name,
+            )
+
+    # Second pass: create only collections that were confirmed missing.
     for collection_name, (
         properties,
         references,
         vector_config,
-    ) in ordered_collection_specs(ALL_COLLECTION_SPECS):
-        if await client.collections.exists(collection_name):
-            logger.debug("Collection %s already exists", collection_name)
+    ) in ordered_specs:
+        if exists_by_collection[collection_name]:
             continue
-
         if vector_config is not None:
             await client.collections.create(
                 name=collection_name,
