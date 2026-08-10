@@ -44,19 +44,6 @@ from people_gator_api.services.http_errors import raise_api_error
 router = APIRouter(tags=["annotations"])
 
 
-@router.post(
-    "/page-mentions",
-    response_model=PageMentionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_page_mention_route(
-    payload: PageMentionCreateRequest,
-    session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
-) -> PageMentionResponse:
-    return await create_page_mention(session, payload, principal.principal_id)
-
-
 @router.get("/page-mentions", response_model=PageMentionListResponse)
 async def list_page_mentions_route(
     session: WeaviateSessionDependency,
@@ -76,6 +63,19 @@ async def list_page_mentions_route(
     )
 
 
+@router.post(
+    "/page-mentions",
+    response_model=PageMentionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_page_mention_route(
+    payload: PageMentionCreateRequest,
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
+) -> PageMentionResponse:
+    return await create_page_mention(session, payload, principal.principal_id)
+
+
 @router.get("/page-mentions/{page_mention_id}", response_model=PageMentionResponse)
 async def get_page_mention_route(
     page_mention_id: uuid.UUID,
@@ -88,19 +88,6 @@ async def get_page_mention_route(
     if page_mention is None:
         raise_api_error(404, "not_found", "Page mention not found")
     return page_mention
-
-
-@router.post(
-    "/document-mentions",
-    response_model=DocumentMentionResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_document_mention_route(
-    payload: DocumentMentionCreateRequest,
-    session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
-) -> DocumentMentionResponse:
-    return await create_document_mention(session, payload, principal.principal_id)
 
 
 @router.get("/document-mentions", response_model=DocumentMentionListResponse)
@@ -120,6 +107,19 @@ async def list_document_mentions_route(
         after_id,
         limit,
     )
+
+
+@router.post(
+    "/document-mentions",
+    response_model=DocumentMentionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_document_mention_route(
+    payload: DocumentMentionCreateRequest,
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
+) -> DocumentMentionResponse:
+    return await create_document_mention(session, payload, principal.principal_id)
 
 
 @router.get(
@@ -158,28 +158,6 @@ async def patch_document_mention_entity_route(
     if item is None:
         raise_api_error(404, "not_found", "Document mention not found")
     return item
-
-
-@router.get(
-    "/document-mentions/{document_mention_id}/page-mentions",
-    response_model=PageMentionListResponse,
-)
-async def list_document_mention_page_mentions_route(
-    document_mention_id: uuid.UUID,
-    session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
-    limit: int = 50,
-    after_id: uuid.UUID | None = None,
-) -> PageMentionListResponse:
-    items = await list_page_mentions(
-        session,
-        principal.principal_id,
-        document_mention_id=document_mention_id,
-        source_id=None,
-        after_id=after_id,
-        limit=limit,
-    )
-    return items
 
 
 @router.post("/faces", response_model=FaceResponse, status_code=status.HTTP_201_CREATED)
