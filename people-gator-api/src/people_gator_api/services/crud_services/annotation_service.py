@@ -32,6 +32,7 @@ from people_gator_api.services.weaviate_service.utils import (
     document_mention_response,
     empty_reference_queries,
     face_response,
+    fetch_collection_page_with_total_count,
     page_mention_response,
     require_reference_uuid,
     reference_id_filter,
@@ -214,15 +215,15 @@ async def list_page_mentions(
         )
     if source_id is not None:
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
-    response = await client.collections.get(
-        PAGE_MENTION_COLLECTION
-    ).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        PAGE_MENTION_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries(
             ["principal", "document_mention", "source"]
         ),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
@@ -231,13 +232,13 @@ async def list_page_mentions(
                 item.references,
                 item.uuid,
             )
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.page_mention_id,
     )
     return PageMentionListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         limit=limit,
         after_id=items[-1].page_mention_id if len(items) == limit and items else None,
     )
@@ -416,13 +417,13 @@ async def list_document_mentions(
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
     if source_id is not None:
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
-    response = await client.collections.get(
-        DOCUMENT_MENTION_COLLECTION
-    ).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        DOCUMENT_MENTION_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries(["principal", "entity", "source"]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
@@ -431,13 +432,13 @@ async def list_document_mentions(
                 item.references,
                 item.uuid,
             )
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.document_mention_id,
     )
     return DocumentMentionListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         limit=limit,
         after_id=items[-1].document_mention_id
         if len(items) == limit and items
@@ -609,11 +610,13 @@ async def list_faces(
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
     if entity_id is not None:
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
-    response = await client.collections.get(FACE_COLLECTION).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        FACE_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries(["principal", "entity", "source"]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
@@ -622,14 +625,14 @@ async def list_faces(
                 item.references,
                 item.uuid,
             )
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.detection_id,
     )
     logger.debug("list_faces completed", extra={"count": len(items)})
     return FaceListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         limit=limit,
         after_id=items[-1].detection_id if len(items) == limit and items else None,
     )

@@ -17,6 +17,7 @@ from people_gator_api.services.weaviate_service.db_schema import SOURCE_COLLECTI
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
+    fetch_collection_page_with_total_count,
     source_response,
     upsert,
 )
@@ -48,22 +49,24 @@ async def list_sources(
     if source_type is not None:
         filters.append(Filter.by_property("source_type").equal(source_type.value))
 
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        SOURCE_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries([]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
             source_response(item.properties, item.references, item.uuid)
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.source_id,
     )
     return SourceListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         after_id=items[-1].source_id if len(items) == limit and items else None,
         limit=limit,
     )

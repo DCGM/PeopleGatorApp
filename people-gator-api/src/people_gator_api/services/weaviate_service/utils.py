@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from collections.abc import (
     Mapping,
@@ -10,7 +11,7 @@ from collections.abc import (
 import json
 import logging
 import uuid
-from typing import cast
+from typing import Protocol, cast
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter, QueryReference
@@ -56,6 +57,12 @@ type JsonValue = (
 
 
 logger = logging.getLogger(__name__)
+
+
+class _CollectionQueryObject(Protocol):
+    properties: WeaviateProperties
+    references: CrossReferences
+    uuid: uuid.UUID
 
 
 @trace()
@@ -125,6 +132,40 @@ def combine_filters(filters: list[FilterReturn]) -> FilterReturn | None:
     if len(filters) == 1:
         return filters[0]
     return Filter.all_of(filters)
+
+
+@trace()
+async def fetch_collection_page_with_total_count(
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    *,
+    filters: FilterReturn | None,
+    limit: int,
+    return_references: Sequence[QueryReference],
+    after_id: uuid.UUID | None,
+) -> tuple[list[_CollectionQueryObject], int]:
+    collection = client.collections.get(collection_name)
+    fetch_coroutine = collection.query.fetch_objects(
+        filters=filters,
+        limit=limit,
+        return_references=list(return_references),
+        after=after_id,
+    )
+    aggregate_coroutine = collection.aggregate.over_all(
+        total_count=True,
+        filters=filters,
+    )
+    fetch_response, aggregate_response = await asyncio.gather(
+        fetch_coroutine,
+        aggregate_coroutine,
+    )
+    total_count_value = aggregate_response.total_count
+    total_count = (
+        total_count_value
+        if isinstance(total_count_value, int)
+        else len(fetch_response.objects)
+    )
+    return list(fetch_response.objects), total_count
 
 
 def single_named_vector_payload(

@@ -23,6 +23,7 @@ from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
     entity_response,
+    fetch_collection_page_with_total_count,
     upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
@@ -47,23 +48,26 @@ async def list_entities(
     del principal_id
     logger.debug("list_entities called", extra={"after_id": after_id, "limit": limit})
     filters: list[FilterReturn] = []
-    response = await client.collections.get(ENTITY_COLLECTION).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        ENTITY_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries(["principal"]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
             entity_response(item.properties, item.references, item.uuid)
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.entity_id,
     )
+
     return EntityListResponse(
         items=items,
         limit=limit,
-        total_count=len(items),
+        total_count=total_count,
         after_id=items[-1].entity_id if len(items) == limit and items else None,
     )
 

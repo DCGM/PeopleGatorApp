@@ -25,6 +25,7 @@ from people_gator_api.services.weaviate_service.db_schema import PRINCIPAL_COLLE
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
+    fetch_collection_page_with_total_count,
     model_agent_response,
     principal_response,
     require_bool,
@@ -76,22 +77,24 @@ async def list_principals(
     if is_active is not None:
         filters.append(Filter.by_property("is_active").equal(is_active))
 
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        PRINCIPAL_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries([]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
             principal_response(item.properties, item.references, item.uuid)
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.principal_id,
     )
     return PrincipalListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         after_id=items[-1].principal_id if len(items) == limit and items else None,
         limit=limit,
     )
@@ -120,22 +123,24 @@ async def list_model_agents(
     if is_active is not None:
         filters.append(Filter.by_property("is_active").equal(is_active))
 
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        PRINCIPAL_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries([]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
             model_agent_response(item.properties, item.references, item.uuid)
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.principal_id,
     )
     return ModelAgentListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         after_id=items[-1].principal_id if len(items) == limit and items else None,
         limit=limit,
     )
@@ -164,22 +169,24 @@ async def list_users(
     if is_active is not None:
         filters.append(Filter.by_property("is_active").equal(is_active))
 
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+    objects, total_count = await fetch_collection_page_with_total_count(
+        client,
+        PRINCIPAL_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
         return_references=empty_reference_queries([]),
-        after=after_id,
+        after_id=after_id,
     )
     items = sorted(
         [
             user_response(item.properties, item.references, item.uuid)
-            for item in response.objects
+            for item in objects
         ],
         key=lambda item: item.principal_id,
     )
     return UserListResponse(
         items=items,
-        total_count=len(items),
+        total_count=total_count,
         after_id=items[-1].principal_id if len(items) == limit and items else None,
         limit=limit,
     )
