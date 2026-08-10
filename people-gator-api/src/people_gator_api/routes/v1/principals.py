@@ -25,19 +25,7 @@ from people_gator_api.services.crud_services.principal_service import (
 router = APIRouter(tags=["principals"])
 
 
-@router.get("/principals", response_model=PrincipalListResponse)
-async def list_principals_route(
-    session: WeaviateSessionDependency,
-    principal: AdminUserDependency,
-    principal_type: PrincipalType | None = None,
-    is_active: bool | None = True,
-    limit: int = 50,
-    after_id: uuid.UUID | None = None,
-) -> PrincipalListResponse:
-    return await list_principals(session, principal_type, is_active, after_id, limit)
-
-
-@router.get("/principals/me", response_model=PrincipalResponse)
+@router.get("/me", response_model=PrincipalResponse)
 async def get_me_route(
     principal: AnnotatorUserDependency,
 ) -> PrincipalResponse:
@@ -48,6 +36,17 @@ async def get_me_route(
         is_active=True,
     )
     return response
+
+@router.get("/principals", response_model=PrincipalListResponse)
+async def list_principals_route(
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+    principal_type: PrincipalType | None = None,
+    is_active: bool | None = True,
+    limit: int = 50,
+    after_id: uuid.UUID | None = None,
+) -> PrincipalListResponse:
+    return await list_principals(session, principal_type, is_active, after_id, limit)
 
 
 @router.get("/principals/{principal_id}", response_model=PrincipalResponse)
@@ -62,7 +61,7 @@ async def get_principal_route(
     return found_principal
 
 
-@router.get("/principals/model-agents", response_model=PrincipalListResponse)
+@router.get("/model-agents", response_model=PrincipalListResponse)
 async def list_model_agents_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
@@ -75,7 +74,7 @@ async def list_model_agents_route(
     )
 
 
-@router.post("/principals/model-agents", response_model=PrincipalResponse)
+@router.post("/model-agents", response_model=PrincipalResponse)
 async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
     session: WeaviateSessionDependency,
@@ -85,7 +84,7 @@ async def create_model_agent_route(
 
 
 @router.patch(
-    "/principals/model-agents/{principal_id}", response_model=PrincipalResponse
+    "/model-agents/{principal_id}", response_model=PrincipalResponse
 )
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
@@ -104,7 +103,7 @@ async def patch_model_agent_route(
     return updated_principal
 
 
-@router.get("/principals/users", response_model=PrincipalListResponse)
+@router.get("/users", response_model=PrincipalListResponse)
 async def list_users_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
@@ -117,7 +116,7 @@ async def list_users_route(
     )
 
 
-@router.patch("/principals/users/{principal_id}", response_model=PrincipalResponse)
+@router.patch("/users/{principal_id}", response_model=PrincipalResponse)
 async def patch_user_route(
     principal_id: uuid.UUID,
     payload: UserPatchRequest,
