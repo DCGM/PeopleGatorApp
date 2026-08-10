@@ -9,16 +9,21 @@ from weaviate.classes.query import Filter
 from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
+    ModelAgentListResponse,
     PrincipalResponse,
     PrincipalListResponse,
+    UserListResponse,
+    UserResponse,
 )
 from people_gator_api.services.weaviate_service.db_schema import PRINCIPAL_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
+    model_agent_response,
     principal_response,
     require_bool,
     upsert,
+    user_response,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -85,6 +90,87 @@ async def list_principals(
 
 
 @trace()
+async def list_model_agents(
+    client: WeaviateAsyncClient,
+    is_active: bool | None,
+    after_id: uuid.UUID | None,
+    limit: int,
+) -> ModelAgentListResponse:
+    logger.debug(
+        "list_model_agents called",
+        extra={
+            "is_active": is_active,
+            "after_id": after_id,
+            "limit": limit,
+        },
+    )
+    filters: list[FilterReturn] = [
+        Filter.by_property("principal_type").equal(PrincipalType.model_agent.value)
+    ]
+    if is_active is not None:
+        filters.append(Filter.by_property("is_active").equal(is_active))
+
+    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+        filters=combine_filters(filters),
+        limit=limit,
+        return_references=empty_reference_queries([]),
+        after=after_id,
+    )
+    items = sorted(
+        [
+            model_agent_response(item.properties, item.references, item.uuid)
+            for item in response.objects
+        ],
+        key=lambda item: item.principal_id,
+    )
+    return ModelAgentListResponse(
+        items=items,
+        total_count=len(items),
+        after_id=items[-1].principal_id if len(items) == limit and items else None,
+        limit=limit,
+    )
+
+
+@trace()
+async def list_users(
+    client: WeaviateAsyncClient,
+    is_active: bool | None,
+    after_id: uuid.UUID | None,
+    limit: int,
+) -> UserListResponse:
+    logger.debug(
+        "list_users called",
+        extra={
+            "is_active": is_active,
+            "after_id": after_id,
+            "limit": limit,
+        },
+    )
+    filters: list[FilterReturn] = [
+        Filter.by_property("principal_type").equal(PrincipalType.user.value)
+    ]
+    if is_active is not None:
+        filters.append(Filter.by_property("is_active").equal(is_active))
+
+    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+        filters=combine_filters(filters),
+        limit=limit,
+        return_references=empty_reference_queries([]),
+        after=after_id,
+    )
+    items = sorted(
+        [user_response(item.properties, item.references, item.uuid) for item in response.objects],
+        key=lambda item: item.principal_id,
+    )
+    return UserListResponse(
+        items=items,
+        total_count=len(items),
+        after_id=items[-1].principal_id if len(items) == limit and items else None,
+        limit=limit,
+    )
+
+
+@trace()
 async def get_principal(
     client: WeaviateAsyncClient,
     principal_id: uuid.UUID,
@@ -101,6 +187,31 @@ async def get_principal(
         return None
     logger.debug("principal found", extra={"principal_id": principal_id})
     return principal_response(response.properties, response.references, response.uuid)
+
+
+@trace()
+async def get_user(
+    client: WeaviateAsyncClient,
+    principal_id: uuid.UUID,
+) -> UserResponse | None:
+    logger.debug("get_user called", extra={"principal_id": principal_id})
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
+        principal_id,
+        return_references=empty_reference_queries([]),
+    )
+    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("user not found", extra={"principal_id": principal_id})
+        return None
+    if response.properties.get("principal_type") != PrincipalType.user.value:
+        logger.info(
+            "principal is not a user",
+            extra={"principal_id": principal_id},
+        )
+        return None
+    logger.debug("user found", extra={"principal_id": principal_id})
+    return user_response(response.properties, response.references, response.uuid)
 
 
 @trace()

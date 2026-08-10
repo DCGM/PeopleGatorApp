@@ -5,9 +5,12 @@ from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
+    ModelAgentListResponse,
     ModelAgentPatchRequest,
     PrincipalListResponse,
     PrincipalResponse,
+    UserListResponse,
+    UserResponse,
     UserPatchRequest,
 )
 from people_gator_api.services.auth_service import (
@@ -18,7 +21,10 @@ from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.principal_service import (
     create_model_agent,
     get_principal,
+    get_user,
+    list_model_agents,
     list_principals,
+    list_users,
     update_principal,
 )
 
@@ -36,6 +42,7 @@ async def get_me_route(
         is_active=True,
     )
     return response
+
 
 @router.get("/principals", response_model=PrincipalListResponse)
 async def list_principals_route(
@@ -61,17 +68,15 @@ async def get_principal_route(
     return found_principal
 
 
-@router.get("/model-agents", response_model=PrincipalListResponse)
+@router.get("/model-agents", response_model=ModelAgentListResponse)
 async def list_model_agents_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
     is_active: bool | None = True,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> PrincipalListResponse:
-    return await list_principals(
-        session, PrincipalType.model_agent, is_active, after_id, limit
-    )
+) -> ModelAgentListResponse:
+    return await list_model_agents(session, is_active, after_id, limit)
 
 
 @router.post("/model-agents", response_model=PrincipalResponse)
@@ -103,17 +108,27 @@ async def patch_model_agent_route(
     return updated_principal
 
 
-@router.get("/users", response_model=PrincipalListResponse)
+@router.get("/users", response_model=UserListResponse)
 async def list_users_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
     is_active: bool | None = True,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> PrincipalListResponse:
-    return await list_principals(
-        session, PrincipalType.user, is_active, after_id, limit
-    )
+) -> UserListResponse:
+    return await list_users(session, is_active, after_id, limit)
+
+
+@router.get("/users/{principal_id}", response_model=UserResponse)
+async def get_user_route(
+    principal_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+) -> UserResponse:
+    found_user = await get_user(session, principal_id)
+    if found_user is None:
+        raise_api_error(404, "not_found", "User not found")
+    return found_user
 
 
 @router.patch("/users/{principal_id}", response_model=PrincipalResponse)
