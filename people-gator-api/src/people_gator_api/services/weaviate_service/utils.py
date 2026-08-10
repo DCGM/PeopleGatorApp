@@ -8,6 +8,7 @@ from collections.abc import (
     Sequence,
 )
 import json
+import logging
 import uuid
 from typing import cast
 
@@ -47,12 +48,17 @@ from people_gator_api.schemas.sources import (
     WikidataSourceMetadata,
     WikimediaImageSourceMetadata,
 )
+from people_gator_api.utils.opentelemetry import trace
 
 type JsonValue = (
     str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 )
 
 
+logger = logging.getLogger(__name__)
+
+
+@trace()
 async def upsert(
     client: WeaviateAsyncClient,
     collection_name: str,
@@ -62,9 +68,25 @@ async def upsert(
     references: ReferenceInputs | None = None,
     vector: dict[str, list[float]] | None = None,
 ) -> None:
+    logger.debug(
+        "upsert called",
+        extra={
+            "collection_name": collection_name,
+            "object_uuid": str(object_uuid),
+            "has_references": references is not None,
+            "has_vector": vector is not None,
+        },
+    )
     collection = client.collections.get(collection_name)
     exists = await collection.data.exists(object_uuid)
     if not exists:
+        logger.info(
+            "Inserting object into Weaviate collection",
+            extra={
+                "collection_name": collection_name,
+                "object_uuid": str(object_uuid),
+            },
+        )
         await collection.data.insert(
             uuid=object_uuid,
             properties=properties,
@@ -72,6 +94,13 @@ async def upsert(
             vector=vector,
         )
         return
+    logger.info(
+        "Replacing object in Weaviate collection",
+        extra={
+            "collection_name": collection_name,
+            "object_uuid": str(object_uuid),
+        },
+    )
     await collection.data.replace(
         uuid=object_uuid,
         properties=properties,
@@ -182,6 +211,14 @@ def source_response(
         SourceKind.nlcr: NlcrAuthoritySourceMetadata,
         SourceKind.obalkyknih: DocumentSourceMetadata,
     }
+    logger.debug(
+        "Mapping source response",
+        extra={
+            "source_id": str(uuid),
+            "source_type": source_type.value,
+            "has_metadata": metadata is not None,
+        },
+    )
     resolved_metadata = (
         metadata_model_by_source_type[source_type](**metadata)
         if metadata is not None
@@ -445,8 +482,10 @@ def optional_json_dict(
     if raw_value is None:
         return None
     if isinstance(raw_value, Mapping):
+        logger.debug("Property already a JSON mapping", extra={"property": key})
         return json_dict_from_mapping(raw_value)
     if isinstance(raw_value, str):
+        logger.debug("Decoding JSON string property", extra={"property": key})
         decoded = json.loads(raw_value)
         if isinstance(decoded, Mapping):
             return json_dict_from_mapping(cast(Mapping[str, WeaviateField], decoded))
