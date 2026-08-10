@@ -248,7 +248,9 @@ async def get_model_agent(
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.info("model agent not found", extra={"principal_id": target_principal_id})
+        logger.info(
+            "model agent not found", extra={"principal_id": target_principal_id}
+        )
         return None
     if response.properties.get("principal_type") != PrincipalType.model_agent.value:
         logger.info(
@@ -306,7 +308,9 @@ async def _create_principal(
     }
     if additional_properties is not None:
         properties.update(additional_properties)
-    await upsert(client, PRINCIPAL_COLLECTION, created_principal_id, properties=properties)
+    await upsert(
+        client, PRINCIPAL_COLLECTION, created_principal_id, properties=properties
+    )
     return created_principal_id
 
 
@@ -345,7 +349,9 @@ async def _update_principal(
         properties[key] = value
     if additional_properties is not None:
         properties.update(additional_properties)
-    await upsert(client, PRINCIPAL_COLLECTION, target_principal_id, properties=properties)
+    await upsert(
+        client, PRINCIPAL_COLLECTION, target_principal_id, properties=properties
+    )
     logger.debug(
         "update_principal persisted", extra={"principal_id": target_principal_id}
     )
@@ -447,7 +453,9 @@ async def create_user(
             Filter.by_property("external_issuer").equal(payload.external_issuer),
         ],
     )
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
         created_principal_id,
         return_references=empty_reference_queries([]),
     )
@@ -482,7 +490,9 @@ async def create_model_agent(
             Filter.by_property("model_version").equal(payload.model_version),
         ],
     )
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
         created_principal_id,
         return_references=empty_reference_queries([]),
     )
@@ -509,7 +519,9 @@ async def update_user(
     )
     if updated is None:
         return None
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
         target_principal_id,
         return_references=empty_reference_queries([]),
     )
@@ -533,7 +545,9 @@ async def update_model_agent(
     )
     if updated is None:
         return None
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
         target_principal_id,
         return_references=empty_reference_queries([]),
     )
@@ -548,7 +562,9 @@ async def delete_model_agent(
     actor_principal_id: uuid.UUID,
     target_principal_id: uuid.UUID,
 ) -> bool:
-    logger.info("delete_model_agent called", extra={"principal_id": target_principal_id})
+    logger.info(
+        "delete_model_agent called", extra={"principal_id": target_principal_id}
+    )
     model_agent = await get_model_agent(client, actor_principal_id, target_principal_id)
     if model_agent is None:
         logger.info(
@@ -557,7 +573,9 @@ async def delete_model_agent(
         )
         return False
 
-    await client.collections.get(PRINCIPAL_COLLECTION).data.delete_by_id(target_principal_id)
+    await client.collections.get(PRINCIPAL_COLLECTION).data.delete_by_id(
+        target_principal_id
+    )
     logger.info(
         "delete_model_agent completed",
         extra={"principal_id": target_principal_id},

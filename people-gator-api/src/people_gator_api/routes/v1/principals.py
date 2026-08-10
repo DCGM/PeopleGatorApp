@@ -108,6 +108,7 @@ async def create_model_agent_route(
 ) -> ModelAgentResponse:
     return await create_model_agent(session, payload, principal.principal_id)
 
+
 @router.get("/model-agents/{principal_id}", response_model=ModelAgentResponse)
 async def get_model_agent_route(
     principal_id: uuid.UUID,
@@ -122,6 +123,7 @@ async def get_model_agent_route(
     if found_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
     return found_principal
+
 
 @router.patch("/model-agents/{principal_id}", response_model=ModelAgentResponse)
 async def patch_model_agent_route(
