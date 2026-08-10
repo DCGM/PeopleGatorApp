@@ -1,4 +1,3 @@
-import structlog
 import logging
 from datetime import (
     datetime,
@@ -6,23 +5,20 @@ from datetime import (
 )
 from people_gator_api.settings import settings
 
-ALL_CALLSITE_PARAMETERS = list(structlog.processors.CallsiteParameter)
+
+class Iso8601Formatter(logging.Formatter):
+    """Formatter that uses ISO-8601 timestamps in UTC with milliseconds.
+
+    Example: 2026-05-21T14:30:00.123+00:00
+    """
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        return dt.isoformat(timespec="milliseconds")
 
 
 def configure_logging():
     handlers: list[logging.Handler] = []
-
-    class Iso8601Formatter(logging.Formatter):
-        """Formatter that uses ISO-8601 timestamps in UTC with milliseconds.
-
-        Example: 2026-05-21T14:30:00.123+00:00
-        """
-
-        def formatTime(
-            self, record: logging.LogRecord, datefmt: str | None = None
-        ) -> str:
-            dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
-            return dt.isoformat(timespec="milliseconds")
 
     fmt = (
         "%(asctime)s %(levelname)s %(name)s %(module)s:%(lineno)d "
