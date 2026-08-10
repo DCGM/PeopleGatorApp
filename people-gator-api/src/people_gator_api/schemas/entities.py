@@ -98,6 +98,22 @@ class PageMentionListResponse(GenericListResponse[PageMentionResponse]):
 # ---------------------------------------------------------------------------
 
 
+class PageMentionInlineCreateRequest(BaseModel):
+    """Page mention embedded directly inside a DocumentMentionCreateRequest.
+
+    `document_mention_id` is omitted — it is assigned automatically from the
+    owning document mention.  `principal_id` is optional and falls back to the
+    document mention's `principal_id` when not supplied.
+    """
+
+    name: str
+    information: str
+    aliases: list[str]
+    polygons: list[Polygon]
+    source_id: uuid.UUID
+    principal_id: uuid.UUID | None = None
+
+
 class DocumentMentionCreateRequest(BaseModel):
     """Request body for creating a document-level mention aggregator."""
     name: str
@@ -106,6 +122,7 @@ class DocumentMentionCreateRequest(BaseModel):
     principal_id: uuid.UUID
     source_id: uuid.UUID
     entity_id: uuid.UUID
+    page_mentions: list[PageMentionInlineCreateRequest] = []
 
 
 class DocumentMentionResponse(BaseModel):

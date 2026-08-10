@@ -10,11 +10,14 @@ from fastapi import (
 from people_gator_api.schemas.entities import (
     DocumentMentionCreateRequest,
     DocumentMentionEntityPatchRequest,
+    DocumentMentionListResponse,
     DocumentMentionResponse,
     FaceCreateRequest,
     FaceEntityPatchRequest,
+    FaceListResponse,
     FaceResponse,
     PageMentionCreateRequest,
+    PageMentionListResponse,
     PageMentionResponse,
 )
 from people_gator_api.services.auth_service import (
@@ -54,7 +57,7 @@ async def create_page_mention_route(
     return await create_page_mention(session, payload)
 
 
-@router.get("/page-mentions", response_model=list[PageMentionResponse])
+@router.get("/page-mentions", response_model=PageMentionListResponse)
 async def list_page_mentions_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
@@ -62,7 +65,7 @@ async def list_page_mentions_route(
     source_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> list[PageMentionResponse]:
+) -> PageMentionListResponse:
     return await list_page_mentions(
         session,
         document_mention_id,
@@ -96,7 +99,7 @@ async def create_document_mention_route(
     return await create_document_mention(session, payload)
 
 
-@router.get("/document-mentions", response_model=list[DocumentMentionResponse])
+@router.get("/document-mentions", response_model=DocumentMentionListResponse)
 async def list_document_mentions_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
@@ -104,7 +107,7 @@ async def list_document_mentions_route(
     source_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> list[DocumentMentionResponse]:
+) -> DocumentMentionListResponse:
     return await list_document_mentions(session, entity_id, source_id, after_id, limit)
 
 
@@ -140,7 +143,7 @@ async def patch_document_mention_entity_route(
 
 @router.get(
     "/document-mentions/{document_mention_id}/page-mentions",
-    response_model=list[PageMentionResponse],
+    response_model=PageMentionListResponse,
 )
 async def list_document_mention_page_mentions_route(
     document_mention_id: uuid.UUID,
@@ -148,7 +151,7 @@ async def list_document_mention_page_mentions_route(
     principal: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> list[PageMentionResponse]:
+) -> PageMentionListResponse:
     items = await list_page_mentions(session, document_mention_id=document_mention_id, source_id=None, after_id=after_id, limit=limit)
     return items
 
@@ -162,7 +165,7 @@ async def create_face_route(
     return await create_face(session, payload)
 
 
-@router.get("/faces", response_model=list[FaceResponse])
+@router.get("/faces", response_model=FaceListResponse)
 async def list_faces_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
@@ -170,7 +173,7 @@ async def list_faces_route(
     entity_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> list[FaceResponse]:
+) -> FaceListResponse:
     return await list_faces(session, source_id, entity_id, after_id, limit)
 
 

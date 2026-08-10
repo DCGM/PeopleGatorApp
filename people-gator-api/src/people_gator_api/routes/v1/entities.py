@@ -8,11 +8,11 @@ from fastapi import (
 )
 
 from people_gator_api.schemas.entities import (
+    DocumentMentionListResponse,
     EntityCreateRequest,
     EntityListResponse,
     EntityResponse,
-    DocumentMentionResponse,
-    FaceResponse,
+    FaceListResponse,
 )
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
@@ -57,25 +57,25 @@ async def get_entity_route(
     return entity
 
 
-@router.get("/entities/{entity_id}/document-mentions", response_model=list[DocumentMentionResponse])
+@router.get("/entities/{entity_id}/document-mentions", response_model=DocumentMentionListResponse)
 async def list_entity_document_mentions_route(
     entity_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> list[DocumentMentionResponse]:
+) -> DocumentMentionListResponse:
     return await list_document_mentions(session, entity_id, None, after_id, limit)
 
 
-@router.get("/entities/{entity_id}/faces", response_model=list[FaceResponse])
+@router.get("/entities/{entity_id}/faces", response_model=FaceListResponse)
 async def list_entity_faces_route(
     entity_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
-) -> list[FaceResponse]:
+) -> FaceListResponse:
     return await list_faces(session, None, entity_id, after_id, limit)
 
 @router.post("/entities", response_model=EntityResponse, status_code=status.HTTP_201_CREATED)

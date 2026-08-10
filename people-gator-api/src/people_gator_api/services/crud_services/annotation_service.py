@@ -5,14 +5,20 @@ import uuid
 from typing import TypeGuard
 
 from weaviate import WeaviateAsyncClient
+from weaviate.classes.data import DataObject
 from weaviate.collections.classes.filters import FilterReturn
+from weaviate.collections.classes.internal import ReferenceInputs
+from weaviate.collections.classes.types import WeaviateProperties
 
 from people_gator_api.schemas.entities import (
     DocumentMentionCreateRequest,
+    DocumentMentionListResponse,
     DocumentMentionResponse,
     FaceCreateRequest,
+    FaceListResponse,
     FaceResponse,
     PageMentionCreateRequest,
+    PageMentionListResponse,
     PageMentionResponse,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
@@ -95,6 +101,62 @@ async def create_page_mention(
 
 
 @trace()
+async def create_many_page_mentions(
+    client: WeaviateAsyncClient,
+    payloads: list[PageMentionCreateRequest],
+) -> list[PageMentionResponse]:
+    logger.info("create_many_page_mentions called", extra={"count": len(payloads)})
+    if not payloads:
+        return []
+    collection = client.collections.get(PAGE_MENTION_COLLECTION)
+    ids: list[uuid.UUID] = [new_uuid6() for _ in payloads]
+    objects: list[DataObject[WeaviateProperties, ReferenceInputs]] = [
+        DataObject(
+            uuid=page_mention_id,
+            properties={
+                "name": payload.name,
+                "information": payload.information,
+                "aliases": [{"alias": alias} for alias in payload.aliases],
+                "polygons": [
+                    {
+                        "points": [
+                            {"x": point.x, "y": point.y}
+                            for point in polygon.points
+                        ]
+                    }
+                    for polygon in payload.polygons
+                ],
+            },
+            references={
+                "document_mention": payload.document_mention_id,
+                "source": payload.source_id,
+                "principal": payload.principal_id,
+            },
+        )
+        for page_mention_id, payload in zip(ids, payloads)
+    ]
+    result = await collection.data.insert_many(objects)
+    if result.errors:
+        logger.error(
+            "create_many_page_mentions partial failure",
+            extra={"errors": {str(k): str(v) for k, v in result.errors.items()}},
+        )
+    return [
+        PageMentionResponse(
+            page_mention_id=page_mention_id,
+            name=payload.name,
+            information=payload.information,
+            aliases=payload.aliases,
+            polygons=payload.polygons,
+            document_mention_id=payload.document_mention_id,
+            source_id=payload.source_id,
+            principal_id=payload.principal_id,
+        )
+        for page_mention_id, payload in zip(ids, payloads)
+    ]
+
+
+@trace()
 async def get_page_mention(
     client: WeaviateAsyncClient,
     page_mention_id: uuid.UUID,
@@ -122,7 +184,7 @@ async def list_page_mentions(
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[PageMentionResponse]:
+) -> PageMentionListResponse:
     logger.debug(
         "list_page_mentions called",
         extra={
@@ -154,7 +216,12 @@ async def list_page_mentions(
         ],
         key=lambda item: item.page_mention_id,
     )
-    return items
+    return PageMentionListResponse(
+        items=items,
+        total_count=len(items),
+        limit=limit,
+        after_id=items[-1].page_mention_id if len(items) == limit and items else None,
+    )
 
 # ---------------------------------------------------------------------------
 # Document Mentions
@@ -186,7 +253,7 @@ async def create_document_mention(
             "principal": payload.principal_id,
         },
     )
-    return DocumentMentionResponse(
+    dm_response = DocumentMentionResponse(
         document_mention_id=document_mention_id,
         name=payload.name,
         information=payload.information,
@@ -195,6 +262,21 @@ async def create_document_mention(
         source_id=payload.source_id,
         entity_id=payload.entity_id,
     )
+    if payload.page_mentions:
+        pm_payloads = [
+            PageMentionCreateRequest(
+                name=pm.name,
+                information=pm.information,
+                aliases=pm.aliases,
+                polygons=pm.polygons,
+                source_id=pm.source_id,
+                document_mention_id=document_mention_id,
+                principal_id=pm.principal_id if pm.principal_id is not None else payload.principal_id,
+            )
+            for pm in payload.page_mentions
+        ]
+        await create_many_page_mentions(client, pm_payloads)
+    return dm_response
 
 
 @trace()
@@ -279,7 +361,7 @@ async def list_document_mentions(
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[DocumentMentionResponse]:
+) -> DocumentMentionListResponse:
     logger.debug(
         "list_document_mentions called",
         extra={
@@ -311,7 +393,12 @@ async def list_document_mentions(
         ],
         key=lambda item: item.document_mention_id,
     )
-    return items
+    return DocumentMentionListResponse(
+        items=items,
+        total_count=len(items),
+        limit=limit,
+        after_id=items[-1].document_mention_id if len(items) == limit and items else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +534,7 @@ async def list_faces(
     entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[FaceResponse]:
+) -> FaceListResponse:
     logger.debug(
         "list_faces called",
         extra={"source_id": source_id, "entity_id": entity_id, "after_id": after_id, "limit": limit},
@@ -475,4 +562,9 @@ async def list_faces(
         key=lambda item: item.detection_id,
     )
     logger.debug("list_faces completed", extra={"count": len(items)})
-    return items
+    return FaceListResponse(
+        items=items,
+        total_count=len(items),
+        limit=limit,
+        after_id=items[-1].detection_id if len(items) == limit and items else None,
+    )
