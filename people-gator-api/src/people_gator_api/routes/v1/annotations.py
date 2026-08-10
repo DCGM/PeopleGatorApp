@@ -160,15 +160,6 @@ async def patch_document_mention_entity_route(
     return item
 
 
-@router.post("/faces", response_model=FaceResponse, status_code=status.HTTP_201_CREATED)
-async def create_face_route(
-    payload: FaceCreateRequest,
-    session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
-) -> FaceResponse:
-    return await create_face(session, payload, principal.principal_id)
-
-
 @router.get("/faces", response_model=FaceListResponse)
 async def list_faces_route(
     session: WeaviateSessionDependency,
@@ -186,6 +177,15 @@ async def list_faces_route(
         after_id,
         limit,
     )
+
+
+@router.post("/faces", response_model=FaceResponse, status_code=status.HTTP_201_CREATED)
+async def create_face_route(
+    payload: FaceCreateRequest,
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
+) -> FaceResponse:
+    return await create_face(session, payload, principal.principal_id)
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)
