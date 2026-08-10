@@ -7,6 +7,7 @@ from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     ModelAgentListResponse,
     ModelAgentPatchRequest,
+    ModelAgentResponse,
     PrincipalListResponse,
     PrincipalResponse,
     UserListResponse,
@@ -20,12 +21,14 @@ from people_gator_api.services.auth_service import (
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.principal_service import (
     create_model_agent,
+    get_model_agent,
     get_principal,
     get_user,
     list_model_agents,
     list_principals,
     list_users,
-    update_principal,
+    update_model_agent,
+    update_user,
 )
 
 router = APIRouter(tags=["principals"])
@@ -96,28 +99,41 @@ async def list_model_agents_route(
     )
 
 
-@router.post("/model-agents", response_model=PrincipalResponse)
+@router.post("/model-agents", response_model=ModelAgentResponse)
 async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-) -> PrincipalResponse:
+) -> ModelAgentResponse:
     return await create_model_agent(session, payload, principal.principal_id)
 
+@router.get("/model-agents/{principal_id}", response_model=ModelAgentResponse)
+async def get_model_agent_route(
+    principal_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
+) -> ModelAgentResponse:
+    found_principal = await get_model_agent(
+        session,
+        principal.principal_id,
+        principal_id,
+    )
+    if found_principal is None:
+        raise_api_error(404, "not_found", "Principal not found")
+    return found_principal
 
-@router.patch("/model-agents/{principal_id}", response_model=PrincipalResponse)
+@router.patch("/model-agents/{principal_id}", response_model=ModelAgentResponse)
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-) -> PrincipalResponse:
-    updated_principal = await update_principal(
+) -> ModelAgentResponse:
+    updated_principal = await update_model_agent(
         session,
         principal.principal_id,
         principal_id,
-        payload.display_name,
-        payload.is_active,
+        payload,
     )
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
@@ -157,19 +173,18 @@ async def get_user_route(
     return found_user
 
 
-@router.patch("/users/{principal_id}", response_model=PrincipalResponse)
+@router.patch("/users/{principal_id}", response_model=UserResponse)
 async def patch_user_route(
     principal_id: uuid.UUID,
     payload: UserPatchRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-) -> PrincipalResponse:
-    updated_principal = await update_principal(
+) -> UserResponse:
+    updated_principal = await update_user(
         session,
         principal.principal_id,
         principal_id,
-        payload.display_name,
-        payload.is_active,
+        payload,
     )
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")

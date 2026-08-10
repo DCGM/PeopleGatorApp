@@ -10,24 +10,42 @@ from people_gator_api.schemas.common import GenericListResponse
 
 
 # ---------------------------------------------------------------------------
+# Shared principal schemas
+# ---------------------------------------------------------------------------
+
+
+class PrincipalCreateRequest(BaseModel):
+    display_name: str
+    is_active: bool
+
+
+class PrincipalPatchRequest(BaseModel):
+    display_name: str | None = None
+    is_active: bool | None = None
+
+
+# ---------------------------------------------------------------------------
 # User schemas
 # ---------------------------------------------------------------------------
 
 
-class UserPatchRequest(BaseModel):
-    display_name: str | None = None
+class UserCreateRequest(PrincipalCreateRequest):
+    external_subject: str
+    external_issuer: str
+
+
+class UserPatchRequest(PrincipalPatchRequest):
+    external_subject: str | None = None
+    external_issuer: str | None = None
     email: str | None = None
-    is_active: bool | None = None
 
 
-class UserResponse(BaseModel):
+class UserResponse(PrincipalCreateRequest):
     principal_id: uuid.UUID
     principal_type: PrincipalType
-    display_name: str
     external_subject: str
     external_issuer: str
     email: str | None
-    is_active: bool
 
 
 class UserListResponse(GenericListResponse[UserResponse]):
@@ -41,23 +59,19 @@ class UserListResponse(GenericListResponse[UserResponse]):
 # ---------------------------------------------------------------------------
 
 
-class ModelAgentCreateRequest(BaseModel):
-    display_name: str
-    is_active: bool
+class ModelAgentCreateRequest(PrincipalCreateRequest):
     model_slug: str
     model_version: str
 
 
-class ModelAgentPatchRequest(BaseModel):
-    display_name: str | None = None
-    is_active: bool | None = None
+class ModelAgentPatchRequest(PrincipalPatchRequest):
+    model_slug: str | None = None
+    model_version: str | None = None
 
 
-class ModelAgentResponse(BaseModel):
+class ModelAgentResponse(PrincipalCreateRequest):
     principal_id: uuid.UUID
     principal_type: PrincipalType
-    display_name: str
-    is_active: bool
     model_slug: str
     model_version: str
 
@@ -73,11 +87,9 @@ class ModelAgentListResponse(GenericListResponse[ModelAgentResponse]):
 # ---------------------------------------------------------------------------
 
 
-class PrincipalResponse(BaseModel):
+class PrincipalResponse(PrincipalCreateRequest):
     principal_id: uuid.UUID
     principal_type: PrincipalType
-    display_name: str
-    is_active: bool
 
 
 class PrincipalListResponse(GenericListResponse[PrincipalResponse]):

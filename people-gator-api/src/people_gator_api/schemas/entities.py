@@ -28,7 +28,6 @@ class EntityCreateRequest(BaseModel):
     nlcr_authority_id: str | None = None
     name_embedding: list[float] | None = None
     fulltext_embedding: list[float] | None = None
-    model_identifier: str | None = None
 
 
 class EntityResponse(BaseModel):
