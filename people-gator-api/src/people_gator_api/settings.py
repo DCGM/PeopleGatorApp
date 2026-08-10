@@ -10,6 +10,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+
 class SearchEntityAggregationMode(StrEnum):
     best_annotation = "best_annotation"
     average_annotation = "average_annotation"
@@ -61,6 +62,7 @@ class EmbeddingServiceSettings(BaseModel):
     embed_text_url: str = "http://localhost:8001/v1/embeddings/text"
     request_timeout_seconds: float = Field(default=30.0, gt=0)
 
+
 class KeycloakSettings(BaseModel):
     url: str
     realm: str
@@ -103,5 +105,6 @@ class Settings(BaseSettings):
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
+
 
 settings = Settings()  # pyright: ignore[reportCallIssue] - BaseSettings values come from env sources.

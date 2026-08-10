@@ -22,6 +22,7 @@ from people_gator_api.settings import (
 class EmbeddingServiceError(RuntimeError):
     pass
 
+
 @dataclass(slots=True)
 class HttpEmbeddingModelService:
     _cfg: EmbeddingServiceSettings
@@ -35,7 +36,9 @@ class HttpEmbeddingModelService:
         content_type: str = "image/jpeg",
     ) -> TimmImageEmbeddingResponse:
         form = FormData()
-        form.add_field("file", image_bytes, filename=filename, content_type=content_type)
+        form.add_field(
+            "file", image_bytes, filename=filename, content_type=content_type
+        )
         response = await self._session.post(self._cfg.embed_image_url, data=form)
         payload = await self._read_json_text_or_raise(response)
         return TimmImageEmbeddingResponse.model_validate_json(payload)
@@ -48,8 +51,12 @@ class HttpEmbeddingModelService:
         content_type: str = "image/jpeg",
     ) -> AllFacesResult:
         form = FormData()
-        form.add_field("file", image_bytes, filename=filename, content_type=content_type)
-        response = await self._session.post(self._cfg.detect_and_embed_image_url, data=form)
+        form.add_field(
+            "file", image_bytes, filename=filename, content_type=content_type
+        )
+        response = await self._session.post(
+            self._cfg.detect_and_embed_image_url, data=form
+        )
         payload = await self._read_json_text_or_raise(response)
         return AllFacesResult.model_validate_json(payload)
 
@@ -70,7 +77,9 @@ class HttpEmbeddingModelService:
         try:
             json.loads(raw_text)
         except json.JSONDecodeError as exc:
-            raise EmbeddingServiceError("embedding_service_invalid_json_response") from exc
+            raise EmbeddingServiceError(
+                "embedding_service_invalid_json_response"
+            ) from exc
         return raw_text
 
 

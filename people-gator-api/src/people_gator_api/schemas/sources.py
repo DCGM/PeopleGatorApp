@@ -49,11 +49,13 @@ class NlcrAuthoritySourceMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nlcr_id: str
-    
+
+
 class ObalkyKnihSourceMetadata(BaseModel):
     """Metadata for a source imported from ObalkyKnih.cz."""
+
     model_config = ConfigDict(extra="forbid")
-    
+
     obalkyknih_id: str
     obalkyknih_url: AnyUrl
 
@@ -118,4 +120,5 @@ class SourceResponse(BaseModel):
 
 class SourceListResponse(GenericListResponse[SourceResponse]):
     """A paginated list of sources."""
+
     items: list[SourceResponse]

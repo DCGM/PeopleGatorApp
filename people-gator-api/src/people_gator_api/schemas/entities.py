@@ -48,6 +48,7 @@ class EntityResponse(BaseModel):
 
 class EntityListResponse(GenericListResponse[EntityResponse]):
     """A paginated list of entities."""
+
     items: list[EntityResponse]
 
 
@@ -58,17 +59,20 @@ class EntityListResponse(GenericListResponse[EntityResponse]):
 
 class PolygonPoint(BaseModel):
     """A polygon point in source-space coordinates."""
+
     x: float
     y: float
 
 
 class Polygon(BaseModel):
     """One polygon represented by ordered points."""
+
     points: list[PolygonPoint] = Field(min_length=3)
 
 
 class PageMentionCreateRequest(BaseModel):
     """Request body for ingesting a page-level mention aggregation."""
+
     name: str
     information: str
     aliases: list[str]
@@ -80,6 +84,7 @@ class PageMentionCreateRequest(BaseModel):
 
 class PageMentionResponse(BaseModel):
     """A single page mention record."""
+
     page_mention_id: uuid.UUID
     name: str
     information: str
@@ -89,9 +94,12 @@ class PageMentionResponse(BaseModel):
     source_id: uuid.UUID
     principal_id: uuid.UUID
 
+
 class PageMentionListResponse(GenericListResponse[PageMentionResponse]):
     """A paginated list of page mentions."""
+
     items: list[PageMentionResponse]
+
 
 # ---------------------------------------------------------------------------
 # Document mentions
@@ -116,6 +124,7 @@ class PageMentionInlineCreateRequest(BaseModel):
 
 class DocumentMentionCreateRequest(BaseModel):
     """Request body for creating a document-level mention aggregator."""
+
     name: str
     information: str
     aliases: list[str]
@@ -139,6 +148,7 @@ class DocumentMentionResponse(BaseModel):
 
 class DocumentMentionListResponse(GenericListResponse[DocumentMentionResponse]):
     """A paginated list of document mentions."""
+
     items: list[DocumentMentionResponse]
 
 
@@ -194,9 +204,12 @@ class FaceResponse(BaseModel):
     entity_id: uuid.UUID | None = Field(default=None)
     confidence: float
 
+
 class FaceListResponse(GenericListResponse[FaceResponse]):
     """A paginated list of face detections."""
+
     items: list[FaceResponse]
+
 
 class FaceEntityPatchRequest(BaseModel):
     """Patch body for reassigning a face annotation to a different entity."""

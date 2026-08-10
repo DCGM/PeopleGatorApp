@@ -49,7 +49,10 @@ async def list_entities(
         after=after_id,
     )
     items = sorted(
-        [entity_response(item.properties, item.references, item.uuid) for item in response.objects],
+        [
+            entity_response(item.properties, item.references, item.uuid)
+            for item in response.objects
+        ],
         key=lambda item: item.entity_id,
     )
     return EntityListResponse(
@@ -130,15 +133,18 @@ async def delete_entity(client: WeaviateAsyncClient, entity_id: uuid.UUID) -> bo
     logger.info("delete_entity called", extra={"entity_id": entity_id})
     entity = await get_entity(client, entity_id)
     if entity is None:
-        logger.info("delete_entity skipped missing entity", extra={"entity_id": entity_id})
+        logger.info(
+            "delete_entity skipped missing entity", extra={"entity_id": entity_id}
+        )
         return False
     entities = client.collections.get(ENTITY_COLLECTION)
     result = await entities.data.delete_by_id(entity_id)
-    logger.info("delete_entity completed", extra={"entity_id": entity_id, "deleted": result})
+    logger.info(
+        "delete_entity completed", extra={"entity_id": entity_id, "deleted": result}
+    )
     return result
 
 
 # ---------------------------------------------------------------------------
 # Backward-Compatible Aliases
 # ---------------------------------------------------------------------------
-

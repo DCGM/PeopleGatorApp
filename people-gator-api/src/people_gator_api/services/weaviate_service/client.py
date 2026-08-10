@@ -83,9 +83,11 @@ def get_weaviate_client() -> WeaviateAsyncClient:
 async def _ensure_collections(client: WeaviateAsyncClient) -> None:
     """Create Weaviate collections if they do not already exist."""
 
-    for collection_name, (properties, references, vector_config) in ordered_collection_specs(
-        ALL_COLLECTION_SPECS
-    ):
+    for collection_name, (
+        properties,
+        references,
+        vector_config,
+    ) in ordered_collection_specs(ALL_COLLECTION_SPECS):
         if await client.collections.exists(collection_name):
             logger.debug("Collection %s already exists", collection_name)
             continue
@@ -132,7 +134,9 @@ def ordered_collection_specs(
                 + unresolved_collections
             )
         for collection_name in ready_collections:
-            ordered_specs.append((collection_name, remaining_specs.pop(collection_name)))
+            ordered_specs.append(
+                (collection_name, remaining_specs.pop(collection_name))
+            )
             resolved_collections.add(collection_name)
 
     return ordered_specs
@@ -146,7 +150,8 @@ def _collection_dependencies(
     return {
         target_collection
         for target_collection in _reference_targets(references)
-        if target_collection in collection_specs and target_collection != collection_name
+        if target_collection in collection_specs
+        and target_collection != collection_name
     }
 
 

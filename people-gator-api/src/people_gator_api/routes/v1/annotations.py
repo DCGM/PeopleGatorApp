@@ -86,6 +86,7 @@ async def get_page_mention_route(
         raise_api_error(404, "not_found", "Page mention not found")
     return page_mention
 
+
 @router.post(
     "/document-mentions",
     response_model=DocumentMentionResponse,
@@ -136,10 +137,13 @@ async def patch_document_mention_entity_route(
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
 ) -> DocumentMentionResponse:
-    item = await patch_document_mention_entity(session, document_mention_id, payload.entity_id)
+    item = await patch_document_mention_entity(
+        session, document_mention_id, payload.entity_id
+    )
     if item is None:
         raise_api_error(404, "not_found", "Document mention not found")
     return item
+
 
 @router.get(
     "/document-mentions/{document_mention_id}/page-mentions",
@@ -152,7 +156,13 @@ async def list_document_mention_page_mentions_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> PageMentionListResponse:
-    items = await list_page_mentions(session, document_mention_id=document_mention_id, source_id=None, after_id=after_id, limit=limit)
+    items = await list_page_mentions(
+        session,
+        document_mention_id=document_mention_id,
+        source_id=None,
+        after_id=after_id,
+        limit=limit,
+    )
     return items
 
 

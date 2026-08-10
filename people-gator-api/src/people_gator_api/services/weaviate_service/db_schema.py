@@ -41,7 +41,9 @@ def _graph_ql_safe_name(value: str) -> str:
     sanitized = re.sub(r"[^0-9A-Za-z_]", "_", value)
     sanitized = re.sub(r"_+", "_", sanitized).strip("_")
     if not sanitized:
-        raise ValueError("Named vector identifier must not be empty after sanitization.")
+        raise ValueError(
+            "Named vector identifier must not be empty after sanitization."
+        )
     if sanitized[0].isdigit():
         sanitized = f"v_{sanitized}"
     return sanitized[:230]
@@ -93,6 +95,7 @@ def _text_property(
         skip_vectorization=True,
     )
 
+
 def _text_array_property(
     name: str,
     description: str,
@@ -107,6 +110,7 @@ def _text_array_property(
         index_searchable=searchable,
         skip_vectorization=True,
     )
+
 
 def _bool_property(name: str, description: str) -> Property:
     return Property(
@@ -239,7 +243,9 @@ PRINCIPAL_PROPERTIES: list[Property] = [
     _text_property("external_subject", "OIDC subject for user principals."),
     _text_property("external_issuer", "OIDC issuer for user principals."),
     _text_property("email", "Email address for user principals."),
-    _text_property("annotation_type", "Annotation type handled by a model agent.", searchable=False),
+    _text_property(
+        "annotation_type", "Annotation type handled by a model agent.", searchable=False
+    ),
     _text_property("role", "Model-agent role prefix.", searchable=False),
     _text_property("model_slug", "Model-agent slot suffix.", searchable=False),
     _text_property("model_version", "Model artifact version.", searchable=False),
@@ -258,7 +264,9 @@ SOURCE_PROPERTIES: list[Property] = [
             _uuid_property("document", "Document identifier."),
             _uuid_property("page", "Page identifier."),
             _text_property("kramerius_url", "Kramerius source URL.", searchable=False),
-            _text_property("entity_id", "Wikidata entity identifier.", searchable=False),
+            _text_property(
+                "entity_id", "Wikidata entity identifier.", searchable=False
+            ),
             _text_property("wikidata_url", "Wikidata source URL.", searchable=False),
             _text_property("nlcr_id", "NLCR authority identifier.", searchable=False),
             _text_property("wikimedia_url", "Wikimedia source URL.", searchable=False),
@@ -270,7 +278,9 @@ ENTITY_PROPERTIES: list[Property] = [
     _text_property("entity_type", "Entity type discriminator.", searchable=False),
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
-    _text_property("short_description", "Entity-level aggregated short description value."),
+    _text_property(
+        "short_description", "Entity-level aggregated short description value."
+    ),
     _text_array_property(
         "aliases",
         "Entity-level aggregated alias values.",
@@ -387,7 +397,9 @@ FACE_REFERENCES: list[ReferenceProperty] = [
 ]
 
 type CollectionVectorConfig = list[object] | None
-type CollectionSpec = tuple[list[Property], list[ReferenceProperty], CollectionVectorConfig]
+type CollectionSpec = tuple[
+    list[Property], list[ReferenceProperty], CollectionVectorConfig
+]
 
 ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     PAGE_MENTION_COLLECTION: (

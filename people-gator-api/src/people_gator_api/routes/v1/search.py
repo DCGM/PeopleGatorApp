@@ -28,12 +28,15 @@ async def search_get(
     name: str | None = Query(default=None, alias="query_name"),
     limit: int = 20,
     after_id: uuid.UUID | None = None,
-)-> SearchResultListResponse:
-    return await search(session, SearchQuery(
-        name=name,
-        limit=limit,
-        after_id=after_id,
-    ))
+) -> SearchResultListResponse:
+    return await search(
+        session,
+        SearchQuery(
+            name=name,
+            limit=limit,
+            after_id=after_id,
+        ),
+    )
 
 
 @router.post("/search", response_model=SearchResultListResponse)

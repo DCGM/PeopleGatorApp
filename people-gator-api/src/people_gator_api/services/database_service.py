@@ -14,7 +14,9 @@ from people_gator_api.services.weaviate_service.client import (
 async def get_session() -> AsyncGenerator[WeaviateAsyncClient, None]:
     yield get_weaviate_client()
 
+
 type WeaviateSessionDependency = Annotated[WeaviateAsyncClient, Depends(get_session)]
+
 
 async def init_db() -> None:
     await init_weaviate()

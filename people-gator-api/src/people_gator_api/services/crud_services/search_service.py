@@ -12,7 +12,9 @@ from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResultListResponse,
 )
-from people_gator_api.services.weaviate_service.search import search_entities_by_name_or_aliases
+from people_gator_api.services.weaviate_service.search import (
+    search_entities_by_name_or_aliases,
+)
 from people_gator_api.utils.opentelemetry import trace
 
 
@@ -50,7 +52,9 @@ async def search(
     )
     page = results
     next_after_id = page[-1].entity_id if page else None
-    logger.info("search completed", extra={"query_name": query_name, "total": len(page)})
+    logger.info(
+        "search completed", extra={"query_name": query_name, "total": len(page)}
+    )
     return SearchResultListResponse(
         items=page,
         total_count=len(page),

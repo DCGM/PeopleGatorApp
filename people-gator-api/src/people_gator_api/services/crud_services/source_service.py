@@ -53,7 +53,10 @@ async def list_sources(
         after=after_id,
     )
     items = sorted(
-        [source_response(item.properties, item.references, item.uuid) for item in response.objects],
+        [
+            source_response(item.properties, item.references, item.uuid)
+            for item in response.objects
+        ],
         key=lambda item: item.source_id,
     )
     return SourceListResponse(
@@ -87,7 +90,10 @@ async def get_source_by_type_uri(
     source_type: SourceKind,
     uri: str,
 ) -> SourceResponse | None:
-    logger.debug("get_source_by_type_uri called", extra={"source_type": source_type.value, "uri": uri})
+    logger.debug(
+        "get_source_by_type_uri called",
+        extra={"source_type": source_type.value, "uri": uri},
+    )
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=Filter.all_of(
             [
@@ -99,7 +105,10 @@ async def get_source_by_type_uri(
         return_references=empty_reference_queries([]),
     )
     if not response.objects:
-        logger.info("source by type and uri not found", extra={"source_type": source_type.value, "uri": uri})
+        logger.info(
+            "source by type and uri not found",
+            extra={"source_type": source_type.value, "uri": uri},
+        )
         return None
     item = response.objects[0]
     logger.debug("source by type and uri found", extra={"source_id": item.uuid})
@@ -112,10 +121,16 @@ async def create_source(
     payload: SourceCreateRequest,
     _created_by: uuid.UUID | None,
 ) -> tuple[SourceResponse, bool]:
-    logger.info("create_source called", extra={"source_type": payload.source_type.value, "uri": payload.uri})
+    logger.info(
+        "create_source called",
+        extra={"source_type": payload.source_type.value, "uri": payload.uri},
+    )
     existing = await get_source_by_type_uri(client, payload.source_type, payload.uri)
     if existing is not None:
-        logger.info("create_source reused existing source", extra={"source_id": existing.source_id})
+        logger.info(
+            "create_source reused existing source",
+            extra={"source_id": existing.source_id},
+        )
         return existing, False
 
     source_id = new_uuid6()
@@ -145,7 +160,9 @@ async def delete_source(client: WeaviateAsyncClient, source_id: uuid.UUID) -> bo
     logger.info("delete_source called", extra={"source_id": source_id})
     source = await get_source(client, source_id)
     if source is None:
-        logger.info("delete_source skipped missing source", extra={"source_id": source_id})
+        logger.info(
+            "delete_source skipped missing source", extra={"source_id": source_id}
+        )
         return False
 
     await client.collections.get(SOURCE_COLLECTION).data.delete_by_id(source_id)

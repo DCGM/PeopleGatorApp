@@ -70,7 +70,10 @@ async def list_model_agents_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> PrincipalListResponse:
-    return await list_principals(session, PrincipalType.model_agent, is_active, after_id, limit)
+    return await list_principals(
+        session, PrincipalType.model_agent, is_active, after_id, limit
+    )
+
 
 @router.post("/principals/model-agents", response_model=PrincipalResponse)
 async def create_model_agent_route(
@@ -81,7 +84,9 @@ async def create_model_agent_route(
     return await create_model_agent(session, payload)
 
 
-@router.patch("/principals/model-agents/{principal_id}", response_model=PrincipalResponse)
+@router.patch(
+    "/principals/model-agents/{principal_id}", response_model=PrincipalResponse
+)
 async def patch_model_agent_route(
     principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
@@ -98,6 +103,7 @@ async def patch_model_agent_route(
         raise_api_error(404, "not_found", "Principal not found")
     return updated_principal
 
+
 @router.get("/principals/users", response_model=PrincipalListResponse)
 async def list_users_route(
     session: WeaviateSessionDependency,
@@ -106,7 +112,10 @@ async def list_users_route(
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> PrincipalListResponse:
-    return await list_principals(session, PrincipalType.user, is_active, after_id, limit)
+    return await list_principals(
+        session, PrincipalType.user, is_active, after_id, limit
+    )
+
 
 @router.patch("/principals/users/{principal_id}", response_model=PrincipalResponse)
 async def patch_user_route(

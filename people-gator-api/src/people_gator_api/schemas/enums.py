@@ -1,7 +1,9 @@
 from enum import StrEnum
 
+
 class AnnotationType(StrEnum):
     """Annotation entities in the simplified ER diagram."""
+
     entity = "entity"
     document_mention = "document_mention"
     page_mention = "page_mention"

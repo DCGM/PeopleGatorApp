@@ -57,7 +57,10 @@ async def get_entity_route(
     return entity
 
 
-@router.get("/entities/{entity_id}/document-mentions", response_model=DocumentMentionListResponse)
+@router.get(
+    "/entities/{entity_id}/document-mentions",
+    response_model=DocumentMentionListResponse,
+)
 async def list_entity_document_mentions_route(
     entity_id: uuid.UUID,
     session: WeaviateSessionDependency,
@@ -78,7 +81,10 @@ async def list_entity_faces_route(
 ) -> FaceListResponse:
     return await list_faces(session, None, entity_id, after_id, limit)
 
-@router.post("/entities", response_model=EntityResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/entities", response_model=EntityResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_entity_route(
     payload: EntityCreateRequest,
     session: WeaviateSessionDependency,

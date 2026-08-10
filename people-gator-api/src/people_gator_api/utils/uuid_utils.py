@@ -8,6 +8,7 @@ from functools import lru_cache
 import uuid
 import uuid6
 
+
 def uuid6_to_datetime(value: uuid.UUID) -> datetime:
     """Convert a UUIDv6's embedded timestamp to a timezone-aware datetime."""
     gregorian_epoch = datetime(1582, 10, 15, tzinfo=timezone.utc)
@@ -28,6 +29,7 @@ def get_clock_seq() -> Callable[[], int]:
     last_uuid = uuid6.uuid6()
     last_time = last_uuid.time
     last_clock_seq = 0
+
     def generate_clock_seq() -> int:
         nonlocal last_clock_seq
         nonlocal last_time
@@ -39,8 +41,10 @@ def get_clock_seq() -> Callable[[], int]:
             last_clock_seq = 0
             last_time = current_time
         return last_clock_seq
+
     return generate_clock_seq
-    
+
+
 @lru_cache(maxsize=1)
 def get_node() -> int:
     """Return a random 48-bit node value for UUID version 6.
@@ -54,8 +58,7 @@ def get_node() -> int:
     """
     node = uuid.getnode() & 0xFFFFFFFFFFFF  # 48 bits
     return node
-    
-    
+
 
 def new_uuid6() -> uuid.UUID:
     """Return a new UUID version 6 (time-ordered, k-sortable, Gregorian epoch)."""

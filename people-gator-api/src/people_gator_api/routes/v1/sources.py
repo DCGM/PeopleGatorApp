@@ -52,7 +52,9 @@ async def get_source_route(
     return source
 
 
-@router.post("/sources", response_model=SourceResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sources", response_model=SourceResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_source_route(
     payload: SourceCreateRequest,
     session: WeaviateSessionDependency,

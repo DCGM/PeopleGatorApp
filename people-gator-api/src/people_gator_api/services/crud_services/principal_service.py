@@ -49,7 +49,9 @@ async def list_principals(
     logger.debug(
         "list_principals called",
         extra={
-            "principal_type": principal_type.value if principal_type is not None else None,
+            "principal_type": principal_type.value
+            if principal_type is not None
+            else None,
             "is_active": is_active,
             "after_id": after_id,
             "limit": limit,
@@ -68,7 +70,10 @@ async def list_principals(
         after=after_id,
     )
     items = sorted(
-        [principal_response(item.properties, item.references, item.uuid) for item in response.objects],
+        [
+            principal_response(item.properties, item.references, item.uuid)
+            for item in response.objects
+        ],
         key=lambda item: item.principal_id,
     )
     return PrincipalListResponse(
@@ -85,7 +90,9 @@ async def get_principal(
     principal_id: uuid.UUID,
 ) -> PrincipalResponse | None:
     logger.debug("get_principal called", extra={"principal_id": principal_id})
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
         principal_id,
         return_references=empty_reference_queries([]),
     )
@@ -105,7 +112,10 @@ async def get_or_create_user(
 ) -> StoredUser:
     logger.info(
         "get_or_create_user called",
-        extra={"external_subject": external_subject, "external_issuer": external_issuer},
+        extra={
+            "external_subject": external_subject,
+            "external_issuer": external_issuer,
+        },
     )
     existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
         limit=1,
@@ -123,7 +133,9 @@ async def get_or_create_user(
         principal_id = existing_item.uuid
         existing_properties = existing_item.properties
         is_active_value = require_bool(existing_properties, "is_active")
-        logger.info("existing user principal found", extra={"principal_id": principal_id})
+        logger.info(
+            "existing user principal found", extra={"principal_id": principal_id}
+        )
     else:
         principal_id = new_uuid6()
         is_active_value = True
@@ -176,14 +188,18 @@ async def create_model_agent(
         limit=1,
         filters=Filter.all_of(
             [
-                Filter.by_property("principal_type").equal(PrincipalType.model_agent.value),
+                Filter.by_property("principal_type").equal(
+                    PrincipalType.model_agent.value
+                ),
                 Filter.by_property("model_slug").equal(payload.model_slug),
                 Filter.by_property("model_version").equal(payload.model_version),
             ]
         ),
     )
 
-    principal_id = getattr(existing.objects[0], "uuid") if existing.objects else new_uuid6()
+    principal_id = (
+        getattr(existing.objects[0], "uuid") if existing.objects else new_uuid6()
+    )
     await upsert(
         client,
         PRINCIPAL_COLLECTION,
@@ -217,12 +233,17 @@ async def update_principal(
     is_active: bool | None,
 ) -> PrincipalResponse | None:
     logger.info("update_principal called", extra={"principal_id": principal_id})
-    response = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_object_by_id(
+    response = await client.collections.get(
+        PRINCIPAL_COLLECTION
+    ).query.fetch_object_by_id(
         principal_id,
         return_references=empty_reference_queries([]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.info("update_principal skipped missing principal", extra={"principal_id": principal_id})
+        logger.info(
+            "update_principal skipped missing principal",
+            extra={"principal_id": principal_id},
+        )
         return None
     properties = dict(response.properties)
     if display_name is not None:

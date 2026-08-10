@@ -8,6 +8,7 @@ from people_gator_api.settings import settings
 
 ALL_CALLSITE_PARAMETERS = list(structlog.processors.CallsiteParameter)
 
+
 def configure_logging():
     handlers: list[logging.Handler] = []
 
@@ -17,7 +18,9 @@ def configure_logging():
         Example: 2026-05-21T14:30:00.123+00:00
         """
 
-        def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        def formatTime(
+            self, record: logging.LogRecord, datefmt: str | None = None
+        ) -> str:
             dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
             return dt.isoformat(timespec="milliseconds")
 
@@ -33,7 +36,7 @@ def configure_logging():
     # if otel_handler:
     #     otel_handler.setFormatter(formatter)
     #     handlers.append(otel_handler)
-    
+
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
 
     logging.basicConfig(
@@ -41,4 +44,3 @@ def configure_logging():
         handlers=handlers,
         force=True,
     )
-    

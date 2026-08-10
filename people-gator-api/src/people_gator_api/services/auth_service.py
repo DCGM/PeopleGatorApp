@@ -7,6 +7,7 @@ from fastapi.security import SecurityScopes
 from typing import Annotated
 from people_gator_api.services.crud_services.principal_service import get_or_create_user
 from people_gator_api.services.database_service import WeaviateSessionDependency
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,25 +23,29 @@ KNOWN_SCOPES = {
     ADMIN_SCOPE,
 }
 
+
 @dataclass
 class Principal:
     """Represents an authenticated user or service principal."""
+
     principal_id: uuid.UUID
     username: str
     scopes: set[str]
 
+
 security = HTTPBasic()
 
+
 async def get_current_user(
-    security_scopes: SecurityScopes, 
-    token: Annotated[HTTPBasicCredentials, Depends(security)], 
-    session: WeaviateSessionDependency
+    security_scopes: SecurityScopes,
+    token: Annotated[HTTPBasicCredentials, Depends(security)],
+    session: WeaviateSessionDependency,
 ):
     """Get the current user from the request context."""
     username = token.username
     password = token.password
     scopes = KNOWN_SCOPES
-    
+
     ### DEBUG: ONLY TEST CREDENTIALS ARE ALLOWED FOR NOW
     if username != "test" or password != "test":
         raise HTTPException(
@@ -53,7 +58,7 @@ async def get_current_user(
         external_subject=username,
         external_issuer="http://test.people-gator-api.local",
     )
-    
+
     for scope in security_scopes.scopes:
         if scope not in scopes:
             raise HTTPException(
@@ -68,7 +73,15 @@ async def get_current_user(
     return returned_user
 
 
-type DataIngestUserDependency = Annotated[Principal, Security(get_current_user, scopes=[INGEST_SCOPE])]
-type AnnotatorUserDependency = Annotated[Principal, Security(get_current_user, scopes=[ANNOTATE_SCOPE])]
-type AdminUserDependency = Annotated[Principal, Security(get_current_user, scopes=[ADMIN_SCOPE])]
-type BrowseUserDependency = Annotated[Principal, Security(get_current_user, scopes=[BROWSE_SCOPE])]
+type DataIngestUserDependency = Annotated[
+    Principal, Security(get_current_user, scopes=[INGEST_SCOPE])
+]
+type AnnotatorUserDependency = Annotated[
+    Principal, Security(get_current_user, scopes=[ANNOTATE_SCOPE])
+]
+type AdminUserDependency = Annotated[
+    Principal, Security(get_current_user, scopes=[ADMIN_SCOPE])
+]
+type BrowseUserDependency = Annotated[
+    Principal, Security(get_current_user, scopes=[BROWSE_SCOPE])
+]

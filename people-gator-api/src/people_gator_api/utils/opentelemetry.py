@@ -38,7 +38,9 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-def trace(name: str | None = None) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+def trace(
+    name: str | None = None,
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Create a decorator that wraps an async function call in an OpenTelemetry span."""
 
     def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
@@ -54,12 +56,15 @@ def trace(name: str | None = None) -> Callable[[Callable[P, Awaitable[R]]], Call
 
     return decorator
 
+
 def initialize_opentelemetry():
-    resource = Resource.create({
-        "service.name": "dev.people-gator-api",
-        "service.version": "0.1.0",
-        "service.instance.id": os.uname().nodename,
-    })
+    resource = Resource.create(
+        {
+            "service.name": "dev.people-gator-api",
+            "service.version": "0.1.0",
+            "service.instance.id": os.uname().nodename,
+        }
+    )
 
     trace_exporter = OTLPSpanExporter(
         endpoint=urljoin(settings.otel.http_endpoint, settings.otel.traces_path)
@@ -85,16 +90,16 @@ def initialize_opentelemetry():
     log_provider = LoggerProvider(resource=resource)
     log_provider.add_log_record_processor(log_processor)
     _logs.set_logger_provider(log_provider)
-    
+
     logger = _logs.get_logger(__name__)
     logging_handler = LoggingHandler(
         level={
             "DEBUG": logging.DEBUG,
             "INFO": logging.INFO,
             "WARNING": logging.WARNING,
-            "ERROR": logging.ERROR
+            "ERROR": logging.ERROR,
         }[settings.log_level],
-        logger_provider=log_provider
+        logger_provider=log_provider,
     )
 
     logging_instrumentator = LoggingInstrumentor(log_level=logging.DEBUG)

@@ -14,6 +14,7 @@ from people_gator_api.services.weaviate_service.client import (
     close_weaviate,
 )
 import dotenv
+
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
 
 
@@ -36,7 +37,9 @@ def get_app() -> FastAPI:
 
     if settings.otel.enabled:
         (
-            _, _, _,
+            _,
+            _,
+            _,
             _,
             fastapi_instrumentor,
             _,
@@ -48,5 +51,6 @@ def get_app() -> FastAPI:
         configure_logging()
     app.include_router(v1_router)
     return app
+
 
 app = get_app()

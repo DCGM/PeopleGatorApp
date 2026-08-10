@@ -18,12 +18,11 @@ from weaviate.collections.classes.types import (
     WeaviateField,
     WeaviateProperties,
 )
-from weaviate.collections.classes.internal import (
-    CrossReferences,
-    ReferenceInputs
-)
+from weaviate.collections.classes.internal import CrossReferences, ReferenceInputs
 
-type JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonValue = (
+    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+)
 
 from people_gator_api.schemas.enums import (
     PrincipalType,
@@ -39,7 +38,11 @@ from people_gator_api.schemas.entities import (
     Polygon,
     PolygonPoint,
 )
-from people_gator_api.schemas.principals import ModelAgentResponse, PrincipalResponse, UserResponse
+from people_gator_api.schemas.principals import (
+    ModelAgentResponse,
+    PrincipalResponse,
+    UserResponse,
+)
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     NlcrAuthoritySourceMetadata,
@@ -48,6 +51,7 @@ from people_gator_api.schemas.sources import (
     WikidataSourceMetadata,
     WikimediaImageSourceMetadata,
 )
+
 
 async def upsert(
     client: WeaviateAsyncClient,
@@ -75,14 +79,16 @@ async def upsert(
         vector=vector,
     )
 
+
 def reference_id_filter(link_on: str, reference_id: uuid.UUID) -> FilterReturn:
     return Filter.by_ref(link_on=link_on).by_id().equal(reference_id)
 
+
 def empty_reference_queries(link_ons: Sequence[str]) -> list[QueryReference]:
     return [
-        QueryReference(link_on=link_on, return_properties=[])
-        for link_on in link_ons
+        QueryReference(link_on=link_on, return_properties=[]) for link_on in link_ons
     ]
+
 
 def combine_filters(filters: list[FilterReturn]) -> FilterReturn | None:
     if not filters:
@@ -100,11 +106,10 @@ def single_named_vector_payload(
         return None
     return {vector_name: embedding}
 
+
 def most_common_normalized(values: Sequence[str | None]) -> str | None:
     normalized = [
-        " ".join(value.split()).strip().lower()
-        for value in values
-        if value is not None
+        " ".join(value.split()).strip().lower() for value in values if value is not None
     ]
     filtered = [value for value in normalized if value]
     if not filtered:
@@ -112,9 +117,11 @@ def most_common_normalized(values: Sequence[str | None]) -> str | None:
     counts = Counter(filtered)
     return counts.most_common(1)[0][0]
 
+
 # -------------------------------------------------------
 # Weaviate property accessors and response mappers
 # -------------------------------------------------------
+
 
 def principal_response(
     properties: WeaviateProperties,
@@ -127,6 +134,7 @@ def principal_response(
         display_name=require_str(properties, "display_name"),
         is_active=require_bool(properties, "is_active"),
     )
+
 
 def user_response(
     properties: WeaviateProperties,
@@ -143,6 +151,7 @@ def user_response(
         email=optional_str(properties, "email"),
     )
 
+
 def model_agent_response(
     properties: WeaviateProperties,
     references: CrossReferences,
@@ -156,6 +165,7 @@ def model_agent_response(
         model_slug=require_str(properties, "model_slug"),
         model_version=require_str(properties, "model_version"),
     )
+
 
 def source_response(
     properties: WeaviateProperties,
@@ -197,7 +207,10 @@ def entity_response(
         name=optional_str(properties, "name"),
         description=optional_str(properties, "description"),
         short_description=optional_str(properties, "short_description"),
-        aliases=[require_str(alias, "alias") for alias in sequence_of_mappings(properties, "aliases")],
+        aliases=[
+            require_str(alias, "alias")
+            for alias in sequence_of_mappings(properties, "aliases")
+        ],
         wikidata_id=optional_str(properties, "wikidata_id"),
         nlcr_authority_id=optional_str(properties, "nlcr_authority_id"),
     )
@@ -214,7 +227,10 @@ def page_mention_response(
         source_id=require_reference_uuid(references, "source"),
         principal_id=require_reference_uuid(references, "principal"),
         name=require_str(properties, "name"),
-        aliases=[require_str(alias, "alias") for alias in sequence_of_mappings(properties, "aliases")],
+        aliases=[
+            require_str(alias, "alias")
+            for alias in sequence_of_mappings(properties, "aliases")
+        ],
         information=require_str(properties, "information"),
         polygons=[
             Polygon(
@@ -243,7 +259,10 @@ def document_mention_response(
         entity_id=require_reference_uuid(references, "entity"),
         name=require_str(properties, "name"),
         information=require_str(properties, "information"),
-        aliases=[require_str(alias, "alias") for alias in sequence_of_mappings(properties, "aliases")],
+        aliases=[
+            require_str(alias, "alias")
+            for alias in sequence_of_mappings(properties, "aliases")
+        ],
     )
 
 
@@ -276,9 +295,11 @@ def face_response(
         confidence=require_float(properties, "confidence"),
     )
 
+
 # -------------------------------------------------------
 # Weaviate property accessors and response mappers
 # -------------------------------------------------------
+
 
 def require_reference_uuid(
     references: CrossReferences,
@@ -433,7 +454,9 @@ def optional_json_dict(
     raise TypeError(f"Property {key!r} is not an object.")
 
 
-def json_dict_from_mapping(value_map: Mapping[str, WeaviateField]) -> dict[str, JsonValue]:
+def json_dict_from_mapping(
+    value_map: Mapping[str, WeaviateField],
+) -> dict[str, JsonValue]:
     return {key: json_value(item) for key, item in value_map.items()}
 
 
