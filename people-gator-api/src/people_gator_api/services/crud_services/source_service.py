@@ -58,8 +58,9 @@ async def list_sources(
     )
     return SourceListResponse(
         items=items,
-        total=len(items),
-        next_after_id=items[-1].source_id if len(items) == limit and items else None,
+        total_count=len(items),
+        after_id=items[-1].source_id if len(items) == limit and items else None,
+        limit=limit,
     )
 
 

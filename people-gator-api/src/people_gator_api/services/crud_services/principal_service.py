@@ -10,6 +10,7 @@ from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
     ModelAgentCreateRequest,
     PrincipalResponse,
+    PrincipalListResponse,
 )
 from people_gator_api.services.weaviate_service.db_schema import PRINCIPAL_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
@@ -44,7 +45,7 @@ async def list_principals(
     is_active: bool | None,
     after_id: uuid.UUID | None,
     limit: int,
-) -> list[PrincipalResponse]:
+) -> PrincipalListResponse:
     logger.debug(
         "list_principals called",
         extra={
@@ -70,7 +71,12 @@ async def list_principals(
         [principal_response(item.properties, item.references, item.uuid) for item in response.objects],
         key=lambda item: item.principal_id,
     )
-    return items
+    return PrincipalListResponse(
+        items=items,
+        total_count=len(items),
+        after_id=items[-1].principal_id if len(items) == limit and items else None,
+        limit=limit,
+    )
 
 
 @trace()
@@ -162,9 +168,8 @@ async def create_model_agent(
     logger.info(
         "create_model_agent called",
         extra={
-            "annotation_type": payload.annotation_type.value,
-            "role": payload.role,
             "model_slug": payload.model_slug,
+            "model_version": payload.model_version,
         },
     )
     existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
@@ -172,9 +177,8 @@ async def create_model_agent(
         filters=Filter.all_of(
             [
                 Filter.by_property("principal_type").equal(PrincipalType.model_agent.value),
-                Filter.by_property("annotation_type").equal(payload.annotation_type.value),
-                Filter.by_property("role").equal(payload.role),
                 Filter.by_property("model_slug").equal(payload.model_slug),
+                Filter.by_property("model_version").equal(payload.model_version),
             ]
         ),
     )
@@ -191,12 +195,12 @@ async def create_model_agent(
             "external_subject": None,
             "external_issuer": None,
             "email": None,
-            "annotation_type": payload.annotation_type.value,
-            "role": payload.role,
             "model_slug": payload.model_slug,
             "model_version": payload.model_version,
-            "registry_source": payload.registry_source.value,
-            "registry_uri": payload.registry_uri,
+            "annotation_type": None,
+            "role": None,
+            "registry_source": None,
+            "registry_uri": None,
         },
     )
     resolved = await get_principal(client, principal_id)

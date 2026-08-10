@@ -55,8 +55,8 @@ async def list_entities(
     return EntityListResponse(
         items=items,
         limit=limit,
-        total=len(items),
-        next_after_id=items[-1].entity_id if len(items) == limit and items else None,
+        total_count=len(items),
+        after_id=items[-1].entity_id if len(items) == limit and items else None,
     )
 
 

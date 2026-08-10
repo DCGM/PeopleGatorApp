@@ -7,6 +7,7 @@ from pydantic import (
     BaseModel,
     Field,
 )
+from people_gator_api.schemas.common import GenericListResponse
 
 # ---------------------------------------------------------------------------
 # Search result type
@@ -22,6 +23,9 @@ class EntitySearchResult(BaseModel):
     aliases: list[str] = Field(..., description="The aliases of the annotation.")
     matching_score: float = Field(..., description="The matching score of the annotation.")
 
+class SearchResultListResponse(GenericListResponse[EntitySearchResult]):
+    """A paginated list of search results."""
+    items: list[EntitySearchResult]
 
 # ---------------------------------------------------------------------------
 # Search request and response
@@ -34,8 +38,8 @@ class SearchQuery(BaseModel):
         validation_alias=AliasChoices("name", "query_name"),
         description="The name to search for.",
     )
-    limit: int | None = Field(
-        default=None,
+    limit: int = Field(
+        default=20,
         validation_alias=AliasChoices("limit", "query_limit"),
         description="The maximum number of results to return.",
     )
@@ -44,11 +48,3 @@ class SearchQuery(BaseModel):
         validation_alias=AliasChoices("after_id", "query_after_id"),
         description="The ID of the last result from the previous page of results.",
     )
-
-class SearchResponse(BaseModel):
-    """Search results union plus facets and request echo."""
-    results: list[EntitySearchResult]
-    total: int
-    limit: int
-    next_after_id: uuid.UUID | None
-    query: SearchQuery

@@ -1,6 +1,7 @@
 """Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
 
 import uuid
+from people_gator_api.schemas.common import GenericListResponse
 
 from pydantic import (
     AnyUrl,
@@ -115,9 +116,6 @@ class SourceResponse(BaseModel):
     metadata: SourceMetadata | None
 
 
-class SourceListResponse(BaseModel):
+class SourceListResponse(GenericListResponse[SourceResponse]):
     """A paginated list of sources."""
-
     items: list[SourceResponse]
-    total: int
-    next_after_id: uuid.UUID | None = None

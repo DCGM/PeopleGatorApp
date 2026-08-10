@@ -10,7 +10,7 @@ from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.search import (
     SearchQuery,
-    SearchResponse,
+    SearchResultListResponse,
 )
 from people_gator_api.services.weaviate_service.search import search_entities_by_name_or_aliases
 from people_gator_api.utils.opentelemetry import trace
@@ -29,35 +29,33 @@ class SearchRequestLike(Protocol):
 async def search(
     session: WeaviateAsyncClient,
     query: SearchQuery,
-) -> SearchResponse:
+) -> SearchResultListResponse:
     """Run entity search using the configured Weaviate BM25 helper."""
     logger.debug("search called", extra={"query_name": query.name})
 
     query_name = _resolve_query_name(query)
     if query_name is None:
         logger.info("search skipped empty query")
-        return SearchResponse(
-            results=[],
-            total=0,
-            limit=20,
-            next_after_id=None,
-            query=query,
+        return SearchResultListResponse(
+            items=[],
+            total_count=0,
+            limit=query.limit,
+            after_id=None,
         )
 
     results = await search_entities_by_name_or_aliases(
         client=session,
         query_name=query_name,
-        limit=100,
+        limit=query.limit,
     )
     page = results
     next_after_id = page[-1].entity_id if page else None
     logger.info("search completed", extra={"query_name": query_name, "total": len(page)})
-    return SearchResponse(
-        results=page,
-        total=len(page),
-        limit=20,
-        next_after_id=next_after_id,
-        query=query,
+    return SearchResultListResponse(
+        items=page,
+        total_count=len(page),
+        limit=query.limit,
+        after_id=next_after_id,
     )
 
 

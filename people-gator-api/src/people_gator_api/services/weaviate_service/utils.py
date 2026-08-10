@@ -39,7 +39,7 @@ from people_gator_api.schemas.entities import (
     Polygon,
     PolygonPoint,
 )
-from people_gator_api.schemas.principals import PrincipalResponse
+from people_gator_api.schemas.principals import ModelAgentResponse, PrincipalResponse, UserResponse
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     NlcrAuthoritySourceMetadata,
@@ -47,11 +47,6 @@ from people_gator_api.schemas.sources import (
     SourceResponse,
     WikidataSourceMetadata,
     WikimediaImageSourceMetadata,
-)
-from people_gator_api.services.weaviate_service.db_schema import (
-    DOCUMENT_MENTION_COLLECTION,
-    FACE_COLLECTION,
-    PAGE_MENTION_COLLECTION,
 )
 
 async def upsert(
@@ -89,64 +84,6 @@ def empty_reference_queries(link_ons: Sequence[str]) -> list[QueryReference]:
         for link_on in link_ons
     ]
 
-async def list_faces_for_entity(
-    client: WeaviateAsyncClient,
-    entity_id: uuid.UUID,
-) -> list[FaceResponse]:
-    faces = client.collections.get(FACE_COLLECTION)
-    response = await faces.query.fetch_objects(
-        filters=reference_id_filter(link_on="entity", reference_id=entity_id),
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
-    )
-    results = sorted(
-        [face_response(item.properties, item.references, item.uuid) for item in response.objects],
-        key=lambda item: item.detection_id,
-    )
-    return results
-
-async def list_document_mentions_for_entity(
-    client: WeaviateAsyncClient,
-    entity_id: uuid.UUID,
-) -> list[DocumentMentionResponse]:
-    document_mentions = client.collections.get(DOCUMENT_MENTION_COLLECTION)
-    response = await document_mentions.query.fetch_objects(
-        filters=reference_id_filter(link_on="entity", reference_id=entity_id),
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
-    )
-    results = sorted(
-        [document_mention_response(item.properties, item.references, item.uuid) for item in response.objects],
-        key=lambda item: item.document_mention_id,
-    )
-    return results
-
-async def list_page_mentions_for_document_mention(
-    client: WeaviateAsyncClient,
-    document_mention_id: uuid.UUID,
-) -> list[PageMentionResponse]:
-    page_mentions = client.collections.get(PAGE_MENTION_COLLECTION)
-    response = await page_mentions.query.fetch_objects(
-        filters=reference_id_filter(link_on="document_mention", reference_id=document_mention_id),
-        return_references=empty_reference_queries(["principal", "document_mention", "source"]),
-    )
-    results = sorted(
-        [page_mention_response(item.properties, item.references, item.uuid) for item in response.objects],
-        key=lambda item: item.page_mention_id,
-    )
-    return results
-
-async def delete_document_mention_tree(
-    client: WeaviateAsyncClient,
-    document_mention_id: uuid.UUID,
-) -> None:
-    page_mentions = client.collections.get(PAGE_MENTION_COLLECTION)
-    await page_mentions.data.delete_many(
-        where=reference_id_filter(
-            link_on="document_mention",
-            reference_id=document_mention_id,
-        ),
-    )
-    return None
-
 def combine_filters(filters: list[FilterReturn]) -> FilterReturn | None:
     if not filters:
         return None
@@ -175,6 +112,9 @@ def most_common_normalized(values: Sequence[str | None]) -> str | None:
     counts = Counter(filtered)
     return counts.most_common(1)[0][0]
 
+# -------------------------------------------------------
+# Weaviate property accessors and response mappers
+# -------------------------------------------------------
 
 def principal_response(
     properties: WeaviateProperties,
@@ -188,6 +128,34 @@ def principal_response(
         is_active=require_bool(properties, "is_active"),
     )
 
+def user_response(
+    properties: WeaviateProperties,
+    references: CrossReferences,
+    uuid: uuid.UUID,
+) -> UserResponse:
+    return UserResponse(
+        principal_id=uuid,
+        principal_type=PrincipalType(require_str(properties, "principal_type")),
+        display_name=require_str(properties, "display_name"),
+        is_active=require_bool(properties, "is_active"),
+        external_subject=require_str(properties, "external_subject"),
+        external_issuer=require_str(properties, "external_issuer"),
+        email=optional_str(properties, "email"),
+    )
+
+def model_agent_response(
+    properties: WeaviateProperties,
+    references: CrossReferences,
+    uuid: uuid.UUID,
+) -> ModelAgentResponse:
+    return ModelAgentResponse(
+        principal_id=uuid,
+        principal_type=PrincipalType(require_str(properties, "principal_type")),
+        display_name=require_str(properties, "display_name"),
+        is_active=require_bool(properties, "is_active"),
+        model_slug=require_str(properties, "model_slug"),
+        model_version=require_str(properties, "model_version"),
+    )
 
 def source_response(
     properties: WeaviateProperties,
@@ -308,6 +276,9 @@ def face_response(
         confidence=require_float(properties, "confidence"),
     )
 
+# -------------------------------------------------------
+# Weaviate property accessors and response mappers
+# -------------------------------------------------------
 
 def require_reference_uuid(
     references: CrossReferences,

@@ -9,6 +9,7 @@ from pydantic import (
     Field,
 )
 
+from people_gator_api.schemas.common import GenericListResponse
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -45,12 +46,9 @@ class EntityResponse(BaseModel):
     principal_id: uuid.UUID
 
 
-class EntityListResponse(BaseModel):
+class EntityListResponse(GenericListResponse[EntityResponse]):
     """A paginated list of entities."""
     items: list[EntityResponse]
-    limit: int
-    total: int
-    next_after_id: uuid.UUID | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +89,9 @@ class PageMentionResponse(BaseModel):
     source_id: uuid.UUID
     principal_id: uuid.UUID
 
+class PageMentionListResponse(GenericListResponse[PageMentionResponse]):
+    """A paginated list of page mentions."""
+    items: list[PageMentionResponse]
 
 # ---------------------------------------------------------------------------
 # Document mentions
@@ -117,6 +118,11 @@ class DocumentMentionResponse(BaseModel):
     principal_id: uuid.UUID
     source_id: uuid.UUID
     entity_id: uuid.UUID
+
+
+class DocumentMentionListResponse(GenericListResponse[DocumentMentionResponse]):
+    """A paginated list of document mentions."""
+    items: list[DocumentMentionResponse]
 
 
 class DocumentMentionEntityPatchRequest(BaseModel):
@@ -171,6 +177,9 @@ class FaceResponse(BaseModel):
     entity_id: uuid.UUID | None = Field(default=None)
     confidence: float
 
+class FaceListResponse(GenericListResponse[FaceResponse]):
+    """A paginated list of face detections."""
+    items: list[FaceResponse]
 
 class FaceEntityPatchRequest(BaseModel):
     """Patch body for reassigning a face annotation to a different entity."""
