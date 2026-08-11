@@ -8,6 +8,7 @@ from pydantic import (
     Field,
 )
 from people_gator_api.schemas.common import GenericListResponse
+from people_gator_api.schemas.enums import AnnotationType
 
 # ---------------------------------------------------------------------------
 # Search result type
@@ -48,6 +49,18 @@ class SearchQuery(BaseModel):
         default=None,
         validation_alias=AliasChoices("name", "query_name", "query_names"),
         description="The name to search for.",
+    )
+    entity_types: list[AnnotationType] | AnnotationType | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "entity_types",
+            "entity_type",
+            "types",
+            "query_entity_types",
+            "query_entity_type",
+            "query_types",
+        ),
+        description="Optional entity type filter(s).",
     )
     limit: int = Field(
         default=20,
