@@ -21,13 +21,13 @@ _DEFAULT_LIMIT = 20
 
 async def search_entities_by_name_or_aliases(
     client: WeaviateAsyncClient,
-    query_name: str,
+    query_name: list[str],
     *,
     filters: FilterReturn | None = None,
     limit: int = _DEFAULT_LIMIT,
 ) -> list[EntitySearchResult]:
     """Search Entity documents with BM25 across name and aliases."""
-    cleaned_name = query_name.strip()
+    cleaned_name = ", ".join(query_name).strip()
     if not cleaned_name:
         return []
 

@@ -44,9 +44,9 @@ class SearchResultListResponse(GenericListResponse[EntitySearchResult]):
 class SearchQuery(BaseModel):
     """Typed query signals the caller wants to find matches for."""
 
-    name: str | None = Field(
+    name: list[str] | str | None = Field(
         default=None,
-        validation_alias=AliasChoices("name", "query_name"),
+        validation_alias=AliasChoices("name", "query_name", "query_names"),
         description="The name to search for.",
     )
     limit: int = Field(

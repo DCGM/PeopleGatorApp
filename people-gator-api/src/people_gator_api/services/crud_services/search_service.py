@@ -30,11 +30,9 @@ class SearchRequestLike(Protocol):
 @trace()
 async def search(
     session: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     query: SearchQuery,
 ) -> SearchResultListResponse:
     """Run entity search using the configured Weaviate BM25 helper."""
-    del principal_id
     logger.debug("search called", extra={"query_name": query.name})
 
     query_name = _resolve_query_name(query)
@@ -65,10 +63,14 @@ async def search(
     )
 
 
-def _resolve_query_name(query: SearchQuery) -> str | None:
+def _resolve_query_name(query: SearchQuery) -> list[str] | None:
     if query.name is None:
         return None
-    cleaned = query.name.strip()
-    if not cleaned:
-        return None
+    raw = query.name
+    cleaned: list[str] | None = None
+    if isinstance(raw, list):
+        cleaned = [name.strip() for name in raw if name.strip()]
+        cleaned = cleaned if cleaned else None
+    if isinstance(raw, str):
+        cleaned = [raw.strip()] if raw.strip() else None
     return cleaned
