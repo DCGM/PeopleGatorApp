@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - /mnt/hdd/Data/people-gator-dev/weaviate:/var/lib/weaviate
+      - /mnt/hdd/Data/people-gator-dev/weaviate:/data
     ports:
       - 8080:8080
       - 50051:50051

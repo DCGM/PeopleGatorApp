@@ -1,5 +1,7 @@
+import httpx
 import pytest
 from weaviate.classes.config import ReferenceProperty
+from weaviate.exceptions import UnexpectedStatusCodeError
 
 from people_gator_api.services.weaviate_service import client
 from people_gator_api.services.weaviate_service import db_schema
@@ -11,9 +13,11 @@ class _FakeCollections:
         self._existing_collections = set(existing_collections)
         self.operation_log: list[tuple[str, str]] = []
         self.created_collections: list[str] = []
+        self.exists_attempts = 0
 
     async def exists(self, collection_name: str) -> bool:
         self.operation_log.append(("exists", collection_name))
+        self.exists_attempts += 1
         return collection_name in self._existing_collections
 
     async def create(
@@ -31,6 +35,23 @@ class _FakeCollections:
         del vector_config
         self.operation_log.append(("create", name))
         self.created_collections.append(name)
+
+
+class _RetryableCollections(_FakeCollections):
+    def __init__(self, existing_collections: set[str], transient_failures: int) -> None:
+        super().__init__(existing_collections)
+        self._transient_failures = transient_failures
+
+    async def exists(self, collection_name: str) -> bool:
+        self.operation_log.append(("exists", collection_name))
+        self.exists_attempts += 1
+        if self.exists_attempts <= self._transient_failures:
+            response = httpx.Response(
+                500,
+                json={"error": [{"message": "failed to execute query: leader not found"}]},
+            )
+            raise UnexpectedStatusCodeError("Collection may not exist!", response)
+        return collection_name in self._existing_collections
 
 
 class _FakeWeaviateClient:
@@ -131,3 +152,16 @@ async def test_ensure_collections_runs_existence_checks_before_create_calls() ->
         for collection_name, _ in client.ordered_collection_specs(db_schema.ALL_COLLECTION_SPECS)
     ]
     assert existence_checks == expected_collection_names
+
+
+@pytest.mark.asyncio
+async def test_ensure_collections_retries_transient_collection_errors() -> None:
+    fake_client = _FakeWeaviateClient(existing_collections=set())
+    fake_client.collections = _RetryableCollections(
+        existing_collections=set(),
+        transient_failures=2,
+    )
+
+    await client._ensure_collections(fake_client, retry_delay_seconds=0.0)  # type: ignore[arg-type]
+
+    assert fake_client.collections.exists_attempts > 2

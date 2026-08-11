@@ -1,5 +1,6 @@
 """Weaviate async client lifecycle management."""
 
+import asyncio
 import logging
 
 import weaviate
@@ -80,7 +81,12 @@ def get_weaviate_client() -> WeaviateAsyncClient:
 # ---------------------------------------------------------------------------
 
 
-async def _ensure_collections(client: WeaviateAsyncClient) -> None:
+async def _ensure_collections(
+    client: WeaviateAsyncClient,
+    *,
+    retry_delay_seconds: float = 2.0,
+    max_retries: int = 3,
+) -> None:
     """Create missing Weaviate collections without mutating existing schemas.
 
     Startup intentionally performs existence checks and creates only missing
@@ -91,9 +97,13 @@ async def _ensure_collections(client: WeaviateAsyncClient) -> None:
     ordered_specs = ordered_collection_specs(ALL_COLLECTION_SPECS)
     exists_by_collection: dict[str, bool] = {}
 
-    # First pass: explicitly sanity-check existence for every collection.
     for collection_name, _ in ordered_specs:
-        exists = await client.collections.exists(collection_name)
+        exists = await _collection_exists_with_retry(
+            client=client,
+            collection_name=collection_name,
+            retry_delay_seconds=retry_delay_seconds,
+            max_retries=max_retries,
+        )
         exists_by_collection[collection_name] = exists
         if exists:
             logger.debug(
@@ -101,7 +111,6 @@ async def _ensure_collections(client: WeaviateAsyncClient) -> None:
                 collection_name,
             )
 
-    # Second pass: create only collections that were confirmed missing.
     for collection_name, (
         properties,
         references,
@@ -125,6 +134,42 @@ async def _ensure_collections(client: WeaviateAsyncClient) -> None:
                 references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
             )
         logger.info("Created Weaviate collection: %s", collection_name)
+
+
+async def _collection_exists_with_retry(
+    *,
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    retry_delay_seconds: float,
+    max_retries: int,
+) -> bool:
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return await client.collections.exists(collection_name)
+        except Exception as exc:  # pragma: no cover - exercised via runtime failures
+            last_error = exc
+            if attempt >= max_retries:
+                logger.warning(
+                    "Unable to confirm Weaviate collection %s after %s attempts: %s",
+                    collection_name,
+                    max_retries + 1,
+                    exc,
+                )
+                raise
+            logger.warning(
+                "Transient Weaviate error while checking collection %s (attempt %s/%s): %s",
+                collection_name,
+                attempt + 1,
+                max_retries + 1,
+                exc,
+            )
+            await asyncio.sleep(retry_delay_seconds)
+
+    if last_error is not None:
+        raise last_error
+    return False
 
 
 def ordered_collection_specs(
