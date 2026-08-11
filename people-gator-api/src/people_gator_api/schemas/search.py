@@ -8,7 +8,7 @@ from pydantic import (
     Field,
 )
 from people_gator_api.schemas.common import GenericListResponse
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import EntityType
 
 # ---------------------------------------------------------------------------
 # Search result type
@@ -19,7 +19,9 @@ class EntitySearchResult(BaseModel):
     """A single result from a nearest-neighbour search over an annotation collection."""
 
     entity_id: uuid.UUID = Field(..., description="The entity ID of the annotation.")
-    entity_type: str = Field(..., description="The entity type of the annotation.")
+    entity_type: EntityType | None = Field(
+        ..., description="The entity type of the annotation."
+    )
     name: str = Field(..., description="The name of the annotation.")
     description: str = Field(..., description="The description of the annotation.")
     short_description: str = Field(
@@ -50,7 +52,7 @@ class SearchQuery(BaseModel):
         validation_alias=AliasChoices("name", "query_name", "query_names"),
         description="The name to search for.",
     )
-    entity_types: list[AnnotationType] | AnnotationType | None = Field(
+    entity_types: list[EntityType] | EntityType | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "entity_types",

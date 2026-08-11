@@ -12,6 +12,7 @@ from pydantic import (
 )
 
 from people_gator_api.schemas.common import GenericListResponse
+from people_gator_api.schemas.enums import EntityType
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -21,7 +22,7 @@ from people_gator_api.schemas.common import GenericListResponse
 class EntityCreateRequest(BaseModel):
     """Request body for creating a new entity."""
 
-    entity_type: str | None = None
+    entity_type: EntityType | None = None
     name: str | None = None
     description: str | None = None
     short_description: str | None = None
@@ -32,11 +33,22 @@ class EntityCreateRequest(BaseModel):
     fulltext_embedding: list[float] | None = None
 
 
+class EntityPatchRequest(BaseModel):
+    """Request body for patching an existing entity."""
+
+    name: str | None = None
+    aliases: list[str] | None = None
+    description: str | None = None
+    short_description: str | None = None
+    wikidata_id: str | None = None
+    nlcr_authority_id: str | None = None
+
+
 class EntityResponse(BaseModel):
     """A single entity record."""
 
     entity_id: uuid.UUID
-    entity_type: str | None
+    entity_type: EntityType | None
     name: str | None
     description: str | None
     short_description: str | None
@@ -56,12 +68,12 @@ class EntityDeleteManyRequest(BaseModel):
     """Request body for deleting multiple entities by selector."""
 
     delete_all: bool = False
-    entity_type: str | None = None
+    entity_type: EntityType | None = None
     entity_ids: list[uuid.UUID] | None = None
 
     @model_validator(mode="after")
     def validate_selector(self) -> EntityDeleteManyRequest:
-        has_type = self.entity_type is not None and self.entity_type.strip() != ""
+        has_type = self.entity_type is not None
         has_ids = bool(self.entity_ids)
 
         if self.delete_all:

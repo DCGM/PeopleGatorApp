@@ -14,7 +14,7 @@ from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResultListResponse,
 )
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.crud_services.search_service import search
 
@@ -25,7 +25,7 @@ router = APIRouter(tags=["search"])
 async def search_get(
     session: WeaviateSessionDependency,
     name: list[str] | None = Query(default=None, alias="query_name"),
-    entity_type: list[AnnotationType] | None = Query(
+    entity_type: list[EntityType] | None = Query(
         default=None,
         alias="query_entity_type",
     ),

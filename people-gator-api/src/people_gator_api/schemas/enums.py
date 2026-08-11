@@ -10,6 +10,14 @@ class AnnotationType(StrEnum):
     face = "face"
 
 
+class EntityType(StrEnum):
+    """Entity type discriminator for normalized identity classes."""
+
+    person = "person"
+    place = "place"
+    date = "date"
+
+
 class SourceKind(StrEnum):
     """Physical type of a SOURCE record."""
 

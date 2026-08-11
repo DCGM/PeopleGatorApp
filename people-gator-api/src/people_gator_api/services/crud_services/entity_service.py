@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from typing import TypeGuard
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
@@ -12,6 +13,7 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyRequest,
     EntityDeleteManyResponse,
     EntityListResponse,
+    EntityPatchRequest,
     EntityResponse,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
@@ -24,6 +26,7 @@ from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
     entity_response,
     fetch_collection_page_with_total_count,
+    require_reference_uuid,
     upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
@@ -31,6 +34,12 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 logger = logging.getLogger(__name__)
+
+
+def _is_flat_float_vector(
+    value: list[float] | list[list[float]],
+) -> TypeGuard[list[float]]:
+    return all(isinstance(item, (int, float)) for item in value)
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +144,63 @@ async def create_entity(
         wikidata_id=payload.wikidata_id,
         nlcr_authority_id=payload.nlcr_authority_id,
     )
+
+
+@trace()
+async def patch_entity(
+    client: WeaviateAsyncClient,
+    entity_id: uuid.UUID,
+    payload: EntityPatchRequest,
+) -> EntityResponse | None:
+    logger.info("patch_entity called", extra={"entity_id": entity_id})
+    response = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
+        entity_id,
+        include_vector=True,
+        return_references=empty_reference_queries(["principal"]),
+    )
+    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.info("patch_entity skipped missing entity", extra={"entity_id": entity_id})
+        return None
+
+    properties = dict(response.properties)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        # Entities are stored with text-array aliases; normalize null to empty list.
+        if key == "aliases" and value is None:
+            properties[key] = []
+            continue
+        properties[key] = value
+
+    vector_payload: dict[str, list[float]] | None = None
+    named_vectors: dict[str, list[float]] = {}
+    for vector_name, vector_value in response.vector.items():
+        if _is_flat_float_vector(vector_value):
+            named_vectors[vector_name] = [float(item) for item in vector_value]
+    if named_vectors:
+        vector_payload = named_vectors
+
+    await upsert(
+        client,
+        ENTITY_COLLECTION,
+        entity_id,
+        properties=properties,
+        references={
+            "principal": require_reference_uuid(response.references, "principal"),
+        },
+        vector=vector_payload,
+    )
+
+    updated = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
+        entity_id,
+        return_references=empty_reference_queries(["principal"]),
+    )
+    if updated is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+        logger.warning(
+            "patch_entity could not read updated entity", extra={"entity_id": entity_id}
+        )
+        return None
+
+    logger.info("patch_entity completed", extra={"entity_id": entity_id})
+    return entity_response(updated.properties, updated.references, updated.uuid)
 
 
 @trace()

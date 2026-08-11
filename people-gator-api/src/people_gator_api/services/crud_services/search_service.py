@@ -10,7 +10,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 
-from people_gator_api.schemas.enums import AnnotationType
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.search import (
     SearchQuery,
     SearchResultListResponse,
@@ -82,14 +82,14 @@ def _resolve_query_name(query: SearchQuery) -> list[str] | None:
     return cleaned
 
 
-def _resolve_query_entity_types(query: SearchQuery) -> list[AnnotationType] | None:
+def _resolve_query_entity_types(query: SearchQuery) -> list[EntityType] | None:
     if query.entity_types is None:
         return None
     raw = query.entity_types
-    if isinstance(raw, AnnotationType):
+    if isinstance(raw, EntityType):
         return [raw]
 
-    deduplicated: list[AnnotationType] = []
+    deduplicated: list[EntityType] = []
     for item in raw:
         if item not in deduplicated:
             deduplicated.append(item)
@@ -97,7 +97,7 @@ def _resolve_query_entity_types(query: SearchQuery) -> list[AnnotationType] | No
 
 
 def _entity_type_filters(
-    entity_types: list[AnnotationType] | None,
+    entity_types: list[EntityType] | None,
 ) -> list[FilterReturn]:
     if entity_types is None:
         return []

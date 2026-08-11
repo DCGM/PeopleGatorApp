@@ -13,6 +13,7 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyRequest,
     EntityDeleteManyResponse,
     EntityListResponse,
+    EntityPatchRequest,
     EntityResponse,
     FaceListResponse,
 )
@@ -33,6 +34,7 @@ from people_gator_api.services.crud_services.entity_service import (
     delete_entity,
     get_entity,
     list_entities,
+    patch_entity,
 )
 
 router = APIRouter(tags=["entities"])
@@ -108,6 +110,20 @@ async def create_entity_route(
     principal: AnnotatorUserDependency,
 ) -> EntityResponse:
     return await create_entity(session, payload, principal.principal_id)
+
+
+@router.patch("/entities/{entity_id}", response_model=EntityResponse)
+async def patch_entity_route(
+    entity_id: uuid.UUID,
+    payload: EntityPatchRequest,
+    session: WeaviateSessionDependency,
+    principal: AnnotatorUserDependency,
+) -> EntityResponse:
+    del principal
+    entity = await patch_entity(session, entity_id, payload)
+    if entity is None:
+        raise_api_error(404, "not_found", "Entity not found")
+    return entity
 
 
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)

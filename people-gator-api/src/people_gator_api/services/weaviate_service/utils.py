@@ -23,6 +23,7 @@ from weaviate.collections.classes.types import (
 from weaviate.collections.classes.internal import CrossReferences, ReferenceInputs
 
 from people_gator_api.schemas.enums import (
+    EntityType,
     PrincipalType,
     SourceKind,
 )
@@ -281,7 +282,7 @@ def entity_response(
     return EntityResponse(
         entity_id=uuid,
         principal_id=require_reference_uuid(references, "principal"),
-        entity_type=optional_str(properties, "entity_type"),
+        entity_type=optional_entity_type(properties, "entity_type"),
         name=optional_str(properties, "name"),
         description=optional_str(properties, "description"),
         short_description=optional_str(properties, "short_description"),
@@ -508,6 +509,16 @@ def optional_alias_text_array(
     if raw_value is None:
         return []
     return as_alias_text_array(raw_value, key)
+
+
+def optional_entity_type(
+    properties: WeaviateProperties | Mapping[str, WeaviateField],
+    field_name: str,
+) -> EntityType | None:
+    raw_value = optional_str(properties, field_name)
+    if raw_value is None:
+        return None
+    return EntityType(raw_value)
 
 
 def as_alias_text_array(raw_value: WeaviateField, key: str) -> list[str]:
