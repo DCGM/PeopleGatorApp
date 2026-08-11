@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import importlib.util
 import sys
 import types
@@ -26,14 +27,14 @@ spec.loader.exec_module(module)
 face_response = module.face_response
 
 
+@dataclass
 class FakeLinkedObject:
-    def __init__(self, object_uuid: uuid.UUID) -> None:
-        self.uuid = object_uuid
+    uuid: uuid.UUID
 
 
+@dataclass
 class FakeReference:
-    def __init__(self, objects: list[FakeLinkedObject]) -> None:
-        self.objects = objects
+    objects: list[FakeLinkedObject]
 
 
 def test_face_response_raises_clear_error_for_empty_reference_links() -> None:
@@ -62,3 +63,20 @@ def test_optional_json_dict_decodes_nested_json_objects() -> None:
     )
 
     assert metadata == {"foo": {"bar": 1}, "baz": [True, None]}
+
+
+def test_optional_alias_text_array_accepts_text_array() -> None:
+    aliases = module.optional_alias_text_array(
+        {"aliases": ["Zoltan Mihaly Nagy", "Zoltan Nagy"]},
+        "aliases",
+    )
+
+    assert aliases == ["Zoltan Mihaly Nagy", "Zoltan Nagy"]
+
+
+def test_optional_alias_text_array_rejects_non_string_items() -> None:
+    with pytest.raises(TypeError, match="contains a non-string alias item"):
+        module.optional_alias_text_array(
+            {"aliases": [{"alias": "Zoltan Mihaly Nagy"}]},
+            "aliases",
+        )

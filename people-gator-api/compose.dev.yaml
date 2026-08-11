@@ -3,11 +3,22 @@ services:
     image: semitechnologies/weaviate:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      CLUSTER_HOSTNAME: people-gator-weaviate-dev
+      PERSISTENCE_DATA_PATH: /data
     volumes:
       - /mnt/hdd/Data/people-gator-dev/weaviate:/data
     ports:
       - 8080:8080
       - 50051:50051
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://localhost:8080/v1/.well-known/ready
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
     networks:
       - default
 
@@ -17,8 +28,9 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.dev
-      #people-gator-keycloak-dev:
-      #  condition: service_started
+    depends_on:
+      people-gator-weaviate-dev:
+        condition: service_healthy
     ports:
       - 5679:5678 # debugger
     user: root

@@ -285,10 +285,7 @@ def entity_response(
         name=optional_str(properties, "name"),
         description=optional_str(properties, "description"),
         short_description=optional_str(properties, "short_description"),
-        aliases=[
-            require_str(alias, "alias")
-            for alias in sequence_of_mappings(properties, "aliases")
-        ],
+        aliases=require_alias_text_array(properties, "aliases"),
         wikidata_id=optional_str(properties, "wikidata_id"),
         nlcr_authority_id=optional_str(properties, "nlcr_authority_id"),
     )
@@ -305,10 +302,7 @@ def page_mention_response(
         source_id=require_reference_uuid(references, "source"),
         principal_id=require_reference_uuid(references, "principal"),
         name=require_str(properties, "name"),
-        aliases=[
-            require_str(alias, "alias")
-            for alias in sequence_of_mappings(properties, "aliases")
-        ],
+        aliases=require_alias_text_array(properties, "aliases"),
         information=require_str(properties, "information"),
         polygons=[
             Polygon(
@@ -337,10 +331,7 @@ def document_mention_response(
         entity_id=require_reference_uuid(references, "entity"),
         name=require_str(properties, "name"),
         information=require_str(properties, "information"),
-        aliases=[
-            require_str(alias, "alias")
-            for alias in sequence_of_mappings(properties, "aliases")
-        ],
+        aliases=require_alias_text_array(properties, "aliases"),
     )
 
 
@@ -499,6 +490,36 @@ def optional_sequence_of_mappings(
     if raw_value is None:
         return []
     return as_mapping_sequence(raw_value, key)
+
+
+def require_alias_text_array(
+    properties: WeaviateProperties | Mapping[str, WeaviateField],
+    key: str,
+) -> list[str]:
+    raw_value = value(properties, key)
+    return as_alias_text_array(raw_value, key)
+
+
+def optional_alias_text_array(
+    properties: WeaviateProperties | Mapping[str, WeaviateField],
+    key: str,
+) -> list[str]:
+    raw_value = properties.get(key)
+    if raw_value is None:
+        return []
+    return as_alias_text_array(raw_value, key)
+
+
+def as_alias_text_array(raw_value: WeaviateField, key: str) -> list[str]:
+    if not isinstance(raw_value, Sequence) or isinstance(raw_value, (str, bytes)):
+        raise TypeError(f"Property {key!r} is not a text array.")
+
+    aliases: list[str] = []
+    for item in raw_value:
+        if not isinstance(item, str):
+            raise TypeError(f"Property {key!r} contains a non-string alias item.")
+        aliases.append(item)
+    return aliases
 
 
 def as_mapping_sequence(

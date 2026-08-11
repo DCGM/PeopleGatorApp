@@ -78,7 +78,7 @@ async def create_page_mention(
         properties={
             "name": payload.name,
             "information": payload.information,
-            "aliases": [{"alias": alias} for alias in payload.aliases],
+            "aliases": payload.aliases,
             "polygons": [
                 {"points": [{"x": point.x, "y": point.y} for point in polygon.points]}
                 for polygon in payload.polygons
@@ -119,7 +119,7 @@ async def create_many_page_mentions(
             properties={
                 "name": payload.name,
                 "information": payload.information,
-                "aliases": [{"alias": alias} for alias in payload.aliases],
+                "aliases": payload.aliases,
                 "polygons": [
                     {
                         "points": [
@@ -267,7 +267,7 @@ async def create_document_mention(
         properties={
             "name": payload.name,
             "information": payload.information,
-            "aliases": [{"alias": alias} for alias in payload.aliases],
+            "aliases": payload.aliases,
         },
         references={
             "entity": payload.entity_id,

@@ -8,12 +8,12 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import MetadataQuery
 from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.types import WeaviateField
-from people_gator_api.services.weaviate_service.db_schema import ENTITY_COLLECTION
+
 from people_gator_api.schemas.search import EntitySearchResult
+from people_gator_api.services.weaviate_service.db_schema import ENTITY_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
-    optional_sequence_of_mappings,
+    optional_alias_text_array,
     optional_str,
-    require_str,
 )
 
 _DEFAULT_LIMIT = 20
@@ -26,14 +26,14 @@ async def search_entities_by_name_or_aliases(
     filters: FilterReturn | None = None,
     limit: int = _DEFAULT_LIMIT,
 ) -> list[EntitySearchResult]:
-    """Search Entity documents with BM25 across name and aliases.alias."""
+    """Search Entity documents with BM25 across name and aliases."""
     cleaned_name = query_name.strip()
     if not cleaned_name:
         return []
 
     response = await client.collections.get(ENTITY_COLLECTION).query.bm25(
         query=cleaned_name,
-        query_properties=["name", "aliases.alias"],
+        query_properties=["name", "aliases"],
         filters=filters,
         limit=limit,
         return_metadata=MetadataQuery(score=True),
@@ -41,7 +41,9 @@ async def search_entities_by_name_or_aliases(
     return [_entity_object_to_result(obj) for obj in response.objects]
 
 
-def _entity_object_to_result(entity_object: object) -> EntitySearchResult:
+def _entity_object_to_result(
+    entity_object: object,
+) -> EntitySearchResult:
     object_uuid = getattr(entity_object, "uuid")
     properties = getattr(entity_object, "properties")
     metadata = getattr(entity_object, "metadata", None)
@@ -52,10 +54,7 @@ def _entity_object_to_result(entity_object: object) -> EntitySearchResult:
         name=optional_str(properties, "name") or "",
         description=optional_str(properties, "description") or "",
         short_description=optional_str(properties, "short_description") or "",
-        aliases=[
-            require_str(alias, "alias")
-            for alias in optional_sequence_of_mappings(properties, "aliases")
-        ],
+        aliases=optional_alias_text_array(properties, "aliases"),
         matching_score=_metadata_score(metadata),
     )
 

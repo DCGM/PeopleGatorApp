@@ -109,7 +109,7 @@ async def create_entity(
             "name": payload.name,
             "description": payload.description,
             "short_description": payload.short_description,
-            "aliases": [{"alias": alias} for alias in (payload.aliases or [])],
+            "aliases": payload.aliases or [],
             "wikidata_id": payload.wikidata_id,
             "nlcr_authority_id": payload.nlcr_authority_id,
         },
