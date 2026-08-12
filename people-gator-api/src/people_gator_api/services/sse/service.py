@@ -72,6 +72,8 @@ class TopicBroker(Protocol):
 
     def stream(self, topic: Topic) -> AsyncIterator[ServerSentEvent]: ...
 
+    def close_topic(self, topic: Topic) -> None: ...
+
     async def publish(
         self,
         topic: Topic,
@@ -92,7 +94,10 @@ class TopicBroker(Protocol):
     def subscriber_counts(self) -> dict[tuple[str, ...], int]: ...
 
 
-def _new_subscriptions() -> dict[_TopicStr, set[asyncio.Queue[ServerSentEvent]]]:
+type _QueuedEvent = ServerSentEvent | None
+
+
+def _new_subscriptions() -> dict[_TopicStr, set[asyncio.Queue[_QueuedEvent]]]:
     return {}
 
 
@@ -104,8 +109,8 @@ class LocalTopicBroker:
     intentionally unbounded in this initial implementation; durable or
     distributed delivery belongs in a future ``TopicBroker`` implementation.
     """
-
-    _subscriptions: dict[_TopicStr, set[asyncio.Queue[ServerSentEvent]]] = field(
+    _max_notification_depth: int = 1
+    _subscriptions: dict[_TopicStr, set[asyncio.Queue[_QueuedEvent]]] = field(
         default_factory=_new_subscriptions,
         init=False,
     )
@@ -121,6 +126,12 @@ class LocalTopicBroker:
             for topic, subscribers in self._subscriptions.items()
         }
 
+    def close_topic(self, topic: Topic) -> None:
+        """Gracefully terminate current subscribers of an exact topic."""
+
+        for queue in tuple(self._subscriptions.get(_topic_to_str(topic), ())):
+            queue.put_nowait(None)
+
     async def publish(
         self,
         topic: Topic,
@@ -134,10 +145,21 @@ class LocalTopicBroker:
         if None in topic:
             await asyncio.sleep(0)  # yield to allow consumers to run
             return  # don't publish to topics with None in them
-        for i in range(len(topic), 0, -1):
-            ancestor: tuple[str | uuid.UUID | None, ...] = topic[:i]
-            for queue in tuple(self._subscriptions.get(_topic_to_str(ancestor), ())):
-                queue.put_nowait(ServerSentEvent(data=data, event=event, id=id, retry=retry, comment=comment))
+        _topic_str = _topic_to_str(topic)
+        _event = ServerSentEvent(
+            data=data,
+            event=event,
+            id=id,
+            retry=retry,
+            comment=comment,
+        )
+        for i in range(0, min(len(topic), self._max_notification_depth)):
+            ancestor: tuple[str, ...] = _topic_str[:-i] if i > 0 else _topic_str
+            queues = self._subscriptions.get(ancestor)
+            if queues is None:
+                continue
+            for queue in queues:
+                queue.put_nowait(_event)
         await asyncio.sleep(0)  # yield to allow consumers to run
 
     async def publish_to_topics(
@@ -162,7 +184,7 @@ class LocalTopicBroker:
         self, topic: Topic
     ) -> AsyncGenerator[AsyncIterator[ServerSentEvent], None]:
         """Register a consumer and clean it up when the context exits."""
-        queue: asyncio.Queue[ServerSentEvent] = asyncio.Queue()
+        queue: asyncio.Queue[_QueuedEvent] = asyncio.Queue()
         self._subscriptions.setdefault(_topic_to_str(topic), set()).add(queue)
         try:
             yield self._events(queue)
@@ -174,17 +196,21 @@ class LocalTopicBroker:
                 if not subscribers:
                     del self._subscriptions[str_topic]
 
-    async def _events(self, queue: asyncio.Queue[ServerSentEvent]) -> AsyncIterator[ServerSentEvent]:
+    async def _events(self, queue: asyncio.Queue[_QueuedEvent]) -> AsyncIterator[ServerSentEvent]:
         while True:
-            yield await queue.get()
+            event = await queue.get()
+            if event is None:
+                return
+            yield event
 
 
-_sse_broker: TopicBroker = LocalTopicBroker()
-
+_sse_broker: TopicBroker | None = None
 
 def get_sse_broker() -> TopicBroker:
     """Return the application-level broker dependency."""
-
+    global _sse_broker
+    if _sse_broker is None:
+        _sse_broker = LocalTopicBroker()
     return _sse_broker
 
 type BrokerDependency = Annotated[TopicBroker, Depends(get_sse_broker)]

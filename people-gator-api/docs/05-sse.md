@@ -355,6 +355,16 @@ The local broker performs these steps:
 
 The SSE route uses this lifecycle directly. When the HTTP client disconnects, the async generator is closed and the subscription cleanup runs.
 
+### Closing a topic
+
+The broker can terminate all currently active subscribers of one exact topic:
+
+```python
+broker.close_topic(("entities", entity_id))
+```
+
+`close_topic()` places an internal close sentinel into each subscriber queue. The stream ends normally, and the subscription context removes each subscriber from the broker. Closure applies only to the exact topic; subscribers of ancestor topics are not closed. Closing a topic does not prevent a later client from subscribing to the same topic.
+
 ## Delivery Semantics
 
 The local broker currently provides live, in-memory fan-out with these properties:

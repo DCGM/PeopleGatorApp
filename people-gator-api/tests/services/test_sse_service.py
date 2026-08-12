@@ -39,3 +39,16 @@ async def test_closing_subscription_removes_consumer() -> None:
         assert broker.subscriber_count(topic) == 1
 
     assert broker.subscriber_count(topic) == 0
+
+
+@pytest.mark.asyncio
+async def test_closing_topic_terminates_active_stream() -> None:
+    broker = LocalTopicBroker()
+    topic: Topic = ("entities", "123")
+
+    async with broker.subscribe(topic) as events:
+        broker.close_topic(topic)
+        with pytest.raises(StopAsyncIteration):
+            await anext(events)
+
+    assert broker.subscriber_count(topic) == 0
