@@ -52,6 +52,8 @@ async def list_page_mentions_route(
     principal: BrowseUserDependency,
     document_mention_id: uuid.UUID | None = None,
     source_id: uuid.UUID | None = None,
+    principal_id: uuid.UUID | None = None,
+    name: str | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> PageMentionListResponse:
@@ -62,6 +64,8 @@ async def list_page_mentions_route(
         source_id,
         after_id,
         limit,
+        owner_principal_id=principal_id,
+        name=name,
     )
 
 
@@ -123,6 +127,8 @@ async def list_document_mentions_route(
     principal: BrowseUserDependency,
     entity_id: uuid.UUID | None = None,
     source_id: uuid.UUID | None = None,
+    principal_id: uuid.UUID | None = None,
+    name: str | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> DocumentMentionListResponse:
@@ -133,6 +139,8 @@ async def list_document_mentions_route(
         source_id,
         after_id,
         limit,
+        owner_principal_id=principal_id,
+        name=name,
     )
 
 
@@ -212,6 +220,7 @@ async def list_faces_route(
     principal: BrowseUserDependency,
     source_id: uuid.UUID | None = None,
     entity_id: uuid.UUID | None = None,
+    principal_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> FaceListResponse:
@@ -222,6 +231,7 @@ async def list_faces_route(
         entity_id,
         after_id,
         limit,
+        owner_principal_id=principal_id,
     )
 
 

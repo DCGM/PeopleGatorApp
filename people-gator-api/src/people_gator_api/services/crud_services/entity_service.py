@@ -9,6 +9,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -27,6 +28,7 @@ from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
     entity_response,
     fetch_collection_page_with_total_count,
+    reference_id_filter,
     upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
@@ -35,11 +37,37 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 
 logger = logging.getLogger(__name__)
 
+NON_FILTERABLE_ENTITY_PROPERTIES: frozenset[str] = frozenset(
+    {"name", "aliases", "description", "short_description"}
+)
+FILTERABLE_ENTITY_PROPERTIES: frozenset[str] = frozenset(
+    {"entity_type", "wikidata_id", "nlcr_authority_id"}
+)
+
 
 def _is_flat_float_vector(
     value: list[float] | list[list[float]],
 ) -> TypeGuard[list[float]]:
     return all(isinstance(item, (int, float)) for item in value)
+
+
+def _build_entity_filters(
+    entity_type: EntityType | None,
+    wikidata_id: str | None,
+    nlcr_authority_id: str | None,
+    principal_id: uuid.UUID | None,
+) -> list[FilterReturn]:
+    filters: list[FilterReturn] = []
+
+    if entity_type is not None:
+        filters.append(Filter.by_property("entity_type").equal(entity_type.value))
+    if wikidata_id is not None:
+        filters.append(Filter.by_property("wikidata_id").equal(wikidata_id))
+    if nlcr_authority_id is not None:
+        filters.append(Filter.by_property("nlcr_authority_id").equal(nlcr_authority_id))
+    if principal_id is not None:
+        filters.append(reference_id_filter(link_on="principal", reference_id=principal_id))
+    return filters
 
 
 # ---------------------------------------------------------------------------
@@ -53,10 +81,29 @@ async def list_entities(
     principal_id: uuid.UUID,
     after_id: uuid.UUID | None,
     limit: int,
+    entity_type: EntityType | None = None,
+    wikidata_id: str | None = None,
+    nlcr_authority_id: str | None = None,
+    owner_principal_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
     del principal_id
-    logger.debug("list_entities called", extra={"after_id": after_id, "limit": limit})
-    filters: list[FilterReturn] = []
+    filters = _build_entity_filters(
+        entity_type=entity_type,
+        wikidata_id=wikidata_id,
+        nlcr_authority_id=nlcr_authority_id,
+        principal_id=owner_principal_id,
+    )
+    logger.debug(
+        "list_entities called",
+        extra={
+            "after_id": after_id,
+            "limit": limit,
+            "entity_type": entity_type.value if entity_type is not None else None,
+            "wikidata_id": wikidata_id,
+            "nlcr_authority_id": nlcr_authority_id,
+            "owner_principal_id": owner_principal_id,
+        },
+    )
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         ENTITY_COLLECTION,

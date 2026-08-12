@@ -35,6 +35,11 @@ async def list_sources(
     source_type: SourceKind | None,
     after_id: uuid.UUID | None,
     limit: int,
+    *,
+    uri: str | None = None,
+    library: str | None = None,
+    document: uuid.UUID | None = None,
+    page: uuid.UUID | None = None,
 ) -> SourceListResponse:
     del principal_id
     logger.debug(
@@ -43,11 +48,23 @@ async def list_sources(
             "source_type": source_type.value if source_type is not None else None,
             "after_id": after_id,
             "limit": limit,
+            "uri": uri,
+            "library": library,
+            "document": document,
+            "page": page,
         },
     )
     filters: list[FilterReturn] = []
     if source_type is not None:
         filters.append(Filter.by_property("source_type").equal(source_type.value))
+    if uri is not None:
+        filters.append(Filter.by_property("uri").equal(uri))
+    if library is not None:
+        filters.append(Filter.by_property("metadata__library").equal(library))
+    if document is not None:
+        filters.append(Filter.by_property("metadata__document").equal(str(document)))
+    if page is not None:
+        filters.append(Filter.by_property("metadata__page").equal(str(page)))
 
     objects, total_count = await fetch_collection_page_with_total_count(
         client,

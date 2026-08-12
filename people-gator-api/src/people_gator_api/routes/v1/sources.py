@@ -40,6 +40,10 @@ async def list_sources_route(
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
     source_type: SourceKind | None = None,
+    uri: str | None = None,
+    library: str | None = None,
+    document: uuid.UUID | None = None,
+    page: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
@@ -49,6 +53,10 @@ async def list_sources_route(
         source_type,
         after_id,
         limit,
+        uri=uri,
+        library=library,
+        document=document,
+        page=page,
     )
 
 

@@ -6,6 +6,7 @@ from typing import TypeGuard
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.data import DataObject
+from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.internal import ReferenceInputs
 from weaviate.collections.classes.types import WeaviateProperties
@@ -195,6 +196,9 @@ async def list_page_mentions(
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
+    *,
+    owner_principal_id: uuid.UUID | None = None,
+    name: str | None = None,
 ) -> PageMentionListResponse:
     del principal_id
     logger.debug(
@@ -204,6 +208,8 @@ async def list_page_mentions(
             "source_id": source_id,
             "after_id": after_id,
             "limit": limit,
+            "owner_principal_id": owner_principal_id,
+            "name": name,
         },
     )
     filters: list[FilterReturn] = []
@@ -215,6 +221,12 @@ async def list_page_mentions(
         )
     if source_id is not None:
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
+    if owner_principal_id is not None:
+        filters.append(
+            reference_id_filter(link_on="principal", reference_id=owner_principal_id)
+        )
+    if name is not None:
+        filters.append(Filter.by_property("name").equal(name))
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         PAGE_MENTION_COLLECTION,
@@ -401,6 +413,9 @@ async def list_document_mentions(
     source_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
+    *,
+    owner_principal_id: uuid.UUID | None = None,
+    name: str | None = None,
 ) -> DocumentMentionListResponse:
     del principal_id
     logger.debug(
@@ -410,6 +425,8 @@ async def list_document_mentions(
             "source_id": source_id,
             "after_id": after_id,
             "limit": limit,
+            "owner_principal_id": owner_principal_id,
+            "name": name,
         },
     )
     filters: list[FilterReturn] = []
@@ -417,6 +434,12 @@ async def list_document_mentions(
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
     if source_id is not None:
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
+    if owner_principal_id is not None:
+        filters.append(
+            reference_id_filter(link_on="principal", reference_id=owner_principal_id)
+        )
+    if name is not None:
+        filters.append(Filter.by_property("name").equal(name))
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         DOCUMENT_MENTION_COLLECTION,
@@ -594,6 +617,8 @@ async def list_faces(
     entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
+    *,
+    owner_principal_id: uuid.UUID | None = None,
 ) -> FaceListResponse:
     del principal_id
     logger.debug(
@@ -603,6 +628,7 @@ async def list_faces(
             "entity_id": entity_id,
             "after_id": after_id,
             "limit": limit,
+            "owner_principal_id": owner_principal_id,
         },
     )
     filters: list[FilterReturn] = []
@@ -610,6 +636,10 @@ async def list_faces(
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
     if entity_id is not None:
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
+    if owner_principal_id is not None:
+        filters.append(
+            reference_id_filter(link_on="principal", reference_id=owner_principal_id)
+        )
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         FACE_COLLECTION,

@@ -9,6 +9,7 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyRequest,
     EntityPatchRequest,
 )
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.services.crud_services import entity_service
 
 
@@ -233,3 +234,44 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors(
         "name": [0.1, 0.2],
         "fulltext": [0.3, 0.4],
     }
+
+
+def test_parse_exact_property_filters_rejects_non_filterable_text_fields() -> None:
+    with pytest.raises(ValueError, match="Filtering by 'name' is not supported"):
+        entity_service._parse_exact_property_filters(["name:John Doe"])
+
+
+def test_build_entity_filters_rejects_conflicting_entity_type_filters() -> None:
+    with pytest.raises(ValueError, match="Conflicting entity_type filters"):
+        entity_service._build_entity_filters(
+            entity_type=EntityType.person,
+            wikidata_id=None,
+            nlcr_authority_id=None,
+            principal_id=None,
+            exact_filters=["entity_type:place"],
+        )
+
+
+def test_build_entity_filters_rejects_invalid_principal_id_exact_filter() -> None:
+    with pytest.raises(
+        ValueError,
+        match="principal_id exact_filter must be a valid UUID",
+    ):
+        entity_service._build_entity_filters(
+            entity_type=None,
+            wikidata_id=None,
+            nlcr_authority_id=None,
+            principal_id=None,
+            exact_filters=["principal_id:not-a-uuid"],
+        )
+
+
+def test_build_entity_filters_supports_exact_identity_filters() -> None:
+    filters = entity_service._build_entity_filters(
+        entity_type=EntityType.person,
+        wikidata_id="Q42",
+        nlcr_authority_id="A100",
+        principal_id=uuid.uuid4(),
+        exact_filters=None,
+    )
+    assert len(filters) == 4

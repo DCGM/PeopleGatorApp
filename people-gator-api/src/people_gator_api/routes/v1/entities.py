@@ -9,6 +9,7 @@ from fastapi import (
     status,
 )
 
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -46,10 +47,26 @@ router = APIRouter(tags=["entities"])
 async def list_entities_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    entity_type: EntityType | None = None,
+    wikidata_id: str | None = None,
+    nlcr_authority_id: str | None = None,
+    principal_id: uuid.UUID | None = None,
     limit: int = 50,
     after_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
-    return await list_entities(session, principal.principal_id, after_id, limit)
+    try:
+        return await list_entities(
+            session,
+            principal.principal_id,
+            after_id,
+            limit,
+            entity_type=entity_type,
+            wikidata_id=wikidata_id,
+            nlcr_authority_id=nlcr_authority_id,
+            owner_principal_id=principal_id,
+        )
+    except ValueError as exc:
+        raise_api_error(422, "invalid_filter", str(exc))
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)
