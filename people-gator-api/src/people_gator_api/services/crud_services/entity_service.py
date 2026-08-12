@@ -26,7 +26,6 @@ from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
     entity_response,
     fetch_collection_page_with_total_count,
-    require_reference_uuid,
     upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
@@ -150,6 +149,7 @@ async def create_entity(
 async def patch_entity(
     client: WeaviateAsyncClient,
     entity_id: uuid.UUID,
+    principal_id: uuid.UUID,
     payload: EntityPatchRequest,
 ) -> EntityResponse | None:
     logger.info("patch_entity called", extra={"entity_id": entity_id})
@@ -184,7 +184,7 @@ async def patch_entity(
         entity_id,
         properties=properties,
         references={
-            "principal": require_reference_uuid(response.references, "principal"),
+            "principal": principal_id,
         },
         vector=vector_payload,
     )

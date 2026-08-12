@@ -119,8 +119,7 @@ async def patch_entity_route(
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
 ) -> EntityResponse:
-    del principal
-    entity = await patch_entity(session, entity_id, payload)
+    entity = await patch_entity(session, entity_id, principal.principal_id, payload)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
@@ -130,7 +129,9 @@ async def patch_entity_route(
 async def delete_entity_route(
     entity_id: uuid.UUID,
     session: WeaviateSessionDependency,
+    principal: AdminUserDependency,
 ) -> None:
+    del principal
     deleted = await delete_entity(session, entity_id)
     if not deleted:
         raise_api_error(404, "not_found", "Entity not found")
@@ -146,4 +147,5 @@ async def delete_entities_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
 ) -> EntityDeleteManyResponse:
+    del principal
     return await delete_entities(session, payload)
