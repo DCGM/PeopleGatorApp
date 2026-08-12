@@ -1,5 +1,6 @@
 """Annotation endpoints for the current collection model."""
 
+import asyncio
 import uuid
 
 from fastapi import (
@@ -40,6 +41,7 @@ from people_gator_api.services.crud_services.annotation_service import (
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.services.sse import BrokerDependency, SseEventType
 
 router = APIRouter(tags=["annotations"])
 
@@ -72,8 +74,33 @@ async def create_page_mention_route(
     payload: PageMentionCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
+    broker: BrokerDependency,
 ) -> PageMentionResponse:
-    return await create_page_mention(session, payload, principal.principal_id)
+    page_mention = await create_page_mention(session, payload, principal.principal_id)
+    asyncio.create_task(broker.publish_to_topics(
+        ("page-mentions", page_mention.page_mention_id),
+        (
+            "document-mentions",
+            page_mention.document_mention_id,
+            "page-mentions",
+            page_mention.page_mention_id,
+        ),
+        (
+            "sources",
+            page_mention.source_id,
+            "page-mentions",
+            page_mention.page_mention_id,
+        ),
+        (
+            "principals",
+            page_mention.principal_id,
+            "page-mentions",
+            page_mention.page_mention_id,
+        ),
+        event=SseEventType.PAGE_MENTION_CREATED,
+        data=page_mention,
+    ))
+    return page_mention
 
 
 @router.get("/page-mentions/{page_mention_id}", response_model=PageMentionResponse)
@@ -118,8 +145,18 @@ async def create_document_mention_route(
     payload: DocumentMentionCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
+    broker: BrokerDependency,
 ) -> DocumentMentionResponse:
-    return await create_document_mention(session, payload, principal.principal_id)
+    document_mention = await create_document_mention(session, payload, principal.principal_id)
+    asyncio.create_task(broker.publish_to_topics(
+        ("document-mentions", document_mention.document_mention_id),
+        ("entities", document_mention.entity_id, "document-mentions", document_mention.document_mention_id),
+        ("sources", document_mention.source_id, "document-mentions", document_mention.document_mention_id),
+        ("principals", document_mention.principal_id, "document-mentions", document_mention.document_mention_id),
+        event=SseEventType.DOCUMENT_MENTION_CREATED,
+        data=document_mention,
+    ))
+    return document_mention
 
 
 @router.get(
@@ -148,6 +185,7 @@ async def patch_document_mention_entity_route(
     payload: DocumentMentionEntityPatchRequest,
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
+    broker: BrokerDependency,
 ) -> DocumentMentionResponse:
     item = await patch_document_mention_entity(
         session,
@@ -157,6 +195,14 @@ async def patch_document_mention_entity_route(
     )
     if item is None:
         raise_api_error(404, "not_found", "Document mention not found")
+    asyncio.create_task(broker.publish_to_topics(
+        ("document-mentions", item.document_mention_id),
+        ("entities", item.entity_id, "document-mentions", item.document_mention_id),
+        ("sources", item.source_id, "document-mentions", item.document_mention_id),
+        ("principals", item.principal_id, "document-mentions", item.document_mention_id),
+        event=SseEventType.DOCUMENT_MENTION_UPDATED,
+        data=item,
+    ))
     return item
 
 
@@ -184,8 +230,18 @@ async def create_face_route(
     payload: FaceCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
+    broker: BrokerDependency,
 ) -> FaceResponse:
-    return await create_face(session, payload, principal.principal_id)
+    face = await create_face(session, payload, principal.principal_id)
+    asyncio.create_task(broker.publish_to_topics(
+        ("faces", face.detection_id),
+        ("entities", face.entity_id, "faces", face.detection_id),
+        ("principals", face.principal_id, "faces", face.detection_id),
+        ("sources", face.source_id, "faces", face.detection_id),
+        event=SseEventType.FACE_CREATED,
+        data=face,
+    ))
+    return face
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)
@@ -206,6 +262,7 @@ async def patch_face_entity_route(
     payload: FaceEntityPatchRequest,
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
+    broker: BrokerDependency,
 ) -> FaceResponse:
     face = await patch_face_entity(
         session,
@@ -215,4 +272,12 @@ async def patch_face_entity_route(
     )
     if face is None:
         raise_api_error(404, "not_found", "Face not found")
+    asyncio.create_task(broker.publish_to_topics(
+        ("faces", face.detection_id),
+        ("entities", face.entity_id, "faces", face.detection_id),
+        ("principals", face.principal_id, "faces", face.detection_id),
+        ("sources", face.source_id, "faces", face.detection_id),
+        event=SseEventType.FACE_UPDATED,
+        data=face,
+    ))
     return face

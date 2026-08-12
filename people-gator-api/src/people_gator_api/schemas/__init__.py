@@ -41,6 +41,8 @@ from people_gator_api.schemas.sources import (
     SourceListResponse,
     SourceResponse,
 )
+from people_gator_api.schemas.enums import PrincipalType
+from people_gator_api.schemas.sse import SseStatsResponse, SseTopicStatsResponse
 
 __all__ = [
     "BoundingBox",
@@ -64,6 +66,7 @@ __all__ = [
     "UserResponse",
     "ModelAgentCreateRequest",
     "ModelAgentResponse",
+    "PrincipalType",
     "PrincipalCreateRequest",
     "PrincipalPatchRequest",
     "PrincipalResponse",
@@ -78,4 +81,6 @@ __all__ = [
     "SourceCreateRequest",
     "SourceListResponse",
     "SourceResponse",
+    "SseStatsResponse",
+    "SseTopicStatsResponse",
 ]

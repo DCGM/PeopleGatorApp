@@ -8,6 +8,7 @@ This repository keeps specification content in focused documents to avoid contra
 2. Entity relations: `docs/02-entity-relations.md`
 3. Architecture specification: `docs/03-architecture-spec.md`
 4. API contract: `docs/04-api-contract.md`
+5. Server-sent events: `docs/05-sse.md`
 
 ## Quick Summary
 
