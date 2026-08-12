@@ -114,7 +114,7 @@ async def create_model_agent_route(
     broker: BrokerDependency,
 ) -> ModelAgentResponse:
     model_agent = await create_model_agent(session, payload, principal.principal_id)
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("principals", model_agent.principal_id),
         ("model-agents", model_agent.principal_id),
         event=SseEventType.MODEL_AGENT_CREATED,
@@ -155,7 +155,7 @@ async def patch_model_agent_route(
     )
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("principals", updated_principal.principal_id),
         ("model-agents", updated_principal.principal_id),
         event=SseEventType.MODEL_AGENT_UPDATED,
@@ -174,7 +174,7 @@ async def delete_model_agent_route(
     deleted = await delete_model_agent(session, principal.principal_id, principal_id)
     if not deleted:
         raise_api_error(404, "not_found", "Principal not found")
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("principals", principal_id),
         ("model-agents", principal_id),
         event=SseEventType.MODEL_AGENT_DELETED,
@@ -231,7 +231,7 @@ async def patch_user_route(
     )
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("principals", updated_principal.principal_id),
         ("users", updated_principal.principal_id),
         event=SseEventType.USER_UPDATED,

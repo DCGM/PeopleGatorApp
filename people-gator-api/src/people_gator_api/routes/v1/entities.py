@@ -91,7 +91,7 @@ async def create_entity_route(
     broker: BrokerDependency,
 ) -> EntityResponse:
     entity = await create_entity(session, payload, principal.principal_id)
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("entities", entity.entity_id),
         ("principals", entity.principal_id, "entities", entity.entity_id),
         event=SseEventType.ENTITY_CREATED,
@@ -99,19 +99,6 @@ async def create_entity_route(
     ))
     return entity
 
-
-async def _publish_batch_of_entities(entities: list[EntityResponse], broker: BrokerDependency) -> None:
-    await asyncio.gather(
-        *(
-            broker.publish_to_topics(
-                ("entities", entity.entity_id),
-                ("principals", entity.principal_id, "entities", entity.entity_id),
-                event=SseEventType.ENTITY_CREATED,
-                data=entity,
-            )
-            for entity in entities
-        )
-    )
 
 @router.post(
     "/entities:batch", response_model=list[EntityResponse], status_code=status.HTTP_201_CREATED
@@ -126,7 +113,14 @@ async def create_entity_batch_route(
         for item in iterable:
             yield item
     entities = await create_entity_batch(session, async_list(payload), principal.principal_id)
-    asyncio.create_task(_publish_batch_of_entities(entities, broker))
+    broker.publish_batch_task(batch=(
+        (topic, SseEventType.ENTITY_CREATED, entity)
+        for entity in entities
+        for topic in (
+            ("entities", entity.entity_id),
+            ("principals", entity.principal_id, "entities", entity.entity_id),
+        )
+    ))
     return entities
 
 
@@ -141,12 +135,12 @@ async def patch_entity_route(
     entity = await patch_entity(session, entity_id, principal.principal_id, payload)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("entities", entity.entity_id),
         ("principals", entity.principal_id, "entities", entity.entity_id),
         event=SseEventType.ENTITY_UPDATED,
         data=entity,
-    ))
+    )
     return entity
 
 
@@ -164,12 +158,12 @@ async def delete_entity_route(
     deleted = await delete_entity(session, entity_id)
     if not deleted:
         raise_api_error(404, "not_found", "Entity not found")
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("entities", entity_id),
         ("principals", entity.principal_id, "entities", entity_id),
         event=SseEventType.ENTITY_DELETED,
         data=DeletedResourceEvent(resource_id=entity_id),
-    ))
+    )
 
 
 @router.delete(
@@ -185,9 +179,9 @@ async def delete_entities_route(
 ) -> EntityDeleteManyResponse:
     del principal
     response = await delete_entities(session, payload)
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("entities",),
         event=SseEventType.ENTITY_DELETED,
         data=response,
-    ))
+    )
     return response

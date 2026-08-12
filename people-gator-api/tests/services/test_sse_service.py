@@ -18,7 +18,7 @@ async def test_leaf_events_reach_leaf_and_ancestor_consumers() -> None:
 
     async with broker.subscribe(collection) as collection_events:
         async with broker.subscribe(resource) as resource_events:
-            await broker.publish(resource, SseEventType.ENTITY_UPDATED, event_data)
+            await broker.publish_single(resource, SseEventType.ENTITY_UPDATED, event_data)
             collection_event = await anext(collection_events)
             resource_event = await anext(resource_events)
 

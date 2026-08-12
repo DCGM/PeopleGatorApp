@@ -7,7 +7,7 @@ not provide replay or durable delivery.
 """
 
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Iterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -74,7 +74,7 @@ class TopicBroker(Protocol):
 
     def close_topic(self, topic: Topic) -> None: ...
 
-    async def publish(
+    async def publish_single(
         self,
         topic: Topic,
         event: SseEventType,
@@ -84,12 +84,29 @@ class TopicBroker(Protocol):
         comment: str | None = None,
     ) -> None: ...
 
-    async def publish_to_topics(
+    async def publish(
         self,
         *topics: Topic,
         event: SseEventType,
         data: BaseModel,
     ) -> None: ...
+    
+    async def publish_batch(
+        self,
+        batch: Iterable[tuple[Topic, SseEventType, BaseModel]],
+    ) -> None: ...
+
+    def publish_batch_task(
+        self,
+        batch: Iterable[tuple[Topic, SseEventType, BaseModel]],
+    ) -> asyncio.Task[None]: ...
+
+    def publish_task(
+        self,
+        *topics: Topic,
+        event: SseEventType,
+        data: BaseModel,
+    ) -> asyncio.Task[None]: ...
 
     def subscriber_counts(self) -> dict[tuple[str, ...], int]: ...
 
@@ -132,7 +149,7 @@ class LocalTopicBroker:
         for queue in tuple(self._subscriptions.get(_topic_to_str(topic), ())):
             queue.put_nowait(None)
 
-    async def publish(
+    async def publish_single(
         self,
         topic: Topic,
         event: SseEventType,
@@ -162,7 +179,7 @@ class LocalTopicBroker:
                 queue.put_nowait(_event)
         await asyncio.sleep(0)  # yield to allow consumers to run
 
-    async def publish_to_topics(
+    async def publish(
         self,
         *topics: Topic,
         event: SseEventType,
@@ -170,7 +187,66 @@ class LocalTopicBroker:
     ) -> None:
         """Publish one typed event concurrently to each supplied topic."""
 
-        await asyncio.gather(*(self.publish(topic, event, data) for topic in topics))
+        await asyncio.gather(*(self.publish_single(topic, event, data) for topic in topics))
+
+    def publish_task(
+        self,
+        *topics: Topic,
+        event: SseEventType,
+        data: BaseModel,
+    ) -> asyncio.Task[None]:
+        """Schedule publish_to_topics as a fire-and-forget task.
+
+        Returns the created task so callers can optionally track or cancel it.
+        """
+
+        return asyncio.ensure_future(
+            self.publish(*topics, event=event, data=data)
+        )
+
+    async def publish_batch(
+        self,
+        batch: Iterable[tuple[Topic, SseEventType, BaseModel]],
+    ) -> None:
+        """Publish each (topic, event, data) triple in the batch concurrently."""
+        # first filter batch by topic taking into account the max_notification_depth
+        pipelined_batch = filter(
+            lambda topic_event_data: None not in topic_event_data[0],
+            batch,
+        ) # filter out topics with None in them
+        pipelined_batch = map(
+            lambda topic_event_data: (_topic_to_str(topic_event_data[0]), topic_event_data[1], topic_event_data[2]),
+            batch,
+        ) # convert topics to strings for easier filtering
+        pipelined_batch = (
+            (topic[:-i], event, data)
+            for topic, event, data in pipelined_batch
+            for i in range(0, min(len(topic), self._max_notification_depth))
+        ) # create ancestor topics up to max_notification_depth
+        pipelined_batch = filter(
+            lambda topic_event_data: topic_event_data[0] in self._subscriptions,
+            pipelined_batch,
+        ) # filter out topics that have no subscribers
+        for ancestor, event, data in pipelined_batch:
+            queues = self._subscriptions[ancestor]
+            for queue in queues:
+                queue.put_nowait(ServerSentEvent(data=data, event=event))
+        await asyncio.sleep(0)  # yield to allow consumers to run
+        
+
+    def publish_batch_task(
+        self,
+        batch: Iterable[tuple[Topic, SseEventType, BaseModel]],
+    ) -> asyncio.Task[None]:
+        """Schedule publish_batch as a fire-and-forget task.
+
+        Returns the created task so callers can optionally track or cancel it.
+        The batch iterable is consumed eagerly before the task is scheduled so
+        that a generator passed by the caller is not exhausted at an unexpected
+        time.
+        """
+
+        return asyncio.ensure_future(self.publish_batch(list(batch)))
 
     async def stream(self, topic: Topic) -> AsyncIterator[ServerSentEvent]:
         """Yield events for a topic until the consumer disconnects."""

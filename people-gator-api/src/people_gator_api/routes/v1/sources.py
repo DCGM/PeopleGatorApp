@@ -84,7 +84,7 @@ async def create_source_route(
     source, created = await create_source(session, payload, principal.principal_id)
     if not created:
         raise_api_error(409, "already_exists", "Source already registered")
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("sources", source.source_id),
         event=SseEventType.SOURCE_CREATED,
         data=source,
@@ -102,7 +102,7 @@ async def delete_source_route(
     deleted = await delete_source(session, principal.principal_id, source_id)
     if not deleted:
         raise_api_error(404, "not_found", "Source not found")
-    asyncio.create_task(broker.publish_to_topics(
+    asyncio.create_task(broker.publish(
         ("sources", source_id),
         event=SseEventType.SOURCE_DELETED,
         data=DeletedResourceEvent(resource_id=source_id),

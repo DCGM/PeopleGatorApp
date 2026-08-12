@@ -1,6 +1,5 @@
 """Annotation endpoints for the current collection model."""
 
-import asyncio
 import uuid
 
 from fastapi import (
@@ -81,29 +80,14 @@ async def create_page_mention_route(
     broker: BrokerDependency,
 ) -> PageMentionResponse:
     page_mention = await create_page_mention(session, payload, principal.principal_id)
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("page-mentions", page_mention.page_mention_id),
-        (
-            "document-mentions",
-            page_mention.document_mention_id,
-            "page-mentions",
-            page_mention.page_mention_id,
-        ),
-        (
-            "sources",
-            page_mention.source_id,
-            "page-mentions",
-            page_mention.page_mention_id,
-        ),
-        (
-            "principals",
-            page_mention.principal_id,
-            "page-mentions",
-            page_mention.page_mention_id,
-        ),
+        ("document-mentions", page_mention.document_mention_id, "page-mentions", page_mention.page_mention_id),
+        ("sources", page_mention.source_id, "page-mentions", page_mention.page_mention_id),
+        ("principals", page_mention.principal_id, "page-mentions", page_mention.page_mention_id),
         event=SseEventType.PAGE_MENTION_CREATED,
         data=page_mention,
-    ))
+    )
     return page_mention
 
 
@@ -156,14 +140,14 @@ async def create_document_mention_route(
     broker: BrokerDependency,
 ) -> DocumentMentionResponse:
     document_mention = await create_document_mention(session, payload, principal.principal_id)
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("document-mentions", document_mention.document_mention_id),
         ("entities", document_mention.entity_id, "document-mentions", document_mention.document_mention_id),
         ("sources", document_mention.source_id, "document-mentions", document_mention.document_mention_id),
         ("principals", document_mention.principal_id, "document-mentions", document_mention.document_mention_id),
         event=SseEventType.DOCUMENT_MENTION_CREATED,
         data=document_mention,
-    ))
+    )
     return document_mention
 
 
@@ -203,14 +187,14 @@ async def patch_document_mention_entity_route(
     )
     if item is None:
         raise_api_error(404, "not_found", "Document mention not found")
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("document-mentions", item.document_mention_id),
         ("entities", item.entity_id, "document-mentions", item.document_mention_id),
         ("sources", item.source_id, "document-mentions", item.document_mention_id),
         ("principals", item.principal_id, "document-mentions", item.document_mention_id),
         event=SseEventType.DOCUMENT_MENTION_UPDATED,
         data=item,
-    ))
+    )
     return item
 
 
@@ -243,14 +227,14 @@ async def create_face_route(
     broker: BrokerDependency,
 ) -> FaceResponse:
     face = await create_face(session, payload, principal.principal_id)
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("faces", face.detection_id),
         ("entities", face.entity_id, "faces", face.detection_id),
         ("principals", face.principal_id, "faces", face.detection_id),
         ("sources", face.source_id, "faces", face.detection_id),
         event=SseEventType.FACE_CREATED,
         data=face,
-    ))
+    )
     return face
 
 
@@ -282,12 +266,12 @@ async def patch_face_entity_route(
     )
     if face is None:
         raise_api_error(404, "not_found", "Face not found")
-    asyncio.create_task(broker.publish_to_topics(
+    broker.publish_task(
         ("faces", face.detection_id),
         ("entities", face.entity_id, "faces", face.detection_id),
         ("principals", face.principal_id, "faces", face.detection_id),
         ("sources", face.source_id, "faces", face.detection_id),
         event=SseEventType.FACE_UPDATED,
         data=face,
-    ))
+    )
     return face
