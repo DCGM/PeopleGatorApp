@@ -1,5 +1,6 @@
 """Entity endpoints (spec §2.1)."""
 
+from collections.abc import AsyncGenerator
 import uuid
 
 from fastapi import (
@@ -30,6 +31,7 @@ from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.entity_service import (
     create_entity,
+    create_entity_batch,
     delete_entities,
     delete_entity,
     get_entity,
@@ -110,6 +112,20 @@ async def create_entity_route(
     principal: AnnotatorUserDependency,
 ) -> EntityResponse:
     return await create_entity(session, payload, principal.principal_id)
+
+
+@router.post(
+    "/entities:batch", response_model=list[EntityResponse], status_code=status.HTTP_201_CREATED
+)
+async def create_entity_batch_route(
+    payload: list[EntityCreateRequest],
+    session: WeaviateSessionDependency,
+    principal: AnnotatorUserDependency,
+) -> list[EntityResponse]:
+    async def async_list(iterable: list[EntityCreateRequest]) -> AsyncGenerator[EntityCreateRequest, None]:
+        for item in iterable:
+            yield item
+    return await create_entity_batch(session, async_list(payload), principal.principal_id)
 
 
 @router.patch("/entities/{entity_id}", response_model=EntityResponse)

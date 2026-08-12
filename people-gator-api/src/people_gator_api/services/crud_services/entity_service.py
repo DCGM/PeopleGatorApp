@@ -3,6 +3,7 @@
 import logging
 import uuid
 from typing import TypeGuard
+from collections.abc import AsyncGenerator
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
@@ -143,6 +144,54 @@ async def create_entity(
         wikidata_id=payload.wikidata_id,
         nlcr_authority_id=payload.nlcr_authority_id,
     )
+
+@trace()
+async def create_entity_batch(
+    client: WeaviateAsyncClient,
+    payload: AsyncGenerator[EntityCreateRequest, None],
+    principal_id: uuid.UUID,
+) -> list[EntityResponse]:
+    logger.info(
+        "create_entity_batch called",
+        extra={"principal_id": principal_id},
+    )
+    entity_collection = client.collections.use(ENTITY_COLLECTION)
+    ids: list[uuid.UUID] = []
+    async with entity_collection.batch.stream() as batch:
+        async for entity_payload in payload:
+            entity_id = new_uuid6()
+            added_id = await batch.add_object(
+                uuid=entity_id,
+                properties={
+                    "entity_type": entity_payload.entity_type,
+                    "name": entity_payload.name,
+                    "description": entity_payload.description,
+                    "short_description": entity_payload.short_description,
+                    "aliases": entity_payload.aliases or [],
+                    "wikidata_id": entity_payload.wikidata_id,
+                    "nlcr_authority_id": entity_payload.nlcr_authority_id,
+                },
+                references={"principal": principal_id},
+                vector={
+                    vector_name: embedding
+                    for vector_name, embedding in {
+                        DEFAULT_NAME_VECTOR: entity_payload.name_embedding,
+                        DEFAULT_FULLTEXT_VECTOR: entity_payload.fulltext_embedding,
+                    }.items()
+                    if embedding is not None
+                }
+                or None,
+            )
+            ids.append(uuid.UUID(str(added_id)))
+    # After batch is complete, fetch the created entities to return their details
+    created_entities = await entity_collection.query.fetch_objects_by_ids(
+        ids,
+        return_references=empty_reference_queries(["principal"]),
+    )
+    return [
+        entity_response(item.properties, item.references, item.uuid)
+        for item in created_entities.objects
+    ]
 
 
 @trace()
