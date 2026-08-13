@@ -29,7 +29,7 @@ async def search_get(
         default=None,
         alias="query_entity_type",
     ),
-    limit: int = 20,
+    limit: int = Query(default=20, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> SearchResultListResponse:
     return await search(

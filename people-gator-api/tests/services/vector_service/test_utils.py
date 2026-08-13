@@ -80,3 +80,38 @@ def test_optional_alias_text_array_rejects_non_string_items() -> None:
             {"aliases": [{"alias": "Zoltan Mihaly Nagy"}]},
             "aliases",
         )
+
+
+@pytest.mark.asyncio
+async def test_fetch_collection_page_with_total_count_skips_object_fetch_for_zero_limit() -> None:
+    class _Query:
+        async def fetch_objects(self, **_kwargs: object) -> types.SimpleNamespace:
+            raise AssertionError("fetch_objects should not be called when limit is zero")
+
+    class _Aggregate:
+        async def over_all(self, **_kwargs: object) -> types.SimpleNamespace:
+            return types.SimpleNamespace(total_count=17)
+
+    class _Collection:
+        query = _Query()
+        aggregate = _Aggregate()
+
+    class _Collections:
+        @staticmethod
+        def get(name: str) -> _Collection:
+            del name
+            return _Collection()
+
+    client = types.SimpleNamespace(collections=_Collections())
+
+    objects, total_count = await module.fetch_collection_page_with_total_count(
+        client,  # type: ignore[reportArgumentType] - test double for WeaviateAsyncClient
+        collection_name="ignored",
+        filters=None,
+        limit=0,
+        return_references=[],
+        after_id=None,
+    )
+
+    assert objects == []
+    assert total_count == 17

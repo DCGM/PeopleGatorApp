@@ -146,27 +146,35 @@ async def fetch_collection_page_with_total_count(
     after_id: uuid.UUID | None,
 ) -> tuple[list[_CollectionQueryObject], int]:
     collection = client.collections.get(collection_name)
-    fetch_coroutine = collection.query.fetch_objects(
-        filters=filters,
-        limit=limit,
-        return_references=list(return_references),
-        after=after_id,
-    )
+    if limit < 0:
+        raise ValueError("limit must be greater than or equal to 0")
+
     aggregate_coroutine = collection.aggregate.over_all(
         total_count=True,
         filters=filters,
     )
-    fetch_response, aggregate_response = await asyncio.gather(
-        fetch_coroutine,
-        aggregate_coroutine,
-    )
+    if limit > 0:
+        fetch_coroutine = collection.query.fetch_objects(
+            filters=filters,
+            limit=limit,
+            return_references=list(return_references),
+            after=after_id,
+        )
+        fetch_response, aggregate_response = await asyncio.gather(
+            fetch_coroutine,
+            aggregate_coroutine,
+        )
+        fetch_objects = list(fetch_response.objects)
+    else:
+        aggregate_response = await aggregate_coroutine
+        fetch_objects: list[_CollectionQueryObject] = []
     total_count_value = aggregate_response.total_count
     total_count = (
         total_count_value
         if isinstance(total_count_value, int)
-        else len(fetch_response.objects)
+        else len(fetch_objects)
     )
-    return list(fetch_response.objects), total_count
+    return fetch_objects, total_count
 
 
 def single_named_vector_payload(

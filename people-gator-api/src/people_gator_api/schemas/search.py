@@ -66,6 +66,7 @@ class SearchQuery(BaseModel):
     )
     limit: int = Field(
         default=20,
+        ge=0,
         validation_alias=AliasChoices("limit", "query_limit"),
         description="The maximum number of results to return.",
     )

@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import (
     APIRouter,
+    Query,
     status,
 )
 
@@ -44,7 +45,7 @@ async def list_sources_route(
     library: str | None = None,
     document: uuid.UUID | None = None,
     page: uuid.UUID | None = None,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
     return await list_sources(

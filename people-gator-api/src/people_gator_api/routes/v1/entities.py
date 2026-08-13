@@ -6,6 +6,7 @@ import uuid
 
 from fastapi import (
     APIRouter,
+    Query,
     status,
 )
 
@@ -51,7 +52,7 @@ async def list_entities_route(
     wikidata_id: str | None = None,
     nlcr_authority_id: str | None = None,
     principal_id: uuid.UUID | None = None,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
     try:

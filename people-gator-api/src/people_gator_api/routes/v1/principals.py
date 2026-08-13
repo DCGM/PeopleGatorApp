@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.schemas.enums import PrincipalType
 from people_gator_api.schemas.principals import (
@@ -60,7 +60,7 @@ async def list_principals_route(
     principal: AdminUserDependency,
     principal_type: PrincipalType | None = None,
     is_active: bool | None = True,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> PrincipalListResponse:
     return await list_principals(
@@ -94,7 +94,7 @@ async def list_model_agents_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
     is_active: bool | None = True,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> ModelAgentListResponse:
     return await list_model_agents(
@@ -187,7 +187,7 @@ async def list_users_route(
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
     is_active: bool | None = True,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> UserListResponse:
     return await list_users(
