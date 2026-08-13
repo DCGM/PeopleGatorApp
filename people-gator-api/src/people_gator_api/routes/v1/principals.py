@@ -48,7 +48,7 @@ async def get_me_route(
     response = PrincipalResponse(
         principal_id=principal.principal_id,
         principal_type=PrincipalType.user,
-        display_name=principal.username,
+        display_name=principal.display_name,
         is_active=True,
     )
     return response

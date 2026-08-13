@@ -1,13 +1,22 @@
+import datetime
 import time
-import httpx
+import json
+from typing import Any
+from fastapi import HTTPException
+from joserfc.errors import ClaimError
 from joserfc.jwk import (
     KeySet,
     KeySetSerialization,
 )
+from joserfc.jws import JWSRegistry
+from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, encode, decode
+from starlette import status
+from people_gator_api.services.s3_filesystem import open_file
+from people_gator_api.settings import settings
+
 
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
-
 
 async def get_key_set() -> KeySet:
     global _keyset, _last_fetch_time
@@ -15,15 +24,86 @@ async def get_key_set() -> KeySet:
     if (
         _keyset is not None
         and _last_fetch_time is not None
-        and now - _last_fetch_time < 3600
+        and now - _last_fetch_time < settings.jwk.cache_ttl_seconds
     ):
         return _keyset
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            "https://example.com/.well-known/jwks.json", timeout=10.0
-        )
-        response.raise_for_status()
-        jwks_data: KeySetSerialization = response.json()
+    async with open_file(settings.jwk.key_path, mode="r") as f:
+        jwks_data: KeySetSerialization = json.load(f)
     _keyset = KeySet.import_key_set(jwks_data)
     _last_fetch_time = now
     return _keyset
+
+def _now_datetime() -> datetime.datetime:
+    """Return the current UTC time as a datetime object."""
+    return datetime.datetime.now(datetime.timezone.utc)
+
+def _now() -> int:
+    """Return the current UTC time as a Unix timestamp."""
+    return int(_now_datetime().timestamp())
+
+
+_claims_registry: JWTClaimsRegistry | None = None
+
+async def get_claims_registry() -> JWTClaimsRegistry:
+    global _claims_registry
+    if _claims_registry is not None:
+        return _claims_registry
+    _claims_registry = JWTClaimsRegistry(
+        now=_now,
+        leeway=0,
+        iss=ClaimsOption(
+            value="http://dev.people-gator.capturemyhand.com", essential=True
+        ),
+        aud=ClaimsOption(value="dev.people-gator.capturemyhand.com", essential=True),
+        sub=ClaimsOption(allow_blank=False, essential=True),
+        scopes=ClaimsOption(allow_blank=False, essential=True),
+    )
+    return _claims_registry
+
+
+_jws_registry: JWSRegistry | None = None
+
+async def get_jws_registry() -> JWSRegistry:
+    global _jws_registry
+    if _jws_registry is not None:
+        return _jws_registry
+    _jws_registry = JWSRegistry(algorithms=["ES256"])
+    return _jws_registry
+
+
+async def issue_key(
+    subject: str,
+    scopes: list[str],
+):
+    iss = "http://dev.people-gator.capturemyhand.com"
+    iat = _now_datetime()
+    exp = iat + datetime.timedelta(hours=2)
+    aud = "dev.people-gator.capturemyhand.com"
+    claims = {
+        "iss": iss,
+        "sub": subject,
+        "aud": aud,
+        "iat": iat,
+        "exp": exp,
+        "scopes": " ".join(scopes),
+    }
+    protected = {"alg": "ES256"}
+    key_set = await get_key_set()
+    jws_registry = await get_jws_registry()
+    return encode(protected, claims, key_set, registry=jws_registry)
+
+
+async def verify_key(token: str) -> dict[str, Any]:
+    key_set = await get_key_set()
+    jws_registry = await get_jws_registry()
+    claims_registry = await get_claims_registry()
+    decoded_claims = decode(token, key_set, registry=jws_registry)
+    try:
+        decoded_claims.claims['scopes'] = decoded_claims.claims.get('scopes', '').split()
+        claims_registry.validate(decoded_claims.claims)
+    except ClaimError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token claims: {str(e)}",
+        )
+    return decoded_claims.claims

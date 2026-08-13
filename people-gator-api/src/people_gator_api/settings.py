@@ -40,10 +40,16 @@ class S3Settings(BaseModel):
     bucket_name: str
     region: str
     endpoint_url: str | None = None
+    timeout_seconds: float = Field(default=30.0, gt=0)
 
 
 class StorageSettings(BaseModel):
     s3: S3Settings
+
+
+class JwkSettings(BaseModel):
+    key_path: str = "peoplegator_api/jwks.json"
+    cache_ttl_seconds: int = Field(default=3600, gt=0)
 
 
 class WeaviateSettings(BaseModel):
@@ -102,6 +108,7 @@ class Settings(BaseSettings):
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
     postgres: PostgresSettings
     storage: StorageSettings
+    jwk: JwkSettings = JwkSettings()
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()

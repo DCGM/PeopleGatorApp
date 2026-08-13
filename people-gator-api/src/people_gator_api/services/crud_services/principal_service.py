@@ -16,7 +16,6 @@ from people_gator_api.schemas.principals import (
     PrincipalPatchRequest,
     PrincipalResponse,
     PrincipalListResponse,
-    UserCreateRequest,
     UserListResponse,
     UserPatchRequest,
     UserResponse,
@@ -28,7 +27,6 @@ from people_gator_api.services.weaviate_service.utils import (
     fetch_collection_page_with_total_count,
     model_agent_response,
     principal_response,
-    require_bool,
     upsert,
     user_response,
 )
@@ -371,7 +369,7 @@ async def get_or_create_user(
     *,
     external_subject: str,
     external_issuer: str,
-) -> StoredUser:
+) -> UserResponse:
     logger.info(
         "get_or_create_user called",
         extra={
@@ -379,7 +377,8 @@ async def get_or_create_user(
             "external_issuer": external_issuer,
         },
     )
-    existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+    user_collection = client.collections.get(PRINCIPAL_COLLECTION)
+    existing = await user_collection.query.fetch_objects(
         limit=1,
         filters=Filter.all_of(
             [
@@ -388,87 +387,37 @@ async def get_or_create_user(
                 Filter.by_property("external_issuer").equal(external_issuer),
             ]
         ),
+        return_references=empty_reference_queries([]),
     )
 
     if existing.objects:
-        existing_item = existing.objects[0]
-        principal_id = existing_item.uuid
-        existing_properties = existing_item.properties
-        is_active_value = require_bool(existing_properties, "is_active")
-        logger.info(
-            "existing user principal found", extra={"principal_id": principal_id}
-        )
+        user = existing.objects[0]
     else:
         principal_id = new_uuid6()
-        is_active_value = True
-        logger.info("creating new user principal", extra={"principal_id": principal_id})
-
-    properties = {
-        "principal_type": PrincipalType.user.value,
-        "display_name": external_subject,
-        "is_active": is_active_value,
-        "external_subject": external_subject,
-        "external_issuer": external_issuer,
-        "email": None,
-        "annotation_type": None,
-        "role": None,
-        "model_slug": None,
-        "model_version": None,
-        "registry_source": None,
-        "registry_uri": None,
-    }
-    await upsert(
-        client,
-        PRINCIPAL_COLLECTION,
-        principal_id,
-        properties=properties,
+        created_user_id = await user_collection.data.insert(
+            uuid=principal_id,
+            properties={
+                "principal_type": PrincipalType.user.value,
+                "display_name": external_subject,
+                "is_active": True,
+                "external_subject": external_subject,
+                "external_issuer": external_issuer,
+                "email": None,
+                "annotation_type": None,
+                "role": None,
+                "model_slug": None,
+                "model_version": None,
+                "registry_source": None,
+                "registry_uri": None,
+            },
+        )
+        user = await user_collection.query.fetch_object_by_id(
+            created_user_id,
+            return_references=empty_reference_queries([]),
+        )
+    return user_response(
+        user.properties, user.references, user.uuid
     )
-    return StoredUser(
-        principal_id=principal_id,
-        principal_type=PrincipalType.user,
-        display_name=external_subject,
-        is_active=is_active_value,
-        external_subject=external_subject,
-        external_issuer=external_issuer,
-        email=None,
-    )
-
-
-@trace()
-async def create_user(
-    client: WeaviateAsyncClient,
-    payload: UserCreateRequest,
-    actor_principal_id: uuid.UUID,
-) -> UserResponse:
-    logger.info(
-        "create_user called",
-        extra={
-            "external_subject": payload.external_subject,
-            "external_issuer": payload.external_issuer,
-        },
-    )
-    created_principal_id = await _create_principal(
-        client,
-        principal_type=PrincipalType.user,
-        payload=payload,
-        additional_properties={
-            "external_subject": payload.external_subject,
-            "external_issuer": payload.external_issuer,
-        },
-        uniqueness_filters=[
-            Filter.by_property("external_subject").equal(payload.external_subject),
-            Filter.by_property("external_issuer").equal(payload.external_issuer),
-        ],
-    )
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        created_principal_id,
-        return_references=empty_reference_queries([]),
-    )
-    assert response is not None
-    logger.info("create_user completed", extra={"principal_id": created_principal_id})
-    return user_response(response.properties, response.references, response.uuid)
 
 
 @trace()
