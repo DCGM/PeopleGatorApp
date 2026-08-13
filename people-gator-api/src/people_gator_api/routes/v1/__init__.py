@@ -18,6 +18,5 @@ router.include_router(principals_router)
 router.include_router(root_router)
 router.include_router(sse_router)
 router.include_router(jwks_router)
-router.include_router(router)
 
 __all__ = ["router"]
