@@ -1,21 +1,23 @@
 """Typed event publication and local SSE topic delivery."""
 
 from people_gator_api.services.sse.service import (
+    BrokerDependency,
     DeletedResourceEvent,
     LocalTopicBroker,
+    SseEvent,
     SseEventType,
     Topic,
     TopicBroker,
     get_sse_broker,
-    BrokerDependency,
 )
 
 __all__ = [
-    "LocalTopicBroker",
+    "BrokerDependency",
     "DeletedResourceEvent",
+    "LocalTopicBroker",
+    "SseEvent",
     "SseEventType",
     "Topic",
     "TopicBroker",
     "get_sse_broker",
-    "BrokerDependency",
 ]

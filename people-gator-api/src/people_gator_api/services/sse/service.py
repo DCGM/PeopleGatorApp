@@ -4,6 +4,12 @@ The public broker contract is documented in ``docs/05-sse.md``. Topics are
 slash-like tuples, and publishing to a leaf fans the event out to that topic
 and each non-empty ancestor. ``LocalTopicBroker`` is process-local and does
 not provide replay or durable delivery.
+
+Internal queues carry plain ``dict`` snapshots produced by ``model_dump``.
+``stream[T]`` and ``subscribe[T]`` accept the target Pydantic model class and
+reconstruct typed instances via ``model_validate`` before yielding them.
+FastAPI serialises ``AsyncIterator[BaseModel]`` directly into SSE frames, so
+endpoints can declare ``-> AsyncIterator[SomeModel]`` without extra plumbing.
 """
 
 import asyncio
@@ -11,18 +17,18 @@ from collections.abc import AsyncGenerator, AsyncIterator, Iterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Annotated, Protocol
+from typing import Annotated, Protocol, TypeVar
 from fastapi import Depends
-from fastapi.sse import ServerSentEvent
 from pydantic import BaseModel
 import uuid
 
-type JsonValue = (
-    str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
-)
-
 type Topic = tuple[str | uuid.UUID | None, ...]
 type _TopicStr = tuple[str, ...]
+# Internal queue item: a plain dict produced by model_dump, or None to
+# signal subscriber stream termination.
+type _QueuedEvent = dict[str, object] | None
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class DeletedResourceEvent(BaseModel):
@@ -30,8 +36,10 @@ class DeletedResourceEvent(BaseModel):
 
     resource_id: uuid.UUID
 
+
 def _topic_to_str(topic: Topic) -> _TopicStr:
     return tuple(str(part) for part in topic)
+
 
 class SseEventType(StrEnum):
     """Wire-level event names published through the SSE broker."""
@@ -59,18 +67,29 @@ class SseEventType(StrEnum):
     SOURCE_DELETED = "source_deleted"
 
 
-class TopicBroker(Protocol):
-    """Transport contract shared by local and future distributed brokers.
+class SseEvent(BaseModel):
+    """Typed SSE envelope delivered to subscribers.
 
-    Implementations must preserve topic ancestor propagation and accept
-    Pydantic payloads that can be serialized by ``ServerSentEvent``.
+    ``event`` carries the wire-level event name; ``data`` is the serialised
+    Pydantic payload.  FastAPI encodes each yielded ``SseEvent`` as the
+    ``data`` field of the SSE frame when an endpoint returns
+    ``AsyncIterator[SseEvent]``.
     """
 
-    def subscribe(
-        self, topic: Topic
-    ) -> AbstractAsyncContextManager[AsyncIterator[ServerSentEvent]]: ...
+    event: SseEventType
+    data: dict[str, object]
 
-    def stream(self, topic: Topic) -> AsyncIterator[ServerSentEvent]: ...
+
+class TopicBroker(Protocol):
+    """Transport contract shared by local and future distributed brokers."""
+
+    def subscribe[T: BaseModel](
+        self, model: type[T], topic: Topic
+    ) -> AbstractAsyncContextManager[AsyncIterator[T]]: ...
+
+    def stream[T: BaseModel](
+        self, model: type[T], topic: Topic
+    ) -> AsyncIterator[T]: ...
 
     def close_topic(self, topic: Topic) -> None: ...
 
@@ -90,7 +109,7 @@ class TopicBroker(Protocol):
         event: SseEventType,
         data: BaseModel,
     ) -> None: ...
-    
+
     async def publish_batch(
         self,
         batch: Iterable[tuple[Topic, SseEventType, BaseModel]],
@@ -111,9 +130,6 @@ class TopicBroker(Protocol):
     def subscriber_counts(self) -> dict[tuple[str, ...], int]: ...
 
 
-type _QueuedEvent = ServerSentEvent | None
-
-
 def _new_subscriptions() -> dict[_TopicStr, set[asyncio.Queue[_QueuedEvent]]]:
     return {}
 
@@ -126,6 +142,7 @@ class LocalTopicBroker:
     intentionally unbounded in this initial implementation; durable or
     distributed delivery belongs in a future ``TopicBroker`` implementation.
     """
+
     _max_notification_depth: int = 1
     _subscriptions: dict[_TopicStr, set[asyncio.Queue[_QueuedEvent]]] = field(
         default_factory=_new_subscriptions,
@@ -136,7 +153,7 @@ class LocalTopicBroker:
         return len(self._subscriptions.get(_topic_to_str(topic), ()))
 
     def subscriber_counts(self) -> dict[tuple[str, ...], int]:
-        """Return active subscriber counts keyed by normalized topic path."""
+        """Return active subscriber counts keyed by normalised topic path."""
 
         return {
             topic: len(subscribers)
@@ -163,20 +180,16 @@ class LocalTopicBroker:
             await asyncio.sleep(0)  # yield to allow consumers to run
             return  # don't publish to topics with None in them
         _topic_str = _topic_to_str(topic)
-        _event = ServerSentEvent(
-            data=data,
-            event=event,
-            id=id,
-            retry=retry,
-            comment=comment,
-        )
+        _queued: _QueuedEvent = SseEvent(
+            event=event, data=data.model_dump(mode="json")
+        ).model_dump(mode="json")
         for i in range(0, min(len(topic), self._max_notification_depth)):
             ancestor: tuple[str, ...] = _topic_str[:-i] if i > 0 else _topic_str
             queues = self._subscriptions.get(ancestor)
             if queues is None:
                 continue
             for queue in queues:
-                queue.put_nowait(_event)
+                queue.put_nowait(_queued)
         await asyncio.sleep(0)  # yield to allow consumers to run
 
     async def publish(
@@ -195,10 +208,7 @@ class LocalTopicBroker:
         event: SseEventType,
         data: BaseModel,
     ) -> asyncio.Task[None]:
-        """Schedule publish_to_topics as a fire-and-forget task.
-
-        Returns the created task so callers can optionally track or cancel it.
-        """
+        """Schedule publish as a fire-and-forget task."""
 
         return asyncio.ensure_future(
             self.publish(*topics, event=event, data=data)
@@ -208,31 +218,32 @@ class LocalTopicBroker:
         self,
         batch: Iterable[tuple[Topic, SseEventType, BaseModel]],
     ) -> None:
-        """Publish each (topic, event, data) triple in the batch concurrently."""
-        # first filter batch by topic taking into account the max_notification_depth
-        pipelined_batch = filter(
-            lambda topic_event_data: None not in topic_event_data[0],
+        """Publish each (topic, event, data) triple in the batch."""
+        pipelined_batch: Iterable[tuple[Topic, SseEventType, BaseModel]] = filter(
+            lambda tpl: None not in tpl[0],
             batch,
-        ) # filter out topics with None in them
-        pipelined_batch = map(
-            lambda topic_event_data: (_topic_to_str(topic_event_data[0]), topic_event_data[1], topic_event_data[2]),
-            batch,
-        ) # convert topics to strings for easier filtering
-        pipelined_batch = (
-            (topic[:-i], event, data)
-            for topic, event, data in pipelined_batch
-            for i in range(0, min(len(topic), self._max_notification_depth))
-        ) # create ancestor topics up to max_notification_depth
-        pipelined_batch = filter(
-            lambda topic_event_data: topic_event_data[0] in self._subscriptions,
+        )  # filter out topics with None in them
+        str_batch: Iterable[tuple[_TopicStr, SseEventType, BaseModel]] = map(
+            lambda tpl: (_topic_to_str(tpl[0]), tpl[1], tpl[2]),
             pipelined_batch,
-        ) # filter out topics that have no subscribers
-        for ancestor, event, data in pipelined_batch:
+        )  # convert topics to strings
+        expanded_batch: Iterable[tuple[_TopicStr, SseEventType, BaseModel]] = (
+            (topic[:-i] if i > 0 else topic, event, data)
+            for topic, event, data in str_batch
+            for i in range(0, min(len(topic), self._max_notification_depth))
+        )  # expand ancestor topics up to max_notification_depth
+        filtered_batch = filter(
+            lambda tpl: tpl[0] in self._subscriptions,
+            expanded_batch,
+        )  # filter out topics that have no subscribers
+        for ancestor, event, data in filtered_batch:
+            queued: _QueuedEvent = SseEvent(
+                event=event, data=data.model_dump(mode="json")
+            ).model_dump(mode="json")
             queues = self._subscriptions[ancestor]
             for queue in queues:
-                queue.put_nowait(ServerSentEvent(data=data, event=event))
+                queue.put_nowait(queued)
         await asyncio.sleep(0)  # yield to allow consumers to run
-        
 
     def publish_batch_task(
         self,
@@ -240,7 +251,6 @@ class LocalTopicBroker:
     ) -> asyncio.Task[None]:
         """Schedule publish_batch as a fire-and-forget task.
 
-        Returns the created task so callers can optionally track or cancel it.
         The batch iterable is consumed eagerly before the task is scheduled so
         that a generator passed by the caller is not exhausted at an unexpected
         time.
@@ -248,22 +258,36 @@ class LocalTopicBroker:
 
         return asyncio.ensure_future(self.publish_batch(list(batch)))
 
-    async def stream(self, topic: Topic) -> AsyncIterator[ServerSentEvent]:
-        """Yield events for a topic until the consumer disconnects."""
+    def stream[T: BaseModel](
+        self, model: type[T], topic: Topic
+    ) -> AsyncIterator[T]:
+        """Yield model_validate'd ``T`` instances for a topic until disconnected."""
 
-        async with self.subscribe(topic) as events:
+        return self._stream(model, topic)
+
+    async def _stream[T: BaseModel](
+        self, model: type[T], topic: Topic
+    ) -> AsyncIterator[T]:
+        async with self.subscribe(model, topic) as events:
             async for event in events:
                 yield event
 
+    def subscribe[T: BaseModel](
+        self, model: type[T], topic: Topic
+    ) -> AbstractAsyncContextManager[AsyncIterator[T]]:
+        """Return an async context manager that yields a ``model_validate``'d stream."""
+
+        return self._subscribe(model, topic)
+
     @asynccontextmanager
-    async def subscribe(
-        self, topic: Topic
-    ) -> AsyncGenerator[AsyncIterator[ServerSentEvent], None]:
+    async def _subscribe[T: BaseModel](
+        self, model: type[T], topic: Topic
+    ) -> AsyncGenerator[AsyncIterator[T], None]:
         """Register a consumer and clean it up when the context exits."""
         queue: asyncio.Queue[_QueuedEvent] = asyncio.Queue()
         self._subscriptions.setdefault(_topic_to_str(topic), set()).add(queue)
         try:
-            yield self._events(queue)
+            yield self._events(model, queue)
         finally:
             str_topic = _topic_to_str(topic)
             subscribers = self._subscriptions.get(str_topic)
@@ -272,15 +296,18 @@ class LocalTopicBroker:
                 if not subscribers:
                     del self._subscriptions[str_topic]
 
-    async def _events(self, queue: asyncio.Queue[_QueuedEvent]) -> AsyncIterator[ServerSentEvent]:
+    async def _events[T: BaseModel](
+        self, model: type[T], queue: asyncio.Queue[_QueuedEvent]
+    ) -> AsyncIterator[T]:
         while True:
-            event = await queue.get()
-            if event is None:
+            raw = await queue.get()
+            if raw is None:
                 return
-            yield event
+            yield model.model_validate(raw)
 
 
 _sse_broker: TopicBroker | None = None
+
 
 def get_sse_broker() -> TopicBroker:
     """Return the application-level broker dependency."""
@@ -289,6 +316,5 @@ def get_sse_broker() -> TopicBroker:
         _sse_broker = LocalTopicBroker()
     return _sse_broker
 
+
 type BrokerDependency = Annotated[TopicBroker, Depends(get_sse_broker)]
-
-
