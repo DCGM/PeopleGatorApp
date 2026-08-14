@@ -1,5 +1,6 @@
 """Service for entity endpoints."""
 
+from datetime import datetime
 import logging
 import uuid
 from typing import TypeGuard
@@ -356,26 +357,33 @@ async def delete_entities(
 async def _delete_entities_by_filters(
     client: WeaviateAsyncClient,
     filters: list[FilterReturn],
-    batch_limit: int = 200,
 ) -> int:
     entities = client.collections.get(ENTITY_COLLECTION)
-    deleted_count = 0
-
-    while True:
-        response = await entities.query.fetch_objects(
-            filters=combine_filters(filters),
-            limit=batch_limit,
-            return_references=empty_reference_queries([]),
+    failed: int = 0
+    matches: int = 0
+    successful: int = 0
+    filters_combined = combine_filters(filters)
+    
+    if filters_combined is not None:
+        deleted = await entities.data.delete_many(where=filters_combined)
+        failed = deleted.failed
+        matches = deleted.matches
+        successful = deleted.successful
+    else:
+        # If no filters are provided, delete all entities in the collection.
+        deleted = await entities.data.delete_many(
+            Filter.by_creation_time().greater_than(datetime.fromtimestamp(0))
         )
-        if not response.objects:
-            break
+        failed = deleted.failed
+        matches = deleted.matches
+        successful = deleted.successful
 
-        for item in response.objects:
-            deleted = await entities.data.delete_by_id(item.uuid)
-            deleted_count += int(deleted)
-
-    logger.info("delete_entities completed", extra={"deleted_count": deleted_count})
-    return deleted_count
+    logger.info("delete_entities completed", extra={
+        "deleted_count": successful,
+        "failed_count": failed,
+        "matches_count": matches,
+    })
+    return successful
 
 
 # ---------------------------------------------------------------------------
