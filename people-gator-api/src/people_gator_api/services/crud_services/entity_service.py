@@ -1,6 +1,4 @@
 """Service for entity endpoints."""
-
-from datetime import datetime
 import logging
 import uuid
 from typing import TypeGuard
@@ -371,12 +369,15 @@ async def _delete_entities_by_filters(
         successful = deleted.successful
     else:
         # If no filters are provided, delete all entities in the collection.
-        deleted = await entities.data.delete_many(
-            Filter.by_creation_time().greater_than(datetime.fromtimestamp(0))
-        )
-        failed = deleted.failed
-        matches = deleted.matches
-        successful = deleted.successful
+        while True:
+            deleted = await entities.data.delete_many(
+                Filter.not_(Filter.by_property("entity_type").equal("unicorn"))
+            )
+            if deleted.matches == 0:
+                break
+            failed += deleted.failed
+            matches += deleted.matches
+            successful += deleted.successful
 
     logger.info("delete_entities completed", extra={
         "deleted_count": successful,
