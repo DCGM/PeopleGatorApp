@@ -43,3 +43,24 @@ class RegistrySource(StrEnum):
     mlflow = "mlflow"
     huggingface = "huggingface"
     local = "local"
+
+
+class FaceEmbeddingModel(StrEnum):
+    """Known face embedding models with named vectors in the Face collection."""
+
+    gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3 = (
+        "vit_small_patch8_gap_112.cosface_ms1mv3"
+    )
+
+
+DEFAULT_FACE_EMBEDDING_MODEL = (
+    FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3
+)
+
+
+class ScoreAggregation(StrEnum):
+    """How per-face matching scores are aggregated into a single entity score."""
+
+    min = "min"
+    max = "max"
+    average = "average"

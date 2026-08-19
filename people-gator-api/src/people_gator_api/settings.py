@@ -114,4 +114,4 @@ class Settings(BaseSettings):
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
 
 
-settings = Settings()  # pyright: ignore[reportCallIssue] - BaseSettings values come from env sources.
+settings = Settings() # type: ignore
