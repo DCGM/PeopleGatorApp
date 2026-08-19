@@ -54,15 +54,6 @@ async def search_get(
         ),
     )
 
-
-@router.post("/search", response_model=SearchResultListResponse)
-async def search_post(
-    request: SearchQuery,
-    session: WeaviateSessionDependency,
-) -> SearchResultListResponse:
-    return await search(session, request)
-
-
 @router.get("/search-faces", response_model=FaceSearchResultListResponse)
 async def search_faces_get(
     session: WeaviateSessionDependency,
