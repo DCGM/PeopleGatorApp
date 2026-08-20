@@ -10,7 +10,7 @@ from people_gator_api.schemas.principals import UserResponse
 from people_gator_api.services.crud_services.principal_service import get_or_create_user
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.jwk_service import (
-    issue_key,
+    issue_access_token,
     issue_refresh_token,
     verify_access_token,
     verify_refresh_token,
@@ -92,23 +92,22 @@ async def get_token(
             )
     
     # Generate access token
-    access_token = await issue_key(
+    access_token = await issue_access_token(
         subject=username,
         scopes=scopes,
     )
     
     # Generate and persist both identifiers for this refresh session.
-    session_id = str(uuid.uuid4())
     jti = str(uuid.uuid4())
     refresh_token = await issue_refresh_token(
         subject=username,
-        session_id=session_id,
+        scopes=scopes,
         jti=jti,
     )
     
     # Store session by UUID (limit to 4 sessions per user).
     refresh_sessions = user_record["refresh_sessions"]
-    refresh_sessions[session_id] = {"jti": jti, "scopes": scopes}
+    refresh_sessions[jti] = {"jti": jti, "scopes": scopes}
     if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
         oldest_session_id = next(iter(refresh_sessions))
         del refresh_sessions[oldest_session_id]
@@ -150,17 +149,16 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     global user_db  # Use the in-memory user database for this example
     try:
         claims = await verify_refresh_token(refresh_token)
-    except Exception:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail=f"Invalid refresh token: {str(e)}",
         )
     
     subject = claims.get("sub")
-    session_id = claims.get("session_id")
     jti = claims.get("jti")
     
-    if not subject or not session_id or not jti:
+    if not subject or not jti:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token claims",
@@ -175,7 +173,7 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     
     # Verify that the session is valid and that its current token is being used.
     refresh_sessions = user_record["refresh_sessions"]
-    session = refresh_sessions.get(session_id)
+    session = refresh_sessions.get(jti)
     if session is None or session["jti"] != jti:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -187,7 +185,7 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     scopes = session["scopes"]
     
     # Generate new access token with same scopes
-    access_token = await issue_key(
+    access_token = await issue_access_token(
         subject=subject,
         scopes=scopes,
     )
@@ -196,11 +194,11 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     new_jti = str(uuid.uuid4())
     new_refresh_token = await issue_refresh_token(
         subject=subject,
-        session_id=session_id,
+        scopes=scopes,
         jti=new_jti,
     )
-    del refresh_sessions[session_id]
-    refresh_sessions[session_id] = {"jti": new_jti, "scopes": scopes}
+    del refresh_sessions[jti]
+    refresh_sessions[new_jti] = {"jti": new_jti, "scopes": scopes}
     
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 

@@ -74,7 +74,7 @@ async def get_refresh_claims_registry() -> JWTClaimsRegistry:
         ),
         aud=ClaimsOption(value="dev.people-gator.capturemyhand.com", essential=True),
         sub=ClaimsOption(allow_blank=False, essential=True),
-        session_id=ClaimsOption(allow_blank=False, essential=True),
+        scopes=ClaimsOption(allow_blank=False, essential=True),
         jti=ClaimsOption(allow_blank=False, essential=True),
     )
     return _refresh_claims_registry
@@ -90,7 +90,7 @@ async def get_jws_registry() -> JWSRegistry:
     return _jws_registry
 
 
-async def issue_key(
+async def issue_access_token(
     subject: str,
     scopes: list[str],
 ):
@@ -114,7 +114,7 @@ async def issue_key(
 
 async def issue_refresh_token(
     subject: str,
-    session_id: str,
+    scopes: list[str],
     jti: str,
 ) -> str:
     """Issue a refresh token that can be used to obtain new access tokens.
@@ -130,8 +130,8 @@ async def issue_refresh_token(
         "sub": subject,
         "aud": aud,
         "iat": iat,
+        "scopes": " ".join(scopes),
         "jti": jti,
-        "session_id": session_id,
     }
     protected = {"alg": "ES256"}
     key_set = await get_key_set()
@@ -153,6 +153,11 @@ async def verify_access_token(token: str) -> dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token claims: {str(e)}",
         )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}",
+        )
     return decoded_claims.claims
 
 
@@ -168,5 +173,10 @@ async def verify_refresh_token(token: str) -> dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid refresh token claims: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid refresh token: {str(e)}",
         )
     return decoded_claims.claims
