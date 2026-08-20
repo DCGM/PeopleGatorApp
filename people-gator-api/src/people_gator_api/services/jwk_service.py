@@ -42,13 +42,14 @@ def _now() -> int:
     return int(_now_datetime().timestamp())
 
 
-_claims_registry: JWTClaimsRegistry | None = None
+_access_claims_registry: JWTClaimsRegistry | None = None
+_refresh_claims_registry: JWTClaimsRegistry | None = None
 
-async def get_claims_registry() -> JWTClaimsRegistry:
-    global _claims_registry
-    if _claims_registry is not None:
-        return _claims_registry
-    _claims_registry = JWTClaimsRegistry(
+async def get_access_claims_registry() -> JWTClaimsRegistry:
+    global _access_claims_registry
+    if _access_claims_registry is not None:
+        return _access_claims_registry
+    _access_claims_registry = JWTClaimsRegistry(
         now=_now,
         leeway=0,
         iss=ClaimsOption(
@@ -58,7 +59,25 @@ async def get_claims_registry() -> JWTClaimsRegistry:
         sub=ClaimsOption(allow_blank=False, essential=True),
         scopes=ClaimsOption(allow_blank=False, essential=True),
     )
-    return _claims_registry
+    return _access_claims_registry
+
+
+async def get_refresh_claims_registry() -> JWTClaimsRegistry:
+    global _refresh_claims_registry
+    if _refresh_claims_registry is not None:
+        return _refresh_claims_registry
+    _refresh_claims_registry = JWTClaimsRegistry(
+        now=_now,
+        leeway=0,
+        iss=ClaimsOption(
+            value="http://dev.people-gator.capturemyhand.com", essential=True
+        ),
+        aud=ClaimsOption(value="dev.people-gator.capturemyhand.com", essential=True),
+        sub=ClaimsOption(allow_blank=False, essential=True),
+        session_id=ClaimsOption(allow_blank=False, essential=True),
+        jti=ClaimsOption(allow_blank=False, essential=True),
+    )
+    return _refresh_claims_registry
 
 
 _jws_registry: JWSRegistry | None = None
@@ -93,17 +112,61 @@ async def issue_key(
     return encode(protected, claims, key_set, registry=jws_registry)
 
 
-async def verify_key(token: str) -> dict[str, Any]:
+async def issue_refresh_token(
+    subject: str,
+    session_id: str,
+    jti: str,
+) -> str:
+    """Issue a refresh token that can be used to obtain new access tokens.
+    
+    Refresh tokens do not expire and include the caller-provided unique
+    identifier (jti) and session_id to track concurrent sessions.
+    """
+    iss = "http://dev.people-gator.capturemyhand.com"
+    iat = _now_datetime()
+    aud = "dev.people-gator.capturemyhand.com"
+    claims = {
+        "iss": iss,
+        "sub": subject,
+        "aud": aud,
+        "iat": iat,
+        "jti": jti,
+        "session_id": session_id,
+    }
+    protected = {"alg": "ES256"}
     key_set = await get_key_set()
     jws_registry = await get_jws_registry()
-    claims_registry = await get_claims_registry()
+    return encode(protected, claims, key_set, registry=jws_registry)
+
+
+async def verify_access_token(token: str) -> dict[str, Any]:
+    """Decode and validate an access token."""
+    key_set = await get_key_set()
+    jws_registry = await get_jws_registry()
     decoded_claims = decode(token, key_set, registry=jws_registry)
     try:
-        decoded_claims.claims['scopes'] = decoded_claims.claims.get('scopes', '').split()
+        claims_registry = await get_access_claims_registry()
         claims_registry.validate(decoded_claims.claims)
+        decoded_claims.claims["scopes"] = str(decoded_claims.claims["scopes"]).split()
     except ClaimError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token claims: {str(e)}",
+        )
+    return decoded_claims.claims
+
+
+async def verify_refresh_token(token: str) -> dict[str, Any]:
+    """Decode and validate a refresh token."""
+    key_set = await get_key_set()
+    jws_registry = await get_jws_registry()
+    decoded_claims = decode(token, key_set, registry=jws_registry)
+    try:
+        claims_registry = await get_refresh_claims_registry()
+        claims_registry.validate(decoded_claims.claims)
+    except ClaimError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid refresh token claims: {str(e)}",
         )
     return decoded_claims.claims

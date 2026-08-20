@@ -24,4 +24,5 @@ class JwksResponse(BaseModel):
 class TokenResponse(BaseModel):
     """A signed JWT token response."""
     access_token: str
+    refresh_token: str
     token_type: str

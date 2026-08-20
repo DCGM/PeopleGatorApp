@@ -1,14 +1,20 @@
 import logging
+import uuid
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import SecurityScopes
-from typing import Annotated
+from typing import Annotated, TypedDict
 import argon2
 from people_gator_api.schemas.jwks import TokenResponse
 from people_gator_api.schemas.principals import UserResponse
 from people_gator_api.services.crud_services.principal_service import get_or_create_user
 from people_gator_api.services.database_service import WeaviateSessionDependency
-from people_gator_api.services.jwk_service import issue_key, verify_key
+from people_gator_api.services.jwk_service import (
+    issue_key,
+    issue_refresh_token,
+    verify_access_token,
+    verify_refresh_token,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +32,18 @@ KNOWN_SCOPES = {
     ADMIN_SCOPE,
 }
 
+
+class RefreshSession(TypedDict):
+    session_id: str
+    jti: str
+    scopes: list[str]
+
+
+class UserRecord(TypedDict):
+    hash: str
+    scopes: set[str]
+    refresh_sessions: list[RefreshSession]
+
 security = OAuth2PasswordBearer(
     tokenUrl="/api/v1/token/login",
     scheme_name="PeopleGator API OAuth2PasswordBearer",
@@ -39,19 +57,22 @@ security = OAuth2PasswordBearer(
 )
 
 
-user_db = {
+user_db: dict[str, UserRecord] = {
     "test": {
         "hash": "$argon2id$v=19$m=65536,t=3,p=4$iTpODf7wIneTlqalyjALZA$1U6pPAHY87UZFYdK0R6wm6B403c9l42nnTw5K9ThuQc",
         "scopes": KNOWN_SCOPES,
+        "refresh_sessions": [],  # List of session and refresh token IDs (max 4)
     }
 }
+
+MAX_REFRESH_SESSIONS_PER_USER = 4
 
 
 
 async def get_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> TokenResponse:
-    """Get the raw access token from the request context."""
+    """Get the raw access token and refresh token from the request context."""
     username = form_data.username
     password = form_data.password
     scopes = form_data.scopes
@@ -69,11 +90,30 @@ async def get_token(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Not enough permissions for scope: {scope}",
             )
-    token = await issue_key(
+    
+    # Generate access token
+    access_token = await issue_key(
         subject=username,
         scopes=scopes,
     )
-    return TokenResponse(access_token=token, token_type="bearer")
+    
+    # Generate and persist both identifiers for this refresh session.
+    session_id = str(uuid.uuid4())
+    jti = str(uuid.uuid4())
+    refresh_token = await issue_refresh_token(
+        subject=username,
+        session_id=session_id,
+        jti=jti,
+    )
+    
+    # Store session ID (limit to 4 sessions per user)
+    refresh_sessions = user_record["refresh_sessions"]
+    refresh_sessions.append({"session_id": session_id, "jti": jti, "scopes": scopes})
+    if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
+        refresh_sessions.pop(0)  # Remove oldest session
+    user_record["refresh_sessions"] = refresh_sessions
+    
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
     
 
 async def get_current_user(
@@ -82,7 +122,7 @@ async def get_current_user(
     session: WeaviateSessionDependency,
 ) -> UserResponse:
     """Get the current user from the request context."""
-    claims = await verify_key(token)
+    claims = await verify_access_token(token)
     issuer = claims["iss"]
     subject = claims["sub"]
     scopes = claims["scopes"]
@@ -98,6 +138,77 @@ async def get_current_user(
                 detail=f"Not enough permissions for scope: {scope}",
             )
     return user
+
+
+async def refresh_access_token(refresh_token: str) -> TokenResponse:
+    """Exchange a refresh token for a new access token.
+    
+    Validates that the refresh token is valid and that the session exists,
+    then generates a new access token with the same scopes.
+    """
+    try:
+        claims = await verify_refresh_token(refresh_token)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+    
+    subject = claims.get("sub")
+    session_id = claims.get("session_id")
+    jti = claims.get("jti")
+    
+    if not subject or not session_id or not jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token claims",
+        )
+    
+    user_record = user_db.get(subject)
+    if not user_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    
+    # Verify that the session is valid
+    refresh_sessions = user_record["refresh_sessions"]
+    session = next(
+        (
+            refresh_session
+            for refresh_session in refresh_sessions
+            if refresh_session["session_id"] == session_id
+            and refresh_session["jti"] == jti
+        ),
+        None,
+    )
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token session expired",
+        )
+    
+    # Restore scopes from the persisted session because refresh tokens do not
+    # carry access-token claims.
+    scopes = session["scopes"]
+    
+    # Generate new access token with same scopes
+    access_token = await issue_key(
+        subject=subject,
+        scopes=scopes,
+    )
+    
+    # Rotate the refresh token identifier while keeping the session active.
+    new_jti = str(uuid.uuid4())
+    new_refresh_token = await issue_refresh_token(
+        subject=subject,
+        session_id=session_id,
+        jti=new_jti,
+    )
+    session["jti"] = new_jti
+    
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
+
 
 type TokenDependency = Annotated[TokenResponse, Depends(get_token)]
 
