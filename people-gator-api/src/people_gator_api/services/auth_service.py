@@ -45,6 +45,7 @@ class UserRecord(TypedDict):
 
 security = OAuth2PasswordBearer(
     tokenUrl="/api/v1/token/login",
+    refreshUrl="/api/v1/token/refresh",
     scheme_name="PeopleGator API OAuth2PasswordBearer",
     scopes={
         BROWSE_SCOPE: "Browse data and metadata",
