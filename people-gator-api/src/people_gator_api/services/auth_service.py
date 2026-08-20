@@ -34,7 +34,6 @@ KNOWN_SCOPES = {
 
 
 class RefreshSession(TypedDict):
-    session_id: str
     jti: str
     scopes: list[str]
 
@@ -42,7 +41,7 @@ class RefreshSession(TypedDict):
 class UserRecord(TypedDict):
     hash: str
     scopes: set[str]
-    refresh_sessions: list[RefreshSession]
+    refresh_sessions: dict[str, RefreshSession]
 
 security = OAuth2PasswordBearer(
     tokenUrl="/api/v1/token/login",
@@ -61,7 +60,7 @@ user_db: dict[str, UserRecord] = {
     "test": {
         "hash": "$argon2id$v=19$m=65536,t=3,p=4$iTpODf7wIneTlqalyjALZA$1U6pPAHY87UZFYdK0R6wm6B403c9l42nnTw5K9ThuQc",
         "scopes": KNOWN_SCOPES,
-        "refresh_sessions": [],  # List of session and refresh token IDs (max 4)
+        "refresh_sessions": {},  # Session UUID to refresh session (max 4)
     }
 }
 
@@ -106,11 +105,12 @@ async def get_token(
         jti=jti,
     )
     
-    # Store session ID (limit to 4 sessions per user)
+    # Store session by UUID (limit to 4 sessions per user).
     refresh_sessions = user_record["refresh_sessions"]
-    refresh_sessions.append({"session_id": session_id, "jti": jti, "scopes": scopes})
+    refresh_sessions[session_id] = {"jti": jti, "scopes": scopes}
     if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
-        refresh_sessions.pop(0)  # Remove oldest session
+        oldest_session_id = next(iter(refresh_sessions))
+        del refresh_sessions[oldest_session_id]
     user_record["refresh_sessions"] = refresh_sessions
     
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
@@ -146,6 +146,7 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     Validates that the refresh token is valid and that the session exists,
     then generates a new access token with the same scopes.
     """
+    global user_db  # Use the in-memory user database for this example
     try:
         claims = await verify_refresh_token(refresh_token)
     except Exception:
@@ -171,18 +172,10 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
             detail="User not found",
         )
     
-    # Verify that the session is valid
+    # Verify that the session is valid and that its current token is being used.
     refresh_sessions = user_record["refresh_sessions"]
-    session = next(
-        (
-            refresh_session
-            for refresh_session in refresh_sessions
-            if refresh_session["session_id"] == session_id
-            and refresh_session["jti"] == jti
-        ),
-        None,
-    )
-    if session is None:
+    session = refresh_sessions.get(session_id)
+    if session is None or session["jti"] != jti:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token session expired",
@@ -205,7 +198,8 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
         session_id=session_id,
         jti=new_jti,
     )
-    session["jti"] = new_jti
+    del refresh_sessions[session_id]
+    refresh_sessions[session_id] = {"jti": new_jti, "scopes": scopes}
     
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 
