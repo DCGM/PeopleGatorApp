@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 from pydantic import BaseModel
 from people_gator_api.schemas.jwks import JwksResponse, TokenResponse
 from people_gator_api.services.auth_service import TokenDependency, refresh_access_token
