@@ -59,7 +59,7 @@ async def test_delete_entities_by_type_deletes_every_matching_entity(
 
     response = await entity_service.delete_entities(
         client=SimpleNamespace(),  # pyright: ignore[reportArgumentType] - tests use a lightweight client double.
-        payload=EntityDeleteManyRequest(entity_type="person"),
+        payload=EntityDeleteManyRequest(entity_type=EntityType.person),
     )
 
     assert response.mode == "entity_type"
@@ -121,6 +121,7 @@ async def test_patch_entity_returns_none_when_entity_does_not_exist() -> None:
     patched = await entity_service.patch_entity(
         client=client,  # pyright: ignore[reportArgumentType] - tests use a lightweight client double.
         entity_id=entity_id,
+        principal_id=uuid.uuid4(),
         payload=EntityPatchRequest(name="Updated name"),
     )
 
@@ -203,6 +204,7 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors(
     patched = await entity_service.patch_entity(
         client=client,  # pyright: ignore[reportArgumentType] - tests use a lightweight client double.
         entity_id=entity_id,
+        principal_id=principal_id,
         payload=EntityPatchRequest(
             name="New name",
             aliases=["Alias 1", "Alias 2"],
@@ -236,42 +238,11 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors(
     }
 
 
-def test_parse_exact_property_filters_rejects_non_filterable_text_fields() -> None:
-    with pytest.raises(ValueError, match="Filtering by 'name' is not supported"):
-        entity_service._parse_exact_property_filters(["name:John Doe"])
-
-
-def test_build_entity_filters_rejects_conflicting_entity_type_filters() -> None:
-    with pytest.raises(ValueError, match="Conflicting entity_type filters"):
-        entity_service._build_entity_filters(
-            entity_type=EntityType.person,
-            wikidata_id=None,
-            nlcr_authority_id=None,
-            principal_id=None,
-            exact_filters=["entity_type:place"],
-        )
-
-
-def test_build_entity_filters_rejects_invalid_principal_id_exact_filter() -> None:
-    with pytest.raises(
-        ValueError,
-        match="principal_id exact_filter must be a valid UUID",
-    ):
-        entity_service._build_entity_filters(
-            entity_type=None,
-            wikidata_id=None,
-            nlcr_authority_id=None,
-            principal_id=None,
-            exact_filters=["principal_id:not-a-uuid"],
-        )
-
-
 def test_build_entity_filters_supports_exact_identity_filters() -> None:
     filters = entity_service._build_entity_filters(
         entity_type=EntityType.person,
         wikidata_id="Q42",
         nlcr_authority_id="A100",
         principal_id=uuid.uuid4(),
-        exact_filters=None,
     )
     assert len(filters) == 4

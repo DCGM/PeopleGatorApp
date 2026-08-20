@@ -71,6 +71,13 @@ class SseEventType(StrEnum):
     SOURCE_DELETED = "source_deleted"
 
 
+class SseEvent(BaseModel):
+    """Public event model for SSE subscriptions."""
+
+    event: SseEventType
+    data: dict[str, object]
+
+
 class TopicBroker(Protocol):
     """Transport contract shared by local and future distributed brokers."""
 
@@ -307,7 +314,7 @@ class LocalTopicBroker:
             raw = await queue.get()
             if raw is None:
                 return
-            yield model.model_validate(raw)
+            yield model.model_validate(raw._asdict())
 
 
 _sse_broker: TopicBroker | None = None

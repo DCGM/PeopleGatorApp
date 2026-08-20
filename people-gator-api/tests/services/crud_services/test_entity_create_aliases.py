@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from people_gator_api.schemas.entities import EntityCreateRequest
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.services.crud_services import entity_service
 
 
@@ -32,7 +33,7 @@ async def test_create_entity_persists_aliases_as_text_array(
     monkeypatch.setattr(entity_service, "new_uuid6", lambda: uuid.UUID(int=1))
 
     payload = EntityCreateRequest(
-        entity_type="person",
+        entity_type=EntityType.person,
         name="Zoltan Mihaly Nagy",
         aliases=["Zoltan Mihaly Nagy", "Zoltan Nagy"],
     )
@@ -69,7 +70,7 @@ async def test_create_entity_defaults_missing_aliases_to_empty_text_array(
     monkeypatch.setattr(entity_service, "upsert", fake_upsert)
     monkeypatch.setattr(entity_service, "new_uuid6", lambda: uuid.UUID(int=3))
 
-    payload = EntityCreateRequest(entity_type="person", name="Zoltan Mihaly Nagy")
+    payload = EntityCreateRequest(entity_type=EntityType.person, name="Zoltan Mihaly Nagy")
 
     result = await entity_service.create_entity(
         client=SimpleNamespace(),  # pyright: ignore[reportArgumentType] - test double for Weaviate client.
