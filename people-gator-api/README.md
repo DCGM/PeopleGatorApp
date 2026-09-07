@@ -29,3 +29,29 @@ Run it from the common package:
 cd ../people-gator-common
 uv run people-gator-import-authorities --help
 ```
+
+## Weaviate operations
+
+`compose.dev.yaml` keeps the Weaviate version pinned and enables single-node
+Raft recovery so persisted collections survive container recreation. Its health
+check waits for the database, Raft leader, and schema to be ready before API or
+backup services start.
+
+The compose stack creates a verified native filesystem backup when none exists
+and every 24 hours thereafter. Backups are stored outside the live-data
+filesystem and the three newest backups are retained. These optional `.env`
+settings override the defaults:
+
+```dotenv
+WEAVIATE_BACKUP_HOST_PATH=/mnt/backup/PeopleGator-backups/weaviate-dev
+WEAVIATE_BACKUP_KEEP_COUNT=3
+WEAVIATE_BACKUP_INTERVAL_SECONDS=86400
+WEAVIATE_BACKUP_RETRY_SECONDS=300
+WEAVIATE_BACKUP_TIMEOUT_SECONDS=21600
+```
+
+To inspect backups:
+
+```bash
+curl http://localhost:8080/v1/backups/filesystem
+```

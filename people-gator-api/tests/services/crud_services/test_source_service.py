@@ -25,7 +25,11 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_PORT", "50051")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.sources import SourceResponse
+from people_gator_api.schemas.sources import (
+    NlcrAuthoritySourceMetadata,
+    SourceDescriptorRequest,
+    SourceResponse,
+)
 from people_gator_api.services.crud_services import source_service
 
 
@@ -91,3 +95,103 @@ async def test_delete_source_removes_existing_source() -> None:
 
     assert deleted is True
     assert deleted_ids == [source_id]
+
+
+@pytest.mark.asyncio
+async def test_resolve_source_reference_creates_source_from_uri(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_ids: list[uuid.UUID] = []
+    created_properties: list[dict[str, object]] = []
+
+    async def fake_get_source_by_type_uri(
+        _client: object,
+        _principal_id: uuid.UUID,
+        _source_type: SourceKind,
+        _uri: str,
+    ) -> SourceResponse | None:
+        return None
+
+    async def fake_upsert(
+        _client: object,
+        _collection_name: str,
+        object_uuid: uuid.UUID,
+        *,
+        properties: dict[str, object],
+        references: object | None = None,
+        vector: object | None = None,
+    ) -> None:
+        del references
+        del vector
+        created_ids.append(object_uuid)
+        created_properties.append(properties)
+
+    monkeypatch.setattr(
+        source_service, "get_source_by_type_uri", fake_get_source_by_type_uri
+    )
+    monkeypatch.setattr(source_service, "upsert", fake_upsert)
+
+    descriptor = SourceDescriptorRequest(uri="https://www.wikidata.org/entity/Q42")
+    resolved = await source_service.resolve_source_reference(
+        client=SimpleNamespace(),  # type: ignore[reportArgumentType]
+        principal_id=uuid.uuid4(),
+        source_id=None,
+        source=descriptor,
+    )
+
+    assert resolved.source_type == SourceKind.wikidata
+    assert resolved.uri == "https://www.wikidata.org/entity/Q42"
+    assert resolved.metadata is None
+    assert created_ids == [resolved.source_id]
+    assert created_properties == [
+        {
+            "source_type": SourceKind.wikidata.value,
+            "uri": "https://www.wikidata.org/entity/Q42",
+            "metadata": None,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_resolve_source_reference_derives_uri_from_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_get_source_by_type_uri(
+        _client: object,
+        _principal_id: uuid.UUID,
+        _source_type: SourceKind,
+        _uri: str,
+    ) -> SourceResponse | None:
+        return None
+
+    async def fake_upsert(
+        _client: object,
+        _collection_name: str,
+        _object_uuid: uuid.UUID,
+        *,
+        properties: dict[str, object],
+        references: object | None = None,
+        vector: object | None = None,
+    ) -> None:
+        del references
+        del vector
+        assert properties["uri"] == "nlcr:abc-123"
+        assert properties["source_type"] == SourceKind.nlcr.value
+
+    monkeypatch.setattr(
+        source_service, "get_source_by_type_uri", fake_get_source_by_type_uri
+    )
+    monkeypatch.setattr(source_service, "upsert", fake_upsert)
+
+    descriptor = SourceDescriptorRequest(
+        metadata=NlcrAuthoritySourceMetadata(nlcr_id="abc-123")
+    )
+    resolved = await source_service.resolve_source_reference(
+        client=SimpleNamespace(),  # type: ignore[reportArgumentType]
+        principal_id=uuid.uuid4(),
+        source_id=None,
+        source=descriptor,
+    )
+
+    assert resolved.source_type == SourceKind.nlcr
+    assert resolved.uri == "nlcr:abc-123"

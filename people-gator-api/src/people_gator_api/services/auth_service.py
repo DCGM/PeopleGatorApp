@@ -44,8 +44,8 @@ class UserRecord(TypedDict):
     refresh_sessions: dict[str, RefreshSession]
 
 security = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/token/login",
-    refreshUrl="/api/v1/token/refresh",
+    tokenUrl="/token/login",
+    refreshUrl="/token/refresh",
     scheme_name="PeopleGator API OAuth2PasswordBearer",
     scopes={
         BROWSE_SCOPE: "Browse data and metadata",

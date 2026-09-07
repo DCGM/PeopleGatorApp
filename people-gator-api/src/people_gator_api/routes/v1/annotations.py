@@ -39,6 +39,7 @@ from people_gator_api.services.crud_services.annotation_service import (
     patch_document_mention_entity,
     patch_face_entity,
 )
+from people_gator_api.services.crud_services.source_service import SourceResolutionError
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.sse import BrokerDependency, SseEventType
@@ -80,7 +81,10 @@ async def create_page_mention_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> PageMentionResponse:
-    page_mention = await create_page_mention(session, payload, principal.principal_id)
+    try:
+        page_mention = await create_page_mention(session, payload, principal.principal_id)
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
     broker.publish_task(
         ("page-mentions", page_mention.page_mention_id),
         ("document-mentions", page_mention.document_mention_id, "page-mentions", page_mention.page_mention_id),
@@ -140,7 +144,12 @@ async def create_document_mention_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> DocumentMentionResponse:
-    document_mention = await create_document_mention(session, payload, principal.principal_id)
+    try:
+        document_mention = await create_document_mention(
+            session, payload, principal.principal_id
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
     broker.publish_task(
         ("document-mentions", document_mention.document_mention_id),
         ("entities", document_mention.entity_id, "document-mentions", document_mention.document_mention_id),
@@ -227,7 +236,10 @@ async def create_face_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> FaceResponse:
-    face = await create_face(session, payload, principal.principal_id)
+    try:
+        face = await create_face(session, payload, principal.principal_id)
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
     broker.publish_task(
         ("faces", face.detection_id),
         ("entities", face.entity_id, "faces", face.detection_id),

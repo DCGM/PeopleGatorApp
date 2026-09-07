@@ -1,8 +1,16 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from people_gator_api.schemas.jwks import JwksResponse, TokenResponse
-from people_gator_api.services.auth_service import TokenDependency, refresh_access_token
-from people_gator_api.services.jwk_service import get_key_set
+from people_gator_api.schemas.jwks import (
+    JwksResponse,
+    OpenIDConfigurationResponse,
+    TokenResponse,
+)
+from people_gator_api.services.auth_service import (
+    KNOWN_SCOPES,
+    TokenDependency,
+    refresh_access_token,
+)
+from people_gator_api.services.jwk_service import TOKEN_ISSUER, get_key_set
 
 router = APIRouter(tags=["jwks"])
 
@@ -17,6 +25,23 @@ async def get_jwks() -> JwksResponse:
     """Return the public JSON Web Key Set used by this service."""
     key_set = await get_key_set()
     return JwksResponse.model_validate(key_set.as_dict(private=False))
+
+
+@router.get(
+    "/.well-known/openid-configuration",
+    response_model=OpenIDConfigurationResponse,
+)
+async def get_openid_configuration() -> OpenIDConfigurationResponse:
+    """Return OpenID Connect discovery metadata for this token service."""
+    return OpenIDConfigurationResponse(
+        issuer=TOKEN_ISSUER,
+        jwks_uri=f"{TOKEN_ISSUER}/.well-known/jwks.json",
+        token_endpoint=f"{TOKEN_ISSUER}/token/login",
+        grant_types_supported=["password", "refresh_token"],
+        scopes_supported=sorted(KNOWN_SCOPES),
+        subject_types_supported=["public"],
+        token_endpoint_auth_methods_supported=["none"],
+    )
 
 
 @router.post("/token/login", response_model=TokenResponse)

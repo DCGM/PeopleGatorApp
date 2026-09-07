@@ -13,6 +13,7 @@ from pydantic import (
 
 from people_gator_api.schemas.common import GenericListResponse
 from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.sources import SourceDescriptorRequest
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -123,7 +124,16 @@ class PageMentionCreateRequest(BaseModel):
     aliases: list[str]
     polygons: list[Polygon]
     document_mention_id: uuid.UUID
-    source_id: uuid.UUID
+    source_id: uuid.UUID | None = None
+    source: SourceDescriptorRequest | None = None
+
+    @model_validator(mode="after")
+    def validate_source_selector(self) -> "PageMentionCreateRequest":
+        has_source_id = self.source_id is not None
+        has_source = self.source is not None
+        if has_source_id == has_source:
+            raise ValueError("provide exactly one of source_id or source")
+        return self
 
 
 class PageMentionResponse(BaseModel):
@@ -161,7 +171,20 @@ class PageMentionInlineCreateRequest(BaseModel):
     information: str
     aliases: list[str]
     polygons: list[Polygon]
-    source_id: uuid.UUID
+    source_id: uuid.UUID | None = None
+    source: SourceDescriptorRequest | None = None
+
+    @model_validator(mode="after")
+    def validate_source_selector(self) -> "PageMentionInlineCreateRequest":
+        has_source_id = self.source_id is not None
+        has_source = self.source is not None
+        if has_source_id == has_source:
+            raise ValueError("provide exactly one of source_id or source")
+        return self
+
+
+def _default_page_mentions() -> list[PageMentionInlineCreateRequest]:
+    return []
 
 
 class DocumentMentionCreateRequest(BaseModel):
@@ -170,9 +193,20 @@ class DocumentMentionCreateRequest(BaseModel):
     name: str
     information: str
     aliases: list[str]
-    source_id: uuid.UUID
+    source_id: uuid.UUID | None = None
+    source: SourceDescriptorRequest | None = None
     entity_id: uuid.UUID
-    page_mentions: list[PageMentionInlineCreateRequest] = []
+    page_mentions: list[PageMentionInlineCreateRequest] = Field(
+        default_factory=_default_page_mentions
+    )
+
+    @model_validator(mode="after")
+    def validate_source_selector(self) -> "DocumentMentionCreateRequest":
+        has_source_id = self.source_id is not None
+        has_source = self.source is not None
+        if has_source_id == has_source:
+            raise ValueError("provide exactly one of source_id or source")
+        return self
 
 
 class DocumentMentionResponse(BaseModel):
@@ -224,13 +258,22 @@ class FaceKeypoint(BaseModel):
 class FaceCreateRequest(BaseModel):
     """Request body for ingesting a face detection."""
 
-    source_id: uuid.UUID
+    source_id: uuid.UUID | None = None
+    source: SourceDescriptorRequest | None = None
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
     embedding: list[float] | None = None
     model_identifier: str | None = None
     entity_id: uuid.UUID
     confidence: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_source_selector(self) -> "FaceCreateRequest":
+        has_source_id = self.source_id is not None
+        has_source = self.source is not None
+        if has_source_id == has_source:
+            raise ValueError("provide exactly one of source_id or source")
+        return self
 
 
 class FaceResponse(BaseModel):

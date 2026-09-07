@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 
 import weaviate
 from weaviate import WeaviateAsyncClient
@@ -39,16 +40,52 @@ async def init_weaviate() -> None:
     Call once during application startup (e.g. from FastAPI lifespan).
     """
     global _client  # noqa: PLW0603
-    _client = _build_client()
-    await _client.connect()
-    logger.info(
-        "Weaviate client connected",
-        extra={
-            "http_host": settings.weaviate.http_host,
-            "http_port": settings.weaviate.http_port,
-        },
-    )
-    await _ensure_collections(_client)
+    if _client is not None:
+        return
+
+    cfg = settings.weaviate
+    deadline = time.monotonic() + cfg.startup_timeout_seconds
+    attempt = 0
+    while True:
+        attempt += 1
+        candidate = _build_client()
+        try:
+            await candidate.connect()
+            await _ensure_collections(candidate)
+        except Exception as exc:
+            # A failed connect can still allocate HTTP/gRPC resources. Close
+            # the whole candidate and build a fresh client for the next try.
+            await candidate.close()
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                logger.error(
+                    "Unable to initialise Weaviate within %.1f seconds",
+                    cfg.startup_timeout_seconds,
+                )
+                raise
+            delay_seconds = min(
+                cfg.startup_retry_interval_seconds,
+                remaining_seconds,
+            )
+            logger.warning(
+                "Weaviate is not ready (attempt %s); retrying in %.1f seconds: %s",
+                attempt,
+                delay_seconds,
+                exc,
+            )
+            await asyncio.sleep(delay_seconds)
+            continue
+
+        _client = candidate
+        logger.info(
+            "Weaviate client connected and schema is ready",
+            extra={
+                "http_host": cfg.http_host,
+                "http_port": cfg.http_port,
+                "attempt": attempt,
+            },
+        )
+        return
 
 
 async def close_weaviate() -> None:

@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import httpx
 import pytest
 from weaviate.classes.config import ReferenceProperty
@@ -58,6 +60,47 @@ class _FakeWeaviateClient:
     def __init__(self, existing_collections: set[str]) -> None:
         super().__init__()
         self.collections = _FakeCollections(existing_collections)
+
+
+class _LifecycleClient:
+    def __init__(self, connect_error: Exception | None = None) -> None:
+        self.connect_error = connect_error
+        self.connect_calls = 0
+        self.close_calls = 0
+
+    async def connect(self) -> None:
+        self.connect_calls += 1
+        if self.connect_error is not None:
+            raise self.connect_error
+
+    async def close(self) -> None:
+        self.close_calls += 1
+
+
+@pytest.mark.asyncio
+async def test_init_weaviate_rebuilds_client_after_failed_connect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failed_client = _LifecycleClient(ConnectionError("database is starting"))
+    connected_client = _LifecycleClient()
+    clients = iter((failed_client, connected_client))
+    ensure_collections = AsyncMock()
+    sleep = AsyncMock()
+
+    monkeypatch.setattr(client, "_client", None)
+    monkeypatch.setattr(client, "_build_client", lambda: next(clients))
+    monkeypatch.setattr(client, "_ensure_collections", ensure_collections)
+    monkeypatch.setattr(client.asyncio, "sleep", sleep)
+
+    await client.init_weaviate()
+
+    assert failed_client.close_calls == 1
+    assert connected_client.connect_calls == 1
+    assert client.get_weaviate_client() is connected_client
+    ensure_collections.assert_awaited_once_with(connected_client)
+    sleep.assert_awaited_once()
+
+    await client.close_weaviate()
 
 
 def test_ordered_collection_specs_respect_reference_dependencies() -> None:

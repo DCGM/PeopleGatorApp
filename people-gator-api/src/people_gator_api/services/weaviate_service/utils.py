@@ -45,6 +45,7 @@ from people_gator_api.schemas.principals import (
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     NlcrAuthoritySourceMetadata,
+    ObalkyKnihSourceMetadata,
     PageSourceMetadata,
     SourceResponse,
     WikidataSourceMetadata,
@@ -259,7 +260,7 @@ def source_response(
         SourceKind.wikidata: WikidataSourceMetadata,
         SourceKind.wikimedia: WikimediaImageSourceMetadata,
         SourceKind.nlcr: NlcrAuthoritySourceMetadata,
-        SourceKind.obalkyknih: DocumentSourceMetadata,
+        SourceKind.obalkyknih: ObalkyKnihSourceMetadata,
     }
     logger.debug(
         "Mapping source response",

@@ -109,6 +109,19 @@ class SourceCreateRequest(BaseModel):
         return self
 
 
+class SourceDescriptorRequest(BaseModel):
+    """Source selector used by annotation ingest endpoints."""
+
+    uri: str | None = None
+    metadata: SourceMetadata | None = None
+
+    @model_validator(mode="after")
+    def validate_source_descriptor(self) -> "SourceDescriptorRequest":
+        if self.uri is None and self.metadata is None:
+            raise ValueError("source descriptor requires uri or metadata")
+        return self
+
+
 class SourceResponse(BaseModel):
     """A single source record."""
 

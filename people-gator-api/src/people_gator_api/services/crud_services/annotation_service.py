@@ -28,6 +28,7 @@ from people_gator_api.services.weaviate_service.db_schema import (
     FACE_COLLECTION,
     PAGE_MENTION_COLLECTION,
 )
+from people_gator_api.services.crud_services.source_service import resolve_source_reference
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     document_mention_response,
@@ -64,10 +65,16 @@ async def create_page_mention(
     payload: PageMentionCreateRequest,
     principal_id: uuid.UUID,
 ) -> PageMentionResponse:
+    source = await resolve_source_reference(
+        client,
+        principal_id,
+        source_id=payload.source_id,
+        source=payload.source,
+    )
     logger.info(
         "create_page_mention called",
         extra={
-            "source_id": payload.source_id,
+            "source_id": source.source_id,
             "document_mention_id": payload.document_mention_id,
         },
     )
@@ -87,7 +94,7 @@ async def create_page_mention(
         },
         references={
             "document_mention": payload.document_mention_id,
-            "source": payload.source_id,
+            "source": source.source_id,
             "principal": principal_id,
         },
     )
@@ -98,7 +105,7 @@ async def create_page_mention(
         aliases=payload.aliases,
         polygons=payload.polygons,
         document_mention_id=payload.document_mention_id,
-        source_id=payload.source_id,
+        source_id=source.source_id,
         principal_id=principal_id,
     )
 
@@ -114,49 +121,58 @@ async def create_many_page_mentions(
         return []
     collection = client.collections.get(PAGE_MENTION_COLLECTION)
     ids: list[uuid.UUID] = [new_uuid6() for _ in payloads]
-    objects: list[DataObject[WeaviateProperties, ReferenceInputs]] = [
-        DataObject(
-            uuid=page_mention_id,
-            properties={
-                "name": payload.name,
-                "information": payload.information,
-                "aliases": payload.aliases,
-                "polygons": [
-                    {
-                        "points": [
-                            {"x": point.x, "y": point.y} for point in polygon.points
-                        ]
-                    }
-                    for polygon in payload.polygons
-                ],
-            },
-            references={
-                "document_mention": payload.document_mention_id,
-                "source": payload.source_id,
-                "principal": principal_id,
-            },
+    objects: list[DataObject[WeaviateProperties, ReferenceInputs]] = []
+    for page_mention_id, payload in zip(ids, payloads):
+        source_id = payload.source_id
+        if source_id is None:
+            raise ValueError("page mention source_id is required for batch insert")
+        objects.append(
+            DataObject(
+                uuid=page_mention_id,
+                properties={
+                    "name": payload.name,
+                    "information": payload.information,
+                    "aliases": payload.aliases,
+                    "polygons": [
+                        {
+                            "points": [
+                                {"x": point.x, "y": point.y} for point in polygon.points
+                            ]
+                        }
+                        for polygon in payload.polygons
+                    ],
+                },
+                references={
+                    "document_mention": payload.document_mention_id,
+                    "source": source_id,
+                    "principal": principal_id,
+                },
+            )
         )
-        for page_mention_id, payload in zip(ids, payloads)
-    ]
     result = await collection.data.insert_many(objects)
     if result.errors:
         logger.error(
             "create_many_page_mentions partial failure",
             extra={"errors": {str(k): str(v) for k, v in result.errors.items()}},
         )
-    return [
-        PageMentionResponse(
-            page_mention_id=page_mention_id,
-            name=payload.name,
-            information=payload.information,
-            aliases=payload.aliases,
-            polygons=payload.polygons,
-            document_mention_id=payload.document_mention_id,
-            source_id=payload.source_id,
-            principal_id=principal_id,
+    responses: list[PageMentionResponse] = []
+    for page_mention_id, payload in zip(ids, payloads):
+        source_id = payload.source_id
+        if source_id is None:
+            raise ValueError("page mention source_id is required for batch response")
+        responses.append(
+            PageMentionResponse(
+                page_mention_id=page_mention_id,
+                name=payload.name,
+                information=payload.information,
+                aliases=payload.aliases,
+                polygons=payload.polygons,
+                document_mention_id=payload.document_mention_id,
+                source_id=source_id,
+                principal_id=principal_id,
+            )
         )
-        for page_mention_id, payload in zip(ids, payloads)
-    ]
+    return responses
 
 
 @trace()
@@ -267,9 +283,15 @@ async def create_document_mention(
     payload: DocumentMentionCreateRequest,
     principal_id: uuid.UUID,
 ) -> DocumentMentionResponse:
+    source = await resolve_source_reference(
+        client,
+        principal_id,
+        source_id=payload.source_id,
+        source=payload.source,
+    )
     logger.info(
         "create_document_mention called",
-        extra={"source_id": payload.source_id, "entity_id": payload.entity_id},
+        extra={"source_id": source.source_id, "entity_id": payload.entity_id},
     )
     document_mention_id = new_uuid6()
     await upsert(
@@ -283,7 +305,7 @@ async def create_document_mention(
         },
         references={
             "entity": payload.entity_id,
-            "source": payload.source_id,
+            "source": source.source_id,
             "principal": principal_id,
         },
     )
@@ -293,21 +315,28 @@ async def create_document_mention(
         information=payload.information,
         aliases=payload.aliases,
         principal_id=principal_id,
-        source_id=payload.source_id,
+        source_id=source.source_id,
         entity_id=payload.entity_id,
     )
     if payload.page_mentions:
-        pm_payloads = [
-            PageMentionCreateRequest(
-                name=pm.name,
-                information=pm.information,
-                aliases=pm.aliases,
-                polygons=pm.polygons,
-                source_id=pm.source_id,
-                document_mention_id=document_mention_id,
+        pm_payloads: list[PageMentionCreateRequest] = []
+        for page_mention in payload.page_mentions:
+            page_source = await resolve_source_reference(
+                client,
+                principal_id,
+                source_id=page_mention.source_id,
+                source=page_mention.source,
             )
-            for pm in payload.page_mentions
-        ]
+            pm_payloads.append(
+                PageMentionCreateRequest(
+                    name=page_mention.name,
+                    information=page_mention.information,
+                    aliases=page_mention.aliases,
+                    polygons=page_mention.polygons,
+                    source_id=page_source.source_id,
+                    document_mention_id=document_mention_id,
+                )
+            )
         await create_many_page_mentions(client, pm_payloads, principal_id)
     return dm_response
 
@@ -480,9 +509,15 @@ async def create_face(
     payload: FaceCreateRequest,
     principal_id: uuid.UUID,
 ) -> FaceResponse:
+    source = await resolve_source_reference(
+        client,
+        principal_id,
+        source_id=payload.source_id,
+        source=payload.source,
+    )
     logger.info(
         "create_face called",
-        extra={"source_id": payload.source_id, "entity_id": payload.entity_id},
+        extra={"source_id": source.source_id, "entity_id": payload.entity_id},
     )
     detection_id = new_uuid6()
     await upsert(
@@ -504,14 +539,14 @@ async def create_face(
         },
         references={
             "entity": payload.entity_id,
-            "source": payload.source_id,
+            "source": source.source_id,
             "principal": principal_id,
         },
         vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
     )
     return FaceResponse(
         detection_id=detection_id,
-        source_id=payload.source_id,
+        source_id=source.source_id,
         bounding_box=payload.bounding_box,
         keypoints=payload.keypoints,
         principal_id=principal_id,

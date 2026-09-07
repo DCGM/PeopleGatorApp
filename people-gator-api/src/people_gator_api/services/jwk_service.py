@@ -18,6 +18,9 @@ from people_gator_api.settings import settings
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
 
+TOKEN_ISSUER = "https://dev.people-gator.capturemyhand.com"
+TOKEN_AUDIENCE = "dev.people-gator.capturemyhand.com"
+
 async def get_key_set() -> KeySet:
     global _keyset, _last_fetch_time
     now = time.monotonic()
@@ -52,10 +55,8 @@ async def get_access_claims_registry() -> JWTClaimsRegistry:
     _access_claims_registry = JWTClaimsRegistry(
         now=_now,
         leeway=0,
-        iss=ClaimsOption(
-            value="http://dev.people-gator.capturemyhand.com", essential=True
-        ),
-        aud=ClaimsOption(value="dev.people-gator.capturemyhand.com", essential=True),
+        iss=ClaimsOption(value=TOKEN_ISSUER, essential=True),
+        aud=ClaimsOption(value=TOKEN_AUDIENCE, essential=True),
         sub=ClaimsOption(allow_blank=False, essential=True),
         scopes=ClaimsOption(allow_blank=False, essential=True),
     )
@@ -69,10 +70,8 @@ async def get_refresh_claims_registry() -> JWTClaimsRegistry:
     _refresh_claims_registry = JWTClaimsRegistry(
         now=_now,
         leeway=0,
-        iss=ClaimsOption(
-            value="http://dev.people-gator.capturemyhand.com", essential=True
-        ),
-        aud=ClaimsOption(value="dev.people-gator.capturemyhand.com", essential=True),
+        iss=ClaimsOption(value=TOKEN_ISSUER, essential=True),
+        aud=ClaimsOption(value=TOKEN_AUDIENCE, essential=True),
         sub=ClaimsOption(allow_blank=False, essential=True),
         scopes=ClaimsOption(allow_blank=False, essential=True),
         jti=ClaimsOption(allow_blank=False, essential=True),
@@ -94,10 +93,10 @@ async def issue_access_token(
     subject: str,
     scopes: list[str],
 ):
-    iss = "http://dev.people-gator.capturemyhand.com"
+    iss = TOKEN_ISSUER
     iat = _now_datetime()
     exp = iat + datetime.timedelta(hours=2)
-    aud = "dev.people-gator.capturemyhand.com"
+    aud = TOKEN_AUDIENCE
     claims = {
         "iss": iss,
         "sub": subject,
@@ -122,9 +121,9 @@ async def issue_refresh_token(
     Refresh tokens do not expire and include the caller-provided unique
     identifier (jti) and session_id to track concurrent sessions.
     """
-    iss = "http://dev.people-gator.capturemyhand.com"
+    iss = TOKEN_ISSUER
     iat = _now_datetime()
-    aud = "dev.people-gator.capturemyhand.com"
+    aud = TOKEN_AUDIENCE
     claims = {
         "iss": iss,
         "sub": subject,

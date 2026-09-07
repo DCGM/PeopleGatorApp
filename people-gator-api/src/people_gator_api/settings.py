@@ -60,6 +60,8 @@ class WeaviateSettings(BaseModel):
     grpc_port: int = Field(le=65535, ge=1)
     grpc_secure: bool
     api_key: str | None = None
+    startup_timeout_seconds: float = Field(default=300.0, gt=0)
+    startup_retry_interval_seconds: float = Field(default=2.0, gt=0)
 
 
 class EmbeddingServiceSettings(BaseModel):
