@@ -1,24 +1,62 @@
 services:
   people-gator-weaviate-dev:
-    image: semitechnologies/weaviate:latest
+    # Keep upgrades explicit: persisted Raft and shard formats must not be
+    # changed just because the floating `latest` tag moved.
+    image: cr.weaviate.io/semitechnologies/weaviate:1.36.22
     restart: unless-stopped
-    env_file: .env
+    stop_grace_period: 2m
     environment:
       CLUSTER_HOSTNAME: people-gator-weaviate-dev
       PERSISTENCE_DATA_PATH: /data
+      RAFT_BOOTSTRAP_EXPECT: 1
+      RAFT_ENABLE_ONE_NODE_RECOVERY: "true"
+      ENABLE_MODULES: backup-filesystem
+      BACKUP_FILESYSTEM_PATH: /backups
     volumes:
       - /mnt/hdd/Data/people-gator-dev/weaviate:/data
+      - ${WEAVIATE_BACKUP_HOST_PATH:-/mnt/backup/PeopleGator-backups/weaviate-dev}:/backups
     ports:
       - 8080:8080
       - 50051:50051
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -q --spider http://localhost:8080/v1/.well-known/ready
+        - >-
+          status="$$(wget -qO- http://localhost:8080/v1/cluster/statistics)" &&
+          echo "$$status" | grep -q '"synchronized":true' &&
+          echo "$$status" | grep -q '"dbLoaded":true' &&
+          echo "$$status" | grep -q '"leaderId":"people-gator-weaviate-dev"' &&
+          echo "$$status" | grep -q '"ready":true' &&
+          echo "$$status" | grep -q '"status":"HEALTHY"'
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 60
       start_period: 10s
+    networks:
+      - default
+
+  people-gator-weaviate-backup-dev:
+    image: people-gator-api-dev:latest
+    restart: unless-stopped
+    command:
+      - uv
+      - run
+      - python
+      - -m
+      - people_gator_api.cli.weaviate_backup
+    depends_on:
+      people-gator-weaviate-dev:
+        condition: service_healthy
+    environment:
+      WEAVIATE_BACKUP_API_URL: http://people-gator-weaviate-dev:8080
+      WEAVIATE_BACKUP_BACKEND: filesystem
+      WEAVIATE_BACKUP_LOCAL_PATH: /backups
+      WEAVIATE_BACKUP_KEEP_COUNT: ${WEAVIATE_BACKUP_KEEP_COUNT:-3}
+      WEAVIATE_BACKUP_INTERVAL_SECONDS: ${WEAVIATE_BACKUP_INTERVAL_SECONDS:-86400}
+      WEAVIATE_BACKUP_RETRY_SECONDS: ${WEAVIATE_BACKUP_RETRY_SECONDS:-300}
+      WEAVIATE_BACKUP_TIMEOUT_SECONDS: ${WEAVIATE_BACKUP_TIMEOUT_SECONDS:-21600}
+    volumes:
+      - ${WEAVIATE_BACKUP_HOST_PATH:-/mnt/backup/PeopleGator-backups/weaviate-dev}:/backups
     networks:
       - default
 
@@ -35,6 +73,12 @@ services:
       - 5679:5678 # debugger
     user: root
     env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/v1/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 32
+      start_period: 1s
     develop:
       # Create a `watch` configuration to update the app
       #
@@ -58,7 +102,7 @@ services:
           path: ./Dockerfile.dev
     labels:
       traefik.enable: true
-      traefik.http.routers.people-gator-api-dev.rule: Host(`dev.people-gator.capturemyhand.com`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))
+      traefik.http.routers.people-gator-api-dev.rule: Host(`dev.people-gator.capturemyhand.com`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`) || PathPrefix(`/.well-known/jwks.json`) || PathPrefix(`/.well-known/openid-configuration`) || PathPrefix(`/token/login`) || PathPrefix(`/token/refresh`))
       traefik.http.routers.people-gator-api-dev.entrypoints: websecure
       traefik.http.services.people-gator-api-dev.loadbalancer.server.port: 8000
       traefik.http.routers.people-gator-api-dev.tls: true
@@ -73,4 +117,3 @@ networks:
     external: true
   logging:
     external: true
-
