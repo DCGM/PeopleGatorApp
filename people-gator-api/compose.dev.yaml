@@ -74,11 +74,11 @@ services:
     user: root
     env_file: .env
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8000/api/v1/health"]
-      interval: 3s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/v1/health >/dev/null"]
+      interval: 10s
       timeout: 3s
       retries: 32
-      start_period: 1s
+      start_period: 0s
     develop:
       # Create a `watch` configuration to update the app
       #
