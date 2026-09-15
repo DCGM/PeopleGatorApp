@@ -67,14 +67,24 @@ describe('App', () => {
 
   it('previews a similar person without replacing the current face or line', async () => {
     await router.push(
-      '/libraries/library/documents/document/pages/page?person=face-01&line=line-anna',
+      '/libraries/library/documents/document/pages/page?person=face-01&selectedPerson=anna-novakova&line=line-anna',
     )
 
     const wrapper = mount(App, { global: { plugins: [router] } })
+    expect(
+      wrapper.get('[aria-label="Preview Anna Nováková on this page"]').attributes('aria-pressed'),
+    ).toBe('true')
+
     await wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.query).toEqual({ person: 'face-01', line: 'line-anna' })
+    expect(router.currentRoute.value.query).toEqual({
+      person: 'face-01',
+      selectedPerson: 'josef-svoboda',
+      line: 'line-anna',
+      translate: 'off',
+      context: '5',
+    })
     expect(wrapper.get('[aria-labelledby="selected-person-title"] h3').text()).toContain(
       'Anna Nováková',
     )
@@ -82,6 +92,43 @@ describe('App', () => {
     expect(
       wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').attributes('aria-pressed'),
     ).toBe('true')
+  })
+
+  it('does not select a face when the route has no person query', async () => {
+    await router.push('/libraries/library/documents/document/pages/page?line=line-anna')
+
+    const wrapper = mount(App, { global: { plugins: [router] } })
+
+    expect(wrapper.get('[aria-labelledby="selected-person-title"]').text()).toContain(
+      'No face selected',
+    )
+    expect(wrapper.get('[aria-label="Select Anna Nováková"]').attributes('aria-pressed')).toBe(
+      'false',
+    )
+    expect(wrapper.get('[aria-label="Select Josef Svoboda"]').attributes('aria-pressed')).toBe(
+      'false',
+    )
+    expect(wrapper.get('[aria-label="Select Unknown person"]').attributes('aria-pressed')).toBe(
+      'false',
+    )
+    expect(router.currentRoute.value.query.person).toBeUndefined()
+
+    await wrapper.get('[aria-label="Select Anna Nováková"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query.person).toBe('face-01')
+    expect(wrapper.get('[aria-label="Select Anna Nováková"]').attributes('aria-pressed')).toBe(
+      'true',
+    )
+
+    await wrapper.get('[aria-label="Clear face selection"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query.person).toBeUndefined()
+    expect(router.currentRoute.value.query.selectedPerson).toBeUndefined()
+    expect(wrapper.get('[aria-labelledby="selected-person-title"]').text()).toContain(
+      'No face selected',
+    )
   })
 
   it('defines all application pages', () => {

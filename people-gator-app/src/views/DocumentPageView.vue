@@ -6,8 +6,10 @@ import {
   CircleAlert,
   ListFilter,
   RefreshCcw,
+  ScanFace,
   UserRoundX,
   WandSparkles,
+  X,
 } from '@lucide/vue'
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -220,7 +222,16 @@ function routeContextLineCount(value: unknown) {
   return Math.max(1, routeNumber(value, 5, transcription.length - 1))
 }
 
-const selectedFaceId = ref(typeof route.query.person === 'string' ? route.query.person : faces[0]!.id)
+const selectedFaceId = ref<string | null>(
+  typeof route.query.person === 'string' && faces.some((face) => face.id === route.query.person)
+    ? route.query.person
+    : null,
+)
+const selectedPersonId = ref<string | null>(
+  typeof route.query.selectedPerson === 'string'
+    ? route.query.selectedPerson
+    : null,
+)
 const selectedLineIndex = ref(routeLineIndex(route.query.line))
 const isTranslationOpen = ref(route.query.translate === 'on')
 const selectedLanguage = ref<TranslationLanguage>('en')
@@ -228,16 +239,14 @@ const contextLineCount = ref(routeContextLineCount(route.query.context))
 const selectedFaceStatus = ref<'all' | FaceStatus>('all')
 const zoomPercent = ref(82)
 const selectedEntityKey = ref<string | null>(null)
-const previewedFaceId = ref<string | null>(null)
-const previewedEntityKey = ref<string | null>(null)
 const viewerElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
 const faceListElement = ref<HTMLElement | null>(null)
-const viewedSimilarPersonId = ref<string | null>(null)
 let panzoom: PanzoomObject | undefined
 
-const selectedFace = computed(() => faces.find((face) => face.id === selectedFaceId.value) ?? faces[0]!)
-const selectedFaceIndex = computed(() => faces.findIndex((face) => face.id === selectedFace.value.id))
+const selectedFace = computed(() => faces.find((face) => face.id === selectedFaceId.value))
+const selectedPersonCandidate = computed(() => similarPeople.find((person) => person.id === selectedPersonId.value))
+const selectedFaceIndex = computed(() => faces.findIndex((face) => face.id === selectedFaceId.value))
 const faceStatusFilter = computed<'all' | FaceStatus>({
   get: () => selectedFaceStatus.value,
   set: (status) => {
@@ -269,7 +278,8 @@ function syncRoute() {
   void router.replace({
     query: {
       ...route.query,
-      person: selectedFaceId.value,
+      person: selectedFaceId.value ?? undefined,
+      selectedPerson: selectedPersonId.value ?? undefined,
       line: transcription[selectedLineIndex.value]!.id,
       translate: isTranslationOpen.value ? 'on' : 'off',
       context: String(contextLineCount.value),
@@ -285,6 +295,13 @@ function selectTranslation(language: TranslationLanguage | 'off') {
 
 function selectFace(faceId: string) {
   selectedFaceId.value = faceId
+  selectedPersonId.value = faces.find((face) => face.id === faceId)?.personId ?? null
+  syncRoute()
+}
+
+function clearFaceSelection() {
+  selectedFaceId.value = null
+  selectedPersonId.value = null
   syncRoute()
 }
 
@@ -350,19 +367,21 @@ function navigateLine(direction: 'next' | 'previous') {
 }
 
 function previewSimilarPerson(person: SimilarPersonCandidate) {
-  viewedSimilarPersonId.value = person.id
-  previewedFaceId.value = person.faceId ?? null
-  previewedEntityKey.value = person.entityKey ?? null
+  selectedPersonId.value = person.id
+  syncRoute()
 }
 
 function assignSimilarPerson(person: SimilarPersonCandidate) {
-  viewedSimilarPersonId.value = person.id
+  if (!selectedFace.value) return
+  selectedPersonId.value = person.id
   selectedFace.value.personId = person.id
   selectedFace.value.name = person.name
   selectedFace.value.status = 'change'
+  syncRoute()
 }
 
 function createSimilarPerson(person: SimilarPersonCandidate) {
+  if (!selectedFace.value) return
   const createdPerson = {
     ...person,
     id: person.id || `person-${similarPeople.length + 1}`,
@@ -373,6 +392,7 @@ function createSimilarPerson(person: SimilarPersonCandidate) {
 }
 
 function reviewSelectedFace(status: Extract<FaceStatus, 'valid' | 'empty' | 'fail'>) {
+  if (!selectedFace.value) return
   selectedFace.value.status = status
   if (status === 'empty') {
     selectedFace.value.personId = null
@@ -440,6 +460,22 @@ watch(
   },
 )
 
+watch(
+  () => route.query.person,
+  (person) => {
+    selectedFaceId.value = typeof person === 'string' && faces.some((face) => face.id === person)
+      ? person
+      : null
+  },
+)
+
+watch(
+  () => route.query.selectedPerson,
+  (selectedPerson) => {
+    selectedPersonId.value = typeof selectedPerson === 'string' ? selectedPerson : null
+  },
+)
+
 watch(selectedFaceId, scrollSelectedFaceIntoView, { immediate: true })
 
 onMounted(async () => {
@@ -484,7 +520,7 @@ onBeforeUnmount(() => {
         aria-labelledby="page-transcription-title">
         <DocumentTeleprompter :visible-transcription="visibleTranscription" :selected-line-index="selectedLineIndex"
           :context-line-count="contextLineCount" :selected-entity-key="selectedEntityKey"
-          :related-entity-key="previewedEntityKey" :is-translation-open="isTranslationOpen"
+          :related-entity-key="selectedPersonCandidate?.entityKey ?? null" :is-translation-open="isTranslationOpen"
           :selected-language="selectedLanguage" :current-translation="currentTranslation" @select-line="selectLine"
           @select-entity="selectEntity" @navigate-line="navigateLine" />
       </section>
@@ -533,13 +569,14 @@ onBeforeUnmount(() => {
               @click.stop="selectLine(index)" />
 
             <button v-for="face in faces" :key="face.id" type="button" class="absolute border-2 transition-colors"
-              :class="face.id === selectedFace.id
+              :class="face.id === selectedFace?.id
                 ? 'border-secondary bg-secondary/15 ring-2 ring-background/80'
-                : face.id === previewedFaceId
+                : face.personId === selectedPersonId || face.id === selectedPersonCandidate?.faceId
                   ? 'border-accent bg-accent/25 ring-2 ring-accent/70'
                   : 'border-accent/60 bg-accent/5 hover:bg-accent/20'"
               :style="{ left: `${face.position.left}%`, top: `${face.position.top}%`, width: `${face.position.width}%`, height: `${face.position.height}%` }"
-              :aria-label="`Select ${face.name}`" @click.stop="selectFace(face.id)">
+              :aria-label="`Select ${face.name}`" :aria-pressed="face.id === selectedFace?.id"
+              @click.stop="selectFace(face.id)">
               <span class="absolute -left-0.5 -top-5 bg-foreground px-1.5 py-0.5 font-mono text-[8px] text-background">
                 {{ face.id }}
               </span>
@@ -552,13 +589,19 @@ onBeforeUnmount(() => {
 
       <aside class="workspace-selection min-h-0 border-l bg-background" aria-labelledby="selected-person-title">
         <div class="shrink-0 bg-background">
-          <header class="p-5">
-            <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
+          <header class="min-h-48 p-5">
+            <div v-if="selectedFace" class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
               <img :src="selectedFace.portrait" :alt="selectedFace.name" class="size-24 object-cover grayscale" />
               <div class="min-w-0">
-                <p id="selected-person-title" class="font-mono font-semibold text-xs uppercase text-secondary">
-                  Current selection
-                </p>
+                <div class="flex items-start justify-between gap-2">
+                  <p id="selected-person-title" class="font-mono font-semibold text-xs uppercase text-secondary">
+                    Current selection
+                  </p>
+                  <Button type="button" size="icon-sm" variant="ghost" aria-label="Clear face selection"
+                    title="Clear face selection" @click="clearFaceSelection">
+                    <X aria-hidden="true" />
+                  </Button>
+                </div>
                 <h3 class="text-lg">
                   <RouterLink v-if="selectedFace.personId"
                     :to="{ name: 'person-detail', params: { personId: selectedFace.personId } }"
@@ -597,13 +640,25 @@ onBeforeUnmount(() => {
                 </Button>
               </ButtonGroup>
             </div>
+            <div v-else class="flex min-h-36 items-center gap-4" role="status">
+              <div class="flex size-16 shrink-0 items-center justify-center border bg-muted">
+                <ScanFace class="size-7 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <div>
+                <p id="selected-person-title" class="font-mono font-semibold text-xs uppercase text-secondary">
+                  Current selection
+                </p>
+                <h3 class="mt-1 text-lg">No face selected</h3>
+                <p class="mt-1 text-sm text-muted-foreground">Select a face on the page or from the list.</p>
+              </div>
+            </div>
           </header>
         </div>
       </aside>
     </div>
 
     <SimilarPeoplePanel class="workspace-similar border-l" :people="similarPeople"
-      :assigned-person-id="selectedFace.personId" :viewed-person-id="viewedSimilarPersonId"
+      :assigned-person-id="selectedFace?.personId ?? null" :viewed-person-id="selectedPersonId"
       @preview="previewSimilarPerson" @assign="assignSimilarPerson" @create="createSimilarPerson" />
 
     <section class="workspace-faces @container min-w-0 overflow-hidden border-t bg-background px-3 py-4 sm:px-6"
@@ -627,7 +682,7 @@ onBeforeUnmount(() => {
       </div>
       <ScrollArea type="always" orientation="horizontal" class="w-full">
         <div ref="faceListElement" class="flex w-max gap-2 pb-5">
-          <FaceItem v-for="face in visibleFaces" :key="face.id" :face="face" :selected="face.id === selectedFace.id"
+          <FaceItem v-for="face in visibleFaces" :key="face.id" :face="face" :selected="face.id === selectedFace?.id"
             @select="selectFace" />
           <FaceItemSkeleton />
           <FaceListEmptyState v-if="visibleFaces.length === 0" />

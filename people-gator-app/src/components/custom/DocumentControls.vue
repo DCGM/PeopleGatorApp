@@ -61,14 +61,14 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0">
       <Button variant="outline" size="icon-sm" aria-label="Previous face" title="Previous face"
-        :disabled="selectedFaceIndex === 0" @click="$emit('previous-face')">
+        :disabled="selectedFaceIndex <= 0" @click="$emit('previous-face')">
         <ChevronLeft />
       </Button>
       <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5 bg-background">
         <ScanFace class="size-3" /> Face
       </ButtonGroupText>
       <Button variant="outline" size="icon-sm" aria-label="Next face" title="Next face"
-        :disabled="selectedFaceIndex === faceCount - 1" @click="$emit('next-face')">
+        :disabled="faceCount === 0 || selectedFaceIndex === faceCount - 1" @click="$emit('next-face')">
         <ChevronRight />
       </Button>
     </ButtonGroup>
