@@ -33,10 +33,10 @@ async def source_filter_dependency(
     ),
 ) -> uuid.UUID | None:
     """Resolve at most one public Source selector to its internal UUID."""
+    del principal
     try:
         return await resolve_source_filter(
             session,
-            principal.principal_id,
             source_id=source_id,
             page=page,
             document=document,

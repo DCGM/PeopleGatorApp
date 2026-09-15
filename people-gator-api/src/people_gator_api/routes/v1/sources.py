@@ -50,9 +50,9 @@ async def list_sources_route(
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
+    del principal
     return await list_sources(
         session,
-        principal.principal_id,
         source_type,
         after_id,
         limit,
@@ -70,9 +70,9 @@ async def get_source_by_url_route(
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
 ) -> SourceResponse:
+    del principal
     source = await get_source_by_type_uri(
         session,
-        principal.principal_id,
         source_type,
         str(url),
     )
@@ -87,7 +87,8 @@ async def get_source_route(
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
 ) -> SourceResponse:
-    source = await get_source(session, principal.principal_id, source_id)
+    del principal
+    source = await get_source(session, source_id)
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
     return source
@@ -120,7 +121,8 @@ async def delete_source_route(
     principal: AdminUserDependency,
     broker: BrokerDependency,
 ) -> None:
-    deleted = await delete_source(session, principal.principal_id, source_id)
+    del principal
+    deleted = await delete_source(session, source_id)
     if not deleted:
         raise_api_error(404, "not_found", "Source not found")
     asyncio.create_task(broker.publish(

@@ -68,7 +68,6 @@ async def create_page_mention(
 ) -> PageMentionResponse:
     source = await resolve_source_reference(
         client,
-        principal_id,
         source_id=payload.source_id,
         source=payload.source,
     )
@@ -284,7 +283,6 @@ async def create_document_mention(
 ) -> DocumentMentionResponse:
     source = await resolve_source_reference(
         client,
-        principal_id,
         source_id=payload.source_id,
         source=payload.source,
     )
@@ -320,7 +318,6 @@ async def create_document_mention(
         for page_mention in payload.page_mentions:
             page_source = await resolve_source_reference(
                 client,
-                principal_id,
                 source_id=page_mention.source_id,
                 source=page_mention.source,
             )
@@ -506,7 +503,6 @@ async def create_face(
 ) -> FaceResponse:
     source = await resolve_source_reference(
         client,
-        principal_id,
         source_id=payload.source_id,
         source=payload.source,
     )

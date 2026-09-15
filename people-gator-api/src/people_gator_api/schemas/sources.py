@@ -100,8 +100,6 @@ class SourceDescriptorRequest(BaseModel):
     """Source selector used by annotation ingest endpoints."""
 
     model_config = ConfigDict(extra="forbid")
-
-    metadata: SourceMetadata | None = None
     page: PageCreateRequest | None = None
     document: DocumentCreateRequest | None = None
     image: ImageCreateRequest | None = None
@@ -110,7 +108,6 @@ class SourceDescriptorRequest(BaseModel):
     def validate_source_descriptor(self) -> "SourceDescriptorRequest":
         descriptor_count = sum(
             (
-                self.metadata is not None,
                 self.page is not None,
                 self.document is not None,
                 self.image is not None,
@@ -118,7 +115,7 @@ class SourceDescriptorRequest(BaseModel):
         )
         if descriptor_count != 1:
             raise ValueError(
-                "source descriptor requires exactly one of metadata, page, document, or image"
+                "source descriptor requires exactly one of page, document, or image"
             )
         return self
 

@@ -118,7 +118,6 @@ async def create_page(
 ) -> tuple[PageResponse, bool]:
     existing = await get_source_by_page_identity(
         client,
-        principal_id,
         payload.library,
         payload.document_id,
         payload.page_id,
@@ -154,7 +153,6 @@ async def create_document(
 ) -> tuple[DocumentResponse, bool]:
     existing = await get_source_by_document_identity(
         client,
-        principal_id,
         payload.library,
         payload.document_id,
     )
@@ -197,7 +195,6 @@ async def create_image(
 @trace()
 async def list_pages(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     after_id: uuid.UUID | None,
     limit: int,
     *,
@@ -207,7 +204,6 @@ async def list_pages(
 ) -> PageListResponse:
     sources = await list_sources(
         client,
-        principal_id,
         SourceKind.page,
         after_id,
         limit,
@@ -226,7 +222,6 @@ async def list_pages(
 @trace()
 async def list_documents(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     after_id: uuid.UUID | None,
     limit: int,
     *,
@@ -234,9 +229,7 @@ async def list_documents(
     document_id: uuid.UUID | None = None,
 ) -> DocumentListResponse:
     sources = await list_sources(
-        client,
-        principal_id,
-        SourceKind.document,
+        client,        SourceKind.document,
         after_id,
         limit,
         library=library,
@@ -253,7 +246,6 @@ async def list_documents(
 @trace()
 async def list_images(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     after_id: uuid.UUID | None,
     limit: int,
     *,
@@ -261,7 +253,6 @@ async def list_images(
 ) -> ImageListResponse:
     sources = await list_sources(
         client,
-        principal_id,
         IMAGE_SOURCE_KINDS,
         after_id,
         limit,
@@ -278,10 +269,9 @@ async def list_images(
 @trace()
 async def get_page(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     page_source_id: uuid.UUID,
 ) -> PageResponse | None:
-    source = await get_source(client, principal_id, page_source_id)
+    source = await get_source(client, page_source_id)
     if source is None or source.source_type != SourceKind.page:
         return None
     return page_response(source)
@@ -290,7 +280,6 @@ async def get_page(
 @trace()
 async def get_page_by_path(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     library: str,
     page_id: uuid.UUID,
     *,
@@ -298,7 +287,6 @@ async def get_page_by_path(
 ) -> PageResponse | None:
     source = await get_source_by_page_path(
         client,
-        principal_id,
         library,
         page_id,
         document_id=document_id,
@@ -309,12 +297,10 @@ async def get_page_by_path(
 @trace()
 async def get_page_by_url(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     url: str,
 ) -> PageResponse | None:
     source = await get_source_by_type_uri(
         client,
-        principal_id,
         SourceKind.page,
         url,
     )
@@ -324,13 +310,11 @@ async def get_page_by_url(
 @trace()
 async def get_document_by_path(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     library: str,
     document_id: uuid.UUID,
 ) -> DocumentResponse | None:
     source = await get_source_by_document_identity(
         client,
-        principal_id,
         library,
         document_id,
     )
@@ -340,10 +324,9 @@ async def get_document_by_path(
 @trace()
 async def get_document(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     document_source_id: uuid.UUID,
 ) -> DocumentResponse | None:
-    source = await get_source(client, principal_id, document_source_id)
+    source = await get_source(client, document_source_id)
     if source is None or source.source_type != SourceKind.document:
         return None
     return document_response(source)
@@ -352,12 +335,10 @@ async def get_document(
 @trace()
 async def get_document_by_url(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     url: str,
 ) -> DocumentResponse | None:
     source = await get_source_by_type_uri(
         client,
-        principal_id,
         SourceKind.document,
         url,
     )
@@ -367,10 +348,9 @@ async def get_document_by_url(
 @trace()
 async def get_image(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     image_id: uuid.UUID,
 ) -> ImageResponse | None:
-    source = await get_source(client, principal_id, image_id)
+    source = await get_source(client, image_id)
     if source is None or source.source_type not in IMAGE_SOURCE_KINDS:
         return None
     return image_response(source)
@@ -379,12 +359,10 @@ async def get_image(
 @trace()
 async def get_image_by_url(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     url: str,
 ) -> ImageResponse | None:
     source = await get_source_by_types_uri(
         client,
-        principal_id,
         IMAGE_SOURCE_KINDS,
         url,
     )

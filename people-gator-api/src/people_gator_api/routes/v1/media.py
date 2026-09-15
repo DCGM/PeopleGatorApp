@@ -62,9 +62,9 @@ async def list_documents_route(
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> DocumentListResponse:
+    del principal
     return await list_documents(
         session,
-        principal.principal_id,
         after_id,
         limit,
         library=library,
@@ -118,9 +118,9 @@ async def get_document_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> DocumentResponse:
+    del principal
     document = await get_document(
         session,
-        principal.principal_id,
         document_source_id,
     )
     if document is None:
@@ -138,9 +138,9 @@ async def get_document_by_url_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> DocumentResponse:
+    del principal
     document = await get_document_by_url(
         session,
-        principal.principal_id,
         str(url),
     )
     if document is None:
@@ -159,9 +159,9 @@ async def get_document_by_path_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> DocumentResponse:
+    del principal
     document = await get_document_by_path(
         session,
-        principal.principal_id,
         library,
         document_id,
     )
@@ -181,16 +181,16 @@ async def delete_document_route(
     principal: AdminUserDependency,
     broker: BrokerDependency,
 ) -> None:
+    del principal
     if (
         await get_document(
             session,
-            principal.principal_id,
             document_source_id,
         )
         is None
     ):
         raise_api_error(404, "not_found", "Document not found")
-    await delete_source(session, principal.principal_id, document_source_id)
+    await delete_source(session, document_source_id)
     broker.publish_task(
         ("sources", document_source_id),
         event=SseEventType.SOURCE_DELETED,
@@ -208,9 +208,9 @@ async def list_pages_route(
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> PageListResponse:
+    del principal
     return await list_pages(
         session,
-        principal.principal_id,
         after_id,
         limit,
         library=library,
@@ -258,9 +258,9 @@ async def get_page_by_url_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> PageResponse:
+    del principal
     page = await get_page_by_url(
         session,
-        principal.principal_id,
         str(url),
     )
     if page is None:
@@ -274,7 +274,8 @@ async def get_page_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> PageResponse:
-    page = await get_page(session, principal.principal_id, page_source_id)
+    del principal
+    page = await get_page(session, page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     return page
@@ -292,9 +293,9 @@ async def get_page_by_full_path_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> PageResponse:
+    del principal
     page = await get_page_by_path(
         session,
-        principal.principal_id,
         library,
         page_id,
         document_id=document_id,
@@ -315,9 +316,9 @@ async def get_page_by_short_path_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> PageResponse:
+    del principal
     page = await get_page_by_path(
         session,
-        principal.principal_id,
         library,
         page_id,
     )
@@ -337,9 +338,10 @@ async def delete_page_route(
     principal: AdminUserDependency,
     broker: BrokerDependency,
 ) -> None:
-    if await get_page(session, principal.principal_id, page_source_id) is None:
+    del principal
+    if await get_page(session, page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
-    await delete_source(session, principal.principal_id, page_source_id)
+    await delete_source(session, page_source_id)
     broker.publish_task(
         ("sources", page_source_id),
         event=SseEventType.SOURCE_DELETED,
@@ -355,9 +357,9 @@ async def list_images_route(
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> ImageListResponse:
+    del principal
     return await list_images(
         session,
-        principal.principal_id,
         after_id,
         limit,
         url=url,
@@ -398,9 +400,9 @@ async def get_image_by_url_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> ImageResponse:
+    del principal
     image = await get_image_by_url(
         session,
-        principal.principal_id,
         str(url),
     )
     if image is None:
@@ -414,7 +416,8 @@ async def get_image_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
 ) -> ImageResponse:
-    image = await get_image(session, principal.principal_id, image_id)
+    del principal
+    image = await get_image(session, image_id)
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
     return image
@@ -431,9 +434,10 @@ async def delete_image_route(
     principal: AdminUserDependency,
     broker: BrokerDependency,
 ) -> None:
-    if await get_image(session, principal.principal_id, image_id) is None:
+    del principal
+    if await get_image(session, image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
-    await delete_source(session, principal.principal_id, image_id)
+    await delete_source(session, image_id)
     broker.publish_task(
         ("sources", image_id),
         event=SseEventType.SOURCE_DELETED,

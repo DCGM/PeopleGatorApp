@@ -132,13 +132,12 @@ def _uri_from_metadata(metadata: SourceMetadata) -> str:
 @trace()
 async def resolve_source_reference(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     *,
     source_id: uuid.UUID | None,
     source: SourceDescriptorRequest | None,
 ) -> SourceResponse:
     if source_id is not None:
-        existing = await get_source(client, principal_id, source_id)
+        existing = await get_source(client, source_id)
         if existing is None:
             raise SourceResolutionError(
                 "Source not found",
@@ -153,8 +152,6 @@ async def resolve_source_reference(
             status_code=422,
             code="invalid_source_reference",
         )
-
-    resolved_metadata = source.metadata
     resolved_uri: str
     resolved_kind: SourceKind
     if source.page is not None:
@@ -185,14 +182,6 @@ async def resolve_source_reference(
         resolved_uri = str(source.image.url)
         resolved_kind = SourceKind.image
         resolved_metadata = None
-    elif resolved_metadata is not None:
-        resolved_uri = _uri_from_metadata(resolved_metadata)
-        if isinstance(resolved_metadata, PageSourceMetadata):
-            resolved_kind = SourceKind.page
-            resolved_metadata = _canonical_page_metadata(resolved_metadata)
-        else:
-            resolved_kind = SourceKind.document
-            resolved_metadata = _canonical_document_metadata(resolved_metadata)
     else:
         raise SourceResolutionError(
             "source descriptor requires page, document, image, or typed metadata",
@@ -203,7 +192,6 @@ async def resolve_source_reference(
     if isinstance(resolved_metadata, PageSourceMetadata):
         existing = await get_source_by_page_identity(
             client,
-            principal_id,
             resolved_metadata.library,
             resolved_metadata.document,
             resolved_metadata.page,
@@ -211,14 +199,12 @@ async def resolve_source_reference(
     elif isinstance(resolved_metadata, DocumentSourceMetadata):
         existing = await get_source_by_document_identity(
             client,
-            principal_id,
             resolved_metadata.library,
             resolved_metadata.document,
         )
     else:
         existing = await get_source_by_type_uri(
             client,
-            principal_id,
             resolved_kind,
             resolved_uri,
         )
@@ -245,7 +231,6 @@ async def resolve_source_reference(
 @trace()
 async def list_sources(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     source_type: SourceKind | Sequence[SourceKind] | None,
     after_id: uuid.UUID | None,
     limit: int,
@@ -255,7 +240,6 @@ async def list_sources(
     document: uuid.UUID | None = None,
     page: uuid.UUID | None = None,
 ) -> SourceListResponse:
-    del principal_id
     logger.debug(
         "list_sources called",
         extra={
@@ -321,10 +305,8 @@ async def list_sources(
 @trace()
 async def get_source(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     source_id: uuid.UUID,
 ) -> SourceResponse | None:
-    del principal_id
     logger.debug("get_source called", extra={"source_id": source_id})
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_object_by_id(
         source_id,
@@ -340,11 +322,9 @@ async def get_source(
 @trace()
 async def get_source_by_type_uri(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     source_type: SourceKind,
     uri: str,
 ) -> SourceResponse | None:
-    del principal_id
     logger.debug(
         "get_source_by_type_uri called",
         extra={"source_type": source_type.value, "uri": uri},
@@ -373,12 +353,10 @@ async def get_source_by_type_uri(
 @trace()
 async def get_source_by_page_identity(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     library: str,
     document_id: uuid.UUID,
     page_id: uuid.UUID,
 ) -> SourceResponse | None:
-    del principal_id
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=Filter.all_of(
             [
@@ -400,14 +378,12 @@ async def get_source_by_page_identity(
 @trace()
 async def get_source_by_page_path(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     library: str,
     page_id: uuid.UUID,
     *,
     document_id: uuid.UUID | None = None,
 ) -> SourceResponse | None:
     """Find a page by its canonical archive path components."""
-    del principal_id
     filters = [
         Filter.by_property("source_type").equal(SourceKind.page.value),
         Filter.by_property("library").equal(library),
@@ -430,11 +406,9 @@ async def get_source_by_page_path(
 @trace()
 async def get_source_by_document_identity(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     library: str,
     document_id: uuid.UUID,
 ) -> SourceResponse | None:
-    del principal_id
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=Filter.all_of(
             [
@@ -455,11 +429,9 @@ async def get_source_by_document_identity(
 @trace()
 async def get_source_by_types_uri(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     source_types: Sequence[SourceKind],
     uri: str,
 ) -> SourceResponse | None:
-    del principal_id
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=Filter.all_of(
             [
@@ -513,7 +485,6 @@ def _parse_archive_path(
 @trace()
 async def resolve_source_filter(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     *,
     source_id: uuid.UUID | None,
     page: str | None,
@@ -539,7 +510,7 @@ async def resolve_source_filter(
     source: SourceResponse | None
     resource_name: str
     if source_id is not None:
-        source = await get_source(client, principal_id, source_id)
+        source = await get_source(client, source_id)
         resource_name = "Source"
     elif page is not None:
         library, identifiers = _parse_archive_path(
@@ -550,14 +521,12 @@ async def resolve_source_filter(
         if len(identifiers) == 1:
             source = await get_source_by_page_path(
                 client,
-                principal_id,
                 library,
                 identifiers[0],
             )
         else:
             source = await get_source_by_page_path(
                 client,
-                principal_id,
                 library,
                 identifiers[1],
                 document_id=identifiers[0],
@@ -571,7 +540,6 @@ async def resolve_source_filter(
         )
         source = await get_source_by_document_identity(
             client,
-            principal_id,
             library,
             identifiers[0],
         )
@@ -579,7 +547,6 @@ async def resolve_source_filter(
     else:
         source = await get_source_by_types_uri(
             client,
-            principal_id,
             (SourceKind.image,),
             image or "",
         )
@@ -620,7 +587,6 @@ async def create_source(
     if isinstance(metadata, PageSourceMetadata):
         existing = await get_source_by_page_identity(
             client,
-            principal_id,
             metadata.library,
             metadata.document,
             metadata.page,
@@ -628,14 +594,12 @@ async def create_source(
     elif isinstance(metadata, DocumentSourceMetadata):
         existing = await get_source_by_document_identity(
             client,
-            principal_id,
             metadata.library,
             metadata.document,
         )
     else:
         existing = await get_source_by_type_uri(
             client,
-            principal_id,
             payload.source_type,
             uri,
         )
@@ -669,11 +633,10 @@ async def create_source(
 @trace()
 async def delete_source(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
     source_id: uuid.UUID,
 ) -> bool:
     logger.info("delete_source called", extra={"source_id": source_id})
-    source = await get_source(client, principal_id, source_id)
+    source = await get_source(client, source_id)
     if source is None:
         logger.info(
             "delete_source skipped missing source", extra={"source_id": source_id}
