@@ -25,6 +25,7 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 face_response = module.face_response
+source_response = module.source_response
 
 
 @dataclass
@@ -63,6 +64,30 @@ def test_optional_json_dict_decodes_nested_json_objects() -> None:
     )
 
     assert metadata == {"foo": {"bar": 1}, "baz": [True, None]}
+
+
+def test_source_response_reconstructs_page_metadata_from_flat_properties() -> None:
+    document_id = uuid.uuid4()
+    page_id = uuid.uuid4()
+    uri = f"https://www.digitalniknihovna.cz/mzk/view/uuid:{document_id}?page=uuid:{page_id}"
+
+    response = source_response(
+        {
+            "source_type": "page",
+            "uri": uri,
+            "library": "mzk",
+            "document": document_id,
+            "page": page_id,
+        },
+        {},
+        uuid.uuid4(),
+    )
+
+    assert response.metadata is not None
+    assert response.metadata.library == "mzk"
+    assert response.metadata.document == document_id
+    assert response.metadata.page == page_id
+    assert str(response.metadata.kramerius_url) == uri
 
 
 def test_optional_alias_text_array_accepts_text_array() -> None:

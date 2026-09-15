@@ -3,7 +3,7 @@
 import logging
 import uuid
 from collections.abc import Sequence
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 from pydantic import AnyUrl
 
@@ -15,16 +15,12 @@ from weaviate.collections.classes.types import WeaviateField, WeaviateProperties
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
-    NlcrAuthoritySourceMetadata,
-    ObalkyKnihSourceMetadata,
     PageSourceMetadata,
     SourceCreateRequest,
     SourceDescriptorRequest,
     SourceListResponse,
     SourceMetadata,
     SourceResponse,
-    WikidataSourceMetadata,
-    WikimediaImageSourceMetadata,
 )
 from people_gator_api.services.weaviate_service.db_schema import SOURCE_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
@@ -101,7 +97,6 @@ def _source_storage_properties(
     properties: dict[str, WeaviateField] = {
         "source_type": source_type.value,
         "uri": uri,
-        "metadata": metadata.model_dump(mode="json") if metadata is not None else None,
         "library": None,
         "document": None,
         "page": None,
@@ -124,20 +119,6 @@ def _source_storage_properties(
     return properties
 
 
-def _source_kind_from_metadata(metadata: SourceMetadata) -> SourceKind:
-    if isinstance(metadata, PageSourceMetadata):
-        return SourceKind.page
-    if isinstance(metadata, DocumentSourceMetadata):
-        return SourceKind.document
-    if isinstance(metadata, WikidataSourceMetadata):
-        return SourceKind.wikidata
-    if isinstance(metadata, WikimediaImageSourceMetadata):
-        return SourceKind.wikimedia
-    if isinstance(metadata, NlcrAuthoritySourceMetadata):
-        return SourceKind.nlcr
-    return SourceKind.obalkyknih
-
-
 def _uri_from_metadata(metadata: SourceMetadata) -> str:
     if isinstance(metadata, PageSourceMetadata):
         return canonical_page_uri(
@@ -145,37 +126,7 @@ def _uri_from_metadata(metadata: SourceMetadata) -> str:
             metadata.document,
             metadata.page,
         )
-    if isinstance(metadata, DocumentSourceMetadata):
-        return canonical_document_uri(metadata.library, metadata.document)
-    if isinstance(metadata, WikidataSourceMetadata):
-        return str(metadata.wikidata_url)
-    if isinstance(metadata, WikimediaImageSourceMetadata):
-        return str(metadata.wikimedia_url)
-    if isinstance(metadata, ObalkyKnihSourceMetadata):
-        return str(metadata.obalkyknih_url)
-    return f"nlcr:{metadata.nlcr_id}"
-
-
-def _infer_source_kind_from_uri(uri: str) -> SourceKind:
-    parsed = urlparse(uri)
-    host = parsed.netloc.lower()
-    if host.endswith("wikidata.org"):
-        return SourceKind.wikidata
-    if "wikimedia.org" in host:
-        return SourceKind.wikimedia
-    if "obalkyknih.cz" in host:
-        return SourceKind.obalkyknih
-    if parsed.scheme == "nlcr":
-        return SourceKind.nlcr
-    if "kramerius" in host:
-        if "page" in parsed.path:
-            return SourceKind.page
-        return SourceKind.document
-    raise SourceResolutionError(
-        "could not infer source_type from uri; provide metadata to disambiguate",
-        status_code=422,
-        code="invalid_source_reference",
-    )
+    return canonical_document_uri(metadata.library, metadata.document)
 
 
 @trace()
@@ -203,9 +154,9 @@ async def resolve_source_reference(
             code="invalid_source_reference",
         )
 
-    resolved_uri = source.uri
     resolved_metadata = source.metadata
-    resolved_kind: SourceKind | None = None
+    resolved_uri: str
+    resolved_kind: SourceKind
     if source.page is not None:
         resolved_uri = canonical_page_uri(
             source.page.library,
@@ -235,20 +186,19 @@ async def resolve_source_reference(
         resolved_kind = SourceKind.image
         resolved_metadata = None
     elif resolved_metadata is not None:
-        resolved_kind = _source_kind_from_metadata(resolved_metadata)
         resolved_uri = _uri_from_metadata(resolved_metadata)
         if isinstance(resolved_metadata, PageSourceMetadata):
+            resolved_kind = SourceKind.page
             resolved_metadata = _canonical_page_metadata(resolved_metadata)
-        elif isinstance(resolved_metadata, DocumentSourceMetadata):
+        else:
+            resolved_kind = SourceKind.document
             resolved_metadata = _canonical_document_metadata(resolved_metadata)
-    if resolved_uri is None:
+    else:
         raise SourceResolutionError(
-            "source descriptor requires uri or metadata",
+            "source descriptor requires page, document, image, or typed metadata",
             status_code=422,
             code="invalid_source_reference",
         )
-    if resolved_kind is None:
-        resolved_kind = _infer_source_kind_from_uri(resolved_uri)
 
     if isinstance(resolved_metadata, PageSourceMetadata):
         existing = await get_source_by_page_identity(
@@ -630,7 +580,7 @@ async def resolve_source_filter(
         source = await get_source_by_types_uri(
             client,
             principal_id,
-            (SourceKind.image, SourceKind.wikimedia, SourceKind.obalkyknih),
+            (SourceKind.image,),
             image or "",
         )
         resource_name = "Image"
@@ -661,7 +611,7 @@ async def create_source(
         uri = _uri_from_metadata(metadata)
         if isinstance(metadata, PageSourceMetadata):
             metadata = _canonical_page_metadata(metadata)
-        elif isinstance(metadata, DocumentSourceMetadata):
+        else:
             metadata = _canonical_document_metadata(metadata)
     logger.info(
         "create_source called",

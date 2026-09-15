@@ -24,10 +24,6 @@ class SourceKind(StrEnum):
     page = "page"
     document = "document"
     image = "image"
-    wikidata = "wikidata"
-    wikimedia = "wikimedia"
-    obalkyknih = "obalkyknih"
-    nlcr = "nlcr"
 
 
 class PrincipalType(StrEnum):

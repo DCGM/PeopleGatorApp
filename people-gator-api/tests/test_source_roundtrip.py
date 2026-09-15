@@ -31,7 +31,7 @@ from people_gator_api.routes.v1.sources import (
     get_source_route,
 )
 from people_gator_api.schemas.enums import SourceKind, PrincipalType
-from people_gator_api.schemas.sources import SourceCreateRequest, WikidataSourceMetadata
+from people_gator_api.schemas.sources import SourceCreateRequest
 from people_gator_api.schemas.principals import UserResponse
 from people_gator_api.services.sse import LocalTopicBroker
 
@@ -134,28 +134,23 @@ async def test_source_post_get_delete_roundtrip() -> None:
     broker = LocalTopicBroker()
 
     payload = SourceCreateRequest(
-        source_type=SourceKind.wikidata,
-        metadata=WikidataSourceMetadata(
-            entity_id="Q999999",
-            wikidata_url="https://www.wikidata.org/entity/Q999999",  # pyright: ignore[reportArgumentType]
-        ),
+        source_type=SourceKind.image,
+        uri="https://example.test/roundtrip-image.jpg",
     )
 
     created = await create_source_route(
         payload=payload, principal=principal, session=session, broker=broker
     )  # pyright: ignore[reportArgumentType]
     assert created.source_type == payload.source_type
-    assert created.uri == "https://www.wikidata.org/entity/Q999999"
-    assert created.metadata is not None
-    assert created.metadata.entity_id == payload.metadata.entity_id
+    assert created.uri == payload.uri
+    assert created.metadata is None
 
     fetched = await get_source_route(
         source_id=created.source_id, principal=principal, session=session
     )  # pyright: ignore[reportArgumentType]
     assert fetched.source_id == created.source_id
-    assert fetched.uri == "https://www.wikidata.org/entity/Q999999"
-    assert fetched.metadata is not None
-    assert fetched.metadata.entity_id == payload.metadata.entity_id
+    assert fetched.uri == payload.uri
+    assert fetched.metadata is None
 
     await delete_source_route(
         source_id=created.source_id, principal=principal, session=session, broker=broker

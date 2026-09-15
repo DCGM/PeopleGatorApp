@@ -15,6 +15,11 @@ from people_gator_api.schemas.entities import (
 )
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import SourceDescriptorRequest, SourceResponse
+from people_gator_api.schemas.sources import (
+    DocumentCreateRequest,
+    ImageCreateRequest,
+    PageCreateRequest,
+)
 from people_gator_api.services.crud_services import annotation_service
 
 
@@ -38,8 +43,8 @@ async def test_create_face_resolves_source_descriptor(
         assert source is not None
         return SourceResponse(
             source_id=resolved_source_id,
-            source_type=SourceKind.wikidata,
-            uri=source.uri or "",
+            source_type=SourceKind.image,
+            uri=str(source.image.url) if source.image is not None else "",
             metadata=source.metadata,
         )
 
@@ -67,7 +72,9 @@ async def test_create_face_resolves_source_descriptor(
     client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
 
     payload = FaceCreateRequest(
-        source=SourceDescriptorRequest(uri="https://www.wikidata.org/entity/Q42"),
+        source=SourceDescriptorRequest(
+            image=ImageCreateRequest(url="https://example.test/image.jpg")
+        ),
         bounding_box=BoundingBox(x=1, y=2, width=3, height=4),
         keypoints=[],
         entity_id=uuid.uuid4(),
@@ -103,17 +110,21 @@ async def test_create_document_mention_resolves_nested_page_sources(
         del principal_id
         del source_id
         assert source is not None
-        if source.uri == "https://kramerius.example/document/1":
+        if source.document is not None:
             return SourceResponse(
                 source_id=parent_source_id,
                 source_type=SourceKind.document,
-                uri=source.uri,
+                uri="https://www.digitalniknihovna.cz/mzk/uuid/uuid:"
+                + str(source.document.document_id),
                 metadata=source.metadata,
             )
         return SourceResponse(
             source_id=child_source_id,
             source_type=SourceKind.page,
-            uri=source.uri or "",
+            uri="https://www.digitalniknihovna.cz/mzk/view/uuid:"
+            + str(source.page.document_id if source.page else "")
+            + "?page=uuid:"
+            + str(source.page.page_id if source.page else ""),
             metadata=source.metadata,
         )
 
@@ -149,7 +160,12 @@ async def test_create_document_mention_resolves_nested_page_sources(
         name="John Doe",
         information="info",
         aliases=["JD"],
-        source=SourceDescriptorRequest(uri="https://kramerius.example/document/1"),
+        source=SourceDescriptorRequest(
+            document=DocumentCreateRequest(
+                library="mzk",
+                document_id=uuid.uuid4(),
+            )
+        ),
         entity_id=uuid.uuid4(),
         page_mentions=[
             PageMentionInlineCreateRequest(
@@ -165,7 +181,13 @@ async def test_create_document_mention_resolves_nested_page_sources(
                         ]
                     )
                 ],
-                source=SourceDescriptorRequest(uri="https://kramerius.example/page/1"),
+                source=SourceDescriptorRequest(
+                    page=PageCreateRequest(
+                        library="mzk",
+                        document_id=uuid.uuid4(),
+                        page_id=uuid.uuid4(),
+                    )
+                ),
             )
         ],
     )

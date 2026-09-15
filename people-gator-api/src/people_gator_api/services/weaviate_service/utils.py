@@ -13,6 +13,7 @@ import logging
 import uuid
 from typing import Protocol, cast
 
+from pydantic import AnyUrl
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter, QueryReference
 from weaviate.collections.classes.filters import FilterReturn
@@ -44,12 +45,8 @@ from people_gator_api.schemas.principals import (
 )
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
-    NlcrAuthoritySourceMetadata,
-    ObalkyKnihSourceMetadata,
     PageSourceMetadata,
     SourceResponse,
-    WikidataSourceMetadata,
-    WikimediaImageSourceMetadata,
 )
 from people_gator_api.utils.opentelemetry import trace
 
@@ -200,35 +197,50 @@ def source_response(
     uuid: uuid.UUID,
 ) -> SourceResponse:
     source_type = SourceKind(require_str(properties, "source_type"))
-    metadata = optional_json_dict(properties, "metadata")
-    metadata_model_by_source_type: dict[SourceKind, type] = {
-        SourceKind.page: PageSourceMetadata,
-        SourceKind.document: DocumentSourceMetadata,
-        SourceKind.wikidata: WikidataSourceMetadata,
-        SourceKind.wikimedia: WikimediaImageSourceMetadata,
-        SourceKind.nlcr: NlcrAuthoritySourceMetadata,
-        SourceKind.obalkyknih: ObalkyKnihSourceMetadata,
-    }
+    uri = require_str(properties, "uri")
+    library = optional_str(properties, "library")
+    document = properties.get("document")
+    page = properties.get("page")
+    resolved_metadata = None
+    if source_type == SourceKind.page:
+        if library is None or document is None or page is None:
+            raise KeyError("Page source is missing its flat archive identity fields.")
+        resolved_metadata = PageSourceMetadata(
+            library=library,
+            document=_as_uuid(document, "document"),
+            page=_as_uuid(page, "page"),
+            kramerius_url=AnyUrl(uri),
+        )
+    elif source_type == SourceKind.document:
+        if library is None or document is None:
+            raise KeyError("Document source is missing its flat archive identity fields.")
+        resolved_metadata = DocumentSourceMetadata(
+            library=library,
+            document=_as_uuid(document, "document"),
+            kramerius_url=AnyUrl(uri),
+        )
     logger.debug(
         "Mapping source response",
         extra={
             "source_id": str(uuid),
             "source_type": source_type.value,
-            "has_metadata": metadata is not None,
+            "has_metadata": resolved_metadata is not None,
         },
-    )
-    metadata_model = metadata_model_by_source_type.get(source_type)
-    resolved_metadata = (
-        metadata_model(**metadata)
-        if metadata is not None and metadata_model is not None
-        else None
     )
     return SourceResponse(
         source_id=uuid,
         source_type=source_type,
-        uri=require_str(properties, "uri"),
+        uri=uri,
         metadata=resolved_metadata,
     )
+
+
+def _as_uuid(value_: WeaviateField, property_name: str) -> uuid.UUID:
+    if isinstance(value_, uuid.UUID):
+        return value_
+    if isinstance(value_, str):
+        return uuid.UUID(value_)
+    raise TypeError(f"Property {property_name!r} is not a UUID.")
 
 
 def entity_response(

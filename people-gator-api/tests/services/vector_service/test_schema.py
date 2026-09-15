@@ -3,26 +3,11 @@ import re
 from people_gator_api.services.weaviate_service import db_schema
 
 
-def test_source_metadata_schema_declares_nested_properties() -> None:
-    metadata_property = next(
-        property_
-        for property_ in db_schema.SOURCE_PROPERTIES
-        if property_.name == "metadata"
-    )
-    metadata_payload = metadata_property.model_dump_json(by_alias=True)
+def test_source_schema_stores_archive_identity_at_top_level() -> None:
+    property_names = {property_.name for property_ in db_schema.SOURCE_PROPERTIES}
 
-    assert '"nested_properties"' in metadata_payload
-    for nested_property_name in (
-        "document",
-        "entity_id",
-        "kramerius_url",
-        "library",
-        "nlcr_id",
-        "page",
-        "wikidata_url",
-        "wikimedia_url",
-    ):
-        assert f'"name":"{nested_property_name}"' in metadata_payload
+    assert "metadata" not in property_names
+    assert {"source_type", "uri", "library", "document", "page"} <= property_names
 
 
 def test_default_named_vectors_are_graphql_safe() -> None:

@@ -265,22 +265,6 @@ SOURCE_PROPERTIES: list[Property] = [
     _text_property("library", "Archive library identifier.", searchable=False),
     _uuid_property("document", "Archive document identifier."),
     _uuid_property("page", "Archive page identifier."),
-    _object_property(
-        "metadata",
-        "Strict source metadata payload.",
-        nested_properties=[
-            _text_property("library", "Source library identifier.", searchable=False),
-            _uuid_property("document", "Document identifier."),
-            _uuid_property("page", "Page identifier."),
-            _text_property("kramerius_url", "Kramerius source URL.", searchable=False),
-            _text_property(
-                "entity_id", "Wikidata entity identifier.", searchable=False
-            ),
-            _text_property("wikidata_url", "Wikidata source URL.", searchable=False),
-            _text_property("nlcr_id", "NLCR authority identifier.", searchable=False),
-            _text_property("wikimedia_url", "Wikimedia source URL.", searchable=False),
-        ],
-    ),
 ]
 
 ENTITY_PROPERTIES: list[Property] = [

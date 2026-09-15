@@ -30,7 +30,6 @@ from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     DocumentCreateRequest,
     ImageCreateRequest,
-    NlcrAuthoritySourceMetadata,
     PageCreateRequest,
     SourceDescriptorRequest,
     SourceResponse,
@@ -63,6 +62,7 @@ def test_document_storage_includes_flat_archive_identity() -> None:
     assert properties["library"] == "mzk"
     assert properties["document"] == document_id
     assert properties["page"] is None
+    assert "metadata" not in properties
 
 
 @pytest.mark.asyncio
@@ -158,11 +158,7 @@ async def test_resolve_source_filter_accepts_image_url(
         source_types: tuple[SourceKind, ...],
         uri: str,
     ) -> SourceResponse:
-        assert source_types == (
-            SourceKind.image,
-            SourceKind.wikimedia,
-            SourceKind.obalkyknih,
-        )
+        assert source_types == (SourceKind.image,)
         assert uri == image_url
         return image_source
 
@@ -267,110 +263,6 @@ async def test_delete_source_removes_existing_source() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_source_reference_creates_source_from_uri(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    created_ids: list[uuid.UUID] = []
-    created_properties: list[dict[str, object]] = []
-
-    async def fake_get_source_by_type_uri(
-        _client: object,
-        _principal_id: uuid.UUID,
-        _source_type: SourceKind,
-        _uri: str,
-    ) -> SourceResponse | None:
-        return None
-
-    class _Data:
-        async def insert(
-            self,
-            *,
-            uuid: uuid.UUID,
-            properties: dict[str, object],
-        ) -> None:
-            created_ids.append(uuid)
-            created_properties.append(properties)
-
-    monkeypatch.setattr(
-        source_service, "get_source_by_type_uri", fake_get_source_by_type_uri
-    )
-
-    def get_collection(_name: str) -> SimpleNamespace:
-        return SimpleNamespace(data=_Data())
-
-    client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
-
-    descriptor = SourceDescriptorRequest(uri="https://www.wikidata.org/entity/Q42")
-    resolved = await source_service.resolve_source_reference(
-        client=client,  # type: ignore[reportArgumentType]
-        principal_id=uuid.uuid4(),
-        source_id=None,
-        source=descriptor,
-    )
-
-    assert resolved.source_type == SourceKind.wikidata
-    assert resolved.uri == "https://www.wikidata.org/entity/Q42"
-    assert resolved.metadata is None
-    assert created_ids == [resolved.source_id]
-    assert created_properties == [
-        {
-            "source_type": SourceKind.wikidata.value,
-            "uri": "https://www.wikidata.org/entity/Q42",
-            "metadata": None,
-            "library": None,
-            "document": None,
-            "page": None,
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_resolve_source_reference_derives_uri_from_metadata(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def fake_get_source_by_type_uri(
-        _client: object,
-        _principal_id: uuid.UUID,
-        _source_type: SourceKind,
-        _uri: str,
-    ) -> SourceResponse | None:
-        return None
-
-    class _Data:
-        async def insert(
-            self,
-            *,
-            uuid: uuid.UUID,
-            properties: dict[str, object],
-        ) -> None:
-            del uuid
-            assert properties["uri"] == "nlcr:abc-123"
-            assert properties["source_type"] == SourceKind.nlcr.value
-
-    monkeypatch.setattr(
-        source_service, "get_source_by_type_uri", fake_get_source_by_type_uri
-    )
-
-    def get_collection(_name: str) -> SimpleNamespace:
-        return SimpleNamespace(data=_Data())
-
-    client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
-
-    descriptor = SourceDescriptorRequest(
-        metadata=NlcrAuthoritySourceMetadata(nlcr_id="abc-123")
-    )
-    resolved = await source_service.resolve_source_reference(
-        client=client,  # type: ignore[reportArgumentType]
-        principal_id=uuid.uuid4(),
-        source_id=None,
-        source=descriptor,
-    )
-
-    assert resolved.source_type == SourceKind.nlcr
-    assert resolved.uri == "nlcr:abc-123"
-
-
-@pytest.mark.asyncio
 async def test_resolve_source_reference_creates_and_links_inline_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -432,15 +324,6 @@ async def test_resolve_source_reference_creates_and_links_inline_page(
             f"https://www.digitalniknihovna.cz/mzk/view/uuid:{document_id}"
             f"?page=uuid:{page_id}"
         ),
-        "metadata": {
-            "library": "mzk",
-            "document": str(document_id),
-            "page": str(page_id),
-            "kramerius_url": (
-                f"https://www.digitalniknihovna.cz/mzk/view/uuid:{document_id}"
-                f"?page=uuid:{page_id}"
-            ),
-        },
         "library": "mzk",
         "document": document_id,
         "page": page_id,
@@ -495,11 +378,6 @@ async def test_resolve_source_reference_creates_inline_document(
     assert inserted["properties"] == {
         "source_type": "document",
         "uri": expected_uri,
-        "metadata": {
-            "library": "mzk",
-            "document": str(document_id),
-            "kramerius_url": expected_uri,
-        },
         "library": "mzk",
         "document": document_id,
         "page": None,

@@ -53,11 +53,7 @@ from people_gator_api.services.weaviate_service.utils import (
 from people_gator_api.utils.opentelemetry import trace
 
 
-IMAGE_SOURCE_KINDS: tuple[SourceKind, ...] = (
-    SourceKind.image,
-    SourceKind.wikimedia,
-    SourceKind.obalkyknih,
-)
+IMAGE_SOURCE_KINDS: tuple[SourceKind, ...] = (SourceKind.image,)
 _RELATION_PAGE_SIZE = 100
 
 

@@ -34,48 +34,7 @@ class DocumentSourceMetadata(BaseModel):
     kramerius_url: AnyUrl | None = None
 
 
-class WikidataSourceMetadata(BaseModel):
-    """Metadata for a source imported from Wikidata."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    entity_id: str
-    wikidata_url: AnyUrl
-
-
-class NlcrAuthoritySourceMetadata(BaseModel):
-    """Metadata for a source imported from Czech National Authority DB (NLCR)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    nlcr_id: str
-
-
-class ObalkyKnihSourceMetadata(BaseModel):
-    """Metadata for a source imported from ObalkyKnih.cz."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    obalkyknih_id: str
-    obalkyknih_url: AnyUrl
-
-
-class WikimediaImageSourceMetadata(BaseModel):
-    """Metadata for a source imported from Wikimedia image repositories."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    wikimedia_url: AnyUrl
-
-
-type SourceMetadata = (
-    PageSourceMetadata
-    | DocumentSourceMetadata
-    | WikidataSourceMetadata
-    | NlcrAuthoritySourceMetadata
-    | WikimediaImageSourceMetadata
-    | ObalkyKnihSourceMetadata
-)
+type SourceMetadata = PageSourceMetadata | DocumentSourceMetadata
 
 
 class PageCreateRequest(BaseModel):
@@ -105,21 +64,6 @@ class ImageCreateRequest(BaseModel):
     url: AnyUrl
 
 
-def _metadata_allowed_for_source_type(
-    source_type: SourceKind,
-    metadata: SourceMetadata,
-) -> bool:
-    source_type_to_metadata_classes: dict[SourceKind, tuple[type[BaseModel], ...]] = {
-        SourceKind.page: (PageSourceMetadata,),
-        SourceKind.document: (DocumentSourceMetadata,),
-        SourceKind.wikidata: (WikidataSourceMetadata,),
-        SourceKind.wikimedia: (WikimediaImageSourceMetadata,),
-        SourceKind.nlcr: (NlcrAuthoritySourceMetadata,),
-        SourceKind.obalkyknih: (ObalkyKnihSourceMetadata,),
-    }
-    return isinstance(metadata, source_type_to_metadata_classes[source_type])
-
-
 class SourceCreateRequest(BaseModel):
     """Request body for registering a source."""
 
@@ -139,7 +83,13 @@ class SourceCreateRequest(BaseModel):
             raise ValueError("uri is derived from metadata for this source type")
         if self.metadata is None:
             raise ValueError("metadata is required for this source type")
-        if not _metadata_allowed_for_source_type(self.source_type, self.metadata):
+        if self.source_type == SourceKind.page and not isinstance(
+            self.metadata, PageSourceMetadata
+        ):
+            raise ValueError("page sources require page metadata")
+        if self.source_type == SourceKind.document and not isinstance(
+            self.metadata, DocumentSourceMetadata
+        ):
             raise ValueError(
                 "metadata shape does not match source_type; expected strict metadata for the given source"
             )
@@ -151,7 +101,6 @@ class SourceDescriptorRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    uri: str | None = None
     metadata: SourceMetadata | None = None
     page: PageCreateRequest | None = None
     document: DocumentCreateRequest | None = None
@@ -159,10 +108,9 @@ class SourceDescriptorRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_source_descriptor(self) -> "SourceDescriptorRequest":
-        legacy_descriptor = self.uri is not None or self.metadata is not None
         descriptor_count = sum(
             (
-                legacy_descriptor,
+                self.metadata is not None,
                 self.page is not None,
                 self.document is not None,
                 self.image is not None,
@@ -170,7 +118,7 @@ class SourceDescriptorRequest(BaseModel):
         )
         if descriptor_count != 1:
             raise ValueError(
-                "source descriptor requires exactly one of uri/metadata, page, document, or image"
+                "source descriptor requires exactly one of metadata, page, document, or image"
             )
         return self
 
