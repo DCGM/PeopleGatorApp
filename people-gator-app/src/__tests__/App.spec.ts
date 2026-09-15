@@ -1,8 +1,18 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 import { flushPromises, mount } from '@vue/test-utils'
 import App from '../App.vue'
 import router from '../router'
+
+vi.mock('@panzoom/panzoom', () => ({
+  default: vi.fn(() => ({
+    destroy: vi.fn(),
+    reset: vi.fn(),
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    zoomWithWheel: vi.fn(),
+  })),
+}))
 
 describe('App', () => {
   it('keeps document pagination in the route query', async () => {
@@ -32,6 +42,25 @@ describe('App', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.query).toEqual({})
+  })
+
+  it('previews a similar person without replacing the current face or line', async () => {
+    await router.push(
+      '/libraries/library/documents/document/pages/page?person=face-01&line=line-anna',
+    )
+
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query).toEqual({ person: 'face-01', line: 'line-anna' })
+    expect(wrapper.get('[aria-labelledby="selected-person-title"] h3').text()).toContain(
+      'Anna Nováková',
+    )
+    expect(wrapper.get('[aria-label="Select Josef Svoboda"]').classes()).toContain('ring-accent/70')
+    expect(
+      wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').attributes('aria-pressed'),
+    ).toBe('true')
   })
 
   it('defines all application pages', () => {

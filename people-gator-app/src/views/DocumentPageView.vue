@@ -9,13 +9,14 @@ import {
   UserRoundX,
   WandSparkles,
 } from '@lucide/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import FaceItem from '@/components/custom/FaceItem.vue'
 import FaceItemSkeleton from '@/components/custom/FaceItemSkeleton.vue'
+import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
 import type {
   Face,
   FaceStatus,
@@ -24,7 +25,9 @@ import type {
   TranscriptionLineId,
   TranslationLanguage,
 } from '@/components/custom/document-page.types'
+import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -57,7 +60,7 @@ const faceStatusIcons = {
 const route = useRoute()
 const router = useRouter()
 
-const faces: Face[] = [
+const faces = reactive<Face[]>([
   {
     id: 'face-01',
     personId: 'anna-novakova',
@@ -85,7 +88,7 @@ const faces: Face[] = [
     position: { left: 41, top: 70, width: 15, height: 13 },
     portrait: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=85',
   },
-]
+])
 
 const transcription: TranscriptionLine[] = [
   {
@@ -149,11 +152,48 @@ const translations = {
   },
 } satisfies Record<TranslationLanguage, Record<TranscriptionLineId, string>>
 
-const similarPeople = [
-  { id: 'anna-novakova', name: 'Anna Novák', score: 94, portrait: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80' },
-  { id: 'marie-dvorakova', name: 'Marie Dvořáková', score: 81, portrait: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=80' },
-  { id: 'alena-horakova', name: 'Alena Horáková', score: 73, portrait: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=160&q=80' },
-]
+const similarPeople = reactive<SimilarPersonCandidate[]>([
+  {
+    id: 'anna-novakova',
+    name: 'Anna Nováková',
+    score: 94,
+    portrait: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80',
+    nerMentions: 1,
+    detections: 1,
+    source: 'page',
+    faceId: 'face-01',
+    entityKey: 'line-anna:35:48',
+    entityLineIndex: 1,
+  },
+  {
+    id: 'josef-svoboda',
+    name: 'Josef Svoboda',
+    score: 88,
+    portrait: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80',
+    nerMentions: 0,
+    detections: 1,
+    source: 'page',
+    faceId: 'face-02',
+  },
+  {
+    id: 'marie-dvorakova',
+    name: 'Marie Dvořáková',
+    score: 81,
+    portrait: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=80',
+    nerMentions: 0,
+    detections: 0,
+    source: 'database',
+  },
+  {
+    id: 'alena-horakova',
+    name: 'Alena Horáková',
+    score: 73,
+    portrait: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=160&q=80',
+    nerMentions: 0,
+    detections: 0,
+    source: 'database',
+  },
+])
 
 function routeNumber(value: unknown, fallback: number, maximum: number) {
   const parsed = typeof value === 'string' ? Number(value) : Number.NaN
@@ -178,9 +218,12 @@ const contextLineCount = ref(routeContextLineCount(route.query.context))
 const selectedFaceStatus = ref<'all' | FaceStatus>('all')
 const zoomPercent = ref(82)
 const selectedEntityKey = ref<string | null>(null)
+const previewedFaceId = ref<string | null>(null)
+const previewedEntityKey = ref<string | null>(null)
 const viewerElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
 const faceListElement = ref<HTMLElement | null>(null)
+const viewedSimilarPersonId = ref<string | null>(null)
 let panzoom: PanzoomObject | undefined
 
 const selectedFace = computed(() => faces.find((face) => face.id === selectedFaceId.value) ?? faces[0]!)
@@ -301,6 +344,37 @@ function openPerson(personId: string | null) {
   void router.push({ name: 'person-detail', params: { personId } })
 }
 
+function previewSimilarPerson(person: SimilarPersonCandidate) {
+  viewedSimilarPersonId.value = person.id
+  previewedFaceId.value = person.faceId ?? null
+  previewedEntityKey.value = person.entityKey ?? null
+}
+
+function assignSimilarPerson(person: SimilarPersonCandidate) {
+  viewedSimilarPersonId.value = person.id
+  selectedFace.value.personId = person.id
+  selectedFace.value.name = person.name
+  selectedFace.value.status = 'change'
+}
+
+function createSimilarPerson(person: SimilarPersonCandidate) {
+  const createdPerson = {
+    ...person,
+    id: person.id || `person-${similarPeople.length + 1}`,
+    faceId: selectedFace.value.id,
+  }
+  similarPeople.unshift(createdPerson)
+  assignSimilarPerson(createdPerson)
+}
+
+function reviewSelectedFace(status: Extract<FaceStatus, 'valid' | 'empty' | 'fail'>) {
+  selectedFace.value.status = status
+  if (status === 'empty') {
+    selectedFace.value.personId = null
+    selectedFace.value.name = 'Unknown person'
+  }
+}
+
 function setZoom(direction: 'in' | 'out') {
   if (!panzoom) return
   if (direction === 'in' && zoomPercent.value >= maximumZoomPercent) return
@@ -402,9 +476,9 @@ onBeforeUnmount(() => {
 
       <DocumentTeleprompter :visible-transcription="visibleTranscription" :selected-line-index="selectedLineIndex"
         :context-line-count="contextLineCount" :selected-entity-key="selectedEntityKey"
-        :is-translation-open="isTranslationOpen" :selected-language="selectedLanguage"
-        :current-translation="currentTranslation" @select-line="selectLine" @select-entity="selectEntity"
-        @navigate-line="navigateLine" />
+        :related-entity-key="previewedEntityKey" :is-translation-open="isTranslationOpen"
+        :selected-language="selectedLanguage" :current-translation="currentTranslation" @select-line="selectLine"
+        @select-entity="selectEntity" @navigate-line="navigateLine" />
     </div>
 
     <section ref="viewerElement" class="workspace-viewer bg-viewer min-h-0 overflow-hidden"
@@ -452,7 +526,9 @@ onBeforeUnmount(() => {
 
           <button v-for="face in faces" :key="face.id" type="button" class="absolute border-2 transition-colors" :class="face.id === selectedFace.id
             ? 'border-secondary bg-secondary/15 ring-2 ring-background/80'
-            : 'border-accent bg-accent/10 hover:bg-accent/25'"
+            : face.id === previewedFaceId
+              ? 'border-accent bg-accent/25 ring-2 ring-accent/70'
+              : 'border-accent/60 bg-accent/5 hover:bg-accent/20'"
             :style="{ left: `${face.position.left}%`, top: `${face.position.top}%`, width: `${face.position.width}%`, height: `${face.position.height}%` }"
             :aria-label="`Select ${face.name}`" @click.stop="selectFace(face.id)">
             <span class="absolute -left-0.5 -top-5 bg-foreground px-1.5 py-0.5 font-mono text-[8px] text-background">
@@ -465,56 +541,65 @@ onBeforeUnmount(() => {
     </section>
 
 
-    <aside class="workspace-selection border-l bg-background" aria-labelledby="selected-person-title">
-      <div class="sticky top-13">
-        <header class="border-b p-5">
-          <div class="flex items-center gap-4">
-            <div class="shrink-0">
-              <img :src="selectedFace.portrait" :alt="selectedFace.name" class="size-24 object-cover grayscale" />
-            </div>
+    <aside class="workspace-selection min-h-0 border-l bg-background" aria-labelledby="selected-person-title">
+      <div class="shrink-0 bg-background">
+        <header class="p-5">
+          <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
+            <img :src="selectedFace.portrait" :alt="selectedFace.name" class="size-24 object-cover grayscale" />
             <div class="min-w-0">
-              <p class="font-mono font-semibold text-xs uppercase text-secondary">Current selection</p>
-              <h3 class="truncate text-lg">
+              <p id="selected-person-title" class="font-mono font-semibold text-xs uppercase text-secondary">
+                Current selection
+              </p>
+              <h3 class="text-lg">
                 <RouterLink v-if="selectedFace.personId"
                   :to="{ name: 'person-detail', params: { personId: selectedFace.personId } }"
-                  class="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  {{ selectedFace.name }}
+                  class="group flex max-w-full items-center gap-1 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span class="truncate">{{ selectedFace.name }}</span>
+                  <ChevronRight
+                    class="size-[1em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
+                    aria-hidden="true" />
                 </RouterLink>
-                <span v-else>{{ selectedFace.name }}</span>
+                <span v-else class="block truncate">{{ selectedFace.name }}</span>
               </h3>
-              <p class="mt-1 font-mono text-[10px] text-muted-foreground">{{ selectedFace.id }}</p>
+              <div class="mt-1 space-y-1 text-sm">
+                <code class="block text-muted-foreground">{{ selectedFace.id }}</code>
+                <span class="flex items-center gap-1 font-medium" :class="faceStatusClasses[selectedFace.status]">
+                  <component :is="faceStatusIcons[selectedFace.status]" class="size-[1em]" aria-hidden="true" />
+                  {{ faceStatusLabels[selectedFace.status] }}
+                </span>
+              </div>
             </div>
+
+            <ButtonGroup
+              class="col-span-2 w-full max-[400px]:flex-col max-[400px]:[&>*]:flex-none max-[400px]:[&>*]:rounded-md max-[400px]:[&>*]:border-l max-[400px]:[&>*:not(:first-child)]:border-t-0"
+              aria-label="Review selected face">
+              <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'valid'"
+                class="flex-1 text-emerald-700" @click="reviewSelectedFace('valid')">
+                <BadgeCheck aria-hidden="true" />
+                Valid
+              </Button>
+              <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'empty'"
+                class="flex-1 text-muted-foreground" @click="reviewSelectedFace('empty')">
+                <UserRoundX aria-hidden="true" />
+                Unassign
+              </Button>
+              <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'fail'"
+                class="flex-1 text-destructive" @click="reviewSelectedFace('fail')">
+                <CircleAlert aria-hidden="true" />
+                Detection fail
+              </Button>
+            </ButtonGroup>
           </div>
         </header>
-
-
-        <Button class="mt-5 w-full rounded-none" variant="outline" :disabled="!selectedFace.personId"
-          @click="openPerson(selectedFace.personId)">
-          Open person record
-          <ChevronRight />
-        </Button>
       </div>
 
-      <section class="border-t p-5" aria-labelledby="similar-title">
-        <div class="flex items-end justify-between">
-          <h2 id="similar-title" class="text-lg">Similar people</h2>
-          <span class="font-mono text-[10px] text-muted-foreground">by face</span>
-        </div>
-        <div class="mt-3 divide-y border-y">
-          <button v-for="person in similarPeople" :key="person.name" type="button"
-            class="flex w-full items-center gap-3 py-3 text-left hover:text-accent" @click="openPerson(person.id)">
-            <img :src="person.portrait" :alt="person.name" class="size-11 object-cover grayscale" />
-            <span class="min-w-0 flex-1">
-              <strong class="block truncate text-sm font-medium">{{ person.name }}</strong>
-              <span class="text-xs text-muted-foreground">Possible identity</span>
-            </span>
-            <span class="font-mono text-xs">{{ person.score }}%</span>
-          </button>
-        </div>
-      </section>
+      <SimilarPeoplePanel :people="similarPeople" :assigned-person-id="selectedFace.personId"
+        :viewed-person-id="viewedSimilarPersonId" @preview="previewSimilarPerson" @assign="assignSimilarPerson"
+        @create="createSimilarPerson" @open-person="openPerson" />
     </aside>
 
-    <section class="workspace-faces border-t bg-background px-3 py-4 sm:px-6" aria-labelledby="page-faces-title">
+    <section class="workspace-faces min-w-0 overflow-hidden border-t bg-background px-3 py-4 sm:px-6"
+      aria-labelledby="page-faces-title">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 id="page-faces-title">Faces on this page</h3>
         <ToggleGroup v-model="faceStatusFilter" type="single" variant="outline" size="sm"
@@ -610,6 +695,10 @@ onBeforeUnmount(() => {
   .workspace-selection {
     grid-column: 2;
     grid-row: 1 / 3;
+    display: flex;
+    max-height: calc(100dvh - 3.25rem);
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .workspace-faces {

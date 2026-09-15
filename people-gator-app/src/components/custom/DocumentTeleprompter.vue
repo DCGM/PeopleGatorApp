@@ -21,6 +21,7 @@ const props = defineProps<{
   selectedLineIndex: number
   contextLineCount: number
   selectedEntityKey: string | null
+  relatedEntityKey: string | null
   isTranslationOpen: boolean
   selectedLanguage: TranslationLanguage
   currentTranslation: string
@@ -56,7 +57,10 @@ function entityKey(entity: TranscriptionEntitySpan) {
 function entityStyle(entity: TranscriptionEntitySpan) {
   const key = entityKey(entity)
   if (props.selectedEntityKey === key) {
-    return { backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)', outline: '1px solid var(--accent)' }
+    return { backgroundColor: 'color-mix(in srgb, var(--secondary) 25%, transparent)', outline: '1px solid var(--secondary)' }
+  }
+  if (props.relatedEntityKey === key) {
+    return { backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)', outline: '2px solid var(--accent)' }
   }
   if (hoveredEntityKey.value === key) {
     return { backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', outline: '1px solid color-mix(in srgb, var(--accent) 50%, transparent)' }
