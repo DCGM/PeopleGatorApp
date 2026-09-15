@@ -217,9 +217,10 @@ def source_response(
             "has_metadata": metadata is not None,
         },
     )
+    metadata_model = metadata_model_by_source_type.get(source_type)
     resolved_metadata = (
-        metadata_model_by_source_type[source_type](**metadata)
-        if metadata is not None
+        metadata_model(**metadata)
+        if metadata is not None and metadata_model is not None
         else None
     )
     return SourceResponse(

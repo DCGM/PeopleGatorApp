@@ -262,6 +262,9 @@ PRINCIPAL_PROPERTIES: list[Property] = [
 SOURCE_PROPERTIES: list[Property] = [
     _text_property("source_type", "Source kind.", searchable=False),
     _text_property("uri", "Source URI."),
+    _text_property("library", "Archive library identifier.", searchable=False),
+    _uuid_property("document", "Archive document identifier."),
+    _uuid_property("page", "Archive page identifier."),
     _object_property(
         "metadata",
         "Strict source metadata payload.",

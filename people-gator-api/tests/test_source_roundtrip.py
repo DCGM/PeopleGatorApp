@@ -25,7 +25,11 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_HOST", "localhost")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_PORT", "50051")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 
-from people_gator_api.routes.v1.sources import create_source_route, delete_source_route, get_source_route
+from people_gator_api.routes.v1.sources import (
+    create_source_route,
+    delete_source_route,
+    get_source_route,
+)
 from people_gator_api.schemas.enums import SourceKind, PrincipalType
 from people_gator_api.schemas.sources import SourceCreateRequest, WikidataSourceMetadata
 from people_gator_api.schemas.principals import UserResponse
@@ -54,10 +58,14 @@ class FakeData:
     async def exists(self, object_id: uuid.UUID) -> bool:
         return str(object_id) in self.owner.objects
 
-    async def insert(self, *, uuid: uuid.UUID, properties: dict[str, object], **_kwargs: object) -> None:
+    async def insert(
+        self, *, uuid: uuid.UUID, properties: dict[str, object], **_kwargs: object
+    ) -> None:
         self.owner.objects[str(uuid)] = {"uuid": uuid, "properties": properties}
 
-    async def replace(self, *, uuid: uuid.UUID, properties: dict[str, object], **_kwargs: object) -> None:
+    async def replace(
+        self, *, uuid: uuid.UUID, properties: dict[str, object], **_kwargs: object
+    ) -> None:
         self.owner.objects[str(uuid)] = {"uuid": uuid, "properties": properties}
 
     async def delete_by_id(self, object_id: uuid.UUID) -> None:
@@ -69,14 +77,20 @@ class FakeQuery:
         super().__init__()
         self.owner = owner
 
-    async def fetch_object_by_id(self, object_id: uuid.UUID, **kwargs: object) -> object | None:
+    async def fetch_object_by_id(
+        self, object_id: uuid.UUID, **kwargs: object
+    ) -> object | None:
         del kwargs
         entry = self.owner.objects.get(str(object_id))
         if entry is None:
             return None
-        return SimpleNamespace(uuid=entry["uuid"], properties=entry["properties"], references={})
+        return SimpleNamespace(
+            uuid=entry["uuid"], properties=entry["properties"], references={}
+        )
 
-    async def fetch_objects(self, *, filters: object | None = None, limit: int = 1, **kwargs: object) -> object:
+    async def fetch_objects(
+        self, *, filters: object | None = None, limit: int = 1, **kwargs: object
+    ) -> object:
         del filters
         del kwargs
         objects = [
@@ -121,29 +135,35 @@ async def test_source_post_get_delete_roundtrip() -> None:
 
     payload = SourceCreateRequest(
         source_type=SourceKind.wikidata,
-        uri="https://example.test/authority-roundtrip",
         metadata=WikidataSourceMetadata(
             entity_id="Q999999",
             wikidata_url="https://www.wikidata.org/entity/Q999999",  # pyright: ignore[reportArgumentType]
         ),
     )
 
-    created = await create_source_route(payload=payload, principal=principal, session=session, broker=broker)  # pyright: ignore[reportArgumentType]
+    created = await create_source_route(
+        payload=payload, principal=principal, session=session, broker=broker
+    )  # pyright: ignore[reportArgumentType]
     assert created.source_type == payload.source_type
-    assert created.uri == payload.uri
+    assert created.uri == "https://www.wikidata.org/entity/Q999999"
     assert created.metadata is not None
     assert created.metadata.entity_id == payload.metadata.entity_id
 
-    fetched = await get_source_route(source_id=created.source_id, principal=principal, session=session)  # pyright: ignore[reportArgumentType]
+    fetched = await get_source_route(
+        source_id=created.source_id, principal=principal, session=session
+    )  # pyright: ignore[reportArgumentType]
     assert fetched.source_id == created.source_id
-    assert fetched.uri == payload.uri
+    assert fetched.uri == "https://www.wikidata.org/entity/Q999999"
     assert fetched.metadata is not None
     assert fetched.metadata.entity_id == payload.metadata.entity_id
 
-    await delete_source_route(source_id=created.source_id, principal=principal, session=session, broker=broker)  # pyright: ignore[reportArgumentType]
+    await delete_source_route(
+        source_id=created.source_id, principal=principal, session=session, broker=broker
+    )  # pyright: ignore[reportArgumentType]
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_source_route(source_id=created.source_id, principal=principal, session=session)  # pyright: ignore[reportArgumentType]
+        await get_source_route(
+            source_id=created.source_id, principal=principal, session=session
+        )  # pyright: ignore[reportArgumentType]
 
     assert exc_info.value.status_code == 404
-

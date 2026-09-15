@@ -43,6 +43,7 @@ from people_gator_api.services.crud_services.source_service import SourceResolut
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.sse import BrokerDependency, SseEventType
+from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 
 router = APIRouter(tags=["annotations"])
 
@@ -51,8 +52,8 @@ router = APIRouter(tags=["annotations"])
 async def list_page_mentions_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    resolved_source_id: SourceFilterDependency,
     document_mention_id: uuid.UUID | None = None,
-    source_id: uuid.UUID | None = None,
     principal_id: uuid.UUID | None = None,
     name: str | None = None,
     limit: int = Query(default=50, ge=0),
@@ -62,7 +63,7 @@ async def list_page_mentions_route(
         session,
         principal.principal_id,
         document_mention_id,
-        source_id,
+        resolved_source_id,
         after_id,
         limit,
         owner_principal_id=principal_id,
@@ -114,8 +115,8 @@ async def get_page_mention_route(
 async def list_document_mentions_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    resolved_source_id: SourceFilterDependency,
     entity_id: uuid.UUID | None = None,
-    source_id: uuid.UUID | None = None,
     principal_id: uuid.UUID | None = None,
     name: str | None = None,
     limit: int = Query(default=50, ge=0),
@@ -125,7 +126,7 @@ async def list_document_mentions_route(
         session,
         principal.principal_id,
         entity_id,
-        source_id,
+        resolved_source_id,
         after_id,
         limit,
         owner_principal_id=principal_id,
@@ -212,7 +213,7 @@ async def patch_document_mention_entity_route(
 async def list_faces_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
-    source_id: uuid.UUID | None = None,
+    resolved_source_id: SourceFilterDependency,
     entity_id: uuid.UUID | None = None,
     principal_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=0),
@@ -221,7 +222,7 @@ async def list_faces_route(
     return await list_faces(
         session,
         principal.principal_id,
-        source_id,
+        resolved_source_id,
         entity_id,
         after_id,
         limit,

@@ -40,6 +40,7 @@ from people_gator_api.services.crud_services.entity_service import (
     list_entities,
     patch_entity,
 )
+from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 
 router = APIRouter(tags=["entities"])
 
@@ -48,6 +49,7 @@ router = APIRouter(tags=["entities"])
 async def list_entities_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    resolved_source_id: SourceFilterDependency,
     entity_type: EntityType | None = None,
     wikidata_id: str | None = None,
     nlcr_authority_id: str | None = None,
@@ -65,6 +67,7 @@ async def list_entities_route(
             wikidata_id=wikidata_id,
             nlcr_authority_id=nlcr_authority_id,
             owner_principal_id=principal_id,
+            source_id=resolved_source_id,
         )
     except ValueError as exc:
         raise_api_error(422, "invalid_filter", str(exc))

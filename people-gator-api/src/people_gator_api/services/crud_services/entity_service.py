@@ -30,6 +30,9 @@ from people_gator_api.services.weaviate_service.utils import (
     fetch_collection_page_with_total_count,
     reference_id_filter,
 )
+from people_gator_api.services.crud_services.media_service import (
+    entity_ids_for_source,
+)
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
 
@@ -86,6 +89,7 @@ async def list_entities(
     wikidata_id: str | None = None,
     nlcr_authority_id: str | None = None,
     owner_principal_id: uuid.UUID | None = None,
+    source_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
     del principal_id
     filters = _build_entity_filters(
@@ -94,6 +98,16 @@ async def list_entities(
         nlcr_authority_id=nlcr_authority_id,
         principal_id=owner_principal_id,
     )
+    if source_id is not None:
+        entity_ids = await entity_ids_for_source(client, source_id)
+        if not entity_ids:
+            return EntityListResponse(
+                items=[],
+                limit=limit,
+                total_count=0,
+                after_id=None,
+            )
+        filters.append(Filter.by_id().contains_any(sorted(entity_ids)))
     logger.debug(
         "list_entities called",
         extra={
@@ -103,6 +117,7 @@ async def list_entities(
             "wikidata_id": wikidata_id,
             "nlcr_authority_id": nlcr_authority_id,
             "owner_principal_id": owner_principal_id,
+            "source_id": source_id,
         },
     )
     objects, total_count = await fetch_collection_page_with_total_count(

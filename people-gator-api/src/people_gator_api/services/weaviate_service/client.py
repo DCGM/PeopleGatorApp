@@ -34,6 +34,11 @@ def _build_client() -> WeaviateAsyncClient:
     )
 
 
+def build_weaviate_client() -> WeaviateAsyncClient:
+    """Build an unconnected client for standalone operational commands."""
+    return _build_client()
+
+
 async def init_weaviate() -> None:
     """Connect the async Weaviate client and ensure collection schemas exist.
 

@@ -242,3 +242,34 @@ def test_build_entity_filters_supports_exact_identity_filters() -> None:
         principal_id=uuid.uuid4(),
     )
     assert len(filters) == 4
+
+
+@pytest.mark.asyncio
+async def test_list_entities_returns_empty_when_source_has_no_entities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_id = uuid.uuid4()
+
+    async def fake_entity_ids_for_source(
+        _client: object,
+        requested_source_id: uuid.UUID,
+    ) -> set[uuid.UUID]:
+        assert requested_source_id == source_id
+        return set()
+
+    monkeypatch.setattr(
+        entity_service,
+        "entity_ids_for_source",
+        fake_entity_ids_for_source,
+    )
+
+    result = await entity_service.list_entities(
+        SimpleNamespace(),  # pyright: ignore[reportArgumentType] - returns before database access.
+        uuid.uuid4(),
+        after_id=None,
+        limit=50,
+        source_id=source_id,
+    )
+
+    assert result.items == []
+    assert result.total_count == 0

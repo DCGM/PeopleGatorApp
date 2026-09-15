@@ -8,6 +8,7 @@ from fastapi import (
     Query,
     status,
 )
+from pydantic import AnyUrl
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.services.auth_service import (
@@ -20,6 +21,7 @@ from people_gator_api.services.crud_services.source_service import (
     create_source,
     delete_source,
     get_source,
+    get_source_by_type_uri,
     list_sources,
 )
 from people_gator_api.schemas.sources import (
@@ -61,7 +63,25 @@ async def list_sources_route(
     )
 
 
-@router.get("/sources/{source_id}", response_model=SourceResponse)
+@router.get("/sources/by-url", response_model=SourceResponse)
+async def get_source_by_url_route(
+    source_type: SourceKind,
+    url: AnyUrl,
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
+) -> SourceResponse:
+    source = await get_source_by_type_uri(
+        session,
+        principal.principal_id,
+        source_type,
+        str(url),
+    )
+    if source is None:
+        raise_api_error(404, "not_found", "Source not found")
+    return source
+
+
+@router.get("/sources/{source_id:uuid}", response_model=SourceResponse)
 async def get_source_route(
     source_id: uuid.UUID,
     session: WeaviateSessionDependency,
@@ -93,7 +113,7 @@ async def create_source_route(
     return source
 
 
-@router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/sources/{source_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source_route(
     source_id: uuid.UUID,
     session: WeaviateSessionDependency,
