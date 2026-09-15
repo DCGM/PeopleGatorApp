@@ -44,7 +44,7 @@ defineEmits<{
 </script>
 
 <template>
-  <header class="flex min-h-9 shrink-0 flex-wrap select-none items-center gap-2 border-b px-2 py-2">
+  <div class="flex min-w-max select-none items-center justify-center gap-2 px-2">
     <ButtonGroup class="shrink-0">
       <Button variant="outline" size="icon-sm" aria-label="Previous line" title="Previous line"
         :disabled="selectedLineIndex === 0" @click="$emit('previous-line')">
@@ -117,5 +117,5 @@ defineEmits<{
         <Plus />
       </Button>
     </ButtonGroup>
-  </header>
+  </div>
 </template>

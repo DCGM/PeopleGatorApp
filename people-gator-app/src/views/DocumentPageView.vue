@@ -9,14 +9,16 @@ import {
   UserRoundX,
   WandSparkles,
 } from '@lucide/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import FaceItem from '@/components/custom/FaceItem.vue'
 import FaceItemSkeleton from '@/components/custom/FaceItemSkeleton.vue'
+import FaceListEmptyState from '@/components/custom/FaceListEmptyState.vue'
 import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
+import { topBarContextKey } from '@/components/custom/top-bar-context'
 import type {
   Face,
   FaceStatus,
@@ -28,7 +30,6 @@ import type {
 import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
@@ -59,6 +60,7 @@ const faceStatusIcons = {
 
 const route = useRoute()
 const router = useRouter()
+const topBarContext = inject(topBarContextKey)
 
 const faces = reactive<Face[]>([
   {
@@ -339,11 +341,6 @@ function navigateLine(direction: 'next' | 'previous') {
   else previousLine()
 }
 
-function openPerson(personId: string | null) {
-  if (!personId) return
-  void router.push({ name: 'person-detail', params: { personId } })
-}
-
 function previewSimilarPerson(person: SimilarPersonCandidate) {
   viewedSimilarPersonId.value = person.id
   previewedFaceId.value = person.faceId ?? null
@@ -462,151 +459,153 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <Teleport v-if="topBarContext" :to="topBarContext">
+    <DocumentControls :selected-line-index="selectedLineIndex" :line-count="transcription.length"
+      :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
+      :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
+      :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
+      :selected-language="selectedLanguage" :context-line-count="contextLineCount"
+      :maximum-context-line-count="transcription.length - 1" @previous-line="previousLine" @next-line="nextLine"
+      @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom" @reset-view="resetView"
+      @select-translation="selectTranslation" @change-context="changeContext" />
+  </Teleport>
+
   <main class="workspace-grid">
-    <div
-      class="workspace-controls mx-auto mb-auto max-h-full w-full max-w-6xl border z-10 bg-background/95 shadow-lg backdrop-blur-sm grid">
-      <DocumentControls :selected-line-index="selectedLineIndex" :line-count="transcription.length"
-        :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
-        :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
-        :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
-        :selected-language="selectedLanguage" :context-line-count="contextLineCount"
-        :maximum-context-line-count="transcription.length - 1" @previous-line="previousLine" @next-line="nextLine"
-        @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom" @reset-view="resetView"
-        @select-translation="selectTranslation" @change-context="changeContext" />
+    <div class="workspace-fold">
+      <section class="workspace-teleprompter min-w-0 overflow-hidden border-b bg-background px-3 py-4 sm:px-6"
+        aria-labelledby="page-transcription-title">
+        <DocumentTeleprompter :visible-transcription="visibleTranscription" :selected-line-index="selectedLineIndex"
+          :context-line-count="contextLineCount" :selected-entity-key="selectedEntityKey"
+          :related-entity-key="previewedEntityKey" :is-translation-open="isTranslationOpen"
+          :selected-language="selectedLanguage" :current-translation="currentTranslation" @select-line="selectLine"
+          @select-entity="selectEntity" @navigate-line="navigateLine" />
+      </section>
 
-      <DocumentTeleprompter :visible-transcription="visibleTranscription" :selected-line-index="selectedLineIndex"
-        :context-line-count="contextLineCount" :selected-entity-key="selectedEntityKey"
-        :related-entity-key="previewedEntityKey" :is-translation-open="isTranslationOpen"
-        :selected-language="selectedLanguage" :current-translation="currentTranslation" @select-line="selectLine"
-        @select-entity="selectEntity" @navigate-line="navigateLine" />
-    </div>
+      <section ref="viewerElement" class="workspace-viewer bg-viewer min-h-0 overflow-hidden"
+        aria-label="Pan and zoom document page">
 
-    <section ref="viewerElement" class="workspace-viewer bg-viewer min-h-0 overflow-hidden"
-      aria-label="Pan and zoom document page">
-
-      <div class="panzoom-layer inset-0 flex h-full min-h-full min-w-full items-center justify-center">
-        <div ref="pageElement" class="scan-page h-190 w-135 shrink-0 overflow-hidden bg-card shadow-2xl">
-          <div class="absolute inset-0 opacity-35 mix-blend-multiply scan-texture" />
-          <div class="relative border-b-2 border-foreground/60 px-10 pb-4 pt-8 text-center text-foreground">
-            <p class="font-heading text-4xl font-semibold">LIDOVÉ NOVINY</p>
-            <p class="mt-1 font-mono text-[9px] uppercase">Ročník XII. · číslo 284 · cena 40 haléřů</p>
-          </div>
-
-          <div class="relative grid grid-cols-3 gap-4 px-8 py-5 text-foreground/80">
-            <article class="space-y-2 text-[8px] leading-[1.45]">
-              <h2 class="text-center text-base leading-none">Ze života našeho města</h2>
-              <img :src="faces[0]!.portrait" alt="Portrait printed in the newspaper"
-                class="h-32 w-full grayscale object-cover contrast-75" />
-              <p v-for="index in 8" :key="`left-${index}`">Spolkový život v našem městě vstupuje do nové sezóny.
-                Veřejnost přijala zprávu s velikým zájmem.</p>
-            </article>
-            <article class="space-y-2 text-[8px] leading-[1.45]">
-              <p v-for="index in 14" :key="`middle-${index}`">Na včerejší schůzi byl představen program podzimních
-                přednášek. Přítomní zástupci okolních obcí projednali další postup.</p>
-            </article>
-            <article class="space-y-2 text-[8px] leading-[1.45]">
-              <h2 class="border-b border-border pb-1 text-center text-base leading-none">Zprávy dne</h2>
-              <p v-for="index in 5" :key="`right-a-${index}`">Další veřejná schůze proběhne v pátek večer. Podrobný
-                pořad přineseme příště.</p>
-              <img :src="faces[1]!.portrait" alt="Second portrait printed in the newspaper"
-                class="h-28 w-full grayscale object-cover contrast-75" />
-              <p v-for="index in 5" :key="`right-b-${index}`">Redakce přijímá oznámení každý všední den. Dopisy račte
-                zasílati na adresu listu.</p>
-            </article>
-          </div>
-
-          <button v-for="(line, index) in transcription" :key="line.id" type="button"
-            class="absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            :class="index === selectedLineIndex
-              ? 'border-accent bg-accent/20 ring-1 ring-background/75'
-              : 'border-transparent hover:border-accent/70 hover:bg-accent/10'"
-            :style="{ left: `${line.position.left}%`, top: `${line.position.top}%`, width: `${line.position.width}%`, height: `${line.position.height}%` }"
-            :aria-label="`Select line ${index + 1}: ${line.text}`" :aria-pressed="index === selectedLineIndex"
-            @click.stop="selectLine(index)" />
-
-          <button v-for="face in faces" :key="face.id" type="button" class="absolute border-2 transition-colors" :class="face.id === selectedFace.id
-            ? 'border-secondary bg-secondary/15 ring-2 ring-background/80'
-            : face.id === previewedFaceId
-              ? 'border-accent bg-accent/25 ring-2 ring-accent/70'
-              : 'border-accent/60 bg-accent/5 hover:bg-accent/20'"
-            :style="{ left: `${face.position.left}%`, top: `${face.position.top}%`, width: `${face.position.width}%`, height: `${face.position.height}%` }"
-            :aria-label="`Select ${face.name}`" @click.stop="selectFace(face.id)">
-            <span class="absolute -left-0.5 -top-5 bg-foreground px-1.5 py-0.5 font-mono text-[8px] text-background">
-              {{ face.id }}
-            </span>
-          </button>
-
-        </div>
-      </div>
-    </section>
-
-
-    <aside class="workspace-selection min-h-0 border-l bg-background" aria-labelledby="selected-person-title">
-      <div class="shrink-0 bg-background">
-        <header class="p-5">
-          <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
-            <img :src="selectedFace.portrait" :alt="selectedFace.name" class="size-24 object-cover grayscale" />
-            <div class="min-w-0">
-              <p id="selected-person-title" class="font-mono font-semibold text-xs uppercase text-secondary">
-                Current selection
-              </p>
-              <h3 class="text-lg">
-                <RouterLink v-if="selectedFace.personId"
-                  :to="{ name: 'person-detail', params: { personId: selectedFace.personId } }"
-                  class="group flex max-w-full items-center gap-1 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <span class="truncate">{{ selectedFace.name }}</span>
-                  <ChevronRight
-                    class="size-[1em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
-                    aria-hidden="true" />
-                </RouterLink>
-                <span v-else class="block truncate">{{ selectedFace.name }}</span>
-              </h3>
-              <div class="mt-1 space-y-1 text-sm">
-                <code class="block text-muted-foreground">{{ selectedFace.id }}</code>
-                <span class="flex items-center gap-1 font-medium" :class="faceStatusClasses[selectedFace.status]">
-                  <component :is="faceStatusIcons[selectedFace.status]" class="size-[1em]" aria-hidden="true" />
-                  {{ faceStatusLabels[selectedFace.status] }}
-                </span>
-              </div>
+        <div class="panzoom-layer inset-0 flex h-full min-h-full min-w-full items-center justify-center">
+          <div ref="pageElement" class="scan-page h-190 w-135 shrink-0 overflow-hidden bg-card shadow-2xl">
+            <div class="absolute inset-0 opacity-35 mix-blend-multiply scan-texture" />
+            <div class="relative border-b-2 border-foreground/60 px-10 pb-4 pt-8 text-center text-foreground">
+              <p class="font-heading text-4xl font-semibold">LIDOVÉ NOVINY</p>
+              <p class="mt-1 font-mono text-[9px] uppercase">Ročník XII. · číslo 284 · cena 40 haléřů</p>
             </div>
 
-            <ButtonGroup
-              class="col-span-2 w-full max-[400px]:flex-col max-[400px]:[&>*]:flex-none max-[400px]:[&>*]:rounded-md max-[400px]:[&>*]:border-l max-[400px]:[&>*:not(:first-child)]:border-t-0"
-              aria-label="Review selected face">
-              <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'valid'"
-                class="flex-1 text-emerald-700" @click="reviewSelectedFace('valid')">
-                <BadgeCheck aria-hidden="true" />
-                Valid
-              </Button>
-              <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'empty'"
-                class="flex-1 text-muted-foreground" @click="reviewSelectedFace('empty')">
-                <UserRoundX aria-hidden="true" />
-                Unassign
-              </Button>
-              <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'fail'"
-                class="flex-1 text-destructive" @click="reviewSelectedFace('fail')">
-                <CircleAlert aria-hidden="true" />
-                Detection fail
-              </Button>
-            </ButtonGroup>
+            <div class="relative grid grid-cols-3 gap-4 px-8 py-5 text-foreground/80">
+              <article class="space-y-2 text-[8px] leading-[1.45]">
+                <h2 class="text-center text-base leading-none">Ze života našeho města</h2>
+                <img :src="faces[0]!.portrait" alt="Portrait printed in the newspaper"
+                  class="h-32 w-full grayscale object-cover contrast-75" />
+                <p v-for="index in 8" :key="`left-${index}`">Spolkový život v našem městě vstupuje do nové sezóny.
+                  Veřejnost přijala zprávu s velikým zájmem.</p>
+              </article>
+              <article class="space-y-2 text-[8px] leading-[1.45]">
+                <p v-for="index in 14" :key="`middle-${index}`">Na včerejší schůzi byl představen program podzimních
+                  přednášek. Přítomní zástupci okolních obcí projednali další postup.</p>
+              </article>
+              <article class="space-y-2 text-[8px] leading-[1.45]">
+                <h2 class="border-b border-border pb-1 text-center text-base leading-none">Zprávy dne</h2>
+                <p v-for="index in 5" :key="`right-a-${index}`">Další veřejná schůze proběhne v pátek večer. Podrobný
+                  pořad přineseme příště.</p>
+                <img :src="faces[1]!.portrait" alt="Second portrait printed in the newspaper"
+                  class="h-28 w-full grayscale object-cover contrast-75" />
+                <p v-for="index in 5" :key="`right-b-${index}`">Redakce přijímá oznámení každý všední den. Dopisy račte
+                  zasílati na adresu listu.</p>
+              </article>
+            </div>
+
+            <button v-for="(line, index) in transcription" :key="line.id" type="button"
+              class="absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              :class="index === selectedLineIndex
+                ? 'border-accent bg-accent/20 ring-1 ring-background/75'
+                : 'border-transparent hover:border-accent/70 hover:bg-accent/10'"
+              :style="{ left: `${line.position.left}%`, top: `${line.position.top}%`, width: `${line.position.width}%`, height: `${line.position.height}%` }"
+              :aria-label="`Select line ${index + 1}: ${line.text}`" :aria-pressed="index === selectedLineIndex"
+              @click.stop="selectLine(index)" />
+
+            <button v-for="face in faces" :key="face.id" type="button" class="absolute border-2 transition-colors"
+              :class="face.id === selectedFace.id
+                ? 'border-secondary bg-secondary/15 ring-2 ring-background/80'
+                : face.id === previewedFaceId
+                  ? 'border-accent bg-accent/25 ring-2 ring-accent/70'
+                  : 'border-accent/60 bg-accent/5 hover:bg-accent/20'"
+              :style="{ left: `${face.position.left}%`, top: `${face.position.top}%`, width: `${face.position.width}%`, height: `${face.position.height}%` }"
+              :aria-label="`Select ${face.name}`" @click.stop="selectFace(face.id)">
+              <span class="absolute -left-0.5 -top-5 bg-foreground px-1.5 py-0.5 font-mono text-[8px] text-background">
+                {{ face.id }}
+              </span>
+            </button>
+
           </div>
-        </header>
-      </div>
+        </div>
+      </section>
 
-      <SimilarPeoplePanel :people="similarPeople" :assigned-person-id="selectedFace.personId"
-        :viewed-person-id="viewedSimilarPersonId" @preview="previewSimilarPerson" @assign="assignSimilarPerson"
-        @create="createSimilarPerson" @open-person="openPerson" />
-    </aside>
 
-    <section class="workspace-faces min-w-0 overflow-hidden border-t bg-background px-3 py-4 sm:px-6"
+      <aside class="workspace-selection min-h-0 border-l bg-background" aria-labelledby="selected-person-title">
+        <div class="shrink-0 bg-background">
+          <header class="p-5">
+            <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
+              <img :src="selectedFace.portrait" :alt="selectedFace.name" class="size-24 object-cover grayscale" />
+              <div class="min-w-0">
+                <p id="selected-person-title" class="font-mono font-semibold text-xs uppercase text-secondary">
+                  Current selection
+                </p>
+                <h3 class="text-lg">
+                  <RouterLink v-if="selectedFace.personId"
+                    :to="{ name: 'person-detail', params: { personId: selectedFace.personId } }"
+                    class="group flex max-w-full items-center gap-1 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span class="truncate">{{ selectedFace.name }}</span>
+                    <ChevronRight
+                      class="size-[1em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
+                      aria-hidden="true" />
+                  </RouterLink>
+                  <span v-else class="block truncate">{{ selectedFace.name }}</span>
+                </h3>
+                <div class="mt-1 space-y-1 text-sm">
+                  <code class="block text-muted-foreground">{{ selectedFace.id }}</code>
+                  <span class="flex items-center gap-1 font-medium" :class="faceStatusClasses[selectedFace.status]">
+                    <component :is="faceStatusIcons[selectedFace.status]" class="size-[1em]" aria-hidden="true" />
+                    {{ faceStatusLabels[selectedFace.status] }}
+                  </span>
+                </div>
+              </div>
+
+              <ButtonGroup class="col-span-2 w-full overflow-x-auto" aria-label="Review selected face">
+                <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'valid'"
+                  class="flex-1 text-emerald-700" @click="reviewSelectedFace('valid')">
+                  <BadgeCheck aria-hidden="true" />
+                  Valid
+                </Button>
+                <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'empty'"
+                  class="flex-1 text-muted-foreground" @click="reviewSelectedFace('empty')">
+                  <UserRoundX aria-hidden="true" />
+                  Unassign
+                </Button>
+                <Button type="button" size="sm" variant="outline" :aria-pressed="selectedFace.status === 'fail'"
+                  class="flex-1 text-destructive" @click="reviewSelectedFace('fail')">
+                  <CircleAlert aria-hidden="true" />
+                  Detection fail
+                </Button>
+              </ButtonGroup>
+            </div>
+          </header>
+        </div>
+      </aside>
+    </div>
+
+    <SimilarPeoplePanel class="workspace-similar border-l" :people="similarPeople"
+      :assigned-person-id="selectedFace.personId" :viewed-person-id="viewedSimilarPersonId"
+      @preview="previewSimilarPerson" @assign="assignSimilarPerson" @create="createSimilarPerson" />
+
+    <section class="workspace-faces @container min-w-0 overflow-hidden border-t bg-background px-3 py-4 sm:px-6"
       aria-labelledby="page-faces-title">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 id="page-faces-title">Faces on this page</h3>
         <ToggleGroup v-model="faceStatusFilter" type="single" variant="outline" size="sm"
           aria-label="Filter faces by status" class="max-w-full overflow-x-auto">
           <ToggleGroupItem value="all" aria-label="Show all face statuses" class="text-xs px-2 py-0.5">
             <ListFilter aria-hidden="true" />
-            <b>All</b>
+            <b>All faces</b>
             <code>{{ faces.length }}</code>
           </ToggleGroupItem>
           <ToggleGroupItem v-for="status in faceStatuses" :key="status" :value="status"
@@ -623,47 +622,39 @@ onBeforeUnmount(() => {
           <FaceItem v-for="face in visibleFaces" :key="face.id" :face="face" :selected="face.id === selectedFace.id"
             @select="selectFace" />
           <FaceItemSkeleton />
-
-          <Item v-if="visibleFaces.length === 0" variant="muted"
-            class="flex-nowrap border border-dashed border-border p-2" role="status" aria-label="No faces found">
-            <ItemMedia variant="icon" class="size-14">
-              <UserRoundX class="size-5 text-muted-foreground" aria-hidden="true" />
-            </ItemMedia>
-            <ItemContent class="gap-0.5">
-              <ItemTitle class="text-base font-serif">No faces found</ItemTitle>
-              <ItemDescription class="text-sm">Try another status filter.</ItemDescription>
-            </ItemContent>
-          </Item>
+          <FaceListEmptyState v-if="visibleFaces.length === 0" />
         </div>
       </ScrollArea>
     </section>
-
 
   </main>
 </template>
 
 <style scoped>
 .workspace-grid {
-  display: grid;
   min-height: calc(100vh - 3.25rem);
+}
+
+.workspace-fold {
+  display: grid;
+  height: calc(100dvh - 3.25rem);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: calc(100dvh - 3.25rem - 5.5rem) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.workspace-controls,
 .workspace-viewer {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.workspace-selection {
   grid-column: 1;
   grid-row: 2;
 }
 
-.workspace-faces {
+.workspace-selection {
   grid-column: 1;
   grid-row: 3;
+}
+
+.workspace-teleprompter {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .bg-viewer {
@@ -687,23 +678,67 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1024px) {
   .workspace-grid {
+    display: grid;
     height: calc(100vh - 3.25rem);
     grid-template-columns: minmax(0, 1fr) 25rem;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .workspace-fold {
+    display: contents;
+  }
+
+  .workspace-viewer {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .workspace-selection {
     grid-column: 2;
-    grid-row: 1 / 3;
-    display: flex;
-    max-height: calc(100dvh - 3.25rem);
-    flex-direction: column;
-    overflow: hidden;
+    grid-row: 1;
   }
 
   .workspace-faces {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 3;
+  }
+
+  .workspace-teleprompter {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .workspace-similar {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 1536px) {
+  .workspace-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 25rem;
+  }
+
+  .workspace-viewer {
+    grid-column: 1 / 3;
+    grid-row: 1 / 3;
+  }
+
+  .workspace-selection {
+    grid-column: 3;
+  }
+
+  .workspace-teleprompter {
+    grid-column: 2;
+    grid-row: 3;
+    border-top-width: 1px;
+    border-left-width: 1px;
+    border-bottom-width: 0;
+  }
+
+  .workspace-similar {
+    grid-column: 3;
   }
 }
 </style>

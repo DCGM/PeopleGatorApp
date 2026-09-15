@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 import { flushPromises, mount } from '@vue/test-utils'
 import App from '../App.vue'
+import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
 
 vi.mock('@panzoom/panzoom', () => ({
@@ -15,6 +16,26 @@ vi.mock('@panzoom/panzoom', () => ({
 }))
 
 describe('App', () => {
+  it('keeps the logo when the optional top bar title is omitted', () => {
+    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+
+    expect(wrapper.get('nav').text()).toContain('PG')
+    expect(wrapper.get('nav').text()).not.toContain('People Gator')
+  })
+
+  it('renders document controls inside the contextual top bar area', async () => {
+    await router.push('/libraries/library/documents/document/pages/page')
+    await router.isReady()
+
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+    const topBar = wrapper.get('nav')
+
+    expect(topBar.text()).not.toContain('People Gator')
+    expect(topBar.find('[aria-label="Previous line"]').exists()).toBe(true)
+    expect(wrapper.get('main').find('[aria-label="Previous line"]').exists()).toBe(false)
+  })
+
   it('keeps document pagination in the route query', async () => {
     await router.push('/documents?q=history&page=2')
     await router.isReady()

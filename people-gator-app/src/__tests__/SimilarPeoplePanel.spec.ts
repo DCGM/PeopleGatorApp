@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
@@ -30,6 +30,7 @@ describe('SimilarPeoplePanel', () => {
   it('emits page face and entity targets when a candidate is previewed', async () => {
     const wrapper = mount(SimilarPeoplePanel, {
       props: { people, assignedPersonId: null, viewedPersonId: 'anna-novakova' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
     expect(wrapper.findAll('[data-slot="item"]')[0]!.classes()).toContain('border-accent')
@@ -38,27 +39,59 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.emitted('preview')).toEqual([[people[0]]])
   })
 
-  it('opens a person only from the candidate name', async () => {
+  it('links candidate names to person details', () => {
     const wrapper = mount(SimilarPeoplePanel, {
       props: { people, assignedPersonId: null, viewedPersonId: null },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
-    await wrapper.get('[aria-label="Open Anna Nováková"]').trigger('click')
+    expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
+      name: 'person-detail',
+      params: { personId: 'anna-novakova' },
+    })
+  })
 
-    expect(wrapper.emitted('open-person')).toEqual([['anna-novakova']])
+  it('shows disabled pagination when all candidates fit on one page', () => {
+    const wrapper = mount(SimilarPeoplePanel, {
+      props: { people, assignedPersonId: null, viewedPersonId: null },
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+
+    const paginationButtons = wrapper.findAll('[data-slot="pagination"] button')
+    expect(paginationButtons).toHaveLength(3)
+    expect(paginationButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(
+      true,
+    )
+  })
+
+  it('assigns a candidate without previewing it', async () => {
+    const wrapper = mount(SimilarPeoplePanel, {
+      props: { people, assignedPersonId: null, viewedPersonId: null },
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Assign')!
+      .trigger('click')
+
+    expect(wrapper.emitted('assign')).toEqual([[people[0]]])
     expect(wrapper.emitted('preview')).toBeUndefined()
   })
 
   it('creates a person using the active search text', async () => {
     const wrapper = mount(SimilarPeoplePanel, {
       props: { people, assignedPersonId: null, viewedPersonId: null },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
-    await wrapper.get('input[placeholder="Search people"]').setValue('Max von Gallwitz')
     await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('Add'))!
-      .trigger('click')
+      .get('input[placeholder="Search by name, WikiData ID, NACR ID"]')
+      .setValue('  Max von Gallwitz  ')
+    await wrapper.get('button[aria-label="Add person"]').trigger('click')
+
+    expect(wrapper.get('form input').element.value).toBe('Max von Gallwitz')
+
     await wrapper.get('form').trigger('submit')
 
     expect(wrapper.emitted('create')?.[0]?.[0]).toMatchObject({
@@ -74,15 +107,28 @@ describe('SimilarPeoplePanel', () => {
       ...people,
       { ...people[1]!, id: 'josef-svoboda', name: 'Josef Svoboda' },
       { ...people[1]!, id: 'alena-horakova', name: 'Alena Horáková' },
+      { ...people[1]!, id: 'jan-novak', name: 'Jan Novák' },
+      { ...people[1]!, id: 'eva-vesela', name: 'Eva Veselá' },
+      { ...people[1]!, id: 'petr-cerny', name: 'Petr Černý' },
     ]
     const wrapper = mount(SimilarPeoplePanel, {
       props: { people: paginatedPeople, assignedPersonId: null, viewedPersonId: null },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
-    expect(wrapper.find('[aria-label="Preview Alena Horáková on this page"]').exists()).toBe(false)
+    expect(wrapper.find('[data-slot="scroll-area-viewport"]').exists()).toBe(false)
+    expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-slot="pagination"] button')).toHaveLength(3)
     await wrapper.get('[aria-label="Next people page"]').trigger('click')
-
     expect(wrapper.get('[aria-label="Preview Alena Horáková on this page"]')).toBeDefined()
-    expect(wrapper.find('[aria-label="Preview Anna Nováková on this page"]').exists()).toBe(false)
+
+    await wrapper.get('[aria-label="Next people page"]').trigger('click')
+    expect(wrapper.get('[aria-label="Preview Petr Černý on this page"]')).toBeDefined()
+
+    await wrapper.get('[aria-label="Previous people page"]').trigger('click')
+    expect(wrapper.get('[aria-label="Preview Alena Horáková on this page"]')).toBeDefined()
+
+    await wrapper.get('[aria-label="First people page"]').trigger('click')
+    expect(wrapper.get('[aria-label="Preview Anna Nováková on this page"]')).toBeDefined()
   })
 })
