@@ -10,11 +10,14 @@ export type TranscriptionLineId =
 
 export type TranslationLanguage = 'en' | 'cs' | 'de'
 
+export type FaceStatus = 'auto' | 'valid' | 'change' | 'empty' | 'fail'
+
 export type Face = {
   id: string
   personId: string | null
   name: string
   confidence: number
+  status: FaceStatus
   position: { left: number; top: number; width: number; height: number }
   portrait: string
 }

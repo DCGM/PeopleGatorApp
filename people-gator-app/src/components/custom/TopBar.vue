@@ -26,7 +26,7 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
           ? 'border-primary text-primary'
           : 'border-transparent text-muted-foreground hover:text-foreground'">
         <span class="flex items-center gap-2">
-          <FileText class="h-4 w-4" />
+          <FileText class="size-[1em]" />
           <span class="hidden sm:inline">Documents</span>
         </span>
       </RouterLink>
@@ -36,7 +36,7 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
           ? 'border-primary text-primary'
           : 'border-transparent text-muted-foreground hover:text-foreground'">
         <span class="flex items-center gap-2">
-          <User class="h-4 w-4" />
+          <User class="size-[1em]" />
           <span class="hidden sm:inline">People</span>
         </span>
       </RouterLink>

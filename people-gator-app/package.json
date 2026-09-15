@@ -19,7 +19,7 @@
   "dependencies": {
     "@hey-api/client-axios": "^0.9.1",
     "@hey-api/openapi-ts": "^0.97.0",
-    "@lucide/vue": "^1.45.0",
+    "@lucide/vue": "^1.46.0",
     "@panzoom/panzoom": "^4.6.2",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/vue-query": "^5.102.8",

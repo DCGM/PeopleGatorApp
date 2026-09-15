@@ -1,25 +1,58 @@
 <script setup lang="ts">
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import {
+  BadgeCheck,
   ChevronRight,
-  Crosshair,
+  CircleAlert,
+  ListFilter,
+  RefreshCcw,
+  UserRoundX,
+  WandSparkles,
 } from '@lucide/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
+import FaceItem from '@/components/custom/FaceItem.vue'
+import FaceItemSkeleton from '@/components/custom/FaceItemSkeleton.vue'
 import type {
   Face,
+  FaceStatus,
   TranscriptionEntitySpan,
   TranscriptionLine,
   TranscriptionLineId,
   TranslationLanguage,
 } from '@/components/custom/document-page.types'
 import { Button } from '@/components/ui/button'
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const minimumZoomPercent = 55
 const maximumZoomPercent = 350
+const faceStatuses = ['auto', 'valid', 'change', 'empty', 'fail'] as const
+const faceStatusLabels = {
+  auto: 'Auto',
+  valid: 'Valid',
+  change: 'Changed',
+  empty: 'Empty',
+  fail: 'Fail',
+} satisfies Record<FaceStatus, string>
+const faceStatusClasses = {
+  auto: 'text-accent',
+  valid: 'text-emerald-700',
+  change: 'text-secondary',
+  empty: 'text-muted-foreground',
+  fail: 'text-destructive',
+} satisfies Record<FaceStatus, string>
+const faceStatusIcons = {
+  auto: WandSparkles,
+  valid: BadgeCheck,
+  change: RefreshCcw,
+  empty: UserRoundX,
+  fail: CircleAlert,
+} satisfies Record<FaceStatus, Component>
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +63,7 @@ const faces: Face[] = [
     personId: 'anna-novakova',
     name: 'Anna Nováková',
     confidence: 96,
+    status: 'valid',
     position: { left: 16, top: 14, width: 21, height: 19 },
     portrait: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=85',
   },
@@ -38,6 +72,7 @@ const faces: Face[] = [
     personId: 'josef-svoboda',
     name: 'Josef Svoboda',
     confidence: 88,
+    status: 'auto',
     position: { left: 63, top: 50, width: 17, height: 15 },
     portrait: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=85',
   },
@@ -46,6 +81,7 @@ const faces: Face[] = [
     personId: null,
     name: 'Unknown person',
     confidence: 64,
+    status: 'empty',
     position: { left: 41, top: 70, width: 15, height: 13 },
     portrait: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=240&q=85',
   },
@@ -139,14 +175,30 @@ const selectedLineIndex = ref(routeLineIndex(route.query.line))
 const isTranslationOpen = ref(route.query.translate === 'on')
 const selectedLanguage = ref<TranslationLanguage>('en')
 const contextLineCount = ref(routeContextLineCount(route.query.context))
+const selectedFaceStatus = ref<'all' | FaceStatus>('all')
 const zoomPercent = ref(82)
 const selectedEntityKey = ref<string | null>(null)
 const viewerElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
+const faceListElement = ref<HTMLElement | null>(null)
 let panzoom: PanzoomObject | undefined
 
 const selectedFace = computed(() => faces.find((face) => face.id === selectedFaceId.value) ?? faces[0]!)
 const selectedFaceIndex = computed(() => faces.findIndex((face) => face.id === selectedFace.value.id))
+const faceStatusFilter = computed<'all' | FaceStatus>({
+  get: () => selectedFaceStatus.value,
+  set: (status) => {
+    selectedFaceStatus.value = status ?? 'all'
+  },
+})
+const visibleFaces = computed(() => faceStatusFilter.value === 'all'
+  ? faces
+  : faces.filter((face) => face.status === faceStatusFilter.value))
+const faceStatusCounts = computed<Record<FaceStatus, number>>(() => {
+  const counts: Record<FaceStatus, number> = { auto: 0, valid: 0, change: 0, empty: 0, fail: 0 }
+  for (const face of faces) counts[face.status] += 1
+  return counts
+})
 const translationOptions = computed<readonly ('off' | TranslationLanguage)[]>(() => ['off', 'cs', 'en', 'de'])
 const currentTranslation = computed(() => {
   const line = transcription[selectedLineIndex.value]!
@@ -181,6 +233,25 @@ function selectTranslation(language: TranslationLanguage | 'off') {
 function selectFace(faceId: string) {
   selectedFaceId.value = faceId
   syncRoute()
+}
+
+function scrollSelectedFaceIntoView() {
+  void nextTick(() => {
+    const faceList = faceListElement.value
+    const faceListViewport = faceList?.closest('[data-slot="scroll-area-viewport"]')
+    const selectedFaceElement = Array.from(faceList?.children ?? [])
+      .find((element) => element instanceof HTMLElement && element.dataset.faceId === selectedFaceId.value)
+    if (!(faceListViewport instanceof HTMLElement) || !(selectedFaceElement instanceof HTMLElement)) return
+
+    const listBounds = faceListViewport.getBoundingClientRect()
+    const faceBounds = selectedFaceElement.getBoundingClientRect()
+    const scrollDelta = faceBounds.left < listBounds.left
+      ? faceBounds.left - listBounds.left
+      : Math.max(0, faceBounds.right - listBounds.right)
+    if (scrollDelta === 0) return
+
+    faceListViewport.scrollBy({ left: scrollDelta })
+  })
 }
 
 function selectLine(index: number) {
@@ -290,6 +361,8 @@ watch(
   },
 )
 
+watch(selectedFaceId, scrollSelectedFaceIntoView, { immediate: true })
+
 onMounted(async () => {
   window.addEventListener('keydown', handleNavigationKeydown)
   await nextTick()
@@ -317,7 +390,7 @@ onBeforeUnmount(() => {
 <template>
   <main class="workspace-grid">
     <div
-      class="mx-auto mb-auto max-h-full w-full max-w-5xl border z-10 bg-background/95 shadow-lg backdrop-blur-sm grid row-start-1 row-span-1 col-start-1 col-span-1">
+      class="workspace-controls mx-auto mb-auto max-h-full w-full max-w-6xl border z-10 bg-background/95 shadow-lg backdrop-blur-sm grid">
       <DocumentControls :selected-line-index="selectedLineIndex" :line-count="transcription.length"
         :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
         :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
@@ -334,11 +407,10 @@ onBeforeUnmount(() => {
         @navigate-line="navigateLine" />
     </div>
 
-    <section ref="viewerElement"
-      class="bg-viewer overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1 row-start-1 row-span-1 col-start-1 col-span-1"
+    <section ref="viewerElement" class="workspace-viewer bg-viewer min-h-0 overflow-hidden"
       aria-label="Pan and zoom document page">
 
-      <div class="panzoom-layer min-h-full min-w-full inset-0 flex items-center justify-center">
+      <div class="panzoom-layer inset-0 flex h-full min-h-full min-w-full items-center justify-center">
         <div ref="pageElement" class="scan-page h-190 w-135 shrink-0 overflow-hidden bg-card shadow-2xl">
           <div class="absolute inset-0 opacity-35 mix-blend-multiply scan-texture" />
           <div class="relative border-b-2 border-foreground/60 px-10 pb-4 pt-8 text-center text-foreground">
@@ -393,70 +465,92 @@ onBeforeUnmount(() => {
     </section>
 
 
-    <aside class="border-l bg-background row-start-1 row-span-2" aria-labelledby="selected-person-title">
+    <aside class="workspace-selection border-l bg-background" aria-labelledby="selected-person-title">
       <div class="sticky top-13">
         <header class="border-b p-5">
-          <p class="font-mono text-[10px] uppercase text-secondary">Current selection</p>
-          <h2 id="selected-person-title" class="mt-1 text-lg">Selected face</h2>
-        </header>
-
-        <div class="p-5">
           <div class="flex items-center gap-4">
-            <div class="relative shrink-0">
+            <div class="shrink-0">
               <img :src="selectedFace.portrait" :alt="selectedFace.name" class="size-24 object-cover grayscale" />
-              <Crosshair class="absolute -bottom-2 -right-2 size-7 border bg-secondary p-1 text-secondary-foreground" />
             </div>
             <div class="min-w-0">
-              <h3 class="truncate text-lg">{{ selectedFace.name }}</h3>
+              <p class="font-mono font-semibold text-xs uppercase text-secondary">Current selection</p>
+              <h3 class="truncate text-lg">
+                <RouterLink v-if="selectedFace.personId"
+                  :to="{ name: 'person-detail', params: { personId: selectedFace.personId } }"
+                  class="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {{ selectedFace.name }}
+                </RouterLink>
+                <span v-else>{{ selectedFace.name }}</span>
+              </h3>
               <p class="mt-1 font-mono text-[10px] text-muted-foreground">{{ selectedFace.id }}</p>
-              <p class="mt-2 text-xs"><strong>{{ selectedFace.confidence }}%</strong> match confidence</p>
             </div>
           </div>
+        </header>
 
-          <Button class="mt-5 w-full rounded-none" variant="outline" :disabled="!selectedFace.personId"
-            @click="openPerson(selectedFace.personId)">
-            Open person record
-            <ChevronRight />
-          </Button>
-        </div>
 
-        <section class="border-t p-5" aria-labelledby="similar-title">
-          <div class="flex items-end justify-between">
-            <h2 id="similar-title" class="text-lg">Similar people</h2>
-            <span class="font-mono text-[10px] text-muted-foreground">by face</span>
-          </div>
-          <div class="mt-3 divide-y border-y">
-            <button v-for="person in similarPeople" :key="person.name" type="button"
-              class="flex w-full items-center gap-3 py-3 text-left hover:text-accent" @click="openPerson(person.id)">
-              <img :src="person.portrait" :alt="person.name" class="size-11 object-cover grayscale" />
-              <span class="min-w-0 flex-1">
-                <strong class="block truncate text-sm font-medium">{{ person.name }}</strong>
-                <span class="text-xs text-muted-foreground">Possible identity</span>
-              </span>
-              <span class="font-mono text-xs">{{ person.score }}%</span>
-            </button>
-          </div>
-        </section>
+        <Button class="mt-5 w-full rounded-none" variant="outline" :disabled="!selectedFace.personId"
+          @click="openPerson(selectedFace.personId)">
+          Open person record
+          <ChevronRight />
+        </Button>
       </div>
+
+      <section class="border-t p-5" aria-labelledby="similar-title">
+        <div class="flex items-end justify-between">
+          <h2 id="similar-title" class="text-lg">Similar people</h2>
+          <span class="font-mono text-[10px] text-muted-foreground">by face</span>
+        </div>
+        <div class="mt-3 divide-y border-y">
+          <button v-for="person in similarPeople" :key="person.name" type="button"
+            class="flex w-full items-center gap-3 py-3 text-left hover:text-accent" @click="openPerson(person.id)">
+            <img :src="person.portrait" :alt="person.name" class="size-11 object-cover grayscale" />
+            <span class="min-w-0 flex-1">
+              <strong class="block truncate text-sm font-medium">{{ person.name }}</strong>
+              <span class="text-xs text-muted-foreground">Possible identity</span>
+            </span>
+            <span class="font-mono text-xs">{{ person.score }}%</span>
+          </button>
+        </div>
+      </section>
     </aside>
 
-    <section class="border-t bg-background px-4 py-4 sm:px-6" aria-labelledby="page-faces-title">
-      <div class="mb-3 flex items-center justify-between">
-        <h2 id="page-faces-title" class="text-base">Faces on this page</h2>
-        <span class="font-mono text-[10px] uppercase text-muted-foreground">{{ faces.length }} detections</span>
+    <section class="workspace-faces border-t bg-background px-3 py-4 sm:px-6" aria-labelledby="page-faces-title">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 id="page-faces-title">Faces on this page</h3>
+        <ToggleGroup v-model="faceStatusFilter" type="single" variant="outline" size="sm"
+          aria-label="Filter faces by status" class="max-w-full overflow-x-auto">
+          <ToggleGroupItem value="all" aria-label="Show all face statuses" class="text-xs px-2 py-0.5">
+            <ListFilter aria-hidden="true" />
+            <b>All</b>
+            <code>{{ faces.length }}</code>
+          </ToggleGroupItem>
+          <ToggleGroupItem v-for="status in faceStatuses" :key="status" :value="status"
+            :aria-label="`Toggle ${faceStatusLabels[status]} faces`" class="text-xs px-2 py-0.5"
+            :class="faceStatusClasses[status]">
+            <component :is="faceStatusIcons[status]" aria-hidden="true" />
+            <b>{{ faceStatusLabels[status] }}</b>
+            <code>{{ faceStatusCounts[status] }}</code>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
-      <div class="flex gap-2 overflow-x-auto pb-1">
-        <button v-for="face in faces" :key="face.id" type="button"
-          class="flex min-w-48 items-center gap-3 border p-2 text-left transition-colors"
-          :class="face.id === selectedFace.id ? 'border-secondary bg-secondary/10' : 'bg-card hover:border-accent'"
-          @click="selectFace(face.id)">
-          <img :src="face.portrait" :alt="face.name" class="size-14 shrink-0 object-cover grayscale" />
-          <span class="min-w-0">
-            <strong class="block truncate text-sm font-medium">{{ face.name }}</strong>
-            <span class="font-mono text-[10px] text-muted-foreground">{{ face.id }} · {{ face.confidence }}%</span>
-          </span>
-        </button>
-      </div>
+      <ScrollArea type="always" orientation="horizontal" class="w-full">
+        <div ref="faceListElement" class="flex w-max gap-2 pb-5">
+          <FaceItem v-for="face in visibleFaces" :key="face.id" :face="face" :selected="face.id === selectedFace.id"
+            @select="selectFace" />
+          <FaceItemSkeleton />
+
+          <Item v-if="visibleFaces.length === 0" variant="muted"
+            class="flex-nowrap border border-dashed border-border p-2" role="status" aria-label="No faces found">
+            <ItemMedia variant="icon" class="size-14">
+              <UserRoundX class="size-5 text-muted-foreground" aria-hidden="true" />
+            </ItemMedia>
+            <ItemContent class="gap-0.5">
+              <ItemTitle class="text-base font-serif">No faces found</ItemTitle>
+              <ItemDescription class="text-sm">Try another status filter.</ItemDescription>
+            </ItemContent>
+          </Item>
+        </div>
+      </ScrollArea>
     </section>
 
 
@@ -465,8 +559,26 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .workspace-grid {
+  display: grid;
   min-height: calc(100vh - 3.25rem);
-  min-width: calc(100vw - 30rem);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: calc(100dvh - 3.25rem - 5.5rem) auto auto;
+}
+
+.workspace-controls,
+.workspace-viewer {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.workspace-selection {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.workspace-faces {
+  grid-column: 1;
+  grid-row: 3;
 }
 
 .bg-viewer {
@@ -490,9 +602,19 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1024px) {
   .workspace-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 30rem;
-    grid-template-rows: minmax(0, 1fr);
+    height: calc(100vh - 3.25rem);
+    grid-template-columns: minmax(0, 1fr) 25rem;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .workspace-selection {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .workspace-faces {
+    grid-column: 1;
+    grid-row: 2;
   }
 }
 </style>

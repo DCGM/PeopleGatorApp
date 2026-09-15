@@ -131,7 +131,7 @@ watch(
 
 <template>
   <section ref="teleprompterElement"
-    class="my-2 min-h-0 shrink-0 overflow-hidden bg-background text-sm font-serif leading-5"
+    class="my-2 min-h-0 shrink-0 overflow-hidden bg-background text-base font-serif leading-5"
     :style="{ maxHeight: `calc(${contextLineCount} * 1.75em)` }" aria-label="Transcription teleprompter"
     @wheel.stop.prevent="handleWheel">
     <template v-for="item in visibleTranscription" :key="item.line.id">
@@ -163,7 +163,7 @@ watch(
   </section>
 
   <section v-if="isTranslationOpen"
-    class="grid shrink-0 grid-cols-[2rem_minmax(0,1fr)_2rem] items-start border-t bg-background py-2 text-sm"
+    class="grid shrink-0 grid-cols-[2rem_minmax(0,1fr)_2rem] items-start border-t bg-background py-2 text-base"
     aria-label="Line translation">
     <small class="pr-2 text-right font-mono font-bold uppercase text-secondary">
       {{ selectedLanguage }}
