@@ -5,7 +5,7 @@ import type { SimilarPersonCandidate } from '@/components/custom/similar-people.
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Item, ItemContent, ItemMedia, ItemTitle, ItemActions } from '@/components/ui/item'
+import { Item, ItemActions, ItemContent, ItemFooter, ItemMedia, ItemTitle } from '@/components/ui/item'
 
 defineProps<{
   person: SimilarPersonCandidate
@@ -24,7 +24,7 @@ function initials(name: string) {
 </script>
 
 <template>
-  <Item variant="outline" class="relative w-full flex-nowrap gap-4 bg-card px-3 py-3 hover:border-accent"
+  <Item variant="outline" class="relative w-full gap-x-4 gap-y-2 bg-card px-3 py-3 hover:border-accent"
     :class="viewed && 'border-accent bg-accent/15 ring-1 ring-accent hover:bg-accent/15'">
     <button type="button"
       class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -49,12 +49,24 @@ function initials(name: string) {
           </h4>
         </RouterLink>
       </ItemTitle>
-      <span class="text-xs text-muted-foreground">
-        <b class="text-foreground">{{ person.nerMentions }}</b> mentions
-        <b class="text-foreground">{{ person.detections }}</b> detections
-      </span>
-      <div class="flex items-center gap-2">
-        <code class="text-xs text-accent">{{ person.score }} sim.</code>
+      <p v-if="person.shortDescription"
+        class="truncate text-wrap text-xs leading-snug height-[2em] text-muted-foreground"
+        :title="person.shortDescription">
+        {{ person.shortDescription }}
+      </p>
+    </ItemContent>
+    <ItemActions class="z-20">
+      <Button type="button" size="xs" :variant="assigned ? 'secondary' : 'outline'" :aria-pressed="assigned"
+        @click="emit('assign', person)">
+        <Check v-if="assigned" aria-hidden="true" />
+        {{ assigned ? 'Linked' : 'Assign' }}
+      </Button>
+    </ItemActions>
+    <ItemFooter class="w-full shrink-0 items-center border-t pt-2 text-muted-foreground">
+      <p class="min-w-0 flex-1 truncate font-mono text-xs">
+        sim {{ person.score }}% · dist {{ person.closestMentionDistancePx ?? '—' }} px
+      </p>
+      <div class="flex shrink-0 items-center gap-1">
         <Badge v-if="person.source === 'database'" variant="outline"
           class="font-mono text-xs py-0 uppercase text-muted-foreground">
           <Database />DB
@@ -64,13 +76,6 @@ function initials(name: string) {
           <FileText />scan
         </Badge>
       </div>
-    </ItemContent>
-    <ItemActions class="z-20">
-      <Button type="button" size="xs" :variant="assigned ? 'secondary' : 'outline'" :aria-pressed="assigned"
-        @click="emit('assign', person)">
-        <Check v-if="assigned" aria-hidden="true" />
-        {{ assigned ? 'Linked' : 'Assign' }}
-      </Button>
-    </ItemActions>
+    </ItemFooter>
   </Item>
 </template>

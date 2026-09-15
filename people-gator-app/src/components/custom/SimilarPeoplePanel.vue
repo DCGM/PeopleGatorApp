@@ -44,7 +44,7 @@ const page = ref(1)
 const resultsElement = ref<HTMLElement | null>(null)
 
 const mobilePageSize = 3
-const minimumResultHeight = 92
+const minimumResultHeight = 120
 const resultGap = 8
 const isMobile = useMediaQuery('(max-width: 1023px)')
 const resultsHeight = ref(0)

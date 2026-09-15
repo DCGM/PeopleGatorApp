@@ -8,9 +8,11 @@ const people: SimilarPersonCandidate[] = [
   {
     id: 'anna-novakova',
     name: 'Anna Nováková',
+    shortDescription: 'Local lecturer and town historian.',
     score: 94,
     nerMentions: 1,
     detections: 1,
+    closestMentionDistancePx: 14,
     source: 'page',
     faceId: 'face-01',
     entityKey: 'line-anna:35:48',
@@ -49,6 +51,10 @@ describe('SimilarPeoplePanel', () => {
       name: 'person-detail',
       params: { personId: 'anna-novakova' },
     })
+    expect(wrapper.get('p[title="Local lecturer and town historian."]').classes()).toContain(
+      'text-xs',
+    )
+    expect(wrapper.get('[data-slot="item-footer"]').text()).toContain('sim 94% · dist 14 px')
   })
 
   it('shows disabled pagination when all candidates fit on one page', () => {
