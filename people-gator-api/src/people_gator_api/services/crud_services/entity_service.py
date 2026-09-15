@@ -1,4 +1,5 @@
 """Service for entity endpoints."""
+
 import logging
 import uuid
 from typing import TypeGuard
@@ -28,7 +29,6 @@ from people_gator_api.services.weaviate_service.utils import (
     entity_response,
     fetch_collection_page_with_total_count,
     reference_id_filter,
-    upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -65,7 +65,9 @@ def _build_entity_filters(
     if nlcr_authority_id is not None:
         filters.append(Filter.by_property("nlcr_authority_id").equal(nlcr_authority_id))
     if principal_id is not None:
-        filters.append(reference_id_filter(link_on="principal", reference_id=principal_id))
+        filters.append(
+            reference_id_filter(link_on="principal", reference_id=principal_id)
+        )
     return filters
 
 
@@ -155,10 +157,8 @@ async def create_entity(
         extra={"principal_id": principal_id, "entity_type": payload.entity_type},
     )
     entity_id = new_uuid6()
-    await upsert(
-        client,
-        ENTITY_COLLECTION,
-        entity_id,
+    await client.collections.get(ENTITY_COLLECTION).data.insert(
+        uuid=entity_id,
         properties={
             "entity_type": payload.entity_type,
             "name": payload.name,
@@ -190,6 +190,7 @@ async def create_entity(
         wikidata_id=payload.wikidata_id,
         nlcr_authority_id=payload.nlcr_authority_id,
     )
+
 
 @trace()
 async def create_entity_batch(
@@ -254,7 +255,9 @@ async def patch_entity(
         return_references=empty_reference_queries(["principal"]),
     )
     if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.info("patch_entity skipped missing entity", extra={"entity_id": entity_id})
+        logger.info(
+            "patch_entity skipped missing entity", extra={"entity_id": entity_id}
+        )
         return None
 
     properties = dict(response.properties)
@@ -273,10 +276,8 @@ async def patch_entity(
     if named_vectors:
         vector_payload = named_vectors
 
-    await upsert(
-        client,
-        ENTITY_COLLECTION,
-        entity_id,
+    await client.collections.get(ENTITY_COLLECTION).data.replace(
+        uuid=entity_id,
         properties=properties,
         references={
             "principal": principal_id,
@@ -361,7 +362,7 @@ async def _delete_entities_by_filters(
     matches: int = 0
     successful: int = 0
     filters_combined = combine_filters(filters)
-    
+
     if filters_combined is not None:
         deleted = await entities.data.delete_many(where=filters_combined)
         failed = deleted.failed
@@ -379,11 +380,14 @@ async def _delete_entities_by_filters(
             matches += deleted.matches
             successful += deleted.successful
 
-    logger.info("delete_entities completed", extra={
-        "deleted_count": successful,
-        "failed_count": failed,
-        "matches_count": matches,
-    })
+    logger.info(
+        "delete_entities completed",
+        extra={
+            "deleted_count": successful,
+            "failed_count": failed,
+            "matches_count": matches,
+        },
+    )
     return successful
 
 

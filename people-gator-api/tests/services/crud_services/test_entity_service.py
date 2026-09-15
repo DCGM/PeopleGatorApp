@@ -129,9 +129,7 @@ async def test_patch_entity_returns_none_when_entity_does_not_exist() -> None:
 
 
 @pytest.mark.asyncio
-async def test_patch_entity_updates_allowed_fields_and_preserves_vectors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_patch_entity_updates_allowed_fields_and_preserves_vectors() -> None:
     entity_id = uuid.uuid4()
     principal_id = uuid.uuid4()
     captured: dict[str, object] = {}
@@ -156,7 +154,6 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors(
     fetch_calls = 0
 
     class _Query:
-
         async def fetch_object_by_id(
             self,
             _entity_id: uuid.UUID,
@@ -178,23 +175,22 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors(
                 vector=vectors,
             )
 
-    async def fake_upsert(
-        _client: object,
-        _collection_name: str,
-        _object_uuid: uuid.UUID,
-        *,
-        properties: dict[str, object],
-        references: dict[str, uuid.UUID],
-        vector: dict[str, list[float]] | None,
-    ) -> None:
-        captured["properties"] = properties
-        captured["references"] = references
-        captured["vector"] = vector
-        stored_properties.update(properties)
+    class _Data:
+        async def replace(
+            self,
+            *,
+            uuid: uuid.UUID,
+            properties: dict[str, object],
+            references: dict[str, uuid.UUID],
+            vector: dict[str, list[float]] | None,
+        ) -> None:
+            del uuid
+            captured["properties"] = properties
+            captured["references"] = references
+            captured["vector"] = vector
+            stored_properties.update(properties)
 
-    monkeypatch.setattr(entity_service, "upsert", fake_upsert)
-
-    collection = SimpleNamespace(query=_Query())
+    collection = SimpleNamespace(query=_Query(), data=_Data())
 
     def _get_collection(_name: str) -> SimpleNamespace:
         return collection

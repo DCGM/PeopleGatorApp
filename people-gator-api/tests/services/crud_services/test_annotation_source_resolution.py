@@ -23,7 +23,7 @@ async def test_create_face_resolves_source_descriptor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     resolved_source_id = uuid.uuid4()
-    upsert_references: list[dict[str, uuid.UUID]] = []
+    insert_references: list[dict[str, uuid.UUID]] = []
 
     async def fake_resolve_source_reference(
         client: object,
@@ -43,24 +43,28 @@ async def test_create_face_resolves_source_descriptor(
             metadata=source.metadata,
         )
 
-    async def fake_upsert(
-        _client: object,
-        _collection_name: str,
-        _object_uuid: uuid.UUID,
-        *,
-        properties: dict[str, object],
-        references: dict[str, uuid.UUID] | None = None,
-        vector: dict[str, list[float]] | None = None,
-    ) -> None:
-        del properties
-        del vector
-        assert references is not None
-        upsert_references.append(references)
+    class _Data:
+        async def insert(
+            self,
+            *,
+            uuid: uuid.UUID,
+            properties: dict[str, object],
+            references: dict[str, uuid.UUID],
+            vector: dict[str, list[float]] | None,
+        ) -> None:
+            del uuid
+            del properties
+            del vector
+            insert_references.append(references)
 
     monkeypatch.setattr(
         annotation_service, "resolve_source_reference", fake_resolve_source_reference
     )
-    monkeypatch.setattr(annotation_service, "upsert", fake_upsert)
+
+    def get_collection(_name: str) -> SimpleNamespace:
+        return SimpleNamespace(data=_Data())
+
+    client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
 
     payload = FaceCreateRequest(
         source=SourceDescriptorRequest(uri="https://www.wikidata.org/entity/Q42"),
@@ -71,13 +75,13 @@ async def test_create_face_resolves_source_descriptor(
     )
     principal_id = uuid.uuid4()
     created = await annotation_service.create_face(
-        client=SimpleNamespace(),  # type: ignore[reportArgumentType]
+        client=client,  # type: ignore[reportArgumentType]
         payload=payload,
         principal_id=principal_id,
     )
 
     assert created.source_id == resolved_source_id
-    assert upsert_references[0]["source"] == resolved_source_id
+    assert insert_references[0]["source"] == resolved_source_id
 
 
 @pytest.mark.asyncio
@@ -113,18 +117,9 @@ async def test_create_document_mention_resolves_nested_page_sources(
             metadata=source.metadata,
         )
 
-    async def fake_upsert(
-        _client: object,
-        _collection_name: str,
-        _object_uuid: uuid.UUID,
-        *,
-        properties: dict[str, object],
-        references: dict[str, uuid.UUID] | None = None,
-        vector: dict[str, list[float]] | None = None,
-    ) -> None:
-        del properties
-        del references
-        del vector
+    class _Data:
+        async def insert(self, **_kwargs: object) -> None:
+            pass
 
     async def fake_create_many_page_mentions(
         client: object,
@@ -139,12 +134,16 @@ async def test_create_document_mention_resolves_nested_page_sources(
     monkeypatch.setattr(
         annotation_service, "resolve_source_reference", fake_resolve_source_reference
     )
-    monkeypatch.setattr(annotation_service, "upsert", fake_upsert)
     monkeypatch.setattr(
         annotation_service,
         "create_many_page_mentions",
         fake_create_many_page_mentions,
     )
+
+    def get_collection(_name: str) -> SimpleNamespace:
+        return SimpleNamespace(data=_Data())
+
+    client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
 
     payload = DocumentMentionCreateRequest(
         name="John Doe",
@@ -166,15 +165,13 @@ async def test_create_document_mention_resolves_nested_page_sources(
                         ]
                     )
                 ],
-                source=SourceDescriptorRequest(
-                    uri="https://kramerius.example/page/1"
-                ),
+                source=SourceDescriptorRequest(uri="https://kramerius.example/page/1"),
             )
         ],
     )
     principal_id = uuid.uuid4()
     created = await annotation_service.create_document_mention(
-        client=SimpleNamespace(),  # type: ignore[reportArgumentType]
+        client=client,  # type: ignore[reportArgumentType]
         payload=payload,
         principal_id=principal_id,
     )

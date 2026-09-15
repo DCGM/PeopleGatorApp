@@ -20,7 +20,7 @@ from weaviate.collections.classes.types import (
     WeaviateField,
     WeaviateProperties,
 )
-from weaviate.collections.classes.internal import CrossReferences, ReferenceInputs
+from weaviate.collections.classes.internal import CrossReferences
 
 from people_gator_api.schemas.enums import (
     EntityType,
@@ -65,57 +65,6 @@ class _CollectionQueryObject(Protocol):
     properties: WeaviateProperties
     references: CrossReferences
     uuid: uuid.UUID
-
-
-@trace()
-async def upsert(
-    client: WeaviateAsyncClient,
-    collection_name: str,
-    object_uuid: uuid.UUID,
-    *,
-    properties: WeaviateProperties,
-    references: ReferenceInputs | None = None,
-    vector: dict[str, list[float]] | None = None,
-) -> None:
-    logger.debug(
-        "upsert called",
-        extra={
-            "collection_name": collection_name,
-            "object_uuid": str(object_uuid),
-            "has_references": references is not None,
-            "has_vector": vector is not None,
-        },
-    )
-    collection = client.collections.get(collection_name)
-    exists = await collection.data.exists(object_uuid)
-    if not exists:
-        logger.info(
-            "Inserting object into Weaviate collection",
-            extra={
-                "collection_name": collection_name,
-                "object_uuid": str(object_uuid),
-            },
-        )
-        await collection.data.insert(
-            uuid=object_uuid,
-            properties=properties,
-            references=references,
-            vector=vector,
-        )
-        return
-    logger.info(
-        "Replacing object in Weaviate collection",
-        extra={
-            "collection_name": collection_name,
-            "object_uuid": str(object_uuid),
-        },
-    )
-    await collection.data.replace(
-        uuid=object_uuid,
-        properties=properties,
-        references=references,
-        vector=vector,
-    )
 
 
 def reference_id_filter(link_on: str, reference_id: uuid.UUID) -> FilterReturn:
@@ -171,9 +120,7 @@ async def fetch_collection_page_with_total_count(
         fetch_objects: list[_CollectionQueryObject] = []
     total_count_value = aggregate_response.total_count
     total_count = (
-        total_count_value
-        if isinstance(total_count_value, int)
-        else len(fetch_objects)
+        total_count_value if isinstance(total_count_value, int) else len(fetch_objects)
     )
     return fetch_objects, total_count
 

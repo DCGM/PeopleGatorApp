@@ -27,7 +27,6 @@ from people_gator_api.services.weaviate_service.utils import (
     fetch_collection_page_with_total_count,
     model_agent_response,
     principal_response,
-    upsert,
     user_response,
 )
 from people_gator_api.utils.opentelemetry import trace
@@ -35,6 +34,10 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 logger = logging.getLogger(__name__)
+
+
+class PrincipalAlreadyExistsError(ValueError):
+    """Raised when a principal with the requested unique identity exists."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -289,14 +292,25 @@ async def _create_principal(
     if uniqueness_filters is not None:
         filters.extend(uniqueness_filters)
 
-    existing = await client.collections.get(PRINCIPAL_COLLECTION).query.fetch_objects(
+    principal_collection = client.collections.get(PRINCIPAL_COLLECTION)
+    existing = await principal_collection.query.fetch_objects(
         limit=1,
         filters=combine_filters(filters),
     )
+    if existing.objects:
+        existing_principal_id = existing.objects[0].uuid
+        logger.info(
+            "create_principal rejected duplicate",
+            extra={
+                "principal_type": principal_type.value,
+                "principal_id": existing_principal_id,
+            },
+        )
+        raise PrincipalAlreadyExistsError(
+            f"{principal_type.value} principal already exists"
+        )
 
-    created_principal_id = (
-        getattr(existing.objects[0], "uuid") if existing.objects else new_uuid6()
-    )
+    created_principal_id = new_uuid6()
     properties = {
         "principal_type": principal_type.value,
         "display_name": payload.display_name,
@@ -313,8 +327,9 @@ async def _create_principal(
     }
     if additional_properties is not None:
         properties.update(additional_properties)
-    await upsert(
-        client, PRINCIPAL_COLLECTION, created_principal_id, properties=properties
+    await principal_collection.data.insert(
+        uuid=created_principal_id,
+        properties=properties,
     )
     return created_principal_id
 
@@ -354,8 +369,9 @@ async def _update_principal(
         properties[key] = value
     if additional_properties is not None:
         properties.update(additional_properties)
-    await upsert(
-        client, PRINCIPAL_COLLECTION, target_principal_id, properties=properties
+    await client.collections.get(PRINCIPAL_COLLECTION).data.replace(
+        uuid=target_principal_id,
+        properties=properties,
     )
     logger.debug(
         "update_principal persisted", extra={"principal_id": target_principal_id}
@@ -415,9 +431,7 @@ async def get_or_create_user(
             created_user_id,
             return_references=empty_reference_queries([]),
         )
-    return user_response(
-        user.properties, user.references, user.uuid
-    )
+    return user_response(user.properties, user.references, user.uuid)
 
 
 @trace()

@@ -28,7 +28,6 @@ from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
     fetch_collection_page_with_total_count,
     source_response,
-    upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -154,10 +153,8 @@ async def resolve_source_reference(
         return existing
 
     new_source_id = new_uuid6()
-    await upsert(
-        client,
-        SOURCE_COLLECTION,
-        new_source_id,
+    await client.collections.get(SOURCE_COLLECTION).data.insert(
+        uuid=new_source_id,
         properties={
             "source_type": resolved_kind.value,
             "uri": resolved_uri,
@@ -313,10 +310,8 @@ async def create_source(
         return existing, False
 
     source_id = new_uuid6()
-    await upsert(
-        client,
-        SOURCE_COLLECTION,
-        source_id,
+    await client.collections.get(SOURCE_COLLECTION).data.insert(
+        uuid=source_id,
         properties={
             "source_type": payload.source_type.value,
             "uri": payload.uri,

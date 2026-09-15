@@ -28,7 +28,9 @@ from people_gator_api.services.weaviate_service.db_schema import (
     FACE_COLLECTION,
     PAGE_MENTION_COLLECTION,
 )
-from people_gator_api.services.crud_services.source_service import resolve_source_reference
+from people_gator_api.services.crud_services.source_service import (
+    resolve_source_reference,
+)
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     document_mention_response,
@@ -39,7 +41,6 @@ from people_gator_api.services.weaviate_service.utils import (
     require_reference_uuid,
     reference_id_filter,
     single_named_vector_payload,
-    upsert,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -79,10 +80,8 @@ async def create_page_mention(
         },
     )
     page_mention_id = new_uuid6()
-    await upsert(
-        client,
-        PAGE_MENTION_COLLECTION,
-        page_mention_id,
+    await client.collections.get(PAGE_MENTION_COLLECTION).data.insert(
+        uuid=page_mention_id,
         properties={
             "name": payload.name,
             "information": payload.information,
@@ -294,10 +293,8 @@ async def create_document_mention(
         extra={"source_id": source.source_id, "entity_id": payload.entity_id},
     )
     document_mention_id = new_uuid6()
-    await upsert(
-        client,
-        DOCUMENT_MENTION_COLLECTION,
-        document_mention_id,
+    await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.insert(
+        uuid=document_mention_id,
         properties={
             "name": payload.name,
             "information": payload.information,
@@ -399,10 +396,8 @@ async def patch_document_mention_entity(
         )
         return None
 
-    await upsert(
-        client,
-        DOCUMENT_MENTION_COLLECTION,
-        document_mention_id,
+    await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.replace(
+        uuid=document_mention_id,
         properties=dict(response.properties),
         references={
             "principal": require_reference_uuid(response.references, "principal"),
@@ -520,10 +515,8 @@ async def create_face(
         extra={"source_id": source.source_id, "entity_id": payload.entity_id},
     )
     detection_id = new_uuid6()
-    await upsert(
-        client,
-        FACE_COLLECTION,
-        detection_id,
+    await client.collections.get(FACE_COLLECTION).data.insert(
+        uuid=detection_id,
         properties={
             "bounding_box": {
                 "x": payload.bounding_box.x,
@@ -610,10 +603,8 @@ async def patch_face_entity(
     if named_vectors:
         vector_payload = named_vectors
 
-    await upsert(
-        client,
-        FACE_COLLECTION,
-        detection_id,
+    await client.collections.get(FACE_COLLECTION).data.replace(
+        uuid=detection_id,
         properties=dict(response.properties),
         references={
             "principal": require_reference_uuid(response.references, "principal"),
