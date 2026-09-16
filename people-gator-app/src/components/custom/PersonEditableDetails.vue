@@ -98,86 +98,43 @@ watch(
       </Avatar>
 
       <div class="min-w-0 flex-1">
-        <small class="font-semibold uppercase text-secondary"
-          >Person record · {{ props.personId }}</small
-        >
+        <small class="font-semibold uppercase text-secondary">Person record · {{ props.personId }}</small>
         <div class="mt-1 flex min-w-0 items-center gap-2">
-          <ContentEditable
-            v-model="draft.name"
-            as="h1"
-            :editable="editingField === 'name'"
-            single-line
-            class="min-w-0 w-fit max-w-full rounded-sm px-2 py-1"
-            :class="editingField === 'name' && 'bg-card outline-1 outline-ring'"
-          />
-          <EditableActions
-            :editing="editingField === 'name'"
-            label="name"
-            @edit="beginEditing('name')"
-            @save="saveEditing('name')"
-            @cancel="cancelEditing('name')"
-          />
+          <ContentEditable v-model="draft.name" as="h1" :editable="editingField === 'name'" single-line
+            class="min-w-0 max-w-full rounded-sm transition-colors duration-300 ease-out"
+            :class="editingField === 'name' && 'bg-accent/10 outline-1 outline-ring'" />
+          <EditableActions :editing="editingField === 'name'" label="name" @edit="beginEditing('name')"
+            @save="saveEditing('name')" @cancel="cancelEditing('name')" />
         </div>
 
         <div class="mt-2 flex min-w-0 items-start gap-2">
-          <ContentEditable
-            v-model="draft.shortDescription"
-            as="p"
-            :editable="editingField === 'shortDescription'"
+          <ContentEditable v-model="draft.shortDescription" as="p" :editable="editingField === 'shortDescription'"
             single-line
-            class="min-w-0 w-fit max-w-3xl rounded-sm px-2 py-1 text-base text-muted-foreground"
-            :class="editingField === 'shortDescription' && 'bg-card outline-1 outline-ring'"
-          />
-          <EditableActions
-            :editing="editingField === 'shortDescription'"
-            label="description"
-            @edit="beginEditing('shortDescription')"
-            @save="saveEditing('shortDescription')"
-            @cancel="cancelEditing('shortDescription')"
-          />
+            class="min-w-0 max-w-3xl rounded-sm text-muted-foreground transition-colors duration-300 ease-out"
+            :class="editingField === 'shortDescription' && 'bg-accent/10 outline-1 outline-ring'" />
+          <EditableActions :editing="editingField === 'shortDescription'" label="description"
+            @edit="beginEditing('shortDescription')" @save="saveEditing('shortDescription')"
+            @cancel="cancelEditing('shortDescription')" />
         </div>
 
         <div class="mt-5 flex flex-wrap items-center gap-2">
-          <span class="mr-1 text-xs font-semibold uppercase text-muted-foreground">Aliases</span>
-          <span
-            v-for="(alias, index) in draft.aliases"
-            :key="index"
-            class="inline-flex min-h-7 items-center gap-1 border bg-card px-2.5 py-1 text-sm"
-          >
-            <ContentEditable
-              v-model="draft.aliases[index]!"
-              :editable="editingField === 'aliases'"
-              single-line
-              :class="editingField === 'aliases' && 'min-w-16 outline-none'"
-            />
-            <Button
-              v-if="editingField === 'aliases'"
-              type="button"
-              size="icon-xs"
-              variant="ghost"
+          <small class="mr-2 font-semibold uppercase text-muted-foreground">Aliases</small>
+          <span v-for="(alias, index) in draft.aliases" :key="index"
+            class="inline-flex min-h-7 items-center gap-1 border bg-card px-2.5 py-1 text-sm transition-colors duration-300 ease-out"
+            :class="editingField === 'aliases' && 'bg-accent/10'">
+            <ContentEditable v-model="draft.aliases[index]!" :editable="editingField === 'aliases'" single-line
+              :class="editingField === 'aliases' && 'min-w-16 outline-none'" />
+            <Button v-if="editingField === 'aliases'" type="button" size="icon-xs" variant="ghost"
               class="ml-1 h-[1em] max-h-[1em] text-muted-foreground hover:text-destructive"
-              :aria-label="`Remove alias ${alias}`"
-              @click="removeAlias(index)"
-            >
+              :aria-label="`Remove alias ${alias}`" @click="removeAlias(index)">
               <Trash2 class="size-3.5" aria-hidden="true" />
             </Button>
           </span>
-          <Button
-            v-if="editingField === 'aliases'"
-            size="sm"
-            variant="ghost"
-            class="h-7 px-2"
-            @click="addAlias"
-          >
+          <Button v-if="editingField === 'aliases'" size="sm" variant="ghost" class="h-7 px-2" @click="addAlias">
             <Plus aria-hidden="true" /> Add alias
           </Button>
-          <EditableActions
-            :editing="editingField === 'aliases'"
-            label="aliases"
-            @edit="beginEditing('aliases')"
-            @save="saveEditing('aliases')"
-            @cancel="cancelEditing('aliases')"
-          />
+          <EditableActions :editing="editingField === 'aliases'" label="aliases" @edit="beginEditing('aliases')"
+            @save="saveEditing('aliases')" @cancel="cancelEditing('aliases')" />
         </div>
       </div>
     </div>
@@ -186,22 +143,13 @@ watch(
   <section class="grid gap-5 border-b py-8 md:grid-cols-[minmax(0,1fr)_12rem]">
     <div class="min-w-0">
       <div class="flex items-center justify-between gap-3">
-        <h2>Biography</h2>
-        <EditableActions
-          :editing="editingField === 'article'"
-          label="biography"
-          @edit="beginEditing('article')"
-          @save="saveEditing('article')"
-          @cancel="cancelEditing('article')"
-        />
+        <h2>Detailed description</h2>
+        <EditableActions :editing="editingField === 'article'" label="detailed description"
+          @edit="beginEditing('article')" @save="saveEditing('article')" @cancel="cancelEditing('article')" />
       </div>
-      <ContentEditable
-        v-model="draft.article"
-        as="p"
-        :editable="editingField === 'article'"
-        class="mt-3 min-h-32 w-fit max-w-4xl rounded-sm px-3 py-2 whitespace-pre-line font-serif text-lg leading-8"
-        :class="editingField === 'article' && 'bg-card outline-1 outline-ring'"
-      />
+      <ContentEditable v-model="draft.article" as="p" :editable="editingField === 'article'"
+        class="mt-3 min-h-32 w-fit max-w-4xl rounded-sm whitespace-pre-line font-serif leading-8 transition-colors duration-300 ease-out"
+        :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'" />
     </div>
     <dl class="grid content-start gap-3 border-l-0 text-sm md:border-l md:pl-5">
       <div>

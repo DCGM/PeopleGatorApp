@@ -5,7 +5,9 @@ import { useRoute, useRouter } from 'vue-router'
 
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
 import PersonFaceCard from '@/components/custom/PersonFaceCard.vue'
+import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
 import PersonMentionItem from '@/components/custom/PersonMentionItem.vue'
+import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
 import type {
   PersonFace,
   PersonMention,
@@ -158,6 +160,7 @@ function selectTab(tab: string | number) {
         }" v-for="face in faces" :key="face.id" class="group">
           <PersonFaceCard :face="face" :person-name="profile.name" />
         </RouterLink>
+        <PersonFaceCardSkeleton />
       </TabsContent>
 
       <TabsContent value="mentions" class="divide-y">
@@ -172,6 +175,7 @@ function selectTab(tab: string | number) {
         }" class="group block py-6 outline-none">
           <PersonMentionItem :mention="mention" />
         </RouterLink>
+        <PersonMentionItemSkeleton />
       </TabsContent>
     </Tabs>
   </main>
