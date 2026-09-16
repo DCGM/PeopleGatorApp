@@ -20,7 +20,7 @@ from people_gator_api.schemas.enums import (
 # ---------------------------------------------------------------------------
 
 
-class EntitySearchResult(BaseModel):
+class SearchEntitiesResult(BaseModel):
     """A single result from a nearest-neighbour search over an annotation collection."""
 
     entity_id: uuid.UUID = Field(..., description="The entity ID of the annotation.")
@@ -38,10 +38,10 @@ class EntitySearchResult(BaseModel):
     )
 
 
-class SearchResultListResponse(GenericListResponse[EntitySearchResult]):
+class SearchEntitiesResultListResponse(GenericListResponse[SearchEntitiesResult]):
     """A paginated list of search results."""
 
-    items: list[EntitySearchResult]
+    items: list[SearchEntitiesResult]
 
 
 # ---------------------------------------------------------------------------
@@ -49,25 +49,31 @@ class SearchResultListResponse(GenericListResponse[EntitySearchResult]):
 # ---------------------------------------------------------------------------
 
 
-class SearchQuery(BaseModel):
+class SearchEntitiesQuery(BaseModel):
     """Typed query signals the caller wants to find matches for."""
-
-    name: list[str] | str | None = Field(
+    q: list[str] | None = Field(
         default=None,
-        validation_alias=AliasChoices("name", "query_name", "query_names"),
-        description="The name to search for.",
+        description="Name or alias text to search for.",
+    )
+    q_face_id: list[uuid.UUID] | None = Field(
+        default=None,
+        description="Reference face detection whose identity should rank nearby.",
     )
     entity_types: list[EntityType] | EntityType | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "entity_types",
-            "entity_type",
-            "types",
-            "query_entity_types",
-            "query_entity_type",
-            "query_types",
-        ),
         description="Optional entity type filter(s).",
+    )
+    source_id: uuid.UUID | None = Field(
+        default=None,
+        description="Only return entities occurring in this document or page Source.",
+    )
+    embedding_model: FaceEmbeddingModel = Field(
+        default=FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3,
+        description="Named face vector used for q_face_id search.",
+    )
+    aggregation: ScoreAggregation = Field(
+        default=ScoreAggregation.max,
+        description="How matching face scores are aggregated per entity.",
     )
     limit: int = Field(
         default=20,
@@ -89,8 +95,7 @@ class SearchQuery(BaseModel):
 
 class FaceSearchResult(BaseModel):
     """A single face detection matched against the supplied query faces."""
-
-    detection_id: uuid.UUID = Field(..., description="The matched face detection ID.")
+    face_id: uuid.UUID = Field(..., description="The matched face detection ID.")
     source_id: uuid.UUID | None = Field(
         default=None, description="Source containing the matched face."
     )
@@ -132,8 +137,18 @@ class FaceSearchQuery(BaseModel):
     )
 
 
-class EntityFaceSearchQuery(FaceSearchQuery):
+class SearchEntitiesByFacesQuery(FaceSearchQuery):
     """Face similarity query whose results are aggregated per entity."""
+
+    entity_types: list[EntityType] | EntityType | None = Field(
+        default=None,
+        validation_alias=AliasChoices("entity_types", "entity_type", "types"),
+        description="Optional entity type filter(s).",
+    )
+    source_id: uuid.UUID | None = Field(
+        default=None,
+        description="Only return entities occurring in this document or page Source.",
+    )
 
     aggregation: ScoreAggregation = Field(
         default=ScoreAggregation.max,

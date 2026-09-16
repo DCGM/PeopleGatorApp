@@ -11,11 +11,10 @@ from fastapi import (
     Query,
 )
 from people_gator_api.schemas.search import (
-    EntityFaceSearchQuery,
     FaceSearchQuery,
     FaceSearchResultListResponse,
-    SearchQuery,
-    SearchResultListResponse,
+    SearchEntitiesQuery,
+    SearchEntitiesResultListResponse,
 )
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
@@ -25,34 +24,43 @@ from people_gator_api.schemas.enums import (
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.crud_services.search_service import (
-    search,
-    search_entities_by_faces,
+    search_entities,
     search_faces,
 )
+from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 
 router = APIRouter(tags=["search"])
 
 
-@router.get("/search", response_model=SearchResultListResponse)
-async def search_get(
+@router.get("/search-entities", response_model=SearchEntitiesResultListResponse)
+async def search_entities_get(
     session: WeaviateSessionDependency,
-    name: list[str] | None = Query(default=None, alias="query_name"),
-    entity_type: list[EntityType] | None = Query(
-        default=None,
-        alias="query_entity_type",
+    resolved_source_id: SourceFilterDependency,
+    q: list[str] | None = Query(default=None),
+    q_face_id: list[uuid.UUID] | None = Query(default=None),
+    entity_type: list[EntityType] | None = Query(default=None),
+    embedding_model: FaceEmbeddingModel = Query(
+        default=DEFAULT_FACE_EMBEDDING_MODEL,
+        alias="model",
     ),
+    aggregation: ScoreAggregation = Query(default=ScoreAggregation.max),
     limit: int = Query(default=20, ge=0),
     after_id: uuid.UUID | None = None,
-) -> SearchResultListResponse:
-    return await search(
+) -> SearchEntitiesResultListResponse:
+    return await search_entities(
         session,
-        SearchQuery(
-            name=name,
+        SearchEntitiesQuery(
+            q=q,
+            q_face_id=q_face_id,
             entity_types=entity_type,
+            source_id=resolved_source_id,
+            embedding_model=embedding_model,
+            aggregation=aggregation,
             limit=limit,
             after_id=after_id,
         ),
     )
+
 
 @router.get("/search-faces", response_model=FaceSearchResultListResponse)
 async def search_faces_get(
@@ -69,28 +77,6 @@ async def search_faces_get(
         FaceSearchQuery(
             face_ids=face_id,
             embedding_model=embedding_model,
-            limit=limit,
-        ),
-    )
-
-
-@router.get("/search-entities", response_model=SearchResultListResponse)
-async def search_entities_by_faces_get(
-    session: WeaviateSessionDependency,
-    face_id: list[uuid.UUID] = Query(default_factory=list),
-    embedding_model: FaceEmbeddingModel = Query(
-        default=DEFAULT_FACE_EMBEDDING_MODEL,
-        alias="model",
-    ),
-    aggregation: ScoreAggregation = Query(default=ScoreAggregation.max),
-    limit: int = Query(default=20, ge=0),
-) -> SearchResultListResponse:
-    return await search_entities_by_faces(
-        session,
-        EntityFaceSearchQuery(
-            face_ids=face_id,
-            embedding_model=embedding_model,
-            aggregation=aggregation,
             limit=limit,
         ),
     )

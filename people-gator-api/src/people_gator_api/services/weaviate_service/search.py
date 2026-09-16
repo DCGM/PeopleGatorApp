@@ -1,4 +1,4 @@
-"""Readable BM25 search helpers for Entity records."""
+"""Weaviate helpers for entity name and reference-face search."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from weaviate.collections.classes.types import WeaviateField
 
 from people_gator_api.schemas.entities import BoundingBox
 from people_gator_api.schemas.enums import EntityType, ScoreAggregation
-from people_gator_api.schemas.search import EntitySearchResult, FaceSearchResult
+from people_gator_api.schemas.search import SearchEntitiesResult, FaceSearchResult
 from people_gator_api.services.weaviate_service.db_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
@@ -47,18 +47,18 @@ _ENTITY_REFERENCE_PROPERTIES = [
 ]
 
 
-async def search_entities_by_name_or_aliases(
+async def search_entities_by_names_or_aliases(
     client: WeaviateAsyncClient,
     query_name: list[str],
     *,
-    filters: FilterReturn | None = None,
+    entity_types: Sequence[EntityType] = (),
     limit: int = _DEFAULT_LIMIT,
-) -> list[EntitySearchResult]:
+) -> list[SearchEntitiesResult]:
     """Search Entity documents with BM25 across name and aliases."""
     cleaned_name = ", ".join(query_name).strip()
-    if not cleaned_name:
+    if not cleaned_name or limit <= 0:
         return []
-
+    filters = _parse_entity_filters(entity_types)
     response = await client.collections.get(ENTITY_COLLECTION).query.bm25(
         query=cleaned_name,
         query_properties=["name", "aliases"],
@@ -68,6 +68,93 @@ async def search_entities_by_name_or_aliases(
     )
     return [_entity_object_to_result(obj) for obj in response.objects]
 
+
+async def search_entities_by_faces_vectors(
+    client: WeaviateAsyncClient,
+    query_vectors: Sequence[Sequence[float]],
+    *,
+    vector_name: str,
+    aggregation: ScoreAggregation = ScoreAggregation.max,
+    excluded_face_ids: Sequence[UUID] = (),
+    entity_types: Sequence[EntityType] = (),
+    number_of_groups: int = _DEFAULT_LIMIT,
+    objects_per_group: int = _DEFAULT_OBJECTS_PER_GROUP,
+) -> list[SearchEntitiesResult]:
+    """Multi-vector face search with Weaviate-side grouping on the entity reference.
+
+    Per-face similarities inside a group are reduced with ``aggregation``; faces
+    without an entity reference are dropped by the grouping.
+    """
+    if not query_vectors or number_of_groups <= 0 or objects_per_group <= 0:
+        return []
+    filters = _parse_face_filters(
+        excluded_face_ids, entity_types
+    )
+    response = await client.collections.get(FACE_COLLECTION).query.near_vector(
+        near_vector=_multi_vector_query(vector_name, query_vectors),
+        target_vector=TargetVectors.minimum([vector_name]),
+        filters=filters,
+        group_by=GroupBy(
+            prop="entity",
+            number_of_groups=number_of_groups,
+            objects_per_group=objects_per_group,
+        ),
+        return_metadata=MetadataQuery(distance=True),
+        return_references=QueryReference(
+            link_on="entity",
+            return_properties=_ENTITY_REFERENCE_PROPERTIES,
+        ),
+    )
+    results: list[SearchEntitiesResult] = []
+    for group_name, group in response.groups.items():
+        entity_id = _group_name_to_uuid(group_name)
+        if entity_id is None or not group.objects:
+            continue
+        scores = [
+            _metadata_similarity(face_object.metadata) for face_object in group.objects
+        ]
+        results.append(
+            _grouped_entity_result(
+                entity_id,
+                _linked_entity_properties(group.objects[0].references),
+                _aggregate_scores(scores, aggregation),
+            )
+        )
+    return results
+
+async def search_faces_by_vectors(
+    client: WeaviateAsyncClient,
+    query_vectors: Sequence[Sequence[float]],
+    *,
+    vector_name: str,
+    excluded_face_ids: Sequence[UUID] = (),
+    limit: int = _DEFAULT_LIMIT,
+) -> list[FaceSearchResult]:
+    """Search the Face collection with several query vectors against one named vector.
+
+    Weaviate scores each candidate against every query vector and keeps the
+    smallest distance, so a face matching any reference face ranks highly.
+    """
+    if not query_vectors or limit <= 0:
+        return []
+    response = await client.collections.get(FACE_COLLECTION).query.near_vector(
+        near_vector=_multi_vector_query(vector_name, query_vectors),
+        target_vector=TargetVectors.minimum([vector_name]),
+        filters=_parse_face_filters(excluded_face_ids, None),
+        limit=limit,
+        return_metadata=MetadataQuery(distance=True),
+        return_references=empty_reference_queries(["entity", "source"]),
+    )
+    return [
+        FaceSearchResult(
+            face_id=face_object.uuid,
+            source_id=_optional_reference_uuid(face_object.references, "source"),
+            entity_id=_optional_reference_uuid(face_object.references, "entity"),
+            bounding_box=_optional_bounding_box(face_object.properties),
+            matching_score=_metadata_similarity(face_object.metadata),
+        )
+        for face_object in response.objects
+    ]
 
 async def fetch_face_vectors(
     client: WeaviateAsyncClient,
@@ -93,97 +180,6 @@ async def fetch_face_vectors(
     return vectors
 
 
-async def search_faces_by_vectors(
-    client: WeaviateAsyncClient,
-    query_vectors: Sequence[Sequence[float]],
-    *,
-    vector_name: str,
-    excluded_face_ids: Sequence[UUID] = (),
-    filters: FilterReturn | None = None,
-    limit: int = _DEFAULT_LIMIT,
-) -> list[FaceSearchResult]:
-    """Search the Face collection with several query vectors against one named vector.
-
-    Weaviate scores each candidate against every query vector and keeps the
-    smallest distance, so a face matching any reference face ranks highly.
-    """
-    if not query_vectors or limit <= 0:
-        return []
-
-    response = await client.collections.get(FACE_COLLECTION).query.near_vector(
-        near_vector=_multi_vector_query(vector_name, query_vectors),
-        target_vector=TargetVectors.minimum([vector_name]),
-        filters=_with_excluded_faces(filters, excluded_face_ids),
-        limit=limit,
-        return_metadata=MetadataQuery(distance=True),
-        return_references=empty_reference_queries(["entity", "source"]),
-    )
-    return [
-        FaceSearchResult(
-            detection_id=face_object.uuid,
-            source_id=_optional_reference_uuid(face_object.references, "source"),
-            entity_id=_optional_reference_uuid(face_object.references, "entity"),
-            bounding_box=_optional_bounding_box(face_object.properties),
-            matching_score=_metadata_similarity(face_object.metadata),
-        )
-        for face_object in response.objects
-    ]
-
-
-async def search_faces_by_vectors_grouped_by_entity(
-    client: WeaviateAsyncClient,
-    query_vectors: Sequence[Sequence[float]],
-    *,
-    vector_name: str,
-    aggregation: ScoreAggregation = ScoreAggregation.max,
-    excluded_face_ids: Sequence[UUID] = (),
-    filters: FilterReturn | None = None,
-    number_of_groups: int = _DEFAULT_LIMIT,
-    objects_per_group: int = _DEFAULT_OBJECTS_PER_GROUP,
-) -> list[EntitySearchResult]:
-    """Multi-vector face search with Weaviate-side grouping on the entity reference.
-
-    Per-face similarities inside a group are reduced with ``aggregation``; faces
-    without an entity reference are dropped by the grouping.
-    """
-    if not query_vectors or number_of_groups <= 0 or objects_per_group <= 0:
-        return []
-
-    response = await client.collections.get(FACE_COLLECTION).query.near_vector(
-        near_vector=_multi_vector_query(vector_name, query_vectors),
-        target_vector=TargetVectors.minimum([vector_name]),
-        filters=_with_excluded_faces(filters, excluded_face_ids),
-        group_by=GroupBy(
-            prop="entity",
-            number_of_groups=number_of_groups,
-            objects_per_group=objects_per_group,
-        ),
-        return_metadata=MetadataQuery(distance=True),
-        return_references=QueryReference(
-            link_on="entity",
-            return_properties=_ENTITY_REFERENCE_PROPERTIES,
-        ),
-    )
-
-    results: list[EntitySearchResult] = []
-    for group_name, group in response.groups.items():
-        entity_id = _group_name_to_uuid(group_name)
-        if entity_id is None or not group.objects:
-            continue
-        scores = [
-            _metadata_similarity(face_object.metadata) for face_object in group.objects
-        ]
-        results.append(
-            _grouped_entity_result(
-                entity_id,
-                _linked_entity_properties(group.objects[0].references),
-                _aggregate_scores(scores, aggregation),
-            )
-        )
-    results.sort(key=lambda item: (-item.matching_score, item.entity_id))
-    return results
-
-
 def _aggregate_scores(scores: list[float], aggregation: ScoreAggregation) -> float:
     match aggregation:
         case ScoreAggregation.min:
@@ -193,6 +189,43 @@ def _aggregate_scores(scores: list[float], aggregation: ScoreAggregation) -> flo
         case ScoreAggregation.average:
             return fmean(scores)
 
+def _parse_face_filters(
+    excluded_face_ids: Sequence[UUID] | None,
+    entity_types: Sequence[EntityType] | None,
+) -> FilterReturn | None:
+    if not entity_types and not excluded_face_ids:
+        return None
+    filters: list[FilterReturn] = []
+    if entity_types:
+        for entity_type in entity_types:
+            filters.append(Filter.by_ref("entity_type").by_property("entity_type").equal(entity_type.value))
+    if excluded_face_ids:
+        filters.append(
+            Filter.by_id().contains_none([str(face_id) for face_id in excluded_face_ids])
+        )
+    if not filters:
+        return None
+    if len(filters) == 1:
+        return filters[0]
+    return Filter.all_of(filters)
+
+def _parse_entity_filters(
+    entity_types: Sequence[EntityType] | None,
+) -> FilterReturn | None:
+    if entity_types is None:
+        return None
+
+    entity_type_values = [entity_type.value for entity_type in entity_types]
+    if not entity_type_values:
+        return None
+    if len(entity_type_values) == 1:
+        return Filter.by_property("entity_type").equal(entity_type_values[0])
+    return Filter.any_of(
+        [
+            Filter.by_property("entity_type").equal(entity_type_value)
+            for entity_type_value in entity_type_values
+        ]
+    )
 
 def _linked_entity_properties(
     references: CrossReferences | None,
@@ -209,8 +242,8 @@ def _grouped_entity_result(
     entity_id: UUID,
     properties: Mapping[str, WeaviateField],
     matching_score: float,
-) -> EntitySearchResult:
-    return EntitySearchResult(
+) -> SearchEntitiesResult:
+    return SearchEntitiesResult(
         entity_id=entity_id,
         entity_type=_optional_entity_type(properties),
         name=optional_str(properties, "name") or "",
@@ -230,20 +263,6 @@ def _multi_vector_query(
             *[list(vector) for vector in query_vectors]
         )
     }
-
-
-def _with_excluded_faces(
-    filters: FilterReturn | None,
-    excluded_face_ids: Sequence[UUID],
-) -> FilterReturn | None:
-    if not excluded_face_ids:
-        return filters
-    exclusion = Filter.by_id().contains_none(
-        [str(face_id) for face_id in excluded_face_ids]
-    )
-    if filters is None:
-        return exclusion
-    return Filter.all_of([filters, exclusion])
 
 
 def _group_name_to_uuid(group_name: str) -> UUID | None:
@@ -297,14 +316,14 @@ def _optional_bounding_box(raw_properties: object) -> BoundingBox | None:
 
 def _entity_object_to_result(
     entity_object: object,
-) -> EntitySearchResult:
+) -> SearchEntitiesResult:
     object_uuid = getattr(entity_object, "uuid")
     raw_properties = getattr(entity_object, "properties")
     metadata = getattr(entity_object, "metadata", None)
 
     properties = _as_weaviate_properties(raw_properties)
 
-    return EntitySearchResult(
+    return SearchEntitiesResult(
         entity_id=_field_to_uuid(object_uuid),
         entity_type=_optional_entity_type(properties),
         name=optional_str(properties, "name") or "",

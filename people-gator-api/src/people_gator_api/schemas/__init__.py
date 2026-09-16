@@ -32,9 +32,9 @@ from people_gator_api.schemas.principals import (
 )
 from people_gator_api.schemas.root import RootResponse
 from people_gator_api.schemas.search import (
-    EntitySearchResult,
-    SearchQuery,
-    SearchResultListResponse,
+    SearchEntitiesResult,
+    SearchEntitiesQuery,
+    SearchEntitiesResultListResponse,
 )
 from people_gator_api.schemas.sources import (
     SourceCreateRequest,
@@ -75,9 +75,9 @@ __all__ = [
     "ModelAgentListResponse",
     "PrincipalListResponse",
     "RootResponse",
-    "EntitySearchResult",
-    "SearchQuery",
-    "SearchResultListResponse",
+    "SearchEntitiesResult",
+    "SearchEntitiesQuery",
+    "SearchEntitiesResultListResponse",
     "SourceCreateRequest",
     "SourceListResponse",
     "SourceResponse",
