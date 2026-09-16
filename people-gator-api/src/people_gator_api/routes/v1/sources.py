@@ -21,7 +21,7 @@ from people_gator_api.services.crud_services.source_service import (
     create_source,
     delete_source,
     get_source,
-    get_source_by_type_uri,
+    get_source_by_uri,
     list_sources,
 )
 from people_gator_api.schemas.sources import (
@@ -63,17 +63,16 @@ async def list_sources_route(
     )
 
 
-@router.get("/sources/by-url", response_model=SourceResponse)
-async def get_source_by_url_route(
-    source_type: SourceKind,
+@router.get("/sources/object", response_model=SourceResponse)
+async def get_source_object_route(
     url: AnyUrl,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
 ) -> SourceResponse:
+    """Fetch one source by its ``url``."""
     del principal
-    source = await get_source_by_type_uri(
+    source = await get_source_by_uri(
         session,
-        source_type,
         str(url),
     )
     if source is None:

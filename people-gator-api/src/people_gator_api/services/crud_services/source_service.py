@@ -326,6 +326,23 @@ async def get_source_by_type_uri(
     return source
 
 
+@trace()
+async def get_source_by_uri(
+    client: WeaviateAsyncClient,
+    uri: str,
+) -> SourceResponse | None:
+    logger.debug("get_source_by_uri called", extra={"uri": uri})
+    source = await _find_source(
+        client,
+        [Filter.by_property("uri").equal(uri)],
+    )
+    if source is None:
+        logger.info("source by uri not found", extra={"uri": uri})
+        return None
+    logger.debug("source by uri found", extra={"source_id": source.source_id})
+    return source
+
+
 async def _find_source(
     client: WeaviateAsyncClient,
     filters: Sequence[FilterReturn],

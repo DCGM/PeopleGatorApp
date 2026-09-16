@@ -14,14 +14,11 @@ def test_media_router_exposes_pages_and_images_without_relationship_routes() -> 
 
     assert "/pages" in paths
     assert "/pages/{page_source_id}" in paths
-    assert "/pages/{library}/{document_id}/{page_id}" in paths
-    assert "/pages/{library}/{page_id}" in paths
-    assert "/documents/{library}/{document_id}" in paths
+    assert "/pages/object" in paths
     assert "/documents" in paths
     assert "/documents/{document_source_id}" in paths
-    assert "/pages/by-url" in paths
-    assert "/documents/by-url" in paths
-    assert "/images/by-url" in paths
+    assert "/documents/object" in paths
+    assert "/images/object" in paths
     assert "/images" in paths
     assert "/images/{image_id}" in paths
     assert not any("/scans" in path for path in paths)
@@ -32,7 +29,7 @@ def test_media_router_exposes_pages_and_images_without_relationship_routes() -> 
     source_paths = {
         cast(APIRoute, route).path_format for route in sources_router.routes
     }
-    assert "/sources/by-url" in source_paths
+    assert "/sources/object" in source_paths
 
 
 def test_annotation_lists_expose_shared_typed_source_filters() -> None:
@@ -55,5 +52,10 @@ def test_documents_expose_full_immutable_rest_interface() -> None:
 
     assert {"get", "post"} <= set(document_paths["/documents"])
     assert {"get", "delete"} <= set(document_paths["/documents/{document_source_id}"])
-    assert "get" in document_paths["/documents/{library}/{document_id}"]
-    assert "get" in document_paths["/documents/by-url"]
+    assert "get" in document_paths["/documents/object"]
+
+    object_parameters = {
+        parameter["name"]
+        for parameter in document_paths["/documents/object"]["get"]["parameters"]
+    }
+    assert {"url", "library", "document"} <= object_parameters

@@ -59,6 +59,11 @@ async def _fetch_bytes(key: str) -> bytes:
         return await response["Body"].read()
 
 
+async def read_bytes(key: str) -> bytes:
+    """Download an S3 object and return its raw bytes (public helper)."""
+    return await _fetch_bytes(key)
+
+
 async def _upload_bytes(key: str, data: bytes) -> None:
     """Upload raw bytes to an S3 object key."""
     async with _s3_client() as client: 

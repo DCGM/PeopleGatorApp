@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from pydantic import AnyUrl
 
 from people_gator_api.schemas.enums import SourceKind
@@ -25,6 +25,12 @@ from people_gator_api.services.auth_service import (
     BrowseUserDependency,
     DataIngestUserDependency,
 )
+from people_gator_api.services.crud_services.image_content_service import (
+    get_image_content,
+)
+from people_gator_api.services.crud_services.page_image_service import (
+    get_page_image,
+)
 from people_gator_api.services.crud_services.media_service import (
     create_document,
     create_image,
@@ -41,7 +47,10 @@ from people_gator_api.services.crud_services.media_service import (
     list_documents,
     list_pages,
 )
-from people_gator_api.services.crud_services.source_service import delete_source
+from people_gator_api.services.crud_services.source_service import (
+    SourceResolutionError,
+    delete_source,
+)
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.sse import (
@@ -126,45 +135,38 @@ async def get_document_route(
 
 
 @router.get(
-    "/documents/by-url",
+    "/documents/object",
     response_model=DocumentResponse,
     tags=["documents"],
 )
-async def get_document_by_url_route(
-    url: AnyUrl,
+async def get_document_object_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    url: AnyUrl | None = None,
+    library: str | None = None,
+    document: uuid.UUID | None = None,
 ) -> DocumentResponse:
+    """Fetch one document by ``url`` or by ``library`` + ``document``."""
     del principal
-    document = await get_document_by_url(
-        session,
-        str(url),
-    )
-    if document is None:
+    if url is not None:
+        if library is not None or document is not None:
+            raise_api_error(
+                422,
+                "ambiguous_selector",
+                "Provide either url or the library/document selectors, not both",
+            )
+        resolved = await get_document_by_url(session, str(url))
+    else:
+        if library is None or document is None:
+            raise_api_error(
+                422,
+                "missing_selector",
+                "Provide either url or both library and document",
+            )
+        resolved = await get_document_by_path(session, library, document)
+    if resolved is None:
         raise_api_error(404, "not_found", "Document not found")
-    return document
-
-
-@router.get(
-    "/documents/{library}/{document_id:uuid}",
-    response_model=DocumentResponse,
-    tags=["documents"],
-)
-async def get_document_by_path_route(
-    library: str,
-    document_id: uuid.UUID,
-    session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
-) -> DocumentResponse:
-    del principal
-    document = await get_document_by_path(
-        session,
-        library,
-        document_id,
-    )
-    if document is None:
-        raise_api_error(404, "not_found", "Document not found")
-    return document
+    return resolved
 
 
 @router.delete(
@@ -250,20 +252,36 @@ async def create_page_route(
     return page
 
 
-@router.get("/pages/by-url", response_model=PageResponse, tags=["pages"])
-async def get_page_by_url_route(
-    url: AnyUrl,
+@router.get("/pages/object", response_model=PageResponse, tags=["pages"])
+async def get_page_object_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    url: AnyUrl | None = None,
+    library: str | None = None,
+    document: uuid.UUID | None = None,
+    page: uuid.UUID | None = None,
 ) -> PageResponse:
+    """Fetch one page by ``url`` or by ``library`` + ``document`` + ``page``."""
     del principal
-    page = await get_page_by_url(
-        session,
-        str(url),
-    )
-    if page is None:
+    if url is not None:
+        if any(param is not None for param in (library, document, page)):
+            raise_api_error(
+                422,
+                "ambiguous_selector",
+                "Provide either url or the library/document/page selectors, not both",
+            )
+        resolved = await get_page_by_url(session, str(url))
+    else:
+        if library is None or document is None or page is None:
+            raise_api_error(
+                422,
+                "missing_selector",
+                "Provide either url or all of library, document and page",
+            )
+        resolved = await get_page_by_path(session, library, page, document_id=document)
+    if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
-    return page
+    return resolved
 
 
 @router.get("/pages/{page_source_id:uuid}", response_model=PageResponse, tags=["pages"])
@@ -280,49 +298,71 @@ async def get_page_route(
 
 
 @router.get(
-    "/pages/{library}/{document_id:uuid}/{page_id:uuid}",
-    response_model=PageResponse,
+    "/pages/{page_source_id:uuid}/image",
+    response_class=Response,
     tags=["pages"],
 )
-async def get_page_by_full_path_route(
-    library: str,
-    document_id: uuid.UUID,
-    page_id: uuid.UUID,
+async def get_page_image_by_id_route(
+    page_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
-) -> PageResponse:
+    width: int | None = None,
+) -> Response:
+    """Stream one page image, optionally a cached JPEG derivative."""
     del principal
-    page = await get_page_by_path(
-        session,
-        library,
-        page_id,
-        document_id=document_id,
-    )
+    page = await get_page(session, page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return page
+    try:
+        image = await get_page_image(str(page.url), width=width)
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return Response(
+        content=image.content,
+        media_type=image.media_type,
+        headers={"X-Cache": "HIT" if image.cache_hit else "MISS"},
+    )
 
 
-@router.get(
-    "/pages/{library}/{page_id:uuid}",
-    response_model=PageResponse,
-    tags=["pages"],
-)
-async def get_page_by_short_path_route(
-    library: str,
-    page_id: uuid.UUID,
+@router.get("/pages/object/image", response_class=Response, tags=["pages"])
+async def get_page_image_object_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
-) -> PageResponse:
+    url: AnyUrl | None = None,
+    library: str | None = None,
+    document: uuid.UUID | None = None,
+    page: uuid.UUID | None = None,
+    width: int | None = None,
+) -> Response:
+    """Stream one page image selected by ``url`` or library/document/page."""
     del principal
-    page = await get_page_by_path(
-        session,
-        library,
-        page_id,
-    )
-    if page is None:
+    if url is not None:
+        if any(param is not None for param in (library, document, page)):
+            raise_api_error(
+                422,
+                "ambiguous_selector",
+                "Provide either url or the library/document/page selectors, not both",
+            )
+        resolved = await get_page_by_url(session, str(url))
+    else:
+        if library is None or document is None or page is None:
+            raise_api_error(
+                422,
+                "missing_selector",
+                "Provide either url or all of library, document and page",
+            )
+        resolved = await get_page_by_path(session, library, page, document_id=document)
+    if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
-    return page
+    try:
+        image = await get_page_image(str(resolved.url), width=width)
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return Response(
+        content=image.content,
+        media_type=image.media_type,
+        headers={"X-Cache": "HIT" if image.cache_hit else "MISS"},
+    )
 
 
 @router.delete(
@@ -393,12 +433,13 @@ async def create_image_route(
     return image
 
 
-@router.get("/images/by-url", response_model=ImageResponse, tags=["images"])
-async def get_image_by_url_route(
-    url: AnyUrl,
+@router.get("/images/object", response_model=ImageResponse, tags=["images"])
+async def get_image_object_route(
     session: WeaviateSessionDependency,
     principal: BrowseUserDependency,
+    url: AnyUrl,
 ) -> ImageResponse:
+    """Fetch one image by its ``url``."""
     del principal
     image = await get_image_by_url(
         session,
@@ -420,6 +461,41 @@ async def get_image_route(
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
     return image
+
+
+@router.get(
+    "/images/object/content",
+    response_class=Response,
+    tags=["images"],
+)
+async def get_image_content_route(
+    url: AnyUrl,
+    principal: BrowseUserDependency,
+) -> Response:
+    """Stream one stored image from the bucket (``image/{website}/{path}``)."""
+    del principal
+    try:
+        content, media_type = await get_image_content(str(url))
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return Response(content=content, media_type=media_type)
+
+
+@router.get("/images/{image_id:uuid}/content", response_class=Response, tags=["images"])
+async def get_image_content_by_id_route(
+    image_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    principal: BrowseUserDependency,
+) -> Response:
+    del principal
+    image = await get_image(session, image_id)
+    if image is None:
+        raise_api_error(404, "not_found", "Image not found")
+    try:
+        content, media_type = await get_image_content(str(image.url))
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return Response(content=content, media_type=media_type)
 
 
 @router.delete(
