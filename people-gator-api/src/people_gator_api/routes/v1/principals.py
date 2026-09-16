@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 
 from fastapi import APIRouter, Query
@@ -32,11 +31,6 @@ from people_gator_api.services.crud_services.principal_service import (
     list_users,
     update_model_agent,
     update_user,
-)
-from people_gator_api.services.sse import (
-    BrokerDependency,
-    DeletedResourceEvent,
-    SseEventType,
 )
 
 router = APIRouter(tags=["principals"])
@@ -112,20 +106,11 @@ async def create_model_agent_route(
     payload: ModelAgentCreateRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> ModelAgentResponse:
     try:
         model_agent = await create_model_agent(session, payload, principal.principal_id)
     except PrincipalAlreadyExistsError:
         raise_api_error(409, "already_exists", "Model agent already registered")
-    asyncio.create_task(
-        broker.publish(
-            ("principals", model_agent.principal_id),
-            ("model-agents", model_agent.principal_id),
-            event=SseEventType.MODEL_AGENT_CREATED,
-            data=model_agent,
-        )
-    )
     return model_agent
 
 
@@ -151,7 +136,6 @@ async def patch_model_agent_route(
     payload: ModelAgentPatchRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> ModelAgentResponse:
     updated_principal = await update_model_agent(
         session,
@@ -161,14 +145,6 @@ async def patch_model_agent_route(
     )
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    asyncio.create_task(
-        broker.publish(
-            ("principals", updated_principal.principal_id),
-            ("model-agents", updated_principal.principal_id),
-            event=SseEventType.MODEL_AGENT_UPDATED,
-            data=updated_principal,
-        )
-    )
     return updated_principal
 
 
@@ -177,19 +153,10 @@ async def delete_model_agent_route(
     principal_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> None:
     deleted = await delete_model_agent(session, principal.principal_id, principal_id)
     if not deleted:
         raise_api_error(404, "not_found", "Principal not found")
-    asyncio.create_task(
-        broker.publish(
-            ("principals", principal_id),
-            ("model-agents", principal_id),
-            event=SseEventType.MODEL_AGENT_DELETED,
-            data=DeletedResourceEvent(resource_id=principal_id),
-        )
-    )
 
 
 @router.get("/users", response_model=UserListResponse)
@@ -231,7 +198,6 @@ async def patch_user_route(
     payload: UserPatchRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> UserResponse:
     updated_principal = await update_user(
         session,
@@ -241,12 +207,4 @@ async def patch_user_route(
     )
     if updated_principal is None:
         raise_api_error(404, "not_found", "Principal not found")
-    asyncio.create_task(
-        broker.publish(
-            ("principals", updated_principal.principal_id),
-            ("users", updated_principal.principal_id),
-            event=SseEventType.USER_UPDATED,
-            data=updated_principal,
-        )
-    )
     return updated_principal

@@ -11,8 +11,10 @@ from fastapi import (
     Query,
 )
 from people_gator_api.schemas.search import (
+    ArchiveHitListResponse,
     FaceSearchQuery,
     FaceSearchResultListResponse,
+    SearchArchiveQuery,
     SearchEntitiesQuery,
     SearchEntitiesResultListResponse,
 )
@@ -24,6 +26,7 @@ from people_gator_api.schemas.enums import (
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.crud_services.search_service import (
+    search_archive_hits,
     search_entities,
     search_faces,
 )
@@ -65,7 +68,7 @@ async def search_entities_get(
 @router.get("/search-faces", response_model=FaceSearchResultListResponse)
 async def search_faces_get(
     session: WeaviateSessionDependency,
-    face_id: list[uuid.UUID] = Query(default_factory=list),
+    q_face_id: list[uuid.UUID] = Query(default_factory=list),
     embedding_model: FaceEmbeddingModel = Query(
         default=DEFAULT_FACE_EMBEDDING_MODEL,
         alias="model",
@@ -75,8 +78,34 @@ async def search_faces_get(
     return await search_faces(
         session,
         FaceSearchQuery(
-            face_ids=face_id,
+            q_face_id=q_face_id,
             embedding_model=embedding_model,
+            limit=limit,
+        ),
+    )
+
+@router.get("/search-archive", response_model=ArchiveHitListResponse)
+async def search_archive_get(
+    session: WeaviateSessionDependency,
+    resolved_source_id: SourceFilterDependency,
+    q: str = Query(
+        min_length=1,
+        description="Page/document ID, mention name, or linked entity alias.",
+    ),
+    limit: int = Query(default=20, ge=0),
+) -> ArchiveHitListResponse:
+    """Search pages and documents with one free-text or UUID query.
+
+    The query matches page mentions, document mentions, linked entity names
+    and aliases, or a bare Source/page/document UUID. Independent mention and
+    entity rankings are fused with reciprocal-rank fusion inside Weaviate
+    calls only, so no cross-service roundtrips occur.
+    """
+    return await search_archive_hits(
+        session,
+        SearchArchiveQuery(
+            q=q,
+            source_id=resolved_source_id,
             limit=limit,
         ),
     )

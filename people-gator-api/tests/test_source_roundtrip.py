@@ -33,7 +33,6 @@ from people_gator_api.routes.v1.sources import (
 from people_gator_api.schemas.enums import SourceKind, PrincipalType
 from people_gator_api.schemas.sources import SourceCreateRequest
 from people_gator_api.schemas.principals import UserResponse
-from people_gator_api.services.sse import LocalTopicBroker
 
 
 class FakeCollection:
@@ -131,15 +130,13 @@ async def test_source_post_get_delete_roundtrip() -> None:
         external_issuer="test-issuer",
         email=None,
     )
-    broker = LocalTopicBroker()
-
     payload = SourceCreateRequest(
         source_type=SourceKind.image,
         uri="https://example.test/roundtrip-image.jpg",
     )
 
     created = await create_source_route(
-        payload=payload, principal=principal, session=session, broker=broker
+        payload=payload, principal=principal, session=session
     )  # pyright: ignore[reportArgumentType]
     assert created.source_type == payload.source_type
     assert created.uri == payload.uri
@@ -153,7 +150,7 @@ async def test_source_post_get_delete_roundtrip() -> None:
     assert fetched.metadata is None
 
     await delete_source_route(
-        source_id=created.source_id, principal=principal, session=session, broker=broker
+        source_id=created.source_id, principal=principal, session=session
     )  # pyright: ignore[reportArgumentType]
 
     with pytest.raises(HTTPException) as exc_info:

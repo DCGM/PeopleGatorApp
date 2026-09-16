@@ -14,6 +14,9 @@ from people_gator_api.schemas.search import (
     FaceSearchResultListResponse,
     SearchEntitiesQuery,
     SearchEntitiesResultListResponse,
+    SearchArchiveQuery,
+    ArchiveHit,
+    ArchiveHitListResponse,
 )
 from people_gator_api.services.weaviate_service.db_schema import FACE_VECTOR_BY_MODEL
 from people_gator_api.services.weaviate_service.search import (
@@ -22,6 +25,7 @@ from people_gator_api.services.weaviate_service.search import (
     search_faces_by_vectors,
     search_entities_by_faces_vectors,
 )
+from people_gator_api.services.weaviate_service.archive_search import search_archive
 from people_gator_api.utils.opentelemetry import trace
 
 
@@ -84,24 +88,24 @@ async def search_faces(
     query: FaceSearchQuery,
 ) -> FaceSearchResultListResponse:
     """Find faces similar to any of the supplied reference faces."""
-    logger.debug("search_faces called", extra={"face_ids": query.face_ids})
+    logger.debug("search_faces called", extra={"face_ids": query.q_face_id})
     vector_name = FACE_VECTOR_BY_MODEL[query.embedding_model]
     query_vectors = await fetch_face_vectors(
         session,
-        query.face_ids,
+        query.q_face_id,
         vector_name=vector_name,
     )
     if not query_vectors:
         logger.info(
             "face search skipped missing reference vectors",
-            extra={"face_ids": query.face_ids, "vector_name": vector_name},
+            extra={"face_ids": query.q_face_id, "vector_name": vector_name},
         )
         return _empty_face_search_response(limit=query.limit)
     faces: list[FaceSearchResult] = await search_faces_by_vectors(
         session,
         query_vectors,
         vector_name=vector_name,
-        excluded_face_ids=query.face_ids,
+        excluded_face_ids=query.q_face_id,
         limit=query.limit,
     )
     logger.info("search_faces completed", extra={"total": len(faces)})
@@ -157,3 +161,42 @@ def _fuse_entity_results(
     ]
     fused.sort(key=lambda item: (-item.matching_score, item.entity_id))
     return fused
+
+
+@trace()
+async def search_archive_hits(
+    session: WeaviateAsyncClient,
+    query: SearchArchiveQuery,
+) -> ArchiveHitListResponse:
+    """Search pages and documents by UUID, mention name, or linked entity alias.
+
+    Delegates to the pure-Weaviate archive search and maps the fused
+    candidates onto the public hit schema.
+    """
+    logger.debug(
+        "search_archive_hits called",
+        extra={"query": query.q, "source_id": query.source_id},
+    )
+    candidates = await search_archive(
+        session,
+        query.q,
+        source_id=query.source_id,
+        limit=query.limit,
+    )
+    hits = [
+        ArchiveHit(
+            source_id=candidate.source_id,
+            kind=candidate.kind,
+            document_id=candidate.document_id,
+            page_id=candidate.page_id,
+            matching_score=candidate.matching_score,
+        )
+        for candidate in candidates
+    ]
+    logger.info("search_archive_hits completed", extra={"total": len(hits)})
+    return ArchiveHitListResponse(
+        items=hits,
+        total_count=len(hits),
+        limit=query.limit,
+        after_id=hits[-1].source_id if hits else None,
+    )

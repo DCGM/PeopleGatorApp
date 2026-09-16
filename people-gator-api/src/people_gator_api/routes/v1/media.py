@@ -5,20 +5,16 @@ import uuid
 from fastapi import APIRouter, Query, Response, status
 from pydantic import AnyUrl
 
-from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
     DocumentCreateRequest,
     DocumentListResponse,
     DocumentResponse,
-    DocumentSourceMetadata,
     ImageCreateRequest,
     ImageListResponse,
     ImageResponse,
     PageCreateRequest,
     PageListResponse,
     PageResponse,
-    PageSourceMetadata,
-    SourceResponse,
 )
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
@@ -53,11 +49,6 @@ from people_gator_api.services.crud_services.source_service import (
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.sse import (
-    BrokerDependency,
-    DeletedResourceEvent,
-    SseEventType,
-)
 
 router = APIRouter()
 
@@ -91,26 +82,11 @@ async def create_document_route(
     payload: DocumentCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> DocumentResponse:
     del principal
     document, created = await create_document(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Document already registered")
-    broker.publish_task(
-        ("sources", document.document_source_id),
-        event=SseEventType.SOURCE_CREATED,
-        data=SourceResponse(
-            source_id=document.document_source_id,
-            source_type=SourceKind.document,
-            uri=str(document.url),
-            metadata=DocumentSourceMetadata(
-                library=document.library,
-                document=document.document_id,
-                kramerius_url=document.url,
-            ),
-        ),
-    )
     return document
 
 
@@ -178,7 +154,6 @@ async def delete_document_route(
     document_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> None:
     del principal
     if (
@@ -190,11 +165,6 @@ async def delete_document_route(
     ):
         raise_api_error(404, "not_found", "Document not found")
     await delete_source(session, document_source_id)
-    broker.publish_task(
-        ("sources", document_source_id),
-        event=SseEventType.SOURCE_DELETED,
-        data=DeletedResourceEvent(resource_id=document_source_id),
-    )
 
 
 @router.get("/pages", response_model=PageListResponse, tags=["pages"])
@@ -228,27 +198,11 @@ async def create_page_route(
     payload: PageCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> PageResponse:
     del principal
     page, created = await create_page(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Page already registered")
-    broker.publish_task(
-        ("sources", page.page_source_id),
-        event=SseEventType.SOURCE_CREATED,
-        data=SourceResponse(
-            source_id=page.page_source_id,
-            source_type=SourceKind.page,
-            uri=str(page.url),
-            metadata=PageSourceMetadata(
-                library=page.library,
-                document=page.document_id,
-                page=page.page_id,
-                kramerius_url=page.url,
-            ),
-        ),
-    )
     return page
 
 
@@ -374,17 +328,11 @@ async def delete_page_route(
     page_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> None:
     del principal
     if await get_page(session, page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
     await delete_source(session, page_source_id)
-    broker.publish_task(
-        ("sources", page_source_id),
-        event=SseEventType.SOURCE_DELETED,
-        data=DeletedResourceEvent(resource_id=page_source_id),
-    )
 
 
 @router.get("/images", response_model=ImageListResponse, tags=["images"])
@@ -414,22 +362,11 @@ async def create_image_route(
     payload: ImageCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> ImageResponse:
     del principal
     image, created = await create_image(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Image already registered")
-    broker.publish_task(
-        ("sources", image.image_id),
-        event=SseEventType.SOURCE_CREATED,
-        data=SourceResponse(
-            source_id=image.image_id,
-            source_type=SourceKind.image,
-            uri=str(image.url),
-            metadata=None,
-        ),
-    )
     return image
 
 
@@ -507,14 +444,8 @@ async def delete_image_route(
     image_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> None:
     del principal
     if await get_image(session, image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
     await delete_source(session, image_id)
-    broker.publish_task(
-        ("sources", image_id),
-        event=SseEventType.SOURCE_DELETED,
-        data=DeletedResourceEvent(resource_id=image_id),
-    )

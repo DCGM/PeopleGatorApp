@@ -1,6 +1,5 @@
 """Entity endpoints (spec §2.1)."""
 
-import asyncio
 from collections.abc import AsyncGenerator
 import uuid
 
@@ -26,11 +25,6 @@ from people_gator_api.services.auth_service import (
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.sse import (
-    BrokerDependency,
-    DeletedResourceEvent,
-    SseEventType,
-)
 from people_gator_api.services.crud_services.entity_service import (
     create_entity,
     create_entity_batch,
@@ -92,15 +86,8 @@ async def create_entity_route(
     payload: EntityCreateRequest,
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
-    broker: BrokerDependency,
 ) -> EntityResponse:
     entity = await create_entity(session, payload, principal.principal_id)
-    asyncio.create_task(broker.publish(
-        ("entities", entity.entity_id),
-        ("principals", entity.principal_id, "entities", entity.entity_id),
-        event=SseEventType.ENTITY_CREATED,
-        data=entity,
-    ))
     return entity
 
 
@@ -111,20 +98,11 @@ async def create_entity_batch_route(
     payload: list[EntityCreateRequest],
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
-    broker: BrokerDependency,
 ) -> list[EntityResponse]:
     async def async_list(iterable: list[EntityCreateRequest]) -> AsyncGenerator[EntityCreateRequest, None]:
         for item in iterable:
             yield item
     entities = await create_entity_batch(session, async_list(payload), principal.principal_id)
-    broker.publish_batch_task(batch=(
-        (topic, SseEventType.ENTITY_CREATED, entity)
-        for entity in entities
-        for topic in (
-            ("entities", entity.entity_id),
-            ("principals", entity.principal_id, "entities", entity.entity_id),
-        )
-    ))
     return entities
 
 
@@ -134,18 +112,11 @@ async def patch_entity_route(
     payload: EntityPatchRequest,
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
-    broker: BrokerDependency,
 ) -> EntityResponse:
     del principal
     entity = await patch_entity(session, entity_id, payload)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
-    broker.publish_task(
-        ("entities", entity.entity_id),
-        ("principals", entity.principal_id, "entities", entity.entity_id),
-        event=SseEventType.ENTITY_UPDATED,
-        data=entity,
-    )
     return entity
 
 
@@ -154,7 +125,6 @@ async def delete_entity_route(
     entity_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> None:
     del principal
     entity = await get_entity(session, entity_id)
@@ -163,12 +133,6 @@ async def delete_entity_route(
     deleted = await delete_entity(session, entity_id)
     if not deleted:
         raise_api_error(404, "not_found", "Entity not found")
-    broker.publish_task(
-        ("entities", entity_id),
-        ("principals", entity.principal_id, "entities", entity_id),
-        event=SseEventType.ENTITY_DELETED,
-        data=DeletedResourceEvent(resource_id=entity_id),
-    )
 
 
 @router.delete(
@@ -180,13 +144,7 @@ async def delete_entities_route(
     payload: EntityDeleteManyRequest,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> EntityDeleteManyResponse:
     del principal
     response = await delete_entities(session, payload)
-    broker.publish_task(
-        ("entities",),
-        event=SseEventType.ENTITY_DELETED,
-        data=response,
-    )
     return response

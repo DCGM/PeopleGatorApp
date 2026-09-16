@@ -1,6 +1,5 @@
 """Source endpoints (spec §2.7 simplified source model)."""
 
-import asyncio
 import uuid
 
 from fastapi import (
@@ -28,11 +27,6 @@ from people_gator_api.schemas.sources import (
     SourceCreateRequest,
     SourceListResponse,
     SourceResponse,
-)
-from people_gator_api.services.sse import (
-    BrokerDependency,
-    DeletedResourceEvent,
-    SseEventType,
 )
 
 router = APIRouter(tags=["sources"])
@@ -100,17 +94,11 @@ async def create_source_route(
     payload: SourceCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> SourceResponse:
     del principal
     source, created = await create_source(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Source already registered")
-    asyncio.create_task(broker.publish(
-        ("sources", source.source_id),
-        event=SseEventType.SOURCE_CREATED,
-        data=source,
-    ))
     return source
 
 
@@ -119,14 +107,8 @@ async def delete_source_route(
     source_id: uuid.UUID,
     session: WeaviateSessionDependency,
     principal: AdminUserDependency,
-    broker: BrokerDependency,
 ) -> None:
     del principal
     deleted = await delete_source(session, source_id)
     if not deleted:
         raise_api_error(404, "not_found", "Source not found")
-    asyncio.create_task(broker.publish(
-        ("sources", source_id),
-        event=SseEventType.SOURCE_DELETED,
-        data=DeletedResourceEvent(resource_id=source_id),
-    ))

@@ -45,7 +45,6 @@ from people_gator_api.services.crud_services.annotation_service import (
 from people_gator_api.services.crud_services.source_service import SourceResolutionError
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.sse import BrokerDependency, SseEventType
 from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 
 router = APIRouter(tags=["annotations"])
@@ -88,20 +87,11 @@ async def create_page_mention_route(
     payload: PageMentionCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> PageMentionResponse:
     try:
         page_mention = await create_page_mention(session, payload, principal.principal_id)
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
-    broker.publish_task(
-        ("page-mentions", page_mention.page_mention_id),
-        ("document-mentions", page_mention.document_mention_id, "page-mentions", page_mention.page_mention_id),
-        ("sources", page_mention.source_id, "page-mentions", page_mention.page_mention_id),
-        ("principals", page_mention.principal_id, "page-mentions", page_mention.page_mention_id),
-        event=SseEventType.PAGE_MENTION_CREATED,
-        data=page_mention,
-    )
     return page_mention
 
 
@@ -151,7 +141,6 @@ async def create_document_mention_route(
     payload: DocumentMentionCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> DocumentMentionResponse:
     try:
         document_mention = await create_document_mention(
@@ -159,14 +148,6 @@ async def create_document_mention_route(
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
-    broker.publish_task(
-        ("document-mentions", document_mention.document_mention_id),
-        ("entities", document_mention.entity_id, "document-mentions", document_mention.document_mention_id),
-        ("sources", document_mention.source_id, "document-mentions", document_mention.document_mention_id),
-        ("principals", document_mention.principal_id, "document-mentions", document_mention.document_mention_id),
-        event=SseEventType.DOCUMENT_MENTION_CREATED,
-        data=document_mention,
-    )
     return document_mention
 
 
@@ -179,7 +160,6 @@ async def create_document_mention_batch_route(
     payload: list[DocumentMentionCreateRequest],
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> list[DocumentMentionResponse]:
     try:
         document_mentions = await create_document_mention_batch(
@@ -189,33 +169,6 @@ async def create_document_mention_batch_route(
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
-    broker.publish_batch_task(
-        batch=(
-            (topic, SseEventType.DOCUMENT_MENTION_CREATED, document_mention)
-            for document_mention in document_mentions
-            for topic in (
-                ("document-mentions", document_mention.document_mention_id),
-                (
-                    "entities",
-                    document_mention.entity_id,
-                    "document-mentions",
-                    document_mention.document_mention_id,
-                ),
-                (
-                    "sources",
-                    document_mention.source_id,
-                    "document-mentions",
-                    document_mention.document_mention_id,
-                ),
-                (
-                    "principals",
-                    document_mention.principal_id,
-                    "document-mentions",
-                    document_mention.document_mention_id,
-                ),
-            )
-        )
-    )
     return document_mentions
 
 
@@ -245,7 +198,6 @@ async def patch_document_mention_entity_route(
     payload: DocumentMentionEntityPatchRequest,
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
-    broker: BrokerDependency,
 ) -> DocumentMentionResponse:
     item = await patch_document_mention_entity(
         session,
@@ -255,14 +207,6 @@ async def patch_document_mention_entity_route(
     )
     if item is None:
         raise_api_error(404, "not_found", "Document mention not found")
-    broker.publish_task(
-        ("document-mentions", item.document_mention_id),
-        ("entities", item.entity_id, "document-mentions", item.document_mention_id),
-        ("sources", item.source_id, "document-mentions", item.document_mention_id),
-        ("principals", item.principal_id, "document-mentions", item.document_mention_id),
-        event=SseEventType.DOCUMENT_MENTION_UPDATED,
-        data=item,
-    )
     return item
 
 
@@ -292,20 +236,11 @@ async def create_face_route(
     payload: FaceCreateRequest,
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> FaceResponse:
     try:
         face = await create_face(session, payload, principal.principal_id)
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
-    broker.publish_task(
-        ("faces", face.detection_id),
-        ("entities", face.entity_id, "faces", face.detection_id),
-        ("principals", face.principal_id, "faces", face.detection_id),
-        ("sources", face.source_id, "faces", face.detection_id),
-        event=SseEventType.FACE_CREATED,
-        data=face,
-    )
     return face
 
 
@@ -318,7 +253,6 @@ async def create_face_batch_route(
     payload: list[FaceCreateRequest],
     session: WeaviateSessionDependency,
     principal: DataIngestUserDependency,
-    broker: BrokerDependency,
 ) -> list[FaceResponse]:
     try:
         faces = await create_face_batch(
@@ -328,18 +262,6 @@ async def create_face_batch_route(
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
-    broker.publish_batch_task(
-        batch=(
-            (topic, SseEventType.FACE_CREATED, face)
-            for face in faces
-            for topic in (
-                ("faces", face.detection_id),
-                ("entities", face.entity_id, "faces", face.detection_id),
-                ("principals", face.principal_id, "faces", face.detection_id),
-                ("sources", face.source_id, "faces", face.detection_id),
-            )
-        )
-    )
     return faces
 
 
@@ -361,7 +283,6 @@ async def patch_face_entity_route(
     payload: FaceEntityPatchRequest,
     session: WeaviateSessionDependency,
     principal: AnnotatorUserDependency,
-    broker: BrokerDependency,
 ) -> FaceResponse:
     face = await patch_face_entity(
         session,
@@ -371,12 +292,4 @@ async def patch_face_entity_route(
     )
     if face is None:
         raise_api_error(404, "not_found", "Face not found")
-    broker.publish_task(
-        ("faces", face.detection_id),
-        ("entities", face.entity_id, "faces", face.detection_id),
-        ("principals", face.principal_id, "faces", face.detection_id),
-        ("sources", face.source_id, "faces", face.detection_id),
-        event=SseEventType.FACE_UPDATED,
-        data=face,
-    )
     return face

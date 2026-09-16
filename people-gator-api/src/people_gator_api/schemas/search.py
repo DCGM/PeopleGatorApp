@@ -13,6 +13,7 @@ from people_gator_api.schemas.enums import (
     EntityType,
     FaceEmbeddingModel,
     ScoreAggregation,
+    SourceKind,
 )
 
 # ---------------------------------------------------------------------------
@@ -117,18 +118,57 @@ class FaceSearchResultListResponse(GenericListResponse[FaceSearchResult]):
     items: list[FaceSearchResult]
 
 
-class FaceSearchQuery(BaseModel):
-    """Query for faces similar to a set of reference faces."""
+# ---------------------------------------------------------------------------
+# Page and document search
+# ---------------------------------------------------------------------------
 
-    face_ids: list[uuid.UUID] = Field(
-        default_factory=list[uuid.UUID],
-        validation_alias=AliasChoices("face_ids", "face_id"),
-        description="Reference face detection IDs the results should be similar to.",
+
+class ArchiveHit(BaseModel):
+    """A page or document hit resolved back to its archive Source."""
+
+    source_id: uuid.UUID = Field(
+        ...,
+        description="Source record describing the page or document.",
     )
-    embedding_model: FaceEmbeddingModel = Field(
-        default=FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3,
-        validation_alias=AliasChoices("embedding_model", "model"),
-        description="Named face vector to search by.",
+    kind: SourceKind = Field(
+        ...,
+        description="Whether the hit is a page or a document.",
+    )
+    document_id: uuid.UUID | None = Field(
+        default=None,
+        description="Archive document identity of the hit, when known.",
+    )
+    page_id: uuid.UUID | None = Field(
+        default=None,
+        description="Archive page identity of the hit, when known.",
+    )
+    matching_score: float = Field(
+        ...,
+        description="Fused BM25 relevance score of the hit.",
+    )
+
+
+class ArchiveHitListResponse(GenericListResponse[ArchiveHit]):
+    """A paginated list of page and document hits."""
+
+    items: list[ArchiveHit]
+
+
+class SearchArchiveQuery(BaseModel):
+    """Single-input search across pages and documents.
+
+    The query input matches page mentions, document mentions, linked entity
+    names and aliases, or archive UUIDs directly.
+    """
+
+    q: str = Field(
+        ...,
+        min_length=1,
+        description="Free text name or alias to search for.",
+    )
+    source_id: uuid.UUID | None = Field(
+        default=None,
+        description="Only return hits inside this document or page Source.",
     )
     limit: int = Field(
         default=20,
@@ -137,20 +177,19 @@ class FaceSearchQuery(BaseModel):
     )
 
 
-class SearchEntitiesByFacesQuery(FaceSearchQuery):
-    """Face similarity query whose results are aggregated per entity."""
+class FaceSearchQuery(BaseModel):
+    """Query for faces similar to a set of reference faces."""
 
-    entity_types: list[EntityType] | EntityType | None = Field(
-        default=None,
-        validation_alias=AliasChoices("entity_types", "entity_type", "types"),
-        description="Optional entity type filter(s).",
+    q_face_id: list[uuid.UUID] = Field(
+        default_factory=list[uuid.UUID],
+        description="Reference face detection IDs the results should be similar to.",
     )
-    source_id: uuid.UUID | None = Field(
-        default=None,
-        description="Only return entities occurring in this document or page Source.",
+    embedding_model: FaceEmbeddingModel = Field(
+        default=FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3,
+        description="Named face vector to search by.",
     )
-
-    aggregation: ScoreAggregation = Field(
-        default=ScoreAggregation.max,
-        description="How per-face scores are aggregated into an entity score.",
+    limit: int = Field(
+        default=20,
+        ge=0,
+        description="The maximum number of results to return.",
     )

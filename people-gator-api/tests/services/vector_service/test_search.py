@@ -575,7 +575,7 @@ async def test_face_search_returns_empty_when_reference_vectors_missing(
 
     response = await search_service.search_faces(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        FaceSearchQuery(face_ids=[uuid.uuid4()]),
+        FaceSearchQuery(q_face_id=[uuid.uuid4()]),
     )
 
     assert response.items == []
@@ -624,7 +624,7 @@ async def test_face_search_excludes_reference_faces_and_paginates(
 
     response = await search_service.search_faces(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        FaceSearchQuery(face_ids=[reference_id], limit=9),
+        FaceSearchQuery(q_face_id=[reference_id], limit=9),
     )
 
     assert captured["excluded_face_ids"] == [reference_id]
