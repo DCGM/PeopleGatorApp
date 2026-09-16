@@ -1,6 +1,7 @@
 """Annotation endpoints for the current collection model."""
 
 import uuid
+from collections.abc import AsyncGenerator
 
 from fastapi import (
     APIRouter,
@@ -28,7 +29,9 @@ from people_gator_api.services.auth_service import (
 )
 from people_gator_api.services.crud_services.annotation_service import (
     create_document_mention,
+    create_document_mention_batch,
     create_face,
+    create_face_batch,
     create_page_mention,
     get_document_mention,
     get_face,
@@ -46,6 +49,11 @@ from people_gator_api.services.sse import BrokerDependency, SseEventType
 from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 
 router = APIRouter(tags=["annotations"])
+
+
+async def _iter_payloads[T](items: list[T]) -> AsyncGenerator[T, None]:
+    for item in items:
+        yield item
 
 
 @router.get("/page-mentions", response_model=PageMentionListResponse)
@@ -162,6 +170,55 @@ async def create_document_mention_route(
     return document_mention
 
 
+@router.post(
+    "/document-mentions:batch",
+    response_model=list[DocumentMentionResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_document_mention_batch_route(
+    payload: list[DocumentMentionCreateRequest],
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
+    broker: BrokerDependency,
+) -> list[DocumentMentionResponse]:
+    try:
+        document_mentions = await create_document_mention_batch(
+            session,
+            _iter_payloads(payload),
+            principal.principal_id,
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    broker.publish_batch_task(
+        batch=(
+            (topic, SseEventType.DOCUMENT_MENTION_CREATED, document_mention)
+            for document_mention in document_mentions
+            for topic in (
+                ("document-mentions", document_mention.document_mention_id),
+                (
+                    "entities",
+                    document_mention.entity_id,
+                    "document-mentions",
+                    document_mention.document_mention_id,
+                ),
+                (
+                    "sources",
+                    document_mention.source_id,
+                    "document-mentions",
+                    document_mention.document_mention_id,
+                ),
+                (
+                    "principals",
+                    document_mention.principal_id,
+                    "document-mentions",
+                    document_mention.document_mention_id,
+                ),
+            )
+        )
+    )
+    return document_mentions
+
+
 @router.get(
     "/document-mentions/{document_mention_id}",
     response_model=DocumentMentionResponse,
@@ -250,6 +307,40 @@ async def create_face_route(
         data=face,
     )
     return face
+
+
+@router.post(
+    "/faces:batch",
+    response_model=list[FaceResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_face_batch_route(
+    payload: list[FaceCreateRequest],
+    session: WeaviateSessionDependency,
+    principal: DataIngestUserDependency,
+    broker: BrokerDependency,
+) -> list[FaceResponse]:
+    try:
+        faces = await create_face_batch(
+            session,
+            _iter_payloads(payload),
+            principal.principal_id,
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    broker.publish_batch_task(
+        batch=(
+            (topic, SseEventType.FACE_CREATED, face)
+            for face in faces
+            for topic in (
+                ("faces", face.detection_id),
+                ("entities", face.entity_id, "faces", face.detection_id),
+                ("principals", face.principal_id, "faces", face.detection_id),
+                ("sources", face.source_id, "faces", face.detection_id),
+            )
+        )
+    )
+    return faces
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)

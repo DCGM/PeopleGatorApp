@@ -64,6 +64,21 @@ class _CollectionQueryObject(Protocol):
     uuid: uuid.UUID
 
 
+async def fetch_collection_object(
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    object_id: uuid.UUID,
+    *,
+    reference_names: Sequence[str] = (),
+) -> _CollectionQueryObject | None:
+    """Fetch one object with a consistent missing-object and reference contract."""
+    response = await client.collections.get(collection_name).query.fetch_object_by_id(
+        object_id,
+        return_references=empty_reference_queries(reference_names),
+    )
+    return cast(_CollectionQueryObject | None, response)
+
+
 def reference_id_filter(link_on: str, reference_id: uuid.UUID) -> FilterReturn:
     return Filter.by_ref(link_on=link_on).by_id().equal(reference_id)
 
@@ -147,7 +162,7 @@ def most_common_normalized(values: Sequence[str | None]) -> str | None:
 # -------------------------------------------------------
 
 
-def principal_response(
+def parse_principal(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -160,7 +175,7 @@ def principal_response(
     )
 
 
-def user_response(
+def parse_user(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -176,7 +191,7 @@ def user_response(
     )
 
 
-def model_agent_response(
+def parse_model_agent(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -191,7 +206,7 @@ def model_agent_response(
     )
 
 
-def source_response(
+def parse_source(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -243,7 +258,7 @@ def _as_uuid(value_: WeaviateField, property_name: str) -> uuid.UUID:
     raise TypeError(f"Property {property_name!r} is not a UUID.")
 
 
-def entity_response(
+def parse_entity(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -261,7 +276,7 @@ def entity_response(
     )
 
 
-def page_mention_response(
+def parse_page_mention(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -289,7 +304,7 @@ def page_mention_response(
     )
 
 
-def document_mention_response(
+def parse_document_mention(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
     references: CrossReferences,
     uuid: uuid.UUID,
@@ -305,7 +320,7 @@ def document_mention_response(
     )
 
 
-def face_response(
+def parse_face(
     properties: WeaviateProperties | Mapping[str, WeaviateField],
     references: CrossReferences,
     uuid: uuid.UUID,

@@ -68,8 +68,8 @@ class FakeData:
     ) -> None:
         self.owner.objects[str(uuid)] = {"uuid": uuid, "properties": properties}
 
-    async def delete_by_id(self, object_id: uuid.UUID) -> None:
-        self.owner.objects.pop(str(object_id), None)
+    async def delete_by_id(self, object_id: uuid.UUID) -> bool:
+        return self.owner.objects.pop(str(object_id), None) is not None
 
 
 class FakeQuery:

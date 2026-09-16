@@ -1,9 +1,10 @@
 import logging
 import uuid
-from dataclasses import dataclass
 
 from weaviate import WeaviateAsyncClient
 from weaviate.collections.classes.filters import FilterReturn
+from weaviate.collections.classes.internal import CrossReferences
+from weaviate.collections.classes.types import WeaviateField
 from weaviate.classes.query import Filter
 
 from people_gator_api.schemas.enums import PrincipalType
@@ -24,10 +25,11 @@ from people_gator_api.services.weaviate_service.db_schema import PRINCIPAL_COLLE
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
+    fetch_collection_object,
     fetch_collection_page_with_total_count,
-    model_agent_response,
-    principal_response,
-    user_response,
+    parse_model_agent,
+    parse_principal,
+    parse_user,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -38,17 +40,6 @@ logger = logging.getLogger(__name__)
 
 class PrincipalAlreadyExistsError(ValueError):
     """Raised when a principal with the requested unique identity exists."""
-
-
-@dataclass(slots=True, frozen=True)
-class StoredUser:
-    principal_id: uuid.UUID
-    principal_type: PrincipalType
-    display_name: str
-    is_active: bool
-    external_subject: str
-    external_issuer: str
-    email: str | None
 
 
 @trace()
@@ -88,7 +79,7 @@ async def list_principals(
     )
     items = sorted(
         [
-            principal_response(item.properties, item.references, item.uuid)
+            parse_principal(item.properties, item.references, item.uuid)
             for item in objects
         ],
         key=lambda item: item.principal_id,
@@ -134,7 +125,7 @@ async def list_model_agents(
     )
     items = sorted(
         [
-            model_agent_response(item.properties, item.references, item.uuid)
+            parse_model_agent(item.properties, item.references, item.uuid)
             for item in objects
         ],
         key=lambda item: item.principal_id,
@@ -180,7 +171,7 @@ async def list_users(
     )
     items = sorted(
         [
-            user_response(item.properties, item.references, item.uuid)
+            parse_user(item.properties, item.references, item.uuid)
             for item in objects
         ],
         key=lambda item: item.principal_id,
@@ -201,17 +192,14 @@ async def get_principal(
 ) -> PrincipalResponse | None:
     del actor_principal_id
     logger.debug("get_principal called", extra={"principal_id": target_principal_id})
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        target_principal_id,
-        return_references=empty_reference_queries([]),
+    response = await fetch_collection_object(
+        client, PRINCIPAL_COLLECTION, target_principal_id
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info("principal not found", extra={"principal_id": target_principal_id})
         return None
     logger.debug("principal found", extra={"principal_id": target_principal_id})
-    return principal_response(response.properties, response.references, response.uuid)
+    return parse_principal(response.properties, response.references, response.uuid)
 
 
 @trace()
@@ -222,13 +210,10 @@ async def get_user(
 ) -> UserResponse | None:
     del actor_principal_id
     logger.debug("get_user called", extra={"principal_id": target_principal_id})
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        target_principal_id,
-        return_references=empty_reference_queries([]),
+    response = await fetch_collection_object(
+        client, PRINCIPAL_COLLECTION, target_principal_id
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info("user not found", extra={"principal_id": target_principal_id})
         return None
     if response.properties.get("principal_type") != PrincipalType.user.value:
@@ -238,7 +223,7 @@ async def get_user(
         )
         return None
     logger.debug("user found", extra={"principal_id": target_principal_id})
-    return user_response(response.properties, response.references, response.uuid)
+    return parse_user(response.properties, response.references, response.uuid)
 
 
 @trace()
@@ -249,13 +234,10 @@ async def get_model_agent(
 ) -> ModelAgentResponse | None:
     del actor_principal_id
     logger.debug("get_model_agent called", extra={"principal_id": target_principal_id})
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        target_principal_id,
-        return_references=empty_reference_queries([]),
+    response = await fetch_collection_object(
+        client, PRINCIPAL_COLLECTION, target_principal_id
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "model agent not found", extra={"principal_id": target_principal_id}
         )
@@ -267,7 +249,7 @@ async def get_model_agent(
         )
         return None
     logger.debug("model agent found", extra={"principal_id": target_principal_id})
-    return model_agent_response(response.properties, response.references, response.uuid)
+    return parse_model_agent(response.properties, response.references, response.uuid)
 
 
 async def _create_principal(
@@ -336,47 +318,34 @@ async def _create_principal(
 
 async def _update_principal(
     client: WeaviateAsyncClient,
-    actor_principal_id: uuid.UUID,
     target_principal_id: uuid.UUID,
     payload: PrincipalPatchRequest,
     *,
     additional_properties: dict[str, str | bool | None] | None = None,
-) -> PrincipalResponse | None:
+) -> tuple[dict[str, WeaviateField], CrossReferences] | None:
     logger.info("update_principal called", extra={"principal_id": target_principal_id})
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        target_principal_id,
-        return_references=empty_reference_queries([]),
+    response = await fetch_collection_object(
+        client, PRINCIPAL_COLLECTION, target_principal_id
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "update_principal skipped missing principal",
             extra={"principal_id": target_principal_id},
         )
         return None
-    if response.uuid != target_principal_id:
-        logger.error(
-            "refusing principal update due to UUID mismatch",
-            extra={
-                "expected_principal_id": target_principal_id,
-                "loaded_principal_id": response.uuid,
-            },
-        )
-        raise RuntimeError("Principal ID is immutable and cannot be changed")
-    properties = dict(response.properties)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        properties[key] = value
+    updates = payload.model_dump(exclude_unset=True)
     if additional_properties is not None:
-        properties.update(additional_properties)
-    await client.collections.get(PRINCIPAL_COLLECTION).data.replace(
+        updates.update(additional_properties)
+    await client.collections.get(PRINCIPAL_COLLECTION).data.update(
         uuid=target_principal_id,
-        properties=properties,
+        properties=updates,
     )
+    properties = dict(response.properties)
+    properties.update(updates)
     logger.debug(
         "update_principal persisted", extra={"principal_id": target_principal_id}
     )
-    return await get_principal(client, actor_principal_id, target_principal_id)
+    return properties, response.references
 
 
 @trace()
@@ -408,30 +377,36 @@ async def get_or_create_user(
 
     if existing.objects:
         user = existing.objects[0]
-    else:
-        principal_id = new_uuid6()
-        created_user_id = await user_collection.data.insert(
-            uuid=principal_id,
-            properties={
-                "principal_type": PrincipalType.user.value,
-                "display_name": external_subject,
-                "is_active": True,
-                "external_subject": external_subject,
-                "external_issuer": external_issuer,
-                "email": None,
-                "annotation_type": None,
-                "role": None,
-                "model_slug": None,
-                "model_version": None,
-                "registry_source": None,
-                "registry_uri": None,
-            },
-        )
-        user = await user_collection.query.fetch_object_by_id(
-            created_user_id,
-            return_references=empty_reference_queries([]),
-        )
-    return user_response(user.properties, user.references, user.uuid)
+        return parse_user(user.properties, user.references, user.uuid)
+
+    principal_id = new_uuid6()
+    properties = {
+        "principal_type": PrincipalType.user.value,
+        "display_name": external_subject,
+        "is_active": True,
+        "external_subject": external_subject,
+        "external_issuer": external_issuer,
+        "email": None,
+        "annotation_type": None,
+        "role": None,
+        "model_slug": None,
+        "model_version": None,
+        "registry_source": None,
+        "registry_uri": None,
+    }
+    await user_collection.data.insert(
+        uuid=principal_id,
+        properties=properties,
+    )
+    return UserResponse(
+        principal_id=principal_id,
+        principal_type=PrincipalType.user,
+        display_name=external_subject,
+        is_active=True,
+        external_subject=external_subject,
+        external_issuer=external_issuer,
+        email=None,
+    )
 
 
 @trace()
@@ -440,6 +415,7 @@ async def create_model_agent(
     payload: ModelAgentCreateRequest,
     actor_principal_id: uuid.UUID,
 ) -> ModelAgentResponse:
+    del actor_principal_id
     logger.info(
         "create_model_agent called",
         extra={
@@ -460,18 +436,18 @@ async def create_model_agent(
             Filter.by_property("model_version").equal(payload.model_version),
         ],
     )
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        created_principal_id,
-        return_references=empty_reference_queries([]),
-    )
-    assert response is not None
     logger.info(
         "create_model_agent completed",
         extra={"principal_id": created_principal_id},
     )
-    return model_agent_response(response.properties, response.references, response.uuid)
+    return ModelAgentResponse(
+        principal_id=created_principal_id,
+        principal_type=PrincipalType.model_agent,
+        display_name=payload.display_name,
+        is_active=payload.is_active,
+        model_slug=payload.model_slug,
+        model_version=payload.model_version,
+    )
 
 
 @trace()
@@ -481,23 +457,16 @@ async def update_user(
     target_principal_id: uuid.UUID,
     payload: UserPatchRequest,
 ) -> UserResponse | None:
+    del actor_principal_id
     updated = await _update_principal(
         client,
-        actor_principal_id,
         target_principal_id,
         payload,
     )
     if updated is None:
         return None
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        target_principal_id,
-        return_references=empty_reference_queries([]),
-    )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        return None
-    return user_response(response.properties, response.references, response.uuid)
+    properties, references = updated
+    return parse_user(properties, references, target_principal_id)
 
 
 @trace()
@@ -507,23 +476,16 @@ async def update_model_agent(
     target_principal_id: uuid.UUID,
     payload: ModelAgentPatchRequest,
 ) -> ModelAgentResponse | None:
+    del actor_principal_id
     updated = await _update_principal(
         client,
-        actor_principal_id,
         target_principal_id,
         payload,
     )
     if updated is None:
         return None
-    response = await client.collections.get(
-        PRINCIPAL_COLLECTION
-    ).query.fetch_object_by_id(
-        target_principal_id,
-        return_references=empty_reference_queries([]),
-    )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        return None
-    return model_agent_response(response.properties, response.references, response.uuid)
+    properties, references = updated
+    return parse_model_agent(properties, references, target_principal_id)
 
 
 @trace()
@@ -537,20 +499,15 @@ async def delete_model_agent(
     )
     model_agent = await get_model_agent(client, actor_principal_id, target_principal_id)
     if model_agent is None:
-        logger.info(
-            "delete_model_agent skipped missing model agent",
-            extra={"principal_id": target_principal_id},
-        )
         return False
-
-    await client.collections.get(PRINCIPAL_COLLECTION).data.delete_by_id(
+    deleted = await client.collections.get(PRINCIPAL_COLLECTION).data.delete_by_id(
         target_principal_id
     )
     logger.info(
         "delete_model_agent completed",
         extra={"principal_id": target_principal_id},
     )
-    return True
+    return deleted
 
 
 @trace()
@@ -561,9 +518,13 @@ async def update_principal(
     display_name: str | None,
     is_active: bool | None,
 ) -> PrincipalResponse | None:
-    return await _update_principal(
+    del actor_principal_id
+    updated = await _update_principal(
         client,
-        actor_principal_id,
         target_principal_id,
         PrincipalPatchRequest(display_name=display_name, is_active=is_active),
     )
+    if updated is None:
+        return None
+    properties, references = updated
+    return parse_principal(properties, references, target_principal_id)

@@ -2,7 +2,6 @@
 
 import logging
 import uuid
-from typing import TypeGuard
 from collections.abc import AsyncGenerator
 
 from weaviate import WeaviateAsyncClient
@@ -26,7 +25,8 @@ from people_gator_api.services.weaviate_service.db_schema import (
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
-    entity_response,
+    parse_entity,
+    fetch_collection_object,
     fetch_collection_page_with_total_count,
     reference_id_filter,
 )
@@ -45,12 +45,6 @@ NON_FILTERABLE_ENTITY_PROPERTIES: frozenset[str] = frozenset(
 FILTERABLE_ENTITY_PROPERTIES: frozenset[str] = frozenset(
     {"entity_type", "wikidata_id", "nlcr_authority_id"}
 )
-
-
-def _is_flat_float_vector(
-    value: list[float] | list[list[float]],
-) -> TypeGuard[list[float]]:
-    return all(isinstance(item, (int, float)) for item in value)
 
 
 def _build_entity_filters(
@@ -130,7 +124,7 @@ async def list_entities(
     )
     items = sorted(
         [
-            entity_response(item.properties, item.references, item.uuid)
+            parse_entity(item.properties, item.references, item.uuid)
             for item in objects
         ],
         key=lambda item: item.entity_id,
@@ -150,15 +144,17 @@ async def get_entity(
     entity_id: uuid.UUID,
 ) -> EntityResponse | None:
     logger.debug("get_entity called", extra={"entity_id": entity_id})
-    response = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        ENTITY_COLLECTION,
         entity_id,
-        return_references=empty_reference_queries(["principal"]),
+        reference_names=["principal"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info("entity not found", extra={"entity_id": entity_id})
         return None
     logger.debug("entity found", extra={"entity_id": entity_id})
-    return entity_response(response.properties, response.references, response.uuid)
+    return parse_entity(response.properties, response.references, response.uuid)
 
 
 @trace()
@@ -251,7 +247,7 @@ async def create_entity_batch(
         return_references=empty_reference_queries(["principal"]),
     )
     return [
-        entity_response(item.properties, item.references, item.uuid)
+        parse_entity(item.properties, item.references, item.uuid)
         for item in created_entities.objects
     ]
 
@@ -260,58 +256,36 @@ async def create_entity_batch(
 async def patch_entity(
     client: WeaviateAsyncClient,
     entity_id: uuid.UUID,
-    principal_id: uuid.UUID,
     payload: EntityPatchRequest,
 ) -> EntityResponse | None:
     logger.info("patch_entity called", extra={"entity_id": entity_id})
-    response = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        ENTITY_COLLECTION,
         entity_id,
-        include_vector=True,
-        return_references=empty_reference_queries(["principal"]),
+        reference_names=["principal"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "patch_entity skipped missing entity", extra={"entity_id": entity_id}
         )
         return None
 
-    properties = dict(response.properties)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        # Entities are stored with text-array aliases; normalize null to empty list.
-        if key == "aliases" and value is None:
-            properties[key] = []
-            continue
-        properties[key] = value
+    updates = payload.model_dump(exclude_unset=True)
+    # Entities are stored with text-array aliases; normalize null to an empty list.
+    if updates.get("aliases") is None and "aliases" in updates:
+        updates["aliases"] = []
 
-    vector_payload: dict[str, list[float]] | None = None
-    named_vectors: dict[str, list[float]] = {}
-    for vector_name, vector_value in response.vector.items():
-        if _is_flat_float_vector(vector_value):
-            named_vectors[vector_name] = [float(item) for item in vector_value]
-    if named_vectors:
-        vector_payload = named_vectors
-
-    await client.collections.get(ENTITY_COLLECTION).data.replace(
+    await client.collections.get(ENTITY_COLLECTION).data.update(
         uuid=entity_id,
-        properties=properties,
-        references={
-            "principal": principal_id,
-        },
-        vector=vector_payload,
+        properties=updates,
     )
 
-    updated = await client.collections.get(ENTITY_COLLECTION).query.fetch_object_by_id(
-        entity_id,
-        return_references=empty_reference_queries(["principal"]),
-    )
-    if updated is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.warning(
-            "patch_entity could not read updated entity", extra={"entity_id": entity_id}
-        )
-        return None
+    properties = dict(response.properties)
+    properties.update(updates)
 
     logger.info("patch_entity completed", extra={"entity_id": entity_id})
-    return entity_response(updated.properties, updated.references, updated.uuid)
+    return parse_entity(properties, response.references, response.uuid)
 
 
 @trace()
@@ -320,12 +294,6 @@ async def delete_entity(
     entity_id: uuid.UUID,
 ) -> bool:
     logger.info("delete_entity called", extra={"entity_id": entity_id})
-    entity = await get_entity(client, entity_id)
-    if entity is None:
-        logger.info(
-            "delete_entity skipped missing entity", extra={"entity_id": entity_id}
-        )
-        return False
     entities = client.collections.get(ENTITY_COLLECTION)
     result = await entities.data.delete_by_id(entity_id)
     logger.info(

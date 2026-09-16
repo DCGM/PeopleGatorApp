@@ -27,7 +27,7 @@ def _reference(object_id: uuid.UUID) -> SimpleNamespace:
     return SimpleNamespace(objects=[SimpleNamespace(uuid=object_id)])
 
 
-def test_page_response_exposes_typed_archive_identity() -> None:
+def test_parse_page_source_exposes_typed_archive_identity() -> None:
     page_source_id = uuid.uuid4()
     document_id = uuid.uuid4()
     page_id = uuid.uuid4()
@@ -43,7 +43,7 @@ def test_page_response_exposes_typed_archive_identity() -> None:
         ),
     )
 
-    page = media_service.page_response(source)
+    page = media_service.parse_page_source(source)
 
     assert page.page_source_id == page_source_id
     assert page.library == "mzk"
@@ -51,9 +51,9 @@ def test_page_response_exposes_typed_archive_identity() -> None:
     assert page.page_id == page_id
 
 
-def test_image_response_accepts_arbitrary_image_source() -> None:
+def test_parse_image_source_accepts_arbitrary_image_source() -> None:
     image_id = uuid.uuid4()
-    image = media_service.image_response(
+    image = media_service.parse_image_source(
         SourceResponse(
             source_id=image_id,
             source_type=SourceKind.image,
@@ -66,6 +66,27 @@ def test_image_response_accepts_arbitrary_image_source() -> None:
     assert str(image.url) == "https://cdn.example.test/path/portrait.jpeg?size=original"
 
 
+def test_parse_document_source_exposes_typed_archive_identity() -> None:
+    source_id = uuid.uuid4()
+    document_id = uuid.uuid4()
+    source = SourceResponse(
+        source_id=source_id,
+        source_type=SourceKind.document,
+        uri="https://library.example/document",
+        metadata=DocumentSourceMetadata(
+            library="mzk",
+            document=document_id,
+            kramerius_url=AnyUrl("https://library.example/document"),
+        ),
+    )
+
+    document = media_service.parse_document_source(source)
+
+    assert document.document_source_id == source_id
+    assert document.library == "mzk"
+    assert document.document_id == document_id
+
+
 @pytest.mark.asyncio
 async def test_create_document_derives_canonical_uri(
     monkeypatch: pytest.MonkeyPatch,
@@ -73,13 +94,9 @@ async def test_create_document_derives_canonical_uri(
     document_id = uuid.uuid4()
     expected_uri = f"https://www.digitalniknihovna.cz/mzk/uuid/uuid:{document_id}"
 
-    async def fake_get_source_by_document_identity(*_args: object) -> None:
-        return None
-
     async def fake_create_source(
         _client: object,
         payload: SourceCreateRequest,
-        _principal_id: uuid.UUID,
     ) -> tuple[SourceResponse, bool]:
         assert payload.uri is None
         metadata = payload.metadata
@@ -96,17 +113,11 @@ async def test_create_document_derives_canonical_uri(
             True,
         )
 
-    monkeypatch.setattr(
-        media_service,
-        "get_source_by_document_identity",
-        fake_get_source_by_document_identity,
-    )
     monkeypatch.setattr(media_service, "create_source", fake_create_source)
 
     document, created = await media_service.create_document(
         object(),  # pyright: ignore[reportArgumentType] - database is mocked above.
         DocumentCreateRequest(library="mzk", document_id=document_id),
-        uuid.uuid4(),
     )
 
     assert created is True
@@ -132,7 +143,6 @@ async def test_get_document_by_path_returns_typed_document(
 
     async def fake_get_source_by_document_identity(
         _client: object,
-        _principal_id: uuid.UUID,
         library: str,
         requested_document_id: uuid.UUID,
     ) -> SourceResponse:
@@ -148,7 +158,6 @@ async def test_get_document_by_path_returns_typed_document(
 
     document = await media_service.get_document_by_path(
         object(),  # pyright: ignore[reportArgumentType] - database is mocked above.
-        uuid.uuid4(),
         "mzk",
         document_id,
     )
@@ -177,18 +186,13 @@ async def test_create_page_reuses_archive_identity_when_url_changes(
         ),
     )
 
-    async def fake_get_source_by_page_identity(*_args: object) -> SourceResponse:
-        return existing
+    async def fake_create_source(
+        _client: object,
+        _payload: SourceCreateRequest,
+    ) -> tuple[SourceResponse, bool]:
+        return existing, False
 
-    async def fail_create_source(*_args: object) -> tuple[SourceResponse, bool]:
-        raise AssertionError("duplicate page must not create a Source")
-
-    monkeypatch.setattr(
-        media_service,
-        "get_source_by_page_identity",
-        fake_get_source_by_page_identity,
-    )
-    monkeypatch.setattr(media_service, "create_source", fail_create_source)
+    monkeypatch.setattr(media_service, "create_source", fake_create_source)
 
     page, created = await media_service.create_page(
         object(),  # pyright: ignore[reportArgumentType] - database is mocked above.
@@ -197,7 +201,6 @@ async def test_create_page_reuses_archive_identity_when_url_changes(
             document_id=document_id,
             page_id=page_id,
         ),
-        uuid.uuid4(),
     )
 
     assert created is False
@@ -227,7 +230,6 @@ async def test_get_page_by_path_supports_both_canonical_forms(
 
     async def fake_get_source_by_page_path(
         _client: object,
-        _principal_id: uuid.UUID,
         library: str,
         requested_page_id: uuid.UUID,
         *,
@@ -246,7 +248,6 @@ async def test_get_page_by_path_supports_both_canonical_forms(
 
     page = await media_service.get_page_by_path(
         object(),  # pyright: ignore[reportArgumentType] - database is mocked above.
-        uuid.uuid4(),
         "mzk",
         page_id,
         document_id=document_id if include_document else None,

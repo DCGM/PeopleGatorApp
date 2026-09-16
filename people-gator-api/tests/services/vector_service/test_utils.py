@@ -24,8 +24,8 @@ assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
-face_response = module.face_response
-source_response = module.source_response
+parse_face = module.parse_face
+parse_source = module.parse_source
 
 
 @dataclass
@@ -46,7 +46,7 @@ def test_face_response_raises_clear_error_for_empty_reference_links() -> None:
     }
 
     with pytest.raises(KeyError, match="has no linked objects"):
-        face_response(
+        parse_face(
             {
                 "bounding_box": {"x": 1, "y": 2, "width": 3, "height": 4},
                 "keypoints": [],
@@ -71,7 +71,7 @@ def test_source_response_reconstructs_page_metadata_from_flat_properties() -> No
     page_id = uuid.uuid4()
     uri = f"https://www.digitalniknihovna.cz/mzk/view/uuid:{document_id}?page=uuid:{page_id}"
 
-    response = source_response(
+    response = parse_source(
         {
             "source_type": "page",
             "uri": uri,

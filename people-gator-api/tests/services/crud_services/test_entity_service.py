@@ -121,7 +121,6 @@ async def test_patch_entity_returns_none_when_entity_does_not_exist() -> None:
     patched = await entity_service.patch_entity(
         client=client,  # pyright: ignore[reportArgumentType] - tests use a lightweight client double.
         entity_id=entity_id,
-        principal_id=uuid.uuid4(),
         payload=EntityPatchRequest(name="Updated name"),
     )
 
@@ -129,7 +128,7 @@ async def test_patch_entity_returns_none_when_entity_does_not_exist() -> None:
 
 
 @pytest.mark.asyncio
-async def test_patch_entity_updates_allowed_fields_and_preserves_vectors() -> None:
+async def test_patch_entity_updates_only_changed_properties() -> None:
     entity_id = uuid.uuid4()
     principal_id = uuid.uuid4()
     captured: dict[str, object] = {}
@@ -146,48 +145,27 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors() -> No
     references = {
         "principal": SimpleNamespace(objects=[SimpleNamespace(uuid=principal_id)])
     }
-    vectors = {
-        "name": [0.1, 0.2],
-        "fulltext": [0.3, 0.4],
-    }
-
-    fetch_calls = 0
-
     class _Query:
         async def fetch_object_by_id(
             self,
             _entity_id: uuid.UUID,
             **_kwargs: object,
         ) -> SimpleNamespace:
-            nonlocal fetch_calls
-            fetch_calls += 1
-            if fetch_calls == 1:
-                return SimpleNamespace(
-                    properties=dict(stored_properties),
-                    references=references,
-                    uuid=entity_id,
-                    vector=vectors,
-                )
             return SimpleNamespace(
                 properties=dict(stored_properties),
                 references=references,
                 uuid=entity_id,
-                vector=vectors,
             )
 
     class _Data:
-        async def replace(
+        async def update(
             self,
             *,
             uuid: uuid.UUID,
             properties: dict[str, object],
-            references: dict[str, uuid.UUID],
-            vector: dict[str, list[float]] | None,
         ) -> None:
             del uuid
             captured["properties"] = properties
-            captured["references"] = references
-            captured["vector"] = vector
             stored_properties.update(properties)
 
     collection = SimpleNamespace(query=_Query(), data=_Data())
@@ -200,7 +178,6 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors() -> No
     patched = await entity_service.patch_entity(
         client=client,  # pyright: ignore[reportArgumentType] - tests use a lightweight client double.
         entity_id=entity_id,
-        principal_id=principal_id,
         payload=EntityPatchRequest(
             name="New name",
             aliases=["Alias 1", "Alias 2"],
@@ -219,18 +196,12 @@ async def test_patch_entity_updates_allowed_fields_and_preserves_vectors() -> No
     assert patched.wikidata_id == "Q2"
     assert patched.nlcr_authority_id == "A2"
     assert captured["properties"] == {
-        "entity_type": "person",
         "name": "New name",
         "description": "New description",
         "short_description": "New short",
         "aliases": ["Alias 1", "Alias 2"],
         "wikidata_id": "Q2",
         "nlcr_authority_id": "A2",
-    }
-    assert captured["references"] == {"principal": principal_id}
-    assert captured["vector"] == {
-        "name": [0.1, 0.2],
-        "fulltext": [0.3, 0.4],
     }
 
 

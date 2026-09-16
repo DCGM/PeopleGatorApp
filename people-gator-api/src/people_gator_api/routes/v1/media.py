@@ -84,11 +84,8 @@ async def create_document_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> DocumentResponse:
-    document, created = await create_document(
-        session,
-        payload,
-        principal.principal_id,
-    )
+    del principal
+    document, created = await create_document(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Document already registered")
     broker.publish_task(
@@ -231,7 +228,8 @@ async def create_page_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> PageResponse:
-    page, created = await create_page(session, payload, principal.principal_id)
+    del principal
+    page, created = await create_page(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Page already registered")
     broker.publish_task(
@@ -378,7 +376,8 @@ async def create_image_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> ImageResponse:
-    image, created = await create_image(session, payload, principal.principal_id)
+    del principal
+    image, created = await create_image(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Image already registered")
     broker.publish_task(

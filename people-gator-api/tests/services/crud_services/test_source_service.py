@@ -77,7 +77,6 @@ async def test_resolve_source_filter_accepts_both_page_paths(
 
     async def fake_get_source_by_page_path(
         _client: object,
-        _principal_id: uuid.UUID,
         library: str,
         requested_page_id: uuid.UUID,
         *,
@@ -100,7 +99,6 @@ async def test_resolve_source_filter_accepts_both_page_paths(
 
     resolved = await source_service.resolve_source_filter(
         object(),  # pyright: ignore[reportArgumentType] - database lookup is mocked.
-        uuid.uuid4(),
         source_id=None,
         page=canonical_path,
         document=None,
@@ -119,7 +117,6 @@ async def test_resolve_source_filter_accepts_document_path(
 
     async def fake_get_source_by_document_identity(
         _client: object,
-        _principal_id: uuid.UUID,
         library: str,
         requested_document_id: uuid.UUID,
     ) -> SourceResponse:
@@ -135,7 +132,6 @@ async def test_resolve_source_filter_accepts_document_path(
 
     resolved = await source_service.resolve_source_filter(
         object(),  # pyright: ignore[reportArgumentType] - database lookup is mocked.
-        uuid.uuid4(),
         source_id=None,
         page=None,
         document=f"mzk/{document_id}",
@@ -152,25 +148,23 @@ async def test_resolve_source_filter_accepts_image_url(
     image_source = _source(SourceKind.image)
     image_url = "https://images.example.test/portrait.jpg?size=large"
 
-    async def fake_get_source_by_types_uri(
+    async def fake_get_source_by_type_uri(
         _client: object,
-        _principal_id: uuid.UUID,
-        source_types: tuple[SourceKind, ...],
+        source_type: SourceKind,
         uri: str,
     ) -> SourceResponse:
-        assert source_types == (SourceKind.image,)
+        assert source_type == SourceKind.image
         assert uri == image_url
         return image_source
 
     monkeypatch.setattr(
         source_service,
-        "get_source_by_types_uri",
-        fake_get_source_by_types_uri,
+        "get_source_by_type_uri",
+        fake_get_source_by_type_uri,
     )
 
     resolved = await source_service.resolve_source_filter(
         object(),  # pyright: ignore[reportArgumentType] - database lookup is mocked.
-        uuid.uuid4(),
         source_id=None,
         page=None,
         document=None,
@@ -185,7 +179,6 @@ async def test_resolve_source_filter_rejects_conflicting_selectors() -> None:
     with pytest.raises(source_service.SourceResolutionError) as exc_info:
         await source_service.resolve_source_filter(
             object(),  # pyright: ignore[reportArgumentType] - rejected before database access.
-            uuid.uuid4(),
             source_id=uuid.uuid4(),
             page=f"mzk/{uuid.uuid4()}",
             document=None,
@@ -198,22 +191,17 @@ async def test_resolve_source_filter_rejects_conflicting_selectors() -> None:
 
 @pytest.mark.asyncio
 async def test_delete_source_returns_false_for_unknown_source() -> None:
-    class _Query:
-        async def fetch_objects(self, **_kwargs: object) -> SimpleNamespace:
-            return SimpleNamespace(objects=[])
-
-        async def fetch_object_by_id(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-    class _Collection:
-        query = _Query()
-        data = SimpleNamespace(delete_by_id=lambda _object_id: None)
+    class _Data:
+        async def delete_by_id(self, _object_id: uuid.UUID) -> bool:
+            return False
 
     client = SimpleNamespace(
-        collections=SimpleNamespace(get=lambda _name: _Collection())
+        collections=SimpleNamespace(
+            get=lambda _name: SimpleNamespace(data=_Data())
+        )
     )
 
-    deleted = await source_service.delete_source(client, uuid.uuid4(), uuid.uuid4())
+    deleted = await source_service.delete_source(client, uuid.uuid4())
 
     assert deleted is False
 
@@ -223,16 +211,11 @@ async def test_delete_source_removes_existing_source() -> None:
     source_id = uuid.uuid4()
     deleted_ids: list[uuid.UUID] = []
 
-    class _Query:
-        async def fetch_objects(self, **_kwargs: object) -> SimpleNamespace:
-            return SimpleNamespace(objects=[])
-
     class _Collection:
-        query = _Query()
-
         class _Data:
-            async def delete_by_id(self, object_id: uuid.UUID) -> None:
+            async def delete_by_id(self, object_id: uuid.UUID) -> bool:
                 deleted_ids.append(object_id)
+                return True
 
         data = _Data()
 
@@ -242,21 +225,7 @@ async def test_delete_source_removes_existing_source() -> None:
 
     client = SimpleNamespace(collections=_Collections())
 
-    async def fake_get_source(
-        _client: object,
-        _principal_id: uuid.UUID,
-        _source_id: uuid.UUID,
-    ) -> SourceResponse:
-        return SourceResponse(
-            source_id=source_id,
-            source_type=SourceKind.document,
-            uri="https://example.test/source",
-            metadata=None,
-        )
-
-    source_service.get_source = fake_get_source  # type: ignore[assignment]
-
-    deleted = await source_service.delete_source(client, uuid.uuid4(), source_id)
+    deleted = await source_service.delete_source(client, source_id)
 
     assert deleted is True
     assert deleted_ids == [source_id]
@@ -269,14 +238,16 @@ async def test_resolve_source_reference_creates_and_links_inline_page(
     inserted: dict[str, object] = {}
     document_id = uuid.uuid4()
     page_id = uuid.uuid4()
+    lookup_count = 0
 
     async def fake_get_source_by_page_identity(
         _client: object,
-        _principal_id: uuid.UUID,
         library: str,
         requested_document_id: uuid.UUID,
         requested_page_id: uuid.UUID,
     ) -> None:
+        nonlocal lookup_count
+        lookup_count += 1
         assert library == "mzk"
         assert requested_document_id == document_id
         assert requested_page_id == page_id
@@ -311,13 +282,13 @@ async def test_resolve_source_reference_creates_and_links_inline_page(
 
     resolved = await source_service.resolve_source_reference(
         client,  # pyright: ignore[reportArgumentType] - lightweight client double.
-        uuid.uuid4(),
         source_id=None,
         source=descriptor,
     )
 
     assert resolved.source_id == inserted["uuid"]
     assert resolved.source_type == SourceKind.page
+    assert lookup_count == 1
     assert inserted["properties"] == {
         "source_type": "page",
         "uri": (
@@ -361,7 +332,6 @@ async def test_resolve_source_reference_creates_inline_document(
 
     resolved = await source_service.resolve_source_reference(
         client,  # pyright: ignore[reportArgumentType] - lightweight client double.
-        uuid.uuid4(),
         source_id=None,
         source=SourceDescriptorRequest(
             document=DocumentCreateRequest(
@@ -397,7 +367,6 @@ async def test_resolve_source_reference_reuses_inline_image_source(
 
     async def fake_get_source_by_type_uri(
         _client: object,
-        _principal_id: uuid.UUID,
         source_type: SourceKind,
         uri: str,
     ) -> SourceResponse:
@@ -411,7 +380,6 @@ async def test_resolve_source_reference_reuses_inline_image_source(
 
     resolved = await source_service.resolve_source_reference(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType] - no database write expected.
-        uuid.uuid4(),
         source_id=None,
         source=SourceDescriptorRequest(
             image=ImageCreateRequest(url=AnyUrl(existing.uri))

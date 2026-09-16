@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from typing import TypeGuard
+from collections.abc import AsyncGenerator
 
 from weaviate import WeaviateAsyncClient
 from weaviate.classes.data import DataObject
@@ -19,6 +19,7 @@ from people_gator_api.schemas.entities import (
     FaceListResponse,
     FaceResponse,
     PageMentionCreateRequest,
+    PageMentionInlineCreateRequest,
     PageMentionListResponse,
     PageMentionResponse,
 )
@@ -33,12 +34,12 @@ from people_gator_api.services.crud_services.source_service import (
 )
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
-    document_mention_response,
+    parse_document_mention,
     empty_reference_queries,
-    face_response,
+    parse_face,
+    fetch_collection_object,
     fetch_collection_page_with_total_count,
-    page_mention_response,
-    require_reference_uuid,
+    parse_page_mention,
     reference_id_filter,
     single_named_vector_payload,
 )
@@ -49,10 +50,66 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 logger = logging.getLogger(__name__)
 
 
-def _is_flat_float_vector(
-    value: list[float] | list[list[float]],
-) -> TypeGuard[list[float]]:
-    return all(isinstance(item, (int, float)) for item in value)
+def _document_mention_properties(
+    payload: DocumentMentionCreateRequest,
+) -> WeaviateProperties:
+    return {
+        "name": payload.name,
+        "information": payload.information,
+        "aliases": payload.aliases,
+    }
+
+
+def _document_mention_result(
+    payload: DocumentMentionCreateRequest,
+    *,
+    document_mention_id: uuid.UUID,
+    source_id: uuid.UUID,
+    principal_id: uuid.UUID,
+) -> DocumentMentionResponse:
+    return DocumentMentionResponse(
+        document_mention_id=document_mention_id,
+        name=payload.name,
+        information=payload.information,
+        aliases=payload.aliases,
+        principal_id=principal_id,
+        source_id=source_id,
+        entity_id=payload.entity_id,
+    )
+
+
+def _face_properties(payload: FaceCreateRequest) -> WeaviateProperties:
+    return {
+        "bounding_box": {
+            "x": payload.bounding_box.x,
+            "y": payload.bounding_box.y,
+            "width": payload.bounding_box.width,
+            "height": payload.bounding_box.height,
+        },
+        "keypoints": [
+            {"type": item.type, "x": item.x, "y": item.y}
+            for item in payload.keypoints
+        ],
+        "confidence": payload.confidence,
+    }
+
+
+def _face_result(
+    payload: FaceCreateRequest,
+    *,
+    detection_id: uuid.UUID,
+    source_id: uuid.UUID,
+    principal_id: uuid.UUID,
+) -> FaceResponse:
+    return FaceResponse(
+        detection_id=detection_id,
+        source_id=source_id,
+        bounding_box=payload.bounding_box,
+        keypoints=payload.keypoints,
+        principal_id=principal_id,
+        entity_id=payload.entity_id,
+        confidence=payload.confidence,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -181,21 +238,19 @@ async def get_page_mention(
 ) -> PageMentionResponse | None:
     del principal_id
     logger.debug("get_page_mention called", extra={"page_mention_id": page_mention_id})
-    response = await client.collections.get(
-        PAGE_MENTION_COLLECTION
-    ).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        PAGE_MENTION_COLLECTION,
         page_mention_id,
-        return_references=empty_reference_queries(
-            ["principal", "document_mention", "source"]
-        ),
+        reference_names=["principal", "document_mention", "source"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "page_mention not found", extra={"page_mention_id": page_mention_id}
         )
         return None
     logger.debug("page_mention found", extra={"page_mention_id": page_mention_id})
-    return page_mention_response(
+    return parse_page_mention(
         response.properties,
         response.references,
         response.uuid,
@@ -253,7 +308,7 @@ async def list_page_mentions(
     )
     items = sorted(
         [
-            page_mention_response(
+            parse_page_mention(
                 item.properties,
                 item.references,
                 item.uuid,
@@ -293,25 +348,18 @@ async def create_document_mention(
     document_mention_id = new_uuid6()
     await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.insert(
         uuid=document_mention_id,
-        properties={
-            "name": payload.name,
-            "information": payload.information,
-            "aliases": payload.aliases,
-        },
+        properties=_document_mention_properties(payload),
         references={
             "entity": payload.entity_id,
             "source": source.source_id,
             "principal": principal_id,
         },
     )
-    dm_response = DocumentMentionResponse(
+    dm_response = _document_mention_result(
+        payload,
         document_mention_id=document_mention_id,
-        name=payload.name,
-        information=payload.information,
-        aliases=payload.aliases,
-        principal_id=principal_id,
         source_id=source.source_id,
-        entity_id=payload.entity_id,
+        principal_id=principal_id,
     )
     if payload.page_mentions:
         pm_payloads: list[PageMentionCreateRequest] = []
@@ -336,6 +384,81 @@ async def create_document_mention(
 
 
 @trace()
+async def create_document_mention_batch(
+    client: WeaviateAsyncClient,
+    payloads: AsyncGenerator[DocumentMentionCreateRequest, None],
+    principal_id: uuid.UUID,
+) -> list[DocumentMentionResponse]:
+    """Insert document mentions as one streamed batch.
+
+    Source identities are resolved before each object is queued. Nested page
+    mentions are inserted in a second batch after their parent IDs exist.
+    """
+    logger.info("create_document_mention_batch called")
+    collection = client.collections.use(DOCUMENT_MENTION_COLLECTION)
+    responses: list[DocumentMentionResponse] = []
+    nested_page_mentions: list[
+        tuple[uuid.UUID, list[PageMentionInlineCreateRequest]]
+    ] = []
+
+    async with collection.batch.stream() as batch:
+        async for payload in payloads:
+            source = await resolve_source_reference(
+                client,
+                source_id=payload.source_id,
+                source=payload.source,
+            )
+            document_mention_id = new_uuid6()
+            await batch.add_object(
+                uuid=document_mention_id,
+                properties=_document_mention_properties(payload),
+                references={
+                    "entity": payload.entity_id,
+                    "source": source.source_id,
+                    "principal": principal_id,
+                },
+            )
+            responses.append(
+                _document_mention_result(
+                    payload,
+                    document_mention_id=document_mention_id,
+                    source_id=source.source_id,
+                    principal_id=principal_id,
+                )
+            )
+            if payload.page_mentions:
+                nested_page_mentions.append(
+                    (document_mention_id, list(payload.page_mentions))
+                )
+
+    page_payloads: list[PageMentionCreateRequest] = []
+    for document_mention_id, page_mentions in nested_page_mentions:
+        for page_mention in page_mentions:
+            page_source = await resolve_source_reference(
+                client,
+                source_id=page_mention.source_id,
+                source=page_mention.source,
+            )
+            page_payloads.append(
+                PageMentionCreateRequest(
+                    name=page_mention.name,
+                    information=page_mention.information,
+                    aliases=page_mention.aliases,
+                    polygons=page_mention.polygons,
+                    source_id=page_source.source_id,
+                    document_mention_id=document_mention_id,
+                )
+            )
+    if page_payloads:
+        await create_many_page_mentions(client, page_payloads, principal_id)
+    logger.info(
+        "create_document_mention_batch completed",
+        extra={"count": len(responses)},
+    )
+    return responses
+
+
+@trace()
 async def get_document_mention(
     client: WeaviateAsyncClient,
     principal_id: uuid.UUID,
@@ -346,13 +469,13 @@ async def get_document_mention(
         "get_document_mention called",
         extra={"document_mention_id": document_mention_id},
     )
-    response = await client.collections.get(
-        DOCUMENT_MENTION_COLLECTION
-    ).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        DOCUMENT_MENTION_COLLECTION,
         document_mention_id,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+        reference_names=["principal", "entity", "source"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "document_mention not found",
             extra={"document_mention_id": document_mention_id},
@@ -361,7 +484,7 @@ async def get_document_mention(
     logger.debug(
         "document_mention found", extra={"document_mention_id": document_mention_id}
     )
-    return document_mention_response(
+    return parse_document_mention(
         response.properties,
         response.references,
         response.uuid,
@@ -380,50 +503,34 @@ async def patch_document_mention_entity(
         "patch_document_mention_entity called",
         extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
     )
-    response = await client.collections.get(
-        DOCUMENT_MENTION_COLLECTION
-    ).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        DOCUMENT_MENTION_COLLECTION,
         document_mention_id,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+        reference_names=["principal", "entity", "source"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "patch_document_mention_entity skipped missing document_mention",
             extra={"document_mention_id": document_mention_id},
         )
         return None
 
-    await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.replace(
-        uuid=document_mention_id,
-        properties=dict(response.properties),
-        references={
-            "principal": require_reference_uuid(response.references, "principal"),
-            "source": require_reference_uuid(response.references, "source"),
-            "entity": entity_id,
-        },
+    current = parse_document_mention(
+        response.properties,
+        response.references,
+        response.uuid,
     )
-
-    updated = await client.collections.get(
-        DOCUMENT_MENTION_COLLECTION
-    ).query.fetch_object_by_id(
-        document_mention_id,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+    await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.reference_replace(
+        from_uuid=document_mention_id,
+        from_property="entity",
+        to=entity_id,
     )
-    if updated is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.warning(
-            "patch_document_mention_entity could not read updated object",
-            extra={"document_mention_id": document_mention_id},
-        )
-        return None
     logger.info(
         "patch_document_mention_entity completed",
         extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
     )
-    return document_mention_response(
-        updated.properties,
-        updated.references,
-        updated.uuid,
-    )
+    return current.model_copy(update={"entity_id": entity_id})
 
 
 @trace()
@@ -471,7 +578,7 @@ async def list_document_mentions(
     )
     items = sorted(
         [
-            document_mention_response(
+            parse_document_mention(
                 item.properties,
                 item.references,
                 item.uuid,
@@ -513,19 +620,7 @@ async def create_face(
     detection_id = new_uuid6()
     await client.collections.get(FACE_COLLECTION).data.insert(
         uuid=detection_id,
-        properties={
-            "bounding_box": {
-                "x": payload.bounding_box.x,
-                "y": payload.bounding_box.y,
-                "width": payload.bounding_box.width,
-                "height": payload.bounding_box.height,
-            },
-            "keypoints": [
-                {"type": item.type, "x": item.x, "y": item.y}
-                for item in payload.keypoints
-            ],
-            "confidence": payload.confidence,
-        },
+        properties=_face_properties(payload),
         references={
             "entity": payload.entity_id,
             "source": source.source_id,
@@ -533,15 +628,55 @@ async def create_face(
         },
         vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
     )
-    return FaceResponse(
+    return _face_result(
+        payload,
         detection_id=detection_id,
         source_id=source.source_id,
-        bounding_box=payload.bounding_box,
-        keypoints=payload.keypoints,
         principal_id=principal_id,
-        entity_id=payload.entity_id,
-        confidence=payload.confidence,
     )
+
+
+@trace()
+async def create_face_batch(
+    client: WeaviateAsyncClient,
+    payloads: AsyncGenerator[FaceCreateRequest, None],
+    principal_id: uuid.UUID,
+) -> list[FaceResponse]:
+    """Resolve sources and insert face detections as one streamed batch."""
+    logger.info("create_face_batch called")
+    collection = client.collections.use(FACE_COLLECTION)
+    responses: list[FaceResponse] = []
+    async with collection.batch.stream() as batch:
+        async for payload in payloads:
+            source = await resolve_source_reference(
+                client,
+                source_id=payload.source_id,
+                source=payload.source,
+            )
+            detection_id = new_uuid6()
+            await batch.add_object(
+                uuid=detection_id,
+                properties=_face_properties(payload),
+                references={
+                    "entity": payload.entity_id,
+                    "source": source.source_id,
+                    "principal": principal_id,
+                },
+                vector=single_named_vector_payload(
+                    DEFAULT_FACE_VECTOR,
+                    payload.embedding,
+                ),
+            )
+            responses.append(
+                _face_result(
+                    payload,
+                    detection_id=detection_id,
+                    source_id=source.source_id,
+                    principal_id=principal_id,
+                )
+            )
+    logger.info("create_face_batch completed", extra={"count": len(responses)})
+    return responses
 
 
 @trace()
@@ -552,15 +687,17 @@ async def get_face(
 ) -> FaceResponse | None:
     del principal_id
     logger.debug("get_face called", extra={"detection_id": detection_id})
-    response = await client.collections.get(FACE_COLLECTION).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        FACE_COLLECTION,
         detection_id,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+        reference_names=["principal", "entity", "source"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info("face not found", extra={"detection_id": detection_id})
         return None
     logger.debug("face found", extra={"detection_id": detection_id})
-    return face_response(
+    return parse_face(
         response.properties,
         response.references,
         response.uuid,
@@ -579,56 +716,34 @@ async def patch_face_entity(
         "patch_face_entity called",
         extra={"detection_id": detection_id, "entity_id": entity_id},
     )
-    response = await client.collections.get(FACE_COLLECTION).query.fetch_object_by_id(
+    response = await fetch_collection_object(
+        client,
+        FACE_COLLECTION,
         detection_id,
-        include_vector=True,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+        reference_names=["principal", "entity", "source"],
     )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    if response is None:
         logger.info(
             "patch_face_entity skipped missing face",
             extra={"detection_id": detection_id},
         )
         return None
 
-    vector_payload: dict[str, list[float]] | None = None
-    named_vectors: dict[str, list[float]] = {}
-    for vector_name, vector_value in response.vector.items():
-        if _is_flat_float_vector(vector_value):
-            named_vectors[vector_name] = [float(item) for item in vector_value]
-    if named_vectors:
-        vector_payload = named_vectors
-
-    await client.collections.get(FACE_COLLECTION).data.replace(
-        uuid=detection_id,
-        properties=dict(response.properties),
-        references={
-            "principal": require_reference_uuid(response.references, "principal"),
-            "source": require_reference_uuid(response.references, "source"),
-            "entity": entity_id,
-        },
-        vector=vector_payload,
+    current = parse_face(
+        response.properties,
+        response.references,
+        response.uuid,
     )
-
-    updated = await client.collections.get(FACE_COLLECTION).query.fetch_object_by_id(
-        detection_id,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+    await client.collections.get(FACE_COLLECTION).data.reference_replace(
+        from_uuid=detection_id,
+        from_property="entity",
+        to=entity_id,
     )
-    if updated is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
-        logger.warning(
-            "patch_face_entity could not read updated face",
-            extra={"detection_id": detection_id},
-        )
-        return None
     logger.info(
         "patch_face_entity completed",
         extra={"detection_id": detection_id, "entity_id": entity_id},
     )
-    return face_response(
-        updated.properties,
-        updated.references,
-        updated.uuid,
-    )
+    return current.model_copy(update={"entity_id": entity_id})
 
 
 @trace()
@@ -672,7 +787,7 @@ async def list_faces(
     )
     items = sorted(
         [
-            face_response(
+            parse_face(
                 item.properties,
                 item.references,
                 item.uuid,

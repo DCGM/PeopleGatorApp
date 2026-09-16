@@ -51,7 +51,7 @@ async def test_list_page_mentions_returns_paginated_response(monkeypatch: pytest
 
     monkeypatch.setattr(
         annotation_service,
-        "page_mention_response",
+        "parse_page_mention",
         _page_mention_response,
     )
 
@@ -103,7 +103,7 @@ async def test_list_document_mentions_returns_paginated_response(monkeypatch: py
 
     monkeypatch.setattr(
         annotation_service,
-        "document_mention_response",
+        "parse_document_mention",
         _document_mention_response,
     )
 
@@ -155,7 +155,7 @@ async def test_list_faces_returns_paginated_response(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(
         annotation_service,
-        "face_response",
+        "parse_face",
         _face_response,
     )
 

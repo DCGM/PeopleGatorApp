@@ -35,9 +35,7 @@ from people_gator_api.services.crud_services.source_service import (
     get_source,
     get_source_by_document_identity,
     get_source_by_page_path,
-    get_source_by_page_identity,
     get_source_by_type_uri,
-    get_source_by_types_uri,
     list_sources,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
@@ -53,7 +51,6 @@ from people_gator_api.services.weaviate_service.utils import (
 from people_gator_api.utils.opentelemetry import trace
 
 
-IMAGE_SOURCE_KINDS: tuple[SourceKind, ...] = (SourceKind.image,)
 _RELATION_PAGE_SIZE = 100
 
 
@@ -63,7 +60,7 @@ class _ReferencedObject(Protocol):
     references: CrossReferences
 
 
-def page_response(source: SourceResponse) -> PageResponse:
+def parse_page_source(source: SourceResponse) -> PageResponse:
     """Map a page Source to its public page representation."""
     if source.source_type != SourceKind.page or not isinstance(
         source.metadata, PageSourceMetadata
@@ -84,7 +81,7 @@ def page_response(source: SourceResponse) -> PageResponse:
     )
 
 
-def document_response(source: SourceResponse) -> DocumentResponse:
+def parse_document_source(source: SourceResponse) -> DocumentResponse:
     """Map a document Source to its public document representation."""
     if source.source_type != SourceKind.document or not isinstance(
         source.metadata, DocumentSourceMetadata
@@ -103,9 +100,9 @@ def document_response(source: SourceResponse) -> DocumentResponse:
     )
 
 
-def image_response(source: SourceResponse) -> ImageResponse:
+def parse_image_source(source: SourceResponse) -> ImageResponse:
     """Map an image-compatible Source to its public image representation."""
-    if source.source_type not in IMAGE_SOURCE_KINDS:
+    if source.source_type != SourceKind.image:
         raise ValueError("Source is not an image")
     return ImageResponse(image_id=source.source_id, url=AnyUrl(source.uri))
 
@@ -114,21 +111,7 @@ def image_response(source: SourceResponse) -> ImageResponse:
 async def create_page(
     client: WeaviateAsyncClient,
     payload: PageCreateRequest,
-    principal_id: uuid.UUID,
 ) -> tuple[PageResponse, bool]:
-    existing = await get_source_by_page_identity(
-        client,
-        payload.library,
-        payload.document_id,
-        payload.page_id,
-    )
-    if existing is not None:
-        return page_response(existing), False
-    uri = canonical_page_uri(
-        payload.library,
-        payload.document_id,
-        payload.page_id,
-    )
     source, created = await create_source(
         client,
         SourceCreateRequest(
@@ -137,28 +120,17 @@ async def create_page(
                 library=payload.library,
                 document=payload.document_id,
                 page=payload.page_id,
-                kramerius_url=AnyUrl(uri),
             ),
         ),
-        principal_id,
     )
-    return page_response(source), created
+    return parse_page_source(source), created
 
 
 @trace()
 async def create_document(
     client: WeaviateAsyncClient,
     payload: DocumentCreateRequest,
-    principal_id: uuid.UUID,
 ) -> tuple[DocumentResponse, bool]:
-    existing = await get_source_by_document_identity(
-        client,
-        payload.library,
-        payload.document_id,
-    )
-    if existing is not None:
-        return document_response(existing), False
-    uri = canonical_document_uri(payload.library, payload.document_id)
     source, created = await create_source(
         client,
         SourceCreateRequest(
@@ -166,19 +138,16 @@ async def create_document(
             metadata=DocumentSourceMetadata(
                 library=payload.library,
                 document=payload.document_id,
-                kramerius_url=AnyUrl(uri),
             ),
         ),
-        principal_id,
     )
-    return document_response(source), created
+    return parse_document_source(source), created
 
 
 @trace()
 async def create_image(
     client: WeaviateAsyncClient,
     payload: ImageCreateRequest,
-    principal_id: uuid.UUID,
 ) -> tuple[ImageResponse, bool]:
     source, created = await create_source(
         client,
@@ -187,9 +156,8 @@ async def create_image(
             uri=str(payload.url),
             metadata=None,
         ),
-        principal_id,
     )
-    return image_response(source), created
+    return parse_image_source(source), created
 
 
 @trace()
@@ -212,7 +180,7 @@ async def list_pages(
         page=page_id,
     )
     return PageListResponse(
-        items=[page_response(source) for source in sources.items],
+        items=[parse_page_source(source) for source in sources.items],
         total_count=sources.total_count,
         limit=sources.limit,
         after_id=sources.after_id,
@@ -236,7 +204,7 @@ async def list_documents(
         document=document_id,
     )
     return DocumentListResponse(
-        items=[document_response(source) for source in sources.items],
+        items=[parse_document_source(source) for source in sources.items],
         total_count=sources.total_count,
         limit=sources.limit,
         after_id=sources.after_id,
@@ -253,13 +221,13 @@ async def list_images(
 ) -> ImageListResponse:
     sources = await list_sources(
         client,
-        IMAGE_SOURCE_KINDS,
+        SourceKind.image,
         after_id,
         limit,
         uri=url,
     )
     return ImageListResponse(
-        items=[image_response(source) for source in sources.items],
+        items=[parse_image_source(source) for source in sources.items],
         total_count=sources.total_count,
         limit=sources.limit,
         after_id=sources.after_id,
@@ -274,7 +242,7 @@ async def get_page(
     source = await get_source(client, page_source_id)
     if source is None or source.source_type != SourceKind.page:
         return None
-    return page_response(source)
+    return parse_page_source(source)
 
 
 @trace()
@@ -291,7 +259,7 @@ async def get_page_by_path(
         page_id,
         document_id=document_id,
     )
-    return page_response(source) if source is not None else None
+    return parse_page_source(source) if source is not None else None
 
 
 @trace()
@@ -304,7 +272,7 @@ async def get_page_by_url(
         SourceKind.page,
         url,
     )
-    return page_response(source) if source is not None else None
+    return parse_page_source(source) if source is not None else None
 
 
 @trace()
@@ -318,7 +286,7 @@ async def get_document_by_path(
         library,
         document_id,
     )
-    return document_response(source) if source is not None else None
+    return parse_document_source(source) if source is not None else None
 
 
 @trace()
@@ -329,7 +297,7 @@ async def get_document(
     source = await get_source(client, document_source_id)
     if source is None or source.source_type != SourceKind.document:
         return None
-    return document_response(source)
+    return parse_document_source(source)
 
 
 @trace()
@@ -342,7 +310,7 @@ async def get_document_by_url(
         SourceKind.document,
         url,
     )
-    return document_response(source) if source is not None else None
+    return parse_document_source(source) if source is not None else None
 
 
 @trace()
@@ -351,9 +319,9 @@ async def get_image(
     image_id: uuid.UUID,
 ) -> ImageResponse | None:
     source = await get_source(client, image_id)
-    if source is None or source.source_type not in IMAGE_SOURCE_KINDS:
+    if source is None or source.source_type != SourceKind.image:
         return None
-    return image_response(source)
+    return parse_image_source(source)
 
 
 @trace()
@@ -361,12 +329,12 @@ async def get_image_by_url(
     client: WeaviateAsyncClient,
     url: str,
 ) -> ImageResponse | None:
-    source = await get_source_by_types_uri(
+    source = await get_source_by_type_uri(
         client,
-        IMAGE_SOURCE_KINDS,
+        SourceKind.image,
         url,
     )
-    return image_response(source) if source is not None else None
+    return parse_image_source(source) if source is not None else None
 
 
 async def _fetch_all_references(

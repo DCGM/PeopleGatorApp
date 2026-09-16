@@ -26,8 +26,9 @@ from people_gator_api.services.weaviate_service.db_schema import SOURCE_COLLECTI
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,
+    fetch_collection_object,
     fetch_collection_page_with_total_count,
-    source_response,
+    parse_source,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -129,6 +130,57 @@ def _uri_from_metadata(metadata: SourceMetadata) -> str:
     return canonical_document_uri(metadata.library, metadata.document)
 
 
+def _normalize_source(
+    payload: SourceCreateRequest,
+) -> tuple[SourceKind, str, SourceMetadata | None]:
+    """Resolve a validated creation payload into its canonical stored form."""
+    metadata = payload.metadata
+    if payload.source_type == SourceKind.image:
+        if payload.uri is None:  # Protected by SourceCreateRequest validation.
+            raise ValueError("image sources require uri")
+        return payload.source_type, payload.uri, None
+    if metadata is None:  # Protected by SourceCreateRequest validation.
+        raise ValueError("page and document sources require metadata")
+    if isinstance(metadata, PageSourceMetadata):
+        canonical_metadata = _canonical_page_metadata(metadata)
+    else:
+        canonical_metadata = _canonical_document_metadata(metadata)
+    return payload.source_type, _uri_from_metadata(canonical_metadata), canonical_metadata
+
+
+def _source_request_from_descriptor(
+    descriptor: SourceDescriptorRequest,
+) -> SourceCreateRequest:
+    """Convert one typed annotation descriptor to the common creation contract."""
+    if descriptor.page is not None:
+        return SourceCreateRequest(
+            source_type=SourceKind.page,
+            metadata=PageSourceMetadata(
+                library=descriptor.page.library,
+                document=descriptor.page.document_id,
+                page=descriptor.page.page_id,
+            ),
+        )
+    if descriptor.document is not None:
+        return SourceCreateRequest(
+            source_type=SourceKind.document,
+            metadata=DocumentSourceMetadata(
+                library=descriptor.document.library,
+                document=descriptor.document.document_id,
+            ),
+        )
+    if descriptor.image is not None:
+        return SourceCreateRequest(
+            source_type=SourceKind.image,
+            uri=str(descriptor.image.url),
+        )
+    raise SourceResolutionError(
+        "source descriptor requires page, document, or image",
+        status_code=422,
+        code="invalid_source_reference",
+    )
+
+
 @trace()
 async def resolve_source_reference(
     client: WeaviateAsyncClient,
@@ -152,80 +204,11 @@ async def resolve_source_reference(
             status_code=422,
             code="invalid_source_reference",
         )
-    resolved_uri: str
-    resolved_kind: SourceKind
-    if source.page is not None:
-        resolved_uri = canonical_page_uri(
-            source.page.library,
-            source.page.document_id,
-            source.page.page_id,
-        )
-        resolved_kind = SourceKind.page
-        resolved_metadata = PageSourceMetadata(
-            library=source.page.library,
-            document=source.page.document_id,
-            page=source.page.page_id,
-            kramerius_url=AnyUrl(resolved_uri),
-        )
-    elif source.document is not None:
-        resolved_uri = canonical_document_uri(
-            source.document.library,
-            source.document.document_id,
-        )
-        resolved_kind = SourceKind.document
-        resolved_metadata = DocumentSourceMetadata(
-            library=source.document.library,
-            document=source.document.document_id,
-            kramerius_url=AnyUrl(resolved_uri),
-        )
-    elif source.image is not None:
-        resolved_uri = str(source.image.url)
-        resolved_kind = SourceKind.image
-        resolved_metadata = None
-    else:
-        raise SourceResolutionError(
-            "source descriptor requires page, document, image, or typed metadata",
-            status_code=422,
-            code="invalid_source_reference",
-        )
-
-    if isinstance(resolved_metadata, PageSourceMetadata):
-        existing = await get_source_by_page_identity(
-            client,
-            resolved_metadata.library,
-            resolved_metadata.document,
-            resolved_metadata.page,
-        )
-    elif isinstance(resolved_metadata, DocumentSourceMetadata):
-        existing = await get_source_by_document_identity(
-            client,
-            resolved_metadata.library,
-            resolved_metadata.document,
-        )
-    else:
-        existing = await get_source_by_type_uri(
-            client,
-            resolved_kind,
-            resolved_uri,
-        )
-    if existing is not None:
-        return existing
-
-    new_source_id = new_uuid6()
-    await client.collections.get(SOURCE_COLLECTION).data.insert(
-        uuid=new_source_id,
-        properties=_source_storage_properties(
-            resolved_kind,
-            resolved_uri,
-            resolved_metadata,
-        ),
+    resolved, _created = await create_source(
+        client,
+        _source_request_from_descriptor(source),
     )
-    return SourceResponse(
-        source_id=new_source_id,
-        source_type=resolved_kind,
-        uri=resolved_uri,
-        metadata=resolved_metadata,
-    )
+    return resolved
 
 
 @trace()
@@ -289,7 +272,7 @@ async def list_sources(
     )
     items = sorted(
         [
-            source_response(item.properties, item.references, item.uuid)
+            parse_source(item.properties, item.references, item.uuid)
             for item in objects
         ],
         key=lambda item: item.source_id,
@@ -308,15 +291,12 @@ async def get_source(
     source_id: uuid.UUID,
 ) -> SourceResponse | None:
     logger.debug("get_source called", extra={"source_id": source_id})
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_object_by_id(
-        source_id,
-        return_references=empty_reference_queries([]),
-    )
-    if response is None:  # type: ignore[reportUnnecessaryComparison] - Weaviate returns None at runtime for missing UUIDs despite narrowed overload return typing.
+    response = await fetch_collection_object(client, SOURCE_COLLECTION, source_id)
+    if response is None:
         logger.info("source not found", extra={"source_id": source_id})
         return None
     logger.debug("source found", extra={"source_id": source_id})
-    return source_response(response.properties, response.references, response.uuid)
+    return parse_source(response.properties, response.references, response.uuid)
 
 
 @trace()
@@ -329,25 +309,37 @@ async def get_source_by_type_uri(
         "get_source_by_type_uri called",
         extra={"source_type": source_type.value, "uri": uri},
     )
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
-        filters=Filter.all_of(
-            [
-                Filter.by_property("source_type").equal(source_type.value),
-                Filter.by_property("uri").equal(uri),
-            ]
-        ),
-        limit=1,
-        return_references=empty_reference_queries([]),
+    source = await _find_source(
+        client,
+        [
+            Filter.by_property("source_type").equal(source_type.value),
+            Filter.by_property("uri").equal(uri),
+        ],
     )
-    if not response.objects:
+    if source is None:
         logger.info(
             "source by type and uri not found",
             extra={"source_type": source_type.value, "uri": uri},
         )
         return None
+    logger.debug("source by type and uri found", extra={"source_id": source.source_id})
+    return source
+
+
+async def _find_source(
+    client: WeaviateAsyncClient,
+    filters: Sequence[FilterReturn],
+) -> SourceResponse | None:
+    """Return the first Source matching an explicit identity filter."""
+    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
+        filters=combine_filters(list(filters)),
+        limit=1,
+        return_references=empty_reference_queries([]),
+    )
+    if not response.objects:
+        return None
     item = response.objects[0]
-    logger.debug("source by type and uri found", extra={"source_id": item.uuid})
-    return source_response(item.properties, item.references, item.uuid)
+    return parse_source(item.properties, item.references, item.uuid)
 
 
 @trace()
@@ -357,22 +349,15 @@ async def get_source_by_page_identity(
     document_id: uuid.UUID,
     page_id: uuid.UUID,
 ) -> SourceResponse | None:
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
-        filters=Filter.all_of(
-            [
-                Filter.by_property("source_type").equal(SourceKind.page.value),
-                Filter.by_property("library").equal(library),
-                Filter.by_property("document").equal(document_id),
-                Filter.by_property("page").equal(page_id),
-            ]
-        ),
-        limit=1,
-        return_references=empty_reference_queries([]),
+    return await _find_source(
+        client,
+        [
+            Filter.by_property("source_type").equal(SourceKind.page.value),
+            Filter.by_property("library").equal(library),
+            Filter.by_property("document").equal(document_id),
+            Filter.by_property("page").equal(page_id),
+        ],
     )
-    if not response.objects:
-        return None
-    item = response.objects[0]
-    return source_response(item.properties, item.references, item.uuid)
 
 
 @trace()
@@ -392,15 +377,7 @@ async def get_source_by_page_path(
     if document_id is not None:
         filters.append(Filter.by_property("document").equal(document_id))
 
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
-        filters=Filter.all_of(filters),
-        limit=1,
-        return_references=empty_reference_queries([]),
-    )
-    if not response.objects:
-        return None
-    item = response.objects[0]
-    return source_response(item.properties, item.references, item.uuid)
+    return await _find_source(client, filters)
 
 
 @trace()
@@ -409,48 +386,14 @@ async def get_source_by_document_identity(
     library: str,
     document_id: uuid.UUID,
 ) -> SourceResponse | None:
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
-        filters=Filter.all_of(
-            [
-                Filter.by_property("source_type").equal(SourceKind.document.value),
-                Filter.by_property("library").equal(library),
-                Filter.by_property("document").equal(document_id),
-            ]
-        ),
-        limit=1,
-        return_references=empty_reference_queries([]),
+    return await _find_source(
+        client,
+        [
+            Filter.by_property("source_type").equal(SourceKind.document.value),
+            Filter.by_property("library").equal(library),
+            Filter.by_property("document").equal(document_id),
+        ],
     )
-    if not response.objects:
-        return None
-    item = response.objects[0]
-    return source_response(item.properties, item.references, item.uuid)
-
-
-@trace()
-async def get_source_by_types_uri(
-    client: WeaviateAsyncClient,
-    source_types: Sequence[SourceKind],
-    uri: str,
-) -> SourceResponse | None:
-    response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
-        filters=Filter.all_of(
-            [
-                Filter.any_of(
-                    [
-                        Filter.by_property("source_type").equal(source_type.value)
-                        for source_type in source_types
-                    ]
-                ),
-                Filter.by_property("uri").equal(uri),
-            ]
-        ),
-        limit=1,
-        return_references=empty_reference_queries([]),
-    )
-    if not response.objects:
-        return None
-    item = response.objects[0]
-    return source_response(item.properties, item.references, item.uuid)
 
 
 def _parse_archive_path(
@@ -545,9 +488,9 @@ async def resolve_source_filter(
         )
         resource_name = "Document"
     else:
-        source = await get_source_by_types_uri(
+        source = await get_source_by_type_uri(
             client,
-            (SourceKind.image,),
+            SourceKind.image,
             image or "",
         )
         resource_name = "Image"
@@ -565,24 +508,11 @@ async def resolve_source_filter(
 async def create_source(
     client: WeaviateAsyncClient,
     payload: SourceCreateRequest,
-    principal_id: uuid.UUID,
 ) -> tuple[SourceResponse, bool]:
-    metadata = payload.metadata
-    if payload.source_type == SourceKind.image:
-        if payload.uri is None:
-            raise ValueError("image sources require uri")
-        uri = payload.uri
-    else:
-        if metadata is None:
-            raise ValueError("metadata-backed sources require metadata")
-        uri = _uri_from_metadata(metadata)
-        if isinstance(metadata, PageSourceMetadata):
-            metadata = _canonical_page_metadata(metadata)
-        else:
-            metadata = _canonical_document_metadata(metadata)
+    source_type, uri, metadata = _normalize_source(payload)
     logger.info(
         "create_source called",
-        extra={"source_type": payload.source_type.value, "uri": uri},
+        extra={"source_type": source_type.value, "uri": uri},
     )
     if isinstance(metadata, PageSourceMetadata):
         existing = await get_source_by_page_identity(
@@ -600,7 +530,7 @@ async def create_source(
     else:
         existing = await get_source_by_type_uri(
             client,
-            payload.source_type,
+            source_type,
             uri,
         )
     if existing is not None:
@@ -614,7 +544,7 @@ async def create_source(
     await client.collections.get(SOURCE_COLLECTION).data.insert(
         uuid=source_id,
         properties=_source_storage_properties(
-            payload.source_type,
+            source_type,
             uri,
             metadata,
         ),
@@ -622,7 +552,7 @@ async def create_source(
     return (
         SourceResponse(
             source_id=source_id,
-            source_type=payload.source_type,
+            source_type=source_type,
             uri=uri,
             metadata=metadata,
         ),
@@ -636,13 +566,11 @@ async def delete_source(
     source_id: uuid.UUID,
 ) -> bool:
     logger.info("delete_source called", extra={"source_id": source_id})
-    source = await get_source(client, source_id)
-    if source is None:
-        logger.info(
-            "delete_source skipped missing source", extra={"source_id": source_id}
-        )
-        return False
-
-    await client.collections.get(SOURCE_COLLECTION).data.delete_by_id(source_id)
-    logger.info("delete_source completed", extra={"source_id": source_id})
-    return True
+    deleted = await client.collections.get(SOURCE_COLLECTION).data.delete_by_id(
+        source_id
+    )
+    logger.info(
+        "delete_source completed",
+        extra={"source_id": source_id, "deleted": deleted},
+    )
+    return deleted

@@ -20,8 +20,6 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_HOST", "localhost")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_PORT", "50051")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 
-from people_gator_api.services.crud_services import search_service
 
 
 # These tests have been removed as they reference functions that no longer exist in search_service
-

@@ -65,11 +65,8 @@ async def test_create_model_agent_inserts_new_principal(
             object_id: uuid.UUID,
             **_kwargs: object,
         ) -> SimpleNamespace:
-            return SimpleNamespace(
-                uuid=object_id,
-                properties=inserted["properties"],
-                references={},
-            )
+            del object_id
+            raise AssertionError("create must not re-read the inserted principal")
 
     class _Data:
         async def insert(

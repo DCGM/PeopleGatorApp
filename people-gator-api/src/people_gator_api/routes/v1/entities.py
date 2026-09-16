@@ -136,7 +136,8 @@ async def patch_entity_route(
     principal: AnnotatorUserDependency,
     broker: BrokerDependency,
 ) -> EntityResponse:
-    entity = await patch_entity(session, entity_id, principal.principal_id, payload)
+    del principal
+    entity = await patch_entity(session, entity_id, payload)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     broker.publish_task(

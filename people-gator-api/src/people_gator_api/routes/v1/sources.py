@@ -103,7 +103,8 @@ async def create_source_route(
     principal: DataIngestUserDependency,
     broker: BrokerDependency,
 ) -> SourceResponse:
-    source, created = await create_source(session, payload, principal.principal_id)
+    del principal
+    source, created = await create_source(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Source already registered")
     asyncio.create_task(broker.publish(

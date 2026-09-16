@@ -32,20 +32,18 @@ async def test_create_face_resolves_source_descriptor(
 
     async def fake_resolve_source_reference(
         client: object,
-        principal_id: uuid.UUID,
         *,
         source_id: uuid.UUID | None,
         source: SourceDescriptorRequest | None,
     ) -> SourceResponse:
         del client
-        del principal_id
         assert source_id is None
         assert source is not None
         return SourceResponse(
             source_id=resolved_source_id,
             source_type=SourceKind.image,
             uri=str(source.image.url) if source.image is not None else "",
-            metadata=source.metadata,
+            metadata=None,
         )
 
     class _Data:
@@ -101,13 +99,11 @@ async def test_create_document_mention_resolves_nested_page_sources(
 
     async def fake_resolve_source_reference(
         client: object,
-        principal_id: uuid.UUID,
         *,
         source_id: uuid.UUID | None,
         source: SourceDescriptorRequest | None,
     ) -> SourceResponse:
         del client
-        del principal_id
         del source_id
         assert source is not None
         if source.document is not None:
@@ -116,7 +112,7 @@ async def test_create_document_mention_resolves_nested_page_sources(
                 source_type=SourceKind.document,
                 uri="https://www.digitalniknihovna.cz/mzk/uuid/uuid:"
                 + str(source.document.document_id),
-                metadata=source.metadata,
+                metadata=None,
             )
         return SourceResponse(
             source_id=child_source_id,
@@ -125,7 +121,7 @@ async def test_create_document_mention_resolves_nested_page_sources(
             + str(source.page.document_id if source.page else "")
             + "?page=uuid:"
             + str(source.page.page_id if source.page else ""),
-            metadata=source.metadata,
+            metadata=None,
         )
 
     class _Data:
@@ -202,3 +198,58 @@ async def test_create_document_mention_resolves_nested_page_sources(
     assert len(create_many_payloads) == 1
     page_payload = create_many_payloads[0]
     assert getattr(page_payload, "source_id") == child_source_id
+
+
+@pytest.mark.asyncio
+async def test_patch_document_mention_replaces_only_entity_reference() -> None:
+    mention_id = uuid.uuid4()
+    principal_id = uuid.uuid4()
+    source_id = uuid.uuid4()
+    old_entity_id = uuid.uuid4()
+    new_entity_id = uuid.uuid4()
+    fetch_count = 0
+    replaced: dict[str, object] = {}
+
+    def reference(object_id: uuid.UUID) -> SimpleNamespace:
+        return SimpleNamespace(objects=[SimpleNamespace(uuid=object_id)])
+
+    class _Query:
+        async def fetch_object_by_id(
+            self, _object_id: uuid.UUID, **_kwargs: object
+        ) -> SimpleNamespace:
+            nonlocal fetch_count
+            fetch_count += 1
+            return SimpleNamespace(
+                uuid=mention_id,
+                properties={"name": "Name", "information": "Info", "aliases": []},
+                references={
+                    "principal": reference(principal_id),
+                    "source": reference(source_id),
+                    "entity": reference(old_entity_id),
+                },
+            )
+
+    class _Data:
+        async def reference_replace(self, **kwargs: object) -> None:
+            replaced.update(kwargs)
+
+    collection = SimpleNamespace(query=_Query(), data=_Data())
+    client = SimpleNamespace(
+        collections=SimpleNamespace(get=lambda _name: collection)
+    )
+
+    updated = await annotation_service.patch_document_mention_entity(
+        client,  # pyright: ignore[reportArgumentType] - lightweight client double.
+        principal_id,
+        mention_id,
+        new_entity_id,
+    )
+
+    assert updated is not None
+    assert updated.entity_id == new_entity_id
+    assert fetch_count == 1
+    assert replaced == {
+        "from_uuid": mention_id,
+        "from_property": "entity",
+        "to": new_entity_id,
+    }
