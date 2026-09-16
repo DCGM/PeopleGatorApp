@@ -83,7 +83,6 @@ describe('App', () => {
       selectedPerson: 'josef-svoboda',
       line: 'line-anna',
       translate: 'off',
-      context: '5',
     })
     expect(wrapper.get('[aria-labelledby="selected-person-title"] h3').text()).toContain(
       'Anna Nováková',
@@ -92,6 +91,26 @@ describe('App', () => {
     expect(
       wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').attributes('aria-pressed'),
     ).toBe('true')
+  })
+
+  it('treats entity fragments on adjacent transcription lines as one entity', async () => {
+    await router.push('/libraries/library/documents/document/pages/page?line=line-anna')
+
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await wrapper.get('[aria-label="Preview Marie Dvořáková on this page"]').trigger('click')
+    await flushPromises()
+
+    const relatedFragments = wrapper.findAll('mark[title="Person: Marie Dvořáková"]')
+    expect(relatedFragments).toHaveLength(2)
+    expect(relatedFragments.every((fragment) => fragment.attributes('style').includes('var(--accent)'))).toBe(true)
+    expect(router.currentRoute.value.query.line).toBe('line-library')
+
+    await relatedFragments[1]!.trigger('click')
+    await flushPromises()
+
+    const selectedFragments = wrapper.findAll('mark[title="Person: Marie Dvořáková"]')
+    expect(selectedFragments.every((fragment) => fragment.attributes('style').includes('var(--secondary)'))).toBe(true)
+    expect(router.currentRoute.value.query.line).toBe('line-exhibition')
   })
 
   it('does not select a face when the route has no person query', async () => {

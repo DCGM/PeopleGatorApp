@@ -29,6 +29,7 @@ import type {
   TranscriptionLineId,
   TranslationLanguage,
 } from '@/components/custom/document-page.types'
+import { transcriptionEntityKey } from '@/components/custom/document-page.types'
 import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -127,6 +128,48 @@ const transcription: TranscriptionLine[] = [
     text: 'Podrobný pořad bude zveřejněn v příštím vydání.',
     position: { left: 68, top: 29.6, width: 26, height: 2.3 },
   },
+  {
+    id: 'line-library',
+    text: 'Na přípravě výstavy se bude podílet také ředitelka Marie',
+    position: { left: 6, top: 42.6, width: 27, height: 2.3 },
+    entities: [{ entity_id: 'person-marie-dvorakova', label: 'person', text: 'Marie', line_id: 'line-library', start_index: 51, end_index: 56 }],
+  },
+  {
+    id: 'line-exhibition',
+    text: 'Dvořáková, která požádala místní rodiny o zapůjčení vzácných fotografií a kronik.',
+    position: { left: 6, top: 45.2, width: 27, height: 2.3 },
+    entities: [{ entity_id: 'person-marie-dvorakova', label: 'person', text: 'Dvořáková', line_id: 'line-exhibition', start_index: 0, end_index: 9 }],
+  },
+  {
+    id: 'line-school',
+    text: 'Žáci obecné školy doplní program krátkým pěveckým vystoupením a četbou z dobových zápisů.',
+    position: { left: 36, top: 34.8, width: 29, height: 2.3 },
+  },
+  {
+    id: 'line-restoration',
+    text: 'Výtěžek dobrovolného vstupného bude věnován na obnovu poškozené kašny na hlavním náměstí.',
+    position: { left: 36, top: 37.4, width: 29, height: 2.3 },
+  },
+  {
+    id: 'line-market',
+    text: 'Sobotní trh nabídne výrobky místních řemeslníků, čerstvé pečivo a podzimní ovoce ze sousedních sadů.',
+    position: { left: 36, top: 40, width: 29, height: 2.3 },
+  },
+  {
+    id: 'line-choir',
+    text: 'Večer zakončí koncert městského pěveckého sboru v sále radnice.',
+    position: { left: 68, top: 32.2, width: 26, height: 2.3 },
+  },
+  {
+    id: 'line-sports',
+    text: 'Sportovní oddíl zve nové členy na první podzimní trénink, který začne v šest hodin na obecním hřišti.',
+    position: { left: 68, top: 34.8, width: 26, height: 2.3 },
+  },
+  {
+    id: 'line-weather',
+    text: 'Podle ranní předpovědi lze o víkendu očekávat chladnější počasí, avšak bez vydatnějších srážek.',
+    position: { left: 68, top: 37.4, width: 26, height: 2.3 },
+  },
 ]
 
 const translations = {
@@ -137,6 +180,14 @@ const translations = {
     'line-attendees': 'Representatives of the surrounding municipalities also attended the meeting.',
     'line-next-meeting': 'The next public meeting will take place on Friday, 18 October.',
     'line-details': 'The detailed programme will be published in the next issue.',
+    'line-library': 'The exhibition will also be prepared by the director, Marie',
+    'line-exhibition': 'Dvořáková, who asked local families to lend rare photographs and chronicles.',
+    'line-school': 'Pupils from the primary school will add a short singing performance and readings from historical records to the programme.',
+    'line-restoration': 'Proceeds from voluntary admission will support the restoration of the damaged fountain in the main square.',
+    'line-market': 'Saturday’s market will offer work by local craftspeople, fresh bread, and autumn fruit from neighbouring orchards.',
+    'line-choir': 'The evening will conclude with a concert by the town choir in the town hall.',
+    'line-sports': 'The sports club invites new members to its first autumn practice, beginning at six o’clock on the municipal field.',
+    'line-weather': 'According to the morning forecast, cooler weather is expected this weekend, but without significant rainfall.',
   },
   de: {
     'line-intro': 'Das Vereinsleben in unserer Stadt beginnt eine neue Saison.',
@@ -145,6 +196,14 @@ const translations = {
     'line-attendees': 'An dem Treffen nahmen auch Vertreter der umliegenden Gemeinden teil.',
     'line-next-meeting': 'Die nächste öffentliche Sitzung findet am Freitag, dem 18. Oktober, statt.',
     'line-details': 'Das ausführliche Programm wird in der nächsten Ausgabe veröffentlicht.',
+    'line-library': 'An der Vorbereitung der Ausstellung beteiligt sich auch die Leiterin Marie',
+    'line-exhibition': 'Dvořáková, die einheimische Familien um seltene Fotografien und Chroniken bat.',
+    'line-school': 'Schüler der Grundschule ergänzen das Programm mit einem kurzen Gesangsauftritt und Lesungen aus historischen Aufzeichnungen.',
+    'line-restoration': 'Der Erlös aus dem freiwilligen Eintritt wird für die Restaurierung des beschädigten Brunnens auf dem Hauptplatz verwendet.',
+    'line-market': 'Auf dem Samstagsmarkt werden Erzeugnisse lokaler Handwerker, frisches Gebäck und Herbstobst aus benachbarten Gärten angeboten.',
+    'line-choir': 'Den Abend beschließt ein Konzert des städtischen Chors im Rathaussaal.',
+    'line-sports': 'Der Sportverein lädt neue Mitglieder zum ersten Herbsttraining ein, das um sechs Uhr auf dem Gemeindesportplatz beginnt.',
+    'line-weather': 'Laut der morgendlichen Vorhersage ist am Wochenende kühleres Wetter, jedoch kein stärkerer Regen zu erwarten.',
   },
   cs: {
     'line-intro': 'Spolkový život v našem městě vstupuje do nové sezóny.',
@@ -153,6 +212,14 @@ const translations = {
     'line-attendees': 'Setkání se zúčastnili také zástupci okolních obcí.',
     'line-next-meeting': 'Další veřejná schůze proběhne v pátek 18. října.',
     'line-details': 'Podrobný pořad bude zveřejněn v příštím vydání.',
+    'line-library': 'Na přípravě výstavy se bude podílet také ředitelka Marie',
+    'line-exhibition': 'Dvořáková, která požádala místní rodiny o zapůjčení vzácných fotografií a kronik.',
+    'line-school': 'Žáci obecné školy doplní program krátkým pěveckým vystoupením a četbou z dobových zápisů.',
+    'line-restoration': 'Výtěžek dobrovolného vstupného bude věnován na obnovu poškozené kašny na hlavním náměstí.',
+    'line-market': 'Sobotní trh nabídne výrobky místních řemeslníků, čerstvé pečivo a podzimní ovoce ze sousedních sadů.',
+    'line-choir': 'Večer zakončí koncert městského pěveckého sboru v sále radnice.',
+    'line-sports': 'Sportovní oddíl zve nové členy na první podzimní trénink, který začne v šest hodin na obecním hřišti.',
+    'line-weather': 'Podle ranní předpovědi lze o víkendu očekávat chladnější počasí, avšak bez vydatnějších srážek.',
   },
 } satisfies Record<TranslationLanguage, Record<TranscriptionLineId, string>>
 
@@ -189,10 +256,12 @@ const similarPeople = reactive<SimilarPersonCandidate[]>([
     shortDescription: 'Historian and researcher of local associations and public life.',
     score: 81,
     portrait: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=80',
-    nerMentions: 0,
+    nerMentions: 1,
     detections: 0,
     closestMentionDistancePx: 86,
-    source: 'database',
+    source: 'page',
+    entityKey: 'person-marie-dvorakova',
+    entityLineIndex: 6,
   },
   {
     id: 'alena-horakova',
@@ -218,10 +287,6 @@ function routeLineIndex(value: unknown) {
   return idIndex >= 0 ? idIndex : routeNumber(value, 1, transcription.length - 1)
 }
 
-function routeContextLineCount(value: unknown) {
-  return Math.max(1, routeNumber(value, 5, transcription.length - 1))
-}
-
 const selectedFaceId = ref<string | null>(
   typeof route.query.person === 'string' && faces.some((face) => face.id === route.query.person)
     ? route.query.person
@@ -235,7 +300,6 @@ const selectedPersonId = ref<string | null>(
 const selectedLineIndex = ref(routeLineIndex(route.query.line))
 const isTranslationOpen = ref(route.query.translate === 'on')
 const selectedLanguage = ref<TranslationLanguage>('en')
-const contextLineCount = ref(routeContextLineCount(route.query.context))
 const selectedFaceStatus = ref<'all' | FaceStatus>('all')
 const zoomPercent = ref(82)
 const selectedEntityKey = ref<string | null>(null)
@@ -266,23 +330,16 @@ const currentTranslation = computed(() => {
   const line = transcription[selectedLineIndex.value]!
   return translations[selectedLanguage.value][line.id]
 })
-const visibleTranscription = computed(() => {
-  const visibleCount = Math.min(contextLineCount.value, transcription.length)
-  const maximumStart = transcription.length - visibleCount
-  const contextBefore = Math.floor(visibleCount / 2)
-  const start = Math.min(maximumStart, Math.max(0, selectedLineIndex.value - contextBefore))
-  return transcription.slice(start, start + visibleCount).map((line, offset) => ({ index: start + offset, line }))
-})
-
 function syncRoute() {
+  const query = { ...route.query }
+  delete query.context
   void router.replace({
     query: {
-      ...route.query,
+      ...query,
       person: selectedFaceId.value ?? undefined,
       selectedPerson: selectedPersonId.value ?? undefined,
       line: transcription[selectedLineIndex.value]!.id,
       translate: isTranslationOpen.value ? 'on' : 'off',
-      context: String(contextLineCount.value),
     },
   })
 }
@@ -333,7 +390,7 @@ function selectLine(index: number) {
 
 function selectEntity(index: number, entity: TranscriptionEntitySpan) {
   selectedLineIndex.value = index
-  selectedEntityKey.value = `${entity.line_id}:${entity.start_index}:${entity.end_index}`
+  selectedEntityKey.value = transcriptionEntityKey(entity)
   syncRoute()
 }
 
@@ -345,12 +402,6 @@ function nextFace() {
 function previousFace() {
   if (selectedFaceIndex.value <= 0) return
   selectFace(faces[selectedFaceIndex.value - 1]!.id)
-}
-
-function changeContext(direction: 'decrease' | 'increase') {
-  const nextCount = contextLineCount.value + (direction === 'increase' ? 1 : -1)
-  contextLineCount.value = Math.min(transcription.length % 2 === 0 ? transcription.length - 1 : transcription.length, Math.max(1, nextCount))
-  syncRoute()
 }
 
 function nextLine() {
@@ -368,6 +419,10 @@ function navigateLine(direction: 'next' | 'previous') {
 
 function previewSimilarPerson(person: SimilarPersonCandidate) {
   selectedPersonId.value = person.id
+  if (person.entityLineIndex !== undefined) {
+    selectedLineIndex.value = person.entityLineIndex
+    selectedEntityKey.value = null
+  }
   syncRoute()
 }
 
@@ -454,13 +509,6 @@ watch(
 )
 
 watch(
-  () => route.query.context,
-  (context) => {
-    contextLineCount.value = routeContextLineCount(context)
-  },
-)
-
-watch(
   () => route.query.person,
   (person) => {
     selectedFaceId.value = typeof person === 'string' && faces.some((face) => face.id === person)
@@ -508,18 +556,18 @@ onBeforeUnmount(() => {
       :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
       :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
       :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
-      :selected-language="selectedLanguage" :context-line-count="contextLineCount"
-      :maximum-context-line-count="transcription.length - 1" @previous-line="previousLine" @next-line="nextLine"
+      :selected-language="selectedLanguage" @previous-line="previousLine" @next-line="nextLine"
       @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom" @reset-view="resetView"
-      @select-translation="selectTranslation" @change-context="changeContext" />
+      @select-translation="selectTranslation" />
   </Teleport>
 
   <main class="workspace-grid">
     <div class="workspace-fold">
-      <section class="workspace-teleprompter min-w-0 overflow-hidden border-b bg-background px-3 py-4 sm:px-6"
+      <section class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"
         aria-labelledby="page-transcription-title">
-        <DocumentTeleprompter :visible-transcription="visibleTranscription" :selected-line-index="selectedLineIndex"
-          :context-line-count="contextLineCount" :selected-entity-key="selectedEntityKey"
+        <DocumentTeleprompter class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
+          :transcription="transcription" :selected-line-index="selectedLineIndex"
+          :selected-entity-key="selectedEntityKey"
           :related-entity-key="selectedPersonCandidate?.entityKey ?? null" :is-translation-open="isTranslationOpen"
           :selected-language="selectedLanguage" :current-translation="currentTranslation" @select-line="selectLine"
           @select-entity="selectEntity" @navigate-line="navigateLine" />
@@ -718,6 +766,7 @@ onBeforeUnmount(() => {
 .workspace-teleprompter {
   grid-column: 1;
   grid-row: 1;
+  height: clamp(8rem, 22dvh, 12rem);
 }
 
 .bg-viewer {
@@ -769,6 +818,7 @@ onBeforeUnmount(() => {
   .workspace-teleprompter {
     grid-column: 1;
     grid-row: 1;
+    height: auto;
   }
 
   .workspace-similar {

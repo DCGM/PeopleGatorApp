@@ -27,8 +27,6 @@ defineProps<{
   translationOptions: readonly ('off' | TranslationLanguage)[]
   isTranslationOpen: boolean
   selectedLanguage: TranslationLanguage
-  contextLineCount: number
-  maximumContextLineCount: number
 }>()
 
 defineEmits<{
@@ -39,7 +37,6 @@ defineEmits<{
   'set-zoom': [direction: 'in' | 'out']
   'reset-view': []
   'select-translation': [language: TranslationLanguage | 'off']
-  'change-context': [direction: 'decrease' | 'increase']
 }>()
 </script>
 
@@ -104,18 +101,5 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <ButtonGroup class="shrink-0">
-      <Button variant="outline" size="icon-sm" aria-label="Show fewer context lines" title="Show fewer context lines"
-        :disabled="contextLineCount === 1" @click="$emit('change-context', 'decrease')">
-        <Minus />
-      </Button>
-      <ButtonGroupText class="min-w-16 justify-center bg-background px-1.5 font-mono text-sm font-normal">
-        {{ contextLineCount }} lines
-      </ButtonGroupText>
-      <Button variant="outline" size="icon-sm" aria-label="Show more context lines" title="Show more context lines"
-        :disabled="contextLineCount >= maximumContextLineCount" @click="$emit('change-context', 'increase')">
-        <Plus />
-      </Button>
-    </ButtonGroup>
   </div>
 </template>

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { Check, Plus, Search, UserPlus, X } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
+import type { AcceptableValue } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import SimilarPersonItem from '@/components/custom/SimilarPersonItem.vue'
+import SimilarPersonItemSkeleton from '@/components/custom/SimilarPersonItemSkeleton.vue'
 import type { SimilarPersonCandidate, SimilarPersonSource } from '@/components/custom/similar-people.types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -104,8 +106,12 @@ function openCreateForm() {
   isCreateOpen.value = true
 }
 
-function updateFilter(value: string | undefined) {
-  if (value) filter.value = value as Filter
+function isFilter(value: AcceptableValue | AcceptableValue[]): value is Filter {
+  return filterOptions.some((option) => option.value === value)
+}
+
+function updateFilter(value: AcceptableValue | AcceptableValue[]): void {
+  if (isFilter(value)) filter.value = value
 }
 
 function createPerson() {
@@ -186,6 +192,7 @@ function createPerson() {
       <SimilarPersonItem v-for="person in paginatedPeople" :key="person.id" :person="person" class="shrink-0"
         :assigned="assignedPersonId === person.id" :viewed="viewedPersonId === person.id"
         @preview="emit('preview', $event)" @assign="emit('assign', $event)" />
+      <SimilarPersonItemSkeleton class="shrink-0" />
 
       <p v-if="filteredPeople.length === 0"
         class="flex flex-1 items-center justify-center py-6 text-center text-sm text-muted-foreground">

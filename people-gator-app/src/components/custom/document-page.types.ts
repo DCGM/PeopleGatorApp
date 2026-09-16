@@ -7,6 +7,14 @@ export type TranscriptionLineId =
   | 'line-attendees'
   | 'line-next-meeting'
   | 'line-details'
+  | 'line-library'
+  | 'line-exhibition'
+  | 'line-school'
+  | 'line-restoration'
+  | 'line-market'
+  | 'line-choir'
+  | 'line-sports'
+  | 'line-weather'
 
 export type TranslationLanguage = 'en' | 'cs' | 'de'
 
@@ -23,6 +31,7 @@ export type Face = {
 }
 
 export type TranscriptionEntitySpan = {
+  entity_id?: string
   label: EntityType
   text: string
   line_id: string
@@ -30,14 +39,13 @@ export type TranscriptionEntitySpan = {
   end_index: number
 }
 
+export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
+  return entity.entity_id ?? `${entity.line_id}:${entity.start_index}:${entity.end_index}`
+}
+
 export type TranscriptionLine = {
   id: TranscriptionLineId
   text: string
   position: { left: number; top: number; width: number; height: number }
   entities?: TranscriptionEntitySpan[]
-}
-
-export type VisibleTranscriptionLine = {
-  index: number
-  line: TranscriptionLine
 }

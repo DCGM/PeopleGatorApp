@@ -56,6 +56,18 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
 
 <style scoped>
 .topbar-context {
+  --edge-fade-width: 0.75rem;
+
+  -webkit-mask-image: linear-gradient(to right,
+      transparent,
+      black var(--edge-fade-width),
+      black calc(100% - var(--edge-fade-width)),
+      transparent);
+  mask-image: linear-gradient(to right,
+      transparent,
+      black var(--edge-fade-width),
+      black calc(100% - var(--edge-fade-width)),
+      transparent);
   scrollbar-width: none;
 }
 
