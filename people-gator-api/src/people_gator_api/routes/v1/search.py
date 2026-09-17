@@ -6,31 +6,32 @@ annotation-level results.
 
 import uuid
 
-from fastapi import (
-    APIRouter,
-    Query,
-)
-from people_gator_api.schemas.search import (
-    ArchiveHitListResponse,
-    FaceSearchQuery,
-    FaceSearchResultListResponse,
-    SearchArchiveQuery,
-    SearchEntitiesQuery,
-    SearchEntitiesResultListResponse,
-)
+from fastapi import APIRouter, Query
+
+from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
     EntityType,
     FaceEmbeddingModel,
     ScoreAggregation,
 )
-from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.schemas.search import (
+    DocumentSearchResultListResponse,
+    FaceSearchQuery,
+    FaceSearchResultListResponse,
+    PageSearchResultListResponse,
+    SearchDocumentsQuery,
+    SearchEntitiesQuery,
+    SearchEntitiesResultListResponse,
+    SearchPagesQuery,
+)
 from people_gator_api.services.crud_services.search_service import (
-    search_archive_hits,
+    search_documents,
     search_entities,
     search_faces,
+    search_pages,
 )
-from people_gator_api.routes.v1.source_filters import SourceFilterDependency
+from people_gator_api.services.database_service import WeaviateSessionDependency
 
 router = APIRouter(tags=["search"])
 
@@ -85,24 +86,41 @@ async def search_faces_get(
     )
 
 
-@router.get("/search-archive", response_model=ArchiveHitListResponse)
-async def search_archive_get(
+@router.get("/search-pages", response_model=PageSearchResultListResponse)
+async def search_pages_get(
     session: WeaviateSessionDependency,
     resolved_source_id: SourceFilterDependency,
     q: str = Query(
         min_length=1,
-        description="Page/document ID or directly linked entity name/alias.",
+        description="Page Source UUID or directly linked entity name/alias.",
     ),
     limit: int = Query(default=20, ge=0),
-) -> ArchiveHitListResponse:
-    """Search pages and documents with one free-text or UUID query.
-
-    The query matches names and aliases of entities directly linked to archive
-    sources, or a bare Source/page/document UUID.
-    """
-    return await search_archive_hits(
+) -> PageSearchResultListResponse:
+    """Search pages with one free-text or UUID query."""
+    return await search_pages(
         session,
-        SearchArchiveQuery(
+        SearchPagesQuery(
+            q=q,
+            source_id=resolved_source_id,
+            limit=limit,
+        ),
+    )
+
+
+@router.get("/search-documents", response_model=DocumentSearchResultListResponse)
+async def search_documents_get(
+    session: WeaviateSessionDependency,
+    resolved_source_id: SourceFilterDependency,
+    q: str = Query(
+        min_length=1,
+        description="Document Source UUID or directly linked entity name/alias.",
+    ),
+    limit: int = Query(default=20, ge=0),
+) -> DocumentSearchResultListResponse:
+    """Search documents with one free-text or UUID query."""
+    return await search_documents(
+        session,
+        SearchDocumentsQuery(
             q=q,
             source_id=resolved_source_id,
             limit=limit,

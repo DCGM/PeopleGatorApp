@@ -53,24 +53,28 @@ async def search_archive(
     query: str,
     *,
     source_id: uuid.UUID | None,
+    source_kind: SourceKind,
     limit: int,
 ) -> list[ArchiveCandidate]:
-    """Resolve an entity name, alias, or Source UUID to archive sources."""
+    """Resolve an entity name, alias, or Source UUID to one source kind."""
     cleaned = query.strip()
     if not cleaned or limit <= 0:
         return []
     if (direct_source_id := _as_uuid(cleaned)) is not None:
         direct = await _source_candidate(client, direct_source_id)
-        return [direct] if direct is not None else []
+        return [direct] if direct is not None and direct.kind is source_kind else []
 
     source_ranking = await _entity_source_ranking(client, cleaned, source_id)
     ranked = [
         (linked_source_id, 1.0 / (_RRF_RANK_CONSTANT + rank))
-        for rank, linked_source_id in enumerate(source_ranking[:limit], start=1)
+        for rank, linked_source_id in enumerate(source_ranking, start=1)
     ]
     if not ranked:
         return []
-    return await _resolve_source_candidates(client, ranked)
+    candidates = await _resolve_source_candidates(client, ranked)
+    return [
+        candidate for candidate in candidates if candidate.kind is source_kind
+    ][:limit]
 
 
 def _as_uuid(query: str) -> uuid.UUID | None:

@@ -7,27 +7,31 @@ import uuid
 from typing import Protocol
 
 from weaviate import WeaviateAsyncClient
+
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.search import (
-    SearchEntitiesResult,
+    DocumentSearchResult,
+    DocumentSearchResultListResponse,
     FaceSearchQuery,
     FaceSearchResult,
     FaceSearchResultListResponse,
+    PageSearchResult,
+    PageSearchResultListResponse,
+    SearchDocumentsQuery,
     SearchEntitiesQuery,
+    SearchEntitiesResult,
     SearchEntitiesResultListResponse,
-    SearchArchiveQuery,
-    ArchiveHit,
-    ArchiveHitListResponse,
+    SearchPagesQuery,
 )
+from people_gator_api.services.weaviate_service.archive_search import search_archive
 from people_gator_api.services.weaviate_service.db_schema import FACE_VECTOR_BY_MODEL
 from people_gator_api.services.weaviate_service.search import (
     fetch_face_vectors,
+    search_entities_by_faces_vectors,
     search_entities_by_names_or_aliases,
     search_faces_by_vectors,
-    search_entities_by_faces_vectors,
 )
-from people_gator_api.services.weaviate_service.archive_search import search_archive
 from people_gator_api.utils.opentelemetry import trace
-
 
 logger = logging.getLogger(__name__)
 
@@ -165,39 +169,63 @@ def _fuse_entity_results(
 
 
 @trace()
-async def search_archive_hits(
+async def search_pages(
     session: WeaviateAsyncClient,
-    query: SearchArchiveQuery,
-) -> ArchiveHitListResponse:
-    """Search pages and documents by UUID or directly linked entity name/alias.
-
-    Delegates to the pure-Weaviate archive search and maps its candidates onto
-    the public hit schema.
-    """
-    logger.debug(
-        "search_archive_hits called",
-        extra={"query": query.q, "source_id": query.source_id},
-    )
+    query: SearchPagesQuery,
+) -> PageSearchResultListResponse:
+    """Search page sources by source UUID or directly linked entity text."""
     candidates = await search_archive(
         session,
         query.q,
         source_id=query.source_id,
+        source_kind=SourceKind.page,
         limit=query.limit,
     )
-    hits = [
-        ArchiveHit(
+    items = [
+        PageSearchResult(
             source_id=candidate.source_id,
-            kind=candidate.kind,
             document_id=candidate.document_id,
             page_id=candidate.page_id,
             matching_score=candidate.matching_score,
         )
         for candidate in candidates
+        if candidate.document_id is not None and candidate.page_id is not None
     ]
-    logger.info("search_archive_hits completed", extra={"total": len(hits)})
-    return ArchiveHitListResponse(
-        items=hits,
-        total_count=len(hits),
+    logger.info("search_pages completed", extra={"total": len(items)})
+    return PageSearchResultListResponse(
+        items=items,
+        total_count=len(items),
         limit=query.limit,
-        after_id=hits[-1].source_id if hits else None,
+        after_id=items[-1].source_id if items else None,
+    )
+
+
+@trace()
+async def search_documents(
+    session: WeaviateAsyncClient,
+    query: SearchDocumentsQuery,
+) -> DocumentSearchResultListResponse:
+    """Search document sources by source UUID or directly linked entity text."""
+    candidates = await search_archive(
+        session,
+        query.q,
+        source_id=query.source_id,
+        source_kind=SourceKind.document,
+        limit=query.limit,
+    )
+    items = [
+        DocumentSearchResult(
+            source_id=candidate.source_id,
+            document_id=candidate.document_id,
+            matching_score=candidate.matching_score,
+        )
+        for candidate in candidates
+        if candidate.document_id is not None
+    ]
+    logger.info("search_documents completed", extra={"total": len(items)})
+    return DocumentSearchResultListResponse(
+        items=items,
+        total_count=len(items),
+        limit=query.limit,
+        after_id=items[-1].source_id if items else None,
     )

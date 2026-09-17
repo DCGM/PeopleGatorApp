@@ -13,7 +13,6 @@ from people_gator_api.schemas.enums import (
     EntityType,
     FaceEmbeddingModel,
     ScoreAggregation,
-    SourceKind,
 )
 
 # ---------------------------------------------------------------------------
@@ -125,57 +124,72 @@ class FaceSearchResultListResponse(GenericListResponse[FaceSearchResult]):
 # ---------------------------------------------------------------------------
 
 
-class ArchiveHit(BaseModel):
-    """A page or document hit resolved back to its archive Source."""
+class PageSearchResult(BaseModel):
+    """A page search hit resolved to its archive source."""
 
-    source_id: uuid.UUID = Field(
-        ...,
-        description="Source record describing the page or document.",
+    source_id: uuid.UUID = Field(..., description="Source record for the page.")
+    document_id: uuid.UUID = Field(
+        ..., description="Archive document containing the page."
     )
-    kind: SourceKind = Field(
-        ...,
-        description="Whether the hit is a page or a document.",
-    )
-    document_id: uuid.UUID | None = Field(
-        default=None,
-        description="Archive document identity of the hit, when known.",
-    )
-    page_id: uuid.UUID | None = Field(
-        default=None,
-        description="Archive page identity of the hit, when known.",
-    )
-    matching_score: float = Field(
-        ...,
-        description="Fused BM25 relevance score of the hit.",
-    )
+    page_id: uuid.UUID = Field(..., description="Archive page identity.")
+    matching_score: float = Field(..., description="Fused BM25 relevance score.")
 
 
-class ArchiveHitListResponse(GenericListResponse[ArchiveHit]):
-    """A paginated list of page and document hits."""
+class PageSearchResultListResponse(GenericListResponse[PageSearchResult]):
+    """A paginated list of page search results."""
 
-    items: list[ArchiveHit]
+    items: list[PageSearchResult]
 
 
-class SearchArchiveQuery(BaseModel):
-    """Single-input search across pages and documents.
+class DocumentSearchResult(BaseModel):
+    """A document search hit resolved to its archive source."""
 
-    The query input matches directly linked entity names and aliases, or
-    archive UUIDs directly.
-    """
+    source_id: uuid.UUID = Field(..., description="Source record for the document.")
+    document_id: uuid.UUID = Field(..., description="Archive document identity.")
+    matching_score: float = Field(..., description="Fused BM25 relevance score.")
+
+
+class DocumentSearchResultListResponse(GenericListResponse[DocumentSearchResult]):
+    """A paginated list of document search results."""
+
+    items: list[DocumentSearchResult]
+
+
+class SearchPagesQuery(BaseModel):
+    """Search pages by directly linked entity text or Source UUID."""
 
     q: str = Field(
         ...,
         min_length=1,
-        description="Free text name or alias to search for.",
+        description="Free text name, alias, or page Source UUID.",
     )
     source_id: uuid.UUID | None = Field(
         default=None,
-        description="Only return hits inside this document or page Source.",
+        description="Only return this page Source.",
     )
     limit: int = Field(
         default=20,
         ge=0,
-        description="The maximum number of results to return.",
+        description="The maximum number of page results to return.",
+    )
+
+
+class SearchDocumentsQuery(BaseModel):
+    """Search documents by directly linked entity text or Source UUID."""
+
+    q: str = Field(
+        ...,
+        min_length=1,
+        description="Free text name, alias, or document Source UUID.",
+    )
+    source_id: uuid.UUID | None = Field(
+        default=None,
+        description="Only return this document Source.",
+    )
+    limit: int = Field(
+        default=20,
+        ge=0,
+        description="The maximum number of document results to return.",
     )
 
 

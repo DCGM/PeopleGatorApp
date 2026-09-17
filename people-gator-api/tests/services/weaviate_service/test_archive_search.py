@@ -151,3 +151,53 @@ def test_candidate_with_matching_score_keeps_identity() -> None:
     assert scored.source_id == source_id
     assert scored.document_id == document_id
     assert scored.matching_score == pytest.approx(0.42)
+
+
+@pytest.mark.asyncio
+async def test_search_archive_filters_kind_before_applying_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from people_gator_api.services.weaviate_service import archive_search
+
+    document_source_id = uuid.uuid4()
+    page_source_id = uuid.uuid4()
+    document = ArchiveCandidate(
+        document_source_id,
+        SourceKind.document,
+        uuid.uuid4(),
+        None,
+        0.5,
+    )
+    page = ArchiveCandidate(
+        page_source_id,
+        SourceKind.page,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        0.4,
+    )
+
+    async def rank_sources(
+        _client: object,
+        _query: str,
+        _source_id: uuid.UUID | None,
+    ) -> list[uuid.UUID]:
+        return [document_source_id, page_source_id]
+
+    async def resolve_sources(
+        _client: object,
+        _ranked: object,
+    ) -> list[ArchiveCandidate]:
+        return [document, page]
+
+    monkeypatch.setattr(archive_search, "_entity_source_ranking", rank_sources)
+    monkeypatch.setattr(archive_search, "_resolve_source_candidates", resolve_sources)
+
+    results = await archive_search.search_archive(
+        object(),  # pyright: ignore[reportArgumentType]
+        "Ada",
+        source_id=None,
+        source_kind=SourceKind.page,
+        limit=1,
+    )
+
+    assert results == [page]
