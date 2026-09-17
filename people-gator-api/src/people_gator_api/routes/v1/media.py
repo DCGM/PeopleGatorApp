@@ -52,6 +52,9 @@ from people_gator_api.services.http_errors import raise_api_error
 router = APIRouter()
 
 
+# --- Page subresource helpers ------------------------------------------------
+
+
 async def _fetch_layout_for_page(
     session: WeaviateSessionDependency,
     page_source_id: uuid.UUID,
@@ -76,6 +79,9 @@ async def _fetch_entity_spans_for_page(
         return await get_entity_spans(session, page_source_id)
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
+
+
+# --- Documents ---------------------------------------------------------------
 
 
 @router.get("/documents", response_model=DocumentListResponse, tags=["documents"])
@@ -133,6 +139,7 @@ async def lookup_document_route(
         raise_api_error(404, "not_found", "Document not found")
     return resolved
 
+
 @router.get(
     "/documents/{document_source_id:uuid}",
     response_model=DocumentResponse,
@@ -173,6 +180,9 @@ async def delete_document_route(
     ):
         raise_api_error(404, "not_found", "Document not found")
     await delete_source(session, document_source_id)
+
+
+# --- Pages ------------------------------------------------------------------
 
 
 @router.get("/pages", response_model=PageListResponse, tags=["pages"])
@@ -325,6 +335,9 @@ async def delete_page_route(
     if await get_page(session, page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
     await delete_source(session, page_source_id)
+
+
+# --- Images -----------------------------------------------------------------
 
 
 @router.get("/images", response_model=ImageListResponse, tags=["images"])
