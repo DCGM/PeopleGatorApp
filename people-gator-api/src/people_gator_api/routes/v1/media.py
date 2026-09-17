@@ -275,40 +275,10 @@ async def get_page_image_by_id_route(
     )
 
 
-@router.get("/pages/lookup/image", response_class=Response, tags=["pages"])
-async def lookup_page_image_route(
-    session: WeaviateSessionDependency,
-    user: BrowseUserDependency,
-    library: str,
-    document_id: uuid.UUID,
-    page_id: uuid.UUID,
-    width: int | None = None,
-) -> Response:
-    """Stream one page image selected by its canonical library identity."""
-    del user
-    resolved = await get_page_by_path(
-        session,
-        library,
-        page_id,
-        document_id=document_id,
-    )
-    if resolved is None:
-        raise_api_error(404, "not_found", "Page not found")
-    try:
-        image = await get_page_image(str(resolved.url), max_width=width)
-    except SourceResolutionError as exc:
-        raise_api_error(exc.status_code, exc.code, exc.message)
-    return Response(
-        content=image.content,
-        media_type=image.media_type,
-        headers={"X-Cache": "HIT" if image.cache_hit else "MISS"},
-    )
-
-
 @router.get(
     "/pages/{page_source_id:uuid}/page-layout",
     response_model=PageLayoutModel,
-    tags=["page-layouts"],
+    tags=["pages"],
 )
 async def get_page_layout_by_id_route(
     page_source_id: uuid.UUID,
@@ -324,34 +294,9 @@ async def get_page_layout_by_id_route(
 
 
 @router.get(
-    "/pages/lookup/page-layout",
-    response_model=PageLayoutModel,
-    tags=["page-layouts"],
-)
-async def lookup_page_layout_route(
-    session: WeaviateSessionDependency,
-    user: BrowseUserDependency,
-    library: str,
-    document_id: uuid.UUID,
-    page_id: uuid.UUID,
-) -> PageLayoutModel:
-    """Fetch one page layout by its canonical library identity."""
-    del user
-    resolved = await get_page_by_path(
-        session,
-        library,
-        page_id,
-        document_id=document_id,
-    )
-    if resolved is None:
-        raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_layout_for_page(session, resolved.page_source_id)
-
-
-@router.get(
     "/pages/{page_source_id:uuid}/entity-spans",
     response_model=list[EntitySpanModel],
-    tags=["page-layouts"],
+    tags=["pages"],
 )
 async def get_entity_spans_by_id_route(
     page_source_id: uuid.UUID,
@@ -364,31 +309,6 @@ async def get_entity_spans_by_id_route(
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     return await _fetch_entity_spans_for_page(session, page.page_source_id)
-
-
-@router.get(
-    "/pages/lookup/entity-spans",
-    response_model=list[EntitySpanModel],
-    tags=["page-layouts"],
-)
-async def lookup_entity_spans_route(
-    session: WeaviateSessionDependency,
-    user: BrowseUserDependency,
-    library: str,
-    document_id: uuid.UUID,
-    page_id: uuid.UUID,
-) -> list[EntitySpanModel]:
-    """Return entity spans by the page's canonical library identity."""
-    del user
-    resolved = await get_page_by_path(
-        session,
-        library,
-        page_id,
-        document_id=document_id,
-    )
-    if resolved is None:
-        raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_entity_spans_for_page(session, resolved.page_source_id)
 
 
 @router.delete(
@@ -470,24 +390,6 @@ async def get_image_route(
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
     return image
-
-
-@router.get(
-    "/images/lookup/content",
-    response_class=Response,
-    tags=["images"],
-)
-async def lookup_image_content_route(
-    url: AnyUrl,
-    user: BrowseUserDependency,
-) -> Response:
-    """Stream one stored image from the bucket (``image/{website}/{path}``)."""
-    del user
-    try:
-        content, media_type = await get_image_content(str(url))
-    except SourceResolutionError as exc:
-        raise_api_error(exc.status_code, exc.code, exc.message)
-    return Response(content=content, media_type=media_type)
 
 
 @router.get("/images/{image_id:uuid}/content", response_class=Response, tags=["images"])

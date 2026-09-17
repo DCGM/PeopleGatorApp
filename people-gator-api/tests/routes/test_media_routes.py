@@ -16,9 +16,7 @@ def test_media_router_exposes_typed_source_and_page_subresource_routes() -> None
     assert "/pages/{page_source_id}" in paths
     assert "/pages/lookup" in paths
     assert "/pages/{page_source_id}/page-layout" in paths
-    assert "/pages/lookup/page-layout" in paths
     assert "/pages/{page_source_id}/entity-spans" in paths
-    assert "/pages/lookup/entity-spans" in paths
     assert "/documents" in paths
     assert "/documents/{document_source_id}" in paths
     assert "/documents/lookup" in paths
@@ -72,7 +70,7 @@ def test_documents_expose_full_immutable_rest_interface() -> None:
     assert lookup_parameters == {"library": True, "document_id": True}
 
 
-def test_typed_lookups_expose_one_strict_identity() -> None:
+def test_typed_lookups_only_resolve_resources() -> None:
     app = FastAPI()
     app.include_router(media_router)
     paths = app.openapi()["paths"]
@@ -80,8 +78,6 @@ def test_typed_lookups_expose_one_strict_identity() -> None:
     expected_parameters = {
         "/documents/lookup": {"library", "document_id"},
         "/pages/lookup": {"library", "document_id", "page_id"},
-        "/pages/lookup/page-layout": {"library", "document_id", "page_id"},
-        "/pages/lookup/entity-spans": {"library", "document_id", "page_id"},
         "/images/lookup": {"url"},
     }
     for path, expected in expected_parameters.items():
@@ -89,12 +85,9 @@ def test_typed_lookups_expose_one_strict_identity() -> None:
         assert {parameter["name"] for parameter in parameters} == expected
         assert all(parameter["required"] for parameter in parameters)
 
-    page_image_parameters = paths["/pages/lookup/image"]["get"]["parameters"]
-    assert {
-        parameter["name"] for parameter in page_image_parameters
-    } == {"library", "document_id", "page_id", "width"}
-    assert all(
-        parameter["required"]
-        for parameter in page_image_parameters
-        if parameter["name"] != "width"
-    )
+    assert not {
+        "/pages/lookup/image",
+        "/pages/lookup/page-layout",
+        "/pages/lookup/entity-spans",
+        "/images/lookup/content",
+    } & paths.keys()

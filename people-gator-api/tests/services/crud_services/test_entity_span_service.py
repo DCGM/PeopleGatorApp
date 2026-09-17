@@ -118,10 +118,10 @@ def test_entity_spans_do_not_cross_layout_regions() -> None:
     assert spans == []
 
 
-def test_entity_span_routes_parallel_page_layout_routes() -> None:
+def test_entity_span_route_requires_page_source_id() -> None:
     app = FastAPI()
     app.include_router(router)
     paths = app.openapi()["paths"]
 
     assert "get" in paths["/pages/{page_source_id}/entity-spans"]
-    assert "get" in paths["/pages/lookup/entity-spans"]
+    assert "/pages/lookup/entity-spans" not in paths
