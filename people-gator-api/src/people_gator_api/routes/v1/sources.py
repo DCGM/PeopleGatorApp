@@ -17,20 +17,24 @@ from people_gator_api.services.auth_service import (
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.source_service import (
-    create_source,
     delete_source,
     get_source,
     list_sources,
 )
 from people_gator_api.schemas.sources import (
-    DocumentSourceMetadata,
-    PageSourceMetadata,
-    SourceCreateRequest,
     SourceListResponse,
     SourceResponse,
 )
 
 router = APIRouter(tags=["sources"])
+
+
+def _source_reference(source: SourceResponse) -> SourceResponse:
+    return SourceResponse(
+        source_id=source.source_id,
+        source_type=source.source_type,
+        uri=source.uri,
+    )
 
 
 @router.get("/sources", response_model=SourceListResponse)
@@ -46,7 +50,7 @@ async def list_sources_route(
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
     del user
-    return await list_sources(
+    sources = await list_sources(
         session,
         source_type,
         after_id,
@@ -55,6 +59,12 @@ async def list_sources_route(
         library=library,
         document_id=document,
         page_id=page,
+    )
+    return SourceListResponse(
+        items=[_source_reference(source) for source in sources.items],
+        total_count=sources.total_count,
+        limit=sources.limit,
+        after_id=sources.after_id,
     )
 
 
@@ -69,7 +79,7 @@ async def get_source_object_route(
     source = await get_source(session, url=str(url))
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
-    return source
+    return _source_reference(source)
 
 
 @router.get("/sources/{source_id:uuid}", response_model=SourceResponse)
@@ -82,43 +92,9 @@ async def get_source_route(
     source = await get_source(session, source_id)
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
-    return source
+    return _source_reference(source)
 
 
-@router.post(
-    "/sources", response_model=SourceResponse, status_code=status.HTTP_201_CREATED
-)
-async def create_source_route(
-    payload: SourceCreateRequest,
-    session: WeaviateSessionDependency,
-    user: DataIngestUserDependency,
-) -> SourceResponse:
-    del user
-    metadata = payload.metadata
-    if isinstance(metadata, PageSourceMetadata):
-        source, created = await create_source(
-            session,
-            payload.source_type,
-            library=metadata.library,
-            document_id=metadata.document,
-            page_id=metadata.page,
-        )
-    elif isinstance(metadata, DocumentSourceMetadata):
-        source, created = await create_source(
-            session,
-            payload.source_type,
-            library=metadata.library,
-            document_id=metadata.document,
-        )
-    else:
-        source, created = await create_source(
-            session,
-            payload.source_type,
-            url=payload.uri,
-        )
-    if not created:
-        raise_api_error(409, "already_exists", "Source already registered")
-    return source
 
 
 @router.delete("/sources/{source_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)

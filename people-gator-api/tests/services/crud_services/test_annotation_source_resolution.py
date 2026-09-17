@@ -35,7 +35,6 @@ async def test_create_face_resolves_source_descriptor(
             source_id=resolved_source_id,
             source_type=SourceKind.image,
             uri=str(source.image.url) if source.image is not None else "",
-            metadata=None,
         )
 
     class _Data:

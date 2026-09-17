@@ -8,6 +8,7 @@ from pydantic import AnyUrl
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
+    SourceRecord,
     DocumentCreateRequest,
     DocumentSourceMetadata,
     PageCreateRequest,
@@ -29,7 +30,7 @@ def test_parse_page_source_exposes_typed_archive_identity() -> None:
     page_source_id = uuid.uuid4()
     document_id = uuid.uuid4()
     page_id = uuid.uuid4()
-    source = SourceResponse(
+    source = SourceRecord(
         source_id=page_source_id,
         source_type=SourceKind.page,
         uri="https://library.example/scan",
@@ -52,7 +53,7 @@ def test_parse_page_source_exposes_typed_archive_identity() -> None:
 def test_parse_image_source_accepts_arbitrary_image_source() -> None:
     image_id = uuid.uuid4()
     image = media_service.parse_image_source(
-        SourceResponse(
+        SourceRecord(
             source_id=image_id,
             source_type=SourceKind.image,
             uri="https://cdn.example.test/path/portrait.jpeg?size=original",
@@ -67,7 +68,7 @@ def test_parse_image_source_accepts_arbitrary_image_source() -> None:
 def test_parse_document_source_exposes_typed_archive_identity() -> None:
     source_id = uuid.uuid4()
     document_id = uuid.uuid4()
-    source = SourceResponse(
+    source = SourceRecord(
         source_id=source_id,
         source_type=SourceKind.document,
         uri="https://library.example/document",
@@ -100,7 +101,7 @@ async def test_create_document_derives_canonical_uri(
         assert kwargs == {"library": "mzk", "document_id": document_id}
         metadata = DocumentSourceMetadata(library="mzk", document=document_id)
         return (
-            SourceResponse(
+            SourceRecord(
                 source_id=uuid.uuid4(),
                 source_type=SourceKind.document,
                 uri=expected_uri,
@@ -126,7 +127,7 @@ async def test_get_document_by_path_returns_typed_document(
 ) -> None:
     document_source_id = uuid.uuid4()
     document_id = uuid.uuid4()
-    source = SourceResponse(
+    source = SourceRecord(
         source_id=document_source_id,
         source_type=SourceKind.document,
         uri="https://library.example/document/1",
@@ -168,7 +169,7 @@ async def test_create_page_reuses_archive_identity_when_url_changes(
     page_source_id = uuid.uuid4()
     document_id = uuid.uuid4()
     page_id = uuid.uuid4()
-    existing = SourceResponse(
+    existing = SourceRecord(
         source_id=page_source_id,
         source_type=SourceKind.page,
         uri="https://old-library.example/scan",
@@ -217,7 +218,7 @@ async def test_get_page_by_path_supports_both_canonical_forms(
     page_source_id = uuid.uuid4()
     document_id = uuid.uuid4()
     page_id = uuid.uuid4()
-    source = SourceResponse(
+    source = SourceRecord(
         source_id=page_source_id,
         source_type=SourceKind.page,
         uri="https://library.example/scan",
@@ -238,7 +239,7 @@ async def test_get_page_by_path_supports_both_canonical_forms(
             "source_type": SourceKind.page,
             "library": "mzk",
             "document_id": (
-                source.metadata.document if include_document else None
+                document_id if include_document else None
             ),
             "page_id": page_id,
         }

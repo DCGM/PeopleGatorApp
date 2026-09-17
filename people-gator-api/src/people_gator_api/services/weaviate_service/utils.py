@@ -37,7 +37,7 @@ from people_gator_api.schemas.users import UserResponse
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     PageSourceMetadata,
-    SourceResponse,
+    SourceRecord,
 )
 from people_gator_api.utils.opentelemetry import trace
 
@@ -172,7 +172,7 @@ def parse_source(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
-) -> SourceResponse:
+) -> SourceRecord:
     source_type = SourceKind(require_str(properties, "source_type"))
     uri = require_str(properties, "uri")
     library = optional_str(properties, "library")
@@ -205,7 +205,7 @@ def parse_source(
             "has_metadata": resolved_metadata is not None,
         },
     )
-    return SourceResponse(
+    return SourceRecord(
         source_id=uuid,
         source_type=source_type,
         uri=uri,

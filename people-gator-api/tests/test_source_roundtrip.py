@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-import uuid
 from types import SimpleNamespace
+import uuid
 
 import pytest
 from fastapi import HTTPException
@@ -25,78 +25,53 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_HOST", "localhost")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_PORT", "50051")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 
-from people_gator_api.routes.v1.sources import (
-    create_source_route,
-    delete_source_route,
-    get_source_route,
-)
+from people_gator_api.app import app
+from people_gator_api.routes.v1.sources import delete_source_route, get_source_route
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.sources import SourceCreateRequest
 from people_gator_api.schemas.users import UserResponse
 
 
 class FakeCollection:
-    def __init__(self, owner: "FakeClient") -> None:
+    def __init__(self, owner: FakeClient) -> None:
         super().__init__()
         self.owner = owner
 
     @property
-    def data(self) -> "FakeData":
+    def data(self) -> FakeData:
         return FakeData(self.owner)
 
     @property
-    def query(self) -> "FakeQuery":
+    def query(self) -> FakeQuery:
         return FakeQuery(self.owner)
 
 
 class FakeData:
-    def __init__(self, owner: "FakeClient") -> None:
+    def __init__(self, owner: FakeClient) -> None:
         super().__init__()
         self.owner = owner
-
-    async def exists(self, object_id: uuid.UUID) -> bool:
-        return str(object_id) in self.owner.objects
-
-    async def insert(
-        self, *, uuid: uuid.UUID, properties: dict[str, object], **_kwargs: object
-    ) -> None:
-        self.owner.objects[str(uuid)] = {"uuid": uuid, "properties": properties}
-
-    async def replace(
-        self, *, uuid: uuid.UUID, properties: dict[str, object], **_kwargs: object
-    ) -> None:
-        self.owner.objects[str(uuid)] = {"uuid": uuid, "properties": properties}
 
     async def delete_by_id(self, object_id: uuid.UUID) -> bool:
         return self.owner.objects.pop(str(object_id), None) is not None
 
 
 class FakeQuery:
-    def __init__(self, owner: "FakeClient") -> None:
+    def __init__(self, owner: FakeClient) -> None:
         super().__init__()
         self.owner = owner
 
     async def fetch_object_by_id(
-        self, object_id: uuid.UUID, **kwargs: object
+        self,
+        object_id: uuid.UUID,
+        **_kwargs: object,
     ) -> object | None:
-        del kwargs
         entry = self.owner.objects.get(str(object_id))
         if entry is None:
             return None
         return SimpleNamespace(
-            uuid=entry["uuid"], properties=entry["properties"], references={}
+            uuid=entry["uuid"],
+            properties=entry["properties"],
+            references={},
         )
-
-    async def fetch_objects(
-        self, *, filters: object | None = None, limit: int = 1, **kwargs: object
-    ) -> object:
-        del filters
-        del kwargs
-        objects = [
-            SimpleNamespace(uuid=entry["uuid"], properties=entry["properties"])
-            for entry in self.owner.objects.values()
-        ][:limit]
-        return SimpleNamespace(objects=objects)
 
 
 class FakeClient:
@@ -105,7 +80,7 @@ class FakeClient:
         self.objects: dict[str, dict[str, object]] = {}
 
     @property
-    def collections(self) -> "FakeCollections":
+    def collections(self) -> FakeCollections:
         return FakeCollections(self)
 
 
@@ -118,10 +93,8 @@ class FakeCollections:
         return FakeCollection(self.owner)
 
 
-@pytest.mark.asyncio
-async def test_source_post_get_delete_roundtrip() -> None:
-    session = FakeClient()  # pyright: ignore[reportArgumentType] - tests use a lightweight client double
-    user = UserResponse(
+def _user() -> UserResponse:
+    return UserResponse(
         user_id=uuid.uuid4(),
         display_name="Test User",
         is_active=True,
@@ -129,32 +102,56 @@ async def test_source_post_get_delete_roundtrip() -> None:
         external_issuer="test-issuer",
         email=None,
     )
-    payload = SourceCreateRequest(
-        source_type=SourceKind.image,
-        uri="https://example.test/roundtrip-image.jpg",
-    )
 
-    created = await create_source_route(
-        payload=payload, user=user, session=session
-    )  # pyright: ignore[reportArgumentType]
-    assert created.source_type == payload.source_type
-    assert created.uri == payload.uri
-    assert created.metadata is None
+
+def test_sources_contract_is_read_only_and_has_no_metadata() -> None:
+    openapi = app.openapi()
+
+    assert "post" not in openapi["paths"]["/api/v1/sources"]
+    source_properties = openapi["components"]["schemas"]["SourceResponse"]["properties"]
+    assert set(source_properties) == {"source_id", "source_type", "uri"}
+
+
+@pytest.mark.asyncio
+async def test_source_get_delete_roundtrip() -> None:
+    session = FakeClient()
+    source_id = uuid.uuid4()
+    uri = "https://example.test/roundtrip-image.jpg"
+    session.objects[str(source_id)] = {
+        "uuid": source_id,
+        "properties": {
+            "source_type": SourceKind.image.value,
+            "uri": uri,
+            "library": None,
+            "document": None,
+            "page": None,
+        },
+    }
 
     fetched = await get_source_route(
-        source_id=created.source_id, user=user, session=session
-    )  # pyright: ignore[reportArgumentType]
-    assert fetched.source_id == created.source_id
-    assert fetched.uri == payload.uri
-    assert fetched.metadata is None
+        source_id=source_id,
+        user=_user(),
+        session=session,  # pyright: ignore[reportArgumentType]
+    )
+    assert fetched.source_id == source_id
+    assert fetched.uri == uri
+    assert fetched.model_dump() == {
+        "source_id": source_id,
+        "source_type": SourceKind.image,
+        "uri": uri,
+    }
 
     await delete_source_route(
-        source_id=created.source_id, user=user, session=session
-    )  # pyright: ignore[reportArgumentType]
+        source_id=source_id,
+        user=_user(),
+        session=session,  # pyright: ignore[reportArgumentType]
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         await get_source_route(
-            source_id=created.source_id, user=user, session=session
-        )  # pyright: ignore[reportArgumentType]
+            source_id=source_id,
+            user=_user(),
+            session=session,  # pyright: ignore[reportArgumentType]
+        )
 
     assert exc_info.value.status_code == 404

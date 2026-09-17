@@ -59,7 +59,6 @@ async def _resolve_source(
         source_id=source_id,
         source_type=SourceKind.image,
         uri=f"https://example.test/{source_id}",
-        metadata=None,
     )
 
 

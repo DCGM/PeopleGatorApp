@@ -25,6 +25,7 @@ from people_gator_api.schemas.sources import (
     PageCreateRequest,
     PageListResponse,
     PageResponse,
+    SourceRecord,
     SourceResponse,
 )
 from people_gator_api.services.crud_services.source_service import (
@@ -57,8 +58,10 @@ class _ReferencedObject(Protocol):
 
 def parse_page_source(source: SourceResponse) -> PageResponse:
     """Map a page Source to its public page representation."""
-    if source.source_type != SourceKind.page or not isinstance(
-        source.metadata, PageSourceMetadata
+    if (
+        not isinstance(source, SourceRecord)
+        or source.source_type != SourceKind.page
+        or not isinstance(source.metadata, PageSourceMetadata)
     ):
         raise ValueError("Source is not a page")
     return PageResponse(
@@ -78,8 +81,10 @@ def parse_page_source(source: SourceResponse) -> PageResponse:
 
 def parse_document_source(source: SourceResponse) -> DocumentResponse:
     """Map a document Source to its public document representation."""
-    if source.source_type != SourceKind.document or not isinstance(
-        source.metadata, DocumentSourceMetadata
+    if (
+        not isinstance(source, SourceRecord)
+        or source.source_type != SourceKind.document
+        or not isinstance(source.metadata, DocumentSourceMetadata)
     ):
         raise ValueError("Source is not a document")
     return DocumentResponse(

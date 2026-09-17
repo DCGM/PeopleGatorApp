@@ -15,7 +15,6 @@ from people_gator_api.schemas.search import (
     SearchEntitiesResultListResponse,
 )
 from people_gator_api.schemas.sources import (
-    SourceCreateRequest,
     SourceListResponse,
     SourceResponse,
 )
@@ -39,7 +38,6 @@ __all__ = [
     "SearchEntitiesQuery",
     "SearchEntitiesResult",
     "SearchEntitiesResultListResponse",
-    "SourceCreateRequest",
     "SourceListResponse",
     "SourceResponse",
     "UserCreateRequest",

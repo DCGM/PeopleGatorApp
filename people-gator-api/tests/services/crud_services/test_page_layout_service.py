@@ -35,12 +35,16 @@ from people_gator_api.schemas.pero import (
     RegionLayoutModel,
     TextLineModel,
 )
-from people_gator_api.schemas.sources import PageSourceMetadata, SourceResponse
+from people_gator_api.schemas.sources import (
+    PageSourceMetadata,
+    SourceRecord,
+    SourceResponse,
+)
 from people_gator_api.services.crud_services import page_layout_service
 
 
 def _page_source() -> SourceResponse:
-    return SourceResponse(
+    return SourceRecord(
         source_id=uuid.uuid4(),
         source_type=SourceKind.page,
         uri="https://www.digitalniknihovna.cz/mzk/view/uuid:x?page=uuid:y",
@@ -213,7 +217,7 @@ async def test_get_page_layout_missing_returns_404(
 
 @pytest.mark.asyncio
 async def test_rejects_non_page_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    image_source = SourceResponse(
+    image_source = SourceRecord(
         source_id=uuid.uuid4(),
         source_type=SourceKind.image,
         uri="https://example.test/image.jpg",

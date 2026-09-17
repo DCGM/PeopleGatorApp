@@ -45,7 +45,6 @@ def _source(source_type: SourceKind) -> SourceResponse:
         source_id=uuid.uuid4(),
         source_type=source_type,
         uri="https://example.test/source",
-        metadata=None,
     )
 
 

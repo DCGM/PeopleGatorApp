@@ -59,38 +59,6 @@ class ImageCreateRequest(BaseModel):
     url: AnyUrl
 
 
-class SourceCreateRequest(BaseModel):
-    """Request body for registering a source."""
-
-    source_type: SourceKind
-    uri: str | None = None
-    metadata: SourceMetadata | None = None
-
-    @model_validator(mode="after")
-    def validate_metadata_for_source_type(self) -> "SourceCreateRequest":
-        if self.source_type == SourceKind.image:
-            if self.metadata is not None:
-                raise ValueError("image sources do not accept metadata")
-            if self.uri is None:
-                raise ValueError("image sources require uri")
-            return self
-        if self.uri is not None:
-            raise ValueError("uri is derived from metadata for this source type")
-        if self.metadata is None:
-            raise ValueError("metadata is required for this source type")
-        if self.source_type == SourceKind.page and not isinstance(
-            self.metadata, PageSourceMetadata
-        ):
-            raise ValueError("page sources require page metadata")
-        if self.source_type == SourceKind.document and not isinstance(
-            self.metadata, DocumentSourceMetadata
-        ):
-            raise ValueError(
-                "metadata shape does not match source_type; expected strict metadata for the given source"
-            )
-        return self
-
-
 class SourceDescriptorRequest(BaseModel):
     """Source selector used by annotation ingest endpoints."""
 
@@ -116,12 +84,25 @@ class SourceDescriptorRequest(BaseModel):
 
 
 class SourceResponse(BaseModel):
-    """A single source record."""
+    """A linkable reference to a typed source."""
+
+    model_config = ConfigDict(extra="forbid")
 
     source_id: uuid.UUID
     source_type: SourceKind
     uri: str
+
+
+class SourceRecord(SourceResponse):
+    """Internal persisted source data used by typed source services."""
+
     metadata: SourceMetadata | None
+
+
+class SourceRecordListResponse(GenericListResponse[SourceRecord]):
+    """Internal paginated source records for typed source services."""
+
+    items: list[SourceRecord]
 
 
 class SourceListResponse(GenericListResponse[SourceResponse]):

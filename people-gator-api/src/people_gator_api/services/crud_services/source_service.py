@@ -14,9 +14,9 @@ from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     PageSourceMetadata,
-    SourceListResponse,
+    SourceRecordListResponse,
     SourceMetadata,
-    SourceResponse,
+    SourceRecord,
 )
 from people_gator_api.services.weaviate_service.db_schema import SOURCE_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
@@ -156,7 +156,7 @@ def _storage_properties(
 async def _first_source(
     client: WeaviateAsyncClient,
     filters: Sequence[FilterReturn],
-) -> SourceResponse | None:
+) -> SourceRecord | None:
     response = await client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
         filters=combine_filters(list(filters)),
         limit=1,
@@ -177,7 +177,7 @@ async def create_source(
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
     url: str | None = None,
-) -> tuple[SourceResponse, bool]:
+) -> tuple[SourceRecord, bool]:
     """Create a source, or return the existing source with the same identity."""
     uri, metadata = _source_content(
         source_type,
@@ -197,7 +197,7 @@ async def create_source(
     if existing is not None:
         return existing, False
 
-    source = SourceResponse(
+    source = SourceRecord(
         source_id=new_uuid6(),
         source_type=source_type,
         uri=uri,
@@ -220,7 +220,7 @@ async def get_source(
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
     url: str | None = None,
-) -> SourceResponse | None:
+) -> SourceRecord | None:
     """Get a source by UUID, URL, or one complete typed identity."""
     has_identity = any(
         value is not None for value in (source_type, library, document_id, page_id, url)
@@ -265,7 +265,7 @@ async def list_sources(
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
     url: str | None = None,
-) -> SourceListResponse:
+) -> SourceRecordListResponse:
     """List sources, optionally filtered by type and stored identity fields."""
     values = {
         "source_type": source_type.value if source_type is not None else None,
@@ -291,7 +291,7 @@ async def list_sources(
         (parse_source(item.properties, item.references, item.uuid) for item in objects),
         key=lambda item: item.source_id,
     )
-    return SourceListResponse(
+    return SourceRecordListResponse(
         items=items,
         total_count=total_count,
         after_id=items[-1].source_id if len(items) == limit and items else None,

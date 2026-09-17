@@ -19,7 +19,11 @@ from pydantic import ValidationError
 from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.pero import PageLayoutModel
-from people_gator_api.schemas.sources import PageSourceMetadata, SourceResponse
+from people_gator_api.schemas.sources import (
+    PageSourceMetadata,
+    SourceRecord,
+    SourceResponse,
+)
 from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
     get_source,
@@ -38,6 +42,12 @@ _LAYOUT_PREFIX = "page-layouts"
 
 def page_layout_key(source: SourceResponse) -> str:
     """Return the canonical storage key for one page source's layout."""
+    if not isinstance(source, SourceRecord):
+        raise SourceResolutionError(
+            "page layouts require a page source",
+            status_code=422,
+            code="invalid_page_layout_source",
+        )
     metadata = source.metadata
     if not isinstance(metadata, PageSourceMetadata):
         raise SourceResolutionError(
