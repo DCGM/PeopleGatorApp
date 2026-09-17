@@ -30,9 +30,9 @@ from people_gator_api.routes.v1.sources import (
     delete_source_route,
     get_source_route,
 )
-from people_gator_api.schemas.enums import SourceKind, PrincipalType
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import SourceCreateRequest
-from people_gator_api.schemas.principals import UserResponse
+from people_gator_api.schemas.users import UserResponse
 
 
 class FakeCollection:
@@ -121,9 +121,8 @@ class FakeCollections:
 @pytest.mark.asyncio
 async def test_source_post_get_delete_roundtrip() -> None:
     session = FakeClient()  # pyright: ignore[reportArgumentType] - tests use a lightweight client double
-    principal = UserResponse(
-        principal_id=uuid.uuid4(),
-        principal_type=PrincipalType.user,
+    user = UserResponse(
+        user_id=uuid.uuid4(),
         display_name="Test User",
         is_active=True,
         external_subject="test-subject",
@@ -136,26 +135,26 @@ async def test_source_post_get_delete_roundtrip() -> None:
     )
 
     created = await create_source_route(
-        payload=payload, principal=principal, session=session
+        payload=payload, user=user, session=session
     )  # pyright: ignore[reportArgumentType]
     assert created.source_type == payload.source_type
     assert created.uri == payload.uri
     assert created.metadata is None
 
     fetched = await get_source_route(
-        source_id=created.source_id, principal=principal, session=session
+        source_id=created.source_id, user=user, session=session
     )  # pyright: ignore[reportArgumentType]
     assert fetched.source_id == created.source_id
     assert fetched.uri == payload.uri
     assert fetched.metadata is None
 
     await delete_source_route(
-        source_id=created.source_id, principal=principal, session=session
+        source_id=created.source_id, user=user, session=session
     )  # pyright: ignore[reportArgumentType]
 
     with pytest.raises(HTTPException) as exc_info:
         await get_source_route(
-            source_id=created.source_id, principal=principal, session=session
+            source_id=created.source_id, user=user, session=session
         )  # pyright: ignore[reportArgumentType]
 
     assert exc_info.value.status_code == 404

@@ -50,7 +50,9 @@ class _RetryableCollections(_FakeCollections):
         if self.exists_attempts <= self._transient_failures:
             response = httpx.Response(
                 500,
-                json={"error": [{"message": "failed to execute query: leader not found"}]},
+                json={
+                    "error": [{"message": "failed to execute query: leader not found"}]
+                },
             )
             raise UnexpectedStatusCodeError("Collection may not exist!", response)
         return collection_name in self._existing_collections
@@ -106,18 +108,20 @@ async def test_init_weaviate_rebuilds_client_after_failed_connect(
 def test_ordered_collection_specs_respect_reference_dependencies() -> None:
     ordered_collection_names = [
         collection_name
-        for collection_name, _ in client.ordered_collection_specs(db_schema.ALL_COLLECTION_SPECS)
+        for collection_name, _ in client.ordered_collection_specs(
+            db_schema.ALL_COLLECTION_SPECS
+        )
     ]
 
-    assert ordered_collection_names.index(db_schema.PRINCIPAL_COLLECTION) < ordered_collection_names.index(
-        db_schema.ENTITY_COLLECTION
-    )
-    assert ordered_collection_names.index(db_schema.DOCUMENT_MENTION_COLLECTION) < ordered_collection_names.index(
-        db_schema.PAGE_MENTION_COLLECTION
-    )
-    assert ordered_collection_names.index(db_schema.ENTITY_COLLECTION) < ordered_collection_names.index(
-        db_schema.DOCUMENT_MENTION_COLLECTION
-    )
+    assert ordered_collection_names.index(
+        db_schema.USER_COLLECTION
+    ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
+    assert ordered_collection_names.index(
+        db_schema.SOURCE_COLLECTION
+    ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
+    assert ordered_collection_names.index(
+        db_schema.USER_COLLECTION
+    ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
 
 
 def test_ordered_collection_specs_reject_cycles() -> None:
@@ -154,7 +158,9 @@ def test_ordered_collection_specs_reject_cycles() -> None:
 async def test_ensure_collections_creates_only_missing_collections() -> None:
     collection_names_in_order = [
         collection_name
-        for collection_name, _ in client.ordered_collection_specs(db_schema.ALL_COLLECTION_SPECS)
+        for collection_name, _ in client.ordered_collection_specs(
+            db_schema.ALL_COLLECTION_SPECS
+        )
     ]
     existing_collections = set(collection_names_in_order[:2])
     fake_client = _FakeWeaviateClient(existing_collections)
@@ -192,7 +198,9 @@ async def test_ensure_collections_runs_existence_checks_before_create_calls() ->
     ]
     expected_collection_names = [
         collection_name
-        for collection_name, _ in client.ordered_collection_specs(db_schema.ALL_COLLECTION_SPECS)
+        for collection_name, _ in client.ordered_collection_specs(
+            db_schema.ALL_COLLECTION_SPECS
+        )
     ]
     assert existence_checks == expected_collection_names
 

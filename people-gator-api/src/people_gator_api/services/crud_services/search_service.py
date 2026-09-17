@@ -48,7 +48,7 @@ async def search_entities(
     """Search entities by name/alias text, a positive face, or both."""
     if query.q is None and query.q_face_id is None:
         return _empty_entity_search_response(limit=query.limit)
-    
+
     q_entities: list[SearchEntitiesResult] = []
     if query.q is not None:
         q_entities = await search_entities_by_names_or_aliases(
@@ -80,7 +80,7 @@ async def search_entities(
         limit=query.limit,
         after_id=items[-1].entity_id if items else None,
     )
-    
+
 
 @trace()
 async def search_faces(
@@ -134,6 +134,7 @@ def _empty_face_search_response(limit: int) -> FaceSearchResultListResponse:
         after_id=None,
     )
 
+
 def _fuse_entity_results(
     ranked_lists: list[list[SearchEntitiesResult]],
 ) -> list[SearchEntitiesResult]:
@@ -143,7 +144,7 @@ def _fuse_entity_results(
         return []
     if len(non_empty_lists) == 1:
         return non_empty_lists[0]
-    
+
     fused_scores: dict[uuid.UUID, float] = {}
     best_items: dict[uuid.UUID, SearchEntitiesResult] = {}
     for items in non_empty_lists:
@@ -168,10 +169,10 @@ async def search_archive_hits(
     session: WeaviateAsyncClient,
     query: SearchArchiveQuery,
 ) -> ArchiveHitListResponse:
-    """Search pages and documents by UUID, mention name, or linked entity alias.
+    """Search pages and documents by UUID or directly linked entity name/alias.
 
-    Delegates to the pure-Weaviate archive search and maps the fused
-    candidates onto the public hit schema.
+    Delegates to the pure-Weaviate archive search and maps its candidates onto
+    the public hit schema.
     """
     logger.debug(
         "search_archive_hits called",

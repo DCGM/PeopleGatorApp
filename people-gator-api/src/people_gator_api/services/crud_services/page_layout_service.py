@@ -23,6 +23,8 @@ from people_gator_api.schemas.sources import PageSourceMetadata, SourceResponse
 from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
     get_source,
+)
+from people_gator_api.services.crud_services.source_resolution_service import (
     resolve_source_filter,
 )
 from people_gator_api.services.s3_filesystem import open_file

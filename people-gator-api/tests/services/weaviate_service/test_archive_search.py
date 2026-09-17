@@ -11,12 +11,9 @@ from people_gator_api.services.weaviate_service.archive_search import (
     ArchiveCandidate,
     _as_uuid,
     _deduplicate,
-    _fuse_rankings,
-    _group_count,
-    _group_name_to_uuid,
-    _linked_mention_filters,
+    _entity_source_ranking,
     _source_candidate_from_properties,
-    _source_scope_filters,
+    _source_scope_filter,
 )
 
 
@@ -29,59 +26,67 @@ def test_as_uuid_rejects_free_text() -> None:
     assert _as_uuid("Karel Hynek Mácha") is None
 
 
-def test_group_name_to_uuid_extracts_trailing_uuid() -> None:
-    source_id = uuid.uuid4()
-    group_name = f"weaviate://localhost/Source/{source_id}"
-    assert _group_name_to_uuid(group_name) == source_id
-
-
-def test_group_name_to_uuid_rejects_plain_text() -> None:
-    assert _group_name_to_uuid("not-a-uuid") is None
-
-
-def test_group_count_scales_with_query_length() -> None:
-    assert _group_count("a") == 5
-    assert _group_count("x" * 12) == 12
-    assert _group_count("x" * 500) == 20
-
-
-def test_fuse_rankings_prefers_hits_present_in_multiple_arms() -> None:
-    first = uuid.uuid4()
-    second = uuid.uuid4()
-    third = uuid.uuid4()
-    fused = _fuse_rankings(
-        [
-            [first, second],
-            [second, third],
-        ],
-    )
-    assert fused[0][0] == second
-    scores = dict(fused)
-    assert scores[second] > scores[first]
-    assert scores[second] > scores[third]
-
-
-def test_fuse_rankings_breaks_ties_deterministically() -> None:
-    first = uuid.UUID(int=1)
-    second = uuid.UUID(int=2)
-    fused = _fuse_rankings([[first], [second]])
-    assert [source_id for source_id, _score in fused] == [first, second]
-
-
 def test_deduplicate_preserves_first_occurrence_order() -> None:
     first = uuid.uuid4()
     second = uuid.uuid4()
     assert _deduplicate([first, second, first]) == [first, second]
 
 
-def test_source_scope_filters_none_without_source() -> None:
-    assert _source_scope_filters(None) is None
+def test_source_scope_filter_none_without_source() -> None:
+    assert _source_scope_filter(None) is None
 
 
-def test_linked_mention_filters_single_entity_has_no_wrapper() -> None:
-    entity_id = uuid.uuid4()
-    filters = _linked_mention_filters([entity_id], None)
-    assert filters is not None
+def test_source_scope_filter_targets_direct_mentioned_in_reference() -> None:
+    assert _source_scope_filter(uuid.uuid4()) is not None
+
+
+@pytest.mark.asyncio
+async def test_entity_source_ranking_follows_direct_links() -> None:
+    first_source = uuid.uuid4()
+    second_source = uuid.uuid4()
+    references = {
+        "mentioned_in": type(
+            "Reference",
+            (),
+            {
+                "objects": [
+                    type("Linked", (), {"uuid": first_source})(),
+                    type("Linked", (), {"uuid": second_source})(),
+                ]
+            },
+        )()
+    }
+
+    class _Query:
+        async def bm25(self, **kwargs: object) -> object:
+            assert kwargs["query"] == "Ada"
+            assert kwargs["query_properties"] == ["name", "aliases"]
+            return type(
+                "Response",
+                (),
+                {
+                    "objects": [
+                        type("Entity", (), {"references": references})(),
+                        type("Entity", (), {"references": references})(),
+                    ]
+                },
+            )()
+
+    collection = type("Collection", (), {"query": _Query()})()
+    collections = type(
+        "Collections",
+        (),
+        {"get": lambda self, _name: collection},
+    )()
+    client = type("Client", (), {"collections": collections})()
+
+    ranking = await _entity_source_ranking(
+        client,  # pyright: ignore[reportArgumentType]
+        "Ada",
+        None,
+    )
+
+    assert ranking == [first_source, second_source]
 
 
 def test_source_candidate_from_page_properties() -> None:

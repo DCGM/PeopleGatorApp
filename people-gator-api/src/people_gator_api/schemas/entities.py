@@ -56,7 +56,7 @@ class EntityResponse(BaseModel):
     aliases: list[str] | None
     wikidata_id: str | None
     nlcr_authority_id: str | None
-    principal_id: uuid.UUID
+    user_id: uuid.UUID
 
 
 class EntityListResponse(GenericListResponse[EntityResponse]):
@@ -96,141 +96,6 @@ class EntityDeleteManyResponse(BaseModel):
 
     mode: Literal["all", "entity_type", "entity_ids"]
     deleted_count: int = Field(ge=0)
-
-
-# ---------------------------------------------------------------------------
-# Page mentions and spans
-# ---------------------------------------------------------------------------
-
-
-class PolygonPoint(BaseModel):
-    """A polygon point in source-space coordinates."""
-
-    x: float
-    y: float
-
-
-class Polygon(BaseModel):
-    """One polygon represented by ordered points."""
-
-    points: list[PolygonPoint] = Field(min_length=3)
-
-
-class PageMentionCreateRequest(BaseModel):
-    """Request body for ingesting a page-level mention aggregation."""
-
-    name: str
-    information: str
-    aliases: list[str]
-    polygons: list[Polygon]
-    document_mention_id: uuid.UUID
-    source_id: uuid.UUID | None = None
-    source: SourceDescriptorRequest | None = None
-
-    @model_validator(mode="after")
-    def validate_source_selector(self) -> "PageMentionCreateRequest":
-        has_source_id = self.source_id is not None
-        has_source = self.source is not None
-        if has_source_id == has_source:
-            raise ValueError("provide exactly one of source_id or source")
-        return self
-
-
-class PageMentionResponse(BaseModel):
-    """A single page mention record."""
-
-    page_mention_id: uuid.UUID
-    name: str
-    information: str
-    aliases: list[str]
-    polygons: list[Polygon]
-    document_mention_id: uuid.UUID
-    source_id: uuid.UUID
-    principal_id: uuid.UUID
-
-
-class PageMentionListResponse(GenericListResponse[PageMentionResponse]):
-    """A paginated list of page mentions."""
-
-    items: list[PageMentionResponse]
-
-
-# ---------------------------------------------------------------------------
-# Document mentions
-# ---------------------------------------------------------------------------
-
-
-class PageMentionInlineCreateRequest(BaseModel):
-    """Page mention embedded directly inside a DocumentMentionCreateRequest.
-
-    `document_mention_id` is omitted — it is assigned automatically from the
-    owning document mention.
-    """
-
-    name: str
-    information: str
-    aliases: list[str]
-    polygons: list[Polygon]
-    source_id: uuid.UUID | None = None
-    source: SourceDescriptorRequest | None = None
-
-    @model_validator(mode="after")
-    def validate_source_selector(self) -> "PageMentionInlineCreateRequest":
-        has_source_id = self.source_id is not None
-        has_source = self.source is not None
-        if has_source_id == has_source:
-            raise ValueError("provide exactly one of source_id or source")
-        return self
-
-
-def _default_page_mentions() -> list[PageMentionInlineCreateRequest]:
-    return []
-
-
-class DocumentMentionCreateRequest(BaseModel):
-    """Request body for creating a document-level mention aggregator."""
-
-    name: str
-    information: str
-    aliases: list[str]
-    source_id: uuid.UUID | None = None
-    source: SourceDescriptorRequest | None = None
-    entity_id: uuid.UUID
-    page_mentions: list[PageMentionInlineCreateRequest] = Field(
-        default_factory=_default_page_mentions
-    )
-
-    @model_validator(mode="after")
-    def validate_source_selector(self) -> "DocumentMentionCreateRequest":
-        has_source_id = self.source_id is not None
-        has_source = self.source is not None
-        if has_source_id == has_source:
-            raise ValueError("provide exactly one of source_id or source")
-        return self
-
-
-class DocumentMentionResponse(BaseModel):
-    """A single document mention record."""
-
-    document_mention_id: uuid.UUID
-    name: str
-    information: str
-    aliases: list[str]
-    principal_id: uuid.UUID
-    source_id: uuid.UUID
-    entity_id: uuid.UUID
-
-
-class DocumentMentionListResponse(GenericListResponse[DocumentMentionResponse]):
-    """A paginated list of document mentions."""
-
-    items: list[DocumentMentionResponse]
-
-
-class DocumentMentionEntityPatchRequest(BaseModel):
-    """Patch body for reassigning a document mention to a different entity."""
-
-    entity_id: uuid.UUID
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +148,7 @@ class FaceResponse(BaseModel):
     source_id: uuid.UUID
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
-    principal_id: uuid.UUID
+    user_id: uuid.UUID
     entity_id: uuid.UUID | None = Field(default=None)
     confidence: float
 

@@ -32,17 +32,24 @@ def test_media_router_exposes_pages_and_images_without_relationship_routes() -> 
     assert "/sources/object" in source_paths
 
 
-def test_annotation_lists_expose_shared_typed_source_filters() -> None:
+def test_source_filtered_lists_expose_shared_typed_source_filters() -> None:
     app = FastAPI()
     app.include_router(annotations_router)
     app.include_router(entities_router)
     spec = app.openapi()
 
-    for path in ("/faces", "/entities", "/page-mentions", "/document-mentions"):
+    for path in ("/faces", "/entities"):
         parameters = {
             parameter["name"] for parameter in spec["paths"][path]["get"]["parameters"]
         }
         assert {"source_id", "page", "document", "image"} <= parameters
+
+    assert "/page-mentions" not in spec["paths"]
+    assert "/document-mentions" not in spec["paths"]
+    assert set(spec["paths"]["/entities/{entity_id}/mentioned-in/{source_id}"]) == {
+        "put",
+        "delete",
+    }
 
 
 def test_documents_expose_full_immutable_rest_interface() -> None:

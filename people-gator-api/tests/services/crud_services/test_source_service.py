@@ -27,14 +27,17 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
-    DocumentSourceMetadata,
     DocumentCreateRequest,
+    DocumentSourceMetadata,
     ImageCreateRequest,
     PageCreateRequest,
     SourceDescriptorRequest,
     SourceResponse,
 )
-from people_gator_api.services.crud_services import source_service
+from people_gator_api.services.crud_services import (
+    source_resolution_service,
+    source_service,
+)
 
 
 def _source(source_type: SourceKind) -> SourceResponse:
@@ -49,20 +52,117 @@ def _source(source_type: SourceKind) -> SourceResponse:
 def test_document_storage_includes_flat_archive_identity() -> None:
     document_id = uuid.uuid4()
 
-    properties = source_service._source_storage_properties(
+    properties = source_service._storage_properties(
         SourceKind.document,
         "https://library.example/document/1",
-        DocumentSourceMetadata(
-            library="mzk",
-            document=document_id,
-            kramerius_url=AnyUrl("https://library.example/document/1"),
-        ),
+        DocumentSourceMetadata(library="mzk", document=document_id),
     )
 
-    assert properties["library"] == "mzk"
-    assert properties["document"] == document_id
-    assert properties["page"] is None
-    assert "metadata" not in properties
+    assert properties == {
+        "source_type": "document",
+        "uri": "https://library.example/document/1",
+        "library": "mzk",
+        "document": document_id,
+        "page": None,
+    }
+
+
+@pytest.mark.parametrize(
+    ("source_type", "kwargs"),
+    [
+        (SourceKind.image, {}),
+        (SourceKind.image, {"url": "https://example.test", "library": "mzk"}),
+        (SourceKind.document, {"library": "mzk"}),
+        (
+            SourceKind.document,
+            {"library": "mzk", "document_id": uuid.uuid4(), "page_id": uuid.uuid4()},
+        ),
+        (
+            SourceKind.page,
+            {"library": "mzk", "document_id": uuid.uuid4()},
+        ),
+    ],
+)
+def test_source_content_rejects_invalid_type_combinations(
+    source_type: SourceKind,
+    kwargs: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        source_service._source_content(
+            source_type,
+            library=kwargs.get("library"),
+            document_id=kwargs.get("document_id"),
+            page_id=kwargs.get("page_id"),
+            url=kwargs.get("url"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_source_checks_identity_and_inserts_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document_id = uuid.uuid4()
+    inserted: dict[str, object] = {}
+
+    async def fake_get_source(*_args: object, **kwargs: object) -> None:
+        assert kwargs == {
+            "source_type": SourceKind.document,
+            "library": "mzk",
+            "document_id": document_id,
+            "page_id": None,
+            "url": None,
+        }
+        return None
+
+    class _Data:
+        async def insert(self, **kwargs: object) -> None:
+            inserted.update(kwargs)
+
+    monkeypatch.setattr(source_service, "get_source", fake_get_source)
+    client = SimpleNamespace(
+        collections=SimpleNamespace(get=lambda _name: SimpleNamespace(data=_Data()))
+    )
+
+    source, created = await source_service.create_source(
+        client,
+        SourceKind.document,
+        library="mzk",
+        document_id=document_id,
+    )
+
+    expected_url = f"https://www.digitalniknihovna.cz/mzk/uuid/uuid:{document_id}"
+    assert created is True
+    assert source.uri == expected_url
+    assert inserted == {
+        "uuid": source.source_id,
+        "properties": {
+            "source_type": "document",
+            "uri": expected_url,
+            "library": "mzk",
+            "document": document_id,
+            "page": None,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_source_reuses_existing_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    existing = _source(SourceKind.image)
+
+    async def fake_get_source(*_args: object, **_kwargs: object) -> SourceResponse:
+        return existing
+
+    monkeypatch.setattr(source_service, "get_source", fake_get_source)
+    source, created = await source_service.create_source(
+        SimpleNamespace(),
+        SourceKind.image,
+        url=existing.uri,
+    )
+
+    assert source == existing
+    assert created is False
 
 
 @pytest.mark.asyncio
@@ -75,32 +175,26 @@ async def test_resolve_source_filter_accepts_both_page_paths(
     page_id = uuid.uuid4()
     document_id = uuid.uuid4()
 
-    async def fake_get_source_by_page_path(
+    async def fake_get_source(
         _client: object,
-        library: str,
-        requested_page_id: uuid.UUID,
-        *,
-        document_id: uuid.UUID | None = None,
+        _source_id: uuid.UUID | None = None,
+        **kwargs: object,
     ) -> SourceResponse:
-        assert library == "mzk"
-        assert requested_page_id == page_id
-        assert document_id == (expected_document_id if include_document else None)
+        assert kwargs == {
+            "source_type": SourceKind.page,
+            "library": "mzk",
+            "document_id": document_id if include_document else None,
+            "page_id": page_id,
+        }
         return page_source
 
-    expected_document_id = document_id
-    monkeypatch.setattr(
-        source_service,
-        "get_source_by_page_path",
-        fake_get_source_by_page_path,
-    )
-    canonical_path = (
-        f"mzk/{document_id}/{page_id}" if include_document else f"mzk/{page_id}"
-    )
+    monkeypatch.setattr(source_resolution_service, "get_source", fake_get_source)
+    path = f"mzk/{document_id}/{page_id}" if include_document else f"mzk/{page_id}"
 
-    resolved = await source_service.resolve_source_filter(
-        object(),  # pyright: ignore[reportArgumentType] - database lookup is mocked.
+    resolved = await source_resolution_service.resolve_source_filter(
+        object(),
         source_id=None,
-        page=canonical_path,
+        page=path,
         document=None,
         image=None,
     )
@@ -109,76 +203,10 @@ async def test_resolve_source_filter_accepts_both_page_paths(
 
 
 @pytest.mark.asyncio
-async def test_resolve_source_filter_accepts_document_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    document_source = _source(SourceKind.document)
-    document_id = uuid.uuid4()
-
-    async def fake_get_source_by_document_identity(
-        _client: object,
-        library: str,
-        requested_document_id: uuid.UUID,
-    ) -> SourceResponse:
-        assert library == "mzk"
-        assert requested_document_id == document_id
-        return document_source
-
-    monkeypatch.setattr(
-        source_service,
-        "get_source_by_document_identity",
-        fake_get_source_by_document_identity,
-    )
-
-    resolved = await source_service.resolve_source_filter(
-        object(),  # pyright: ignore[reportArgumentType] - database lookup is mocked.
-        source_id=None,
-        page=None,
-        document=f"mzk/{document_id}",
-        image=None,
-    )
-
-    assert resolved == document_source.source_id
-
-
-@pytest.mark.asyncio
-async def test_resolve_source_filter_accepts_image_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    image_source = _source(SourceKind.image)
-    image_url = "https://images.example.test/portrait.jpg?size=large"
-
-    async def fake_get_source_by_type_uri(
-        _client: object,
-        source_type: SourceKind,
-        uri: str,
-    ) -> SourceResponse:
-        assert source_type == SourceKind.image
-        assert uri == image_url
-        return image_source
-
-    monkeypatch.setattr(
-        source_service,
-        "get_source_by_type_uri",
-        fake_get_source_by_type_uri,
-    )
-
-    resolved = await source_service.resolve_source_filter(
-        object(),  # pyright: ignore[reportArgumentType] - database lookup is mocked.
-        source_id=None,
-        page=None,
-        document=None,
-        image=image_url,
-    )
-
-    assert resolved == image_source.source_id
-
-
-@pytest.mark.asyncio
 async def test_resolve_source_filter_rejects_conflicting_selectors() -> None:
     with pytest.raises(source_service.SourceResolutionError) as exc_info:
-        await source_service.resolve_source_filter(
-            object(),  # pyright: ignore[reportArgumentType] - rejected before database access.
+        await source_resolution_service.resolve_source_filter(
+            object(),
             source_id=uuid.uuid4(),
             page=f"mzk/{uuid.uuid4()}",
             document=None,
@@ -190,200 +218,89 @@ async def test_resolve_source_filter_rejects_conflicting_selectors() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_source_returns_false_for_unknown_source() -> None:
-    class _Data:
-        async def delete_by_id(self, _object_id: uuid.UUID) -> bool:
-            return False
-
-    client = SimpleNamespace(
-        collections=SimpleNamespace(
-            get=lambda _name: SimpleNamespace(data=_Data())
-        )
-    )
-
-    deleted = await source_service.delete_source(client, uuid.uuid4())
-
-    assert deleted is False
-
-
-@pytest.mark.asyncio
-async def test_delete_source_removes_existing_source() -> None:
-    source_id = uuid.uuid4()
-    deleted_ids: list[uuid.UUID] = []
-
-    class _Collection:
-        class _Data:
-            async def delete_by_id(self, object_id: uuid.UUID) -> bool:
-                deleted_ids.append(object_id)
-                return True
-
-        data = _Data()
-
-    class _Collections:
-        def get(self, _collection_name: str) -> _Collection:
-            return _Collection()
-
-    client = SimpleNamespace(collections=_Collections())
-
-    deleted = await source_service.delete_source(client, source_id)
-
-    assert deleted is True
-    assert deleted_ids == [source_id]
-
-
-@pytest.mark.asyncio
-async def test_resolve_source_reference_creates_and_links_inline_page(
+@pytest.mark.parametrize(
+    ("descriptor", "source_type", "kwargs"),
+    [
+        (
+            SourceDescriptorRequest(
+                page=PageCreateRequest(
+                    library="mzk",
+                    document_id=(document_id := uuid.uuid4()),
+                    page_id=(page_id := uuid.uuid4()),
+                )
+            ),
+            SourceKind.page,
+            {
+                "library": "mzk",
+                "document_id": document_id,
+                "page_id": page_id,
+            },
+        ),
+        (
+            SourceDescriptorRequest(
+                document=DocumentCreateRequest(
+                    library="mzk",
+                    document_id=(document_id := uuid.uuid4()),
+                )
+            ),
+            SourceKind.document,
+            {"library": "mzk", "document_id": document_id},
+        ),
+        (
+            SourceDescriptorRequest(
+                image=ImageCreateRequest(url=AnyUrl("https://example.test/image.jpg"))
+            ),
+            SourceKind.image,
+            {"url": "https://example.test/image.jpg"},
+        ),
+    ],
+)
+async def test_resolve_source_reference_uses_generic_create(
     monkeypatch: pytest.MonkeyPatch,
+    descriptor: SourceDescriptorRequest,
+    source_type: SourceKind,
+    kwargs: dict[str, object],
 ) -> None:
-    inserted: dict[str, object] = {}
-    document_id = uuid.uuid4()
-    page_id = uuid.uuid4()
-    lookup_count = 0
+    expected = _source(source_type)
 
-    async def fake_get_source_by_page_identity(
+    async def fake_create_source(
         _client: object,
-        library: str,
-        requested_document_id: uuid.UUID,
-        requested_page_id: uuid.UUID,
-    ) -> None:
-        nonlocal lookup_count
-        lookup_count += 1
-        assert library == "mzk"
-        assert requested_document_id == document_id
-        assert requested_page_id == page_id
-        return None
-
-    class _Data:
-        async def insert(
-            self,
-            *,
-            uuid: uuid.UUID,
-            properties: dict[str, object],
-        ) -> None:
-            inserted["uuid"] = uuid
-            inserted["properties"] = properties
-
-    def get_collection(_name: str) -> SimpleNamespace:
-        return SimpleNamespace(data=_Data())
+        actual_type: SourceKind,
+        **actual_kwargs: object,
+    ) -> tuple[SourceResponse, bool]:
+        assert actual_type == source_type
+        assert actual_kwargs == kwargs
+        return expected, True
 
     monkeypatch.setattr(
-        source_service,
-        "get_source_by_page_identity",
-        fake_get_source_by_page_identity,
-    )
-    client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
-    descriptor = SourceDescriptorRequest(
-        page=PageCreateRequest(
-            library="mzk",
-            document_id=document_id,
-            page_id=page_id,
-        )
+        source_resolution_service,
+        "create_source",
+        fake_create_source,
     )
 
-    resolved = await source_service.resolve_source_reference(
-        client,  # pyright: ignore[reportArgumentType] - lightweight client double.
+    resolved = await source_resolution_service.resolve_source_reference(
+        object(),
         source_id=None,
         source=descriptor,
     )
 
-    assert resolved.source_id == inserted["uuid"]
-    assert resolved.source_type == SourceKind.page
-    assert lookup_count == 1
-    assert inserted["properties"] == {
-        "source_type": "page",
-        "uri": (
-            f"https://www.digitalniknihovna.cz/mzk/view/uuid:{document_id}"
-            f"?page=uuid:{page_id}"
-        ),
-        "library": "mzk",
-        "document": document_id,
-        "page": page_id,
-    }
+    assert resolved == expected
 
 
 @pytest.mark.asyncio
-async def test_resolve_source_reference_creates_inline_document(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    document_id = uuid.uuid4()
-    inserted: dict[str, object] = {}
-
-    async def fake_get_source_by_document_identity(*_args: object) -> None:
-        return None
+@pytest.mark.parametrize("deleted", [False, True])
+async def test_delete_source_returns_storage_result(deleted: bool) -> None:
+    source_id = uuid.uuid4()
+    deleted_ids: list[uuid.UUID] = []
 
     class _Data:
-        async def insert(
-            self,
-            *,
-            uuid: uuid.UUID,
-            properties: dict[str, object],
-        ) -> None:
-            inserted["uuid"] = uuid
-            inserted["properties"] = properties
+        async def delete_by_id(self, object_id: uuid.UUID) -> bool:
+            deleted_ids.append(object_id)
+            return deleted
 
-    monkeypatch.setattr(
-        source_service,
-        "get_source_by_document_identity",
-        fake_get_source_by_document_identity,
-    )
     client = SimpleNamespace(
         collections=SimpleNamespace(get=lambda _name: SimpleNamespace(data=_Data()))
     )
 
-    resolved = await source_service.resolve_source_reference(
-        client,  # pyright: ignore[reportArgumentType] - lightweight client double.
-        source_id=None,
-        source=SourceDescriptorRequest(
-            document=DocumentCreateRequest(
-                library="mzk",
-                document_id=document_id,
-            )
-        ),
-    )
-
-    expected_uri = f"https://www.digitalniknihovna.cz/mzk/uuid/uuid:{document_id}"
-    assert resolved.source_id == inserted["uuid"]
-    assert resolved.source_type == SourceKind.document
-    assert resolved.uri == expected_uri
-    assert inserted["properties"] == {
-        "source_type": "document",
-        "uri": expected_uri,
-        "library": "mzk",
-        "document": document_id,
-        "page": None,
-    }
-
-
-@pytest.mark.asyncio
-async def test_resolve_source_reference_reuses_inline_image_source(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    existing = SourceResponse(
-        source_id=uuid.uuid4(),
-        source_type=SourceKind.image,
-        uri="https://images.example/portrait.jpg",
-        metadata=None,
-    )
-
-    async def fake_get_source_by_type_uri(
-        _client: object,
-        source_type: SourceKind,
-        uri: str,
-    ) -> SourceResponse:
-        assert source_type == SourceKind.image
-        assert uri == existing.uri
-        return existing
-
-    monkeypatch.setattr(
-        source_service, "get_source_by_type_uri", fake_get_source_by_type_uri
-    )
-
-    resolved = await source_service.resolve_source_reference(
-        SimpleNamespace(),  # pyright: ignore[reportArgumentType] - no database write expected.
-        source_id=None,
-        source=SourceDescriptorRequest(
-            image=ImageCreateRequest(url=AnyUrl(existing.uri))
-        ),
-    )
-
-    assert resolved == existing
+    assert await source_service.delete_source(client, source_id) is deleted
+    assert deleted_ids == [source_id]

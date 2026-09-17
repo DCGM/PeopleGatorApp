@@ -12,14 +12,12 @@ from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     PageCreateRequest,
     PageSourceMetadata,
-    SourceCreateRequest,
     SourceResponse,
 )
 from people_gator_api.services.crud_services import media_service
 from people_gator_api.services.weaviate_service.db_schema import (
-    DOCUMENT_MENTION_COLLECTION,
+    ENTITY_COLLECTION,
     FACE_COLLECTION,
-    PAGE_MENTION_COLLECTION,
 )
 
 
@@ -76,7 +74,6 @@ def test_parse_document_source_exposes_typed_archive_identity() -> None:
         metadata=DocumentSourceMetadata(
             library="mzk",
             document=document_id,
-            kramerius_url=AnyUrl("https://library.example/document"),
         ),
     )
 
@@ -96,13 +93,12 @@ async def test_create_document_derives_canonical_uri(
 
     async def fake_create_source(
         _client: object,
-        payload: SourceCreateRequest,
+        source_type: SourceKind,
+        **kwargs: object,
     ) -> tuple[SourceResponse, bool]:
-        assert payload.uri is None
-        metadata = payload.metadata
-        assert isinstance(metadata, DocumentSourceMetadata)
-        assert metadata.library == "mzk"
-        assert metadata.document == document_id
+        assert source_type == SourceKind.document
+        assert kwargs == {"library": "mzk", "document_id": document_id}
+        metadata = DocumentSourceMetadata(library="mzk", document=document_id)
         return (
             SourceResponse(
                 source_id=uuid.uuid4(),
@@ -137,24 +133,22 @@ async def test_get_document_by_path_returns_typed_document(
         metadata=DocumentSourceMetadata(
             library="mzk",
             document=document_id,
-            kramerius_url=AnyUrl("https://library.example/document/1"),
         ),
     )
 
-    async def fake_get_source_by_document_identity(
+    async def fake_get_source(
         _client: object,
-        library: str,
-        requested_document_id: uuid.UUID,
+        _source_id: uuid.UUID | None = None,
+        **kwargs: object,
     ) -> SourceResponse:
-        assert library == "mzk"
-        assert requested_document_id == document_id
+        assert kwargs == {
+            "source_type": SourceKind.document,
+            "library": "mzk",
+            "document_id": document_id,
+        }
         return source
 
-    monkeypatch.setattr(
-        media_service,
-        "get_source_by_document_identity",
-        fake_get_source_by_document_identity,
-    )
+    monkeypatch.setattr(media_service, "get_source", fake_get_source)
 
     document = await media_service.get_document_by_path(
         object(),  # pyright: ignore[reportArgumentType] - database is mocked above.
@@ -188,8 +182,15 @@ async def test_create_page_reuses_archive_identity_when_url_changes(
 
     async def fake_create_source(
         _client: object,
-        _payload: SourceCreateRequest,
+        source_type: SourceKind,
+        **kwargs: object,
     ) -> tuple[SourceResponse, bool]:
+        assert source_type == SourceKind.page
+        assert kwargs == {
+            "library": "mzk",
+            "document_id": document_id,
+            "page_id": page_id,
+        }
         return existing, False
 
     monkeypatch.setattr(media_service, "create_source", fake_create_source)
@@ -228,23 +229,22 @@ async def test_get_page_by_path_supports_both_canonical_forms(
         ),
     )
 
-    async def fake_get_source_by_page_path(
+    async def fake_get_source(
         _client: object,
-        library: str,
-        requested_page_id: uuid.UUID,
-        *,
-        document_id: uuid.UUID | None = None,
+        _source_id: uuid.UUID | None = None,
+        **kwargs: object,
     ) -> SourceResponse:
-        assert library == "mzk"
-        assert requested_page_id == page_id
-        assert document_id == (source.metadata.document if include_document else None)
+        assert kwargs == {
+            "source_type": SourceKind.page,
+            "library": "mzk",
+            "document_id": (
+                source.metadata.document if include_document else None
+            ),
+            "page_id": page_id,
+        }
         return source
 
-    monkeypatch.setattr(
-        media_service,
-        "get_source_by_page_path",
-        fake_get_source_by_page_path,
-    )
+    monkeypatch.setattr(media_service, "get_source", fake_get_source)
 
     page = await media_service.get_page_by_path(
         object(),  # pyright: ignore[reportArgumentType] - database is mocked above.
@@ -258,26 +258,22 @@ async def test_get_page_by_path_supports_both_canonical_forms(
 
 
 @pytest.mark.asyncio
-async def test_entity_ids_for_source_combines_mentions_and_face_detections() -> None:
+async def test_entity_ids_for_source_combines_direct_links_and_face_detections() -> (
+    None
+):
     source_id = uuid.uuid4()
     face_entity_id = uuid.uuid4()
     mentioned_entity_id = uuid.uuid4()
-    document_mention_id = uuid.uuid4()
 
     face = SimpleNamespace(
         uuid=uuid.uuid4(),
         properties={},
         references={"entity": _reference(face_entity_id)},
     )
-    page_mention = SimpleNamespace(
-        uuid=uuid.uuid4(),
+    mentioned_entity = SimpleNamespace(
+        uuid=mentioned_entity_id,
         properties={},
-        references={"document_mention": _reference(document_mention_id)},
-    )
-    document_mention = SimpleNamespace(
-        uuid=document_mention_id,
-        properties={},
-        references={"entity": _reference(mentioned_entity_id)},
+        references={},
     )
 
     class _Query:
@@ -288,20 +284,9 @@ async def test_entity_ids_for_source_combines_mentions_and_face_detections() -> 
         async def fetch_objects(self, **_kwargs: object) -> SimpleNamespace:
             objects = {
                 FACE_COLLECTION: [face],
-                PAGE_MENTION_COLLECTION: [page_mention],
-                DOCUMENT_MENTION_COLLECTION: [],
+                ENTITY_COLLECTION: [mentioned_entity],
             }.get(self.collection_name, [])
             return SimpleNamespace(objects=objects)
-
-        async def fetch_objects_by_ids(
-            self,
-            object_ids: list[uuid.UUID],
-            **_kwargs: object,
-        ) -> SimpleNamespace:
-            if self.collection_name == DOCUMENT_MENTION_COLLECTION:
-                assert object_ids == [document_mention_id]
-                return SimpleNamespace(objects=[document_mention])
-            raise AssertionError("unexpected fetch_objects_by_ids call")
 
     def get_collection(collection_name: str) -> SimpleNamespace:
         return SimpleNamespace(query=_Query(collection_name))

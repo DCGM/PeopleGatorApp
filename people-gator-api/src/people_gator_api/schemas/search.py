@@ -52,6 +52,7 @@ class SearchEntitiesResultListResponse(GenericListResponse[SearchEntitiesResult]
 
 class SearchEntitiesQuery(BaseModel):
     """Typed query signals the caller wants to find matches for."""
+
     q: list[str] | None = Field(
         default=None,
         description="Name or alias text to search for.",
@@ -96,6 +97,7 @@ class SearchEntitiesQuery(BaseModel):
 
 class FaceSearchResult(BaseModel):
     """A single face detection matched against the supplied query faces."""
+
     face_id: uuid.UUID = Field(..., description="The matched face detection ID.")
     source_id: uuid.UUID | None = Field(
         default=None, description="Source containing the matched face."
@@ -157,8 +159,8 @@ class ArchiveHitListResponse(GenericListResponse[ArchiveHit]):
 class SearchArchiveQuery(BaseModel):
     """Single-input search across pages and documents.
 
-    The query input matches page mentions, document mentions, linked entity
-    names and aliases, or archive UUIDs directly.
+    The query input matches directly linked entity names and aliases, or
+    archive UUIDs directly.
     """
 
     q: str = Field(

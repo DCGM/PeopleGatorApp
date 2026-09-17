@@ -56,13 +56,13 @@ router = APIRouter()
 @router.get("/documents", response_model=DocumentListResponse, tags=["documents"])
 async def list_documents_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     library: str | None = None,
     document_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> DocumentListResponse:
-    del principal
+    del user
     return await list_documents(
         session,
         after_id,
@@ -81,9 +81,9 @@ async def list_documents_route(
 async def create_document_route(
     payload: DocumentCreateRequest,
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
 ) -> DocumentResponse:
-    del principal
+    del user
     document, created = await create_document(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Document already registered")
@@ -98,9 +98,9 @@ async def create_document_route(
 async def get_document_route(
     document_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
 ) -> DocumentResponse:
-    del principal
+    del user
     document = await get_document(
         session,
         document_source_id,
@@ -117,13 +117,13 @@ async def get_document_route(
 )
 async def get_document_object_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     url: AnyUrl | None = None,
     library: str | None = None,
     document: uuid.UUID | None = None,
 ) -> DocumentResponse:
     """Fetch one document by ``url`` or by ``library`` + ``document``."""
-    del principal
+    del user
     if url is not None:
         if library is not None or document is not None:
             raise_api_error(
@@ -153,9 +153,9 @@ async def get_document_object_route(
 async def delete_document_route(
     document_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: AdminUserDependency,
+    user: AdminUserDependency,
 ) -> None:
-    del principal
+    del user
     if (
         await get_document(
             session,
@@ -170,14 +170,14 @@ async def delete_document_route(
 @router.get("/pages", response_model=PageListResponse, tags=["pages"])
 async def list_pages_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     library: str | None = None,
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> PageListResponse:
-    del principal
+    del user
     return await list_pages(
         session,
         after_id,
@@ -197,9 +197,9 @@ async def list_pages_route(
 async def create_page_route(
     payload: PageCreateRequest,
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
 ) -> PageResponse:
-    del principal
+    del user
     page, created = await create_page(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Page already registered")
@@ -209,14 +209,14 @@ async def create_page_route(
 @router.get("/pages/object", response_model=PageResponse, tags=["pages"])
 async def get_page_object_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     url: AnyUrl | None = None,
     library: str | None = None,
     document: uuid.UUID | None = None,
     page: uuid.UUID | None = None,
 ) -> PageResponse:
     """Fetch one page by ``url`` or by ``library`` + ``document`` + ``page``."""
-    del principal
+    del user
     if url is not None:
         if any(param is not None for param in (library, document, page)):
             raise_api_error(
@@ -242,9 +242,9 @@ async def get_page_object_route(
 async def get_page_route(
     page_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
 ) -> PageResponse:
-    del principal
+    del user
     page = await get_page(session, page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
@@ -259,16 +259,16 @@ async def get_page_route(
 async def get_page_image_by_id_route(
     page_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
-    del principal
+    del user
     page = await get_page(session, page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
-        image = await get_page_image(str(page.url), width=width)
+        image = await get_page_image(str(page.url), max_width=width)
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
     return Response(
@@ -281,7 +281,7 @@ async def get_page_image_by_id_route(
 @router.get("/pages/object/image", response_class=Response, tags=["pages"])
 async def get_page_image_object_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     url: AnyUrl | None = None,
     library: str | None = None,
     document: uuid.UUID | None = None,
@@ -289,7 +289,7 @@ async def get_page_image_object_route(
     width: int | None = None,
 ) -> Response:
     """Stream one page image selected by ``url`` or library/document/page."""
-    del principal
+    del user
     if url is not None:
         if any(param is not None for param in (library, document, page)):
             raise_api_error(
@@ -309,7 +309,7 @@ async def get_page_image_object_route(
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
-        image = await get_page_image(str(resolved.url), width=width)
+        image = await get_page_image(str(resolved.url), max_width=width)
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
     return Response(
@@ -327,9 +327,9 @@ async def get_page_image_object_route(
 async def delete_page_route(
     page_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: AdminUserDependency,
+    user: AdminUserDependency,
 ) -> None:
-    del principal
+    del user
     if await get_page(session, page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
     await delete_source(session, page_source_id)
@@ -338,12 +338,12 @@ async def delete_page_route(
 @router.get("/images", response_model=ImageListResponse, tags=["images"])
 async def list_images_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     url: str | None = None,
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> ImageListResponse:
-    del principal
+    del user
     return await list_images(
         session,
         after_id,
@@ -361,9 +361,9 @@ async def list_images_route(
 async def create_image_route(
     payload: ImageCreateRequest,
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
 ) -> ImageResponse:
-    del principal
+    del user
     image, created = await create_image(session, payload)
     if not created:
         raise_api_error(409, "already_exists", "Image already registered")
@@ -373,11 +373,11 @@ async def create_image_route(
 @router.get("/images/object", response_model=ImageResponse, tags=["images"])
 async def get_image_object_route(
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
     url: AnyUrl,
 ) -> ImageResponse:
     """Fetch one image by its ``url``."""
-    del principal
+    del user
     image = await get_image_by_url(
         session,
         str(url),
@@ -391,9 +391,9 @@ async def get_image_object_route(
 async def get_image_route(
     image_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
 ) -> ImageResponse:
-    del principal
+    del user
     image = await get_image(session, image_id)
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
@@ -407,10 +407,10 @@ async def get_image_route(
 )
 async def get_image_content_route(
     url: AnyUrl,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
 ) -> Response:
     """Stream one stored image from the bucket (``image/{website}/{path}``)."""
-    del principal
+    del user
     try:
         content, media_type = await get_image_content(str(url))
     except SourceResolutionError as exc:
@@ -422,9 +422,9 @@ async def get_image_content_route(
 async def get_image_content_by_id_route(
     image_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: BrowseUserDependency,
+    user: BrowseUserDependency,
 ) -> Response:
-    del principal
+    del user
     image = await get_image(session, image_id)
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
@@ -443,9 +443,9 @@ async def get_image_content_by_id_route(
 async def delete_image_route(
     image_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: AdminUserDependency,
+    user: AdminUserDependency,
 ) -> None:
-    del principal
+    del user
     if await get_image(session, image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
     await delete_source(session, image_id)

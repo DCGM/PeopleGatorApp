@@ -5,8 +5,6 @@ class AnnotationType(StrEnum):
     """Annotation entities in the simplified ER diagram."""
 
     entity = "entity"
-    document_mention = "document_mention"
-    page_mention = "page_mention"
     face = "face"
 
 
@@ -24,22 +22,6 @@ class SourceKind(StrEnum):
     page = "page"
     document = "document"
     image = "image"
-
-
-class PrincipalType(StrEnum):
-    """Polymorphic discriminator for PRINCIPAL rows."""
-
-    user = "user"
-    service_agent = "service_agent"
-    model_agent = "model_agent"
-
-
-class RegistrySource(StrEnum):
-    """Model registry that hosts a MODEL_AGENT artifact."""
-
-    mlflow = "mlflow"
-    huggingface = "huggingface"
-    local = "local"
 
 
 class FaceEmbeddingModel(StrEnum):

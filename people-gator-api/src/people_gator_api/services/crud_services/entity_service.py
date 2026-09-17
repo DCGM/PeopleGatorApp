@@ -8,7 +8,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import EntityType, SourceKind
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -33,6 +33,10 @@ from people_gator_api.services.weaviate_service.utils import (
 from people_gator_api.services.crud_services.media_service import (
     entity_ids_for_source,
 )
+from people_gator_api.services.crud_services.source_service import (
+    SourceResolutionError,
+    get_source,
+)
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
 
@@ -51,7 +55,7 @@ def _build_entity_filters(
     entity_type: EntityType | None,
     wikidata_id: str | None,
     nlcr_authority_id: str | None,
-    principal_id: uuid.UUID | None,
+    user_id: uuid.UUID | None,
 ) -> list[FilterReturn]:
     filters: list[FilterReturn] = []
 
@@ -61,9 +65,9 @@ def _build_entity_filters(
         filters.append(Filter.by_property("wikidata_id").equal(wikidata_id))
     if nlcr_authority_id is not None:
         filters.append(Filter.by_property("nlcr_authority_id").equal(nlcr_authority_id))
-    if principal_id is not None:
+    if user_id is not None:
         filters.append(
-            reference_id_filter(link_on="principal", reference_id=principal_id)
+            reference_id_filter(link_on="user", reference_id=user_id)
         )
     return filters
 
@@ -76,21 +80,21 @@ def _build_entity_filters(
 @trace()
 async def list_entities(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
     after_id: uuid.UUID | None,
     limit: int,
     entity_type: EntityType | None = None,
     wikidata_id: str | None = None,
     nlcr_authority_id: str | None = None,
-    owner_principal_id: uuid.UUID | None = None,
+    owner_user_id: uuid.UUID | None = None,
     source_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
-    del principal_id
+    del user_id
     filters = _build_entity_filters(
         entity_type=entity_type,
         wikidata_id=wikidata_id,
         nlcr_authority_id=nlcr_authority_id,
-        principal_id=owner_principal_id,
+        user_id=owner_user_id,
     )
     if source_id is not None:
         entity_ids = await entity_ids_for_source(client, source_id)
@@ -110,7 +114,7 @@ async def list_entities(
             "entity_type": entity_type.value if entity_type is not None else None,
             "wikidata_id": wikidata_id,
             "nlcr_authority_id": nlcr_authority_id,
-            "owner_principal_id": owner_principal_id,
+            "owner_user_id": owner_user_id,
             "source_id": source_id,
         },
     )
@@ -119,14 +123,11 @@ async def list_entities(
         ENTITY_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
-        return_references=empty_reference_queries(["principal"]),
+        return_references=empty_reference_queries(["user"]),
         after_id=after_id,
     )
     items = sorted(
-        [
-            parse_entity(item.properties, item.references, item.uuid)
-            for item in objects
-        ],
+        [parse_entity(item.properties, item.references, item.uuid) for item in objects],
         key=lambda item: item.entity_id,
     )
 
@@ -148,7 +149,7 @@ async def get_entity(
         client,
         ENTITY_COLLECTION,
         entity_id,
-        reference_names=["principal"],
+        reference_names=["user"],
     )
     if response is None:
         logger.info("entity not found", extra={"entity_id": entity_id})
@@ -161,11 +162,11 @@ async def get_entity(
 async def create_entity(
     client: WeaviateAsyncClient,
     payload: EntityCreateRequest,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> EntityResponse:
     logger.info(
         "create_entity called",
-        extra={"principal_id": principal_id, "entity_type": payload.entity_type},
+        extra={"user_id": user_id, "entity_type": payload.entity_type},
     )
     entity_id = new_uuid6()
     await client.collections.get(ENTITY_COLLECTION).data.insert(
@@ -179,7 +180,7 @@ async def create_entity(
             "wikidata_id": payload.wikidata_id,
             "nlcr_authority_id": payload.nlcr_authority_id,
         },
-        references={"principal": principal_id},
+        references={"user": user_id},
         vector={
             vector_name: embedding
             for vector_name, embedding in {
@@ -192,7 +193,7 @@ async def create_entity(
     )
     return EntityResponse(
         entity_id=entity_id,
-        principal_id=principal_id,
+        user_id=user_id,
         entity_type=payload.entity_type,
         name=payload.name,
         description=payload.description,
@@ -207,11 +208,11 @@ async def create_entity(
 async def create_entity_batch(
     client: WeaviateAsyncClient,
     payload: AsyncGenerator[EntityCreateRequest, None],
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> list[EntityResponse]:
     logger.info(
         "create_entity_batch called",
-        extra={"principal_id": principal_id},
+        extra={"user_id": user_id},
     )
     entity_collection = client.collections.use(ENTITY_COLLECTION)
     ids: list[uuid.UUID] = []
@@ -229,7 +230,7 @@ async def create_entity_batch(
                     "wikidata_id": entity_payload.wikidata_id,
                     "nlcr_authority_id": entity_payload.nlcr_authority_id,
                 },
-                references={"principal": principal_id},
+                references={"user": user_id},
                 vector={
                     vector_name: embedding
                     for vector_name, embedding in {
@@ -244,7 +245,7 @@ async def create_entity_batch(
     # After batch is complete, fetch the created entities to return their details
     created_entities = await entity_collection.query.fetch_objects_by_ids(
         ids,
-        return_references=empty_reference_queries(["principal"]),
+        return_references=empty_reference_queries(["user"]),
     )
     return [
         parse_entity(item.properties, item.references, item.uuid)
@@ -263,7 +264,7 @@ async def patch_entity(
         client,
         ENTITY_COLLECTION,
         entity_id,
-        reference_names=["principal"],
+        reference_names=["user"],
     )
     if response is None:
         logger.info(
@@ -286,6 +287,66 @@ async def patch_entity(
 
     logger.info("patch_entity completed", extra={"entity_id": entity_id})
     return parse_entity(properties, response.references, response.uuid)
+
+
+@trace()
+async def link_entity_to_source(
+    client: WeaviateAsyncClient,
+    entity_id: uuid.UUID,
+    source_id: uuid.UUID,
+) -> bool:
+    """Add a direct ``mentioned_in`` link to a document or page source."""
+    if await get_entity(client, entity_id) is None:
+        return False
+    source = await get_source(client, source_id)
+    if source is None:
+        raise SourceResolutionError(
+            "Source not found",
+            status_code=404,
+            code="not_found",
+        )
+    if source.source_type not in (SourceKind.document, SourceKind.page):
+        raise SourceResolutionError(
+            "Entities can only be mentioned in document or page sources",
+            status_code=422,
+            code="invalid_source_type",
+        )
+    await client.collections.get(ENTITY_COLLECTION).data.reference_add(
+        from_uuid=entity_id,
+        from_property="mentioned_in",
+        to=source_id,
+    )
+    return True
+
+
+@trace()
+async def unlink_entity_from_source(
+    client: WeaviateAsyncClient,
+    entity_id: uuid.UUID,
+    source_id: uuid.UUID,
+) -> bool:
+    """Remove a direct ``mentioned_in`` link from an entity."""
+    if await get_entity(client, entity_id) is None:
+        return False
+    source = await get_source(client, source_id)
+    if source is None:
+        raise SourceResolutionError(
+            "Source not found",
+            status_code=404,
+            code="not_found",
+        )
+    if source.source_type not in (SourceKind.document, SourceKind.page):
+        raise SourceResolutionError(
+            "Entities can only be mentioned in document or page sources",
+            status_code=422,
+            code="invalid_source_type",
+        )
+    await client.collections.get(ENTITY_COLLECTION).data.reference_delete(
+        from_uuid=entity_id,
+        from_property="mentioned_in",
+        to=source_id,
+    )
+    return True
 
 
 @trace()

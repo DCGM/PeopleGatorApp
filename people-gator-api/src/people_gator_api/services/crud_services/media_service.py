@@ -25,7 +25,6 @@ from people_gator_api.schemas.sources import (
     PageCreateRequest,
     PageListResponse,
     PageResponse,
-    SourceCreateRequest,
     SourceResponse,
 )
 from people_gator_api.services.crud_services.source_service import (
@@ -33,15 +32,11 @@ from people_gator_api.services.crud_services.source_service import (
     canonical_page_uri,
     create_source,
     get_source,
-    get_source_by_document_identity,
-    get_source_by_page_path,
-    get_source_by_type_uri,
     list_sources,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
-    DOCUMENT_MENTION_COLLECTION,
+    ENTITY_COLLECTION,
     FACE_COLLECTION,
-    PAGE_MENTION_COLLECTION,
 )
 from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
@@ -114,14 +109,10 @@ async def create_page(
 ) -> tuple[PageResponse, bool]:
     source, created = await create_source(
         client,
-        SourceCreateRequest(
-            source_type=SourceKind.page,
-            metadata=PageSourceMetadata(
-                library=payload.library,
-                document=payload.document_id,
-                page=payload.page_id,
-            ),
-        ),
+        SourceKind.page,
+        library=payload.library,
+        document_id=payload.document_id,
+        page_id=payload.page_id,
     )
     return parse_page_source(source), created
 
@@ -133,13 +124,9 @@ async def create_document(
 ) -> tuple[DocumentResponse, bool]:
     source, created = await create_source(
         client,
-        SourceCreateRequest(
-            source_type=SourceKind.document,
-            metadata=DocumentSourceMetadata(
-                library=payload.library,
-                document=payload.document_id,
-            ),
-        ),
+        SourceKind.document,
+        library=payload.library,
+        document_id=payload.document_id,
     )
     return parse_document_source(source), created
 
@@ -151,11 +138,8 @@ async def create_image(
 ) -> tuple[ImageResponse, bool]:
     source, created = await create_source(
         client,
-        SourceCreateRequest(
-            source_type=SourceKind.image,
-            uri=str(payload.url),
-            metadata=None,
-        ),
+        SourceKind.image,
+        url=str(payload.url),
     )
     return parse_image_source(source), created
 
@@ -176,8 +160,8 @@ async def list_pages(
         after_id,
         limit,
         library=library,
-        document=document_id,
-        page=page_id,
+        document_id=document_id,
+        page_id=page_id,
     )
     return PageListResponse(
         items=[parse_page_source(source) for source in sources.items],
@@ -197,11 +181,12 @@ async def list_documents(
     document_id: uuid.UUID | None = None,
 ) -> DocumentListResponse:
     sources = await list_sources(
-        client,        SourceKind.document,
+        client,
+        SourceKind.document,
         after_id,
         limit,
         library=library,
-        document=document_id,
+        document_id=document_id,
     )
     return DocumentListResponse(
         items=[parse_document_source(source) for source in sources.items],
@@ -224,7 +209,7 @@ async def list_images(
         SourceKind.image,
         after_id,
         limit,
-        uri=url,
+        url=url,
     )
     return ImageListResponse(
         items=[parse_image_source(source) for source in sources.items],
@@ -253,11 +238,12 @@ async def get_page_by_path(
     *,
     document_id: uuid.UUID | None = None,
 ) -> PageResponse | None:
-    source = await get_source_by_page_path(
+    source = await get_source(
         client,
-        library,
-        page_id,
+        source_type=SourceKind.page,
+        library=library,
         document_id=document_id,
+        page_id=page_id,
     )
     return parse_page_source(source) if source is not None else None
 
@@ -267,10 +253,10 @@ async def get_page_by_url(
     client: WeaviateAsyncClient,
     url: str,
 ) -> PageResponse | None:
-    source = await get_source_by_type_uri(
+    source = await get_source(
         client,
-        SourceKind.page,
-        url,
+        source_type=SourceKind.page,
+        url=url,
     )
     return parse_page_source(source) if source is not None else None
 
@@ -281,10 +267,11 @@ async def get_document_by_path(
     library: str,
     document_id: uuid.UUID,
 ) -> DocumentResponse | None:
-    source = await get_source_by_document_identity(
+    source = await get_source(
         client,
-        library,
-        document_id,
+        source_type=SourceKind.document,
+        library=library,
+        document_id=document_id,
     )
     return parse_document_source(source) if source is not None else None
 
@@ -305,10 +292,10 @@ async def get_document_by_url(
     client: WeaviateAsyncClient,
     url: str,
 ) -> DocumentResponse | None:
-    source = await get_source_by_type_uri(
+    source = await get_source(
         client,
-        SourceKind.document,
-        url,
+        source_type=SourceKind.document,
+        url=url,
     )
     return parse_document_source(source) if source is not None else None
 
@@ -329,10 +316,10 @@ async def get_image_by_url(
     client: WeaviateAsyncClient,
     url: str,
 ) -> ImageResponse | None:
-    source = await get_source_by_type_uri(
+    source = await get_source(
         client,
-        SourceKind.image,
-        url,
+        source_type=SourceKind.image,
+        url=url,
     )
     return parse_image_source(source) if source is not None else None
 
@@ -385,7 +372,7 @@ async def entity_ids_for_source(
     client: WeaviateAsyncClient,
     source_id: uuid.UUID,
 ) -> set[uuid.UUID]:
-    """Collect entities connected to a Source through any annotation type."""
+    """Collect entities directly mentioned in or visually detected in a Source."""
     source_filter = reference_id_filter(link_on="source", reference_id=source_id)
     faces = await _fetch_all_references(
         client,
@@ -393,28 +380,10 @@ async def entity_ids_for_source(
         filters=source_filter,
         reference_names=["entity"],
     )
-    document_mentions = await _fetch_all_references(
+    mentioned_entities = await _fetch_all_references(
         client,
-        DOCUMENT_MENTION_COLLECTION,
-        filters=source_filter,
-        reference_names=["entity"],
+        ENTITY_COLLECTION,
+        filters=reference_id_filter(link_on="mentioned_in", reference_id=source_id),
+        reference_names=[],
     )
-    page_mentions = await _fetch_all_references(
-        client,
-        PAGE_MENTION_COLLECTION,
-        filters=source_filter,
-        reference_names=["document_mention"],
-    )
-
-    document_mention_ids = _reference_ids(page_mentions, "document_mention")
-    if document_mention_ids:
-        referenced_documents = await client.collections.get(
-            DOCUMENT_MENTION_COLLECTION
-        ).query.fetch_objects_by_ids(
-            list(document_mention_ids),
-            return_properties=[],
-            return_references=empty_reference_queries(["entity"]),
-        )
-        document_mentions.extend(referenced_documents.objects)
-
-    return _reference_ids(faces, "entity") | _reference_ids(document_mentions, "entity")
+    return _reference_ids(faces, "entity") | {item.uuid for item in mentioned_entities}

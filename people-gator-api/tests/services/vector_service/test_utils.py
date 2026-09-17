@@ -40,7 +40,7 @@ class FakeReference:
 
 def test_face_response_raises_clear_error_for_empty_reference_links() -> None:
     references = {
-        "principal": FakeReference([]),
+        "user": FakeReference([]),
         "entity": FakeReference([]),
         "source": FakeReference([]),
     }

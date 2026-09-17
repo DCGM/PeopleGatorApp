@@ -9,7 +9,7 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import EntityType, SourceKind
 from people_gator_api.services.crud_services import entity_service
 
 
@@ -130,7 +130,7 @@ async def test_patch_entity_returns_none_when_entity_does_not_exist() -> None:
 @pytest.mark.asyncio
 async def test_patch_entity_updates_only_changed_properties() -> None:
     entity_id = uuid.uuid4()
-    principal_id = uuid.uuid4()
+    user_id = uuid.uuid4()
     captured: dict[str, object] = {}
     stored_properties: dict[str, object] = {
         "entity_type": "person",
@@ -143,8 +143,9 @@ async def test_patch_entity_updates_only_changed_properties() -> None:
     }
 
     references = {
-        "principal": SimpleNamespace(objects=[SimpleNamespace(uuid=principal_id)])
+        "user": SimpleNamespace(objects=[SimpleNamespace(uuid=user_id)])
     }
+
     class _Query:
         async def fetch_object_by_id(
             self,
@@ -210,7 +211,7 @@ def test_build_entity_filters_supports_exact_identity_filters() -> None:
         entity_type=EntityType.person,
         wikidata_id="Q42",
         nlcr_authority_id="A100",
-        principal_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
     )
     assert len(filters) == 4
 
@@ -244,3 +245,81 @@ async def test_list_entities_returns_empty_when_source_has_no_entities(
 
     assert result.items == []
     assert result.total_count == 0
+
+
+@pytest.mark.asyncio
+async def test_link_entity_to_source_adds_mentioned_in_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entity_id = uuid.uuid4()
+    source_id = uuid.uuid4()
+    captured: dict[str, object] = {}
+
+    async def fake_get_entity(_client: object, requested_id: uuid.UUID) -> object:
+        assert requested_id == entity_id
+        return object()
+
+    async def fake_get_source(_client: object, requested_id: uuid.UUID) -> object:
+        assert requested_id == source_id
+        return SimpleNamespace(source_type=SourceKind.page)
+
+    class _Data:
+        async def reference_add(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    client = SimpleNamespace(
+        collections=SimpleNamespace(get=lambda _name: SimpleNamespace(data=_Data()))
+    )
+    monkeypatch.setattr(entity_service, "get_entity", fake_get_entity)
+    monkeypatch.setattr(entity_service, "get_source", fake_get_source)
+
+    linked = await entity_service.link_entity_to_source(
+        client,  # pyright: ignore[reportArgumentType]
+        entity_id,
+        source_id,
+    )
+
+    assert linked is True
+    assert captured == {
+        "from_uuid": entity_id,
+        "from_property": "mentioned_in",
+        "to": source_id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_unlink_entity_from_source_deletes_mentioned_in_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entity_id = uuid.uuid4()
+    source_id = uuid.uuid4()
+    captured: dict[str, object] = {}
+
+    async def fake_get_entity(_client: object, _requested_id: uuid.UUID) -> object:
+        return object()
+
+    async def fake_get_source(_client: object, _requested_id: uuid.UUID) -> object:
+        return SimpleNamespace(source_type=SourceKind.document)
+
+    class _Data:
+        async def reference_delete(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    client = SimpleNamespace(
+        collections=SimpleNamespace(get=lambda _name: SimpleNamespace(data=_Data()))
+    )
+    monkeypatch.setattr(entity_service, "get_entity", fake_get_entity)
+    monkeypatch.setattr(entity_service, "get_source", fake_get_source)
+
+    unlinked = await entity_service.unlink_entity_from_source(
+        client,  # pyright: ignore[reportArgumentType]
+        entity_id,
+        source_id,
+    )
+
+    assert unlinked is True
+    assert captured == {
+        "from_uuid": entity_id,
+        "from_property": "mentioned_in",
+        "to": source_id,
+    }

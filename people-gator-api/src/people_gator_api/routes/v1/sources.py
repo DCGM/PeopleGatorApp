@@ -20,10 +20,11 @@ from people_gator_api.services.crud_services.source_service import (
     create_source,
     delete_source,
     get_source,
-    get_source_by_uri,
     list_sources,
 )
 from people_gator_api.schemas.sources import (
+    DocumentSourceMetadata,
+    PageSourceMetadata,
     SourceCreateRequest,
     SourceListResponse,
     SourceResponse,
@@ -35,7 +36,7 @@ router = APIRouter(tags=["sources"])
 @router.get("/sources", response_model=SourceListResponse)
 async def list_sources_route(
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
     source_type: SourceKind | None = None,
     uri: str | None = None,
     library: str | None = None,
@@ -44,16 +45,16 @@ async def list_sources_route(
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
-    del principal
+    del user
     return await list_sources(
         session,
         source_type,
         after_id,
         limit,
-        uri=uri,
+        url=uri,
         library=library,
-        document=document,
-        page=page,
+        document_id=document,
+        page_id=page,
     )
 
 
@@ -61,14 +62,11 @@ async def list_sources_route(
 async def get_source_object_route(
     url: AnyUrl,
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
 ) -> SourceResponse:
     """Fetch one source by its ``url``."""
-    del principal
-    source = await get_source_by_uri(
-        session,
-        str(url),
-    )
+    del user
+    source = await get_source(session, url=str(url))
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
     return source
@@ -78,9 +76,9 @@ async def get_source_object_route(
 async def get_source_route(
     source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
 ) -> SourceResponse:
-    del principal
+    del user
     source = await get_source(session, source_id)
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
@@ -93,10 +91,31 @@ async def get_source_route(
 async def create_source_route(
     payload: SourceCreateRequest,
     session: WeaviateSessionDependency,
-    principal: DataIngestUserDependency,
+    user: DataIngestUserDependency,
 ) -> SourceResponse:
-    del principal
-    source, created = await create_source(session, payload)
+    del user
+    metadata = payload.metadata
+    if isinstance(metadata, PageSourceMetadata):
+        source, created = await create_source(
+            session,
+            payload.source_type,
+            library=metadata.library,
+            document_id=metadata.document,
+            page_id=metadata.page,
+        )
+    elif isinstance(metadata, DocumentSourceMetadata):
+        source, created = await create_source(
+            session,
+            payload.source_type,
+            library=metadata.library,
+            document_id=metadata.document,
+        )
+    else:
+        source, created = await create_source(
+            session,
+            payload.source_type,
+            url=payload.uri,
+        )
     if not created:
         raise_api_error(409, "already_exists", "Source already registered")
     return source
@@ -106,9 +125,9 @@ async def create_source_route(
 async def delete_source_route(
     source_id: uuid.UUID,
     session: WeaviateSessionDependency,
-    principal: AdminUserDependency,
+    user: AdminUserDependency,
 ) -> None:
-    del principal
+    del user
     deleted = await delete_source(session, source_id)
     if not deleted:
         raise_api_error(404, "not_found", "Source not found")

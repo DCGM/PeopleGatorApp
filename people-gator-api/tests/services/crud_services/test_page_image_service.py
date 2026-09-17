@@ -84,7 +84,7 @@ def test_get_page_image_rejects_unknown_width(
     cache_cfg = _enable_cache(monkeypatch, tmp_path)
 
     with pytest.raises(page_image_service.SourceResolutionError) as exc_info:
-        asyncio.run(get_page_image(_URL, width=cache_cfg.widths[0] + 1))
+        asyncio.run(get_page_image(_URL, max_width=cache_cfg.widths[0] + 1))
     assert exc_info.value.status_code == 422
     assert exc_info.value.code == "invalid_image_width"
 
@@ -95,7 +95,7 @@ def test_get_page_image_renders_and_caches_derivative(
     cache_cfg = _enable_cache(monkeypatch, tmp_path)
     _stub_original(monkeypatch, _png_bytes())
 
-    first = asyncio.run(get_page_image(_URL, width=cache_cfg.widths[0]))
+    first = asyncio.run(get_page_image(_URL, max_width=cache_cfg.widths[0]))
     assert first.media_type == "image/jpeg"
     assert first.cache_hit is False
 
@@ -111,7 +111,7 @@ def test_get_page_image_renders_and_caches_derivative(
     )
     assert cached_path.is_file()
 
-    second = asyncio.run(get_page_image(_URL, width=cache_cfg.widths[0]))
+    second = asyncio.run(get_page_image(_URL, max_width=cache_cfg.widths[0]))
     assert second.cache_hit is True
     assert second.media_type == first.media_type
     assert second.content == first.content
@@ -126,7 +126,7 @@ def test_get_page_image_disabled_cache_streams_original(
 ) -> None:
     _stub_original(monkeypatch, b"original-bytes")
 
-    result = asyncio.run(get_page_image(_URL, width=256))
+    result = asyncio.run(get_page_image(_URL, max_width=256))
 
     assert result.content == b"original-bytes"
     assert result.cache_hit is False

@@ -1,45 +1,31 @@
-"""CRUD service for annotation entities."""
+"""CRUD service for face annotations."""
 
 import logging
 import uuid
 from collections.abc import AsyncGenerator
 
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.data import DataObject
-from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
-from weaviate.collections.classes.internal import ReferenceInputs
 from weaviate.collections.classes.types import WeaviateProperties
 
 from people_gator_api.schemas.entities import (
-    DocumentMentionCreateRequest,
-    DocumentMentionListResponse,
-    DocumentMentionResponse,
     FaceCreateRequest,
     FaceListResponse,
     FaceResponse,
-    PageMentionCreateRequest,
-    PageMentionInlineCreateRequest,
-    PageMentionListResponse,
-    PageMentionResponse,
+)
+from people_gator_api.services.crud_services.source_resolution_service import (
+    resolve_source_reference,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
     DEFAULT_FACE_VECTOR,
-    DOCUMENT_MENTION_COLLECTION,
     FACE_COLLECTION,
-    PAGE_MENTION_COLLECTION,
-)
-from people_gator_api.services.crud_services.source_service import (
-    resolve_source_reference,
 )
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
-    parse_document_mention,
     empty_reference_queries,
-    parse_face,
     fetch_collection_object,
     fetch_collection_page_with_total_count,
-    parse_page_mention,
+    parse_face,
     reference_id_filter,
     single_named_vector_payload,
 )
@@ -48,34 +34,6 @@ from people_gator_api.utils.uuid_utils import new_uuid6
 
 
 logger = logging.getLogger(__name__)
-
-
-def _document_mention_properties(
-    payload: DocumentMentionCreateRequest,
-) -> WeaviateProperties:
-    return {
-        "name": payload.name,
-        "information": payload.information,
-        "aliases": payload.aliases,
-    }
-
-
-def _document_mention_result(
-    payload: DocumentMentionCreateRequest,
-    *,
-    document_mention_id: uuid.UUID,
-    source_id: uuid.UUID,
-    principal_id: uuid.UUID,
-) -> DocumentMentionResponse:
-    return DocumentMentionResponse(
-        document_mention_id=document_mention_id,
-        name=payload.name,
-        information=payload.information,
-        aliases=payload.aliases,
-        principal_id=principal_id,
-        source_id=source_id,
-        entity_id=payload.entity_id,
-    )
 
 
 def _face_properties(payload: FaceCreateRequest) -> WeaviateProperties:
@@ -87,8 +45,7 @@ def _face_properties(payload: FaceCreateRequest) -> WeaviateProperties:
             "height": payload.bounding_box.height,
         },
         "keypoints": [
-            {"type": item.type, "x": item.x, "y": item.y}
-            for item in payload.keypoints
+            {"type": item.type, "x": item.x, "y": item.y} for item in payload.keypoints
         ],
         "confidence": payload.confidence,
     }
@@ -99,514 +56,24 @@ def _face_result(
     *,
     detection_id: uuid.UUID,
     source_id: uuid.UUID,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> FaceResponse:
     return FaceResponse(
         detection_id=detection_id,
         source_id=source_id,
         bounding_box=payload.bounding_box,
         keypoints=payload.keypoints,
-        principal_id=principal_id,
+        user_id=user_id,
         entity_id=payload.entity_id,
         confidence=payload.confidence,
     )
-
-
-# ---------------------------------------------------------------------------
-# Page Mentions
-# ---------------------------------------------------------------------------
-
-
-@trace()
-async def create_page_mention(
-    client: WeaviateAsyncClient,
-    payload: PageMentionCreateRequest,
-    principal_id: uuid.UUID,
-) -> PageMentionResponse:
-    source = await resolve_source_reference(
-        client,
-        source_id=payload.source_id,
-        source=payload.source,
-    )
-    logger.info(
-        "create_page_mention called",
-        extra={
-            "source_id": source.source_id,
-            "document_mention_id": payload.document_mention_id,
-        },
-    )
-    page_mention_id = new_uuid6()
-    await client.collections.get(PAGE_MENTION_COLLECTION).data.insert(
-        uuid=page_mention_id,
-        properties={
-            "name": payload.name,
-            "information": payload.information,
-            "aliases": payload.aliases,
-            "polygons": [
-                {"points": [{"x": point.x, "y": point.y} for point in polygon.points]}
-                for polygon in payload.polygons
-            ],
-        },
-        references={
-            "document_mention": payload.document_mention_id,
-            "source": source.source_id,
-            "principal": principal_id,
-        },
-    )
-    return PageMentionResponse(
-        page_mention_id=page_mention_id,
-        name=payload.name,
-        information=payload.information,
-        aliases=payload.aliases,
-        polygons=payload.polygons,
-        document_mention_id=payload.document_mention_id,
-        source_id=source.source_id,
-        principal_id=principal_id,
-    )
-
-
-@trace()
-async def create_many_page_mentions(
-    client: WeaviateAsyncClient,
-    payloads: list[PageMentionCreateRequest],
-    principal_id: uuid.UUID,
-) -> list[PageMentionResponse]:
-    logger.info("create_many_page_mentions called", extra={"count": len(payloads)})
-    if not payloads:
-        return []
-    collection = client.collections.get(PAGE_MENTION_COLLECTION)
-    ids: list[uuid.UUID] = [new_uuid6() for _ in payloads]
-    objects: list[DataObject[WeaviateProperties, ReferenceInputs]] = []
-    for page_mention_id, payload in zip(ids, payloads):
-        source_id = payload.source_id
-        if source_id is None:
-            raise ValueError("page mention source_id is required for batch insert")
-        objects.append(
-            DataObject(
-                uuid=page_mention_id,
-                properties={
-                    "name": payload.name,
-                    "information": payload.information,
-                    "aliases": payload.aliases,
-                    "polygons": [
-                        {
-                            "points": [
-                                {"x": point.x, "y": point.y} for point in polygon.points
-                            ]
-                        }
-                        for polygon in payload.polygons
-                    ],
-                },
-                references={
-                    "document_mention": payload.document_mention_id,
-                    "source": source_id,
-                    "principal": principal_id,
-                },
-            )
-        )
-    result = await collection.data.insert_many(objects)
-    if result.errors:
-        logger.error(
-            "create_many_page_mentions partial failure",
-            extra={"errors": {str(k): str(v) for k, v in result.errors.items()}},
-        )
-    responses: list[PageMentionResponse] = []
-    for page_mention_id, payload in zip(ids, payloads):
-        source_id = payload.source_id
-        if source_id is None:
-            raise ValueError("page mention source_id is required for batch response")
-        responses.append(
-            PageMentionResponse(
-                page_mention_id=page_mention_id,
-                name=payload.name,
-                information=payload.information,
-                aliases=payload.aliases,
-                polygons=payload.polygons,
-                document_mention_id=payload.document_mention_id,
-                source_id=source_id,
-                principal_id=principal_id,
-            )
-        )
-    return responses
-
-
-@trace()
-async def get_page_mention(
-    client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
-    page_mention_id: uuid.UUID,
-) -> PageMentionResponse | None:
-    del principal_id
-    logger.debug("get_page_mention called", extra={"page_mention_id": page_mention_id})
-    response = await fetch_collection_object(
-        client,
-        PAGE_MENTION_COLLECTION,
-        page_mention_id,
-        reference_names=["principal", "document_mention", "source"],
-    )
-    if response is None:
-        logger.info(
-            "page_mention not found", extra={"page_mention_id": page_mention_id}
-        )
-        return None
-    logger.debug("page_mention found", extra={"page_mention_id": page_mention_id})
-    return parse_page_mention(
-        response.properties,
-        response.references,
-        response.uuid,
-    )
-
-
-@trace()
-async def list_page_mentions(
-    client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
-    document_mention_id: uuid.UUID | None,
-    source_id: uuid.UUID | None,
-    after_id: uuid.UUID | None,
-    limit: int,
-    *,
-    owner_principal_id: uuid.UUID | None = None,
-    name: str | None = None,
-) -> PageMentionListResponse:
-    del principal_id
-    logger.debug(
-        "list_page_mentions called",
-        extra={
-            "document_mention_id": document_mention_id,
-            "source_id": source_id,
-            "after_id": after_id,
-            "limit": limit,
-            "owner_principal_id": owner_principal_id,
-            "name": name,
-        },
-    )
-    filters: list[FilterReturn] = []
-    if document_mention_id is not None:
-        filters.append(
-            reference_id_filter(
-                link_on="document_mention", reference_id=document_mention_id
-            )
-        )
-    if source_id is not None:
-        filters.append(reference_id_filter(link_on="source", reference_id=source_id))
-    if owner_principal_id is not None:
-        filters.append(
-            reference_id_filter(link_on="principal", reference_id=owner_principal_id)
-        )
-    if name is not None:
-        filters.append(Filter.by_property("name").equal(name))
-    objects, total_count = await fetch_collection_page_with_total_count(
-        client,
-        PAGE_MENTION_COLLECTION,
-        filters=combine_filters(filters),
-        limit=limit,
-        return_references=empty_reference_queries(
-            ["principal", "document_mention", "source"]
-        ),
-        after_id=after_id,
-    )
-    items = sorted(
-        [
-            parse_page_mention(
-                item.properties,
-                item.references,
-                item.uuid,
-            )
-            for item in objects
-        ],
-        key=lambda item: item.page_mention_id,
-    )
-    return PageMentionListResponse(
-        items=items,
-        total_count=total_count,
-        limit=limit,
-        after_id=items[-1].page_mention_id if len(items) == limit and items else None,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Document Mentions
-# ---------------------------------------------------------------------------
-
-
-@trace()
-async def create_document_mention(
-    client: WeaviateAsyncClient,
-    payload: DocumentMentionCreateRequest,
-    principal_id: uuid.UUID,
-) -> DocumentMentionResponse:
-    source = await resolve_source_reference(
-        client,
-        source_id=payload.source_id,
-        source=payload.source,
-    )
-    logger.info(
-        "create_document_mention called",
-        extra={"source_id": source.source_id, "entity_id": payload.entity_id},
-    )
-    document_mention_id = new_uuid6()
-    await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.insert(
-        uuid=document_mention_id,
-        properties=_document_mention_properties(payload),
-        references={
-            "entity": payload.entity_id,
-            "source": source.source_id,
-            "principal": principal_id,
-        },
-    )
-    dm_response = _document_mention_result(
-        payload,
-        document_mention_id=document_mention_id,
-        source_id=source.source_id,
-        principal_id=principal_id,
-    )
-    if payload.page_mentions:
-        pm_payloads: list[PageMentionCreateRequest] = []
-        for page_mention in payload.page_mentions:
-            page_source = await resolve_source_reference(
-                client,
-                source_id=page_mention.source_id,
-                source=page_mention.source,
-            )
-            pm_payloads.append(
-                PageMentionCreateRequest(
-                    name=page_mention.name,
-                    information=page_mention.information,
-                    aliases=page_mention.aliases,
-                    polygons=page_mention.polygons,
-                    source_id=page_source.source_id,
-                    document_mention_id=document_mention_id,
-                )
-            )
-        await create_many_page_mentions(client, pm_payloads, principal_id)
-    return dm_response
-
-
-@trace()
-async def create_document_mention_batch(
-    client: WeaviateAsyncClient,
-    payloads: AsyncGenerator[DocumentMentionCreateRequest, None],
-    principal_id: uuid.UUID,
-) -> list[DocumentMentionResponse]:
-    """Insert document mentions as one streamed batch.
-
-    Source identities are resolved before each object is queued. Nested page
-    mentions are inserted in a second batch after their parent IDs exist.
-    """
-    logger.info("create_document_mention_batch called")
-    collection = client.collections.use(DOCUMENT_MENTION_COLLECTION)
-    responses: list[DocumentMentionResponse] = []
-    nested_page_mentions: list[
-        tuple[uuid.UUID, list[PageMentionInlineCreateRequest]]
-    ] = []
-
-    async with collection.batch.stream() as batch:
-        async for payload in payloads:
-            source = await resolve_source_reference(
-                client,
-                source_id=payload.source_id,
-                source=payload.source,
-            )
-            document_mention_id = new_uuid6()
-            await batch.add_object(
-                uuid=document_mention_id,
-                properties=_document_mention_properties(payload),
-                references={
-                    "entity": payload.entity_id,
-                    "source": source.source_id,
-                    "principal": principal_id,
-                },
-            )
-            responses.append(
-                _document_mention_result(
-                    payload,
-                    document_mention_id=document_mention_id,
-                    source_id=source.source_id,
-                    principal_id=principal_id,
-                )
-            )
-            if payload.page_mentions:
-                nested_page_mentions.append(
-                    (document_mention_id, list(payload.page_mentions))
-                )
-
-    page_payloads: list[PageMentionCreateRequest] = []
-    for document_mention_id, page_mentions in nested_page_mentions:
-        for page_mention in page_mentions:
-            page_source = await resolve_source_reference(
-                client,
-                source_id=page_mention.source_id,
-                source=page_mention.source,
-            )
-            page_payloads.append(
-                PageMentionCreateRequest(
-                    name=page_mention.name,
-                    information=page_mention.information,
-                    aliases=page_mention.aliases,
-                    polygons=page_mention.polygons,
-                    source_id=page_source.source_id,
-                    document_mention_id=document_mention_id,
-                )
-            )
-    if page_payloads:
-        await create_many_page_mentions(client, page_payloads, principal_id)
-    logger.info(
-        "create_document_mention_batch completed",
-        extra={"count": len(responses)},
-    )
-    return responses
-
-
-@trace()
-async def get_document_mention(
-    client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
-    document_mention_id: uuid.UUID,
-) -> DocumentMentionResponse | None:
-    del principal_id
-    logger.debug(
-        "get_document_mention called",
-        extra={"document_mention_id": document_mention_id},
-    )
-    response = await fetch_collection_object(
-        client,
-        DOCUMENT_MENTION_COLLECTION,
-        document_mention_id,
-        reference_names=["principal", "entity", "source"],
-    )
-    if response is None:
-        logger.info(
-            "document_mention not found",
-            extra={"document_mention_id": document_mention_id},
-        )
-        return None
-    logger.debug(
-        "document_mention found", extra={"document_mention_id": document_mention_id}
-    )
-    return parse_document_mention(
-        response.properties,
-        response.references,
-        response.uuid,
-    )
-
-
-@trace()
-async def patch_document_mention_entity(
-    client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
-    document_mention_id: uuid.UUID,
-    entity_id: uuid.UUID,
-) -> DocumentMentionResponse | None:
-    del principal_id
-    logger.info(
-        "patch_document_mention_entity called",
-        extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
-    )
-    response = await fetch_collection_object(
-        client,
-        DOCUMENT_MENTION_COLLECTION,
-        document_mention_id,
-        reference_names=["principal", "entity", "source"],
-    )
-    if response is None:
-        logger.info(
-            "patch_document_mention_entity skipped missing document_mention",
-            extra={"document_mention_id": document_mention_id},
-        )
-        return None
-
-    current = parse_document_mention(
-        response.properties,
-        response.references,
-        response.uuid,
-    )
-    await client.collections.get(DOCUMENT_MENTION_COLLECTION).data.reference_replace(
-        from_uuid=document_mention_id,
-        from_property="entity",
-        to=entity_id,
-    )
-    logger.info(
-        "patch_document_mention_entity completed",
-        extra={"document_mention_id": document_mention_id, "entity_id": entity_id},
-    )
-    return current.model_copy(update={"entity_id": entity_id})
-
-
-@trace()
-async def list_document_mentions(
-    client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
-    entity_id: uuid.UUID | None,
-    source_id: uuid.UUID | None,
-    after_id: uuid.UUID | None,
-    limit: int,
-    *,
-    owner_principal_id: uuid.UUID | None = None,
-    name: str | None = None,
-) -> DocumentMentionListResponse:
-    del principal_id
-    logger.debug(
-        "list_document_mentions called",
-        extra={
-            "entity_id": entity_id,
-            "source_id": source_id,
-            "after_id": after_id,
-            "limit": limit,
-            "owner_principal_id": owner_principal_id,
-            "name": name,
-        },
-    )
-    filters: list[FilterReturn] = []
-    if entity_id is not None:
-        filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
-    if source_id is not None:
-        filters.append(reference_id_filter(link_on="source", reference_id=source_id))
-    if owner_principal_id is not None:
-        filters.append(
-            reference_id_filter(link_on="principal", reference_id=owner_principal_id)
-        )
-    if name is not None:
-        filters.append(Filter.by_property("name").equal(name))
-    objects, total_count = await fetch_collection_page_with_total_count(
-        client,
-        DOCUMENT_MENTION_COLLECTION,
-        filters=combine_filters(filters),
-        limit=limit,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
-        after_id=after_id,
-    )
-    items = sorted(
-        [
-            parse_document_mention(
-                item.properties,
-                item.references,
-                item.uuid,
-            )
-            for item in objects
-        ],
-        key=lambda item: item.document_mention_id,
-    )
-    return DocumentMentionListResponse(
-        items=items,
-        total_count=total_count,
-        limit=limit,
-        after_id=items[-1].document_mention_id
-        if len(items) == limit and items
-        else None,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Faces
-# ---------------------------------------------------------------------------
 
 
 @trace()
 async def create_face(
     client: WeaviateAsyncClient,
     payload: FaceCreateRequest,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> FaceResponse:
     source = await resolve_source_reference(
         client,
@@ -624,7 +91,7 @@ async def create_face(
         references={
             "entity": payload.entity_id,
             "source": source.source_id,
-            "principal": principal_id,
+            "user": user_id,
         },
         vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
     )
@@ -632,7 +99,7 @@ async def create_face(
         payload,
         detection_id=detection_id,
         source_id=source.source_id,
-        principal_id=principal_id,
+        user_id=user_id,
     )
 
 
@@ -640,7 +107,7 @@ async def create_face(
 async def create_face_batch(
     client: WeaviateAsyncClient,
     payloads: AsyncGenerator[FaceCreateRequest, None],
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> list[FaceResponse]:
     """Resolve sources and insert face detections as one streamed batch."""
     logger.info("create_face_batch called")
@@ -660,7 +127,7 @@ async def create_face_batch(
                 references={
                     "entity": payload.entity_id,
                     "source": source.source_id,
-                    "principal": principal_id,
+                    "user": user_id,
                 },
                 vector=single_named_vector_payload(
                     DEFAULT_FACE_VECTOR,
@@ -672,7 +139,7 @@ async def create_face_batch(
                     payload,
                     detection_id=detection_id,
                     source_id=source.source_id,
-                    principal_id=principal_id,
+                    user_id=user_id,
                 )
             )
     logger.info("create_face_batch completed", extra={"count": len(responses)})
@@ -682,16 +149,16 @@ async def create_face_batch(
 @trace()
 async def get_face(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
     detection_id: uuid.UUID,
 ) -> FaceResponse | None:
-    del principal_id
+    del user_id
     logger.debug("get_face called", extra={"detection_id": detection_id})
     response = await fetch_collection_object(
         client,
         FACE_COLLECTION,
         detection_id,
-        reference_names=["principal", "entity", "source"],
+        reference_names=["user", "entity", "source"],
     )
     if response is None:
         logger.info("face not found", extra={"detection_id": detection_id})
@@ -707,11 +174,11 @@ async def get_face(
 @trace()
 async def patch_face_entity(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
     detection_id: uuid.UUID,
     entity_id: uuid.UUID,
 ) -> FaceResponse | None:
-    del principal_id
+    del user_id
     logger.info(
         "patch_face_entity called",
         extra={"detection_id": detection_id, "entity_id": entity_id},
@@ -720,7 +187,7 @@ async def patch_face_entity(
         client,
         FACE_COLLECTION,
         detection_id,
-        reference_names=["principal", "entity", "source"],
+        reference_names=["user", "entity", "source"],
     )
     if response is None:
         logger.info(
@@ -749,15 +216,15 @@ async def patch_face_entity(
 @trace()
 async def list_faces(
     client: WeaviateAsyncClient,
-    principal_id: uuid.UUID,
+    user_id: uuid.UUID,
     source_id: uuid.UUID | None,
     entity_id: uuid.UUID | None,
     after_id: uuid.UUID | None,
     limit: int,
     *,
-    owner_principal_id: uuid.UUID | None = None,
+    owner_user_id: uuid.UUID | None = None,
 ) -> FaceListResponse:
-    del principal_id
+    del user_id
     logger.debug(
         "list_faces called",
         extra={
@@ -765,7 +232,7 @@ async def list_faces(
             "entity_id": entity_id,
             "after_id": after_id,
             "limit": limit,
-            "owner_principal_id": owner_principal_id,
+            "owner_user_id": owner_user_id,
         },
     )
     filters: list[FilterReturn] = []
@@ -773,16 +240,16 @@ async def list_faces(
         filters.append(reference_id_filter(link_on="source", reference_id=source_id))
     if entity_id is not None:
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
-    if owner_principal_id is not None:
+    if owner_user_id is not None:
         filters.append(
-            reference_id_filter(link_on="principal", reference_id=owner_principal_id)
+            reference_id_filter(link_on="user", reference_id=owner_user_id)
         )
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         FACE_COLLECTION,
         filters=combine_filters(filters),
         limit=limit,
-        return_references=empty_reference_queries(["principal", "entity", "source"]),
+        return_references=empty_reference_queries(["user", "entity", "source"]),
         after_id=after_id,
     )
     items = sorted(

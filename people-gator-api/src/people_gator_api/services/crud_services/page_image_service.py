@@ -113,16 +113,16 @@ def _write_cache(path: str, data: bytes) -> None:
 async def get_page_image(
     url: str,
     *,
-    width: int | None = None,
+    max_width: int | None = None,
 ) -> PageImageContent:
     """Return one page image, optionally a cached JPEG derivative.
 
-    Without ``width`` the original bytes are streamed from object storage.
-    With ``width`` (and the cache enabled) a JPEG derivative is served from
+    Without ``max_width`` the original bytes are streamed from object storage.
+    With ``max_width`` (and the cache enabled) a JPEG derivative is served from
     the filesystem mount, rendered on first request and cached afterwards.
     """
     cache_cfg = settings.page_image_cache
-    resolved_width = _resolve_width(cache_cfg, width)
+    resolved_width = _resolve_width(cache_cfg, max_width)
 
     if resolved_width is None or not cache_cfg.enabled:
         content, media_type = await get_image_content(url)

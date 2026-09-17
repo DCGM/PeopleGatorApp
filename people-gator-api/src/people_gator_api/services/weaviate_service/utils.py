@@ -25,24 +25,15 @@ from weaviate.collections.classes.internal import CrossReferences
 
 from people_gator_api.schemas.enums import (
     EntityType,
-    PrincipalType,
     SourceKind,
 )
 from people_gator_api.schemas.entities import (
     BoundingBox,
-    DocumentMentionResponse,
     EntityResponse,
     FaceKeypoint,
     FaceResponse,
-    PageMentionResponse,
-    Polygon,
-    PolygonPoint,
 )
-from people_gator_api.schemas.principals import (
-    ModelAgentResponse,
-    PrincipalResponse,
-    UserResponse,
-)
+from people_gator_api.schemas.users import UserResponse
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     PageSourceMetadata,
@@ -162,47 +153,18 @@ def most_common_normalized(values: Sequence[str | None]) -> str | None:
 # -------------------------------------------------------
 
 
-def parse_principal(
-    properties: WeaviateProperties,
-    references: CrossReferences,
-    uuid: uuid.UUID,
-) -> PrincipalResponse:
-    return PrincipalResponse(
-        principal_id=uuid,
-        principal_type=PrincipalType(require_str(properties, "principal_type")),
-        display_name=require_str(properties, "display_name"),
-        is_active=require_bool(properties, "is_active"),
-    )
-
-
 def parse_user(
     properties: WeaviateProperties,
     references: CrossReferences,
     uuid: uuid.UUID,
 ) -> UserResponse:
     return UserResponse(
-        principal_id=uuid,
-        principal_type=PrincipalType(require_str(properties, "principal_type")),
+        user_id=uuid,
         display_name=require_str(properties, "display_name"),
         is_active=require_bool(properties, "is_active"),
         external_subject=require_str(properties, "external_subject"),
         external_issuer=require_str(properties, "external_issuer"),
         email=optional_str(properties, "email"),
-    )
-
-
-def parse_model_agent(
-    properties: WeaviateProperties,
-    references: CrossReferences,
-    uuid: uuid.UUID,
-) -> ModelAgentResponse:
-    return ModelAgentResponse(
-        principal_id=uuid,
-        principal_type=PrincipalType(require_str(properties, "principal_type")),
-        display_name=require_str(properties, "display_name"),
-        is_active=require_bool(properties, "is_active"),
-        model_slug=require_str(properties, "model_slug"),
-        model_version=require_str(properties, "model_version"),
     )
 
 
@@ -228,11 +190,12 @@ def parse_source(
         )
     elif source_type == SourceKind.document:
         if library is None or document is None:
-            raise KeyError("Document source is missing its flat archive identity fields.")
+            raise KeyError(
+                "Document source is missing its flat archive identity fields."
+            )
         resolved_metadata = DocumentSourceMetadata(
             library=library,
             document=_as_uuid(document, "document"),
-            kramerius_url=AnyUrl(uri),
         )
     logger.debug(
         "Mapping source response",
@@ -265,7 +228,7 @@ def parse_entity(
 ) -> EntityResponse:
     return EntityResponse(
         entity_id=uuid,
-        principal_id=require_reference_uuid(references, "principal"),
+        user_id=require_reference_uuid(references, "user"),
         entity_type=optional_entity_type(properties, "entity_type"),
         name=optional_str(properties, "name"),
         description=optional_str(properties, "description"),
@@ -273,50 +236,6 @@ def parse_entity(
         aliases=require_alias_text_array(properties, "aliases"),
         wikidata_id=optional_str(properties, "wikidata_id"),
         nlcr_authority_id=optional_str(properties, "nlcr_authority_id"),
-    )
-
-
-def parse_page_mention(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-    references: CrossReferences,
-    uuid: uuid.UUID,
-) -> PageMentionResponse:
-    return PageMentionResponse(
-        page_mention_id=uuid,
-        document_mention_id=require_reference_uuid(references, "document_mention"),
-        source_id=require_reference_uuid(references, "source"),
-        principal_id=require_reference_uuid(references, "principal"),
-        name=require_str(properties, "name"),
-        aliases=require_alias_text_array(properties, "aliases"),
-        information=require_str(properties, "information"),
-        polygons=[
-            Polygon(
-                points=[
-                    PolygonPoint(
-                        x=require_number(point, "x"),
-                        y=require_number(point, "y"),
-                    )
-                    for point in sequence_of_mappings(polygon, "points")
-                ]
-            )
-            for polygon in sequence_of_mappings(properties, "polygons")
-        ],
-    )
-
-
-def parse_document_mention(
-    properties: WeaviateProperties | Mapping[str, WeaviateField],
-    references: CrossReferences,
-    uuid: uuid.UUID,
-) -> DocumentMentionResponse:
-    return DocumentMentionResponse(
-        document_mention_id=uuid,
-        principal_id=require_reference_uuid(references, "principal"),
-        source_id=require_reference_uuid(references, "source"),
-        entity_id=require_reference_uuid(references, "entity"),
-        name=require_str(properties, "name"),
-        information=require_str(properties, "information"),
-        aliases=require_alias_text_array(properties, "aliases"),
     )
 
 
@@ -329,7 +248,7 @@ def parse_face(
     keypoints = sequence_of_mappings(properties, "keypoints")
     return FaceResponse(
         detection_id=uuid,
-        principal_id=require_reference_uuid(references, "principal"),
+        user_id=require_reference_uuid(references, "user"),
         entity_id=require_reference_uuid(references, "entity"),
         source_id=require_reference_uuid(references, "source"),
         bounding_box=BoundingBox(

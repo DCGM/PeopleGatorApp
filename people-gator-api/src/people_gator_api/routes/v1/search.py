@@ -84,22 +84,21 @@ async def search_faces_get(
         ),
     )
 
+
 @router.get("/search-archive", response_model=ArchiveHitListResponse)
 async def search_archive_get(
     session: WeaviateSessionDependency,
     resolved_source_id: SourceFilterDependency,
     q: str = Query(
         min_length=1,
-        description="Page/document ID, mention name, or linked entity alias.",
+        description="Page/document ID or directly linked entity name/alias.",
     ),
     limit: int = Query(default=20, ge=0),
 ) -> ArchiveHitListResponse:
     """Search pages and documents with one free-text or UUID query.
 
-    The query matches page mentions, document mentions, linked entity names
-    and aliases, or a bare Source/page/document UUID. Independent mention and
-    entity rankings are fused with reciprocal-rank fusion inside Weaviate
-    calls only, so no cross-service roundtrips occur.
+    The query matches names and aliases of entities directly linked to archive
+    sources, or a bare Source/page/document UUID.
     """
     return await search_archive_hits(
         session,

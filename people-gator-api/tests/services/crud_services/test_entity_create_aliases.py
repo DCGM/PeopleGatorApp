@@ -46,7 +46,7 @@ async def test_create_entity_persists_aliases_as_text_array(
     result = await entity_service.create_entity(
         client=client,  # pyright: ignore[reportArgumentType] - test double for Weaviate client.
         payload=payload,
-        principal_id=uuid.UUID(int=2),
+        user_id=uuid.UUID(int=2),
     )
 
     assert captured_properties["aliases"] == ["Zoltan Mihaly Nagy", "Zoltan Nagy"]
@@ -87,7 +87,7 @@ async def test_create_entity_defaults_missing_aliases_to_empty_text_array(
     result = await entity_service.create_entity(
         client=client,  # pyright: ignore[reportArgumentType] - test double for Weaviate client.
         payload=payload,
-        principal_id=uuid.UUID(int=4),
+        user_id=uuid.UUID(int=4),
     )
 
     assert captured_properties["aliases"] == []

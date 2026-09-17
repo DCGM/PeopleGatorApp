@@ -16,11 +16,9 @@ from people_gator_api.schemas.enums import AnnotationType, FaceEmbeddingModel
 # Collection names
 # ---------------------------------------------------------------------------
 
-PRINCIPAL_COLLECTION = "Principal"
+USER_COLLECTION = "User"
 SOURCE_COLLECTION = "Source"
 ENTITY_COLLECTION = "Entity"
-PAGE_MENTION_COLLECTION = "PageMention"
-DOCUMENT_MENTION_COLLECTION = "DocumentMention"
 FACE_COLLECTION = "Face"
 
 # ---------------------------------------------------------------------------
@@ -68,8 +66,6 @@ FACE_VECTOR_BY_MODEL: dict[FaceEmbeddingModel, str] = {
 }
 
 ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
-    AnnotationType.document_mention: DOCUMENT_MENTION_COLLECTION,
-    AnnotationType.page_mention: PAGE_MENTION_COLLECTION,
     AnnotationType.face: FACE_COLLECTION,
     AnnotationType.entity: ENTITY_COLLECTION,
 }
@@ -216,11 +212,6 @@ def default_face_vector_config() -> list[object]:
     return [_named_vector(DEFAULT_FACE_VECTOR)]
 
 
-POINT_PROPERTIES = [
-    _number_property("x", "Horizontal coordinate."),
-    _number_property("y", "Vertical coordinate."),
-]
-
 BOUNDING_BOX_PROPERTIES = [
     _int_property("x", "Bounding box left coordinate."),
     _int_property("y", "Bounding box top coordinate."),
@@ -234,29 +225,12 @@ FACE_KEYPOINT_PROPERTIES = [
     _number_property("y", "Keypoint vertical coordinate."),
 ]
 
-POLYGON_PROPERTIES = [
-    _object_array_property(
-        "points",
-        "Ordered polygon points.",
-        nested_properties=POINT_PROPERTIES,
-    ),
-]
-
-PRINCIPAL_PROPERTIES: list[Property] = [
-    _text_property("principal_type", "Principal type discriminator.", searchable=False),
+USER_PROPERTIES: list[Property] = [
     _text_property("display_name", "Human-readable display name."),
-    _bool_property("is_active", "Whether the principal is active."),
-    _text_property("external_subject", "OIDC subject for user principals."),
-    _text_property("external_issuer", "OIDC issuer for user principals."),
-    _text_property("email", "Email address for user principals."),
-    _text_property(
-        "annotation_type", "Annotation type handled by a model agent.", searchable=False
-    ),
-    _text_property("role", "Model-agent role prefix.", searchable=False),
-    _text_property("model_slug", "Model-agent slot suffix.", searchable=False),
-    _text_property("model_version", "Model artifact version.", searchable=False),
-    _text_property("registry_source", "Model registry source.", searchable=False),
-    _text_property("registry_uri", "Model registry URI.", searchable=False),
+    _bool_property("is_active", "Whether the user is active."),
+    _text_property("external_subject", "OIDC subject."),
+    _text_property("external_issuer", "OIDC issuer."),
+    _text_property("email", "Email address."),
 ]
 
 SOURCE_PROPERTIES: list[Property] = [
@@ -283,37 +257,6 @@ ENTITY_PROPERTIES: list[Property] = [
     _text_property("nlcr_authority_id", "Entity-level aggregated NLCR authority ID."),
 ]
 
-PAGE_MENTION_PROPERTIES: list[Property] = [
-    _text_property("name", "Name of the page mention."),
-    _text_property("information", "Information of the page mention."),
-    _text_array_property(
-        "aliases",
-        "Entity-level aggregated alias values.",
-        searchable=True,
-    ),
-    _object_array_property(
-        "mentions",
-        "Page mention polygon lists.",
-        nested_properties=[
-            _object_array_property(
-                "polygons",
-                "Ordered page mention polygons.",
-                nested_properties=POLYGON_PROPERTIES,
-            )
-        ],
-    ),
-]
-
-DOCUMENT_MENTION_PROPERTIES: list[Property] = [
-    _text_property("name", "Aggregated document-level name."),
-    _text_property("information", "Aggregated document-level information."),
-    _text_array_property(
-        "aliases",
-        "Entity-level aggregated alias values.",
-        searchable=True,
-    ),
-]
-
 FACE_PROPERTIES: list[Property] = [
     _object_property(
         "bounding_box",
@@ -328,47 +271,18 @@ FACE_PROPERTIES: list[Property] = [
     _number_property("confidence", "Detection confidence."),
 ]
 
-PRINCIPAL_REFERENCES: list[ReferenceProperty] = []
+USER_REFERENCES: list[ReferenceProperty] = []
 SOURCE_REFERENCES: list[ReferenceProperty] = []
 ENTITY_REFERENCES: list[ReferenceProperty] = [
     ReferenceProperty(
-        name="principal",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Principal that created the entity.",
-    )
-]
-PAGE_MENTION_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="document_mention",
-        target_collection=DOCUMENT_MENTION_COLLECTION,
-        description="Owning document mention.",
+        name="user",
+        target_collection=USER_COLLECTION,
+        description="User that created the entity.",
     ),
     ReferenceProperty(
-        name="source",
+        name="mentioned_in",
         target_collection=SOURCE_COLLECTION,
-        description="Source containing the page mention.",
-    ),
-    ReferenceProperty(
-        name="principal",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Principal that extracted the page mention.",
-    ),
-]
-DOCUMENT_MENTION_REFERENCES: list[ReferenceProperty] = [
-    ReferenceProperty(
-        name="entity",
-        target_collection=ENTITY_COLLECTION,
-        description="Entity associated with the document mention.",
-    ),
-    ReferenceProperty(
-        name="source",
-        target_collection=SOURCE_COLLECTION,
-        description="Source containing the document mention.",
-    ),
-    ReferenceProperty(
-        name="principal",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Principal that produced the aggregation.",
+        description="Document or page sources in which the entity is mentioned.",
     ),
 ]
 FACE_REFERENCES: list[ReferenceProperty] = [
@@ -383,9 +297,9 @@ FACE_REFERENCES: list[ReferenceProperty] = [
         description="Source containing the face detection.",
     ),
     ReferenceProperty(
-        name="principal",
-        target_collection=PRINCIPAL_COLLECTION,
-        description="Principal that performed the detection.",
+        name="user",
+        target_collection=USER_COLLECTION,
+        description="User that performed the detection.",
     ),
 ]
 
@@ -395,16 +309,6 @@ type CollectionSpec = tuple[
 ]
 
 ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    PAGE_MENTION_COLLECTION: (
-        PAGE_MENTION_PROPERTIES,
-        PAGE_MENTION_REFERENCES,
-        None,
-    ),
-    DOCUMENT_MENTION_COLLECTION: (
-        DOCUMENT_MENTION_PROPERTIES,
-        DOCUMENT_MENTION_REFERENCES,
-        None,
-    ),
     FACE_COLLECTION: (
         FACE_PROPERTIES,
         FACE_REFERENCES,
@@ -413,9 +317,9 @@ ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 }
 
 NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
-    PRINCIPAL_COLLECTION: (
-        PRINCIPAL_PROPERTIES,
-        PRINCIPAL_REFERENCES,
+    USER_COLLECTION: (
+        USER_PROPERTIES,
+        USER_REFERENCES,
         None,
     ),
     SOURCE_COLLECTION: (

@@ -28,10 +28,8 @@ class DocumentSourceMetadata(BaseModel):
     """Metadata for a source representing a full document."""
 
     model_config = ConfigDict(extra="forbid")
-
     library: str
     document: uuid.UUID
-    kramerius_url: AnyUrl | None = None
 
 
 type SourceMetadata = PageSourceMetadata | DocumentSourceMetadata
@@ -41,7 +39,6 @@ class PageCreateRequest(BaseModel):
     """Typed page descriptor backed by a page Source record."""
 
     model_config = ConfigDict(extra="forbid")
-
     library: str
     document_id: uuid.UUID
     page_id: uuid.UUID
@@ -51,7 +48,6 @@ class DocumentCreateRequest(BaseModel):
     """Typed document descriptor backed by a document Source record."""
 
     model_config = ConfigDict(extra="forbid")
-
     library: str
     document_id: uuid.UUID
 
@@ -60,7 +56,6 @@ class ImageCreateRequest(BaseModel):
     """Typed image descriptor backed by an arbitrary URL Source record."""
 
     model_config = ConfigDict(extra="forbid")
-
     url: AnyUrl
 
 
