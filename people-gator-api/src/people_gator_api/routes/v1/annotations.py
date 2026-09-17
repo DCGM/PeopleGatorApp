@@ -5,7 +5,6 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query, status
 
-from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 from people_gator_api.schemas.entities import (
     FaceCreateRequest,
     FaceEntityPatchRequest,
@@ -40,7 +39,7 @@ async def _iter_payloads[T](items: list[T]) -> AsyncGenerator[T, None]:
 async def list_faces_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-    resolved_source_id: SourceFilterDependency,
+    source_id: uuid.UUID | None = None,
     entity_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=0),
@@ -49,7 +48,7 @@ async def list_faces_route(
     return await list_faces(
         session,
         user.user_id,
-        resolved_source_id,
+        source_id,
         entity_id,
         after_id,
         limit,

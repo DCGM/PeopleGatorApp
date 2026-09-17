@@ -34,17 +34,37 @@ def test_media_router_exposes_typed_source_and_page_subresource_routes() -> None
     assert "/sources/lookup" in source_paths
 
 
-def test_source_filtered_lists_expose_shared_typed_source_filters() -> None:
+def test_source_list_only_accepts_url_as_its_filter() -> None:
+    app = FastAPI()
+    app.include_router(sources_router)
+
+    parameters = app.openapi()["paths"]["/sources"]["get"]["parameters"]
+    assert {parameter["name"] for parameter in parameters} == {
+        "url",
+        "limit",
+        "after_id",
+    }
+
+
+def test_annotation_lists_only_accept_direct_source_filters() -> None:
     app = FastAPI()
     app.include_router(annotations_router)
     app.include_router(entities_router)
     spec = app.openapi()
 
-    for path in ("/faces", "/entities"):
-        parameters = {
-            parameter["name"] for parameter in spec["paths"][path]["get"]["parameters"]
-        }
-        assert {"source_id", "page", "document", "image"} <= parameters
+    face_parameters = {
+        parameter["name"]
+        for parameter in spec["paths"]["/faces"]["get"]["parameters"]
+    }
+    source_selectors = {"source_id", "page", "document", "image"}
+    assert face_parameters & source_selectors == {"source_id"}
+    assert "entity_id" in face_parameters
+
+    entity_parameters = {
+        parameter["name"]
+        for parameter in spec["paths"]["/entities"]["get"]["parameters"]
+    }
+    assert entity_parameters & source_selectors == {"source_id"}
 
     assert "/page-mentions" not in spec["paths"]
     assert "/document-mentions" not in spec["paths"]

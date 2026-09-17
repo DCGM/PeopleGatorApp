@@ -52,7 +52,9 @@ from people_gator_api.services.http_errors import raise_api_error
 router = APIRouter()
 
 
+# -----------------------------------------------------------------------------
 # --- Page subresource helpers ------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 async def _fetch_layout_for_page(
@@ -81,7 +83,9 @@ async def _fetch_entity_spans_for_page(
         raise_api_error(exc.status_code, exc.code, exc.message)
 
 
+# -----------------------------------------------------------------------------
 # --- Documents ---------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 @router.get("/documents", response_model=DocumentListResponse, tags=["documents"])
@@ -182,7 +186,9 @@ async def delete_document_route(
     await delete_source(session, document_source_id)
 
 
-# --- Pages ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# --- Pages -------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 @router.get("/pages", response_model=PageListResponse, tags=["pages"])
@@ -337,7 +343,9 @@ async def delete_page_route(
     await delete_source(session, page_source_id)
 
 
-# --- Images -----------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# --- Images ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 @router.get("/images", response_model=ImageListResponse, tags=["images"])

@@ -9,7 +9,6 @@ from fastapi import (
 )
 from pydantic import AnyUrl
 
-from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     DataIngestUserDependency,
@@ -41,24 +40,17 @@ def _source_reference(source: SourceResponse) -> SourceResponse:
 async def list_sources_route(
     session: WeaviateSessionDependency,
     user: DataIngestUserDependency,
-    source_type: SourceKind | None = None,
-    uri: str | None = None,
-    library: str | None = None,
-    document: uuid.UUID | None = None,
-    page: uuid.UUID | None = None,
+    url: AnyUrl | None = None,
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> SourceListResponse:
     del user
     sources = await list_sources(
         session,
-        source_type,
+        None,
         after_id,
         limit,
-        url=uri,
-        library=library,
-        document_id=document,
-        page_id=page,
+        url=str(url) if url is not None else None,
     )
     return SourceListResponse(
         items=[_source_reference(source) for source in sources.items],
@@ -93,8 +85,6 @@ async def get_source_route(
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
     return _source_reference(source)
-
-
 
 
 @router.delete("/sources/{source_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)
