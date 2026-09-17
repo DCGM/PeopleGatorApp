@@ -111,11 +111,11 @@ async def get_document_route(
 
 
 @router.get(
-    "/documents/object",
+    "/documents/lookup",
     response_model=DocumentResponse,
     tags=["documents"],
 )
-async def get_document_object_route(
+async def lookup_document_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
     url: AnyUrl | None = None,
@@ -206,8 +206,8 @@ async def create_page_route(
     return page
 
 
-@router.get("/pages/object", response_model=PageResponse, tags=["pages"])
-async def get_page_object_route(
+@router.get("/pages/lookup", response_model=PageResponse, tags=["pages"])
+async def lookup_page_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
     url: AnyUrl | None = None,
@@ -278,8 +278,8 @@ async def get_page_image_by_id_route(
     )
 
 
-@router.get("/pages/object/image", response_class=Response, tags=["pages"])
-async def get_page_image_object_route(
+@router.get("/pages/lookup/image", response_class=Response, tags=["pages"])
+async def lookup_page_image_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
     url: AnyUrl | None = None,
@@ -370,8 +370,8 @@ async def create_image_route(
     return image
 
 
-@router.get("/images/object", response_model=ImageResponse, tags=["images"])
-async def get_image_object_route(
+@router.get("/images/lookup", response_model=ImageResponse, tags=["images"])
+async def lookup_image_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
     url: AnyUrl,
@@ -401,11 +401,11 @@ async def get_image_route(
 
 
 @router.get(
-    "/images/object/content",
+    "/images/lookup/content",
     response_class=Response,
     tags=["images"],
 )
-async def get_image_content_route(
+async def lookup_image_content_route(
     url: AnyUrl,
     user: BrowseUserDependency,
 ) -> Response:

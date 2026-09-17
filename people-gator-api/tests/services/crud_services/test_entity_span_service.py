@@ -124,4 +124,4 @@ def test_entity_span_routes_parallel_page_layout_routes() -> None:
     paths = app.openapi()["paths"]
 
     assert "get" in paths["/pages/{page_source_id}/entity-spans"]
-    assert "get" in paths["/pages/object/entity-spans"]
+    assert "get" in paths["/pages/lookup/entity-spans"]

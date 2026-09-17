@@ -14,11 +14,11 @@ def test_media_router_exposes_pages_and_images_without_relationship_routes() -> 
 
     assert "/pages" in paths
     assert "/pages/{page_source_id}" in paths
-    assert "/pages/object" in paths
+    assert "/pages/lookup" in paths
     assert "/documents" in paths
     assert "/documents/{document_source_id}" in paths
-    assert "/documents/object" in paths
-    assert "/images/object" in paths
+    assert "/documents/lookup" in paths
+    assert "/images/lookup" in paths
     assert "/images" in paths
     assert "/images/{image_id}" in paths
     assert not any("/scans" in path for path in paths)
@@ -29,7 +29,7 @@ def test_media_router_exposes_pages_and_images_without_relationship_routes() -> 
     source_paths = {
         cast(APIRoute, route).path_format for route in sources_router.routes
     }
-    assert "/sources/object" in source_paths
+    assert "/sources/lookup" in source_paths
 
 
 def test_source_filtered_lists_expose_shared_typed_source_filters() -> None:
@@ -59,10 +59,10 @@ def test_documents_expose_full_immutable_rest_interface() -> None:
 
     assert {"get", "post"} <= set(document_paths["/documents"])
     assert {"get", "delete"} <= set(document_paths["/documents/{document_source_id}"])
-    assert "get" in document_paths["/documents/object"]
+    assert "get" in document_paths["/documents/lookup"]
 
-    object_parameters = {
+    lookup_parameters = {
         parameter["name"]
-        for parameter in document_paths["/documents/object"]["get"]["parameters"]
+        for parameter in document_paths["/documents/lookup"]["get"]["parameters"]
     }
-    assert {"url", "library", "document"} <= object_parameters
+    assert {"url", "library", "document"} <= lookup_parameters

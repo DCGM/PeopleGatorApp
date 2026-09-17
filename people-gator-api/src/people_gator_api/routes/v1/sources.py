@@ -68,8 +68,8 @@ async def list_sources_route(
     )
 
 
-@router.get("/sources/object", response_model=SourceResponse)
-async def get_source_object_route(
+@router.get("/sources/lookup", response_model=SourceResponse)
+async def lookup_source_route(
     url: AnyUrl,
     session: WeaviateSessionDependency,
     user: DataIngestUserDependency,

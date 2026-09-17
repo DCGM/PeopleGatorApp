@@ -1,7 +1,7 @@
 """Page-layout endpoints (PERO OCR structure per page Source).
 
 Page layouts are sub-resources of pages: they are fetched either via the
-page's Source UUID or through the shared ``/pages/object`` selectors.
+page's Source UUID or through the shared ``/pages/lookup`` selectors.
 """
 
 import uuid
@@ -88,11 +88,11 @@ async def get_entity_spans_by_id_route(
 
 
 @router.get(
-    "/pages/object/page-layout",
+    "/pages/lookup/page-layout",
     response_model=PageLayoutModel,
     tags=["page-layouts"],
 )
-async def get_page_layout_object_route(
+async def lookup_page_layout_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
     url: str | None = None,
@@ -124,11 +124,11 @@ async def get_page_layout_object_route(
 
 
 @router.get(
-    "/pages/object/entity-spans",
+    "/pages/lookup/entity-spans",
     response_model=list[EntitySpanModel],
     tags=["page-layouts"],
 )
-async def get_entity_spans_object_route(
+async def lookup_entity_spans_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
     url: str | None = None,
