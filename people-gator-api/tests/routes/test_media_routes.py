@@ -6,6 +6,7 @@ from fastapi.routing import APIRoute
 from people_gator_api.routes.v1.annotations import router as annotations_router
 from people_gator_api.routes.v1.entities import router as entities_router
 from people_gator_api.routes.v1.media import router as media_router
+from people_gator_api.routes.v1.page_layouts import router as page_layouts_router
 from people_gator_api.routes.v1.sources import router as sources_router
 
 
@@ -62,7 +63,36 @@ def test_documents_expose_full_immutable_rest_interface() -> None:
     assert "get" in document_paths["/documents/lookup"]
 
     lookup_parameters = {
-        parameter["name"]
+        parameter["name"]: parameter["required"]
         for parameter in document_paths["/documents/lookup"]["get"]["parameters"]
     }
-    assert {"url", "library", "document"} <= lookup_parameters
+    assert lookup_parameters == {"library": True, "document_id": True}
+
+
+def test_typed_lookups_expose_one_strict_identity() -> None:
+    app = FastAPI()
+    app.include_router(media_router)
+    app.include_router(page_layouts_router)
+    paths = app.openapi()["paths"]
+
+    expected_parameters = {
+        "/documents/lookup": {"library", "document_id"},
+        "/pages/lookup": {"library", "document_id", "page_id"},
+        "/pages/lookup/page-layout": {"library", "document_id", "page_id"},
+        "/pages/lookup/entity-spans": {"library", "document_id", "page_id"},
+        "/images/lookup": {"url"},
+    }
+    for path, expected in expected_parameters.items():
+        parameters = paths[path]["get"]["parameters"]
+        assert {parameter["name"] for parameter in parameters} == expected
+        assert all(parameter["required"] for parameter in parameters)
+
+    page_image_parameters = paths["/pages/lookup/image"]["get"]["parameters"]
+    assert {
+        parameter["name"] for parameter in page_image_parameters
+    } == {"library", "document_id", "page_id", "width"}
+    assert all(
+        parameter["required"]
+        for parameter in page_image_parameters
+        if parameter["name"] != "width"
+    )

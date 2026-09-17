@@ -254,19 +254,6 @@ async def get_page_by_path(
 
 
 @trace()
-async def get_page_by_url(
-    client: WeaviateAsyncClient,
-    url: str,
-) -> PageResponse | None:
-    source = await get_source(
-        client,
-        source_type=SourceKind.page,
-        url=url,
-    )
-    return parse_page_source(source) if source is not None else None
-
-
-@trace()
 async def get_document_by_path(
     client: WeaviateAsyncClient,
     library: str,
@@ -290,19 +277,6 @@ async def get_document(
     if source is None or source.source_type != SourceKind.document:
         return None
     return parse_document_source(source)
-
-
-@trace()
-async def get_document_by_url(
-    client: WeaviateAsyncClient,
-    url: str,
-) -> DocumentResponse | None:
-    source = await get_source(
-        client,
-        source_type=SourceKind.document,
-        url=url,
-    )
-    return parse_document_source(source) if source is not None else None
 
 
 @trace()

@@ -33,12 +33,10 @@ from people_gator_api.services.crud_services.media_service import (
     create_page,
     get_document,
     get_document_by_path,
-    get_document_by_url,
     get_image,
     get_image_by_url,
     get_page,
     get_page_by_path,
-    get_page_by_url,
     list_images,
     list_documents,
     list_pages,
@@ -118,28 +116,12 @@ async def get_document_route(
 async def lookup_document_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-    url: AnyUrl | None = None,
-    library: str | None = None,
-    document: uuid.UUID | None = None,
+    library: str,
+    document_id: uuid.UUID,
 ) -> DocumentResponse:
-    """Fetch one document by ``url`` or by ``library`` + ``document``."""
+    """Fetch one document by its canonical library identity."""
     del user
-    if url is not None:
-        if library is not None or document is not None:
-            raise_api_error(
-                422,
-                "ambiguous_selector",
-                "Provide either url or the library/document selectors, not both",
-            )
-        resolved = await get_document_by_url(session, str(url))
-    else:
-        if library is None or document is None:
-            raise_api_error(
-                422,
-                "missing_selector",
-                "Provide either url or both library and document",
-            )
-        resolved = await get_document_by_path(session, library, document)
+    resolved = await get_document_by_path(session, library, document_id)
     if resolved is None:
         raise_api_error(404, "not_found", "Document not found")
     return resolved
@@ -210,29 +192,18 @@ async def create_page_route(
 async def lookup_page_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-    url: AnyUrl | None = None,
-    library: str | None = None,
-    document: uuid.UUID | None = None,
-    page: uuid.UUID | None = None,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
 ) -> PageResponse:
-    """Fetch one page by ``url`` or by ``library`` + ``document`` + ``page``."""
+    """Fetch one page by its canonical library identity."""
     del user
-    if url is not None:
-        if any(param is not None for param in (library, document, page)):
-            raise_api_error(
-                422,
-                "ambiguous_selector",
-                "Provide either url or the library/document/page selectors, not both",
-            )
-        resolved = await get_page_by_url(session, str(url))
-    else:
-        if library is None or document is None or page is None:
-            raise_api_error(
-                422,
-                "missing_selector",
-                "Provide either url or all of library, document and page",
-            )
-        resolved = await get_page_by_path(session, library, page, document_id=document)
+    resolved = await get_page_by_path(
+        session,
+        library,
+        page_id,
+        document_id=document_id,
+    )
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
     return resolved
@@ -282,30 +253,19 @@ async def get_page_image_by_id_route(
 async def lookup_page_image_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-    url: AnyUrl | None = None,
-    library: str | None = None,
-    document: uuid.UUID | None = None,
-    page: uuid.UUID | None = None,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
     width: int | None = None,
 ) -> Response:
-    """Stream one page image selected by ``url`` or library/document/page."""
+    """Stream one page image selected by its canonical library identity."""
     del user
-    if url is not None:
-        if any(param is not None for param in (library, document, page)):
-            raise_api_error(
-                422,
-                "ambiguous_selector",
-                "Provide either url or the library/document/page selectors, not both",
-            )
-        resolved = await get_page_by_url(session, str(url))
-    else:
-        if library is None or document is None or page is None:
-            raise_api_error(
-                422,
-                "missing_selector",
-                "Provide either url or all of library, document and page",
-            )
-        resolved = await get_page_by_path(session, library, page, document_id=document)
+    resolved = await get_page_by_path(
+        session,
+        library,
+        page_id,
+        document_id=document_id,
+    )
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
     try:

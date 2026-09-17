@@ -13,7 +13,6 @@ from people_gator_api.services.auth_service import BrowseUserDependency
 from people_gator_api.services.crud_services.media_service import (
     get_page,
     get_page_by_path,
-    get_page_by_url,
 )
 from people_gator_api.services.crud_services.page_layout_service import get_page_layout
 from people_gator_api.services.crud_services.entity_span_service import get_entity_spans
@@ -95,29 +94,18 @@ async def get_entity_spans_by_id_route(
 async def lookup_page_layout_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-    url: str | None = None,
-    library: str | None = None,
-    document: uuid.UUID | None = None,
-    page: uuid.UUID | None = None,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
 ) -> PageLayoutModel:
-    """Fetch one page layout by ``url`` or by ``library`` + ``document`` + ``page``."""
+    """Fetch one page layout by its canonical library identity."""
     del user
-    if url is not None:
-        if any(param is not None for param in (library, document, page)):
-            raise_api_error(
-                422,
-                "ambiguous_selector",
-                "Provide either url or the library/document/page selectors, not both",
-            )
-        resolved = await get_page_by_url(session, url)
-    else:
-        if library is None or document is None or page is None:
-            raise_api_error(
-                422,
-                "missing_selector",
-                "Provide either url or all of library, document and page",
-            )
-        resolved = await get_page_by_path(session, library, page, document_id=document)
+    resolved = await get_page_by_path(
+        session,
+        library,
+        page_id,
+        document_id=document_id,
+    )
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
     return await _fetch_layout_for_page(session, resolved.page_source_id)
@@ -131,29 +119,18 @@ async def lookup_page_layout_route(
 async def lookup_entity_spans_route(
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-    url: str | None = None,
-    library: str | None = None,
-    document: uuid.UUID | None = None,
-    page: uuid.UUID | None = None,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
 ) -> list[EntitySpanModel]:
-    """Return entity spans by page URL or archive identity."""
+    """Return entity spans by the page's canonical library identity."""
     del user
-    if url is not None:
-        if any(param is not None for param in (library, document, page)):
-            raise_api_error(
-                422,
-                "ambiguous_selector",
-                "Provide either url or the library/document/page selectors, not both",
-            )
-        resolved = await get_page_by_url(session, url)
-    else:
-        if library is None or document is None or page is None:
-            raise_api_error(
-                422,
-                "missing_selector",
-                "Provide either url or all of library, document and page",
-            )
-        resolved = await get_page_by_path(session, library, page, document_id=document)
+    resolved = await get_page_by_path(
+        session,
+        library,
+        page_id,
+        document_id=document_id,
+    )
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
     return await _fetch_entity_spans_for_page(session, resolved.page_source_id)
