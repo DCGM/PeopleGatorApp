@@ -1,10 +1,11 @@
-"""Typed page, document, and image endpoints backed by internal Source records."""
+"""Typed media and page-subresource endpoints backed by Source records."""
 
 import uuid
 
 from fastapi import APIRouter, Query, Response, status
 from pydantic import AnyUrl
 
+from people_gator_api.schemas.pero import EntitySpanModel, PageLayoutModel
 from people_gator_api.schemas.sources import (
     DocumentCreateRequest,
     DocumentListResponse,
@@ -21,11 +22,9 @@ from people_gator_api.services.auth_service import (
     BrowseUserDependency,
     DataIngestUserDependency,
 )
+from people_gator_api.services.crud_services.entity_span_service import get_entity_spans
 from people_gator_api.services.crud_services.image_content_service import (
     get_image_content,
-)
-from people_gator_api.services.crud_services.page_image_service import (
-    get_page_image,
 )
 from people_gator_api.services.crud_services.media_service import (
     create_document,
@@ -41,6 +40,8 @@ from people_gator_api.services.crud_services.media_service import (
     list_documents,
     list_pages,
 )
+from people_gator_api.services.crud_services.page_image_service import get_page_image
+from people_gator_api.services.crud_services.page_layout_service import get_page_layout
 from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
     delete_source,
@@ -49,6 +50,32 @@ from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 
 router = APIRouter()
+
+
+async def _fetch_layout_for_page(
+    session: WeaviateSessionDependency,
+    page_source_id: uuid.UUID,
+) -> PageLayoutModel:
+    """Fetch the stored layout for an already-resolved page."""
+    try:
+        return await get_page_layout(
+            session,
+            source_id=page_source_id,
+            page_path=None,
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+
+
+async def _fetch_entity_spans_for_page(
+    session: WeaviateSessionDependency,
+    page_source_id: uuid.UUID,
+) -> list[EntitySpanModel]:
+    """Match directly linked entities against one page's stored OCR layout."""
+    try:
+        return await get_entity_spans(session, page_source_id)
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
 
 
 @router.get("/documents", response_model=DocumentListResponse, tags=["documents"])
@@ -89,6 +116,24 @@ async def create_document_route(
 
 
 @router.get(
+    "/documents/lookup",
+    response_model=DocumentResponse,
+    tags=["documents"],
+)
+async def lookup_document_route(
+    session: WeaviateSessionDependency,
+    user: BrowseUserDependency,
+    library: str,
+    document_id: uuid.UUID,
+) -> DocumentResponse:
+    """Fetch one document by its canonical library identity."""
+    del user
+    resolved = await get_document_by_path(session, library, document_id)
+    if resolved is None:
+        raise_api_error(404, "not_found", "Document not found")
+    return resolved
+
+@router.get(
     "/documents/{document_source_id:uuid}",
     response_model=DocumentResponse,
     tags=["documents"],
@@ -106,25 +151,6 @@ async def get_document_route(
     if document is None:
         raise_api_error(404, "not_found", "Document not found")
     return document
-
-
-@router.get(
-    "/documents/lookup",
-    response_model=DocumentResponse,
-    tags=["documents"],
-)
-async def lookup_document_route(
-    session: WeaviateSessionDependency,
-    user: BrowseUserDependency,
-    library: str,
-    document_id: uuid.UUID,
-) -> DocumentResponse:
-    """Fetch one document by its canonical library identity."""
-    del user
-    resolved = await get_document_by_path(session, library, document_id)
-    if resolved is None:
-        raise_api_error(404, "not_found", "Document not found")
-    return resolved
 
 
 @router.delete(
@@ -277,6 +303,92 @@ async def lookup_page_image_route(
         media_type=image.media_type,
         headers={"X-Cache": "HIT" if image.cache_hit else "MISS"},
     )
+
+
+@router.get(
+    "/pages/{page_source_id:uuid}/page-layout",
+    response_model=PageLayoutModel,
+    tags=["page-layouts"],
+)
+async def get_page_layout_by_id_route(
+    page_source_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    user: BrowseUserDependency,
+) -> PageLayoutModel:
+    """Fetch the page layout for one page by its Source UUID."""
+    del user
+    page = await get_page(session, page_source_id)
+    if page is None:
+        raise_api_error(404, "not_found", "Page not found")
+    return await _fetch_layout_for_page(session, page.page_source_id)
+
+
+@router.get(
+    "/pages/lookup/page-layout",
+    response_model=PageLayoutModel,
+    tags=["page-layouts"],
+)
+async def lookup_page_layout_route(
+    session: WeaviateSessionDependency,
+    user: BrowseUserDependency,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
+) -> PageLayoutModel:
+    """Fetch one page layout by its canonical library identity."""
+    del user
+    resolved = await get_page_by_path(
+        session,
+        library,
+        page_id,
+        document_id=document_id,
+    )
+    if resolved is None:
+        raise_api_error(404, "not_found", "Page not found")
+    return await _fetch_layout_for_page(session, resolved.page_source_id)
+
+
+@router.get(
+    "/pages/{page_source_id:uuid}/entity-spans",
+    response_model=list[EntitySpanModel],
+    tags=["page-layouts"],
+)
+async def get_entity_spans_by_id_route(
+    page_source_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    user: BrowseUserDependency,
+) -> list[EntitySpanModel]:
+    """Return word-aligned fuzzy entity spans for one page Source UUID."""
+    del user
+    page = await get_page(session, page_source_id)
+    if page is None:
+        raise_api_error(404, "not_found", "Page not found")
+    return await _fetch_entity_spans_for_page(session, page.page_source_id)
+
+
+@router.get(
+    "/pages/lookup/entity-spans",
+    response_model=list[EntitySpanModel],
+    tags=["page-layouts"],
+)
+async def lookup_entity_spans_route(
+    session: WeaviateSessionDependency,
+    user: BrowseUserDependency,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
+) -> list[EntitySpanModel]:
+    """Return entity spans by the page's canonical library identity."""
+    del user
+    resolved = await get_page_by_path(
+        session,
+        library,
+        page_id,
+        document_id=document_id,
+    )
+    if resolved is None:
+        raise_api_error(404, "not_found", "Page not found")
+    return await _fetch_entity_spans_for_page(session, resolved.page_source_id)
 
 
 @router.delete(

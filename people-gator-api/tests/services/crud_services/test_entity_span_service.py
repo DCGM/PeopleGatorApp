@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import FastAPI
 
-from people_gator_api.routes.v1.page_layouts import router
+from people_gator_api.routes.v1.media import router
 from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.pero import (
     PageLayoutModel,
