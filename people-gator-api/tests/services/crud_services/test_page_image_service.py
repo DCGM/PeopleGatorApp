@@ -22,6 +22,7 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 
 import asyncio
 import io
+import uuid
 
 import pytest
 from botocore.exceptions import ClientError
@@ -31,18 +32,19 @@ from people_gator_api.services.crud_services import page_image_service
 from people_gator_api.services.crud_services.page_image_service import (
     PageImageContent,
     get_page_image,
+    page_image_key,
 )
-from people_gator_api.settings import PageImageCacheSettings
+from people_gator_api.settings import PageImageCacheSettings, PageImageSettings
 
 
-_URL = "https://example.org/mzk/d/x/img.png"
+_LIBRARY = "mzk"
+_DOCUMENT_ID = uuid.UUID("23b44592-98e4-4ad3-b62d-3cfc821abb21")
+_PAGE_ID = uuid.UUID("b96c068d-1707-4622-bf64-1c5a8eb26f84")
 
 
 def _png_bytes(width: int = 400, height: int = 200) -> bytes:
     buffer = io.BytesIO()
-    Image.new("RGB", (width, height), color=(200, 10, 10)).save(
-        buffer, format="PNG"
-    )
+    Image.new("RGB", (width, height), color=(200, 10, 10)).save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -78,12 +80,21 @@ def _install_fake_cache(
     return objects
 
 
-def _stub_original(monkeypatch: pytest.MonkeyPatch, data: bytes) -> None:
-    async def fake_get_image_content(_url: str) -> tuple[bytes, str]:
-        return data, "image/png"
+def _store_original(objects: dict[str, bytes], data: bytes) -> None:
+    objects[page_image_key(_LIBRARY, _DOCUMENT_ID, _PAGE_ID)] = data
 
+
+def test_page_image_key_uses_configured_scan_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
-        page_image_service, "get_image_content", fake_get_image_content
+        page_image_service.settings,
+        "page_image",
+        PageImageSettings(key_prefix="archive/scans"),
+    )
+
+    assert page_image_key(_LIBRARY, _DOCUMENT_ID, _PAGE_ID) == (
+        f"archive/scans/{_LIBRARY}/{_DOCUMENT_ID}/{_PAGE_ID}.jpg"
     )
 
 
@@ -91,12 +102,13 @@ def test_get_page_image_without_width_streams_original(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _enable_cache(monkeypatch)
-    _stub_original(monkeypatch, b"original-bytes")
+    objects = _install_fake_cache(monkeypatch)
+    _store_original(objects, b"original-bytes")
 
-    result = asyncio.run(get_page_image(_URL))
+    result = asyncio.run(get_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID))
 
     assert result == PageImageContent(
-        content=b"original-bytes", media_type="image/png", cache_hit=False
+        content=b"original-bytes", media_type="image/jpeg", cache_hit=False
     )
 
 
@@ -106,7 +118,14 @@ def test_get_page_image_rejects_unknown_width(
     cache_cfg = _enable_cache(monkeypatch)
 
     with pytest.raises(page_image_service.SourceResolutionError) as exc_info:
-        asyncio.run(get_page_image(_URL, max_width=cache_cfg.widths[0] + 1))
+        asyncio.run(
+            get_page_image(
+                _LIBRARY,
+                _DOCUMENT_ID,
+                _PAGE_ID,
+                max_width=cache_cfg.widths[0] + 1,
+            )
+        )
     assert exc_info.value.status_code == 422
     assert exc_info.value.code == "invalid_image_width"
 
@@ -116,20 +135,34 @@ def test_get_page_image_renders_and_caches_derivative(
 ) -> None:
     cache_cfg = _enable_cache(monkeypatch)
     objects = _install_fake_cache(monkeypatch)
-    _stub_original(monkeypatch, _png_bytes())
+    _store_original(objects, _png_bytes())
 
-    first = asyncio.run(get_page_image(_URL, max_width=cache_cfg.widths[0]))
+    first = asyncio.run(
+        get_page_image(
+            _LIBRARY,
+            _DOCUMENT_ID,
+            _PAGE_ID,
+            max_width=cache_cfg.widths[0],
+        )
+    )
     assert first.media_type == "image/jpeg"
     assert first.cache_hit is False
 
     # The derivative is stored in S3 and served as a cache hit.
     cache_key = (
-        "page-image-cache/example.org/mzk/d/x/img.png/"
+        f"page-image-cache/{_LIBRARY}/{_DOCUMENT_ID}/{_PAGE_ID}/"
         f"{cache_cfg.widths[0]}.jpg"
     )
     assert cache_key in objects
 
-    second = asyncio.run(get_page_image(_URL, max_width=cache_cfg.widths[0]))
+    second = asyncio.run(
+        get_page_image(
+            _LIBRARY,
+            _DOCUMENT_ID,
+            _PAGE_ID,
+            max_width=cache_cfg.widths[0],
+        )
+    )
     assert second.cache_hit is True
     assert second.media_type == first.media_type
     assert second.content == first.content
@@ -142,9 +175,29 @@ def test_get_page_image_renders_and_caches_derivative(
 def test_get_page_image_disabled_cache_streams_original(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _stub_original(monkeypatch, b"original-bytes")
+    objects = _install_fake_cache(monkeypatch)
+    _store_original(objects, b"original-bytes")
 
-    result = asyncio.run(get_page_image(_URL, max_width=256))
+    result = asyncio.run(
+        get_page_image(
+            _LIBRARY,
+            _DOCUMENT_ID,
+            _PAGE_ID,
+            max_width=256,
+        )
+    )
 
     assert result.content == b"original-bytes"
     assert result.cache_hit is False
+
+
+def test_get_page_image_missing_original_returns_404(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_cache(monkeypatch)
+
+    with pytest.raises(page_image_service.SourceResolutionError) as exc_info:
+        asyncio.run(get_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID))
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == "not_found"

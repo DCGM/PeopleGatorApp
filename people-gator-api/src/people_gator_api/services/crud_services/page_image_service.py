@@ -1,11 +1,13 @@
-"""Page-image retrieval with an optional S3-backed resized-JPEG cache.
+"""Page-scan retrieval with an optional S3-backed resized-JPEG cache.
 
-The canonical page image lives under the configured image-content S3 prefix
-(see :mod:`image_content_service`).  When the
-cache is enabled, resized derivatives (JPEG only) are stored in the configured
-S3 bucket under::
+Original page scans are addressed only by their canonical archive identity and
+live in object storage under::
 
-    {key_prefix}/{website}/{path}/{width}.jpg
+    {scan_prefix}/{library}/{document_id}/{page_id}.jpg
+
+When the cache is enabled, resized derivatives (JPEG only) are stored under::
+
+    {cache_prefix}/{library}/{document_id}/{page_id}/{width}.jpg
 
 Cache misses are rendered from the original bytes with Pillow and uploaded to
 the bucket.
@@ -15,15 +17,12 @@ import asyncio
 import io
 import logging
 import posixpath
-from urllib.parse import urlparse
+import uuid
 
 from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image
 from pydantic import BaseModel
 
-from people_gator_api.services.crud_services.image_content_service import (
-    get_image_content,
-)
 from people_gator_api.services.crud_services.source_service import SourceResolutionError
 from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
 from people_gator_api.settings import PageImageCacheSettings, settings
@@ -44,16 +43,32 @@ class PageImageContent(BaseModel):
 
 def _cache_key(
     cache_cfg: PageImageCacheSettings,
-    website: str,
-    object_path: str,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
     width: int,
 ) -> str:
     """S3 object key of the cached derivative for one page image."""
     return posixpath.join(
         cache_cfg.key_prefix.strip("/"),
-        website,
-        object_path.lstrip("/"),
+        library,
+        str(document_id),
+        str(page_id),
         f"{width}.jpg",
+    )
+
+
+def page_image_key(
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
+) -> str:
+    """Return the canonical object-storage key for one original page scan."""
+    return posixpath.join(
+        settings.page_image.key_prefix.strip("/"),
+        library,
+        str(document_id),
+        f"{page_id}.jpg",
     )
 
 
@@ -112,8 +127,23 @@ async def _write_cache(key: str, data: bytes) -> None:
         logger.warning("page image cache write failed", extra={"key": key})
 
 
+async def _read_original(key: str) -> bytes:
+    """Read an original page scan and translate a missing object to a 404."""
+    try:
+        return await read_bytes(key)
+    except ClientError as exc:
+        logger.info("page image not found", extra={"key": key})
+        raise SourceResolutionError(
+            "Page image not found",
+            status_code=404,
+            code="not_found",
+        ) from exc
+
+
 async def get_page_image(
-    url: str,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
     *,
     max_width: int | None = None,
 ) -> PageImageContent:
@@ -125,14 +155,22 @@ async def get_page_image(
     """
     cache_cfg = settings.page_image_cache
     resolved_width = _resolve_width(cache_cfg, max_width)
+    original_key = page_image_key(library, document_id, page_id)
 
     if resolved_width is None or not cache_cfg.enabled:
-        content, media_type = await get_image_content(url)
-        return PageImageContent(content=content, media_type=media_type, cache_hit=False)
+        content = await _read_original(original_key)
+        return PageImageContent(
+            content=content,
+            media_type=_JPEG_MEDIA_TYPE,
+            cache_hit=False,
+        )
 
-    parsed = urlparse(url)
     cache_key = _cache_key(
-        cache_cfg, parsed.netloc, parsed.path.lstrip("/"), resolved_width
+        cache_cfg,
+        library,
+        document_id,
+        page_id,
+        resolved_width,
     )
     cached = await _read_cache(cache_key)
     if cached is not None:
@@ -140,7 +178,7 @@ async def get_page_image(
             content=cached, media_type=_JPEG_MEDIA_TYPE, cache_hit=True
         )
 
-    original, _ = await get_image_content(url)
+    original = await _read_original(original_key)
     rendered = await asyncio.to_thread(
         _render_jpeg, original, resolved_width, cache_cfg.quality
     )

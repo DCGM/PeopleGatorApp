@@ -319,7 +319,12 @@ async def get_page_image_by_id_route(
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
-        image = await get_page_image(str(page.url), max_width=width)
+        image = await get_page_image(
+            page.library,
+            page.document_id,
+            page.page_id,
+            max_width=width,
+        )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
     return Response(

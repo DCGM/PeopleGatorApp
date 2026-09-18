@@ -53,6 +53,12 @@ class ImageContentSettings(BaseModel):
     key_prefix: str = "images"
 
 
+class PageImageSettings(BaseModel):
+    """S3 storage settings for original page scans."""
+
+    key_prefix: str = "images/ndk"
+
+
 class PageImageCacheSettings(BaseModel):
     """S3-backed cache for resized page images (JPEG only)."""
 
@@ -137,8 +143,9 @@ class Settings(BaseSettings):
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
     image_content: ImageContentSettings = ImageContentSettings()
+    page_image: PageImageSettings = PageImageSettings()
     page_image_cache: PageImageCacheSettings = PageImageCacheSettings()
     page_layout: PageLayoutSettings = PageLayoutSettings()
 
 
-settings = Settings() # type: ignore
+settings = Settings()  # type: ignore
