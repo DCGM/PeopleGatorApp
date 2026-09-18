@@ -38,6 +38,7 @@ from people_gator_api.services.crud_services import (
     source_resolution_service,
     source_service,
 )
+from people_gator_api.services.crud_services.source_service import SourceCreateSpec
 
 
 def _source(source_type: SourceKind) -> SourceResponse:
@@ -162,6 +163,100 @@ async def test_create_source_reuses_existing_source(
 
     assert source == existing
     assert created is False
+
+
+@pytest.mark.asyncio
+async def test_create_source_batch_uses_one_lookup_and_preserves_input_order() -> None:
+    existing_document_id = uuid.uuid4()
+    new_document_id = uuid.uuid4()
+    existing_source_id = uuid.uuid4()
+    existing_object = SimpleNamespace(
+        uuid=existing_source_id,
+        properties={
+            "source_type": "document",
+            "uri": "https://old.example.test/document",
+            "library": "mzk",
+            "document": existing_document_id,
+            "page": None,
+        },
+        references={},
+    )
+    lookup_calls: list[dict[str, object]] = []
+    inserted: list[dict[str, object]] = []
+
+    class _Query:
+        async def fetch_objects(self, **kwargs: object) -> SimpleNamespace:
+            lookup_calls.append(kwargs)
+            return SimpleNamespace(objects=[existing_object])
+
+    class _Batch:
+        async def __aenter__(self) -> "_Batch":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def add_object(self, **kwargs: object) -> None:
+            inserted.append(kwargs)
+
+    batch = _Batch()
+    collection = SimpleNamespace(
+        query=_Query(),
+        batch=SimpleNamespace(stream=lambda: batch, failed_objects=[]),
+    )
+    client = SimpleNamespace(
+        collections=SimpleNamespace(use=lambda _name: collection)
+    )
+
+    result = await source_service.create_source_batch(
+        client,  # pyright: ignore[reportArgumentType] - lightweight client double.
+        [
+            SourceCreateSpec(
+                source_type=SourceKind.document,
+                library="mzk",
+                document_id=new_document_id,
+            ),
+            SourceCreateSpec(
+                source_type=SourceKind.document,
+                library="mzk",
+                document_id=existing_document_id,
+            ),
+            SourceCreateSpec(
+                source_type=SourceKind.document,
+                library="mzk",
+                document_id=new_document_id,
+            ),
+        ],
+    )
+
+    assert len(lookup_calls) == 1
+    assert lookup_calls[0]["limit"] == 2
+    assert len(inserted) == 1
+    assert inserted[0]["properties"] == {
+        "source_type": "document",
+        "uri": (
+            "https://www.digitalniknihovna.cz/mzk/uuid/"
+            f"uuid:{new_document_id}"
+        ),
+        "library": "mzk",
+        "document": new_document_id,
+        "page": None,
+    }
+    assert [item.source_id for item in result] == [
+        inserted[0]["uuid"],
+        existing_source_id,
+        inserted[0]["uuid"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_create_source_batch_skips_weaviate_for_empty_input() -> None:
+    result = await source_service.create_source_batch(
+        SimpleNamespace(),  # pyright: ignore[reportArgumentType]
+        [],
+    )
+
+    assert result == []
 
 
 @pytest.mark.asyncio

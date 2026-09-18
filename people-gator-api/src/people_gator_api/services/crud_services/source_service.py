@@ -2,7 +2,8 @@
 
 import uuid
 from collections.abc import Sequence
-from urllib.parse import quote
+from dataclasses import dataclass
+from urllib.parse import parse_qsl, quote, urlparse, urlencode
 
 from pydantic import AnyUrl
 from weaviate import WeaviateAsyncClient
@@ -27,7 +28,21 @@ from people_gator_api.services.weaviate_service.utils import (
     parse_source,
 )
 from people_gator_api.utils.opentelemetry import trace
-from people_gator_api.utils.uuid_utils import new_uuid6
+
+
+type SourceIdentityKey = tuple[SourceKind, str, uuid.UUID | None, uuid.UUID | None]
+_SOURCE_ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "http://peoplegator/source")
+
+
+@dataclass(frozen=True, slots=True)
+class SourceCreateSpec:
+    """Complete typed identity for one source requested by a batch import."""
+
+    source_type: SourceKind
+    library: str | None = None
+    document_id: uuid.UUID | None = None
+    page_id: uuid.UUID | None = None
+    url: str | None = None
 
 
 def canonical_page_uri(
@@ -46,6 +61,13 @@ def canonical_document_uri(library: str, document_id: uuid.UUID) -> str:
     library = quote(library, safe="")
     return f"https://www.digitalniknihovna.cz/{library}/uuid/uuid:{document_id}"
 
+def canonical_source_uri(uri: str) -> str:
+    parsed_uri = urlparse(uri)
+    query_dict = sorted(parse_qsl(parsed_uri.query))
+    normalized_query = urlencode(query_dict)
+    normalized_uri = parsed_uri._replace(query=normalized_query).geturl()
+    return normalized_uri
+    
 
 class SourceResolutionError(ValueError):
     def __init__(self, message: str, *, status_code: int, code: str) -> None:
@@ -153,6 +175,36 @@ def _storage_properties(
     return properties
 
 
+def _source_uri(
+    source_type: SourceKind,
+    *,
+    library: str | None,
+    document_id: uuid.UUID | None,
+    page_id: uuid.UUID | None,
+    url: str | None,
+) -> str:
+    """Return the canonical, hashable database identity for one source."""
+    if source_type == SourceKind.image and url is not None:
+        return canonical_source_uri(url)
+    if source_type == SourceKind.page and library is not None and document_id is not None and page_id is not None:
+        return canonical_source_uri(canonical_page_uri(library, document_id, page_id))
+    if source_type == SourceKind.document and library is not None and document_id is not None:
+        return canonical_source_uri(canonical_document_uri(library, document_id))
+    raise ValueError("document sources require library and document_id")
+
+
+def _source_uuid(
+    source_type: SourceKind,
+    *,
+    library: str | None,
+    document_id: uuid.UUID | None,
+    page_id: uuid.UUID | None,
+    url: str | None,
+) -> uuid.UUID:
+    """Generate the stable Weaviate ID that enforces identity under races."""
+    source_uri = _source_uri(source_type, library=library, document_id=document_id, page_id=page_id, url=url)
+    return uuid.uuid5(_SOURCE_ID_NAMESPACE, f"{source_type.value}:{source_uri}")
+
 async def _first_source(
     client: WeaviateAsyncClient,
     filters: Sequence[FilterReturn],
@@ -196,18 +248,110 @@ async def create_source(
     )
     if existing is not None:
         return existing, False
-
+    source_uuid = _source_uuid(source_type, library=library, document_id=document_id, page_id=page_id, url=url)
     source = SourceRecord(
-        source_id=new_uuid6(),
+        source_id=source_uuid,
         source_type=source_type,
         uri=uri,
         metadata=metadata,
     )
-    await client.collections.get(SOURCE_COLLECTION).data.insert(
-        uuid=source.source_id,
-        properties=_storage_properties(source_type, uri, metadata),
-    )
+    try:
+        await client.collections.get(SOURCE_COLLECTION).data.insert(
+            uuid=source.source_id,
+            properties=_storage_properties(source_type, uri, metadata),
+        )
+    except Exception:
+        # A concurrent importer can win after the identity lookup. Stable IDs
+        # turn that race into a duplicate-ID error instead of a duplicate row.
+        raced_source = await get_source(client, source_type=source_type, library=library, document_id=document_id, page_id=page_id, url=url)
+        if (
+            raced_source is not None
+            and raced_source.source_id
+            == source_uuid
+        ):
+            return raced_source, False
+        raise
     return source, True
+
+
+@trace()
+async def create_source_batch(
+    client: WeaviateAsyncClient,
+    specs: Sequence[SourceCreateSpec],
+) -> list[SourceRecord]:
+    """Resolve or create sources in one preflight query and one write batch.
+
+    Repeated identities in ``specs`` are queried and inserted only once, but
+    their resolved record is repeated at the corresponding response positions.
+    """
+    if not specs:
+        return []
+    collection = client.collections.use(SOURCE_COLLECTION)
+    source_uuids = [
+        _source_uuid(
+            spec.source_type,
+            library=spec.library,
+            document_id=spec.document_id,
+            page_id=spec.page_id,
+            url=spec.url,
+        )
+        for spec in specs
+    ]
+    response = await collection.query.fetch_objects(
+        filters=Filter.by_id().contains_any(source_uuids),
+        limit=len(specs),
+        return_references=empty_reference_queries([]),
+    )
+    resolved_by_uuid: dict[uuid.UUID, SourceRecord] = {}
+    for item in response.objects:
+        source = parse_source(item.properties, item.references, item.uuid)
+        # Keep the first record if legacy data already contains a duplicate.
+        resolved_by_uuid.setdefault(source.source_id, source)
+    missing = [
+        (source_uuid, spec)
+        for source_uuid, spec in zip(source_uuids, specs)
+        if source_uuid not in resolved_by_uuid
+    ]
+    async with collection.batch.stream() as batch:
+        for source_uuid, spec in missing:
+            source_uri, source_metadata = _source_content(
+                spec.source_type, 
+                library=spec.library, 
+                document_id=spec.document_id, 
+                page_id=spec.page_id, 
+                url=spec.url
+            )
+            await batch.add_object(
+                uuid=source_uuid,
+                properties=_storage_properties(spec.source_type, source_uri, source_metadata),
+            )
+            resolved_by_uuid[source_uuid] = SourceRecord(
+                source_id=source_uuid,
+                source_type=spec.source_type,
+                uri=source_uri,
+                metadata=source_metadata,
+            )
+    failed_objects = collection.batch.failed_objects
+    if failed_objects:
+        failed_ids = {
+            failed.object_.uuid
+            for failed in failed_objects
+            if failed.object_.uuid is not None
+        }
+        verified = await collection.query.fetch_objects_by_ids(
+            failed_ids,
+            return_references=empty_reference_queries([]),
+        )
+        verified_ids = {item.uuid for item in verified.objects}
+        unresolved_ids = failed_ids - verified_ids
+        if unresolved_ids:
+            messages = "; ".join(
+                failed.message
+                for failed in failed_objects
+                if failed.object_.uuid in unresolved_ids
+            )
+            raise RuntimeError(f"Source batch import failed: {messages}")
+    return [resolved_by_uuid[key] for key in source_uuids]
 
 
 @trace()

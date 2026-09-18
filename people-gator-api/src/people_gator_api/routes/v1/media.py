@@ -7,12 +7,15 @@ from pydantic import AnyUrl
 
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
+    DocumentBatchCreateRequest,
     DocumentCreateRequest,
     DocumentListResponse,
     DocumentResponse,
+    ImageBatchCreateRequest,
     ImageCreateRequest,
     ImageListResponse,
     ImageResponse,
+    PageBatchCreateRequest,
     PageCreateRequest,
     PageListResponse,
     PageResponse,
@@ -30,8 +33,11 @@ from people_gator_api.services.crud_services.image_content_service import (
 )
 from people_gator_api.services.crud_services.media_service import (
     create_document,
+    create_document_batch,
     create_image,
+    create_image_batch,
     create_page,
+    create_page_batch,
     get_document,
     get_document_by_path,
     get_image,
@@ -125,6 +131,21 @@ async def create_document_route(
     if not created:
         raise_api_error(409, "already_exists", "Document already registered")
     return document
+
+
+@router.post(
+    "/documents:batch",
+    response_model=list[DocumentResponse],
+    status_code=status.HTTP_201_CREATED,
+    tags=["documents"],
+)
+async def create_document_batch_route(
+    payload: DocumentBatchCreateRequest,
+    session: WeaviateSessionDependency,
+    user: DataIngestUserDependency,
+) -> list[DocumentResponse]:
+    del user
+    return await create_document_batch(session, payload)
 
 
 @router.get(
@@ -230,6 +251,21 @@ async def create_page_route(
     if not created:
         raise_api_error(409, "already_exists", "Page already registered")
     return page
+
+
+@router.post(
+    "/pages:batch",
+    response_model=list[PageResponse],
+    status_code=status.HTTP_201_CREATED,
+    tags=["pages"],
+)
+async def create_page_batch_route(
+    payload: PageBatchCreateRequest,
+    session: WeaviateSessionDependency,
+    user: DataIngestUserDependency,
+) -> list[PageResponse]:
+    del user
+    return await create_page_batch(session, payload)
 
 
 @router.get("/pages/lookup", response_model=PageResponse, tags=["pages"])
@@ -383,6 +419,21 @@ async def create_image_route(
     if not created:
         raise_api_error(409, "already_exists", "Image already registered")
     return image
+
+
+@router.post(
+    "/images:batch",
+    response_model=list[ImageResponse],
+    status_code=status.HTTP_201_CREATED,
+    tags=["images"],
+)
+async def create_image_batch_route(
+    payload: ImageBatchCreateRequest,
+    session: WeaviateSessionDependency,
+    user: DataIngestUserDependency,
+) -> list[ImageResponse]:
+    del user
+    return await create_image_batch(session, payload)
 
 
 @router.get("/images/lookup", response_model=ImageResponse, tags=["images"])

@@ -13,15 +13,18 @@ def test_media_router_exposes_typed_source_and_page_subresource_routes() -> None
     paths = {cast(APIRoute, route).path_format for route in media_router.routes}
 
     assert "/pages" in paths
+    assert "/pages:batch" in paths
     assert "/pages/{page_source_id}" in paths
     assert "/pages/lookup" in paths
     assert "/pages/{page_source_id}/page-layout" in paths
     assert "/pages/{page_source_id}/text-mentions-spans" in paths
     assert "/documents" in paths
+    assert "/documents:batch" in paths
     assert "/documents/{document_source_id}" in paths
     assert "/documents/lookup" in paths
     assert "/images/lookup" in paths
     assert "/images" in paths
+    assert "/images:batch" in paths
     assert "/images/{image_id}" in paths
     assert not any("/scans" in path for path in paths)
     assert not any(
@@ -85,6 +88,33 @@ def test_documents_expose_full_immutable_rest_interface() -> None:
         for parameter in document_paths["/documents/lookup"]["get"]["parameters"]
     }
     assert lookup_parameters == {"library": True, "document_id": True}
+
+
+def test_media_batch_routes_expose_bounded_array_interfaces() -> None:
+    app = FastAPI()
+    app.include_router(media_router)
+    paths = app.openapi()["paths"]
+
+    response_schema_names = {
+        "/documents:batch": "DocumentResponse",
+        "/pages:batch": "PageResponse",
+        "/images:batch": "ImageResponse",
+    }
+    for path, response_schema_name in response_schema_names.items():
+        operation = paths[path]["post"]
+        request_schema = operation["requestBody"]["content"][
+            "application/json"
+        ]["schema"]
+        response_schema = operation["responses"]["201"]["content"][
+            "application/json"
+        ]["schema"]
+
+        assert request_schema["type"] == "array"
+        assert request_schema["maxItems"] == 1_000
+        assert response_schema["type"] == "array"
+        assert response_schema["items"] == {
+            "$ref": f"#/components/schemas/{response_schema_name}"
+        }
 
 
 def test_typed_lookups_only_resolve_resources() -> None:

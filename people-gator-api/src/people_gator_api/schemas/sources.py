@@ -1,15 +1,17 @@
 """Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
 
 import uuid
-from people_gator_api.schemas.common import GenericListResponse
+from typing import Annotated
 
 from pydantic import (
     AnyUrl,
     BaseModel,
     ConfigDict,
+    Field,
     model_validator,
 )
 
+from people_gator_api.schemas.common import GenericListResponse
 from people_gator_api.schemas.enums import SourceKind
 
 
@@ -57,6 +59,20 @@ class ImageCreateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     url: AnyUrl
+
+
+# A bounded batch keeps the single preflight query and its exact OR filter at a
+# predictable size while still making large imports practical.
+MAX_MEDIA_BATCH_SIZE = 1_000
+type PageBatchCreateRequest = Annotated[
+    list[PageCreateRequest], Field(max_length=MAX_MEDIA_BATCH_SIZE)
+]
+type DocumentBatchCreateRequest = Annotated[
+    list[DocumentCreateRequest], Field(max_length=MAX_MEDIA_BATCH_SIZE)
+]
+type ImageBatchCreateRequest = Annotated[
+    list[ImageCreateRequest], Field(max_length=MAX_MEDIA_BATCH_SIZE)
+]
 
 
 class SourceDescriptorRequest(BaseModel):

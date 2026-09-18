@@ -30,9 +30,11 @@ from people_gator_api.schemas.sources import (
     SourceResponse,
 )
 from people_gator_api.services.crud_services.source_service import (
+    SourceCreateSpec,
     canonical_document_uri,
     canonical_page_uri,
     create_source,
+    create_source_batch,
     get_source,
     list_sources,
 )
@@ -148,6 +150,63 @@ async def create_image(
         url=str(payload.url),
     )
     return parse_image_source(source), created
+
+
+@trace()
+async def create_page_batch(
+    client: WeaviateAsyncClient,
+    payloads: Sequence[PageCreateRequest],
+) -> list[PageResponse]:
+    sources = await create_source_batch(
+        client,
+        [
+            SourceCreateSpec(
+                source_type=SourceKind.page,
+                library=payload.library,
+                document_id=payload.document_id,
+                page_id=payload.page_id,
+            )
+            for payload in payloads
+        ],
+    )
+    return [parse_page_source(source) for source in sources]
+
+
+@trace()
+async def create_document_batch(
+    client: WeaviateAsyncClient,
+    payloads: Sequence[DocumentCreateRequest],
+) -> list[DocumentResponse]:
+    sources = await create_source_batch(
+        client,
+        [
+            SourceCreateSpec(
+                source_type=SourceKind.document,
+                library=payload.library,
+                document_id=payload.document_id,
+            )
+            for payload in payloads
+        ],
+    )
+    return [parse_document_source(source) for source in sources]
+
+
+@trace()
+async def create_image_batch(
+    client: WeaviateAsyncClient,
+    payloads: Sequence[ImageCreateRequest],
+) -> list[ImageResponse]:
+    sources = await create_source_batch(
+        client,
+        [
+            SourceCreateSpec(
+                source_type=SourceKind.image,
+                url=str(payload.url),
+            )
+            for payload in payloads
+        ],
+    )
+    return [parse_image_source(source) for source in sources]
 
 
 @trace()
