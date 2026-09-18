@@ -13,7 +13,11 @@ from people_gator_api.services.weaviate_service.archive_search import (
     _deduplicate,
     _entity_source_ranking,
     _source_candidate_from_properties,
-    _source_scope_filter,
+)
+from people_gator_api.services.weaviate_service.db_schema import (
+    ENTITY_COLLECTION,
+    FACE_COLLECTION,
+    TEXT_MENTION_COLLECTION,
 )
 
 
@@ -32,33 +36,41 @@ def test_deduplicate_preserves_first_occurrence_order() -> None:
     assert _deduplicate([first, second, first]) == [first, second]
 
 
-def test_source_scope_filter_none_without_source() -> None:
-    assert _source_scope_filter(None) is None
-
-
-def test_source_scope_filter_targets_direct_mentioned_in_reference() -> None:
-    assert _source_scope_filter(uuid.uuid4()) is not None
-
-
 @pytest.mark.asyncio
-async def test_entity_source_ranking_follows_direct_links() -> None:
-    first_source = uuid.uuid4()
-    second_source = uuid.uuid4()
-    references = {
-        "mentioned_in": type(
+async def test_entity_source_ranking_combines_face_and_text_mention_paths() -> None:
+    first_entity = uuid.UUID(int=1)
+    second_entity = uuid.UUID(int=2)
+    first_source = uuid.UUID(int=3)
+    second_source = uuid.UUID(int=4)
+
+    def reference(object_id: uuid.UUID) -> object:
+        return type(
             "Reference",
             (),
+            {"objects": [type("Linked", (), {"uuid": object_id})()]},
+        )()
+
+    def appearance(entity_id: uuid.UUID, source_id: uuid.UUID) -> object:
+        return type(
+            "Appearance",
+            (),
             {
-                "objects": [
-                    type("Linked", (), {"uuid": first_source})(),
-                    type("Linked", (), {"uuid": second_source})(),
-                ]
+                "uuid": uuid.uuid4(),
+                "references": {
+                    "entity": reference(entity_id),
+                    "source": reference(source_id),
+                },
             },
         )()
-    }
+
+    requested_collections: list[str] = []
 
     class _Query:
+        def __init__(self, collection_name: str) -> None:
+            self.collection_name = collection_name
+
         async def bm25(self, **kwargs: object) -> object:
+            assert self.collection_name == ENTITY_COLLECTION
             assert kwargs["query"] == "Ada"
             assert kwargs["query_properties"] == ["name", "aliases"]
             return type(
@@ -66,18 +78,28 @@ async def test_entity_source_ranking_follows_direct_links() -> None:
                 (),
                 {
                     "objects": [
-                        type("Entity", (), {"references": references})(),
-                        type("Entity", (), {"references": references})(),
+                        type("Entity", (), {"uuid": first_entity})(),
+                        type("Entity", (), {"uuid": second_entity})(),
                     ]
                 },
             )()
 
-    collection = type("Collection", (), {"query": _Query()})()
-    collections = type(
-        "Collections",
-        (),
-        {"get": lambda self, _name: collection},
-    )()
+        async def fetch_objects(self, **_kwargs: object) -> object:
+            objects = {
+                FACE_COLLECTION: [appearance(first_entity, second_source)],
+                TEXT_MENTION_COLLECTION: [
+                    appearance(first_entity, first_source),
+                    appearance(second_entity, first_source),
+                ],
+            }[self.collection_name]
+            return type("Response", (), {"objects": objects})()
+
+    class _Collections:
+        def get(self, collection_name: str) -> object:
+            requested_collections.append(collection_name)
+            return type("Collection", (), {"query": _Query(collection_name)})()
+
+    collections = _Collections()
     client = type("Client", (), {"collections": collections})()
 
     ranking = await _entity_source_ranking(
@@ -87,6 +109,11 @@ async def test_entity_source_ranking_follows_direct_links() -> None:
     )
 
     assert ranking == [first_source, second_source]
+    assert requested_collections == [
+        ENTITY_COLLECTION,
+        FACE_COLLECTION,
+        TEXT_MENTION_COLLECTION,
+    ]
 
 
 def test_source_candidate_from_page_properties() -> None:

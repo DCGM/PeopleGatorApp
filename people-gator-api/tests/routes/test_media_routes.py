@@ -68,10 +68,7 @@ def test_annotation_lists_only_accept_direct_source_filters() -> None:
 
     assert "/page-mentions" not in spec["paths"]
     assert "/document-mentions" not in spec["paths"]
-    assert set(spec["paths"]["/entities/{entity_id}/mentioned-in/{source_id}"]) == {
-        "put",
-        "delete",
-    }
+    assert "/entities/{entity_id}/mentioned-in/{source_id}" not in spec["paths"]
 
 
 def test_documents_expose_full_immutable_rest_interface() -> None:

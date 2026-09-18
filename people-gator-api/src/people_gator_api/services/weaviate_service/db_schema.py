@@ -285,11 +285,6 @@ ENTITY_REFERENCES: list[ReferenceProperty] = [
         target_collection=USER_COLLECTION,
         description="User that created the entity.",
     ),
-    ReferenceProperty(
-        name="mentioned_in",
-        target_collection=SOURCE_COLLECTION,
-        description="Document or page sources in which the entity is mentioned.",
-    ),
 ]
 FACE_REFERENCES: list[ReferenceProperty] = [
     ReferenceProperty(

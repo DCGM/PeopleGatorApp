@@ -10,14 +10,12 @@ def test_source_schema_stores_archive_identity_at_top_level() -> None:
     assert {"source_type", "uri", "library", "document", "page"} <= property_names
 
 
-def test_entity_schema_links_directly_to_sources() -> None:
-    references = {
-        reference.name: reference for reference in db_schema.ENTITY_REFERENCES
+def test_entity_schema_has_no_direct_source_reference() -> None:
+    reference_names = {
+        reference.name for reference in db_schema.ENTITY_REFERENCES
     }
 
-    assert references["mentioned_in"].target_collection == db_schema.SOURCE_COLLECTION
-    assert "DocumentMention" not in db_schema.ALL_COLLECTION_SPECS
-    assert "PageMention" not in db_schema.ALL_COLLECTION_SPECS
+    assert reference_names == {"user"}
 
 
 def test_text_mention_schema_links_to_entity_and_source() -> None:

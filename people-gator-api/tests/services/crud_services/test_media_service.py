@@ -17,8 +17,8 @@ from people_gator_api.schemas.sources import (
 )
 from people_gator_api.services.crud_services import media_service
 from people_gator_api.services.weaviate_service.db_schema import (
-    ENTITY_COLLECTION,
     FACE_COLLECTION,
+    TEXT_MENTION_COLLECTION,
 )
 
 
@@ -259,22 +259,25 @@ async def test_get_page_by_path_supports_both_canonical_forms(
 
 
 @pytest.mark.asyncio
-async def test_entity_ids_for_source_combines_direct_links_and_face_detections() -> (
-    None
-):
+async def test_entity_ids_for_source_combines_unique_face_and_text_mentions() -> None:
     source_id = uuid.uuid4()
-    face_entity_id = uuid.uuid4()
-    mentioned_entity_id = uuid.uuid4()
+    shared_entity_id = uuid.uuid4()
+    mention_only_entity_id = uuid.uuid4()
 
     face = SimpleNamespace(
         uuid=uuid.uuid4(),
         properties={},
-        references={"entity": _reference(face_entity_id)},
+        references={"entity": _reference(shared_entity_id)},
     )
-    mentioned_entity = SimpleNamespace(
-        uuid=mentioned_entity_id,
+    shared_mention = SimpleNamespace(
+        uuid=uuid.uuid4(),
         properties={},
-        references={},
+        references={"entity": _reference(shared_entity_id)},
+    )
+    other_mention = SimpleNamespace(
+        uuid=uuid.uuid4(),
+        properties={},
+        references={"entity": _reference(mention_only_entity_id)},
     )
 
     class _Query:
@@ -285,7 +288,7 @@ async def test_entity_ids_for_source_combines_direct_links_and_face_detections()
         async def fetch_objects(self, **_kwargs: object) -> SimpleNamespace:
             objects = {
                 FACE_COLLECTION: [face],
-                ENTITY_COLLECTION: [mentioned_entity],
+                TEXT_MENTION_COLLECTION: [shared_mention, other_mention],
             }.get(self.collection_name, [])
             return SimpleNamespace(objects=objects)
 
@@ -300,6 +303,6 @@ async def test_entity_ids_for_source_combines_direct_links_and_face_detections()
     )
 
     assert result == {
-        face_entity_id,
-        mentioned_entity_id,
+        shared_entity_id,
+        mention_only_entity_id,
     }

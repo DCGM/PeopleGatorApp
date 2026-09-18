@@ -9,7 +9,7 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.enums import EntityType, SourceKind
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.services.crud_services import entity_service
 
 
@@ -245,81 +245,3 @@ async def test_list_entities_returns_empty_when_source_has_no_entities(
 
     assert result.items == []
     assert result.total_count == 0
-
-
-@pytest.mark.asyncio
-async def test_link_entity_to_source_adds_mentioned_in_reference(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    entity_id = uuid.uuid4()
-    source_id = uuid.uuid4()
-    captured: dict[str, object] = {}
-
-    async def fake_get_entity(_client: object, requested_id: uuid.UUID) -> object:
-        assert requested_id == entity_id
-        return object()
-
-    async def fake_get_source(_client: object, requested_id: uuid.UUID) -> object:
-        assert requested_id == source_id
-        return SimpleNamespace(source_type=SourceKind.page)
-
-    class _Data:
-        async def reference_add(self, **kwargs: object) -> None:
-            captured.update(kwargs)
-
-    client = SimpleNamespace(
-        collections=SimpleNamespace(get=lambda _name: SimpleNamespace(data=_Data()))
-    )
-    monkeypatch.setattr(entity_service, "get_entity", fake_get_entity)
-    monkeypatch.setattr(entity_service, "get_source", fake_get_source)
-
-    linked = await entity_service.link_entity_to_source(
-        client,  # pyright: ignore[reportArgumentType]
-        entity_id,
-        source_id,
-    )
-
-    assert linked is True
-    assert captured == {
-        "from_uuid": entity_id,
-        "from_property": "mentioned_in",
-        "to": source_id,
-    }
-
-
-@pytest.mark.asyncio
-async def test_unlink_entity_from_source_deletes_mentioned_in_reference(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    entity_id = uuid.uuid4()
-    source_id = uuid.uuid4()
-    captured: dict[str, object] = {}
-
-    async def fake_get_entity(_client: object, _requested_id: uuid.UUID) -> object:
-        return object()
-
-    async def fake_get_source(_client: object, _requested_id: uuid.UUID) -> object:
-        return SimpleNamespace(source_type=SourceKind.document)
-
-    class _Data:
-        async def reference_delete(self, **kwargs: object) -> None:
-            captured.update(kwargs)
-
-    client = SimpleNamespace(
-        collections=SimpleNamespace(get=lambda _name: SimpleNamespace(data=_Data()))
-    )
-    monkeypatch.setattr(entity_service, "get_entity", fake_get_entity)
-    monkeypatch.setattr(entity_service, "get_source", fake_get_source)
-
-    unlinked = await entity_service.unlink_entity_from_source(
-        client,  # pyright: ignore[reportArgumentType]
-        entity_id,
-        source_id,
-    )
-
-    assert unlinked is True
-    assert captured == {
-        "from_uuid": entity_id,
-        "from_property": "mentioned_in",
-        "to": source_id,
-    }

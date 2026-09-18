@@ -2,28 +2,44 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import cast
+from typing import Protocol, cast
 
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter, QueryReference
+from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.internal import CrossReferences
+from weaviate.collections.classes.types import WeaviateProperties
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.services.weaviate_service.db_schema import (
     ENTITY_COLLECTION,
+    FACE_COLLECTION,
     SOURCE_COLLECTION,
+    TEXT_MENTION_COLLECTION,
 )
-from people_gator_api.services.weaviate_service.utils import fetch_collection_object
+from people_gator_api.services.weaviate_service.utils import (
+    combine_filters,
+    empty_reference_queries,
+    fetch_collection_object,
+    reference_id_filter,
+)
 from people_gator_api.utils.opentelemetry import trace
 
 _ENTITY_QUERY_PROPERTIES = ["name", "aliases"]
 _SOURCE_PROPERTIES = ["source_type", "library", "document", "page"]
 _RRF_RANK_CONSTANT = 60
 _ENTITY_MATCH_LIMIT = 100
+_APPEARANCE_PAGE_SIZE = 100
+
+
+class _AppearanceObject(Protocol):
+    uuid: uuid.UUID
+    properties: WeaviateProperties
+    references: CrossReferences
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,33 +106,80 @@ async def _entity_source_ranking(
     query: str,
     source_id: uuid.UUID | None,
 ) -> list[uuid.UUID]:
-    """Rank sources by the matching entities that link to them directly."""
+    """Rank sources reached through faces and text mentions of matching entities."""
     response = await client.collections.get(ENTITY_COLLECTION).query.bm25(
         query=query,
         query_properties=_ENTITY_QUERY_PROPERTIES,
-        filters=_source_scope_filter(source_id),
         limit=_ENTITY_MATCH_LIMIT,
         return_properties=[],
-        return_references=QueryReference(
-            link_on="mentioned_in",
-            return_properties=[],
+    )
+    entity_ids = [entity_object.uuid for entity_object in response.objects]
+    if not entity_ids:
+        return []
+
+    faces, mentions = await asyncio.gather(
+        _fetch_appearances(
+            client,
+            FACE_COLLECTION,
+            entity_ids=entity_ids,
+            source_id=source_id,
+        ),
+        _fetch_appearances(
+            client,
+            TEXT_MENTION_COLLECTION,
+            entity_ids=entity_ids,
+            source_id=source_id,
         ),
     )
-    linked_sources: list[uuid.UUID] = []
-    for entity_object in response.objects:
-        for linked_source_id in _reference_uuids(
-            entity_object.references,
-            "mentioned_in",
-        ):
-            if source_id is None or linked_source_id == source_id:
-                linked_sources.append(linked_source_id)
-    return _deduplicate(linked_sources)
+    entity_rank = {entity_id: rank for rank, entity_id in enumerate(entity_ids)}
+    ranked_sources: list[tuple[int, uuid.UUID]] = []
+    for appearance in [*faces, *mentions]:
+        linked_entities = _reference_uuids(appearance.references, "entity")
+        linked_sources = _reference_uuids(appearance.references, "source")
+        if not linked_entities or not linked_sources:
+            continue
+        rank = entity_rank.get(linked_entities[0])
+        if rank is not None:
+            ranked_sources.append((rank, linked_sources[0]))
+    ranked_sources.sort(key=lambda item: (item[0], item[1]))
+    return _deduplicate([source for _rank, source in ranked_sources])
 
 
-def _source_scope_filter(source_id: uuid.UUID | None) -> FilterReturn | None:
-    if source_id is None:
-        return None
-    return Filter.by_ref("mentioned_in").by_id().equal(source_id)
+async def _fetch_appearances(
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    *,
+    entity_ids: Sequence[uuid.UUID],
+    source_id: uuid.UUID | None,
+) -> list[_AppearanceObject]:
+    filters: list[FilterReturn] = [
+        Filter.by_ref("entity").by_id().contains_any(sorted(entity_ids))
+    ]
+    if source_id is not None:
+        filters.append(reference_id_filter(link_on="source", reference_id=source_id))
+
+    collection = client.collections.get(collection_name)
+    appearances: list[_AppearanceObject] = []
+    after_id: uuid.UUID | None = None
+    while True:
+        response = await collection.query.fetch_objects(
+            filters=combine_filters(filters),
+            limit=_APPEARANCE_PAGE_SIZE,
+            after=after_id,
+            return_properties=[],
+            return_references=empty_reference_queries(["entity", "source"]),
+        )
+        page = cast(list[_AppearanceObject], list(response.objects))
+        if not page:
+            break
+        appearances.extend(page)
+        if len(page) < _APPEARANCE_PAGE_SIZE:
+            break
+        next_after_id = page[-1].uuid
+        if next_after_id == after_id:
+            raise RuntimeError("Weaviate appearance pagination did not advance")
+        after_id = next_after_id
+    return appearances
 
 
 def _reference_uuids(

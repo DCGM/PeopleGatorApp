@@ -22,7 +22,6 @@ from people_gator_api.services.auth_service import (
     AdminUserDependency,
     AnnotatorUserDependency,
     BrowseUserDependency,
-    DataIngestUserDependency,
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
@@ -32,12 +31,9 @@ from people_gator_api.services.crud_services.entity_service import (
     delete_entities,
     delete_entity,
     get_entity,
-    link_entity_to_source,
     list_entities,
     patch_entity,
-    unlink_entity_from_source,
 )
-from people_gator_api.services.crud_services.source_service import SourceResolutionError
 router = APIRouter(tags=["entities"])
 
 
@@ -127,44 +123,6 @@ async def patch_entity_route(
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
-
-
-@router.put(
-    "/entities/{entity_id}/mentioned-in/{source_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def link_entity_to_source_route(
-    entity_id: uuid.UUID,
-    source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
-    user: DataIngestUserDependency,
-) -> None:
-    del user
-    try:
-        linked = await link_entity_to_source(session, entity_id, source_id)
-    except SourceResolutionError as exc:
-        raise_api_error(exc.status_code, exc.code, exc.message)
-    if not linked:
-        raise_api_error(404, "not_found", "Entity not found")
-
-
-@router.delete(
-    "/entities/{entity_id}/mentioned-in/{source_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_entity_from_source_route(
-    entity_id: uuid.UUID,
-    source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
-    user: AnnotatorUserDependency,
-) -> None:
-    del user
-    try:
-        unlinked = await unlink_entity_from_source(session, entity_id, source_id)
-    except SourceResolutionError as exc:
-        raise_api_error(exc.status_code, exc.code, exc.message)
-    if not unlinked:
-        raise_api_error(404, "not_found", "Entity not found")
 
 
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)

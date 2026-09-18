@@ -8,7 +8,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 
-from people_gator_api.schemas.enums import EntityType, SourceKind
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -32,10 +32,6 @@ from people_gator_api.services.weaviate_service.utils import (
 )
 from people_gator_api.services.crud_services.media_service import (
     entity_ids_for_source,
-)
-from people_gator_api.services.crud_services.source_service import (
-    SourceResolutionError,
-    get_source,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
@@ -287,66 +283,6 @@ async def patch_entity(
 
     logger.info("patch_entity completed", extra={"entity_id": entity_id})
     return parse_entity(properties, response.references, response.uuid)
-
-
-@trace()
-async def link_entity_to_source(
-    client: WeaviateAsyncClient,
-    entity_id: uuid.UUID,
-    source_id: uuid.UUID,
-) -> bool:
-    """Add a direct ``mentioned_in`` link to a document or page source."""
-    if await get_entity(client, entity_id) is None:
-        return False
-    source = await get_source(client, source_id)
-    if source is None:
-        raise SourceResolutionError(
-            "Source not found",
-            status_code=404,
-            code="not_found",
-        )
-    if source.source_type not in (SourceKind.document, SourceKind.page):
-        raise SourceResolutionError(
-            "Entities can only be mentioned in document or page sources",
-            status_code=422,
-            code="invalid_source_type",
-        )
-    await client.collections.get(ENTITY_COLLECTION).data.reference_add(
-        from_uuid=entity_id,
-        from_property="mentioned_in",
-        to=source_id,
-    )
-    return True
-
-
-@trace()
-async def unlink_entity_from_source(
-    client: WeaviateAsyncClient,
-    entity_id: uuid.UUID,
-    source_id: uuid.UUID,
-) -> bool:
-    """Remove a direct ``mentioned_in`` link from an entity."""
-    if await get_entity(client, entity_id) is None:
-        return False
-    source = await get_source(client, source_id)
-    if source is None:
-        raise SourceResolutionError(
-            "Source not found",
-            status_code=404,
-            code="not_found",
-        )
-    if source.source_type not in (SourceKind.document, SourceKind.page):
-        raise SourceResolutionError(
-            "Entities can only be mentioned in document or page sources",
-            status_code=422,
-            code="invalid_source_type",
-        )
-    await client.collections.get(ENTITY_COLLECTION).data.reference_delete(
-        from_uuid=entity_id,
-        from_property="mentioned_in",
-        to=source_id,
-    )
-    return True
 
 
 @trace()

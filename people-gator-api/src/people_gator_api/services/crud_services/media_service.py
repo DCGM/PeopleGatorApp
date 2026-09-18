@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Sequence
 from typing import Protocol, cast
@@ -36,8 +37,8 @@ from people_gator_api.services.crud_services.source_service import (
     list_sources,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
-    ENTITY_COLLECTION,
     FACE_COLLECTION,
+    TEXT_MENTION_COLLECTION,
 )
 from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
@@ -351,18 +352,20 @@ async def entity_ids_for_source(
     client: WeaviateAsyncClient,
     source_id: uuid.UUID,
 ) -> set[uuid.UUID]:
-    """Collect entities directly mentioned in or visually detected in a Source."""
+    """Collect unique entities with face or text appearances in a Source."""
     source_filter = reference_id_filter(link_on="source", reference_id=source_id)
-    faces = await _fetch_all_references(
-        client,
-        FACE_COLLECTION,
-        filters=source_filter,
-        reference_names=["entity"],
+    faces, mentions = await asyncio.gather(
+        _fetch_all_references(
+            client,
+            FACE_COLLECTION,
+            filters=source_filter,
+            reference_names=["entity"],
+        ),
+        _fetch_all_references(
+            client,
+            TEXT_MENTION_COLLECTION,
+            filters=source_filter,
+            reference_names=["entity"],
+        ),
     )
-    mentioned_entities = await _fetch_all_references(
-        client,
-        ENTITY_COLLECTION,
-        filters=reference_id_filter(link_on="mentioned_in", reference_id=source_id),
-        reference_names=[],
-    )
-    return _reference_ids(faces, "entity") | {item.uuid for item in mentioned_entities}
+    return _reference_ids(faces, "entity") | _reference_ids(mentions, "entity")
