@@ -47,14 +47,26 @@ class StorageSettings(BaseModel):
     s3: S3Settings
 
 
+class ImageContentSettings(BaseModel):
+    """S3 storage settings for original image content."""
+
+    key_prefix: str = "images"
+
+
 class PageImageCacheSettings(BaseModel):
-    """Local filesystem cache for resized page images (JPEG only)."""
+    """S3-backed cache for resized page images (JPEG only)."""
 
     enabled: bool = False
-    mount_path: str = "/var/cache/people-gator/page-images"
+    key_prefix: str = "cache/page-images"
     quality: int = Field(default=85, ge=1, le=100)
     # Widths (in pixels) pre-generated and accepted as ``size`` query values.
     widths: list[int] = Field(default_factory=lambda: [256, 1024, 2048])
+
+
+class PageLayoutSettings(BaseModel):
+    """S3 storage settings for page-layout JSON documents."""
+
+    key_prefix: str = "page-layouts"
 
 
 class JwkSettings(BaseModel):
@@ -124,7 +136,9 @@ class Settings(BaseSettings):
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
+    image_content: ImageContentSettings = ImageContentSettings()
     page_image_cache: PageImageCacheSettings = PageImageCacheSettings()
+    page_layout: PageLayoutSettings = PageLayoutSettings()
 
 
 settings = Settings() # type: ignore

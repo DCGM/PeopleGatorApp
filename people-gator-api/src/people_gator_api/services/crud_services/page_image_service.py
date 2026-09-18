@@ -1,24 +1,23 @@
-"""Page-image retrieval with an optional local resized-JPEG cache.
+"""Page-image retrieval with an optional S3-backed resized-JPEG cache.
 
-The canonical page image lives in object storage under
-``image/{website}/{path}`` (see :mod:`image_content_service`).  When the
-cache is enabled, resized derivatives (JPEG only) are stored on an explicit
-filesystem mount under::
+The canonical page image lives under the configured image-content S3 prefix
+(see :mod:`image_content_service`).  When the
+cache is enabled, resized derivatives (JPEG only) are stored in the configured
+S3 bucket under::
 
-    {mount_path}/{website}/{path}/{width}.jpg
+    {key_prefix}/{website}/{path}/{width}.jpg
 
-and served directly from disk.  Cache misses are rendered from the original
-bytes with Pillow and written back to the mount atomically.
+Cache misses are rendered from the original bytes with Pillow and uploaded to
+the bucket.
 """
 
 import asyncio
 import io
 import logging
-import os
 import posixpath
-import tempfile
 from urllib.parse import urlparse
 
+from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image
 from pydantic import BaseModel
 
@@ -26,6 +25,7 @@ from people_gator_api.services.crud_services.image_content_service import (
     get_image_content,
 )
 from people_gator_api.services.crud_services.source_service import SourceResolutionError
+from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
 from people_gator_api.settings import PageImageCacheSettings, settings
 
 
@@ -48,8 +48,13 @@ def _cache_key(
     object_path: str,
     width: int,
 ) -> str:
-    """Filesystem path of the cached derivative for one page image."""
-    return os.path.join(cache_cfg.mount_path, website, object_path, f"{width}.jpg")
+    """S3 object key of the cached derivative for one page image."""
+    return posixpath.join(
+        cache_cfg.key_prefix.strip("/"),
+        website,
+        object_path.lstrip("/"),
+        f"{width}.jpg",
+    )
 
 
 def _resolve_width(
@@ -81,33 +86,30 @@ def _render_jpeg(data: bytes, width: int, quality: int) -> bytes:
         return buffer.getvalue()
 
 
-def _read_cache(path: str) -> bytes | None:
+def _is_missing_object(exc: ClientError) -> bool:
+    code = exc.response.get("Error", {}).get("Code")
+    return code in {"404", "NoSuchKey", "NotFound"}
+
+
+async def _read_cache(key: str) -> bytes | None:
     """Return cached bytes or ``None`` when the derivative is not stored."""
     try:
-        with open(path, "rb") as f:
-            return f.read()
-    except FileNotFoundError:
+        return await read_bytes(key)
+    except ClientError as exc:
+        if not _is_missing_object(exc):
+            logger.warning("page image cache read failed", extra={"key": key})
         return None
-    except OSError:
-        logger.warning("page image cache read failed", extra={"path": path})
+    except BotoCoreError:
+        logger.warning("page image cache read failed", extra={"key": key})
         return None
 
 
-def _write_cache(path: str, data: bytes) -> None:
-    """Atomically write a derivative to the cache mount (best effort)."""
-    directory = posixpath.dirname(path)
+async def _write_cache(key: str, data: bytes) -> None:
+    """Upload a derivative to the cache prefix (best effort)."""
     try:
-        os.makedirs(directory, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(data)
-            os.replace(tmp_path, path)
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-    except OSError:
-        logger.warning("page image cache write failed", extra={"path": path})
+        await write_bytes(key, data)
+    except BotoCoreError:
+        logger.warning("page image cache write failed", extra={"key": key})
 
 
 async def get_page_image(
@@ -119,7 +121,7 @@ async def get_page_image(
 
     Without ``max_width`` the original bytes are streamed from object storage.
     With ``max_width`` (and the cache enabled) a JPEG derivative is served from
-    the filesystem mount, rendered on first request and cached afterwards.
+    S3, rendered on first request and uploaded to the configured bucket.
     """
     cache_cfg = settings.page_image_cache
     resolved_width = _resolve_width(cache_cfg, max_width)
@@ -129,10 +131,10 @@ async def get_page_image(
         return PageImageContent(content=content, media_type=media_type, cache_hit=False)
 
     parsed = urlparse(url)
-    cache_path = _cache_key(
+    cache_key = _cache_key(
         cache_cfg, parsed.netloc, parsed.path.lstrip("/"), resolved_width
     )
-    cached = await asyncio.to_thread(_read_cache, cache_path)
+    cached = await _read_cache(cache_key)
     if cached is not None:
         return PageImageContent(
             content=cached, media_type=_JPEG_MEDIA_TYPE, cache_hit=True
@@ -142,7 +144,7 @@ async def get_page_image(
     rendered = await asyncio.to_thread(
         _render_jpeg, original, resolved_width, cache_cfg.quality
     )
-    await asyncio.to_thread(_write_cache, cache_path, rendered)
+    await _write_cache(cache_key, rendered)
     return PageImageContent(
         content=rendered, media_type=_JPEG_MEDIA_TYPE, cache_hit=False
     )

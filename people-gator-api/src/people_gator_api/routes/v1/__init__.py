@@ -7,11 +7,15 @@ from people_gator_api.routes.v1.users import router as users_router
 from people_gator_api.routes.v1.root import router as root_router
 from people_gator_api.routes.v1.search import router as search_router
 from people_gator_api.routes.v1.sources import router as sources_router
+from people_gator_api.routes.v1.text_mentions import (
+    router as text_mentions_router,
+)
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(search_router)
 router.include_router(identities_router)
 router.include_router(annotations_router)
+router.include_router(text_mentions_router)
 router.include_router(sources_router)
 router.include_router(media_router)
 router.include_router(users_router)

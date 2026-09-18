@@ -2,11 +2,11 @@
 
 Binary image files live in the bucket under::
 
-    image/{website}/{path/to/image.ext}
+    {key_prefix}/{website}/{path/to/image.ext}
 
-and are exposed through :func:`get_image_content`, which normalizes and
-validates the storage path, downloads the bytes, and resolves the media type
-from the extension.
+and are exposed through :func:`get_image_content`, which derives the storage
+key from the URL, downloads the bytes, and resolves the media type from the
+extension.
 """
 
 import logging
@@ -17,11 +17,10 @@ from botocore.exceptions import ClientError
 
 from people_gator_api.services.crud_services.source_service import SourceResolutionError
 from people_gator_api.services.s3_filesystem import read_bytes
+from people_gator_api.settings import settings
 
 
 logger = logging.getLogger(__name__)
-
-_IMAGE_CONTENT_PREFIX = "images"
 
 # Explicit allow-list; mimetypes is only used to map extensions to media types.
 _ALLOWED_EXTENSIONS = frozenset(
@@ -42,12 +41,21 @@ def image_media_type(key: str) -> str:
     return _FALLBACK_MEDIA_TYPE
 
 
+def image_content_key(url: str) -> str:
+    """Return the configured S3 object key for one image URL."""
+    parsed_url = urlparse(url)
+    return posixpath.join(
+        settings.image_content.key_prefix.strip("/"),
+        parsed_url.netloc,
+        parsed_url.path.lstrip("/"),
+    )
+
+
 async def get_image_content(
     url: str,
 ) -> tuple[bytes, str]:
     """Download one stored image and return ``(bytes, media_type)``."""
-    parsed_url = urlparse(url)
-    key = f"{_IMAGE_CONTENT_PREFIX}/{parsed_url.netloc}{parsed_url.path}"
+    key = image_content_key(url)
     try:
         content = await read_bytes(key)
     except ClientError as exc:

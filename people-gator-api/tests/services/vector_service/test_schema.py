@@ -20,6 +20,21 @@ def test_entity_schema_links_directly_to_sources() -> None:
     assert "PageMention" not in db_schema.ALL_COLLECTION_SPECS
 
 
+def test_text_mention_schema_links_to_entity_and_source() -> None:
+    property_names = {
+        property_.name for property_ in db_schema.TEXT_MENTION_PROPERTIES
+    }
+    references = {
+        reference.name: reference
+        for reference in db_schema.TEXT_MENTION_REFERENCES
+    }
+
+    assert property_names == {"name", "context"}
+    assert references["entity"].target_collection == db_schema.ENTITY_COLLECTION
+    assert references["source"].target_collection == db_schema.SOURCE_COLLECTION
+    assert db_schema.TEXT_MENTION_COLLECTION in db_schema.ALL_COLLECTION_SPECS
+
+
 def test_default_named_vectors_are_graphql_safe() -> None:
     graph_ql_name_pattern = re.compile(r"^[_A-Za-z][_0-9A-Za-z]{0,229}$")
 

@@ -18,6 +18,12 @@ from people_gator_api.schemas.sources import (
     SourceListResponse,
     SourceResponse,
 )
+from people_gator_api.schemas.text_mentions import (
+    TextMentionCreateRequest,
+    TextMentionEntityPatchRequest,
+    TextMentionListResponse,
+    TextMentionResponse,
+)
 from people_gator_api.schemas.users import (
     UserCreateRequest,
     UserListResponse,
@@ -40,6 +46,10 @@ __all__ = [
     "SearchEntitiesResultListResponse",
     "SourceListResponse",
     "SourceResponse",
+    "TextMentionCreateRequest",
+    "TextMentionEntityPatchRequest",
+    "TextMentionListResponse",
+    "TextMentionResponse",
     "UserCreateRequest",
     "UserListResponse",
     "UserPatchRequest",

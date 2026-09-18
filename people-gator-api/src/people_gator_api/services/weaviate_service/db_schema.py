@@ -20,6 +20,7 @@ USER_COLLECTION = "User"
 SOURCE_COLLECTION = "Source"
 ENTITY_COLLECTION = "Entity"
 FACE_COLLECTION = "Face"
+TEXT_MENTION_COLLECTION = "TextMention"
 
 # ---------------------------------------------------------------------------
 # Named vector names
@@ -271,6 +272,11 @@ FACE_PROPERTIES: list[Property] = [
     _number_property("confidence", "Detection confidence."),
 ]
 
+TEXT_MENTION_PROPERTIES: list[Property] = [
+    _text_property("name", "Entity name as it appears in the source."),
+    _text_property("context", "Optional surrounding text for the mention."),
+]
+
 USER_REFERENCES: list[ReferenceProperty] = []
 SOURCE_REFERENCES: list[ReferenceProperty] = []
 ENTITY_REFERENCES: list[ReferenceProperty] = [
@@ -303,6 +309,19 @@ FACE_REFERENCES: list[ReferenceProperty] = [
     ),
 ]
 
+TEXT_MENTION_REFERENCES: list[ReferenceProperty] = [
+    ReferenceProperty(
+        name="entity",
+        target_collection=ENTITY_COLLECTION,
+        description="Entity identified by this text mention.",
+    ),
+    ReferenceProperty(
+        name="source",
+        target_collection=SOURCE_COLLECTION,
+        description="Source containing this text mention.",
+    ),
+]
+
 type CollectionVectorConfig = list[object] | None
 type CollectionSpec = tuple[
     list[Property], list[ReferenceProperty], CollectionVectorConfig
@@ -313,6 +332,11 @@ ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
         FACE_PROPERTIES,
         FACE_REFERENCES,
         default_face_vector_config(),
+    ),
+    TEXT_MENTION_COLLECTION: (
+        TEXT_MENTION_PROPERTIES,
+        TEXT_MENTION_REFERENCES,
+        None,
     ),
 }
 

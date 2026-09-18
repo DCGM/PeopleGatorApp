@@ -75,6 +75,11 @@ async def _upload_bytes(key: str, data: bytes) -> None:
         )
 
 
+async def write_bytes(key: str, data: bytes) -> None:
+    """Upload raw bytes to an S3 object (public helper)."""
+    await _upload_bytes(key, data)
+
+
 class _S3FileContext[_F: io.StringIO | io.BytesIO]:
     """Typed async context manager produced by :func:`open_file`.
 
@@ -214,4 +219,3 @@ async def glob(pattern: str) -> list[S3Entry]:
                 if fnmatch.fnmatch(key, pattern):
                     entries.append(S3Entry(key=key, is_prefix=False, size=obj.get("Size")))
         return entries
-

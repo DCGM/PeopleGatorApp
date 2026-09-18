@@ -27,7 +27,6 @@ import asyncio
 
 import pytest
 from botocore.exceptions import ClientError
-from pydantic import AnyUrl
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.pero import (
@@ -41,6 +40,7 @@ from people_gator_api.schemas.sources import (
     SourceResponse,
 )
 from people_gator_api.services.crud_services import page_layout_service
+from people_gator_api.settings import PageLayoutSettings
 
 
 def _page_source() -> SourceResponse:
@@ -147,10 +147,15 @@ async def test_put_page_layout_stores_canonical_key(
     source = _page_source()
     _install_source_lookup(monkeypatch, source)
     _install_fake_s3(monkeypatch)
+    monkeypatch.setattr(
+        page_layout_service.settings,
+        "page_layout",
+        PageLayoutSettings(key_prefix="ocr/page-layouts"),
+    )
     client = object()  # pyright: ignore[reportAssignmentType] - lookup is mocked
 
     expected_key = (
-        f"page-layouts/{source.metadata.library}"  # pyright: ignore[reportOptionalMemberAccess]
+        f"ocr/page-layouts/{source.metadata.library}"  # pyright: ignore[reportOptionalMemberAccess]
         f"/{source.metadata.document}"  # pyright: ignore[reportOptionalMemberAccess]
         f"/{source.metadata.page}.json"  # pyright: ignore[reportOptionalMemberAccess]
     )

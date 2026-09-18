@@ -28,39 +28,25 @@ from botocore.exceptions import ClientError
 from people_gator_api.services.crud_services import image_content_service
 from people_gator_api.services.crud_services.image_content_service import (
     get_image_content,
+    image_content_key,
     image_media_type,
-    normalize_image_key,
 )
+from people_gator_api.settings import ImageContentSettings
 
 
-def test_normalize_image_key_builds_canonical_key() -> None:
-    key = normalize_image_key("mzk", "path/to/image.jpg")
-    assert key == "image/mzk/path/to/image.jpg"
+_URL = "https://example.org/mzk/d/x/img.png"
 
 
-def test_normalize_image_key_rejects_traversal() -> None:
-    with pytest.raises(image_content_service.SourceResolutionError) as exc_info:
-        normalize_image_key("mzk", "../../etc/passwd.jpg")
-    assert exc_info.value.status_code == 422
-    assert exc_info.value.code == "invalid_image_path"
+def test_image_content_key_uses_configured_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        image_content_service.settings,
+        "image_content",
+        ImageContentSettings(key_prefix="originals/images"),
+    )
 
-
-def test_normalize_image_key_rejects_empty_segments() -> None:
-    with pytest.raises(image_content_service.SourceResolutionError):
-        normalize_image_key("mzk", "a//b.jpg")
-    with pytest.raises(image_content_service.SourceResolutionError):
-        normalize_image_key("mzk", "")
-
-
-def test_normalize_image_key_rejects_unknown_extension() -> None:
-    with pytest.raises(image_content_service.SourceResolutionError) as exc_info:
-        normalize_image_key("mzk", "docs/report.pdf")
-    assert exc_info.value.code == "invalid_image_path"
-
-
-def test_normalize_image_key_accepts_uppercase_extension() -> None:
-    key = normalize_image_key("mzk", "a/b.JPG")
-    assert key == "image/mzk/a/b.JPG"
+    assert image_content_key(_URL) == "originals/images/example.org/mzk/d/x/img.png"
 
 
 def test_image_media_type_from_extension() -> None:
@@ -69,7 +55,9 @@ def test_image_media_type_from_extension() -> None:
     assert image_media_type("image/mzk/a/b.tif") == "image/tiff"
 
 
-def test_install_fake_s3_missing_object(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_image_content_missing_object_returns_404(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def fake_read_bytes(_key: str) -> bytes:
         raise ClientError(
             {"Error": {"Code": "NoSuchKey", "Message": "Not Found"}},
@@ -79,7 +67,7 @@ def test_install_fake_s3_missing_object(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(image_content_service, "read_bytes", fake_read_bytes)
 
     with pytest.raises(image_content_service.SourceResolutionError) as exc_info:
-        asyncio.run(get_image_content("mzk", "missing/image.jpg"))
+        asyncio.run(get_image_content(_URL))
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "not_found"
 
@@ -92,18 +80,13 @@ def test_get_image_content_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
         return b"\x89PNG\r\n\x1a\nfake-bytes"
 
     monkeypatch.setattr(image_content_service, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr(
+        image_content_service.settings,
+        "image_content",
+        ImageContentSettings(key_prefix="originals/images"),
+    )
 
-    content, media_type = asyncio.run(get_image_content("mzk", "d/x/img.png"))
-    assert captured["key"] == "image/mzk/d/x/img.png"
+    content, media_type = asyncio.run(get_image_content(_URL))
+    assert captured["key"] == "originals/images/example.org/mzk/d/x/img.png"
     assert content == b"\x89PNG\r\n\x1a\nfake-bytes"
     assert media_type == "image/png"
-
-
-def test_get_image_content_rejects_bad_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fail_read_bytes(_key: str) -> bytes:
-        raise AssertionError("should not be called")
-
-    monkeypatch.setattr(image_content_service, "read_bytes", fail_read_bytes)
-
-    with pytest.raises(image_content_service.SourceResolutionError):
-        asyncio.run(get_image_content("mzk", "../secret.jpg"))

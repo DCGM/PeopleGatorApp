@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Query, Response, status
 from pydantic import AnyUrl
 
-from people_gator_api.schemas.pero import EntitySpanModel, PageLayoutModel
+from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
     DocumentCreateRequest,
     DocumentListResponse,
@@ -22,7 +22,9 @@ from people_gator_api.services.auth_service import (
     BrowseUserDependency,
     DataIngestUserDependency,
 )
-from people_gator_api.services.crud_services.entity_span_service import get_entity_spans
+from people_gator_api.services.crud_services.text_mention_span_service import (
+    get_text_mention_spans,
+)
 from people_gator_api.services.crud_services.image_content_service import (
     get_image_content,
 )
@@ -72,13 +74,13 @@ async def _fetch_layout_for_page(
         raise_api_error(exc.status_code, exc.code, exc.message)
 
 
-async def _fetch_entity_spans_for_page(
+async def _fetch_text_mention_spans_for_page(
     session: WeaviateSessionDependency,
     page_source_id: uuid.UUID,
-) -> list[EntitySpanModel]:
-    """Match directly linked entities against one page's stored OCR layout."""
+) -> list[TextMentionSpanModel]:
+    """Match the page's text mentions against its stored OCR layout."""
     try:
-        return await get_entity_spans(session, page_source_id)
+        return await get_text_mention_spans(session, page_source_id)
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
 
@@ -310,21 +312,21 @@ async def get_page_layout_by_id_route(
 
 
 @router.get(
-    "/pages/{page_source_id:uuid}/entity-spans",
-    response_model=list[EntitySpanModel],
+    "/pages/{page_source_id:uuid}/text-mentions-spans",
+    response_model=list[TextMentionSpanModel],
     tags=["pages"],
 )
-async def get_entity_spans_by_id_route(
+async def get_text_mention_spans_by_id_route(
     page_source_id: uuid.UUID,
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
-) -> list[EntitySpanModel]:
-    """Return word-aligned fuzzy entity spans for one page Source UUID."""
+) -> list[TextMentionSpanModel]:
+    """Return word-aligned fuzzy text-mention spans for one page Source UUID."""
     del user
     page = await get_page(session, page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_entity_spans_for_page(session, page.page_source_id)
+    return await _fetch_text_mention_spans_for_page(session, page.page_source_id)
 
 
 @router.delete(

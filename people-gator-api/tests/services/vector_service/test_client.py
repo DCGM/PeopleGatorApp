@@ -117,6 +117,12 @@ def test_ordered_collection_specs_respect_reference_dependencies() -> None:
         db_schema.USER_COLLECTION
     ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
     assert ordered_collection_names.index(
+        db_schema.ENTITY_COLLECTION
+    ) < ordered_collection_names.index(db_schema.TEXT_MENTION_COLLECTION)
+    assert ordered_collection_names.index(
+        db_schema.SOURCE_COLLECTION
+    ) < ordered_collection_names.index(db_schema.TEXT_MENTION_COLLECTION)
+    assert ordered_collection_names.index(
         db_schema.SOURCE_COLLECTION
     ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
     assert ordered_collection_names.index(

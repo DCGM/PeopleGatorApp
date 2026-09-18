@@ -33,6 +33,7 @@ from people_gator_api.schemas.entities import (
     FaceKeypoint,
     FaceResponse,
 )
+from people_gator_api.schemas.text_mentions import TextMentionResponse
 from people_gator_api.schemas.users import UserResponse
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
@@ -266,6 +267,20 @@ def parse_face(
             for item in keypoints
         ],
         confidence=require_float(properties, "confidence"),
+    )
+
+
+def parse_text_mention(
+    properties: WeaviateProperties | Mapping[str, WeaviateField],
+    references: CrossReferences,
+    uuid: uuid.UUID,
+) -> TextMentionResponse:
+    return TextMentionResponse(
+        mention_id=uuid,
+        name=require_str(properties, "name"),
+        context=optional_str(properties, "context"),
+        entity_id=require_reference_uuid(references, "entity"),
+        source_id=require_reference_uuid(references, "source"),
     )
 
 

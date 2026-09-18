@@ -3,7 +3,7 @@
 A page layout (PERO OCR structure) is stored as one JSON document per page
 Source.  The storage key is derived from the page Source's archive identity::
 
-    page-layouts/{library}/{document_id}/{page_id}.json
+    {key_prefix}/{library}/{document_id}/{page_id}.json
 
 Both selector styles are supported — a raw ``source_id`` and the canonical
 archive path (``library/page_id`` or ``library/document_id/page_id``) — and
@@ -12,6 +12,7 @@ both the uploaded payload and the stored document are validated with
 """
 
 import logging
+import posixpath
 import uuid
 
 from botocore.exceptions import ClientError
@@ -32,13 +33,11 @@ from people_gator_api.services.crud_services.source_resolution_service import (
     resolve_source_filter,
 )
 from people_gator_api.services.s3_filesystem import open_file
+from people_gator_api.settings import settings
 from people_gator_api.utils.opentelemetry import trace
 
 
 logger = logging.getLogger(__name__)
-
-_LAYOUT_PREFIX = "page-layouts"
-
 
 def page_layout_key(source: SourceResponse) -> str:
     """Return the canonical storage key for one page source's layout."""
@@ -55,9 +54,11 @@ def page_layout_key(source: SourceResponse) -> str:
             status_code=422,
             code="invalid_page_layout_source",
         )
-    return (
-        f"{_LAYOUT_PREFIX}/{metadata.library}"
-        f"/{metadata.document}/{metadata.page}.json"
+    return posixpath.join(
+        settings.page_layout.key_prefix.strip("/"),
+        metadata.library,
+        str(metadata.document),
+        f"{metadata.page}.json",
     )
 
 

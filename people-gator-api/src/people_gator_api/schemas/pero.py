@@ -30,13 +30,14 @@ class PageLayoutModel(BaseModel):
     reading_order: dict[str, int]
 
 
-class EntitySpanModel(BaseModel):
-    """An entity occurrence located in one or more OCR text lines.
+class TextMentionSpanModel(BaseModel):
+    """A text mention located in one or more OCR text lines.
 
     Character offsets are zero-based within their respective lines and
     ``end_character`` is exclusive.
     """
 
+    mention_id: uuid.UUID
     entity_id: uuid.UUID
     entity_type: EntityType | None
     start_line_id: str
@@ -49,5 +50,5 @@ __all__ = [
     "TextLineModel",
     "RegionLayoutModel",
     "PageLayoutModel",
-    "EntitySpanModel",
+    "TextMentionSpanModel",
 ]

@@ -16,7 +16,7 @@ def test_media_router_exposes_typed_source_and_page_subresource_routes() -> None
     assert "/pages/{page_source_id}" in paths
     assert "/pages/lookup" in paths
     assert "/pages/{page_source_id}/page-layout" in paths
-    assert "/pages/{page_source_id}/entity-spans" in paths
+    assert "/pages/{page_source_id}/text-mentions-spans" in paths
     assert "/documents" in paths
     assert "/documents/{document_source_id}" in paths
     assert "/documents/lookup" in paths
@@ -108,6 +108,6 @@ def test_typed_lookups_only_resolve_resources() -> None:
     assert not {
         "/pages/lookup/image",
         "/pages/lookup/page-layout",
-        "/pages/lookup/entity-spans",
+        "/pages/lookup/text-mentions-spans",
         "/images/lookup/content",
     } & paths.keys()
