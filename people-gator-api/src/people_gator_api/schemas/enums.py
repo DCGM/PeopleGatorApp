@@ -8,6 +8,13 @@ class AnnotationType(StrEnum):
     face = "face"
 
 
+class AssignmentType(StrEnum):
+    """Assigned annotation kind used to filter people and sources."""
+
+    face = "face"
+    text_mention = "text_mention"
+
+
 class EntityType(StrEnum):
     """Entity type discriminator for normalized identity classes."""
 

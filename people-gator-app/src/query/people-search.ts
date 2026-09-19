@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQueries, type InfiniteData, type QueryKey } from '
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntityResponse, SearchEntitiesResult } from '@/client'
+import { assignmentType, type AssignmentFilter } from '@/query/assignment'
 import { fetchEntities } from '@/query/entities'
 import { fetchFaces } from '@/query/faces'
 import { queryKeys } from '@/query/keys'
@@ -28,10 +29,11 @@ const PEOPLE_GC_TIME = 60 * 60_000
 
 export function usePeopleSearch(
   searchTerm: MaybeRefOrGetter<string>,
-  filter: MaybeRefOrGetter<string>,
+  filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
+  const assignment = computed(() => assignmentType(toValue(filter)))
   const peopleQuery = useInfiniteQuery<
     PeoplePage,
     Error,
@@ -41,8 +43,12 @@ export function usePeopleSearch(
   >({
     queryKey: computed(() =>
       normalizedSearch.value
-        ? queryKeys.search.infiniteEntities({ q: normalizedSearch.value, limit: pageSize })
-        : queryKeys.entities.infinite({ limit: pageSize }),
+        ? queryKeys.search.infiniteEntities({
+            q: normalizedSearch.value,
+            assignment: assignment.value,
+            limit: pageSize,
+          })
+        : queryKeys.entities.infinite({ assignment: assignment.value, limit: pageSize }),
     ),
     queryFn: async ({ pageParam, signal }): Promise<PeoplePage> => {
       if (normalizedSearch.value) {
@@ -52,7 +58,11 @@ export function usePeopleSearch(
         const pageIndex = typeof pageParam === 'number' ? pageParam : 0
         const pageEnd = (pageIndex + 1) * pageSize
         const response = await fetchEntitySearch(
-          { q: [normalizedSearch.value], limit: pageEnd + 1 },
+          {
+            q: [normalizedSearch.value],
+            assignment: assignment.value,
+            limit: pageEnd + 1,
+          },
           signal,
         )
         const hasNextPage = response.items.length > pageEnd
@@ -60,6 +70,21 @@ export function usePeopleSearch(
         return {
           items: response.items.slice(pageIndex * pageSize, pageEnd),
           totalCount: hasNextPage ? pageEnd + 1 : response.items.length,
+          nextPage: hasNextPage ? pageIndex + 1 : undefined,
+        }
+      }
+
+      if (assignment.value) {
+        const pageIndex = typeof pageParam === 'number' ? pageParam : 0
+        const pageEnd = (pageIndex + 1) * pageSize
+        const response = await fetchEntities(
+          { assignment: assignment.value, limit: pageEnd + 1 },
+          signal,
+        )
+        const hasNextPage = response.items.length > pageEnd
+        return {
+          items: response.items.slice(pageIndex * pageSize, pageEnd),
+          totalCount: response.total_count,
           nextPage: hasNextPage ? pageIndex + 1 : undefined,
         }
       }
@@ -116,19 +141,13 @@ export function usePeopleSearch(
   })
 
   const people = computed<PeopleSearchItem[]>(() =>
-    pageRecords.value
-      .map((person, index) => ({
-        id: person.entity_id,
-        name: person.name || 'Unnamed person',
-        aliases: person.aliases ?? [],
-        faces: faceCountQueries.value[index]?.data?.total_count ?? 0,
-        names: mentionCountQueries.value[index]?.data?.total_count ?? 0,
-      }))
-      .filter((person) => {
-        if (toValue(filter) === 'faces') return person.faces > 0
-        if (toValue(filter) === 'names') return person.names > 0
-        return true
-      }),
+    pageRecords.value.map((person, index) => ({
+      id: person.entity_id,
+      name: person.name || 'Unnamed person',
+      aliases: person.aliases ?? [],
+      faces: faceCountQueries.value[index]?.data?.total_count ?? 0,
+      names: mentionCountQueries.value[index]?.data?.total_count ?? 0,
+    })),
   )
 
   return {

@@ -9,23 +9,24 @@ import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/query/people-search'
+import { normalizeAssignmentFilter } from '@/query/assignment'
 
 const route = useRoute()
 const router = useRouter()
 
 const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
-const filters = ref(typeof route.query.filters === 'string' ? route.query.filters : 'all')
+const assignment = ref(normalizeAssignmentFilter(route.query.assignment ?? route.query.filters))
 
 const { error, hasNextPage, isFetchingNextPage, isLoading, loadMore, people, resultCount } =
-  usePeopleSearch(searchTerm, filters, resultsPerPage)
+  usePeopleSearch(searchTerm, assignment, resultsPerPage)
 
 function updateSearch() {
   void router.replace({
     name: 'people-search',
     query: {
       ...(searchTerm.value && { q: searchTerm.value }),
-      ...(filters.value !== 'all' && { filters: filters.value }),
+      ...(assignment.value !== 'all' && { assignment: assignment.value }),
     },
   })
 }
@@ -40,11 +41,11 @@ function updateSearch() {
 
     <PeopleSearchBar
       v-model:search-term="searchTerm"
-      v-model:filters="filters"
+      v-model:assignment="assignment"
       :result-count="resultCount"
       :has-more-results="hasNextPage"
       @update:search-term="updateSearch()"
-      @update:filters="updateSearch()"
+      @update:assignment="updateSearch()"
     />
 
     <section class="stable-search-results pt-6" aria-live="polite">

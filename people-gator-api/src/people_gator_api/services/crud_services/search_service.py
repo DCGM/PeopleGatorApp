@@ -24,6 +24,9 @@ from people_gator_api.schemas.search import (
     SearchPagesQuery,
 )
 from people_gator_api.services.weaviate_service.archive_search import search_archive
+from people_gator_api.services.weaviate_service.assignments import (
+    assigned_reference_ids,
+)
 from people_gator_api.services.weaviate_service.db_schema import FACE_VECTOR_BY_MODEL
 from people_gator_api.services.weaviate_service.search import (
     fetch_face_vectors,
@@ -53,12 +56,30 @@ async def search_entities(
     if query.q is None and query.q_face_id is None:
         return _empty_entity_search_response(limit=query.limit)
 
+    assigned_entity_ids = (
+        await assigned_reference_ids(session, query.assignment, "entity")
+        if query.assignment is not None
+        else None
+    )
+    if assigned_entity_ids is not None and not assigned_entity_ids:
+        return _empty_entity_search_response(limit=query.limit)
+
     q_entities: list[SearchEntitiesResult] = []
     if query.q is not None:
+        text_filter_kwargs: dict[str, object] = {}
+        if query.entity_types is not None:
+            text_filter_kwargs["entity_types"] = (
+                query.entity_types
+                if isinstance(query.entity_types, list)
+                else [query.entity_types]
+            )
+        if assigned_entity_ids is not None:
+            text_filter_kwargs["entity_ids"] = assigned_entity_ids
         q_entities = await search_entities_by_names_or_aliases(
             session,
             query.q,
             limit=query.limit,
+            **text_filter_kwargs,  # pyright: ignore[reportArgumentType]
         )
     q_face_entities: list[SearchEntitiesResult] = []
     if query.q_face_id is not None:
@@ -67,12 +88,22 @@ async def search_entities(
             query.q_face_id,
             vector_name=FACE_VECTOR_BY_MODEL[query.embedding_model],
         )
+        face_filter_kwargs: dict[str, object] = {}
+        if query.entity_types is not None:
+            face_filter_kwargs["entity_types"] = (
+                query.entity_types
+                if isinstance(query.entity_types, list)
+                else [query.entity_types]
+            )
+        if assigned_entity_ids is not None:
+            face_filter_kwargs["entity_ids"] = assigned_entity_ids
         q_face_entities = await search_entities_by_faces_vectors(
             session,
             query_vectors=face_query_vectors,
             vector_name=FACE_VECTOR_BY_MODEL[query.embedding_model],
             excluded_face_ids=query.q_face_id,
             number_of_groups=query.limit,
+            **face_filter_kwargs,  # pyright: ignore[reportArgumentType]
         )
     fused_entities = _fuse_entity_results(
         [q_entities, q_face_entities],
@@ -174,12 +205,16 @@ async def search_pages(
     query: SearchPagesQuery,
 ) -> PageSearchResultListResponse:
     """Search page sources by source UUID or directly linked entity text."""
+    archive_filter_kwargs = (
+        {"assignment": query.assignment} if query.assignment is not None else {}
+    )
     candidates = await search_archive(
         session,
         query.q,
         source_id=query.source_id,
         source_kind=SourceKind.page,
         limit=query.limit,
+        **archive_filter_kwargs,
     )
     items = [
         PageSearchResult(

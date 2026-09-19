@@ -7,20 +7,23 @@ import DocumentSearchBar from '@/components/custom/DocumentSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { useDocumentSearch } from '@/query/document-search'
+import { normalizeAssignmentFilter } from '@/query/assignment'
 
 const route = useRoute()
 const router = useRouter()
 
 const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
+const assignment = ref(normalizeAssignmentFilter(route.query.assignment))
 const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
-  useDocumentSearch(searchTerm, resultsPerPage)
+  useDocumentSearch(searchTerm, assignment, resultsPerPage)
 
 function updateSearch() {
   void router.replace({
     name: 'document-search',
     query: {
       ...(searchTerm.value && { q: searchTerm.value }),
+      ...(assignment.value !== 'all' && { assignment: assignment.value }),
     },
   })
 }
@@ -35,9 +38,11 @@ function updateSearch() {
 
     <DocumentSearchBar
       v-model:search-term="searchTerm"
+      v-model:assignment="assignment"
       :result-count="resultCount"
       :has-more-results="hasNextPage"
       @update:search-term="updateSearch()"
+      @update:assignment="updateSearch()"
     />
     <section class="stable-search-results pt-6" aria-live="polite">
       <h2 class="mb-4">Search Results</h2>

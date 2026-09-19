@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { AssignmentFilter } from '@/query/assignment'
 
 defineProps<{
   resultCount: number
@@ -19,7 +20,7 @@ defineProps<{
 }>()
 
 const searchTerm = defineModel<string>('searchTerm', { required: true })
-const filters = defineModel<string>('filters', { required: true })
+const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
 </script>
 
 <template>
@@ -37,16 +38,16 @@ const filters = defineModel<string>('filters', { required: true })
             {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
           </InputGroupAddon>
         </InputGroup>
-        <Select v-model="filters">
+        <Select v-model="assignment">
           <SelectTrigger class="w-full rounded-none">
-            <SelectValue placeholder="Contains data" />
+            <SelectValue placeholder="Assignment" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectLabel>Contains data</SelectLabel>
-              <SelectItem value="all">Names and faces</SelectItem>
-              <SelectItem value="faces">Faces</SelectItem>
-              <SelectItem value="names">Names</SelectItem>
+              <SelectLabel>Assignment</SelectLabel>
+              <SelectItem value="all">All people</SelectItem>
+              <SelectItem value="faces">Assigned faces</SelectItem>
+              <SelectItem value="mentions">Assigned mentions</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>

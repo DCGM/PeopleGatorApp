@@ -10,6 +10,7 @@ from pydantic import (
 from people_gator_api.schemas.common import GenericListResponse
 from people_gator_api.schemas.entities import BoundingBox
 from people_gator_api.schemas.enums import (
+    AssignmentType,
     EntityType,
     FaceEmbeddingModel,
     ScoreAggregation,
@@ -67,6 +68,10 @@ class SearchEntitiesQuery(BaseModel):
     source_id: uuid.UUID | None = Field(
         default=None,
         description="Only return entities occurring in this document or page Source.",
+    )
+    assignment: AssignmentType | None = Field(
+        default=None,
+        description="Only return entities with this assigned annotation kind.",
     )
     embedding_model: FaceEmbeddingModel = Field(
         default=FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3,
@@ -166,6 +171,10 @@ class SearchPagesQuery(BaseModel):
     source_id: uuid.UUID | None = Field(
         default=None,
         description="Only return this page Source.",
+    )
+    assignment: AssignmentType | None = Field(
+        default=None,
+        description="Only return pages with this assigned annotation kind.",
     )
     limit: int = Field(
         default=20,

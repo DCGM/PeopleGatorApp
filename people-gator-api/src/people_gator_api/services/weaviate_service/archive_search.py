@@ -14,7 +14,8 @@ from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.internal import CrossReferences
 from weaviate.collections.classes.types import WeaviateProperties
 
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import AssignmentType, SourceKind
+from people_gator_api.services.weaviate_service.assignments import source_has_assignment
 from people_gator_api.services.weaviate_service.db_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
@@ -71,6 +72,7 @@ async def search_archive(
     source_id: uuid.UUID | None,
     source_kind: SourceKind,
     limit: int,
+    assignment: AssignmentType | None = None,
 ) -> list[ArchiveCandidate]:
     """Resolve an entity name, alias, or Source UUID to one source kind."""
     cleaned = query.strip()
@@ -78,9 +80,19 @@ async def search_archive(
         return []
     if (direct_source_id := _as_uuid(cleaned)) is not None:
         direct = await _source_candidate(client, direct_source_id)
-        return [direct] if direct is not None and direct.kind is source_kind else []
+        if direct is None or direct.kind is not source_kind:
+            return []
+        if assignment is not None and not await source_has_assignment(
+            client, direct_source_id, assignment
+        ):
+            return []
+        return [direct]
 
-    source_ranking = await _entity_source_ranking(client, cleaned, source_id)
+    source_ranking = (
+        await _entity_source_ranking(client, cleaned, source_id, assignment)
+        if assignment is not None
+        else await _entity_source_ranking(client, cleaned, source_id)
+    )
     ranked = [
         (linked_source_id, 1.0 / (_RRF_RANK_CONSTANT + rank))
         for rank, linked_source_id in enumerate(source_ranking, start=1)
@@ -88,9 +100,9 @@ async def search_archive(
     if not ranked:
         return []
     candidates = await _resolve_source_candidates(client, ranked)
-    return [
-        candidate for candidate in candidates if candidate.kind is source_kind
-    ][:limit]
+    return [candidate for candidate in candidates if candidate.kind is source_kind][
+        :limit
+    ]
 
 
 def _as_uuid(query: str) -> uuid.UUID | None:
@@ -105,6 +117,7 @@ async def _entity_source_ranking(
     client: WeaviateAsyncClient,
     query: str,
     source_id: uuid.UUID | None,
+    assignment: AssignmentType | None = None,
 ) -> list[uuid.UUID]:
     """Rank sources reached through faces and text mentions of matching entities."""
     response = await client.collections.get(ENTITY_COLLECTION).query.bm25(
@@ -117,23 +130,29 @@ async def _entity_source_ranking(
     if not entity_ids:
         return []
 
-    faces, mentions = await asyncio.gather(
-        _fetch_appearances(
-            client,
-            FACE_COLLECTION,
-            entity_ids=entity_ids,
-            source_id=source_id,
-        ),
-        _fetch_appearances(
-            client,
-            TEXT_MENTION_COLLECTION,
-            entity_ids=entity_ids,
-            source_id=source_id,
-        ),
+    collection_names = {
+        None: (FACE_COLLECTION, TEXT_MENTION_COLLECTION),
+        AssignmentType.face: (FACE_COLLECTION,),
+        AssignmentType.text_mention: (TEXT_MENTION_COLLECTION,),
+    }[assignment]
+    appearances_by_collection = await asyncio.gather(
+        *(
+            _fetch_appearances(
+                client,
+                collection_name,
+                entity_ids=entity_ids,
+                source_id=source_id,
+            )
+            for collection_name in collection_names
+        )
     )
     entity_rank = {entity_id: rank for rank, entity_id in enumerate(entity_ids)}
     ranked_sources: list[tuple[int, uuid.UUID]] = []
-    for appearance in [*faces, *mentions]:
+    for appearance in (
+        appearance
+        for collection_appearances in appearances_by_collection
+        for appearance in collection_appearances
+    ):
         linked_entities = _reference_uuids(appearance.references, "entity")
         linked_sources = _reference_uuids(appearance.references, "source")
         if not linked_entities or not linked_sources:

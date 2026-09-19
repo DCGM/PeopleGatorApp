@@ -9,7 +9,7 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import AssignmentType, EntityType
 from people_gator_api.services.crud_services import entity_service
 
 
@@ -241,6 +241,37 @@ async def test_list_entities_returns_empty_when_source_has_no_entities(
         after_id=None,
         limit=50,
         source_id=source_id,
+    )
+
+    assert result.items == []
+    assert result.total_count == 0
+
+
+@pytest.mark.asyncio
+async def test_list_entities_returns_empty_when_assignment_has_no_entities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_assigned_reference_ids(
+        _client: object,
+        assignment: AssignmentType,
+        reference_name: str,
+    ) -> set[uuid.UUID]:
+        assert assignment is AssignmentType.face
+        assert reference_name == "entity"
+        return set()
+
+    monkeypatch.setattr(
+        entity_service,
+        "assigned_reference_ids",
+        fake_assigned_reference_ids,
+    )
+
+    result = await entity_service.list_entities(
+        SimpleNamespace(),  # pyright: ignore[reportArgumentType]
+        uuid.uuid4(),
+        after_id=None,
+        limit=50,
+        assignment=AssignmentType.face,
     )
 
     assert result.items == []

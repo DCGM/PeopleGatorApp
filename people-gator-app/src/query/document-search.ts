@@ -1,12 +1,13 @@
 import { useInfiniteQuery, useQueries, type InfiniteData, type QueryKey } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-import type { PageResponse, PageSearchResult, SourceResponse } from '@/client'
+import type { EntityResponse, PageResponse, PageSearchResult, SourceResponse } from '@/client'
+import { assignmentType, type AssignmentFilter } from '@/query/assignment'
+import { fetchEntities } from '@/query/entities'
 import { fetchPage, fetchPageImage, fetchPages, fetchSources } from '@/query/media'
 import { useObjectUrlMap } from '@/query/object-url'
 import { queryKeys } from '@/query/keys'
 import { fetchPageSearch } from '@/query/search'
-import { fetchTextMentions } from '@/query/text-mentions'
 
 export type DocumentSearchCard = {
   sourceId: string
@@ -27,6 +28,23 @@ type DocumentResultPage = {
 const DOCUMENT_CACHE_TIME = 10 * 60_000
 const DOCUMENT_GC_TIME = 60 * 60_000
 
+export function sourceEntityNames(
+  entities: Array<Pick<EntityResponse, 'name'> | { name?: string | null }>,
+) {
+  const seen = new Set<string>()
+  const names: string[] = []
+
+  for (const entity of entities) {
+    const normalizedName = entity.name?.trim()
+    if (!normalizedName || seen.has(normalizedName)) continue
+    seen.add(normalizedName)
+    names.push(normalizedName)
+    if (names.length >= 3) break
+  }
+
+  return names
+}
+
 async function fetchPageSources(afterId: string | undefined, limit: number, signal: AbortSignal) {
   const pageSources: SourceResponse[] = []
   let nextCursor = afterId
@@ -46,8 +64,13 @@ async function fetchPageSources(afterId: string | undefined, limit: number, sign
   return { items: pageSources, nextCursor }
 }
 
-export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize = 12) {
+export function useDocumentSearch(
+  searchTerm: MaybeRefOrGetter<string>,
+  filter: MaybeRefOrGetter<AssignmentFilter>,
+  pageSize = 12,
+) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
+  const assignment = computed(() => assignmentType(toValue(filter)))
 
   const pageResultsQuery = useInfiniteQuery<
     DocumentResultPage,
@@ -58,8 +81,12 @@ export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize
   >({
     queryKey: computed(() =>
       normalizedSearch.value
-        ? queryKeys.search.infinitePages({ q: normalizedSearch.value, limit: pageSize })
-        : queryKeys.pages.infinite({ limit: pageSize }),
+        ? queryKeys.search.infinitePages({
+            q: normalizedSearch.value,
+            assignment: assignment.value,
+            limit: pageSize,
+          })
+        : queryKeys.pages.infinite({ assignment: assignment.value, limit: pageSize }),
     ),
     queryFn: async ({ pageParam, signal }): Promise<DocumentResultPage> => {
       if (normalizedSearch.value) {
@@ -68,7 +95,11 @@ export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize
         const pageIndex = typeof pageParam === 'number' ? pageParam : 0
         const pageEnd = (pageIndex + 1) * pageSize
         const response = await fetchPageSearch(
-          { q: normalizedSearch.value, limit: pageEnd + 1 },
+          {
+            q: normalizedSearch.value,
+            assignment: assignment.value,
+            limit: pageEnd + 1,
+          },
           signal,
         )
         const hasNextPage = response.items.length > pageEnd
@@ -76,6 +107,21 @@ export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize
         return {
           items: response.items.slice(pageIndex * pageSize, pageEnd),
           totalCount: hasNextPage ? pageEnd + 1 : response.items.length,
+          nextPage: hasNextPage ? pageIndex + 1 : undefined,
+        }
+      }
+
+      if (assignment.value) {
+        const pageIndex = typeof pageParam === 'number' ? pageParam : 0
+        const pageEnd = (pageIndex + 1) * pageSize
+        const response = await fetchPages(
+          { assignment: assignment.value, limit: pageEnd + 1 },
+          signal,
+        )
+        const hasNextPage = response.items.length > pageEnd
+        return {
+          items: response.items.slice(pageIndex * pageSize, pageEnd),
+          totalCount: response.total_count,
           nextPage: hasNextPage ? pageIndex + 1 : undefined,
         }
       }
@@ -133,12 +179,12 @@ export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize
     return pages
   })
 
-  const mentionQueries = useQueries({
+  const entityQueries = useQueries({
     queries: computed(() =>
       resultSourceIds.value.map((sourceId) => ({
-        queryKey: queryKeys.textMentions.list({ source_id: sourceId, limit: 100 }),
+        queryKey: queryKeys.entities.list({ source_id: sourceId, limit: 3 }),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
-          fetchTextMentions({ source_id: sourceId, limit: 100 }, signal),
+          fetchEntities({ source_id: sourceId, limit: 3 }, signal),
         staleTime: DOCUMENT_CACHE_TIME,
         gcTime: DOCUMENT_GC_TIME,
       })),
@@ -169,9 +215,7 @@ export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize
     resultSourceIds.value.flatMap((sourceId, index) => {
       const resolvedPage = resolvedPages.value.get(sourceId)
       if (!resolvedPage) return []
-      const names = [
-        ...new Set((mentionQueries.value[index]?.data?.items ?? []).map((item) => item.name)),
-      ]
+      const names = sourceEntityNames(entityQueries.value[index]?.data?.items ?? [])
       return [
         {
           sourceId,

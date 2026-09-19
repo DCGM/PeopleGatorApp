@@ -77,6 +77,8 @@ export function useCreateFaceMutation() {
     onSuccess: (face) => {
       queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
     },
   })
@@ -92,6 +94,8 @@ export function useCreateFacesMutation() {
         queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
     },
   })
@@ -112,6 +116,7 @@ export function useAssignFaceMutation() {
       queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
     },
   })
@@ -158,6 +163,7 @@ export function useAssignFacesMutation() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
       ])
     },

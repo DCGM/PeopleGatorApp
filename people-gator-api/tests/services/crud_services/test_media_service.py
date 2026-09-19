@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import AnyUrl
 
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import AssignmentType, SourceKind
 from people_gator_api.schemas.sources import (
     SourceRecord,
     DocumentCreateRequest,
@@ -14,6 +14,7 @@ from people_gator_api.schemas.sources import (
     PageCreateRequest,
     PageSourceMetadata,
     SourceResponse,
+    SourceRecordListResponse,
 )
 from people_gator_api.services.crud_services import media_service
 from people_gator_api.services.weaviate_service.db_schema import (
@@ -48,6 +49,51 @@ def test_parse_page_source_exposes_typed_archive_identity() -> None:
     assert page.library == "mzk"
     assert page.document_id == document_id
     assert page.page_id == page_id
+
+
+@pytest.mark.asyncio
+async def test_list_pages_limits_sources_to_requested_assignment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_ids = {uuid.uuid4(), uuid.uuid4()}
+    captured: dict[str, object] = {}
+
+    async def fake_assigned_reference_ids(
+        _client: object,
+        assignment: AssignmentType,
+        reference_name: str,
+    ) -> set[uuid.UUID]:
+        assert assignment is AssignmentType.text_mention
+        assert reference_name == "source"
+        return source_ids
+
+    async def fake_list_sources(
+        _client: object,
+        source_type: SourceKind,
+        after_id: uuid.UUID | None,
+        limit: int,
+        **kwargs: object,
+    ) -> SourceRecordListResponse:
+        captured.update(kwargs)
+        assert source_type is SourceKind.page
+        assert after_id is None
+        return SourceRecordListResponse(
+            items=[], total_count=0, limit=limit, after_id=None
+        )
+
+    monkeypatch.setattr(
+        media_service, "assigned_reference_ids", fake_assigned_reference_ids
+    )
+    monkeypatch.setattr(media_service, "list_sources", fake_list_sources)
+
+    await media_service.list_pages(
+        object(),  # pyright: ignore[reportArgumentType]
+        after_id=None,
+        limit=12,
+        assignment=AssignmentType.text_mention,
+    )
+
+    assert captured["source_ids"] == source_ids
 
 
 def test_parse_image_source_accepts_arbitrary_image_source() -> None:

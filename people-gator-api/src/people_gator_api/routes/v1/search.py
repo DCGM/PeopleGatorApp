@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 
 from people_gator_api.routes.v1.source_filters import SourceFilterDependency
 from people_gator_api.schemas.enums import (
+    AssignmentType,
     DEFAULT_FACE_EMBEDDING_MODEL,
     EntityType,
     FaceEmbeddingModel,
@@ -43,6 +44,7 @@ async def search_entities_get(
     q: list[str] | None = Query(default=None),
     q_face_id: list[uuid.UUID] | None = Query(default=None),
     entity_type: list[EntityType] | None = Query(default=None),
+    assignment: AssignmentType | None = Query(default=None),
     embedding_model: FaceEmbeddingModel = Query(
         default=DEFAULT_FACE_EMBEDDING_MODEL,
         alias="model",
@@ -58,6 +60,7 @@ async def search_entities_get(
             q_face_id=q_face_id,
             entity_types=entity_type,
             source_id=resolved_source_id,
+            assignment=assignment,
             embedding_model=embedding_model,
             aggregation=aggregation,
             limit=limit,
@@ -95,6 +98,7 @@ async def search_pages_get(
         description="Page Source UUID or directly linked entity name/alias.",
     ),
     limit: int = Query(default=20, ge=0),
+    assignment: AssignmentType | None = Query(default=None),
 ) -> PageSearchResultListResponse:
     """Search pages with one free-text or UUID query."""
     return await search_pages(
@@ -102,6 +106,7 @@ async def search_pages_get(
         SearchPagesQuery(
             q=q,
             source_id=resolved_source_id,
+            assignment=assignment,
             limit=limit,
         ),
     )

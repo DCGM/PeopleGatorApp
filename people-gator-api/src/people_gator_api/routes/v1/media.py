@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Query, Response, status
 from pydantic import AnyUrl
 
+from people_gator_api.schemas.enums import AssignmentType
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
     DocumentBatchCreateRequest,
@@ -221,6 +222,7 @@ async def list_pages_route(
     library: str | None = None,
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
+    assignment: AssignmentType | None = None,
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> PageListResponse:
@@ -232,6 +234,7 @@ async def list_pages_route(
         library=library,
         document_id=document_id,
         page_id=page_id,
+        assignment=assignment,
     )
 
 

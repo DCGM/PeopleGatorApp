@@ -9,7 +9,7 @@ from fastapi import (
     status,
 )
 
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import AssignmentType, EntityType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -46,6 +46,7 @@ async def list_entities_route(
     wikidata_id: str | None = None,
     nlcr_authority_id: str | None = None,
     user_id: uuid.UUID | None = None,
+    assignment: AssignmentType | None = None,
     limit: int = Query(default=50, ge=0),
     after_id: uuid.UUID | None = None,
 ) -> EntityListResponse:
@@ -60,6 +61,7 @@ async def list_entities_route(
             nlcr_authority_id=nlcr_authority_id,
             owner_user_id=user_id,
             source_id=source_id,
+            assignment=assignment,
         )
     except ValueError as exc:
         raise_api_error(422, "invalid_filter", str(exc))

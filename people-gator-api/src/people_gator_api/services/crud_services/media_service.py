@@ -13,7 +13,7 @@ from weaviate.collections.classes.filters import FilterReturn
 from weaviate.collections.classes.internal import CrossReferences
 from weaviate.collections.classes.types import WeaviateProperties
 
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import AssignmentType, SourceKind
 from people_gator_api.schemas.sources import (
     DocumentCreateRequest,
     DocumentListResponse,
@@ -41,6 +41,9 @@ from people_gator_api.services.crud_services.source_service import (
 from people_gator_api.services.weaviate_service.db_schema import (
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,
+)
+from people_gator_api.services.weaviate_service.assignments import (
+    assigned_reference_ids,
 )
 from people_gator_api.services.weaviate_service.utils import (
     empty_reference_queries,
@@ -218,7 +221,13 @@ async def list_pages(
     library: str | None = None,
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
+    assignment: AssignmentType | None = None,
 ) -> PageListResponse:
+    source_ids = (
+        await assigned_reference_ids(client, assignment, "source")
+        if assignment is not None
+        else None
+    )
     sources = await list_sources(
         client,
         SourceKind.page,
@@ -227,6 +236,7 @@ async def list_pages(
         library=library,
         document_id=document_id,
         page_id=page_id,
+        source_ids=source_ids,
     )
     return PageListResponse(
         items=[parse_page_source(source) for source in sources.items],

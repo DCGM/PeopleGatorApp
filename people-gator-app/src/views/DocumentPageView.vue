@@ -36,7 +36,7 @@ import { fetchTranslation } from '@/query/translation'
 
 const minimumZoomPercent = 55
 const maximumZoomPercent = 350
-const controlledZoomStep = 0.18
+const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const faceStatuses = ['assigned', 'unassigned'] as const
 const faceStatusLabels = {
@@ -390,8 +390,8 @@ onBeforeUnmount(() => {
         <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
           <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
             :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
-            <LoadableImage :src="pageImageUrl" :loading="pageImageLoading" :alt="`Scan ${pageId}`" class="absolute inset-0 size-full"
-              image-class="object-contain">
+            <LoadableImage :src="pageImageUrl" :loading="pageImageLoading" :alt="`Scan ${pageId}`"
+              class="absolute inset-0 size-full" image-class="object-contain">
               <template #fallback>
                 <div class="flex size-full items-center justify-center text-muted-foreground">
                   <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
@@ -410,8 +410,8 @@ onBeforeUnmount(() => {
         <header class="min-h-48 p-5">
           <div v-if="selectedFace" class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
             <div class="aspect-square size-24 overflow-hidden bg-muted">
-              <LoadableImage :src="selectedFace.portrait" :loading="selectedFace.portraitLoading" :alt="selectedFace.name" class="size-full"
-                image-class="object-cover grayscale" />
+              <LoadableImage :src="selectedFace.portrait" :loading="selectedFace.portraitLoading"
+                :alt="selectedFace.name" class="size-full" image-class="object-cover grayscale" />
             </div>
             <div class="min-w-0">
               <div class="flex items-start justify-between gap-2">
@@ -436,7 +436,7 @@ onBeforeUnmount(() => {
                 selectedFace.id
               }}</code>
               <span class="mt-1 flex items-center gap-1 text-sm" :class="faceStatusClasses[selectedFace.status]">
-                <component :is="faceStatusIcons[selectedFace.status]" class="size-4" />
+                <component :is="faceStatusIcons[selectedFace.status]" class="size-[1.15em]" />
                 {{ faceStatusLabels[selectedFace.status] }} · {{ selectedFace.confidence }}%
               </span>
               <small v-if="assignmentStatus === 'pending'" class="text-muted-foreground">Saving…</small>

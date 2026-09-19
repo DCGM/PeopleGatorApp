@@ -36,7 +36,6 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
-    "@hey-api/vite-plugin": "0.3.2",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^24.13.4",

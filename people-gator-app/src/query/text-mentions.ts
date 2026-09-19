@@ -56,6 +56,8 @@ export function useCreateTextMentionMutation() {
       queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
     },
   })
 }
@@ -71,6 +73,8 @@ export function useCreateTextMentionsMutation() {
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
     },
   })
 }
@@ -90,6 +94,8 @@ export function useReassignTextMentionMutation() {
       queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
     },
   })
 }

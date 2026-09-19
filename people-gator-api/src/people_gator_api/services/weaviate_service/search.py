@@ -52,13 +52,14 @@ async def search_entities_by_names_or_aliases(
     query_name: list[str],
     *,
     entity_types: Sequence[EntityType] = (),
+    entity_ids: Sequence[UUID] | None = None,
     limit: int = _DEFAULT_LIMIT,
 ) -> list[SearchEntitiesResult]:
     """Search Entity documents with BM25 across name and aliases."""
     cleaned_name = ", ".join(query_name).strip()
     if not cleaned_name or limit <= 0:
         return []
-    filters = _parse_entity_filters(entity_types)
+    filters = _parse_entity_filters(entity_types, entity_ids)
     response = await client.collections.get(ENTITY_COLLECTION).query.bm25(
         query=cleaned_name,
         query_properties=["name", "aliases"],
@@ -77,6 +78,7 @@ async def search_entities_by_faces_vectors(
     aggregation: ScoreAggregation = ScoreAggregation.max,
     excluded_face_ids: Sequence[UUID] = (),
     entity_types: Sequence[EntityType] = (),
+    entity_ids: Sequence[UUID] | None = None,
     number_of_groups: int = _DEFAULT_LIMIT,
     objects_per_group: int = _DEFAULT_OBJECTS_PER_GROUP,
 ) -> list[SearchEntitiesResult]:
@@ -89,7 +91,7 @@ async def search_entities_by_faces_vectors(
     if not query_vectors or number_of_groups <= 0 or objects_per_group <= 0:
         return []
     assigned_faces = Filter.by_ref_count(link_on="entity").greater_than(0)
-    other_filters = _parse_face_filters(excluded_face_ids, entity_types)
+    other_filters = _parse_face_filters(excluded_face_ids, entity_types, entity_ids)
     filters = (
         Filter.all_of([assigned_faces, other_filters])
         if other_filters is not None
@@ -197,8 +199,9 @@ def _aggregate_scores(scores: list[float], aggregation: ScoreAggregation) -> flo
 def _parse_face_filters(
     excluded_face_ids: Sequence[UUID] | None,
     entity_types: Sequence[EntityType] | None,
+    entity_ids: Sequence[UUID] | None = None,
 ) -> FilterReturn | None:
-    if not entity_types and not excluded_face_ids:
+    if not entity_types and not excluded_face_ids and entity_ids is None:
         return None
     filters: list[FilterReturn] = []
     if entity_types:
@@ -208,6 +211,8 @@ def _parse_face_filters(
         filters.append(
             Filter.by_id().contains_none([str(face_id) for face_id in excluded_face_ids])
         )
+    if entity_ids is not None:
+        filters.append(Filter.by_ref("entity").by_id().contains_any(sorted(entity_ids)))
     if not filters:
         return None
     if len(filters) == 1:
@@ -216,21 +221,29 @@ def _parse_face_filters(
 
 def _parse_entity_filters(
     entity_types: Sequence[EntityType] | None,
+    entity_ids: Sequence[UUID] | None = None,
 ) -> FilterReturn | None:
-    if entity_types is None:
-        return None
-
-    entity_type_values = [entity_type.value for entity_type in entity_types]
-    if not entity_type_values:
-        return None
+    filters: list[FilterReturn] = []
+    entity_type_values = [entity_type.value for entity_type in (entity_types or [])]
     if len(entity_type_values) == 1:
-        return Filter.by_property("entity_type").equal(entity_type_values[0])
-    return Filter.any_of(
-        [
-            Filter.by_property("entity_type").equal(entity_type_value)
-            for entity_type_value in entity_type_values
-        ]
-    )
+        filters.append(Filter.by_property("entity_type").equal(entity_type_values[0]))
+    elif entity_type_values:
+        filters.append(
+            Filter.any_of(
+                [
+                    Filter.by_property("entity_type").equal(entity_type_value)
+                    for entity_type_value in entity_type_values
+                ]
+            )
+        )
+    if entity_ids is not None:
+        filters.append(Filter.by_id().contains_any(sorted(entity_ids)))
+    if not filters:
+        return None
+    if len(filters) == 1:
+        return filters[0]
+    return Filter.all_of(filters)
+
 
 def _linked_entity_properties(
     references: CrossReferences | None,

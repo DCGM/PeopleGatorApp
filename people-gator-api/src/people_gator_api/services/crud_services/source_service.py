@@ -1,7 +1,7 @@
 """CRUD operations for sources."""
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, quote, urlparse, urlencode
 
@@ -409,6 +409,7 @@ async def list_sources(
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
     url: str | None = None,
+    source_ids: Collection[uuid.UUID] | None = None,
 ) -> SourceRecordListResponse:
     """List sources, optionally filtered by type and stored identity fields."""
     values = {
@@ -423,6 +424,12 @@ async def list_sources(
         for name, value in values.items()
         if value is not None
     ]
+    if source_ids is not None:
+        if not source_ids:
+            return SourceRecordListResponse(
+                items=[], total_count=0, limit=limit, after_id=None
+            )
+        filters.append(Filter.by_id().contains_any(sorted(source_ids)))
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         SOURCE_COLLECTION,

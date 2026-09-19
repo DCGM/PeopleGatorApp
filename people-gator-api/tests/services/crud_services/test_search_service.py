@@ -27,7 +27,7 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 
 from people_gator_api.app import app
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.enums import AssignmentType, SourceKind
 from people_gator_api.schemas.search import SearchDocumentsQuery, SearchPagesQuery
 from people_gator_api.services.crud_services import search_service
 from people_gator_api.services.weaviate_service.archive_search import ArchiveCandidate
@@ -131,3 +131,43 @@ def test_openapi_exposes_separate_archive_result_paths() -> None:
 
     assert page_schema["$ref"].endswith("/PageSearchResultListResponse")
     assert document_schema["$ref"].endswith("/DocumentSearchResultListResponse")
+
+    page_parameters = paths["/api/v1/search-pages"]["get"]["parameters"]
+    entity_parameters = paths["/api/v1/search-entities"]["get"]["parameters"]
+    list_page_parameters = paths["/api/v1/pages"]["get"]["parameters"]
+    list_entity_parameters = paths["/api/v1/entities"]["get"]["parameters"]
+    for parameters in (
+        page_parameters,
+        entity_parameters,
+        list_page_parameters,
+        list_entity_parameters,
+    ):
+        assert "assignment" in {parameter["name"] for parameter in parameters}
+
+
+@pytest.mark.asyncio
+async def test_search_pages_forwards_assignment_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_search_archive(
+        _session: object,
+        _query: str,
+        **kwargs: object,
+    ) -> list[ArchiveCandidate]:
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(search_service, "search_archive", fake_search_archive)
+
+    await search_service.search_pages(
+        object(),  # pyright: ignore[reportArgumentType]
+        SearchPagesQuery(
+            q="Ada",
+            assignment=AssignmentType.text_mention,
+            limit=5,
+        ),
+    )
+
+    assert captured["assignment"] is AssignmentType.text_mention

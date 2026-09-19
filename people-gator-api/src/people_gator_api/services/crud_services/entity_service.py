@@ -8,7 +8,7 @@ from weaviate import WeaviateAsyncClient
 from weaviate.classes.query import Filter
 from weaviate.collections.classes.filters import FilterReturn
 
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import AssignmentType, EntityType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -21,6 +21,9 @@ from people_gator_api.services.weaviate_service.db_schema import (
     DEFAULT_FULLTEXT_VECTOR,
     DEFAULT_NAME_VECTOR,
     ENTITY_COLLECTION,
+)
+from people_gator_api.services.weaviate_service.assignments import (
+    assigned_reference_ids,
 )
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
@@ -84,6 +87,7 @@ async def list_entities(
     nlcr_authority_id: str | None = None,
     owner_user_id: uuid.UUID | None = None,
     source_id: uuid.UUID | None = None,
+    assignment: AssignmentType | None = None,
 ) -> EntityListResponse:
     del user_id
     filters = _build_entity_filters(
@@ -102,6 +106,13 @@ async def list_entities(
                 after_id=None,
             )
         filters.append(Filter.by_id().contains_any(sorted(entity_ids)))
+    if assignment is not None:
+        assigned_entity_ids = await assigned_reference_ids(client, assignment, "entity")
+        if not assigned_entity_ids:
+            return EntityListResponse(
+                items=[], limit=limit, total_count=0, after_id=None
+            )
+        filters.append(Filter.by_id().contains_any(sorted(assigned_entity_ids)))
     logger.debug(
         "list_entities called",
         extra={
@@ -112,6 +123,7 @@ async def list_entities(
             "nlcr_authority_id": nlcr_authority_id,
             "owner_user_id": owner_user_id,
             "source_id": source_id,
+            "assignment": assignment.value if assignment is not None else None,
         },
     )
     objects, total_count = await fetch_collection_page_with_total_count(

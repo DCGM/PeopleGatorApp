@@ -35,6 +35,27 @@ const faceStatusBadgeClasses = {
   unassigned: 'bg-muted-foreground text-background',
 } satisfies Record<FaceStatus, string>
 
+const faceSelectionClasses = {
+  selected: 'border-secondary bg-secondary/25 ring-2 ring-secondary/70',
+  matched: 'border-accent bg-accent/15 ring-2 ring-accent/80',
+  default: 'border-gray-500/20 bg-transparent hover:bg-accent/20',
+} as const
+
+function faceSelectionState(face: Face): keyof typeof faceSelectionClasses {
+  if (face.id === props.selectedFaceId) return 'selected'
+  if (face.personId === props.selectedPersonId || face.id === props.selectedCandidateFaceId) return 'matched'
+  return 'default'
+}
+
+const lineSelectionClasses = {
+  selected: 'border-accent bg-accent/20 ring-1 ring-background/75',
+  default: 'border-transparent hover:border-accent/70 hover:bg-accent/10',
+} as const
+
+function lineSelectionState(index: number): keyof typeof lineSelectionClasses {
+  return index === props.selectedLineIndex ? 'selected' : 'default'
+}
+
 function regionStyle(position: Face['position']): CSSProperties {
   if (!props.pageBounds) return { display: 'none' }
 
@@ -48,54 +69,23 @@ function regionStyle(position: Face['position']): CSSProperties {
 </script>
 
 <template>
-  <div
-    data-slot="document-page-overlay"
-    class="pointer-events-none absolute inset-0 z-10 overflow-hidden"
-  >
-    <button
-      v-for="(line, index) in transcription"
-      :key="line.id"
-      type="button"
-      data-region-type="line"
+  <div data-slot="document-page-overlay" class="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+    <button v-for="(line, index) in transcription" :key="line.id" type="button" data-region-type="line"
       class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      :class="
-        index === selectedLineIndex
-          ? 'border-accent bg-accent/20 ring-1 ring-background/75'
-          : 'border-transparent hover:border-accent/70 hover:bg-accent/10'
-      "
-      :style="regionStyle(line.position)"
-      :aria-label="`Select line ${index + 1}: ${line.text}`"
-      :aria-pressed="index === selectedLineIndex"
-      @click.stop="emit('selectLine', index)"
-    />
+      :class="lineSelectionClasses[lineSelectionState(index)]" :style="regionStyle(line.position)"
+      :aria-label="`Select line ${index + 1}: ${line.text}`" :aria-pressed="index === selectedLineIndex"
+      @click.stop="emit('selectLine', index)" />
 
-    <button
-      v-for="face in faces"
-      :key="face.id"
-      type="button"
-      data-region-type="face"
+    <button v-for="face in faces" :key="face.id" type="button" data-region-type="face"
       class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      :class="
-        face.id === selectedFaceId
-          ? 'border-secondary bg-secondary/15 ring-2 ring-background/80'
-          : face.personId === selectedPersonId || face.id === selectedCandidateFaceId
-            ? 'border-accent bg-accent/25 ring-2 ring-accent/70'
-            : 'border-accent/60 bg-accent/5 hover:bg-accent/20'
-      "
-      :style="regionStyle(face.position)"
-      :aria-label="`Select ${face.name}`"
-      :aria-pressed="face.id === selectedFaceId"
-      @click.stop="emit('selectFace', face.id)"
-    >
-      <Badge
-        as="span"
-        data-face-status-badge
-        class="absolute -left-1 -top-6 size-5 rounded-full border-background p-0 shadow-sm [&>svg]:size-3"
-        :class="faceStatusBadgeClasses[face.status]"
-        :title="face.status === 'assigned' ? 'Assigned' : 'Unassigned'"
-        aria-hidden="true"
-      >
-        <component :is="faceStatusIcons[face.status]" />
+      :class="faceSelectionClasses[faceSelectionState(face)]" :style="regionStyle(face.position)"
+      :aria-label="`Select ${face.name}`" :aria-pressed="face.id === selectedFaceId"
+      @click.stop="emit('selectFace', face.id)">
+      <Badge as="span" data-face-status-badge
+        class="absolute -left-1 -top-6 rounded-full border-none p-1 shadow-sm w-min h-min"
+        :class="faceStatusBadgeClasses[face.status]" :title="face.status === 'assigned' ? 'Assigned' : 'Unassigned'"
+        aria-hidden="true">
+        <component :is="faceStatusIcons[face.status]" class="size-6" />
       </Badge>
     </button>
   </div>

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from people_gator_api.schemas.enums import (
+    AssignmentType,
     EntityType,
     FaceEmbeddingModel,
     ScoreAggregation,
@@ -450,6 +451,56 @@ async def test_entity_search_text_only_uses_bm25(
     assert response.items[0].entity_id == entity_id
     assert response.total_count == 1
     assert response.after_id == entity_id
+    assert response.limit == 7
+
+
+@pytest.mark.asyncio
+async def test_entity_search_filters_bm25_to_assigned_entities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assigned_entity_id = uuid.uuid4()
+    captured: dict[str, object] = {}
+
+    async def fake_assigned_reference_ids(
+        _client: object,
+        assignment: AssignmentType,
+        reference_name: str,
+    ) -> set[uuid.UUID]:
+        assert assignment is AssignmentType.face
+        assert reference_name == "entity"
+        return {assigned_entity_id}
+
+    async def fake_bm25_search(
+        _client: object,
+        _query: list[str],
+        *,
+        entity_ids: set[uuid.UUID],
+        limit: int,
+    ) -> list[SearchEntitiesResult]:
+        captured["entity_ids"] = entity_ids
+        captured["limit"] = limit
+        return [_entity_result(assigned_entity_id, 3.0)]
+
+    monkeypatch.setattr(
+        search_service, "assigned_reference_ids", fake_assigned_reference_ids
+    )
+    monkeypatch.setattr(
+        search_service, "search_entities_by_names_or_aliases", fake_bm25_search
+    )
+
+    response = await search_service.search_entities(
+        SimpleNamespace(),  # pyright: ignore[reportArgumentType]
+        SearchEntitiesQuery(
+            q=["Ada"],
+            assignment=AssignmentType.face,
+            limit=7,
+        ),
+    )
+
+    assert captured == {"entity_ids": {assigned_entity_id}, "limit": 7}
+    assert response.items[0].entity_id == assigned_entity_id
+    assert response.total_count == 1
+    assert response.after_id == assigned_entity_id
     assert response.limit == 7
 
 

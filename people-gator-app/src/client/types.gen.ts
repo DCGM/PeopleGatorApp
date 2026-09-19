@@ -5,6 +5,13 @@ export type ClientOptions = {
 };
 
 /**
+ * AssignmentType
+ *
+ * Assigned annotation kind used to filter people and sources.
+ */
+export type AssignmentType = 'face' | 'text_mention';
+
+/**
  * Body_get_token_token_login_post
  */
 export type BodyGetTokenTokenLoginPost = {
@@ -1426,6 +1433,10 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          * Entity Type
          */
         entity_type?: Array<EntityType> | null;
+        /**
+         * Assignment
+         */
+        assignment?: AssignmentType | null;
         model?: FaceEmbeddingModel;
         aggregation?: ScoreAggregation;
         /**
@@ -1529,6 +1540,10 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          * Limit
          */
         limit?: number;
+        /**
+         * Assignment
+         */
+        assignment?: AssignmentType | null;
         /**
          * Source Id
          */
@@ -1680,6 +1695,10 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * User Id
          */
         user_id?: string | null;
+        /**
+         * Assignment
+         */
+        assignment?: AssignmentType | null;
         /**
          * Limit
          */
@@ -2569,6 +2588,10 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Page Id
          */
         page_id?: string | null;
+        /**
+         * Assignment
+         */
+        assignment?: AssignmentType | null;
         /**
          * Limit
          */
