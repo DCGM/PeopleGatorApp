@@ -24,6 +24,7 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__HTTP_SECURE", "false")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_HOST", "localhost")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_PORT", "50051")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
+os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (

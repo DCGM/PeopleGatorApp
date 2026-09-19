@@ -10,6 +10,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from people_gator_api.schemas.enums import Language
+
 
 class SearchEntityAggregationMode(StrEnum):
     best_annotation = "best_annotation"
@@ -115,6 +117,18 @@ class EmbeddingServiceSettings(BaseModel):
     request_timeout_seconds: float = Field(default=30.0, gt=0)
 
 
+class OpenRouterSettings(BaseModel):
+    """Fixed configuration for the OpenRouter-backed translation endpoint."""
+
+    api_key: str
+    model: str = "deepseek/deepseek-v4-flash"
+    base_url: str = "https://openrouter.ai/api/v1"
+    request_timeout_seconds: float = Field(default=30.0, gt=0)
+    allowed_languages: list[Language] = Field(
+        default_factory=lambda: list(Language)
+    )
+
+
 class KeycloakSettings(BaseModel):
     url: str
     realm: str
@@ -158,6 +172,7 @@ class Settings(BaseSettings):
     keycloak: KeycloakSettings
     weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
+    openrouter: OpenRouterSettings
     image_content: ImageContentSettings = ImageContentSettings()
     page_image: PageImageSettings = PageImageSettings()
     page_image_cache: PageImageCacheSettings = PageImageCacheSettings()

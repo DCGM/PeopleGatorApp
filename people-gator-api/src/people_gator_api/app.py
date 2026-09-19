@@ -6,6 +6,10 @@ from people_gator_api.services.embedding_service.http_service import (
     close_embedding_service,
     init_embedding_service,
 )
+from people_gator_api.services.openrouter_service import (
+    close_openrouter_service,
+    init_openrouter_service,
+)
 from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
@@ -42,9 +46,11 @@ async def well_known_cors(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_embedding_service()
+    await init_openrouter_service()
     await init_weaviate()
     yield
     await close_embedding_service()
+    await close_openrouter_service()
     await close_weaviate()
 
 

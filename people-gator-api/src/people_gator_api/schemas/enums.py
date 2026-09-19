@@ -43,3 +43,12 @@ class ScoreAggregation(StrEnum):
     min = "min"
     max = "max"
     average = "average"
+
+
+class Language(StrEnum):
+    """Languages supported by the translation endpoint."""
+
+    czech = "cs"
+    english = "en"
+    german = "de"
+    french = "fr"

@@ -10,6 +10,7 @@ from people_gator_api.routes.v1.sources import router as sources_router
 from people_gator_api.routes.v1.text_mentions import (
     router as text_mentions_router,
 )
+from people_gator_api.routes.v1.translation import router as translation_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(search_router)
@@ -19,6 +20,7 @@ router.include_router(text_mentions_router)
 router.include_router(sources_router)
 router.include_router(media_router)
 router.include_router(users_router)
+router.include_router(translation_router)
 router.include_router(root_router)
 
 __all__ = ["router"]
