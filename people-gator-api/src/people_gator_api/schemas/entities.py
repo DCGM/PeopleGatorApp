@@ -12,7 +12,11 @@ from pydantic import (
 )
 
 from people_gator_api.schemas.common import GenericListResponse
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import (
+    DEFAULT_FACE_EMBEDDING_MODEL,
+    EntityType,
+    FaceEmbeddingModel,
+)
 from people_gator_api.schemas.sources import SourceDescriptorRequest
 
 # ---------------------------------------------------------------------------
@@ -130,7 +134,7 @@ class FaceCreateRequest(BaseModel):
     keypoints: list[FaceKeypoint]
     embedding: list[float] | None = None
     model_identifier: str | None = None
-    entity_id: uuid.UUID
+    entity_id: uuid.UUID | None = None
     confidence: float = Field(ge=0.0, le=1.0)
 
     @model_validator(mode="after")
@@ -140,6 +144,20 @@ class FaceCreateRequest(BaseModel):
         if has_source_id == has_source:
             raise ValueError("provide exactly one of source_id or source")
         return self
+
+
+class FaceEmbeddingUpdateRequest(BaseModel):
+    """Named vector update for an existing face detection."""
+
+    detection_id: uuid.UUID
+    embedding: list[float] = Field(min_length=1)
+    model_identifier: FaceEmbeddingModel = DEFAULT_FACE_EMBEDDING_MODEL
+
+
+class FaceEmbeddingBatchUpdateResponse(BaseModel):
+    """Summary of a face embedding backfill batch."""
+
+    updated_count: int = Field(ge=0)
 
 
 class FaceResponse(BaseModel):

@@ -10,6 +10,7 @@ from weaviate.collections.classes.types import WeaviateField, WeaviateProperties
 
 from people_gator_api.schemas.entities import (
     FaceCreateRequest,
+    FaceEmbeddingUpdateRequest,
     FaceListResponse,
     FaceResponse,
 )
@@ -19,6 +20,7 @@ from people_gator_api.services.crud_services.source_resolution_service import (
 from people_gator_api.services.weaviate_service.db_schema import (
     DEFAULT_FACE_VECTOR,
     FACE_COLLECTION,
+    FACE_VECTOR_BY_MODEL,
 )
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
@@ -73,6 +75,21 @@ def _face_result(
     )
 
 
+def _face_references(
+    payload: FaceCreateRequest,
+    *,
+    source_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> dict[str, uuid.UUID]:
+    references = {
+        "source": source_id,
+        "user": user_id,
+    }
+    if payload.entity_id is not None:
+        references["entity"] = payload.entity_id
+    return references
+
+
 @trace()
 async def create_face(
     client: WeaviateAsyncClient,
@@ -92,11 +109,11 @@ async def create_face(
     await client.collections.get(FACE_COLLECTION).data.insert(
         uuid=detection_id,
         properties=_face_properties(payload),
-        references={
-            "entity": payload.entity_id,
-            "source": source.source_id,
-            "user": user_id,
-        },
+        references=_face_references(
+            payload,
+            source_id=source.source_id,
+            user_id=user_id,
+        ),
         vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
     )
     return _face_result(
@@ -128,11 +145,11 @@ async def create_face_batch(
             await batch.add_object(
                 uuid=detection_id,
                 properties=_face_properties(payload),
-                references={
-                    "entity": payload.entity_id,
-                    "source": source.source_id,
-                    "user": user_id,
-                },
+                references=_face_references(
+                    payload,
+                    source_id=source.source_id,
+                    user_id=user_id,
+                ),
                 vector=single_named_vector_payload(
                     DEFAULT_FACE_VECTOR,
                     payload.embedding,
@@ -148,6 +165,25 @@ async def create_face_batch(
             )
     logger.info("create_face_batch completed", extra={"count": len(responses)})
     return responses
+
+
+@trace()
+async def update_face_embedding_batch(
+    client: WeaviateAsyncClient,
+    payloads: list[FaceEmbeddingUpdateRequest],
+) -> int:
+    """Attach named embedding vectors to existing face detections."""
+    collection = client.collections.use(FACE_COLLECTION)
+    async with collection.batch.stream() as batch:
+        for payload in payloads:
+            await batch.add_object(
+                uuid=payload.detection_id,
+                vector={
+                    FACE_VECTOR_BY_MODEL[payload.model_identifier]: payload.embedding
+                },
+            )
+    logger.info("Updated face embeddings", extra={"count": len(payloads)})
+    return len(payloads)
 
 
 @trace()

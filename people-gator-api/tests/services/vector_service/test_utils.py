@@ -58,6 +58,25 @@ def test_face_response_parses_optional_identifier() -> None:
     assert parse_face(properties, references, uuid.uuid4()).identifier is None
 
 
+def test_face_response_parses_missing_entity_as_unassigned() -> None:
+    references = {
+        name: FakeReference([FakeLinkedObject(uuid.uuid4())])
+        for name in ("user", "source")
+    }
+
+    face = parse_face(
+        {
+            "bounding_box": {"x": 1, "y": 2, "width": 3, "height": 4},
+            "keypoints": [],
+            "confidence": 0.8,
+        },
+        references,
+        uuid.uuid4(),
+    )
+
+    assert face.entity_id is None
+
+
 def test_face_response_raises_clear_error_for_empty_reference_links() -> None:
     references = {
         "user": FakeReference([]),

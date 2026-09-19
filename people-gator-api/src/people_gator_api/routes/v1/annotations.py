@@ -7,6 +7,8 @@ from fastapi import APIRouter, Query, status
 
 from people_gator_api.schemas.entities import (
     FaceCreateRequest,
+    FaceEmbeddingBatchUpdateResponse,
+    FaceEmbeddingUpdateRequest,
     FaceEntityPatchRequest,
     FaceListResponse,
     FaceResponse,
@@ -22,6 +24,7 @@ from people_gator_api.services.crud_services.annotation_service import (
     get_face,
     list_faces,
     patch_face_entity,
+    update_face_embedding_batch,
 )
 from people_gator_api.services.crud_services.source_service import SourceResolutionError
 from people_gator_api.services.database_service import WeaviateSessionDependency
@@ -88,6 +91,16 @@ async def create_face_batch_route(
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
     return faces
+
+
+@router.post("/faces:embeddings", response_model=FaceEmbeddingBatchUpdateResponse)
+async def update_face_embedding_batch_route(
+    payload: list[FaceEmbeddingUpdateRequest],
+    session: WeaviateSessionDependency,
+    _user: DataIngestUserDependency,
+) -> FaceEmbeddingBatchUpdateResponse:
+    updated_count = await update_face_embedding_batch(session, payload)
+    return FaceEmbeddingBatchUpdateResponse(updated_count=updated_count)
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)

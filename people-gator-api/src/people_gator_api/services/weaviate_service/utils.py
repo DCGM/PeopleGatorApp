@@ -251,7 +251,7 @@ def parse_face(
         detection_id=uuid,
         identifier=optional_str(properties, "identifier"),
         user_id=require_reference_uuid(references, "user"),
-        entity_id=require_reference_uuid(references, "entity"),
+        entity_id=optional_reference_uuid(references, "entity"),
         source_id=require_reference_uuid(references, "source"),
         bounding_box=BoundingBox(
             x=require_int(bounding_box, "x"),
@@ -300,6 +300,15 @@ def require_reference_uuid(
     if not linked_objects:
         raise KeyError(f"Reference {key!r} has no linked objects.")
     return linked_objects[0].uuid
+
+
+def optional_reference_uuid(
+    references: CrossReferences,
+    key: str,
+) -> uuid.UUID | None:
+    if key not in references or not references[key].objects:
+        return None
+    return references[key].objects[0].uuid
 
 
 def value(
