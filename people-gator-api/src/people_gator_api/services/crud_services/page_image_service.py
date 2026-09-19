@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 
 _JPEG_MEDIA_TYPE = "image/jpeg"
 
+# Keeps references to fire-and-forget cache-write tasks so they aren't
+# garbage-collected mid-flight; entries are discarded once each task finishes.
+_background_cache_writes: set[asyncio.Task[None]] = set()
+
 
 class PageImageContent(BaseModel):
     """One rendered page image ready for an HTTP response."""
@@ -123,8 +127,20 @@ async def _write_cache(key: str, data: bytes) -> None:
     """Upload a derivative to the cache prefix (best effort)."""
     try:
         await write_bytes(key, data)
-    except BotoCoreError:
+    except (ClientError, BotoCoreError):
         logger.warning("page image cache write failed", extra={"key": key})
+
+
+def _schedule_cache_write(key: str, data: bytes) -> None:
+    """Upload a derivative in the background so callers never wait on it.
+
+    A slow or misconfigured cache write (e.g. a denied ``PutObject`` that
+    only fails after the full request timeout) must not delay the image
+    response, so the write runs detached from the current request.
+    """
+    task = asyncio.create_task(_write_cache(key, data))
+    _background_cache_writes.add(task)
+    task.add_done_callback(_background_cache_writes.discard)
 
 
 async def _read_original(key: str) -> bytes:
@@ -182,7 +198,7 @@ async def get_page_image(
     rendered = await asyncio.to_thread(
         _render_jpeg, original, resolved_width, cache_cfg.quality
     )
-    await _write_cache(cache_key, rendered)
+    _schedule_cache_write(cache_key, rendered)
     return PageImageContent(
         content=rendered, media_type=_JPEG_MEDIA_TYPE, cache_hit=False
     )

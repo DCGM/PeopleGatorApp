@@ -84,6 +84,23 @@ def _store_original(objects: dict[str, bytes], data: bytes) -> None:
     objects[page_image_key(_LIBRARY, _DOCUMENT_ID, _PAGE_ID)] = data
 
 
+async def _get_page_image_and_drain(
+    *args: object, **kwargs: object
+) -> PageImageContent:
+    """Await ``get_page_image`` plus its fire-and-forget cache-write task.
+
+    Cache writes are scheduled in the background so the response never waits
+    on them; tests still need to observe the write's outcome.
+    """
+    result = await get_page_image(*args, **kwargs)  # type: ignore[arg-type]
+    pending = list(
+        page_image_service._background_cache_writes  # pyright: ignore[reportPrivateUsage]
+    )
+    if pending:
+        await asyncio.gather(*pending)
+    return result
+
+
 def test_page_image_key_uses_configured_scan_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -138,7 +155,7 @@ def test_get_page_image_renders_and_caches_derivative(
     _store_original(objects, _png_bytes())
 
     first = asyncio.run(
-        get_page_image(
+        _get_page_image_and_drain(
             _LIBRARY,
             _DOCUMENT_ID,
             _PAGE_ID,
@@ -175,6 +192,12 @@ def test_get_page_image_renders_and_caches_derivative(
 def test_get_page_image_disabled_cache_streams_original(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    cache_cfg = _enable_cache(monkeypatch)
+    monkeypatch.setattr(
+        page_image_service.settings,
+        "page_image_cache",
+        cache_cfg.model_copy(update={"enabled": False}),
+    )
     objects = _install_fake_cache(monkeypatch)
     _store_original(objects, b"original-bytes")
 
