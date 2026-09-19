@@ -75,6 +75,22 @@ class PageLayoutSettings(BaseModel):
     key_prefix: str = "page-layouts"
 
 
+class AlignedFaceCropSettings(BaseModel):
+    """Rendering settings for ArcFace-aligned face crops.
+
+    The reference keypoint template is defined for a ``reference_width`` x
+    ``reference_height`` canvas, but the actual output keeps the original
+    image scale: only rotation and translation are applied, so the output
+    canvas is scaled up/down from the reference size to match the detected
+    face's native resolution.
+    """
+
+    reference_width: int = Field(default=112, gt=0)
+    reference_height: int = Field(default=112, gt=0)
+    jpeg_quality: int = Field(default=92, ge=1, le=100)
+    max_output_width: int = Field(default=4096, gt=0)
+
+
 class JwkSettings(BaseModel):
     key_path: str = "peoplegator_api/jwks.json"
     cache_ttl_seconds: int = Field(default=3600, gt=0)
@@ -146,6 +162,7 @@ class Settings(BaseSettings):
     page_image: PageImageSettings = PageImageSettings()
     page_image_cache: PageImageCacheSettings = PageImageCacheSettings()
     page_layout: PageLayoutSettings = PageLayoutSettings()
+    aligned_face_crop: AlignedFaceCropSettings = AlignedFaceCropSettings()
 
 
 settings = Settings()  # type: ignore

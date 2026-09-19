@@ -3,7 +3,7 @@
 import uuid
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
 from people_gator_api.schemas.entities import (
     FaceCreateRequest,
@@ -17,6 +17,9 @@ from people_gator_api.services.auth_service import (
     AnnotatorUserDependency,
     BrowseUserDependency,
     DataIngestUserDependency,
+)
+from people_gator_api.services.crud_services.aligned_face_crop_service import (
+    get_aligned_face_crop,
 )
 from people_gator_api.services.crud_services.annotation_service import (
     create_face,
@@ -101,6 +104,23 @@ async def update_face_embedding_batch_route(
 ) -> FaceEmbeddingBatchUpdateResponse:
     updated_count = await update_face_embedding_batch(session, payload)
     return FaceEmbeddingBatchUpdateResponse(updated_count=updated_count)
+
+
+@router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
+async def get_face_aligned_crop_route(
+    detection_id: uuid.UUID,
+    session: WeaviateSessionDependency,
+    user: BrowseUserDependency,
+    max_width: int | None = Query(default=None, gt=0),
+) -> Response:
+    """Return one ArcFace-aligned face crop, kept at the original image scale."""
+    try:
+        crop = await get_aligned_face_crop(
+            session, user.user_id, detection_id, max_width=max_width
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return Response(content=crop.content, media_type=crop.media_type)
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)

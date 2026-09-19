@@ -93,7 +93,7 @@ def _render_jpeg(data: bytes, width: int, quality: int) -> bytes:
     with Image.open(io.BytesIO(data)) as img:
         ratio = width / img.width
         target: tuple[int, int] = (width, max(1, round(img.height * ratio)))
-        resized: Image.Image = img.resize(target)  # pyright: ignore[reportUnknownMemberType]
+        resized: Image.Image = img.resize(target)
         if resized.mode not in ("RGB", "L"):
             resized = resized.convert("RGB")
         buffer = io.BytesIO()
