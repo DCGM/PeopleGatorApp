@@ -123,6 +123,7 @@ class FaceKeypoint(BaseModel):
 class FaceCreateRequest(BaseModel):
     """Request body for ingesting a face detection."""
 
+    identifier: str | None = None
     source_id: uuid.UUID | None = None
     source: SourceDescriptorRequest | None = None
     bounding_box: BoundingBox
@@ -145,6 +146,7 @@ class FaceResponse(BaseModel):
     """A single face detection record."""
 
     detection_id: uuid.UUID
+    identifier: str | None = None
     source_id: uuid.UUID
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]

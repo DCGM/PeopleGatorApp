@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from weaviate.collections.classes.types import WeaviateField
 
 
 repo_root = Path(__file__).resolve().parents[3]
@@ -36,6 +37,25 @@ class FakeLinkedObject:
 @dataclass
 class FakeReference:
     objects: list[FakeLinkedObject]
+
+
+def test_face_response_parses_optional_identifier() -> None:
+    references = {
+        name: FakeReference([FakeLinkedObject(uuid.uuid4())])
+        for name in ("user", "entity", "source")
+    }
+    properties: dict[str, WeaviateField] = {
+        "identifier": "archive-face-42",
+        "bounding_box": {"x": 1, "y": 2, "width": 3, "height": 4},
+        "keypoints": [],
+        "confidence": 0.8,
+    }
+
+    assert parse_face(properties, references, uuid.uuid4()).identifier == (
+        "archive-face-42"
+    )
+    properties.pop("identifier")
+    assert parse_face(properties, references, uuid.uuid4()).identifier is None
 
 
 def test_face_response_raises_clear_error_for_empty_reference_links() -> None:

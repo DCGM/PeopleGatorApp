@@ -249,6 +249,7 @@ def parse_face(
     keypoints = sequence_of_mappings(properties, "keypoints")
     return FaceResponse(
         detection_id=uuid,
+        identifier=optional_str(properties, "identifier"),
         user_id=require_reference_uuid(references, "user"),
         entity_id=require_reference_uuid(references, "entity"),
         source_id=require_reference_uuid(references, "source"),

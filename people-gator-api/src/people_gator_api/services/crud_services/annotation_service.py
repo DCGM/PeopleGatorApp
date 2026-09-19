@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 
 from weaviate import WeaviateAsyncClient
 from weaviate.collections.classes.filters import FilterReturn
-from weaviate.collections.classes.types import WeaviateProperties
+from weaviate.collections.classes.types import WeaviateField, WeaviateProperties
 
 from people_gator_api.schemas.entities import (
     FaceCreateRequest,
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 def _face_properties(payload: FaceCreateRequest) -> WeaviateProperties:
-    return {
+    properties: dict[str, WeaviateField] = {
         "bounding_box": {
             "x": payload.bounding_box.x,
             "y": payload.bounding_box.y,
@@ -49,6 +49,9 @@ def _face_properties(payload: FaceCreateRequest) -> WeaviateProperties:
         ],
         "confidence": payload.confidence,
     }
+    if payload.identifier is not None:
+        properties["identifier"] = payload.identifier
+    return properties
 
 
 def _face_result(
@@ -60,6 +63,7 @@ def _face_result(
 ) -> FaceResponse:
     return FaceResponse(
         detection_id=detection_id,
+        identifier=payload.identifier,
         source_id=source_id,
         bounding_box=payload.bounding_box,
         keypoints=payload.keypoints,

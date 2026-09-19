@@ -21,6 +21,7 @@ async def test_create_face_resolves_source_descriptor(
 ) -> None:
     resolved_source_id = uuid.uuid4()
     insert_references: list[dict[str, uuid.UUID]] = []
+    insert_properties: list[dict[str, object]] = []
 
     async def fake_resolve_source_reference(
         client: object,
@@ -47,8 +48,8 @@ async def test_create_face_resolves_source_descriptor(
             vector: dict[str, list[float]] | None,
         ) -> None:
             del uuid
-            del properties
             del vector
+            insert_properties.append(properties)
             insert_references.append(references)
 
     monkeypatch.setattr(
@@ -61,6 +62,7 @@ async def test_create_face_resolves_source_descriptor(
     client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
 
     payload = FaceCreateRequest(
+        identifier="archive-face-42",
         source=SourceDescriptorRequest(
             image=ImageCreateRequest(url="https://example.test/image.jpg")
         ),
@@ -77,4 +79,6 @@ async def test_create_face_resolves_source_descriptor(
     )
 
     assert created.source_id == resolved_source_id
+    assert created.identifier == "archive-face-42"
+    assert insert_properties[0]["identifier"] == "archive-face-42"
     assert insert_references[0]["source"] == resolved_source_id

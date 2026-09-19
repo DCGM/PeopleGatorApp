@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from weaviate.classes.config import ReferenceProperty
+from weaviate.classes.config import DataType, Property, ReferenceProperty
 from weaviate.exceptions import UnexpectedStatusCodeError
 
 from people_gator_api.services.weaviate_service import client
@@ -222,3 +222,33 @@ async def test_ensure_collections_retries_transient_collection_errors() -> None:
     await client._ensure_collections(fake_client, retry_delay_seconds=0.0)  # type: ignore[arg-type]
 
     assert fake_client.collections.exists_attempts > 2
+
+
+@pytest.mark.asyncio
+async def test_add_missing_properties_is_additive_and_idempotent() -> None:
+    existing = Property(name="existing", data_type=DataType.TEXT)
+    missing = Property(name="identifier", data_type=DataType.TEXT)
+    added: list[Property] = []
+
+    class _Config:
+        async def get(self, *, simple: bool) -> object:
+            assert simple is True
+            return type("Config", (), {"properties": [existing]})()
+
+        async def add_property(self, property_: Property) -> None:
+            added.append(property_)
+
+    collection = type("Collection", (), {"config": _Config()})()
+    fake_client = type(
+        "Client",
+        (),
+        {"collections": type("Collections", (), {"use": lambda self, name: collection})()},
+    )()
+
+    await client._add_missing_properties(  # pyright: ignore[reportArgumentType]
+        fake_client,
+        db_schema.FACE_COLLECTION,
+        [existing, missing],
+    )
+
+    assert added == [missing]

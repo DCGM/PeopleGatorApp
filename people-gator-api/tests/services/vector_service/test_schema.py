@@ -18,6 +18,18 @@ def test_entity_schema_has_no_direct_source_reference() -> None:
     assert reference_names == {"user"}
 
 
+def test_face_schema_has_optional_external_identifier_property() -> None:
+    properties = {
+        property_.name: property_ for property_ in db_schema.FACE_PROPERTIES
+    }
+
+    assert "identifier" in properties
+    assert properties["identifier"].dataType == db_schema.DataType.TEXT
+    assert db_schema.ADDITIVE_PROPERTY_MIGRATIONS[db_schema.FACE_COLLECTION] == [
+        properties["identifier"]
+    ]
+
+
 def test_text_mention_schema_links_to_entity_and_source() -> None:
     property_names = {
         property_.name for property_ in db_schema.TEXT_MENTION_PROPERTIES

@@ -259,6 +259,11 @@ ENTITY_PROPERTIES: list[Property] = [
 ]
 
 FACE_PROPERTIES: list[Property] = [
+    _text_property(
+        "identifier",
+        "Optional caller-provided face identifier.",
+        searchable=False,
+    ),
     _object_property(
         "bounding_box",
         "Bounding box coordinates.",
@@ -356,6 +361,13 @@ NON_ANNOTATION_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
     **NON_ANNOTATION_COLLECTION_SPECS,
     **ANNOTATION_COLLECTION_SPECS,
+}
+
+# Weaviate does not update existing collections when their declarative specs
+# change. Keep additive, idempotent migrations explicit so startup can safely
+# bring persisted deployments forward without recreating collections or data.
+ADDITIVE_PROPERTY_MIGRATIONS: dict[str, list[Property]] = {
+    FACE_COLLECTION: [FACE_PROPERTIES[0]],
 }
 
 

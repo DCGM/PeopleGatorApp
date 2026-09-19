@@ -6,11 +6,12 @@ import time
 
 import weaviate
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.config import ReferenceProperty
+from weaviate.classes.config import Property, ReferenceProperty
 from weaviate.classes.init import Auth
 
 from people_gator_api.settings import settings
 from people_gator_api.services.weaviate_service.db_schema import (
+    ADDITIVE_PROPERTY_MIGRATIONS,
     ALL_COLLECTION_SPECS,
     CollectionSpec,
 )
@@ -129,12 +130,7 @@ async def _ensure_collections(
     retry_delay_seconds: float = 2.0,
     max_retries: int = 3,
 ) -> None:
-    """Create missing Weaviate collections without mutating existing schemas.
-
-    Startup intentionally performs existence checks and creates only missing
-    collections. Schema migration or drift reconciliation must be handled by
-    dedicated tooling outside this lifecycle path.
-    """
+    """Create missing collections and apply declared additive schema migrations."""
 
     ordered_specs = ordered_collection_specs(ALL_COLLECTION_SPECS)
     exists_by_collection: dict[str, bool] = {}
@@ -149,7 +145,7 @@ async def _ensure_collections(
         exists_by_collection[collection_name] = exists
         if exists:
             logger.debug(
-                "Collection %s already exists; leaving schema unchanged",
+                "Collection %s already exists",
                 collection_name,
             )
 
@@ -176,6 +172,31 @@ async def _ensure_collections(
                 references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
             )
         logger.info("Created Weaviate collection: %s", collection_name)
+
+    for collection_name, properties in ADDITIVE_PROPERTY_MIGRATIONS.items():
+        if not exists_by_collection.get(collection_name, False):
+            continue
+        await _add_missing_properties(client, collection_name, properties)
+
+
+async def _add_missing_properties(
+    client: WeaviateAsyncClient,
+    collection_name: str,
+    properties: list[Property],
+) -> None:
+    """Add explicitly migrated properties that are absent from a collection."""
+    collection = client.collections.use(collection_name)
+    config = await collection.config.get(simple=True)
+    existing_property_names = {property_.name for property_ in config.properties}
+    for property_ in properties:
+        if property_.name in existing_property_names:
+            continue
+        await collection.config.add_property(property_)
+        logger.info(
+            "Added Weaviate property %s.%s",
+            collection_name,
+            property_.name,
+        )
 
 
 async def _collection_exists_with_retry(
