@@ -91,6 +91,8 @@ class AlignedFaceCropSettings(BaseModel):
     reference_height: int = Field(default=112, gt=0)
     jpeg_quality: int = Field(default=92, ge=1, le=100)
     max_output_width: int = Field(default=4096, gt=0)
+    cache_enabled: bool = True
+    cache_key_prefix: str = "cache/aligned-face-crops"
 
 
 class JwkSettings(BaseModel):

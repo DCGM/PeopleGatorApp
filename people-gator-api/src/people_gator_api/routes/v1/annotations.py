@@ -120,7 +120,11 @@ async def get_face_aligned_crop_route(
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
-    return Response(content=crop.content, media_type=crop.media_type)
+    return Response(
+        content=crop.content,
+        media_type=crop.media_type,
+        headers={"X-Cache": "HIT" if crop.cache_hit else "MISS"},
+    )
 
 
 @router.get("/faces/{detection_id}", response_model=FaceResponse)

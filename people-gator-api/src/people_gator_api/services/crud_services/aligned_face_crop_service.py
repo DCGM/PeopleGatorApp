@@ -6,14 +6,22 @@ keeps the *original* image scale: only rotation and translation are applied
 to the reference template, never a resize. This yields a crop whose pixel
 density matches the source image instead of being resampled to a fixed
 112x112 canvas.
+
+Rendered crops are cached in object storage under a content-addressed key. The
+key fingerprints every face/configuration value that affects rendering, so an
+edit to a keypoint automatically selects a fresh cache entry.
 """
 
 import asyncio
+import hashlib
 import io
+import json
 import logging
+import posixpath
 import uuid
 
 import numpy as np
+from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image
 from pydantic import BaseModel
 from weaviate import WeaviateAsyncClient
@@ -28,6 +36,7 @@ from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
     get_source,
 )
+from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
 from people_gator_api.settings import AlignedFaceCropSettings, settings
 from people_gator_api.utils.opentelemetry import trace
 
@@ -35,6 +44,10 @@ from people_gator_api.utils.opentelemetry import trace
 logger = logging.getLogger(__name__)
 
 _JPEG_MEDIA_TYPE = "image/jpeg"
+_CACHE_FORMAT_VERSION = 1
+
+# Keep strong references to best-effort writes until they finish.
+_background_cache_writes: set[asyncio.Task[None]] = set()
 
 # Documented keypoint order: left_eye, right_eye, nose, left_mouth_corner,
 # right_mouth_corner (see people-gator-data-models instructions).
@@ -64,6 +77,73 @@ class AlignedFaceCropContent(BaseModel):
 
     content: bytes
     media_type: str
+    cache_hit: bool
+
+
+def _cache_key(
+    crop_cfg: AlignedFaceCropSettings,
+    user_id: uuid.UUID,
+    face: FaceResponse,
+    keypoints: np.ndarray,
+    max_width: int | None,
+) -> str:
+    """Return a content-addressed key for all inputs that affect the crop."""
+    fingerprint_input = {
+        "version": _CACHE_FORMAT_VERSION,
+        "source_id": str(face.source_id),
+        "keypoints": keypoints.tolist(),
+        "reference_width": crop_cfg.reference_width,
+        "reference_height": crop_cfg.reference_height,
+        "jpeg_quality": crop_cfg.jpeg_quality,
+        "max_width": max_width,
+    }
+    serialized = json.dumps(
+        fingerprint_input,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    fingerprint = hashlib.sha256(serialized).hexdigest()
+    width_key = "original" if max_width is None else str(max_width)
+    return posixpath.join(
+        crop_cfg.cache_key_prefix.strip("/"),
+        str(user_id),
+        str(face.detection_id),
+        width_key,
+        f"{fingerprint}.jpg",
+    )
+
+
+def _is_missing_object(exc: ClientError) -> bool:
+    code = exc.response.get("Error", {}).get("Code")
+    return code in {"404", "NoSuchKey", "NotFound"}
+
+
+async def _read_cache(key: str) -> bytes | None:
+    """Return cached crop bytes, treating cache errors as misses."""
+    try:
+        return await read_bytes(key)
+    except ClientError as exc:
+        if not _is_missing_object(exc):
+            logger.warning("aligned face crop cache read failed", extra={"key": key})
+        return None
+    except BotoCoreError:
+        logger.warning("aligned face crop cache read failed", extra={"key": key})
+        return None
+
+
+async def _write_cache(key: str, data: bytes) -> None:
+    """Store crop bytes without allowing cache failures to fail the request."""
+    try:
+        await write_bytes(key, data)
+    except (ClientError, BotoCoreError):
+        logger.warning("aligned face crop cache write failed", extra={"key": key})
+
+
+def _schedule_cache_write(key: str, data: bytes) -> None:
+    task = asyncio.create_task(_write_cache(key, data))
+    _background_cache_writes.add(task)
+    task.add_done_callback(_background_cache_writes.discard)
 
 
 def _reference_keypoints(crop_cfg: AlignedFaceCropSettings) -> np.ndarray:
@@ -218,8 +298,25 @@ async def get_aligned_face_crop(
             code="invalid_max_width",
         )
     keypoints = _ordered_keypoints(face.keypoints)
+    cache_key: str | None = None
+    if crop_cfg.cache_enabled:
+        cache_key = _cache_key(crop_cfg, user_id, face, keypoints, max_width)
+        cached = await _read_cache(cache_key)
+        if cached is not None:
+            return AlignedFaceCropContent(
+                content=cached,
+                media_type=_JPEG_MEDIA_TYPE,
+                cache_hit=True,
+            )
+
     image_bytes = await _read_face_source_image(client, face)
     content = await asyncio.to_thread(
         _render_aligned_crop, image_bytes, keypoints, crop_cfg, max_width
     )
-    return AlignedFaceCropContent(content=content, media_type=_JPEG_MEDIA_TYPE)
+    if cache_key is not None:
+        _schedule_cache_write(cache_key, content)
+    return AlignedFaceCropContent(
+        content=content,
+        media_type=_JPEG_MEDIA_TYPE,
+        cache_hit=False,
+    )
