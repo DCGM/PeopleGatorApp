@@ -1950,6 +1950,39 @@ export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses = {
 
 export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponse = UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses[keyof UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses];
 
+export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetData = {
+    body?: never;
+    path: {
+        /**
+         * Detection Id
+         */
+        detection_id: string;
+    };
+    query?: {
+        /**
+         * Max Width
+         */
+        max_width?: number | null;
+    };
+    url: '/api/v1/faces/{detection_id}/aligned_crop';
+};
+
+export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetError = GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors[keyof GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors];
+
+export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type GetFaceRouteApiV1FacesDetectionIdGetData = {
     body?: never;
     path: {
