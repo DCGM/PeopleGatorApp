@@ -106,6 +106,16 @@
   code {
     @apply font-mono font-normal;
   }
+
+  /* Mobile Safari zooms the viewport when a focused editing control is below 16px. */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select,
+    [contenteditable='true'] {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer base {
