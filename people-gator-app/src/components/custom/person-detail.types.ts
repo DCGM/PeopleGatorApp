@@ -1,4 +1,4 @@
-import type { FaceStatus } from '@/components/custom/document-page.types'
+import type { BoundingBox } from '@/client'
 
 export type PersonProfile = {
   name: string
@@ -10,12 +10,12 @@ export type PersonProfile = {
 export type PersonFace = {
   id: string
   portrait: string
-  status: Extract<FaceStatus, 'auto' | 'valid' | 'change'>
   confidence: number
   library: string
   documentId: string
   pageId: string
   pageLabel: string
+  position: BoundingBox
 }
 
 export type PersonMention = {
@@ -27,6 +27,4 @@ export type PersonMention = {
   documentTitle: string
   pageId: string
   pageLabel: string
-  lineId: string
-  date: string
 }

@@ -1,24 +1,6 @@
 import type { EntityType } from '@/client/types.gen'
 
-export type TranscriptionLineId =
-  | 'line-intro'
-  | 'line-anna'
-  | 'line-program'
-  | 'line-attendees'
-  | 'line-next-meeting'
-  | 'line-details'
-  | 'line-library'
-  | 'line-exhibition'
-  | 'line-school'
-  | 'line-restoration'
-  | 'line-market'
-  | 'line-choir'
-  | 'line-sports'
-  | 'line-weather'
-
-export type TranslationLanguage = 'en' | 'cs' | 'de'
-
-export type FaceStatus = 'auto' | 'valid' | 'change' | 'empty' | 'fail'
+export type FaceStatus = 'assigned' | 'unassigned'
 
 export type Face = {
   id: string
@@ -44,7 +26,7 @@ export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
 }
 
 export type TranscriptionLine = {
-  id: TranscriptionLineId
+  id: string
   text: string
   position: { left: number; top: number; width: number; height: number }
   entities?: TranscriptionEntitySpan[]

@@ -5,7 +5,7 @@ export type SimilarPersonCandidate = {
   name: string
   shortDescription?: string
   portrait?: string
-  score: number
+  score?: number
   nerMentions: number
   detections: number
   closestMentionDistancePx?: number

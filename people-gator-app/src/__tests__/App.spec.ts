@@ -1,18 +1,75 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import Panzoom from '@panzoom/panzoom'
 import { flushPromises, mount } from '@vue/test-utils'
+import { ref } from 'vue'
+
 import App from '../App.vue'
 import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
 
 vi.mock('@panzoom/panzoom', () => ({
-  default: vi.fn(() => ({
-    destroy: vi.fn(),
-    reset: vi.fn(),
-    zoomIn: vi.fn(),
-    zoomOut: vi.fn(),
-    zoomWithWheel: vi.fn(),
+  default: vi.fn<() => object>(() => ({
+    destroy: vi.fn<() => void>(),
+    reset: vi.fn<() => void>(),
+    zoomIn: vi.fn<() => void>(),
+    zoomOut: vi.fn<() => void>(),
+    zoomWithWheel: vi.fn<() => void>(),
   })),
+}))
+
+vi.mock('@/query/document-search', () => ({
+  useDocumentSearch: () => ({
+    cards: ref([]),
+    error: ref(null),
+    hasNextPage: ref(false),
+    isFetchingNextPage: ref(false),
+    isLoading: ref(false),
+    loadMore: vi.fn<() => void>(),
+    resultCount: ref(26),
+  }),
+}))
+
+vi.mock('@/query/people-search', () => ({
+  usePeopleSearch: () => ({
+    error: ref(null),
+    hasNextPage: ref(false),
+    isFetchingNextPage: ref(false),
+    isLoading: ref(false),
+    loadMore: vi.fn<() => void>(),
+    people: ref([]),
+    resultCount: ref(26),
+  }),
+}))
+
+vi.mock('@/query/person-detail', () => ({
+  usePersonDetail: () => ({
+    error: ref(null),
+    faces: ref([]),
+    identifiers: ref({ wikidataId: '', nationalLibraryAuthorityId: '' }),
+    isLoading: ref(false),
+    libraryCount: ref(0),
+    mentions: ref([]),
+    portrait: ref(''),
+    profile: ref({ name: '', shortDescription: '', article: '', aliases: [] }),
+    updateProfile: vi.fn<() => void>(),
+  }),
+}))
+
+vi.mock('@/query/document-workspace', () => ({
+  useDocumentWorkspace: () => ({
+    assignFace: vi.fn<() => void>(),
+    assignmentStatus: ref('idle'),
+    createAndAssign: vi.fn<() => void>(),
+    error: ref(null),
+    faces: ref([]),
+    isLoading: ref(false),
+    pageDimensions: ref({ width: 210, height: 297 }),
+    pageImageUrl: ref(''),
+    similarPeople: ref([]),
+    similarPeopleLoading: ref(false),
+    transcription: ref([]),
+  }),
 }))
 
 describe('App', () => {
@@ -36,118 +93,31 @@ describe('App', () => {
     expect(wrapper.get('main').find('[aria-label="Previous line"]').exists()).toBe(false)
   })
 
-  it('keeps document pagination in the route query', async () => {
+  it('uses the full viewer layer as the panzoom coordinate space', async () => {
+    await router.push('/libraries/library/documents/document/pages/page')
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    const zoomLayer = wrapper.get('.panzoom-layer').element
+    const calls = vi.mocked(Panzoom).mock.calls
+    const latestCall = calls[calls.length - 1]
+
+    expect(latestCall?.[0]).toBe(zoomLayer)
+    expect(latestCall?.[1]).toMatchObject({ canvas: true })
+    expect(zoomLayer.parentElement?.getAttribute('aria-label')).toBe('Pan and zoom document page')
+  })
+
+  it('removes page-number navigation from document search', async () => {
     await router.push('/documents?q=history&page=2')
-    await router.isReady()
-
-    const wrapper = mount(App, { global: { plugins: [router] } })
-    const secondPage = wrapper.get('[aria-label="Page 2"]')
-
-    expect(secondPage.attributes('aria-current')).toBe('page')
-
-    await wrapper.get('[aria-label="Page 1"]').trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.query).toEqual({ q: 'history' })
-  })
-
-  it('paginates people results and links cards to person details', async () => {
-    await router.push('/people?page=2')
-
     const wrapper = mount(App, { global: { plugins: [router] } })
 
-    expect(wrapper.get('[aria-label="Page 2"]').attributes('aria-current')).toBe('page')
-    expect(wrapper.findAll('a[href^="/people/"]')).toHaveLength(12)
-
-    await wrapper.get('[aria-label="Page 1"]').trigger('click')
+    expect(wrapper.find('[data-slot="pagination"]').exists()).toBe(false)
+    await wrapper
+      .get('input[placeholder="Search a person, page or document…"]')
+      .setValue('archives')
     await flushPromises()
 
-    expect(router.currentRoute.value.query).toEqual({})
-  })
-
-  it('previews a similar person without replacing the current face or line', async () => {
-    await router.push(
-      '/libraries/library/documents/document/pages/page?person=face-01&selectedPerson=anna-novakova&line=line-anna',
-    )
-
-    const wrapper = mount(App, { global: { plugins: [router] } })
-    expect(
-      wrapper.get('[aria-label="Preview Anna Nováková on this page"]').attributes('aria-pressed'),
-    ).toBe('true')
-
-    await wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.query).toEqual({
-      person: 'face-01',
-      selectedPerson: 'josef-svoboda',
-      line: 'line-anna',
-      translate: 'off',
-    })
-    expect(wrapper.get('[aria-labelledby="selected-person-title"] h3').text()).toContain(
-      'Anna Nováková',
-    )
-    expect(wrapper.get('[aria-label="Select Josef Svoboda"]').classes()).toContain('ring-accent/70')
-    expect(
-      wrapper.get('[aria-label="Preview Josef Svoboda on this page"]').attributes('aria-pressed'),
-    ).toBe('true')
-  })
-
-  it('treats entity fragments on adjacent transcription lines as one entity', async () => {
-    await router.push('/libraries/library/documents/document/pages/page?line=line-anna')
-
-    const wrapper = mount(App, { global: { plugins: [router] } })
-    await wrapper.get('[aria-label="Preview Marie Dvořáková on this page"]').trigger('click')
-    await flushPromises()
-
-    const relatedFragments = wrapper.findAll('mark[title="Person: Marie Dvořáková"]')
-    expect(relatedFragments).toHaveLength(2)
-    expect(relatedFragments.every((fragment) => fragment.attributes('style').includes('var(--accent)'))).toBe(true)
-    expect(router.currentRoute.value.query.line).toBe('line-library')
-
-    await relatedFragments[1]!.trigger('click')
-    await flushPromises()
-
-    const selectedFragments = wrapper.findAll('mark[title="Person: Marie Dvořáková"]')
-    expect(selectedFragments.every((fragment) => fragment.attributes('style').includes('var(--secondary)'))).toBe(true)
-    expect(router.currentRoute.value.query.line).toBe('line-exhibition')
-  })
-
-  it('does not select a face when the route has no person query', async () => {
-    await router.push('/libraries/library/documents/document/pages/page?line=line-anna')
-
-    const wrapper = mount(App, { global: { plugins: [router] } })
-
-    expect(wrapper.get('[aria-labelledby="selected-person-title"]').text()).toContain(
-      'No face selected',
-    )
-    expect(wrapper.get('[aria-label="Select Anna Nováková"]').attributes('aria-pressed')).toBe(
-      'false',
-    )
-    expect(wrapper.get('[aria-label="Select Josef Svoboda"]').attributes('aria-pressed')).toBe(
-      'false',
-    )
-    expect(wrapper.get('[aria-label="Select Unknown person"]').attributes('aria-pressed')).toBe(
-      'false',
-    )
-    expect(router.currentRoute.value.query.person).toBeUndefined()
-
-    await wrapper.get('[aria-label="Select Anna Nováková"]').trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.query.person).toBe('face-01')
-    expect(wrapper.get('[aria-label="Select Anna Nováková"]').attributes('aria-pressed')).toBe(
-      'true',
-    )
-
-    await wrapper.get('[aria-label="Clear face selection"]').trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.query.person).toBeUndefined()
-    expect(router.currentRoute.value.query.selectedPerson).toBeUndefined()
-    expect(wrapper.get('[aria-labelledby="selected-person-title"]').text()).toContain(
-      'No face selected',
-    )
+    expect(router.currentRoute.value.query).toEqual({ q: 'archives' })
   })
 
   it('defines all application pages', () => {

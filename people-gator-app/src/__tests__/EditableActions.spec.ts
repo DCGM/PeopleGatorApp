@@ -11,7 +11,7 @@ describe('EditableActions', () => {
       props: { editing: false, label: 'name' },
     })
 
-    expect(wrapper.get('[role="group"] [aria-label="Edit name"]').exists()).toBe(true)
+    expect(wrapper.find('[role="group"] [aria-label="Edit name"]').exists()).toBe(true)
 
     await wrapper.get('[aria-label="Edit name"]').trigger('click')
     expect(wrapper.emitted('edit')).toHaveLength(1)
@@ -27,8 +27,8 @@ describe('EditableActions', () => {
     const group = wrapper.get('[role="group"]')
 
     expect(group.text()).toContain('Add alias')
-    expect(group.get('[aria-label="Save aliases"]').exists()).toBe(true)
-    expect(group.get('[aria-label="Cancel aliases editing"]').exists()).toBe(true)
+    expect(group.find('[aria-label="Save aliases"]').exists()).toBe(true)
+    expect(group.find('[aria-label="Cancel aliases editing"]').exists()).toBe(true)
 
     await group.get('[aria-label="Save aliases"]').trigger('click')
     await group.get('[aria-label="Cancel aliases editing"]').trigger('click')

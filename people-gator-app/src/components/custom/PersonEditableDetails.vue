@@ -17,6 +17,8 @@ const props = defineProps<{
   faceCount: number
   mentionCount: number
   libraryCount: number
+  wikidataId: string
+  nationalLibraryAuthorityId: string
 }>()
 
 const emit = defineEmits<{
@@ -98,43 +100,87 @@ watch(
       </Avatar>
 
       <div class="min-w-0 flex-1">
-        <small class="font-semibold uppercase text-secondary">Person record · {{ props.personId }}</small>
+        <small class="font-semibold uppercase text-secondary"
+          >Person record · {{ props.personId }}</small
+        >
         <div class="mt-1 flex min-w-0 items-center gap-2">
-          <ContentEditable v-model="draft.name" as="h1" :editable="editingField === 'name'" single-line
+          <ContentEditable
+            v-model="draft.name"
+            as="h1"
+            :editable="editingField === 'name'"
+            single-line
             class="min-w-0 max-w-full rounded-sm transition-colors duration-300 ease-out"
-            :class="editingField === 'name' && 'bg-accent/10 outline-1 outline-ring'" />
-          <EditableActions :editing="editingField === 'name'" label="name" @edit="beginEditing('name')"
-            @save="saveEditing('name')" @cancel="cancelEditing('name')" />
+            :class="editingField === 'name' && 'bg-accent/10 outline-1 outline-ring'"
+          />
+          <EditableActions
+            :editing="editingField === 'name'"
+            label="name"
+            @edit="beginEditing('name')"
+            @save="saveEditing('name')"
+            @cancel="cancelEditing('name')"
+          />
         </div>
 
         <div class="mt-2 flex min-w-0 items-start gap-2">
-          <ContentEditable v-model="draft.shortDescription" as="p" :editable="editingField === 'shortDescription'"
+          <ContentEditable
+            v-model="draft.shortDescription"
+            as="p"
+            :editable="editingField === 'shortDescription'"
             single-line
             class="min-w-0 max-w-3xl rounded-sm text-muted-foreground transition-colors duration-300 ease-out"
-            :class="editingField === 'shortDescription' && 'bg-accent/10 outline-1 outline-ring'" />
-          <EditableActions :editing="editingField === 'shortDescription'" label="description"
-            @edit="beginEditing('shortDescription')" @save="saveEditing('shortDescription')"
-            @cancel="cancelEditing('shortDescription')" />
+            :class="editingField === 'shortDescription' && 'bg-accent/10 outline-1 outline-ring'"
+          />
+          <EditableActions
+            :editing="editingField === 'shortDescription'"
+            label="description"
+            @edit="beginEditing('shortDescription')"
+            @save="saveEditing('shortDescription')"
+            @cancel="cancelEditing('shortDescription')"
+          />
         </div>
 
         <div class="mt-5 flex flex-wrap items-center gap-2">
           <small class="mr-2 font-semibold uppercase text-muted-foreground">Aliases</small>
-          <span v-for="(alias, index) in draft.aliases" :key="index"
+          <span
+            v-for="(alias, index) in draft.aliases"
+            :key="index"
             class="inline-flex min-h-7 items-center gap-1 border bg-card px-2.5 py-1 text-sm transition-colors duration-300 ease-out"
-            :class="editingField === 'aliases' && 'bg-accent/10'">
-            <ContentEditable v-model="draft.aliases[index]!" :editable="editingField === 'aliases'" single-line
-              :class="editingField === 'aliases' && 'min-w-16 outline-none'" />
-            <Button v-if="editingField === 'aliases'" type="button" size="icon-xs" variant="ghost"
+            :class="editingField === 'aliases' && 'bg-accent/10'"
+          >
+            <ContentEditable
+              v-model="draft.aliases[index]!"
+              :editable="editingField === 'aliases'"
+              single-line
+              :class="editingField === 'aliases' && 'min-w-16 outline-none'"
+            />
+            <Button
+              v-if="editingField === 'aliases'"
+              type="button"
+              size="icon-xs"
+              variant="ghost"
               class="ml-1 h-[1em] max-h-[1em] text-muted-foreground hover:text-destructive"
-              :aria-label="`Remove alias ${alias}`" @click="removeAlias(index)">
+              :aria-label="`Remove alias ${alias}`"
+              @click="removeAlias(index)"
+            >
               <Trash2 class="size-3.5" aria-hidden="true" />
             </Button>
           </span>
-          <Button v-if="editingField === 'aliases'" size="sm" variant="ghost" class="h-7 px-2" @click="addAlias">
+          <Button
+            v-if="editingField === 'aliases'"
+            size="sm"
+            variant="ghost"
+            class="h-7 px-2"
+            @click="addAlias"
+          >
             <Plus aria-hidden="true" /> Add alias
           </Button>
-          <EditableActions :editing="editingField === 'aliases'" label="aliases" @edit="beginEditing('aliases')"
-            @save="saveEditing('aliases')" @cancel="cancelEditing('aliases')" />
+          <EditableActions
+            :editing="editingField === 'aliases'"
+            label="aliases"
+            @edit="beginEditing('aliases')"
+            @save="saveEditing('aliases')"
+            @cancel="cancelEditing('aliases')"
+          />
         </div>
       </div>
     </div>
@@ -144,12 +190,21 @@ watch(
     <div class="min-w-0">
       <div class="flex items-center justify-between gap-3">
         <h2>Detailed description</h2>
-        <EditableActions :editing="editingField === 'article'" label="detailed description"
-          @edit="beginEditing('article')" @save="saveEditing('article')" @cancel="cancelEditing('article')" />
+        <EditableActions
+          :editing="editingField === 'article'"
+          label="detailed description"
+          @edit="beginEditing('article')"
+          @save="saveEditing('article')"
+          @cancel="cancelEditing('article')"
+        />
       </div>
-      <ContentEditable v-model="draft.article" as="p" :editable="editingField === 'article'"
+      <ContentEditable
+        v-model="draft.article"
+        as="p"
+        :editable="editingField === 'article'"
         class="mt-3 min-h-32 w-fit max-w-4xl rounded-sm whitespace-pre-line font-serif leading-8 transition-colors duration-300 ease-out"
-        :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'" />
+        :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'"
+      />
     </div>
     <dl class="grid content-start gap-3 border-l-0 text-sm md:border-l md:pl-5">
       <div>
@@ -163,6 +218,25 @@ watch(
       <div>
         <dt class="text-muted-foreground">Libraries</dt>
         <dd class="font-mono text-lg">{{ props.libraryCount }}</dd>
+      </div>
+      <div>
+        <dt class="text-muted-foreground">Wikidata ID</dt>
+        <dd class="break-all font-mono">
+          <a
+            v-if="props.wikidataId"
+            :href="`https://www.wikidata.org/wiki/${props.wikidataId}`"
+            class="underline underline-offset-2"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ props.wikidataId }}
+          </a>
+          <span v-else>—</span>
+        </dd>
+      </div>
+      <div>
+        <dt class="text-muted-foreground">National Library authority ID</dt>
+        <dd class="break-all font-mono">{{ props.nationalLibraryAuthorityId || '—' }}</dd>
       </div>
     </dl>
   </section>

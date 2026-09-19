@@ -59,60 +59,31 @@ export type BoundingBox = {
 };
 
 /**
- * DocumentMentionCreateRequest
+ * DocumentCreateRequest
  *
- * Request body for creating a document-level mention aggregator.
+ * Typed document descriptor backed by a document Source record.
  */
-export type DocumentMentionCreateRequest = {
+export type DocumentCreateRequest = {
     /**
-     * Name
+     * Library
      */
-    name: string;
+    library: string;
     /**
-     * Information
+     * Document Id
      */
-    information: string;
-    /**
-     * Aliases
-     */
-    aliases: Array<string>;
-    /**
-     * Source Id
-     */
-    source_id?: string | null;
-    source?: SourceDescriptorRequest | null;
-    /**
-     * Entity Id
-     */
-    entity_id: string;
-    /**
-     * Page Mentions
-     */
-    page_mentions?: Array<PageMentionInlineCreateRequest>;
+    document_id: string;
 };
 
 /**
- * DocumentMentionEntityPatchRequest
+ * DocumentListResponse
  *
- * Patch body for reassigning a document mention to a different entity.
+ * A paginated list of documents.
  */
-export type DocumentMentionEntityPatchRequest = {
-    /**
-     * Entity Id
-     */
-    entity_id: string;
-};
-
-/**
- * DocumentMentionListResponse
- *
- * A paginated list of document mentions.
- */
-export type DocumentMentionListResponse = {
+export type DocumentListResponse = {
     /**
      * Items
      */
-    items: Array<DocumentMentionResponse>;
+    items: Array<DocumentResponse>;
     /**
      * Total Count
      */
@@ -128,59 +99,77 @@ export type DocumentMentionListResponse = {
 };
 
 /**
- * DocumentMentionResponse
+ * DocumentResponse
  *
- * A single document mention record.
+ * A document with its archive identity.
  */
-export type DocumentMentionResponse = {
+export type DocumentResponse = {
     /**
-     * Document Mention Id
+     * Document Source Id
      */
-    document_mention_id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Information
-     */
-    information: string;
-    /**
-     * Aliases
-     */
-    aliases: Array<string>;
-    /**
-     * Principal Id
-     */
-    principal_id: string;
-    /**
-     * Source Id
-     */
-    source_id: string;
-    /**
-     * Entity Id
-     */
-    entity_id: string;
-};
-
-/**
- * DocumentSourceMetadata
- *
- * Metadata for a source representing a full document.
- */
-export type DocumentSourceMetadata = {
+    document_source_id: string;
     /**
      * Library
      */
     library: string;
     /**
-     * Document
+     * Document Id
      */
-    document: string;
+    document_id: string;
     /**
-     * Kramerius Url
+     * Url
      */
-    kramerius_url: string;
+    url: string;
+};
+
+/**
+ * DocumentSearchResult
+ *
+ * A document search hit resolved to its archive source.
+ */
+export type DocumentSearchResult = {
+    /**
+     * Source Id
+     *
+     * Source record for the document.
+     */
+    source_id: string;
+    /**
+     * Document Id
+     *
+     * Archive document identity.
+     */
+    document_id: string;
+    /**
+     * Matching Score
+     *
+     * Fused BM25 relevance score.
+     */
+    matching_score: number;
+};
+
+/**
+ * DocumentSearchResultListResponse
+ *
+ * A paginated list of document search results.
+ */
+export type DocumentSearchResultListResponse = {
+    /**
+     * Items
+     */
+    items: Array<DocumentSearchResult>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * After Id
+     */
+    after_id?: string | null;
 };
 
 /**
@@ -349,57 +338,9 @@ export type EntityResponse = {
      */
     nlcr_authority_id: string | null;
     /**
-     * Principal Id
+     * User Id
      */
-    principal_id: string;
-};
-
-/**
- * EntitySearchResult
- *
- * A single result from a nearest-neighbour search over an annotation collection.
- */
-export type EntitySearchResult = {
-    /**
-     * Entity Id
-     *
-     * The entity ID of the annotation.
-     */
-    entity_id: string;
-    /**
-     * The entity type of the annotation.
-     */
-    entity_type: EntityType | null;
-    /**
-     * Name
-     *
-     * The name of the annotation.
-     */
-    name: string;
-    /**
-     * Description
-     *
-     * The description of the annotation.
-     */
-    description: string;
-    /**
-     * Short Description
-     *
-     * The short description of the annotation.
-     */
-    short_description: string;
-    /**
-     * Aliases
-     *
-     * The aliases of the annotation.
-     */
-    aliases: Array<string>;
-    /**
-     * Matching Score
-     *
-     * The matching score of the annotation.
-     */
-    matching_score: number;
+    user_id: string;
 };
 
 /**
@@ -415,6 +356,10 @@ export type EntityType = 'person' | 'place' | 'date';
  * Request body for ingesting a face detection.
  */
 export type FaceCreateRequest = {
+    /**
+     * Identifier
+     */
+    identifier?: string | null;
     /**
      * Source Id
      */
@@ -436,11 +381,23 @@ export type FaceCreateRequest = {
     /**
      * Entity Id
      */
-    entity_id: string;
+    entity_id?: string | null;
     /**
      * Confidence
      */
     confidence: number;
+};
+
+/**
+ * FaceEmbeddingBatchUpdateResponse
+ *
+ * Summary of a face embedding backfill batch.
+ */
+export type FaceEmbeddingBatchUpdateResponse = {
+    /**
+     * Updated Count
+     */
+    updated_count: number;
 };
 
 /**
@@ -449,6 +406,23 @@ export type FaceCreateRequest = {
  * Known face embedding models with named vectors in the Face collection.
  */
 export type FaceEmbeddingModel = 'vit_small_patch8_gap_112.cosface_ms1mv3';
+
+/**
+ * FaceEmbeddingUpdateRequest
+ *
+ * Named vector update for an existing face detection.
+ */
+export type FaceEmbeddingUpdateRequest = {
+    /**
+     * Detection Id
+     */
+    detection_id: string;
+    /**
+     * Embedding
+     */
+    embedding: Array<number>;
+    model_identifier?: FaceEmbeddingModel;
+};
 
 /**
  * FaceEntityPatchRequest
@@ -517,6 +491,10 @@ export type FaceResponse = {
      */
     detection_id: string;
     /**
+     * Identifier
+     */
+    identifier?: string | null;
+    /**
      * Source Id
      */
     source_id: string;
@@ -526,9 +504,9 @@ export type FaceResponse = {
      */
     keypoints: Array<FaceKeypoint>;
     /**
-     * Principal Id
+     * User Id
      */
-    principal_id: string;
+    user_id: string;
     /**
      * Entity Id
      */
@@ -546,11 +524,11 @@ export type FaceResponse = {
  */
 export type FaceSearchResult = {
     /**
-     * Detection Id
+     * Face Id
      *
      * The matched face detection ID.
      */
-    detection_id: string;
+    face_id: string;
     /**
      * Source Id
      *
@@ -620,6 +598,58 @@ export type HealthResponse = {
 };
 
 /**
+ * ImageCreateRequest
+ *
+ * Typed image descriptor backed by an arbitrary URL Source record.
+ */
+export type ImageCreateRequest = {
+    /**
+     * Url
+     */
+    url: string;
+};
+
+/**
+ * ImageListResponse
+ *
+ * A paginated list of images.
+ */
+export type ImageListResponse = {
+    /**
+     * Items
+     */
+    items: Array<ImageResponse>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * After Id
+     */
+    after_id?: string | null;
+};
+
+/**
+ * ImageResponse
+ *
+ * An image identified by an arbitrary URL.
+ */
+export type ImageResponse = {
+    /**
+     * Image Id
+     */
+    image_id: string;
+    /**
+     * Url
+     */
+    url: string;
+};
+
+/**
  * JwkKeyResponse
  *
  * A single JSON Web Key (public fields only).
@@ -676,129 +706,6 @@ export type JwksResponse = {
 };
 
 /**
- * ModelAgentCreateRequest
- */
-export type ModelAgentCreateRequest = {
-    /**
-     * Display Name
-     */
-    display_name: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * Model Slug
-     */
-    model_slug: string;
-    /**
-     * Model Version
-     */
-    model_version: string;
-};
-
-/**
- * ModelAgentListResponse
- *
- * A paginated list of model agents.
- */
-export type ModelAgentListResponse = {
-    /**
-     * Items
-     */
-    items: Array<ModelAgentResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
- * ModelAgentPatchRequest
- */
-export type ModelAgentPatchRequest = {
-    /**
-     * Display Name
-     */
-    display_name?: string | null;
-    /**
-     * Is Active
-     */
-    is_active?: boolean | null;
-    /**
-     * Model Slug
-     */
-    model_slug?: string | null;
-    /**
-     * Model Version
-     */
-    model_version?: string | null;
-};
-
-/**
- * ModelAgentResponse
- */
-export type ModelAgentResponse = {
-    /**
-     * Display Name
-     */
-    display_name: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * Principal Id
-     */
-    principal_id: string;
-    principal_type: PrincipalType;
-    /**
-     * Model Slug
-     */
-    model_slug: string;
-    /**
-     * Model Version
-     */
-    model_version: string;
-};
-
-/**
- * NlcrAuthoritySourceMetadata
- *
- * Metadata for a source imported from Czech National Authority DB (NLCR).
- */
-export type NlcrAuthoritySourceMetadata = {
-    /**
-     * Nlcr Id
-     */
-    nlcr_id: string;
-};
-
-/**
- * ObalkyKnihSourceMetadata
- *
- * Metadata for a source imported from ObalkyKnih.cz.
- */
-export type ObalkyKnihSourceMetadata = {
-    /**
-     * Obalkyknih Id
-     */
-    obalkyknih_id: string;
-    /**
-     * Obalkyknih Url
-     */
-    obalkyknih_url: string;
-};
-
-/**
  * OpenIDConfigurationResponse
  *
  * OpenID Connect discovery metadata for the People Gator token service.
@@ -835,196 +742,62 @@ export type OpenIdConfigurationResponse = {
 };
 
 /**
- * PageMentionCreateRequest
+ * PageCreateRequest
  *
- * Request body for ingesting a page-level mention aggregation.
+ * Typed page descriptor backed by a page Source record.
  */
-export type PageMentionCreateRequest = {
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Information
-     */
-    information: string;
-    /**
-     * Aliases
-     */
-    aliases: Array<string>;
-    /**
-     * Polygons
-     */
-    polygons: Array<Polygon>;
-    /**
-     * Document Mention Id
-     */
-    document_mention_id: string;
-    /**
-     * Source Id
-     */
-    source_id?: string | null;
-    source?: SourceDescriptorRequest | null;
-};
-
-/**
- * PageMentionInlineCreateRequest
- *
- * Page mention embedded directly inside a DocumentMentionCreateRequest.
- *
- * `document_mention_id` is omitted — it is assigned automatically from the
- * owning document mention.
- */
-export type PageMentionInlineCreateRequest = {
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Information
-     */
-    information: string;
-    /**
-     * Aliases
-     */
-    aliases: Array<string>;
-    /**
-     * Polygons
-     */
-    polygons: Array<Polygon>;
-    /**
-     * Source Id
-     */
-    source_id?: string | null;
-    source?: SourceDescriptorRequest | null;
-};
-
-/**
- * PageMentionListResponse
- *
- * A paginated list of page mentions.
- */
-export type PageMentionListResponse = {
-    /**
-     * Items
-     */
-    items: Array<PageMentionResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
- * PageMentionResponse
- *
- * A single page mention record.
- */
-export type PageMentionResponse = {
-    /**
-     * Page Mention Id
-     */
-    page_mention_id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Information
-     */
-    information: string;
-    /**
-     * Aliases
-     */
-    aliases: Array<string>;
-    /**
-     * Polygons
-     */
-    polygons: Array<Polygon>;
-    /**
-     * Document Mention Id
-     */
-    document_mention_id: string;
-    /**
-     * Source Id
-     */
-    source_id: string;
-    /**
-     * Principal Id
-     */
-    principal_id: string;
-};
-
-/**
- * PageSourceMetadata
- *
- * Metadata for a source representing a single page inside a document.
- */
-export type PageSourceMetadata = {
+export type PageCreateRequest = {
     /**
      * Library
      */
     library: string;
     /**
-     * Document
+     * Document Id
      */
-    document: string;
+    document_id: string;
     /**
-     * Page
+     * Page Id
      */
-    page: string;
-    /**
-     * Kramerius Url
-     */
-    kramerius_url: string;
+    page_id: string;
 };
 
 /**
- * Polygon
- *
- * One polygon represented by ordered points.
+ * PageLayoutModel
  */
-export type Polygon = {
+export type PageLayoutModel = {
     /**
-     * Points
+     * Id
      */
-    points: Array<PolygonPoint>;
+    id: string;
+    /**
+     * Page Size
+     */
+    page_size: [
+        number,
+        number
+    ];
+    /**
+     * Regions
+     */
+    regions: Array<RegionLayoutModel>;
+    /**
+     * Reading Order
+     */
+    reading_order: {
+        [key: string]: number;
+    };
 };
 
 /**
- * PolygonPoint
+ * PageListResponse
  *
- * A polygon point in source-space coordinates.
+ * A paginated list of pages.
  */
-export type PolygonPoint = {
-    /**
-     * X
-     */
-    x: number;
-    /**
-     * Y
-     */
-    y: number;
-};
-
-/**
- * PrincipalListResponse
- *
- * A paginated list of principals.
- */
-export type PrincipalListResponse = {
+export type PageListResponse = {
     /**
      * Items
      */
-    items: Array<PrincipalResponse>;
+    items: Array<PageResponse>;
     /**
      * Total Count
      */
@@ -1040,30 +813,88 @@ export type PrincipalListResponse = {
 };
 
 /**
- * PrincipalResponse
+ * PageResponse
+ *
+ * A page with its archive identity.
  */
-export type PrincipalResponse = {
+export type PageResponse = {
     /**
-     * Display Name
+     * Page Source Id
      */
-    display_name: string;
+    page_source_id: string;
     /**
-     * Is Active
+     * Library
      */
-    is_active: boolean;
+    library: string;
     /**
-     * Principal Id
+     * Document Id
      */
-    principal_id: string;
-    principal_type: PrincipalType;
+    document_id: string;
+    /**
+     * Page Id
+     */
+    page_id: string;
+    /**
+     * Url
+     */
+    url: string;
 };
 
 /**
- * PrincipalType
+ * PageSearchResult
  *
- * Polymorphic discriminator for PRINCIPAL rows.
+ * A page search hit resolved to its archive source.
  */
-export type PrincipalType = 'user' | 'service_agent' | 'model_agent';
+export type PageSearchResult = {
+    /**
+     * Source Id
+     *
+     * Source record for the page.
+     */
+    source_id: string;
+    /**
+     * Document Id
+     *
+     * Archive document containing the page.
+     */
+    document_id: string;
+    /**
+     * Page Id
+     *
+     * Archive page identity.
+     */
+    page_id: string;
+    /**
+     * Matching Score
+     *
+     * Fused BM25 relevance score.
+     */
+    matching_score: number;
+};
+
+/**
+ * PageSearchResultListResponse
+ *
+ * A paginated list of page search results.
+ */
+export type PageSearchResultListResponse = {
+    /**
+     * Items
+     */
+    items: Array<PageSearchResult>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * After Id
+     */
+    after_id?: string | null;
+};
 
 /**
  * RefreshTokenRequest
@@ -1075,6 +906,32 @@ export type RefreshTokenRequest = {
      * Refresh Token
      */
     refresh_token: string;
+};
+
+/**
+ * RegionLayoutModel
+ */
+export type RegionLayoutModel = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Polygon
+     */
+    polygon: Array<Array<number>>;
+    /**
+     * Region Type
+     */
+    region_type?: string | null;
+    /**
+     * Transcription
+     */
+    transcription?: string;
+    /**
+     * Lines
+     */
+    lines: Array<TextLineModel>;
 };
 
 /**
@@ -1103,15 +960,63 @@ export type RootResponse = {
 export type ScoreAggregation = 'min' | 'max' | 'average';
 
 /**
- * SearchResultListResponse
+ * SearchEntitiesResult
+ *
+ * A single result from a nearest-neighbour search over an annotation collection.
+ */
+export type SearchEntitiesResult = {
+    /**
+     * Entity Id
+     *
+     * The entity ID of the annotation.
+     */
+    entity_id: string;
+    /**
+     * The entity type of the annotation.
+     */
+    entity_type: EntityType | null;
+    /**
+     * Name
+     *
+     * The name of the annotation.
+     */
+    name: string;
+    /**
+     * Description
+     *
+     * The description of the annotation.
+     */
+    description: string;
+    /**
+     * Short Description
+     *
+     * The short description of the annotation.
+     */
+    short_description: string;
+    /**
+     * Aliases
+     *
+     * The aliases of the annotation.
+     */
+    aliases: Array<string>;
+    /**
+     * Matching Score
+     *
+     * The matching score of the annotation.
+     */
+    matching_score: number;
+};
+
+/**
+ * SearchEntitiesResultListResponse
  *
  * A paginated list of search results.
  */
-export type SearchResultListResponse = {
+export type SearchEntitiesResultListResponse = {
     /**
      * Items
      */
-    items: Array<EntitySearchResult>;
+    items: Array<SearchEntitiesResult>;
     /**
      * Total Count
      */
@@ -1127,30 +1032,14 @@ export type SearchResultListResponse = {
 };
 
 /**
- * SourceCreateRequest
- *
- * Request body for registering a source.
- */
-export type SourceCreateRequest = {
-    source_type: SourceKind;
-    /**
-     * Uri
-     */
-    uri: string;
-    metadata: SourceMetadata;
-};
-
-/**
  * SourceDescriptorRequest
  *
  * Source selector used by annotation ingest endpoints.
  */
 export type SourceDescriptorRequest = {
-    /**
-     * Uri
-     */
-    uri?: string | null;
-    metadata?: SourceMetadata | null;
+    page?: PageCreateRequest | null;
+    document?: DocumentCreateRequest | null;
+    image?: ImageCreateRequest | null;
 };
 
 /**
@@ -1158,7 +1047,7 @@ export type SourceDescriptorRequest = {
  *
  * Physical type of a SOURCE record.
  */
-export type SourceKind = 'page' | 'document' | 'wikidata' | 'wikimedia' | 'obalkyknih' | 'nlcr';
+export type SourceKind = 'page' | 'document' | 'image';
 
 /**
  * SourceListResponse
@@ -1184,12 +1073,10 @@ export type SourceListResponse = {
     after_id?: string | null;
 };
 
-export type SourceMetadata = PageSourceMetadata | DocumentSourceMetadata | WikidataSourceMetadata | NlcrAuthoritySourceMetadata | WikimediaImageSourceMetadata | ObalkyKnihSourceMetadata;
-
 /**
  * SourceResponse
  *
- * A single source record.
+ * A linkable reference to a typed source.
  */
 export type SourceResponse = {
     /**
@@ -1201,39 +1088,164 @@ export type SourceResponse = {
      * Uri
      */
     uri: string;
-    metadata: SourceMetadata | null;
 };
 
 /**
- * SseStatsResponse
- *
- * Active SSE subscriber counts for each concrete topic in this process.
+ * TextLineModel
  */
-export type SseStatsResponse = {
+export type TextLineModel = {
     /**
-     * Topics
+     * Id
      */
-    topics: Array<SseTopicStatsResponse>;
+    id: string;
     /**
-     * Total Subscribers
+     * Baseline
      */
-    total_subscribers: number;
+    baseline: Array<Array<number>>;
+    /**
+     * Polygon
+     */
+    polygon: Array<Array<number>>;
+    /**
+     * Heights
+     */
+    heights: Array<number>;
+    /**
+     * Transcription
+     */
+    transcription?: string;
+    /**
+     * Transcription Confidence
+     */
+    transcription_confidence?: number | null;
+    /**
+     * Index
+     */
+    index?: number | null;
 };
 
 /**
- * SseTopicStatsResponse
+ * TextMentionCreateRequest
  *
- * Response model for SSE topic statistics.
+ * Request body for recording an entity name found in a source.
  */
-export type SseTopicStatsResponse = {
+export type TextMentionCreateRequest = {
     /**
-     * Topic
+     * Name
      */
-    topic: Array<string>;
+    name: string;
     /**
-     * Subscriber Count
+     * Context
      */
-    subscriber_count: number;
+    context?: string | null;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * Source Id
+     */
+    source_id: string;
+};
+
+/**
+ * TextMentionEntityPatchRequest
+ *
+ * Request body for assigning a mention to another entity.
+ */
+export type TextMentionEntityPatchRequest = {
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+};
+
+/**
+ * TextMentionListResponse
+ *
+ * A paginated list of text mentions.
+ */
+export type TextMentionListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TextMentionResponse>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * After Id
+     */
+    after_id?: string | null;
+};
+
+/**
+ * TextMentionResponse
+ *
+ * A single mention of an entity name in a text source.
+ */
+export type TextMentionResponse = {
+    /**
+     * Mention Id
+     */
+    mention_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Context
+     */
+    context: string | null;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * Source Id
+     */
+    source_id: string;
+};
+
+/**
+ * TextMentionSpanModel
+ *
+ * A text mention located in one or more OCR text lines.
+ *
+ * Character offsets are zero-based within their respective lines and
+ * ``end_character`` is exclusive.
+ */
+export type TextMentionSpanModel = {
+    /**
+     * Mention Id
+     */
+    mention_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    entity_type: EntityType | null;
+    /**
+     * Start Line Id
+     */
+    start_line_id: string;
+    /**
+     * End Line Id
+     */
+    end_line_id: string;
+    /**
+     * Start Character
+     */
+    start_character: number;
+    /**
+     * End Character
+     */
+    end_character: number;
 };
 
 /**
@@ -1319,11 +1331,6 @@ export type UserResponse = {
      */
     is_active: boolean;
     /**
-     * Principal Id
-     */
-    principal_id: string;
-    principal_type: PrincipalType;
-    /**
      * External Subject
      */
     external_subject: string;
@@ -1331,6 +1338,10 @@ export type UserResponse = {
      * External Issuer
      */
     external_issuer: string;
+    /**
+     * User Id
+     */
+    user_id: string;
     /**
      * Email
      */
@@ -1365,46 +1376,24 @@ export type ValidationError = {
     };
 };
 
-/**
- * WikidataSourceMetadata
- *
- * Metadata for a source imported from Wikidata.
- */
-export type WikidataSourceMetadata = {
-    /**
-     * Entity Id
-     */
-    entity_id: string;
-    /**
-     * Wikidata Url
-     */
-    wikidata_url: string;
-};
-
-/**
- * WikimediaImageSourceMetadata
- *
- * Metadata for a source imported from Wikimedia image repositories.
- */
-export type WikimediaImageSourceMetadata = {
-    /**
-     * Wikimedia Url
-     */
-    wikimedia_url: string;
-};
-
-export type SearchGetApiV1SearchGetData = {
+export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Query Name
+         * Q
          */
-        query_name?: Array<string> | null;
+        q?: Array<string> | null;
         /**
-         * Query Entity Type
+         * Q Face Id
          */
-        query_entity_type?: Array<EntityType> | null;
+        q_face_id?: Array<string> | null;
+        /**
+         * Entity Type
+         */
+        entity_type?: Array<EntityType> | null;
+        model?: FaceEmbeddingModel;
+        aggregation?: ScoreAggregation;
         /**
          * Limit
          */
@@ -1413,36 +1402,58 @@ export type SearchGetApiV1SearchGetData = {
          * After Id
          */
         after_id?: string | null;
+        /**
+         * Source Id
+         */
+        source_id?: string | null;
+        /**
+         * Page
+         *
+         * Canonical page identity: library/page_id or library/document_id/page_id.
+         */
+        page?: string | null;
+        /**
+         * Document
+         *
+         * Canonical document identity: library/document_id.
+         */
+        document?: string | null;
+        /**
+         * Image
+         *
+         * Exact URL of an image Source.
+         */
+        image?: string | null;
     };
-    url: '/api/v1/search';
+    url: '/api/v1/search-entities';
 };
 
-export type SearchGetApiV1SearchGetErrors = {
+export type SearchEntitiesGetApiV1SearchEntitiesGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type SearchGetApiV1SearchGetError = SearchGetApiV1SearchGetErrors[keyof SearchGetApiV1SearchGetErrors];
+export type SearchEntitiesGetApiV1SearchEntitiesGetError = SearchEntitiesGetApiV1SearchEntitiesGetErrors[keyof SearchEntitiesGetApiV1SearchEntitiesGetErrors];
 
-export type SearchGetApiV1SearchGetResponses = {
+export type SearchEntitiesGetApiV1SearchEntitiesGetResponses = {
     /**
      * Successful Response
      */
-    200: SearchResultListResponse;
+    200: SearchEntitiesResultListResponse;
 };
 
-export type SearchGetApiV1SearchGetResponse = SearchGetApiV1SearchGetResponses[keyof SearchGetApiV1SearchGetResponses];
+export type SearchEntitiesGetApiV1SearchEntitiesGetResponse = SearchEntitiesGetApiV1SearchEntitiesGetResponses[keyof SearchEntitiesGetApiV1SearchEntitiesGetResponses];
 
 export type SearchFacesGetApiV1SearchFacesGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Face Id
+         * Q Face Id
          */
-        face_id?: Array<string>;
+        q_face_id?: Array<string>;
         model?: FaceEmbeddingModel;
         /**
          * Limit
@@ -1470,41 +1481,121 @@ export type SearchFacesGetApiV1SearchFacesGetResponses = {
 
 export type SearchFacesGetApiV1SearchFacesGetResponse = SearchFacesGetApiV1SearchFacesGetResponses[keyof SearchFacesGetApiV1SearchFacesGetResponses];
 
-export type SearchEntitiesByFacesGetApiV1SearchEntitiesGetData = {
+export type SearchPagesGetApiV1SearchPagesGetData = {
     body?: never;
     path?: never;
-    query?: {
+    query: {
         /**
-         * Face Id
+         * Q
+         *
+         * Page Source UUID or directly linked entity name/alias.
          */
-        face_id?: Array<string>;
-        model?: FaceEmbeddingModel;
-        aggregation?: ScoreAggregation;
+        q: string;
         /**
          * Limit
          */
         limit?: number;
+        /**
+         * Source Id
+         */
+        source_id?: string | null;
+        /**
+         * Page
+         *
+         * Canonical page identity: library/page_id or library/document_id/page_id.
+         */
+        page?: string | null;
+        /**
+         * Document
+         *
+         * Canonical document identity: library/document_id.
+         */
+        document?: string | null;
+        /**
+         * Image
+         *
+         * Exact URL of an image Source.
+         */
+        image?: string | null;
     };
-    url: '/api/v1/search-entities';
+    url: '/api/v1/search-pages';
 };
 
-export type SearchEntitiesByFacesGetApiV1SearchEntitiesGetErrors = {
+export type SearchPagesGetApiV1SearchPagesGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type SearchEntitiesByFacesGetApiV1SearchEntitiesGetError = SearchEntitiesByFacesGetApiV1SearchEntitiesGetErrors[keyof SearchEntitiesByFacesGetApiV1SearchEntitiesGetErrors];
+export type SearchPagesGetApiV1SearchPagesGetError = SearchPagesGetApiV1SearchPagesGetErrors[keyof SearchPagesGetApiV1SearchPagesGetErrors];
 
-export type SearchEntitiesByFacesGetApiV1SearchEntitiesGetResponses = {
+export type SearchPagesGetApiV1SearchPagesGetResponses = {
     /**
      * Successful Response
      */
-    200: SearchResultListResponse;
+    200: PageSearchResultListResponse;
 };
 
-export type SearchEntitiesByFacesGetApiV1SearchEntitiesGetResponse = SearchEntitiesByFacesGetApiV1SearchEntitiesGetResponses[keyof SearchEntitiesByFacesGetApiV1SearchEntitiesGetResponses];
+export type SearchPagesGetApiV1SearchPagesGetResponse = SearchPagesGetApiV1SearchPagesGetResponses[keyof SearchPagesGetApiV1SearchPagesGetResponses];
+
+export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Q
+         *
+         * Document Source UUID or directly linked entity name/alias.
+         */
+        q: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Source Id
+         */
+        source_id?: string | null;
+        /**
+         * Page
+         *
+         * Canonical page identity: library/page_id or library/document_id/page_id.
+         */
+        page?: string | null;
+        /**
+         * Document
+         *
+         * Canonical document identity: library/document_id.
+         */
+        document?: string | null;
+        /**
+         * Image
+         *
+         * Exact URL of an image Source.
+         */
+        image?: string | null;
+    };
+    url: '/api/v1/search-documents';
+};
+
+export type SearchDocumentsGetApiV1SearchDocumentsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SearchDocumentsGetApiV1SearchDocumentsGetError = SearchDocumentsGetApiV1SearchDocumentsGetErrors[keyof SearchDocumentsGetApiV1SearchDocumentsGetErrors];
+
+export type SearchDocumentsGetApiV1SearchDocumentsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentSearchResultListResponse;
+};
+
+export type SearchDocumentsGetApiV1SearchDocumentsGetResponse = SearchDocumentsGetApiV1SearchDocumentsGetResponses[keyof SearchDocumentsGetApiV1SearchDocumentsGetResponses];
 
 export type DeleteEntitiesRouteApiV1EntitiesDeleteData = {
     body: EntityDeleteManyRequest;
@@ -1536,6 +1627,10 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     path?: never;
     query?: {
         /**
+         * Source Id
+         */
+        source_id?: string | null;
+        /**
          * Entity Type
          */
         entity_type?: EntityType | null;
@@ -1548,9 +1643,9 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          */
         nlcr_authority_id?: string | null;
         /**
-         * Principal Id
+         * User Id
          */
-        principal_id?: string | null;
+        user_id?: string | null;
         /**
          * Limit
          */
@@ -1726,246 +1821,6 @@ export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponses = {
 
 export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponse = CreateEntityBatchRouteApiV1EntitiesBatchPostResponses[keyof CreateEntityBatchRouteApiV1EntitiesBatchPostResponses];
 
-export type ListPageMentionsRouteApiV1PageMentionsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Document Mention Id
-         */
-        document_mention_id?: string | null;
-        /**
-         * Source Id
-         */
-        source_id?: string | null;
-        /**
-         * Principal Id
-         */
-        principal_id?: string | null;
-        /**
-         * Name
-         */
-        name?: string | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * After Id
-         */
-        after_id?: string | null;
-    };
-    url: '/api/v1/page-mentions';
-};
-
-export type ListPageMentionsRouteApiV1PageMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListPageMentionsRouteApiV1PageMentionsGetError = ListPageMentionsRouteApiV1PageMentionsGetErrors[keyof ListPageMentionsRouteApiV1PageMentionsGetErrors];
-
-export type ListPageMentionsRouteApiV1PageMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PageMentionListResponse;
-};
-
-export type ListPageMentionsRouteApiV1PageMentionsGetResponse = ListPageMentionsRouteApiV1PageMentionsGetResponses[keyof ListPageMentionsRouteApiV1PageMentionsGetResponses];
-
-export type CreatePageMentionRouteApiV1PageMentionsPostData = {
-    body: PageMentionCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/page-mentions';
-};
-
-export type CreatePageMentionRouteApiV1PageMentionsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CreatePageMentionRouteApiV1PageMentionsPostError = CreatePageMentionRouteApiV1PageMentionsPostErrors[keyof CreatePageMentionRouteApiV1PageMentionsPostErrors];
-
-export type CreatePageMentionRouteApiV1PageMentionsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: PageMentionResponse;
-};
-
-export type CreatePageMentionRouteApiV1PageMentionsPostResponse = CreatePageMentionRouteApiV1PageMentionsPostResponses[keyof CreatePageMentionRouteApiV1PageMentionsPostResponses];
-
-export type GetPageMentionRouteApiV1PageMentionsPageMentionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Page Mention Id
-         */
-        page_mention_id: string;
-    };
-    query?: never;
-    url: '/api/v1/page-mentions/{page_mention_id}';
-};
-
-export type GetPageMentionRouteApiV1PageMentionsPageMentionIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPageMentionRouteApiV1PageMentionsPageMentionIdGetError = GetPageMentionRouteApiV1PageMentionsPageMentionIdGetErrors[keyof GetPageMentionRouteApiV1PageMentionsPageMentionIdGetErrors];
-
-export type GetPageMentionRouteApiV1PageMentionsPageMentionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PageMentionResponse;
-};
-
-export type GetPageMentionRouteApiV1PageMentionsPageMentionIdGetResponse = GetPageMentionRouteApiV1PageMentionsPageMentionIdGetResponses[keyof GetPageMentionRouteApiV1PageMentionsPageMentionIdGetResponses];
-
-export type ListDocumentMentionsRouteApiV1DocumentMentionsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Entity Id
-         */
-        entity_id?: string | null;
-        /**
-         * Source Id
-         */
-        source_id?: string | null;
-        /**
-         * Principal Id
-         */
-        principal_id?: string | null;
-        /**
-         * Name
-         */
-        name?: string | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * After Id
-         */
-        after_id?: string | null;
-    };
-    url: '/api/v1/document-mentions';
-};
-
-export type ListDocumentMentionsRouteApiV1DocumentMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListDocumentMentionsRouteApiV1DocumentMentionsGetError = ListDocumentMentionsRouteApiV1DocumentMentionsGetErrors[keyof ListDocumentMentionsRouteApiV1DocumentMentionsGetErrors];
-
-export type ListDocumentMentionsRouteApiV1DocumentMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: DocumentMentionListResponse;
-};
-
-export type ListDocumentMentionsRouteApiV1DocumentMentionsGetResponse = ListDocumentMentionsRouteApiV1DocumentMentionsGetResponses[keyof ListDocumentMentionsRouteApiV1DocumentMentionsGetResponses];
-
-export type CreateDocumentMentionRouteApiV1DocumentMentionsPostData = {
-    body: DocumentMentionCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/document-mentions';
-};
-
-export type CreateDocumentMentionRouteApiV1DocumentMentionsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CreateDocumentMentionRouteApiV1DocumentMentionsPostError = CreateDocumentMentionRouteApiV1DocumentMentionsPostErrors[keyof CreateDocumentMentionRouteApiV1DocumentMentionsPostErrors];
-
-export type CreateDocumentMentionRouteApiV1DocumentMentionsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: DocumentMentionResponse;
-};
-
-export type CreateDocumentMentionRouteApiV1DocumentMentionsPostResponse = CreateDocumentMentionRouteApiV1DocumentMentionsPostResponses[keyof CreateDocumentMentionRouteApiV1DocumentMentionsPostResponses];
-
-export type GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Document Mention Id
-         */
-        document_mention_id: string;
-    };
-    query?: never;
-    url: '/api/v1/document-mentions/{document_mention_id}';
-};
-
-export type GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetError = GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetErrors[keyof GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetErrors];
-
-export type GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: DocumentMentionResponse;
-};
-
-export type GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetResponse = GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetResponses[keyof GetDocumentMentionRouteApiV1DocumentMentionsDocumentMentionIdGetResponses];
-
-export type PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchData = {
-    body: DocumentMentionEntityPatchRequest;
-    path: {
-        /**
-         * Document Mention Id
-         */
-        document_mention_id: string;
-    };
-    query?: never;
-    url: '/api/v1/document-mentions/{document_mention_id}';
-};
-
-export type PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchError = PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchErrors[keyof PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchErrors];
-
-export type PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: DocumentMentionResponse;
-};
-
-export type PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchResponse = PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchResponses[keyof PatchDocumentMentionEntityRouteApiV1DocumentMentionsDocumentMentionIdPatchResponses];
-
 export type ListFacesRouteApiV1FacesGetData = {
     body?: never;
     path?: never;
@@ -1979,9 +1834,9 @@ export type ListFacesRouteApiV1FacesGetData = {
          */
         entity_id?: string | null;
         /**
-         * Principal Id
+         * User Id
          */
-        principal_id?: string | null;
+        user_id?: string | null;
         /**
          * Limit
          */
@@ -2036,6 +1891,64 @@ export type CreateFaceRouteApiV1FacesPostResponses = {
 };
 
 export type CreateFaceRouteApiV1FacesPostResponse = CreateFaceRouteApiV1FacesPostResponses[keyof CreateFaceRouteApiV1FacesPostResponses];
+
+export type CreateFaceBatchRouteApiV1FacesBatchPostData = {
+    /**
+     * Payload
+     */
+    body: Array<FaceCreateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/faces:batch';
+};
+
+export type CreateFaceBatchRouteApiV1FacesBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateFaceBatchRouteApiV1FacesBatchPostError = CreateFaceBatchRouteApiV1FacesBatchPostErrors[keyof CreateFaceBatchRouteApiV1FacesBatchPostErrors];
+
+export type CreateFaceBatchRouteApiV1FacesBatchPostResponses = {
+    /**
+     * Response Create Face Batch Route Api V1 Faces Batch Post
+     *
+     * Successful Response
+     */
+    201: Array<FaceResponse>;
+};
+
+export type CreateFaceBatchRouteApiV1FacesBatchPostResponse = CreateFaceBatchRouteApiV1FacesBatchPostResponses[keyof CreateFaceBatchRouteApiV1FacesBatchPostResponses];
+
+export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostData = {
+    /**
+     * Payload
+     */
+    body: Array<FaceEmbeddingUpdateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/faces:embeddings';
+};
+
+export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostError = UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors[keyof UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors];
+
+export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: FaceEmbeddingBatchUpdateResponse;
+};
+
+export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponse = UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses[keyof UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses];
 
 export type GetFaceRouteApiV1FacesDetectionIdGetData = {
     body?: never;
@@ -2097,30 +2010,171 @@ export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses = {
 
 export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponse = PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses[keyof PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses];
 
+export type ListTextMentionsRouteApiV1TextMentionsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Source Id
+         */
+        source_id?: string | null;
+        /**
+         * Entity Id
+         */
+        entity_id?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * After Id
+         */
+        after_id?: string | null;
+    };
+    url: '/api/v1/text-mentions';
+};
+
+export type ListTextMentionsRouteApiV1TextMentionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListTextMentionsRouteApiV1TextMentionsGetError = ListTextMentionsRouteApiV1TextMentionsGetErrors[keyof ListTextMentionsRouteApiV1TextMentionsGetErrors];
+
+export type ListTextMentionsRouteApiV1TextMentionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TextMentionListResponse;
+};
+
+export type ListTextMentionsRouteApiV1TextMentionsGetResponse = ListTextMentionsRouteApiV1TextMentionsGetResponses[keyof ListTextMentionsRouteApiV1TextMentionsGetResponses];
+
+export type CreateTextMentionRouteApiV1TextMentionsPostData = {
+    body: TextMentionCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/text-mentions';
+};
+
+export type CreateTextMentionRouteApiV1TextMentionsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateTextMentionRouteApiV1TextMentionsPostError = CreateTextMentionRouteApiV1TextMentionsPostErrors[keyof CreateTextMentionRouteApiV1TextMentionsPostErrors];
+
+export type CreateTextMentionRouteApiV1TextMentionsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: TextMentionResponse;
+};
+
+export type CreateTextMentionRouteApiV1TextMentionsPostResponse = CreateTextMentionRouteApiV1TextMentionsPostResponses[keyof CreateTextMentionRouteApiV1TextMentionsPostResponses];
+
+export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData = {
+    /**
+     * Payload
+     */
+    body: Array<TextMentionCreateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/text-mentions:batch';
+};
+
+export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostError = CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors[keyof CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors];
+
+export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses = {
+    /**
+     * Response Create Text Mention Batch Route Api V1 Text Mentions Batch Post
+     *
+     * Successful Response
+     */
+    201: Array<TextMentionResponse>;
+};
+
+export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponse = CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses[keyof CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses];
+
+export type GetTextMentionRouteApiV1TextMentionsMentionIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Mention Id
+         */
+        mention_id: string;
+    };
+    query?: never;
+    url: '/api/v1/text-mentions/{mention_id}';
+};
+
+export type GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetTextMentionRouteApiV1TextMentionsMentionIdGetError = GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors[keyof GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors];
+
+export type GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TextMentionResponse;
+};
+
+export type GetTextMentionRouteApiV1TextMentionsMentionIdGetResponse = GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses[keyof GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses];
+
+export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchData = {
+    body: TextMentionEntityPatchRequest;
+    path: {
+        /**
+         * Mention Id
+         */
+        mention_id: string;
+    };
+    query?: never;
+    url: '/api/v1/text-mentions/{mention_id}';
+};
+
+export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchError = ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors[keyof ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors];
+
+export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: TextMentionResponse;
+};
+
+export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponse = ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses[keyof ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses];
+
 export type ListSourcesRouteApiV1SourcesGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Source Type
+         * Url
          */
-        source_type?: SourceKind | null;
-        /**
-         * Uri
-         */
-        uri?: string | null;
-        /**
-         * Library
-         */
-        library?: string | null;
-        /**
-         * Document
-         */
-        document?: string | null;
-        /**
-         * Page
-         */
-        page?: string | null;
+        url?: string | null;
         /**
          * Limit
          */
@@ -2151,30 +2205,35 @@ export type ListSourcesRouteApiV1SourcesGetResponses = {
 
 export type ListSourcesRouteApiV1SourcesGetResponse = ListSourcesRouteApiV1SourcesGetResponses[keyof ListSourcesRouteApiV1SourcesGetResponses];
 
-export type CreateSourceRouteApiV1SourcesPostData = {
-    body: SourceCreateRequest;
+export type LookupSourceRouteApiV1SourcesLookupGetData = {
+    body?: never;
     path?: never;
-    query?: never;
-    url: '/api/v1/sources';
+    query: {
+        /**
+         * Url
+         */
+        url: string;
+    };
+    url: '/api/v1/sources/lookup';
 };
 
-export type CreateSourceRouteApiV1SourcesPostErrors = {
+export type LookupSourceRouteApiV1SourcesLookupGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CreateSourceRouteApiV1SourcesPostError = CreateSourceRouteApiV1SourcesPostErrors[keyof CreateSourceRouteApiV1SourcesPostErrors];
+export type LookupSourceRouteApiV1SourcesLookupGetError = LookupSourceRouteApiV1SourcesLookupGetErrors[keyof LookupSourceRouteApiV1SourcesLookupGetErrors];
 
-export type CreateSourceRouteApiV1SourcesPostResponses = {
+export type LookupSourceRouteApiV1SourcesLookupGetResponses = {
     /**
      * Successful Response
      */
-    201: SourceResponse;
+    200: SourceResponse;
 };
 
-export type CreateSourceRouteApiV1SourcesPostResponse = CreateSourceRouteApiV1SourcesPostResponses[keyof CreateSourceRouteApiV1SourcesPostResponses];
+export type LookupSourceRouteApiV1SourcesLookupGetResponse = LookupSourceRouteApiV1SourcesLookupGetResponses[keyof LookupSourceRouteApiV1SourcesLookupGetResponses];
 
 export type DeleteSourceRouteApiV1SourcesSourceIdDeleteData = {
     body?: never;
@@ -2236,6 +2295,702 @@ export type GetSourceRouteApiV1SourcesSourceIdGetResponses = {
 
 export type GetSourceRouteApiV1SourcesSourceIdGetResponse = GetSourceRouteApiV1SourcesSourceIdGetResponses[keyof GetSourceRouteApiV1SourcesSourceIdGetResponses];
 
+export type ListDocumentsRouteApiV1DocumentsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Library
+         */
+        library?: string | null;
+        /**
+         * Document Id
+         */
+        document_id?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * After Id
+         */
+        after_id?: string | null;
+    };
+    url: '/api/v1/documents';
+};
+
+export type ListDocumentsRouteApiV1DocumentsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListDocumentsRouteApiV1DocumentsGetError = ListDocumentsRouteApiV1DocumentsGetErrors[keyof ListDocumentsRouteApiV1DocumentsGetErrors];
+
+export type ListDocumentsRouteApiV1DocumentsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentListResponse;
+};
+
+export type ListDocumentsRouteApiV1DocumentsGetResponse = ListDocumentsRouteApiV1DocumentsGetResponses[keyof ListDocumentsRouteApiV1DocumentsGetResponses];
+
+export type CreateDocumentRouteApiV1DocumentsPostData = {
+    body: DocumentCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/documents';
+};
+
+export type CreateDocumentRouteApiV1DocumentsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateDocumentRouteApiV1DocumentsPostError = CreateDocumentRouteApiV1DocumentsPostErrors[keyof CreateDocumentRouteApiV1DocumentsPostErrors];
+
+export type CreateDocumentRouteApiV1DocumentsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: DocumentResponse;
+};
+
+export type CreateDocumentRouteApiV1DocumentsPostResponse = CreateDocumentRouteApiV1DocumentsPostResponses[keyof CreateDocumentRouteApiV1DocumentsPostResponses];
+
+export type CreateDocumentBatchRouteApiV1DocumentsBatchPostData = {
+    /**
+     * Payload
+     */
+    body: Array<DocumentCreateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/documents:batch';
+};
+
+export type CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateDocumentBatchRouteApiV1DocumentsBatchPostError = CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors[keyof CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors];
+
+export type CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses = {
+    /**
+     * Response Create Document Batch Route Api V1 Documents Batch Post
+     *
+     * Successful Response
+     */
+    201: Array<DocumentResponse>;
+};
+
+export type CreateDocumentBatchRouteApiV1DocumentsBatchPostResponse = CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses[keyof CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses];
+
+export type LookupDocumentRouteApiV1DocumentsLookupGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Library
+         */
+        library: string;
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    url: '/api/v1/documents/lookup';
+};
+
+export type LookupDocumentRouteApiV1DocumentsLookupGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LookupDocumentRouteApiV1DocumentsLookupGetError = LookupDocumentRouteApiV1DocumentsLookupGetErrors[keyof LookupDocumentRouteApiV1DocumentsLookupGetErrors];
+
+export type LookupDocumentRouteApiV1DocumentsLookupGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentResponse;
+};
+
+export type LookupDocumentRouteApiV1DocumentsLookupGetResponse = LookupDocumentRouteApiV1DocumentsLookupGetResponses[keyof LookupDocumentRouteApiV1DocumentsLookupGetResponses];
+
+export type DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Document Source Id
+         */
+        document_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_source_id}';
+};
+
+export type DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteError = DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors[keyof DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors];
+
+export type DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponse = DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses[keyof DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses];
+
+export type GetDocumentRouteApiV1DocumentsDocumentSourceIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Document Source Id
+         */
+        document_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_source_id}';
+};
+
+export type GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetDocumentRouteApiV1DocumentsDocumentSourceIdGetError = GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors[keyof GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors];
+
+export type GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentResponse;
+};
+
+export type GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponse = GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses[keyof GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses];
+
+export type ListPagesRouteApiV1PagesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Library
+         */
+        library?: string | null;
+        /**
+         * Document Id
+         */
+        document_id?: string | null;
+        /**
+         * Page Id
+         */
+        page_id?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * After Id
+         */
+        after_id?: string | null;
+    };
+    url: '/api/v1/pages';
+};
+
+export type ListPagesRouteApiV1PagesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListPagesRouteApiV1PagesGetError = ListPagesRouteApiV1PagesGetErrors[keyof ListPagesRouteApiV1PagesGetErrors];
+
+export type ListPagesRouteApiV1PagesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageListResponse;
+};
+
+export type ListPagesRouteApiV1PagesGetResponse = ListPagesRouteApiV1PagesGetResponses[keyof ListPagesRouteApiV1PagesGetResponses];
+
+export type CreatePageRouteApiV1PagesPostData = {
+    body: PageCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/pages';
+};
+
+export type CreatePageRouteApiV1PagesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreatePageRouteApiV1PagesPostError = CreatePageRouteApiV1PagesPostErrors[keyof CreatePageRouteApiV1PagesPostErrors];
+
+export type CreatePageRouteApiV1PagesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: PageResponse;
+};
+
+export type CreatePageRouteApiV1PagesPostResponse = CreatePageRouteApiV1PagesPostResponses[keyof CreatePageRouteApiV1PagesPostResponses];
+
+export type CreatePageBatchRouteApiV1PagesBatchPostData = {
+    /**
+     * Payload
+     */
+    body: Array<PageCreateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/pages:batch';
+};
+
+export type CreatePageBatchRouteApiV1PagesBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreatePageBatchRouteApiV1PagesBatchPostError = CreatePageBatchRouteApiV1PagesBatchPostErrors[keyof CreatePageBatchRouteApiV1PagesBatchPostErrors];
+
+export type CreatePageBatchRouteApiV1PagesBatchPostResponses = {
+    /**
+     * Response Create Page Batch Route Api V1 Pages Batch Post
+     *
+     * Successful Response
+     */
+    201: Array<PageResponse>;
+};
+
+export type CreatePageBatchRouteApiV1PagesBatchPostResponse = CreatePageBatchRouteApiV1PagesBatchPostResponses[keyof CreatePageBatchRouteApiV1PagesBatchPostResponses];
+
+export type LookupPageRouteApiV1PagesLookupGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Library
+         */
+        library: string;
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Page Id
+         */
+        page_id: string;
+    };
+    url: '/api/v1/pages/lookup';
+};
+
+export type LookupPageRouteApiV1PagesLookupGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LookupPageRouteApiV1PagesLookupGetError = LookupPageRouteApiV1PagesLookupGetErrors[keyof LookupPageRouteApiV1PagesLookupGetErrors];
+
+export type LookupPageRouteApiV1PagesLookupGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageResponse;
+};
+
+export type LookupPageRouteApiV1PagesLookupGetResponse = LookupPageRouteApiV1PagesLookupGetResponses[keyof LookupPageRouteApiV1PagesLookupGetResponses];
+
+export type DeletePageRouteApiV1PagesPageSourceIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Page Source Id
+         */
+        page_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/pages/{page_source_id}';
+};
+
+export type DeletePageRouteApiV1PagesPageSourceIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeletePageRouteApiV1PagesPageSourceIdDeleteError = DeletePageRouteApiV1PagesPageSourceIdDeleteErrors[keyof DeletePageRouteApiV1PagesPageSourceIdDeleteErrors];
+
+export type DeletePageRouteApiV1PagesPageSourceIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeletePageRouteApiV1PagesPageSourceIdDeleteResponse = DeletePageRouteApiV1PagesPageSourceIdDeleteResponses[keyof DeletePageRouteApiV1PagesPageSourceIdDeleteResponses];
+
+export type GetPageRouteApiV1PagesPageSourceIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Page Source Id
+         */
+        page_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/pages/{page_source_id}';
+};
+
+export type GetPageRouteApiV1PagesPageSourceIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPageRouteApiV1PagesPageSourceIdGetError = GetPageRouteApiV1PagesPageSourceIdGetErrors[keyof GetPageRouteApiV1PagesPageSourceIdGetErrors];
+
+export type GetPageRouteApiV1PagesPageSourceIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageResponse;
+};
+
+export type GetPageRouteApiV1PagesPageSourceIdGetResponse = GetPageRouteApiV1PagesPageSourceIdGetResponses[keyof GetPageRouteApiV1PagesPageSourceIdGetResponses];
+
+export type GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetData = {
+    body?: never;
+    path: {
+        /**
+         * Page Source Id
+         */
+        page_source_id: string;
+    };
+    query?: {
+        /**
+         * Width
+         */
+        width?: number | null;
+    };
+    url: '/api/v1/pages/{page_source_id}/image';
+};
+
+export type GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetError = GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors[keyof GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors];
+
+export type GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetData = {
+    body?: never;
+    path: {
+        /**
+         * Page Source Id
+         */
+        page_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/pages/{page_source_id}/page-layout';
+};
+
+export type GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetError = GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors[keyof GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors];
+
+export type GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageLayoutModel;
+};
+
+export type GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponse = GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses[keyof GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses];
+
+export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetData = {
+    body?: never;
+    path: {
+        /**
+         * Page Source Id
+         */
+        page_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/pages/{page_source_id}/text-mentions-spans';
+};
+
+export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetError = GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors[keyof GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors];
+
+export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses = {
+    /**
+     * Response Get Text Mention Spans By Id Route Api V1 Pages  Page Source Id  Text Mentions Spans Get
+     *
+     * Successful Response
+     */
+    200: Array<TextMentionSpanModel>;
+};
+
+export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponse = GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses[keyof GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses];
+
+export type ListImagesRouteApiV1ImagesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Url
+         */
+        url?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * After Id
+         */
+        after_id?: string | null;
+    };
+    url: '/api/v1/images';
+};
+
+export type ListImagesRouteApiV1ImagesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListImagesRouteApiV1ImagesGetError = ListImagesRouteApiV1ImagesGetErrors[keyof ListImagesRouteApiV1ImagesGetErrors];
+
+export type ListImagesRouteApiV1ImagesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageListResponse;
+};
+
+export type ListImagesRouteApiV1ImagesGetResponse = ListImagesRouteApiV1ImagesGetResponses[keyof ListImagesRouteApiV1ImagesGetResponses];
+
+export type CreateImageRouteApiV1ImagesPostData = {
+    body: ImageCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/images';
+};
+
+export type CreateImageRouteApiV1ImagesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateImageRouteApiV1ImagesPostError = CreateImageRouteApiV1ImagesPostErrors[keyof CreateImageRouteApiV1ImagesPostErrors];
+
+export type CreateImageRouteApiV1ImagesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: ImageResponse;
+};
+
+export type CreateImageRouteApiV1ImagesPostResponse = CreateImageRouteApiV1ImagesPostResponses[keyof CreateImageRouteApiV1ImagesPostResponses];
+
+export type CreateImageBatchRouteApiV1ImagesBatchPostData = {
+    /**
+     * Payload
+     */
+    body: Array<ImageCreateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/images:batch';
+};
+
+export type CreateImageBatchRouteApiV1ImagesBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateImageBatchRouteApiV1ImagesBatchPostError = CreateImageBatchRouteApiV1ImagesBatchPostErrors[keyof CreateImageBatchRouteApiV1ImagesBatchPostErrors];
+
+export type CreateImageBatchRouteApiV1ImagesBatchPostResponses = {
+    /**
+     * Response Create Image Batch Route Api V1 Images Batch Post
+     *
+     * Successful Response
+     */
+    201: Array<ImageResponse>;
+};
+
+export type CreateImageBatchRouteApiV1ImagesBatchPostResponse = CreateImageBatchRouteApiV1ImagesBatchPostResponses[keyof CreateImageBatchRouteApiV1ImagesBatchPostResponses];
+
+export type LookupImageRouteApiV1ImagesLookupGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Url
+         */
+        url: string;
+    };
+    url: '/api/v1/images/lookup';
+};
+
+export type LookupImageRouteApiV1ImagesLookupGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type LookupImageRouteApiV1ImagesLookupGetError = LookupImageRouteApiV1ImagesLookupGetErrors[keyof LookupImageRouteApiV1ImagesLookupGetErrors];
+
+export type LookupImageRouteApiV1ImagesLookupGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageResponse;
+};
+
+export type LookupImageRouteApiV1ImagesLookupGetResponse = LookupImageRouteApiV1ImagesLookupGetResponses[keyof LookupImageRouteApiV1ImagesLookupGetResponses];
+
+export type DeleteImageRouteApiV1ImagesImageIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Image Id
+         */
+        image_id: string;
+    };
+    query?: never;
+    url: '/api/v1/images/{image_id}';
+};
+
+export type DeleteImageRouteApiV1ImagesImageIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteImageRouteApiV1ImagesImageIdDeleteError = DeleteImageRouteApiV1ImagesImageIdDeleteErrors[keyof DeleteImageRouteApiV1ImagesImageIdDeleteErrors];
+
+export type DeleteImageRouteApiV1ImagesImageIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteImageRouteApiV1ImagesImageIdDeleteResponse = DeleteImageRouteApiV1ImagesImageIdDeleteResponses[keyof DeleteImageRouteApiV1ImagesImageIdDeleteResponses];
+
+export type GetImageRouteApiV1ImagesImageIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Image Id
+         */
+        image_id: string;
+    };
+    query?: never;
+    url: '/api/v1/images/{image_id}';
+};
+
+export type GetImageRouteApiV1ImagesImageIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetImageRouteApiV1ImagesImageIdGetError = GetImageRouteApiV1ImagesImageIdGetErrors[keyof GetImageRouteApiV1ImagesImageIdGetErrors];
+
+export type GetImageRouteApiV1ImagesImageIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageResponse;
+};
+
+export type GetImageRouteApiV1ImagesImageIdGetResponse = GetImageRouteApiV1ImagesImageIdGetResponses[keyof GetImageRouteApiV1ImagesImageIdGetResponses];
+
+export type GetImageContentByIdRouteApiV1ImagesImageIdContentGetData = {
+    body?: never;
+    path: {
+        /**
+         * Image Id
+         */
+        image_id: string;
+    };
+    query?: never;
+    url: '/api/v1/images/{image_id}/content';
+};
+
+export type GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetImageContentByIdRouteApiV1ImagesImageIdContentGetError = GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors[keyof GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors];
+
+export type GetImageContentByIdRouteApiV1ImagesImageIdContentGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type GetMeRouteApiV1MeGetData = {
     body?: never;
     path?: never;
@@ -2247,235 +3002,10 @@ export type GetMeRouteApiV1MeGetResponses = {
     /**
      * Successful Response
      */
-    200: PrincipalResponse;
+    200: UserResponse;
 };
 
 export type GetMeRouteApiV1MeGetResponse = GetMeRouteApiV1MeGetResponses[keyof GetMeRouteApiV1MeGetResponses];
-
-export type ListPrincipalsRouteApiV1PrincipalsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Principal Type
-         */
-        principal_type?: PrincipalType | null;
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * After Id
-         */
-        after_id?: string | null;
-    };
-    url: '/api/v1/principals';
-};
-
-export type ListPrincipalsRouteApiV1PrincipalsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListPrincipalsRouteApiV1PrincipalsGetError = ListPrincipalsRouteApiV1PrincipalsGetErrors[keyof ListPrincipalsRouteApiV1PrincipalsGetErrors];
-
-export type ListPrincipalsRouteApiV1PrincipalsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PrincipalListResponse;
-};
-
-export type ListPrincipalsRouteApiV1PrincipalsGetResponse = ListPrincipalsRouteApiV1PrincipalsGetResponses[keyof ListPrincipalsRouteApiV1PrincipalsGetResponses];
-
-export type GetPrincipalRouteApiV1PrincipalsPrincipalIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/principals/{principal_id}';
-};
-
-export type GetPrincipalRouteApiV1PrincipalsPrincipalIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPrincipalRouteApiV1PrincipalsPrincipalIdGetError = GetPrincipalRouteApiV1PrincipalsPrincipalIdGetErrors[keyof GetPrincipalRouteApiV1PrincipalsPrincipalIdGetErrors];
-
-export type GetPrincipalRouteApiV1PrincipalsPrincipalIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: PrincipalResponse;
-};
-
-export type GetPrincipalRouteApiV1PrincipalsPrincipalIdGetResponse = GetPrincipalRouteApiV1PrincipalsPrincipalIdGetResponses[keyof GetPrincipalRouteApiV1PrincipalsPrincipalIdGetResponses];
-
-export type ListModelAgentsRouteApiV1ModelAgentsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Is Active
-         */
-        is_active?: boolean | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * After Id
-         */
-        after_id?: string | null;
-    };
-    url: '/api/v1/model-agents';
-};
-
-export type ListModelAgentsRouteApiV1ModelAgentsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListModelAgentsRouteApiV1ModelAgentsGetError = ListModelAgentsRouteApiV1ModelAgentsGetErrors[keyof ListModelAgentsRouteApiV1ModelAgentsGetErrors];
-
-export type ListModelAgentsRouteApiV1ModelAgentsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelAgentListResponse;
-};
-
-export type ListModelAgentsRouteApiV1ModelAgentsGetResponse = ListModelAgentsRouteApiV1ModelAgentsGetResponses[keyof ListModelAgentsRouteApiV1ModelAgentsGetResponses];
-
-export type CreateModelAgentRouteApiV1ModelAgentsPostData = {
-    body: ModelAgentCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/v1/model-agents';
-};
-
-export type CreateModelAgentRouteApiV1ModelAgentsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CreateModelAgentRouteApiV1ModelAgentsPostError = CreateModelAgentRouteApiV1ModelAgentsPostErrors[keyof CreateModelAgentRouteApiV1ModelAgentsPostErrors];
-
-export type CreateModelAgentRouteApiV1ModelAgentsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelAgentResponse;
-};
-
-export type CreateModelAgentRouteApiV1ModelAgentsPostResponse = CreateModelAgentRouteApiV1ModelAgentsPostResponses[keyof CreateModelAgentRouteApiV1ModelAgentsPostResponses];
-
-export type DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/model-agents/{principal_id}';
-};
-
-export type DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteError = DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteErrors[keyof DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteErrors];
-
-export type DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteResponse = DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteResponses[keyof DeleteModelAgentRouteApiV1ModelAgentsPrincipalIdDeleteResponses];
-
-export type GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/model-agents/{principal_id}';
-};
-
-export type GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetError = GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetErrors[keyof GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetErrors];
-
-export type GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelAgentResponse;
-};
-
-export type GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetResponse = GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetResponses[keyof GetModelAgentRouteApiV1ModelAgentsPrincipalIdGetResponses];
-
-export type PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchData = {
-    body: ModelAgentPatchRequest;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/model-agents/{principal_id}';
-};
-
-export type PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchError = PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchErrors[keyof PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchErrors];
-
-export type PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: ModelAgentResponse;
-};
-
-export type PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchResponse = PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchResponses[keyof PatchModelAgentRouteApiV1ModelAgentsPrincipalIdPatchResponses];
 
 export type ListUsersRouteApiV1UsersGetData = {
     body?: never;
@@ -2515,65 +3045,65 @@ export type ListUsersRouteApiV1UsersGetResponses = {
 
 export type ListUsersRouteApiV1UsersGetResponse = ListUsersRouteApiV1UsersGetResponses[keyof ListUsersRouteApiV1UsersGetResponses];
 
-export type GetUserRouteApiV1UsersPrincipalIdGetData = {
+export type GetUserRouteApiV1UsersUserIdGetData = {
     body?: never;
     path: {
         /**
-         * Principal Id
+         * User Id
          */
-        principal_id: string;
+        user_id: string;
     };
     query?: never;
-    url: '/api/v1/users/{principal_id}';
+    url: '/api/v1/users/{user_id}';
 };
 
-export type GetUserRouteApiV1UsersPrincipalIdGetErrors = {
+export type GetUserRouteApiV1UsersUserIdGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type GetUserRouteApiV1UsersPrincipalIdGetError = GetUserRouteApiV1UsersPrincipalIdGetErrors[keyof GetUserRouteApiV1UsersPrincipalIdGetErrors];
+export type GetUserRouteApiV1UsersUserIdGetError = GetUserRouteApiV1UsersUserIdGetErrors[keyof GetUserRouteApiV1UsersUserIdGetErrors];
 
-export type GetUserRouteApiV1UsersPrincipalIdGetResponses = {
+export type GetUserRouteApiV1UsersUserIdGetResponses = {
     /**
      * Successful Response
      */
     200: UserResponse;
 };
 
-export type GetUserRouteApiV1UsersPrincipalIdGetResponse = GetUserRouteApiV1UsersPrincipalIdGetResponses[keyof GetUserRouteApiV1UsersPrincipalIdGetResponses];
+export type GetUserRouteApiV1UsersUserIdGetResponse = GetUserRouteApiV1UsersUserIdGetResponses[keyof GetUserRouteApiV1UsersUserIdGetResponses];
 
-export type PatchUserRouteApiV1UsersPrincipalIdPatchData = {
+export type PatchUserRouteApiV1UsersUserIdPatchData = {
     body: UserPatchRequest;
     path: {
         /**
-         * Principal Id
+         * User Id
          */
-        principal_id: string;
+        user_id: string;
     };
     query?: never;
-    url: '/api/v1/users/{principal_id}';
+    url: '/api/v1/users/{user_id}';
 };
 
-export type PatchUserRouteApiV1UsersPrincipalIdPatchErrors = {
+export type PatchUserRouteApiV1UsersUserIdPatchErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PatchUserRouteApiV1UsersPrincipalIdPatchError = PatchUserRouteApiV1UsersPrincipalIdPatchErrors[keyof PatchUserRouteApiV1UsersPrincipalIdPatchErrors];
+export type PatchUserRouteApiV1UsersUserIdPatchError = PatchUserRouteApiV1UsersUserIdPatchErrors[keyof PatchUserRouteApiV1UsersUserIdPatchErrors];
 
-export type PatchUserRouteApiV1UsersPrincipalIdPatchResponses = {
+export type PatchUserRouteApiV1UsersUserIdPatchResponses = {
     /**
      * Successful Response
      */
     200: UserResponse;
 };
 
-export type PatchUserRouteApiV1UsersPrincipalIdPatchResponse = PatchUserRouteApiV1UsersPrincipalIdPatchResponses[keyof PatchUserRouteApiV1UsersPrincipalIdPatchResponses];
+export type PatchUserRouteApiV1UsersUserIdPatchResponse = PatchUserRouteApiV1UsersUserIdPatchResponses[keyof PatchUserRouteApiV1UsersUserIdPatchResponses];
 
 export type HomeApiV1GetData = {
     body?: never;
@@ -2606,562 +3136,6 @@ export type HealthApiV1HealthGetResponses = {
 };
 
 export type HealthApiV1HealthGetResponse = HealthApiV1HealthGetResponses[keyof HealthApiV1HealthGetResponses];
-
-export type GetSseStatsApiV1SseGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/sse/';
-};
-
-export type GetSseStatsApiV1SseGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: SseStatsResponse;
-};
-
-export type GetSseStatsApiV1SseGetResponse = GetSseStatsApiV1SseGetResponses[keyof GetSseStatsApiV1SseGetResponses];
-
-export type StreamEntityApiV1SseEntitiesEntityIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Entity Id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/entities/{entity_id}';
-};
-
-export type StreamEntityApiV1SseEntitiesEntityIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamEntityApiV1SseEntitiesEntityIdGetError = StreamEntityApiV1SseEntitiesEntityIdGetErrors[keyof StreamEntityApiV1SseEntitiesEntityIdGetErrors];
-
-export type StreamEntityApiV1SseEntitiesEntityIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamEntityApiV1SseEntitiesEntityIdGetResponse = StreamEntityApiV1SseEntitiesEntityIdGetResponses[keyof StreamEntityApiV1SseEntitiesEntityIdGetResponses];
-
-export type StreamFaceApiV1SseFacesDetectionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Detection Id
-         */
-        detection_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/faces/{detection_id}';
-};
-
-export type StreamFaceApiV1SseFacesDetectionIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamFaceApiV1SseFacesDetectionIdGetError = StreamFaceApiV1SseFacesDetectionIdGetErrors[keyof StreamFaceApiV1SseFacesDetectionIdGetErrors];
-
-export type StreamFaceApiV1SseFacesDetectionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamFaceApiV1SseFacesDetectionIdGetResponse = StreamFaceApiV1SseFacesDetectionIdGetResponses[keyof StreamFaceApiV1SseFacesDetectionIdGetResponses];
-
-export type StreamPageMentionApiV1SsePageMentionsPageMentionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Page Mention Id
-         */
-        page_mention_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/page-mentions/{page_mention_id}';
-};
-
-export type StreamPageMentionApiV1SsePageMentionsPageMentionIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPageMentionApiV1SsePageMentionsPageMentionIdGetError = StreamPageMentionApiV1SsePageMentionsPageMentionIdGetErrors[keyof StreamPageMentionApiV1SsePageMentionsPageMentionIdGetErrors];
-
-export type StreamPageMentionApiV1SsePageMentionsPageMentionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPageMentionApiV1SsePageMentionsPageMentionIdGetResponse = StreamPageMentionApiV1SsePageMentionsPageMentionIdGetResponses[keyof StreamPageMentionApiV1SsePageMentionsPageMentionIdGetResponses];
-
-export type StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Document Mention Id
-         */
-        document_mention_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/document-mentions/{document_mention_id}';
-};
-
-export type StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetError = StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetErrors[keyof StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetErrors];
-
-export type StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetResponse = StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetResponses[keyof StreamDocumentMentionApiV1SseDocumentMentionsDocumentMentionIdGetResponses];
-
-export type StreamPrincipalApiV1SsePrincipalsPrincipalIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/principals/{principal_id}';
-};
-
-export type StreamPrincipalApiV1SsePrincipalsPrincipalIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPrincipalApiV1SsePrincipalsPrincipalIdGetError = StreamPrincipalApiV1SsePrincipalsPrincipalIdGetErrors[keyof StreamPrincipalApiV1SsePrincipalsPrincipalIdGetErrors];
-
-export type StreamPrincipalApiV1SsePrincipalsPrincipalIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPrincipalApiV1SsePrincipalsPrincipalIdGetResponse = StreamPrincipalApiV1SsePrincipalsPrincipalIdGetResponses[keyof StreamPrincipalApiV1SsePrincipalsPrincipalIdGetResponses];
-
-export type StreamModelAgentApiV1SseModelAgentsPrincipalIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/model-agents/{principal_id}';
-};
-
-export type StreamModelAgentApiV1SseModelAgentsPrincipalIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamModelAgentApiV1SseModelAgentsPrincipalIdGetError = StreamModelAgentApiV1SseModelAgentsPrincipalIdGetErrors[keyof StreamModelAgentApiV1SseModelAgentsPrincipalIdGetErrors];
-
-export type StreamModelAgentApiV1SseModelAgentsPrincipalIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamModelAgentApiV1SseModelAgentsPrincipalIdGetResponse = StreamModelAgentApiV1SseModelAgentsPrincipalIdGetResponses[keyof StreamModelAgentApiV1SseModelAgentsPrincipalIdGetResponses];
-
-export type StreamUserApiV1SseUsersPrincipalIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/users/{principal_id}';
-};
-
-export type StreamUserApiV1SseUsersPrincipalIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamUserApiV1SseUsersPrincipalIdGetError = StreamUserApiV1SseUsersPrincipalIdGetErrors[keyof StreamUserApiV1SseUsersPrincipalIdGetErrors];
-
-export type StreamUserApiV1SseUsersPrincipalIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamUserApiV1SseUsersPrincipalIdGetResponse = StreamUserApiV1SseUsersPrincipalIdGetResponses[keyof StreamUserApiV1SseUsersPrincipalIdGetResponses];
-
-export type StreamSourceApiV1SseSourcesSourceIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Source Id
-         */
-        source_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/sources/{source_id}';
-};
-
-export type StreamSourceApiV1SseSourcesSourceIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamSourceApiV1SseSourcesSourceIdGetError = StreamSourceApiV1SseSourcesSourceIdGetErrors[keyof StreamSourceApiV1SseSourcesSourceIdGetErrors];
-
-export type StreamSourceApiV1SseSourcesSourceIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamSourceApiV1SseSourcesSourceIdGetResponse = StreamSourceApiV1SseSourcesSourceIdGetResponses[keyof StreamSourceApiV1SseSourcesSourceIdGetResponses];
-
-export type StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetData = {
-    body?: never;
-    path: {
-        /**
-         * Entity Id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/entities/{entity_id}/faces';
-};
-
-export type StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetError = StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetErrors[keyof StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetErrors];
-
-export type StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetResponse = StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetResponses[keyof StreamEntityFacesApiV1SseEntitiesEntityIdFacesGetResponses];
-
-export type StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Entity Id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/entities/{entity_id}/document-mentions';
-};
-
-export type StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetError = StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetErrors[keyof StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetErrors];
-
-export type StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetResponse = StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetResponses[keyof StreamEntityDocumentMentionsApiV1SseEntitiesEntityIdDocumentMentionsGetResponses];
-
-export type StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/principals/{principal_id}/faces';
-};
-
-export type StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetError = StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetErrors[keyof StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetErrors];
-
-export type StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetResponse = StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetResponses[keyof StreamPrincipalFacesApiV1SsePrincipalsPrincipalIdFacesGetResponses];
-
-export type StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/principals/{principal_id}/entities';
-};
-
-export type StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetError = StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetErrors[keyof StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetErrors];
-
-export type StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetResponse = StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetResponses[keyof StreamPrincipalEntitiesApiV1SsePrincipalsPrincipalIdEntitiesGetResponses];
-
-export type StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/principals/{principal_id}/page-mentions';
-};
-
-export type StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetError = StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetErrors[keyof StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetErrors];
-
-export type StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetResponse = StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetResponses[keyof StreamPrincipalPageMentionsApiV1SsePrincipalsPrincipalIdPageMentionsGetResponses];
-
-export type StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/principals/{principal_id}/document-mentions';
-};
-
-export type StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetError = StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetErrors[keyof StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetErrors];
-
-export type StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetResponse = StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetResponses[keyof StreamPrincipalDocumentMentionsApiV1SsePrincipalsPrincipalIdDocumentMentionsGetResponses];
-
-export type StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetData = {
-    body?: never;
-    path: {
-        /**
-         * Principal Id
-         */
-        principal_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/principals/{principal_id}/sources';
-};
-
-export type StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetError = StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetErrors[keyof StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetErrors];
-
-export type StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetResponse = StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetResponses[keyof StreamPrincipalSourcesApiV1SsePrincipalsPrincipalIdSourcesGetResponses];
-
-export type StreamSourceFacesApiV1SseSourcesSourceIdFacesGetData = {
-    body?: never;
-    path: {
-        /**
-         * Source Id
-         */
-        source_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/sources/{source_id}/faces';
-};
-
-export type StreamSourceFacesApiV1SseSourcesSourceIdFacesGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamSourceFacesApiV1SseSourcesSourceIdFacesGetError = StreamSourceFacesApiV1SseSourcesSourceIdFacesGetErrors[keyof StreamSourceFacesApiV1SseSourcesSourceIdFacesGetErrors];
-
-export type StreamSourceFacesApiV1SseSourcesSourceIdFacesGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamSourceFacesApiV1SseSourcesSourceIdFacesGetResponse = StreamSourceFacesApiV1SseSourcesSourceIdFacesGetResponses[keyof StreamSourceFacesApiV1SseSourcesSourceIdFacesGetResponses];
-
-export type StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Source Id
-         */
-        source_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/sources/{source_id}/page-mentions';
-};
-
-export type StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetError = StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetErrors[keyof StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetErrors];
-
-export type StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetResponse = StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetResponses[keyof StreamSourcePageMentionsApiV1SseSourcesSourceIdPageMentionsGetResponses];
-
-export type StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Source Id
-         */
-        source_id: string;
-    };
-    query?: never;
-    url: '/api/v1/sse/sources/{source_id}/document-mentions';
-};
-
-export type StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetError = StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetErrors[keyof StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetErrors];
-
-export type StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: string;
-};
-
-export type StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetResponse = StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetResponses[keyof StreamSourceDocumentMentionsApiV1SseSourcesSourceIdDocumentMentionsGetResponses];
 
 export type GetJwksWellKnownJwksJsonGetData = {
     body?: never;

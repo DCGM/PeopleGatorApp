@@ -1,0 +1,41 @@
+import type { EntityResponse, SearchEntitiesResult, TextMentionSpanModel } from '@/client'
+import type { EntitySearchParams } from '@/query/search'
+
+/** Face similarity and text search are distinct modes, never a fused request. */
+export function candidateSearchParams(
+  selectedFaceId: string | null,
+  searchTerm: string,
+): EntitySearchParams | undefined {
+  const text = searchTerm.trim()
+  if (text) return { q: [text], limit: 50 }
+  if (selectedFaceId) return { q_face_id: [selectedFaceId], limit: 50 }
+  return undefined
+}
+
+/** The current page's own detections and mentions determine source membership. */
+export function currentPagePersonIds(
+  faces: Array<{ entity_id?: string | null }>,
+  spans: Array<Pick<TextMentionSpanModel, 'entity_id' | 'entity_type'>>,
+) {
+  return [
+    ...new Set([
+      ...faces.flatMap((face) => (face.entity_id ? [face.entity_id] : [])),
+      ...spans.filter((span) => span.entity_type === 'person').map((span) => span.entity_id),
+    ]),
+  ]
+}
+
+export function candidateEntities(
+  onPage: EntityResponse[],
+  matches: SearchEntitiesResult[],
+  searchTerm: string,
+): Array<EntityResponse | SearchEntitiesResult> {
+  // Text search must show only server matches, including alias matches whose
+  // primary name differs from the search term.
+  if (searchTerm.trim()) return matches
+  const unique = new Map<string, EntityResponse | SearchEntitiesResult>()
+  for (const entity of [...matches, ...onPage]) {
+    if (!unique.has(entity.entity_id)) unique.set(entity.entity_id, entity)
+  }
+  return [...unique.values()]
+}

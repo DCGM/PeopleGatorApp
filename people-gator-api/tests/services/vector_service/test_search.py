@@ -219,11 +219,44 @@ async def test_face_grouped_search_aggregates_scores_per_entity() -> None:
 
     assert captured["group_by"] is not None
     assert captured["target_vector"] is not None
+    # An empty entity-reference group must not hide assigned faces.
+    assert "link_on='entity'" in repr(captured["filters"])
+    assert "GREATER_THAN" in repr(captured["filters"])
     assert len(results) == 1
     assert results[0].entity_id == entity_id
     assert results[0].name == "Ada Lovelace"
     # max aggregation over similarities 0.9 / 0.7 / 0.5
     assert results[0].matching_score == pytest.approx(0.9)
+
+
+@pytest.mark.asyncio
+async def test_face_grouped_search_combines_assignment_filter_with_excluded_faces() -> None:
+    excluded_face_id = uuid.uuid4()
+    captured: dict[str, object] = {}
+
+    class _Query:
+        async def near_vector(self, **kwargs: object) -> SimpleNamespace:
+            captured.update(kwargs)
+            return SimpleNamespace(groups={})
+
+    class _Collections:
+        def get(self, collection_name: str) -> SimpleNamespace:
+            assert collection_name == FACE_COLLECTION
+            return SimpleNamespace(query=_Query())
+
+    results = await weaviate_search.search_entities_by_faces_vectors(
+        SimpleNamespace(collections=_Collections()),  # pyright: ignore[reportArgumentType]
+        [[0.1, 0.2]],
+        vector_name="face_vector",
+        excluded_face_ids=[excluded_face_id],
+    )
+
+    assert results == []
+    conditions = vars(captured["filters"])["filters"]
+    assert len(conditions) == 2
+    assert "link_on='entity'" in repr(conditions[0])
+    assert "GREATER_THAN" in repr(conditions[0])
+    assert str(excluded_face_id) in repr(conditions[1])
 
 
 @pytest.mark.asyncio

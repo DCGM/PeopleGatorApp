@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { X } from '@lucide/vue'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { EntityType } from '@/client/types.gen'
 import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
-  TranslationLanguage,
 } from '@/components/custom/document-page.types'
 import { transcriptionEntityKey } from '@/components/custom/document-page.types'
-import { Button } from '@/components/ui/button'
 
 type TranscriptionSegment = {
   text: string
@@ -21,9 +18,6 @@ const props = defineProps<{
   selectedLineIndex: number
   selectedEntityKey: string | null
   relatedEntityKey: string | null
-  isTranslationOpen: boolean
-  selectedLanguage: TranslationLanguage
-  currentTranslation: string
 }>()
 
 const emit = defineEmits<{
@@ -46,8 +40,6 @@ const entityLabels = {
 
 const hoveredEntityKey = ref<string | null>(null)
 const teleprompterElement = ref<HTMLElement | null>(null)
-const translationElement = ref<HTMLElement | null>(null)
-const isTranslationExpanded = ref(false)
 let teleprompterResizeObserver: ResizeObserver | undefined
 
 function entityKey(entity: TranscriptionEntitySpan) {
@@ -102,14 +94,6 @@ function handleWheel(event: WheelEvent) {
   emit('navigate-line', event.deltaY > 0 ? 'next' : 'previous')
 }
 
-function expandTranslation() {
-  if (isTranslationExpanded.value) return
-  const translation = translationElement.value
-  if (translation && translation.scrollWidth > translation.clientWidth) {
-    isTranslationExpanded.value = true
-  }
-}
-
 function revealSelectedLine() {
   const teleprompter = teleprompterElement.value
   const selectedLine = teleprompter?.querySelector<HTMLElement>('[aria-current="true"]')
@@ -134,7 +118,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.selectedLineIndex, props.isTranslationOpen, isTranslationExpanded.value],
+  () => props.selectedLineIndex,
   async () => {
     await nextTick()
     revealSelectedLine()
@@ -142,16 +126,10 @@ watch(
   { flush: 'post', immediate: true },
 )
 
-watch(
-  () => props.selectedLanguage,
-  () => {
-    isTranslationExpanded.value = false
-  },
-)
 </script>
 
 <template>
-  <div class="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-background"
+  <div class="grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-background"
     @wheel.stop.prevent="handleWheel">
     <section ref="teleprompterElement" class="min-h-0 overflow-hidden py-2 text-base font-serif leading-5"
       aria-label="Transcription teleprompter">
@@ -181,24 +159,6 @@ watch(
           </p>
         </component>
       </template>
-    </section>
-
-    <section v-if="isTranslationOpen"
-      class="grid shrink-0 grid-cols-[2rem_minmax(0,1fr)_2rem] items-start border-t bg-background py-2 text-base"
-      aria-label="Line translation">
-      <small class="pr-2 text-right font-mono font-bold uppercase text-secondary">
-        {{ selectedLanguage }}
-      </small>
-      <p ref="translationElement"
-        class="min-w-0 select-text overflow-hidden font-serif italic text-muted-foreground leading-[1.75em]"
-        :class="isTranslationExpanded ? 'cursor-text' : 'h-[1.75em] cursor-pointer whitespace-nowrap truncate'"
-        :aria-expanded="isTranslationExpanded" @click="expandTranslation">
-        {{ currentTranslation }}
-      </p>
-      <Button v-if="isTranslationExpanded" variant="ghost" size="icon-xs" class="-mt-1"
-        aria-label="Collapse translation" title="Collapse translation" @click="isTranslationExpanded = false">
-        <X />
-      </Button>
     </section>
   </div>
 </template>

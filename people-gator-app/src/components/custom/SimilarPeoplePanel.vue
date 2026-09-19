@@ -6,7 +6,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import SimilarPersonItem from '@/components/custom/SimilarPersonItem.vue'
 import SimilarPersonItemSkeleton from '@/components/custom/SimilarPersonItemSkeleton.vue'
-import type { SimilarPersonCandidate, SimilarPersonSource } from '@/components/custom/similar-people.types'
+import type {
+  SimilarPersonCandidate,
+  SimilarPersonSource,
+} from '@/components/custom/similar-people.types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -15,19 +18,13 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationFirst,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const props = defineProps<{
   people: SimilarPersonCandidate[]
   assignedPersonId: string | null
   viewedPersonId: string | null
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -39,10 +36,10 @@ const emit = defineEmits<{
 type Filter = 'all' | SimilarPersonSource
 
 const filter = ref<Filter>('all')
-const query = ref('')
+const query = defineModel<string>('searchTerm', { default: '' })
 const isCreateOpen = ref(false)
 const newName = ref('')
-const page = ref(1)
+const visiblePageCount = ref(1)
 const resultsElement = ref<HTMLElement | null>(null)
 
 const mobilePageSize = 3
@@ -59,30 +56,25 @@ const filterOptions: { value: Filter; label: string }[] = [
 ]
 
 const filteredPeople = computed(() => {
-  const normalizedQuery = query.value.trim().toLocaleLowerCase()
-  return props.people.filter((person) => {
-    const matchesFilter = filter.value === 'all' || person.source === filter.value
-    const matchesQuery = !normalizedQuery || person.name.toLocaleLowerCase().includes(normalizedQuery)
-    return matchesFilter && matchesQuery
-  })
+  // Text matching belongs to the server: aliases can match even when the
+  // returned primary name does not contain the typed term.
+  return props.people.filter((person) => filter.value === 'all' || person.source === filter.value)
 })
 
 const pageSize = computed(() => {
   if (isMobile.value || resultsHeight.value === 0) return mobilePageSize
-  return Math.max(1, Math.floor((resultsHeight.value + resultGap) / (minimumResultHeight + resultGap)))
+  return Math.max(
+    1,
+    Math.floor((resultsHeight.value + resultGap) / (minimumResultHeight + resultGap)),
+  )
 })
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredPeople.value.length / pageSize.value)))
-const paginatedPeople = computed(() => {
-  const start = (page.value - 1) * pageSize.value
-  return filteredPeople.value.slice(start, start + pageSize.value)
-})
+const visiblePeople = computed(() =>
+  filteredPeople.value.slice(0, visiblePageCount.value * pageSize.value),
+)
+const hasMorePeople = computed(() => visiblePeople.value.length < filteredPeople.value.length)
 
 watch([filter, query], () => {
-  page.value = 1
-})
-
-watch(pageCount, (count) => {
-  page.value = Math.min(page.value, count)
+  visiblePageCount.value = 1
 })
 
 onMounted(async () => {
@@ -119,7 +111,12 @@ function createPerson() {
   if (!name) return
 
   emit('create', {
-    id: name.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+    id: name
+      .toLocaleLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, ''),
     name,
     score: 100,
     nerMentions: 0,
@@ -139,10 +136,22 @@ function createPerson() {
       <small class="font-semibold uppercase text-secondary">Reassign identity</small>
     </div>
 
-    <ToggleGroup type="single" variant="outline" size="sm" :model-value="filter" class="w-full mt-2"
-      aria-label="Filter similar people" @update:model-value="updateFilter">
-      <ToggleGroupItem v-for="option in filterOptions" :key="option.value" :value="option.value"
-        class="min-w-0 flex-1 px-2 text-xs" :aria-label="option.label">
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      :model-value="filter"
+      class="w-full mt-2"
+      aria-label="Filter similar people"
+      @update:model-value="updateFilter"
+    >
+      <ToggleGroupItem
+        v-for="option in filterOptions"
+        :key="option.value"
+        :value="option.value"
+        class="min-w-0 flex-1 px-2 text-xs"
+        :aria-label="option.label"
+      >
         <span class="block truncate">{{ option.label }}</span>
       </ToggleGroupItem>
     </ToggleGroup>
@@ -152,27 +161,51 @@ function createPerson() {
         <InputGroupAddon align="inline-start">
           <Search aria-hidden="true" />
         </InputGroupAddon>
-        <InputGroupInput v-model="query" class="font-mono text-xs" placeholder="Search by name, WikiData ID, NACR ID"
-          aria-label="Search people" />
+        <InputGroupInput
+          v-model="query"
+          class="font-mono"
+          placeholder="Search by name or alias"
+          aria-label="Search people"
+        />
         <InputGroupAddon align="inline-end">
-          <InputGroupButton v-if="query" type="button" size="icon-sm" aria-label="Clear people search"
-            @click="query = ''">
+          <InputGroupButton
+            v-if="query"
+            type="button"
+            size="icon-sm"
+            aria-label="Clear people search"
+            @click="query = ''"
+          >
             <X aria-hidden="true" />
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
-      <Button type="button" size="sm" variant="outline" aria-label="Add person" @click="openCreateForm">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        aria-label="Add person"
+        @click="openCreateForm"
+      >
         <Plus aria-hidden="true" />
         Add
       </Button>
     </div>
-    <form v-if="isCreateOpen" class="mt-3 space-y-3 border border-secondary p-3" @submit.prevent="createPerson">
+    <form
+      v-if="isCreateOpen"
+      class="mt-3 space-y-3 border border-secondary p-3"
+      @submit.prevent="createPerson"
+    >
       <div class="flex items-center justify-between border-b pb-2">
         <strong class="flex items-center gap-2 text-sm">
           <UserPlus class="size-4 text-secondary" />Create and assign person
         </strong>
-        <Button type="button" size="icon-xs" variant="ghost" aria-label="Close create person form"
-          @click="isCreateOpen = false">
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Close create person form"
+          @click="isCreateOpen = false"
+        >
           <X aria-hidden="true" />
         </Button>
       </div>
@@ -181,32 +214,44 @@ function createPerson() {
         <Input v-model="newName" required />
       </label>
       <div class="flex justify-end gap-2">
-        <Button type="button" size="sm" variant="ghost" @click="isCreateOpen = false">Cancel</Button>
+        <Button type="button" size="sm" variant="ghost" @click="isCreateOpen = false"
+          >Cancel</Button
+        >
         <Button type="submit" size="sm" :disabled="!newName.trim()">
           <Check />Create & assign
         </Button>
       </div>
     </form>
 
-    <div ref="resultsElement" class="mt-3 flex min-h-0 flex-1 flex-col gap-2" aria-live="polite">
-      <SimilarPersonItem v-for="person in paginatedPeople" :key="person.id" :person="person" class="shrink-0"
-        :assigned="assignedPersonId === person.id" :viewed="viewedPersonId === person.id"
-        @preview="emit('preview', $event)" @assign="emit('assign', $event)" />
-      <SimilarPersonItemSkeleton class="shrink-0" />
+    <div
+      ref="resultsElement"
+      class="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1"
+      aria-live="polite"
+    >
+      <SimilarPersonItem
+        v-for="person in visiblePeople"
+        :key="person.id"
+        :person="person"
+        class="shrink-0"
+        :assigned="assignedPersonId === person.id"
+        :viewed="viewedPersonId === person.id"
+        @preview="emit('preview', $event)"
+        @assign="emit('assign', $event)"
+      />
+      <SimilarPersonItemSkeleton v-if="props.loading" class="shrink-0" />
 
-      <p v-if="filteredPeople.length === 0"
-        class="flex flex-1 items-center justify-center py-6 text-center text-sm text-muted-foreground">
+      <p
+        v-if="filteredPeople.length === 0 && !props.loading"
+        class="flex flex-1 items-center justify-center py-6 text-center text-sm text-muted-foreground"
+      >
         No matching people. Add a new identity instead.
       </p>
     </div>
 
-    <Pagination v-model:page="page" :items-per-page="pageSize" :total="filteredPeople.length"
-      class="mt-3 shrink-0 border-t pt-3">
-      <PaginationContent>
-        <PaginationFirst aria-label="First people page" />
-        <PaginationPrevious aria-label="Previous people page" />
-        <PaginationNext aria-label="Next people page" />
-      </PaginationContent>
-    </Pagination>
+    <div v-if="hasMorePeople" class="mt-3 flex shrink-0 justify-center border-t pt-3">
+      <Button type="button" size="sm" variant="outline" @click="visiblePageCount += 1">
+        Load more people
+      </Button>
+    </div>
   </section>
 </template>

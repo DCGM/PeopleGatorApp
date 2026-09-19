@@ -15,7 +15,6 @@ const props = defineProps<{
         {{ props.mention.library }} · P. {{ props.mention.pageLabel }}
       </p>
       <p class="mt-1 text-sm font-medium">{{ props.mention.documentTitle }}</p>
-      <p class="text-xs text-muted-foreground">{{ props.mention.date }}</p>
     </div>
     <blockquote
       class="border-l-2 pl-4 font-serif text-lg leading-7 text-muted-foreground group-hover:text-foreground"

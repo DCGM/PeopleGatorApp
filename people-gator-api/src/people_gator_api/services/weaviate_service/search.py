@@ -82,13 +82,18 @@ async def search_entities_by_faces_vectors(
 ) -> list[SearchEntitiesResult]:
     """Multi-vector face search with Weaviate-side grouping on the entity reference.
 
-    Per-face similarities inside a group are reduced with ``aggregation``; faces
-    without an entity reference are dropped by the grouping.
+    Per-face similarities inside a group are reduced with ``aggregation``.
+    Filter out unassigned faces *before* nearest-neighbour grouping, otherwise
+    their empty-reference group can crowd out every assigned entity.
     """
     if not query_vectors or number_of_groups <= 0 or objects_per_group <= 0:
         return []
-    filters = _parse_face_filters(
-        excluded_face_ids, entity_types
+    assigned_faces = Filter.by_ref_count(link_on="entity").greater_than(0)
+    other_filters = _parse_face_filters(excluded_face_ids, entity_types)
+    filters = (
+        Filter.all_of([assigned_faces, other_filters])
+        if other_filters is not None
+        else assigned_faces
     )
     response = await client.collections.get(FACE_COLLECTION).query.near_vector(
         near_vector=_multi_vector_query(vector_name, query_vectors),
