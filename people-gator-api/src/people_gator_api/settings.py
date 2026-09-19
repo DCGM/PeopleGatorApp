@@ -62,7 +62,7 @@ class PageImageSettings(BaseModel):
 class PageImageCacheSettings(BaseModel):
     """S3-backed cache for resized page images (JPEG only)."""
 
-    enabled: bool = False
+    enabled: bool = True
     key_prefix: str = "cache/page-images"
     quality: int = Field(default=85, ge=1, le=100)
     # Widths (in pixels) pre-generated and accepted as ``size`` query values.
