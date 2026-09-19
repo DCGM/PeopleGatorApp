@@ -81,11 +81,9 @@ function regionStyle(position: Face['position']): CSSProperties {
       :class="faceSelectionClasses[faceSelectionState(face)]" :style="regionStyle(face.position)"
       :aria-label="`Select ${face.name}`" :aria-pressed="face.id === selectedFaceId"
       @click.stop="emit('selectFace', face.id)">
-      <Badge as="span" data-face-status-badge
-        class="absolute -left-1 -top-6 rounded-full border-none p-1 shadow-sm w-min h-min"
-        :class="faceStatusBadgeClasses[face.status]" :title="face.status === 'assigned' ? 'Assigned' : 'Unassigned'"
-        aria-hidden="true">
-        <component :is="faceStatusIcons[face.status]" class="size-6" />
+      <Badge class="absolute -left-1 -top-6 text-sm" :class="faceStatusBadgeClasses[face.status]"
+        :title="face.status === 'assigned' ? 'Assigned' : 'Unassigned'" aria-hidden="true">
+        <component :is="faceStatusIcons[face.status]" />
       </Badge>
     </button>
   </div>
