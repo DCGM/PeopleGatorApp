@@ -9,14 +9,13 @@ const props = defineProps<{
   face: PersonFace
   personName: string
 }>()
-
 </script>
 
 <template>
   <Card
     class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary">
     <CardHeader class="relative gap-0 px-0">
-      <AspectRatio :ratio="210 / 297" class="overflow-hidden bg-muted">
+      <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
         <img :src="props.face.portrait" :alt="`${props.personName} detection in ${props.face.documentId}`"
           class="h-full w-full object-cover grayscale duration-300 ease-out group-hover:scale-105 group-focus:scale-102" />
       </AspectRatio>

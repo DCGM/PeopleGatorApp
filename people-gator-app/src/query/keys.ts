@@ -23,6 +23,8 @@ export const queryKeys = {
     lists: () => ['faces', 'list'] as const,
     list: (params?: QueryParams) => ['faces', 'list', params ?? {}] as const,
     detail: (detectionId: string) => ['faces', 'detail', detectionId] as const,
+    alignedCrop: (detectionId: string, maxWidth?: number) =>
+      ['faces', 'aligned-crop', detectionId, maxWidth] as const,
   },
   textMentions: {
     all: ['text-mentions'] as const,

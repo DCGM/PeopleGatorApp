@@ -4,6 +4,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import {
   createFaceRouteApiV1FacesPost,
   createFaceBatchRouteApiV1FacesBatchPost,
+  getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet,
   getFaceRouteApiV1FacesDetectionIdGet,
   listFacesRouteApiV1FacesGet,
   patchFaceEntityRouteApiV1FacesDetectionIdPatch,
@@ -27,6 +28,30 @@ export function fetchFace(detectionId: string, signal?: AbortSignal) {
       throwOnError: true,
     }),
   )
+}
+
+export function fetchFaceAlignedCrop(detectionId: string, maxWidth?: number, signal?: AbortSignal) {
+  return responseData(
+    getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet({
+      path: { detection_id: detectionId },
+      query: maxWidth ? { max_width: maxWidth } : undefined,
+      responseType: 'blob',
+      signal,
+      throwOnError: true,
+    }),
+  ) as Promise<Blob>
+}
+
+export function useFaceAlignedCropQuery(
+  detectionId: MaybeRefOrGetter<string>,
+  maxWidth?: MaybeRefOrGetter<number | undefined>,
+) {
+  return useQuery({
+    queryKey: computed(() => queryKeys.faces.alignedCrop(toValue(detectionId), toValue(maxWidth))),
+    queryFn: ({ signal }) => fetchFaceAlignedCrop(toValue(detectionId), toValue(maxWidth), signal),
+    enabled: computed(() => Boolean(toValue(detectionId))),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
 }
 
 export function useFacesQuery(params?: MaybeRefOrGetter<FaceListParams | undefined>) {

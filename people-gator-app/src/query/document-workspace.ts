@@ -19,9 +19,9 @@ import { transcriptionEntityKey } from '@/components/custom/document-page.types'
 import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
 import { responseData } from '@/query/api'
 import { fetchEntity, useCreateEntityMutation } from '@/query/entities'
-import { fetchFaces, useAssignFaceMutation } from '@/query/faces'
+import { fetchFaces, fetchFaceAlignedCrop, useAssignFaceMutation } from '@/query/faces'
 import { usePageImageQuery, usePageLookupQuery } from '@/query/media'
-import { useObjectUrl } from '@/query/object-url'
+import { useObjectUrl, useObjectUrlMap } from '@/query/object-url'
 import { queryKeys } from '@/query/keys'
 import { fetchEntitySearch } from '@/query/search'
 import {
@@ -161,6 +161,32 @@ export function useDocumentWorkspace(
   const pageImageQuery = usePageImageQuery(sourceId, 1024)
   const pageImageUrl = useObjectUrl(computed(() => pageImageQuery.data.value))
 
+  // Aligned face crops (ArcFace-aligned, 1:1) are fetched per detection and
+  // used as the face portraits instead of the full page image.
+  const faceIds = computed(() =>
+    (faceQuery.data.value?.items ?? []).map((face) => face.detection_id),
+  )
+  const alignedCropQueries = useQueries({
+    queries: computed(() =>
+      faceIds.value.map((detectionId) => ({
+        queryKey: queryKeys.faces.alignedCrop(detectionId, 256),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          fetchFaceAlignedCrop(detectionId, 256, signal),
+        staleTime: Number.POSITIVE_INFINITY,
+        retry: false,
+      })),
+    ),
+  })
+  const alignedCropBlobs = computed(() => {
+    const result = new Map<string, Blob>()
+    faceIds.value.forEach((detectionId, index) => {
+      const blob = alignedCropQueries.value[index]?.data
+      if (blob instanceof Blob) result.set(detectionId, blob)
+    })
+    return result
+  })
+  const alignedCropUrls = useObjectUrlMap(alignedCropBlobs)
+
   // The page's faces and OCR spans both carry the page source_id. These are
   // authoritative for the "On this page" filter; entity search results do not
   // expose source membership and the search endpoint ignores source_id today.
@@ -193,7 +219,7 @@ export function useDocumentWorkspace(
       confidence: percentage(face.confidence),
       status: face.entity_id ? 'assigned' : 'unassigned',
       position: toPercentBox(face.bounding_box, layoutQuery.data.value),
-      portrait: pageImageUrl.value,
+      portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
     })),
   )
   const transcription = computed(() =>

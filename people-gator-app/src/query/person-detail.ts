@@ -8,7 +8,7 @@ import type {
   PersonProfile,
 } from '@/components/custom/person-detail.types'
 import { useEntityQuery, usePatchEntityMutation } from '@/query/entities'
-import { fetchFaces } from '@/query/faces'
+import { fetchFaceAlignedCrop, fetchFaces } from '@/query/faces'
 import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/query/object-url'
 import { queryKeys } from '@/query/keys'
@@ -83,6 +83,29 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   })
   const imageUrls = useObjectUrlMap(imageBlobs)
 
+  // Aligned face crops (ArcFace-aligned, 1:1) keyed by detection id.
+  const detectionIds = computed(() => faceRecords.value.map((face) => face.detection_id))
+  const alignedCropQueries = useQueries({
+    queries: computed(() =>
+      detectionIds.value.map((detectionId) => ({
+        queryKey: queryKeys.faces.alignedCrop(detectionId, 256),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          fetchFaceAlignedCrop(detectionId, 256, signal),
+        staleTime: Number.POSITIVE_INFINITY,
+        retry: false,
+      })),
+    ),
+  })
+  const alignedCropBlobs = computed(() => {
+    const result = new Map<string, Blob>()
+    detectionIds.value.forEach((detectionId, index) => {
+      const blob = alignedCropQueries.value[index]?.data
+      if (blob instanceof Blob) result.set(detectionId, blob)
+    })
+    return result
+  })
+  const alignedCropUrls = useObjectUrlMap(alignedCropBlobs)
+
   const profile = computed<PersonProfile>(() => ({
     name: entityQuery.data.value?.name || 'Unnamed person',
     shortDescription: entityQuery.data.value?.short_description || '',
@@ -101,7 +124,10 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
       return [
         {
           id: face.detection_id,
-          portrait: imageUrls.value.get(face.source_id) ?? '',
+          portrait:
+            alignedCropUrls.value.get(face.detection_id) ??
+            imageUrls.value.get(face.source_id) ??
+            '',
           confidence: percentage(face.confidence),
           library: page.library,
           documentId: page.document_id,
