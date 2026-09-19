@@ -3,6 +3,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 
 import type { PageResponse } from '@/client'
 import type {
+  PersonIdentifiers,
   PersonFace,
   PersonMention,
   PersonProfile,
@@ -18,6 +19,8 @@ function percentage(value: number) {
   return Math.round(value <= 1 ? value * 100 : value)
 }
 
+const PERSON_DETAIL_GC_TIME = 60 * 60_000
+
 export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const entityQuery = useEntityQuery(personId)
   const patchEntity = usePatchEntityMutation()
@@ -26,6 +29,8 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
     queryKey: computed(() => queryKeys.faces.list({ entity_id: toValue(personId), limit: 100 })),
     queryFn: ({ signal }) => fetchFaces({ entity_id: toValue(personId), limit: 100 }, signal),
     enabled: computed(() => Boolean(toValue(personId))),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: PERSON_DETAIL_GC_TIME,
   })
   const mentionQuery = useQuery({
     queryKey: computed(() =>
@@ -34,6 +39,8 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
     queryFn: ({ signal }) =>
       fetchTextMentions({ entity_id: toValue(personId), limit: 100 }, signal),
     enabled: computed(() => Boolean(toValue(personId))),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: PERSON_DETAIL_GC_TIME,
   })
 
   const faceRecords = computed(() => faceQuery.data.value?.items ?? [])
@@ -51,6 +58,8 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
         queryKey: queryKeys.pages.detail(sourceId),
         queryFn: ({ signal }: { signal: AbortSignal }) => fetchPage(sourceId, signal),
         retry: false,
+        staleTime: Number.POSITIVE_INFINITY,
+        gcTime: PERSON_DETAIL_GC_TIME,
       })),
     ),
   })
@@ -69,6 +78,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
         queryKey: queryKeys.pages.image(sourceId, 256),
         queryFn: ({ signal }: { signal: AbortSignal }) => fetchPageImage(sourceId, 256, signal),
         staleTime: Number.POSITIVE_INFINITY,
+        gcTime: PERSON_DETAIL_GC_TIME,
       })),
     ),
   })
@@ -92,6 +102,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
         queryFn: ({ signal }: { signal: AbortSignal }) =>
           fetchFaceAlignedCrop(detectionId, 256, signal),
         staleTime: Number.POSITIVE_INFINITY,
+        gcTime: PERSON_DETAIL_GC_TIME,
         retry: false,
       })),
     ),
@@ -118,16 +129,20 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   }))
 
   const faces = computed<PersonFace[]>(() =>
-    faceRecords.value.flatMap((face) => {
+    faceRecords.value.flatMap((face, faceIndex) => {
       const page = pages.value.get(face.source_id)
       if (!page) return []
+      const portrait =
+        alignedCropUrls.value.get(face.detection_id) ?? imageUrls.value.get(face.source_id) ?? ''
+      const pageImageIndex = imageSourceIds.value.indexOf(face.source_id)
       return [
         {
           id: face.detection_id,
-          portrait:
-            alignedCropUrls.value.get(face.detection_id) ??
-            imageUrls.value.get(face.source_id) ??
-            '',
+          portrait,
+          portraitLoading:
+            !portrait &&
+            ((alignedCropQueries.value[faceIndex]?.isPending ?? false) ||
+              (pageImageIndex >= 0 && (imageQueries.value[pageImageIndex]?.isPending ?? false))),
           confidence: percentage(face.confidence),
           library: page.library,
           documentId: page.document_id,
@@ -170,9 +185,20 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
     })
   }
 
+  function updateIdentifiers(nextIdentifiers: PersonIdentifiers) {
+    patchEntity.mutate({
+      entityId: toValue(personId),
+      body: {
+        wikidata_id: nextIdentifiers.wikidataId || null,
+        nlcr_authority_id: nextIdentifiers.nationalLibraryAuthorityId || null,
+      },
+    })
+  }
+
   return {
     entity: entityQuery.data,
     error: entityQuery.error,
+    faceIds: detectionIds,
     faces,
     identifiers,
     isLoading: computed(
@@ -182,8 +208,10 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
     libraryCount: computed(() => new Set(faces.value.map((face) => face.library)).size),
     mentions,
     portrait: computed(() => faces.value[0]?.portrait ?? ''),
+    portraitLoading: computed(() => faces.value[0]?.portraitLoading ?? false),
     profile,
     updateProfile,
+    updateIdentifiers,
     updateStatus: patchEntity.status,
   }
 }

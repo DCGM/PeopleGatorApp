@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronRight } from '@lucide/vue'
 
+import LoadableImage from '@/components/custom/LoadableImage.vue'
 import type { PersonFace } from '@/components/custom/person-detail.types'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
@@ -13,11 +14,17 @@ const props = defineProps<{
 
 <template>
   <Card
-    class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary">
+    class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary"
+  >
     <CardHeader class="relative gap-0 px-0">
       <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
-        <img :src="props.face.portrait" :alt="`${props.personName} detection in ${props.face.documentId}`"
-          class="h-full w-full object-cover grayscale duration-300 ease-out group-hover:scale-105 group-focus:scale-102" />
+        <LoadableImage
+          :src="props.face.portrait"
+          :loading="props.face.portraitLoading"
+          :alt="`${props.personName} detection in ${props.face.documentId}`"
+          class="size-full"
+          image-class="object-cover grayscale duration-300 ease-out group-hover:scale-105 group-focus:scale-102"
+        />
       </AspectRatio>
     </CardHeader>
     <CardContent class="min-w-0 px-0">
@@ -31,7 +38,8 @@ const props = defineProps<{
       <small class="whitespace-nowrap text-secondary">{{ props.face.confidence }}%</small>
       <ChevronRight
         class="size-4 shrink-0 transition-all duration-200 group-hover:translate-x-1 group-focus:-translate-x-1"
-        aria-hidden="true" />
+        aria-hidden="true"
+      />
     </CardFooter>
   </Card>
 </template>

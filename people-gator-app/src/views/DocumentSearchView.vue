@@ -17,7 +17,7 @@ const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resu
   useDocumentSearch(searchTerm, resultsPerPage)
 
 function updateSearch() {
-  void router.push({
+  void router.replace({
     name: 'document-search',
     query: {
       ...(searchTerm.value && { q: searchTerm.value }),
@@ -39,7 +39,7 @@ function updateSearch() {
       :has-more-results="hasNextPage"
       @update:search-term="updateSearch()"
     />
-    <section class="pt-6" aria-live="polite">
+    <section class="stable-search-results pt-6" aria-live="polite">
       <h2 class="mb-4">Search Results</h2>
       <Separator orientation="horizontal" />
       <div class="pt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -62,6 +62,7 @@ function updateSearch() {
             :page-uuid="result.pageId"
             :names="result.names"
             :thumbnail-url="result.thumbnailUrl"
+            :thumbnail-loading="result.thumbnailLoading"
           />
         </RouterLink>
         <DocumentCardSkeleton

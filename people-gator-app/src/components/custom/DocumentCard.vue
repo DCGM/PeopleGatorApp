@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronRight, FileText } from '@lucide/vue'
 
+import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 
@@ -10,6 +11,7 @@ const props = defineProps<{
   pageUuid: string
   names: readonly string[]
   thumbnailUrl?: string
+  thumbnailLoading?: boolean
 }>()
 
 function compactUuid(uuid: string) {
@@ -21,20 +23,27 @@ function compactUuid(uuid: string) {
   const binary = String.fromCharCode(...bytes.map((byte: string) => Number.parseInt(byte, 16)))
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
-
 </script>
 
 <template>
   <Card
-    class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary">
+    class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary"
+  >
     <CardHeader class="gap-0 px-0">
       <AspectRatio :ratio="210 / 297" class="overflow-hidden bg-muted">
-        <img v-if="props.thumbnailUrl" :src="props.thumbnailUrl"
+        <LoadableImage
+          :src="props.thumbnailUrl"
+          :loading="props.thumbnailLoading"
           :alt="`Scan ${props.pageUuid} from document ${props.documentUuid}`"
-          class="h-full w-full object-cover duration-300 ease-out group-hover:scale-105 group-focus:scale-102">
-        <div v-else class="flex h-full items-center justify-center text-muted-foreground">
-          <FileText class="size-10" aria-hidden="true" />
-        </div>
+          class="size-full"
+          image-class="object-cover duration-300 ease-out group-hover:scale-105 group-focus:scale-102"
+        >
+          <template #fallback>
+            <div class="flex size-full items-center justify-center text-muted-foreground">
+              <FileText class="size-10" aria-hidden="true" />
+            </div>
+          </template>
+        </LoadableImage>
       </AspectRatio>
     </CardHeader>
     <CardContent class="px-0">
@@ -52,7 +61,8 @@ function compactUuid(uuid: string) {
       </small>
       <ChevronRight
         class="size-4 shrink-0 transition-all duration-200 group-hover:translate-x-1 group-focus:-translate-x-1"
-        aria-hidden="true" />
+        aria-hidden="true"
+      />
     </CardFooter>
   </Card>
 </template>

@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Languages,
   LocateFixed,
   Minus,
   Plus,
@@ -11,6 +12,7 @@ import {
   ScanFace,
 } from '@lucide/vue'
 
+import type { Language } from '@/client'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group'
 
@@ -22,6 +24,9 @@ defineProps<{
   zoomPercent: number
   minimumZoomPercent: number
   maximumZoomPercent: number
+  translationOptions: readonly ('off' | Language)[]
+  isTranslationOpen: boolean
+  selectedLanguage: Language
 }>()
 
 defineEmits<{
@@ -31,6 +36,7 @@ defineEmits<{
   'next-face': []
   'set-zoom': [direction: 'in' | 'out']
   'reset-view': []
+  'select-translation': [language: Language | 'off']
 }>()
 </script>
 
@@ -82,5 +88,17 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
+    <ButtonGroup class="shrink-0" aria-label="Translation">
+      <Button v-for="option in translationOptions" :key="option" variant="outline" size="sm"
+        class="font-mono text-sm uppercase" :class="(option === 'off' ? !isTranslationOpen : isTranslationOpen && selectedLanguage === option)
+          ? 'bg-muted font-semibold text-foreground'
+          : 'text-muted-foreground hover:text-foreground'"
+        :aria-pressed="option === 'off' ? !isTranslationOpen : isTranslationOpen && selectedLanguage === option"
+        @click="$emit('select-translation', option)">
+        <Languages v-if="option === 'off'" class="size-[1.25em] transition-colors"
+          :class="isTranslationOpen ? 'text-secondary' : 'text-muted-foreground/50'" />
+        {{ option }}
+      </Button>
+    </ButtonGroup>
   </div>
 </template>

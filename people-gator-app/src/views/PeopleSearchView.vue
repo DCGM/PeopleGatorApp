@@ -21,7 +21,7 @@ const { error, hasNextPage, isFetchingNextPage, isLoading, loadMore, people, res
   usePeopleSearch(searchTerm, filters, resultsPerPage)
 
 function updateSearch() {
-  void router.push({
+  void router.replace({
     name: 'people-search',
     query: {
       ...(searchTerm.value && { q: searchTerm.value }),
@@ -47,7 +47,7 @@ function updateSearch() {
       @update:filters="updateSearch()"
     />
 
-    <section class="pt-6" aria-live="polite">
+    <section class="stable-search-results pt-6" aria-live="polite">
       <h2 class="mb-4">Search Results</h2>
       <Separator orientation="horizontal" />
 

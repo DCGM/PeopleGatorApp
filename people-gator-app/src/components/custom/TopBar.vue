@@ -16,9 +16,9 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
 <template>
   <nav class="flex h-13 w-full items-center gap-3 border-b bg-background pl-3 pr-6">
     <div class="flex shrink-0 items-center gap-6">
-      <div class="h-16 w-16 z-20 flex items-center justify-center border-3 rotate-4 bg-background">
-        <h1 class="rotate-[-4deg] text-border text-2xl">PG</h1>
-      </div>
+      <RouterLink :to="{ name: 'document-search' }" class="z-20 flex h-12 w-28 shrink-0 items-center bg-background">
+        <img src="/PeopleGator-logo.svg" alt="PeopleGator" class="h-auto max-h-11 w-full">
+      </RouterLink>
       <div v-if="title" class="hidden flex-col leading-none sm:flex">
         <h1 class="text-lg">{{ title }}</h1>
       </div>

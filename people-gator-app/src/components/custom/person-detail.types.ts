@@ -7,9 +7,15 @@ export type PersonProfile = {
   aliases: string[]
 }
 
+export type PersonIdentifiers = {
+  wikidataId: string
+  nationalLibraryAuthorityId: string
+}
+
 export type PersonFace = {
   id: string
   portrait: string
+  portraitLoading: boolean
   confidence: number
   library: string
   documentId: string
@@ -27,4 +33,26 @@ export type PersonMention = {
   documentTitle: string
   pageId: string
   pageLabel: string
+}
+
+export type PersonDiscoveryFace = {
+  id: string
+  portrait: string
+  portraitLoading: boolean
+  score: number
+  assignedEntityId: string | null
+  assignedEntityName?: string
+  library?: string
+  documentId?: string
+  pageId?: string
+  pageLabel?: string
+}
+
+export type PersonDiscoveryCandidate = {
+  id: string
+  name: string
+  shortDescription: string
+  aliases: string[]
+  portrait: string
+  portraitLoading: boolean
 }

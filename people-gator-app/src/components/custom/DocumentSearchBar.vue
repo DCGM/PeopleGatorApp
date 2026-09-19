@@ -20,7 +20,7 @@ const searchTerm = defineModel<string>('searchTerm', { required: true })
         <InputGroupAddon>
           <Search />
         </InputGroupAddon>
-        <InputGroupAddon align="inline-end">
+        <InputGroupAddon align="inline-end" class="min-w-20 justify-end tabular-nums">
           {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
         </InputGroupAddon>
       </InputGroup>

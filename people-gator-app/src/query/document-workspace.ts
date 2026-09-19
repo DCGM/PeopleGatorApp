@@ -212,12 +212,13 @@ export function useDocumentWorkspace(
   })
 
   const faces = computed<Face[]>(() =>
-    (faceQuery.data.value?.items ?? []).map((face) => ({
+    (faceQuery.data.value?.items ?? []).map((face, index) => ({
       id: face.detection_id,
       personId: face.entity_id ?? null,
       name: (face.entity_id && onPageEntities.value.get(face.entity_id)?.name) || 'Unknown person',
       confidence: percentage(face.confidence),
       status: face.entity_id ? 'assigned' : 'unassigned',
+      portraitLoading: alignedCropQueries.value[index]?.isPending ?? false,
       position: toPercentBox(face.bounding_box, layoutQuery.data.value),
       portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
     })),
@@ -304,6 +305,7 @@ export function useDocumentWorkspace(
       height: layoutQuery.data.value?.page_size[0] ?? 297,
       width: layoutQuery.data.value?.page_size[1] ?? 210,
     })),
+    pageImageLoading: pageImageQuery.isPending,
     pageImageUrl,
     similarPeopleLoading: computed(
       () =>

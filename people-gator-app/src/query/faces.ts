@@ -116,3 +116,50 @@ export function useAssignFaceMutation() {
     },
   })
 }
+
+export function useAssignFacesMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      detectionIds,
+      entityId,
+    }: {
+      detectionIds: string[]
+      entityId: string
+    }) => {
+      const results = await Promise.allSettled(
+        detectionIds.map((detectionId) =>
+          responseData(
+            patchFaceEntityRouteApiV1FacesDetectionIdPatch({
+              path: { detection_id: detectionId },
+              body: { entity_id: entityId },
+              throwOnError: true,
+            }),
+          ),
+        ),
+      )
+      const faces = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      )
+      const failedCount = results.length - faces.length
+      if (failedCount) {
+        throw new Error(
+          `${failedCount} of ${results.length} face assignments failed. Successful assignments were kept.`,
+        )
+      }
+      return faces
+    },
+    onSuccess: (faces) => {
+      for (const face of faces) {
+        queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
+      }
+    },
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
+      ])
+    },
+  })
+}

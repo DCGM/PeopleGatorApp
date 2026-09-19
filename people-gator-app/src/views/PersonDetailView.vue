@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { Image, ScanFace } from '@lucide/vue'
-import { computed } from 'vue'
+import { Image, ScanFace, UserRoundSearch } from '@lucide/vue'
+import { useDebounce } from '@vueuse/core'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
+import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
 import PersonFaceCard from '@/components/custom/PersonFaceCard.vue'
 import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
 import PersonMentionItem from '@/components/custom/PersonMentionItem.vue'
 import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePersonDiscovery } from '@/query/person-discovery'
 import { usePersonDetail } from '@/query/person-detail'
 
 const route = useRoute()
@@ -17,24 +20,70 @@ const personId = computed(() => String(route.params.personId))
 
 const {
   error,
+  faceIds,
   faces,
   identifiers,
   isLoading,
   libraryCount,
   mentions,
   portrait,
+  portraitLoading,
   profile,
+  updateIdentifiers,
   updateProfile,
 } = usePersonDetail(personId)
 
-const activeTab = computed(() => (route.query.tab === 'mentions' ? 'mentions' : 'faces'))
+const activeTab = computed(() => {
+  if (route.query.tab === 'mentions') return 'mentions'
+  if (route.query.tab === 'discover') return 'discover'
+  return 'faces'
+})
+const personSearchTerm = ref('')
+const debouncedPersonSearchTerm = useDebounce(personSearchTerm, 300)
+let searchSeeded = false
+let lastSeededName = ''
+
+watch(personId, () => {
+  const currentName = profile.value.name
+  const canSeed = Boolean(currentName && currentName !== 'Unnamed person')
+  personSearchTerm.value = canSeed ? currentName : ''
+  searchSeeded = canSeed
+  lastSeededName = canSeed ? currentName : ''
+})
+
+watch(
+  () => profile.value.name,
+  (name) => {
+    if (!name || name === 'Unnamed person') return
+    if (searchSeeded && personSearchTerm.value !== lastSeededName) return
+    personSearchTerm.value = name
+    searchSeeded = true
+    lastSeededName = name
+  },
+  { immediate: true },
+)
+
+const {
+  assignFaces,
+  assignmentStatus,
+  error: discoveryError,
+  isLoadingFaces,
+  isLoadingPeople,
+  similarFaces,
+  similarPeople,
+} = usePersonDiscovery(
+  personId,
+  faceIds,
+  debouncedPersonSearchTerm,
+  computed(() => activeTab.value === 'discover'),
+)
 
 function selectTab(tab: string | number) {
-  const selectedTab = tab === 'mentions' ? 'mentions' : 'faces'
+  const selectedTab = tab === 'mentions' || tab === 'discover' ? tab : 'faces'
   void router.replace({
     name: 'person-detail',
     params: { personId: personId.value },
-    query: selectedTab === 'mentions' ? { tab: selectedTab } : {},
+    query: selectedTab === 'faces' ? {} : { tab: selectedTab },
   })
 }
 </script>
@@ -47,17 +96,19 @@ function selectTab(tab: string | number) {
         :model-value="profile"
         :person-id="personId"
         :portrait="portrait"
+        :portrait-loading="portraitLoading"
         :face-count="faces.length"
         :mention-count="mentions.length"
         :library-count="libraryCount"
         :wikidata-id="identifiers.wikidataId"
         :national-library-authority-id="identifiers.nationalLibraryAuthorityId"
         @update:model-value="updateProfile"
+        @update:identifiers="updateIdentifiers"
       />
 
       <Tabs :model-value="activeTab" class="mt-8" @update:model-value="selectTab">
-        <h2>Evidence across the archive</h2>
-        <TabsList aria-label="Person occurrences" class="gap-2 mt-4">
+        <h2>Evidence and identity discovery</h2>
+        <TabsList aria-label="Person record sections" class="gap-2 mt-4">
           <TabsTrigger value="faces">
             <ScanFace class="size-4" aria-hidden="true" /> Faces
             <span class="font-mono">{{ faces.length }}</span>
@@ -65,6 +116,9 @@ function selectTab(tab: string | number) {
           <TabsTrigger value="mentions">
             <Image class="size-4" aria-hidden="true" /> Mentions
             <span class="font-mono">{{ mentions.length }}</span>
+          </TabsTrigger>
+          <TabsTrigger value="discover">
+            <UserRoundSearch class="size-4" aria-hidden="true" /> Discover
           </TabsTrigger>
         </TabsList>
 
@@ -104,6 +158,21 @@ function selectTab(tab: string | number) {
             <PersonMentionItem :mention="mention" />
           </RouterLink>
           <PersonMentionItemSkeleton v-if="isLoading" />
+        </TabsContent>
+
+        <TabsContent value="discover">
+          <PersonDiscoveryPanel
+            v-model:search-term="personSearchTerm"
+            :faces="similarFaces"
+            :people="similarPeople"
+            :current-name="profile.name"
+            :reference-face-count="faceIds.length"
+            :assigning-faces="assignmentStatus === 'pending'"
+            :loading-faces="isLoadingFaces"
+            :loading-people="isLoadingPeople"
+            :error="discoveryError"
+            @assign-faces="assignFaces"
+          />
         </TabsContent>
       </Tabs>
     </template>

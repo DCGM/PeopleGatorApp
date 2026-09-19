@@ -15,6 +15,7 @@ export type DocumentSearchCard = {
   pageId: string
   names: string[]
   thumbnailUrl: string
+  thumbnailLoading: boolean
 }
 
 type DocumentResultPage = {
@@ -179,6 +180,7 @@ export function useDocumentSearch(searchTerm: MaybeRefOrGetter<string>, pageSize
           pageId: resolvedPage.page_id,
           names,
           thumbnailUrl: imageUrls.value.get(sourceId) ?? '',
+          thumbnailLoading: imageQueries.value[index]?.isPending ?? false,
         },
       ]
     }),

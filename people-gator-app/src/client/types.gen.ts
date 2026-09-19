@@ -706,6 +706,13 @@ export type JwksResponse = {
 };
 
 /**
+ * Language
+ *
+ * Languages supported by the translation endpoint.
+ */
+export type Language = 'cs' | 'en' | 'de' | 'fr';
+
+/**
  * OpenIDConfigurationResponse
  *
  * OpenID Connect discovery metadata for the People Gator token service.
@@ -1266,6 +1273,33 @@ export type TokenResponse = {
      * Token Type
      */
     token_type: string;
+};
+
+/**
+ * TranslationRequest
+ */
+export type TranslationRequest = {
+    /**
+     * Text
+     */
+    text: string;
+    language: Language;
+};
+
+/**
+ * TranslationResponse
+ */
+export type TranslationResponse = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Translation
+     */
+    translation: string;
+    source_language: Language;
+    target_language: Language;
 };
 
 /**
@@ -3137,6 +3171,31 @@ export type PatchUserRouteApiV1UsersUserIdPatchResponses = {
 };
 
 export type PatchUserRouteApiV1UsersUserIdPatchResponse = PatchUserRouteApiV1UsersUserIdPatchResponses[keyof PatchUserRouteApiV1UsersUserIdPatchResponses];
+
+export type TranslateRouteApiV1TranslatePostData = {
+    body: TranslationRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/translate';
+};
+
+export type TranslateRouteApiV1TranslatePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type TranslateRouteApiV1TranslatePostError = TranslateRouteApiV1TranslatePostErrors[keyof TranslateRouteApiV1TranslatePostErrors];
+
+export type TranslateRouteApiV1TranslatePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TranslationResponse;
+};
+
+export type TranslateRouteApiV1TranslatePostResponse = TranslateRouteApiV1TranslatePostResponses[keyof TranslateRouteApiV1TranslatePostResponses];
 
 export type HomeApiV1GetData = {
     body?: never;

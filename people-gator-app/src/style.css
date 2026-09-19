@@ -118,6 +118,16 @@
   }
 }
 
+@layer components {
+  /* Keep mobile sticky search controls anchored when async results change height. */
+  @media (max-width: 767px) {
+    .stable-search-results {
+      min-height: 100dvh;
+      overflow-anchor: none;
+    }
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

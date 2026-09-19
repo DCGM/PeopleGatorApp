@@ -10,6 +10,14 @@ export type Face = {
   status: FaceStatus
   position: { left: number; top: number; width: number; height: number }
   portrait: string
+  portraitLoading: boolean
+}
+
+export type PageViewportBounds = {
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 export type TranscriptionEntitySpan = {

@@ -4,16 +4,18 @@ import { computed, reactive, ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
 import EditableActions from '@/components/custom/EditableActions.vue'
-import type { PersonProfile } from '@/components/custom/person-detail.types'
+import type { PersonIdentifiers, PersonProfile } from '@/components/custom/person-detail.types'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 
-type EditableField = keyof PersonProfile
+type EditableField = keyof PersonProfile | keyof PersonIdentifiers
+type ProfileTextField = Exclude<keyof PersonProfile, 'aliases'>
 
 const props = defineProps<{
   modelValue: PersonProfile
   personId: string
   portrait: string
+  portraitLoading?: boolean
   faceCount: number
   mentionCount: number
   libraryCount: number
@@ -23,14 +25,31 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [profile: PersonProfile]
+  'update:identifiers': [identifiers: PersonIdentifiers]
 }>()
 
 const draft = reactive<PersonProfile>({
   ...props.modelValue,
   aliases: [...props.modelValue.aliases],
 })
+const identifierDraft = reactive<PersonIdentifiers>({
+  wikidataId: props.wikidataId,
+  nationalLibraryAuthorityId: props.nationalLibraryAuthorityId,
+})
 const editingField = ref<EditableField | null>(null)
 let savedFieldValue: string | string[] | null = null
+
+function isIdentifierField(field: EditableField): field is keyof PersonIdentifiers {
+  return field === 'wikidataId' || field === 'nationalLibraryAuthorityId'
+}
+
+function isProfileTextField(field: EditableField): field is ProfileTextField {
+  return field === 'name' || field === 'shortDescription' || field === 'article'
+}
+
+function wikidataHref(value: string) {
+  return /^https?:\/\//i.test(value) ? value : `https://www.wikidata.org/wiki/${value}`
+}
 
 const initials = computed(() =>
   draft.name
@@ -47,18 +66,28 @@ function nameFromId(id: string) {
 }
 
 function beginEditing(field: EditableField) {
-  savedFieldValue = field === 'aliases' ? [...draft.aliases] : draft[field]
+  savedFieldValue =
+    field === 'aliases'
+      ? [...draft.aliases]
+      : isIdentifierField(field)
+        ? identifierDraft[field]
+        : draft[field]
   editingField.value = field
 }
 
 function saveEditing(field: EditableField) {
   if (field === 'aliases') {
     draft.aliases = draft.aliases.map((alias) => alias.trim()).filter(Boolean)
+  } else if (isIdentifierField(field)) {
+    identifierDraft[field] = identifierDraft[field].trim()
+    emit('update:identifiers', { ...identifierDraft })
   } else {
     draft[field] = draft[field].trim()
     if (field === 'name' && !draft.name) draft.name = nameFromId(props.personId)
   }
-  emit('update:modelValue', { ...draft, aliases: [...draft.aliases] })
+  if (!isIdentifierField(field)) {
+    emit('update:modelValue', { ...draft, aliases: [...draft.aliases] })
+  }
   savedFieldValue = null
   editingField.value = null
 }
@@ -66,7 +95,9 @@ function saveEditing(field: EditableField) {
 function cancelEditing(field: EditableField) {
   if (field === 'aliases' && Array.isArray(savedFieldValue)) {
     draft.aliases = savedFieldValue
-  } else if (typeof savedFieldValue === 'string' && field !== 'aliases') {
+  } else if (isIdentifierField(field) && typeof savedFieldValue === 'string') {
+    identifierDraft[field] = savedFieldValue
+  } else if (typeof savedFieldValue === 'string' && isProfileTextField(field)) {
     draft[field] = savedFieldValue
   }
   savedFieldValue = null
@@ -89,13 +120,27 @@ watch(
   },
   { deep: true },
 )
+
+watch(
+  () => [props.wikidataId, props.nationalLibraryAuthorityId] as const,
+  ([wikidataId, nationalLibraryAuthorityId]) => {
+    if (isIdentifierField(editingField.value ?? 'name')) return
+    identifierDraft.wikidataId = wikidataId
+    identifierDraft.nationalLibraryAuthorityId = nationalLibraryAuthorityId
+  },
+)
 </script>
 
 <template>
   <header class="border-b pb-8">
     <div class="flex flex-col gap-6 sm:flex-row sm:items-start">
       <Avatar class="size-24 shrink-0 border bg-card sm:size-28">
-        <AvatarImage :src="props.portrait" :alt="draft.name" class="grayscale" />
+        <AvatarImage
+          :src="props.portrait"
+          :alt="draft.name"
+          :loading="props.portraitLoading"
+          class="grayscale"
+        />
         <AvatarFallback class="font-serif text-2xl">{{ initials }}</AvatarFallback>
       </Avatar>
 
@@ -119,6 +164,66 @@ watch(
             @save="saveEditing('name')"
             @cancel="cancelEditing('name')"
           />
+        </div>
+
+        <div class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="shrink-0 text-xs font-semibold uppercase text-muted-foreground"
+              >Wikidata</span
+            >
+            <ContentEditable
+              v-if="editingField === 'wikidataId'"
+              v-model="identifierDraft.wikidataId"
+              :editable="true"
+              single-line
+              class="min-w-20 rounded-sm bg-accent/10 font-mono outline-1 outline-ring"
+            />
+            <a
+              v-else-if="identifierDraft.wikidataId"
+              :href="wikidataHref(identifierDraft.wikidataId)"
+              class="break-all font-mono underline decoration-border underline-offset-4 hover:decoration-current"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ identifierDraft.wikidataId }}
+            </a>
+            <span v-else class="font-mono text-muted-foreground">—</span>
+            <EditableActions
+              :editing="editingField === 'wikidataId'"
+              label="Wikidata ID"
+              @edit="beginEditing('wikidataId')"
+              @save="saveEditing('wikidataId')"
+              @cancel="cancelEditing('wikidataId')"
+            />
+          </div>
+
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="shrink-0 text-xs font-semibold uppercase text-muted-foreground"
+              >NLCR ID</span
+            >
+            <ContentEditable
+              v-if="
+                editingField === 'nationalLibraryAuthorityId' ||
+                identifierDraft.nationalLibraryAuthorityId
+              "
+              v-model="identifierDraft.nationalLibraryAuthorityId"
+              :editable="editingField === 'nationalLibraryAuthorityId'"
+              single-line
+              class="min-w-20 rounded-sm font-mono transition-colors duration-300 ease-out"
+              :class="
+                editingField === 'nationalLibraryAuthorityId' &&
+                'bg-accent/10 outline-1 outline-ring'
+              "
+            />
+            <span v-else class="font-mono text-muted-foreground">—</span>
+            <EditableActions
+              :editing="editingField === 'nationalLibraryAuthorityId'"
+              label="NLCR ID"
+              @edit="beginEditing('nationalLibraryAuthorityId')"
+              @save="saveEditing('nationalLibraryAuthorityId')"
+              @cancel="cancelEditing('nationalLibraryAuthorityId')"
+            />
+          </div>
         </div>
 
         <div class="mt-2 flex min-w-0 items-start gap-2">
@@ -218,25 +323,6 @@ watch(
       <div>
         <dt class="text-muted-foreground">Libraries</dt>
         <dd class="font-mono text-lg">{{ props.libraryCount }}</dd>
-      </div>
-      <div>
-        <dt class="text-muted-foreground">Wikidata ID</dt>
-        <dd class="break-all font-mono">
-          <a
-            v-if="props.wikidataId"
-            :href="`https://www.wikidata.org/wiki/${props.wikidataId}`"
-            class="underline underline-offset-2"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {{ props.wikidataId }}
-          </a>
-          <span v-else>—</span>
-        </dd>
-      </div>
-      <div>
-        <dt class="text-muted-foreground">National Library authority ID</dt>
-        <dd class="break-all font-mono">{{ props.nationalLibraryAuthorityId || '—' }}</dd>
       </div>
     </dl>
   </section>

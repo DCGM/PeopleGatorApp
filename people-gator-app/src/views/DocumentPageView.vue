@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { ChevronRight, Link, ListFilter, ScanFace, UserRoundX, X } from '@lucide/vue'
+import { useQuery } from '@tanstack/vue-query'
 import { useDebounce } from '@vueuse/core'
 import {
   computed,
@@ -15,22 +16,28 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 
 import DocumentControls from '@/components/custom/DocumentControls.vue'
+import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import FaceItem from '@/components/custom/FaceItem.vue'
 import FaceItemSkeleton from '@/components/custom/FaceItemSkeleton.vue'
 import FaceListEmptyState from '@/components/custom/FaceListEmptyState.vue'
+import LoadableImage from '@/components/custom/LoadableImage.vue'
 import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
 import { topBarContextKey } from '@/components/custom/top-bar-context'
-import type { FaceStatus, TranscriptionEntitySpan } from '@/components/custom/document-page.types'
+import type { FaceStatus, PageViewportBounds, TranscriptionEntitySpan } from '@/components/custom/document-page.types'
 import { transcriptionEntityKey } from '@/components/custom/document-page.types'
 import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/query/document-workspace'
+import { fetchTranslation } from '@/query/translation'
 
 const minimumZoomPercent = 55
 const maximumZoomPercent = 350
+const controlledZoomStep = 0.18
+const touchZoomStep = 0.45
 const faceStatuses = ['assigned', 'unassigned'] as const
 const faceStatusLabels = {
   assigned: 'Assigned',
@@ -67,6 +74,7 @@ const {
   faces,
   isLoading,
   pageDimensions,
+  pageImageLoading,
   pageImageUrl,
   similarPeople,
   similarPeopleLoading,
@@ -74,13 +82,18 @@ const {
 } = useDocumentWorkspace(libraryId, documentId, pageId, selectedFaceId, debouncedCandidateTerm)
 
 const selectedLineIndex = ref(0)
+const isTranslationOpen = ref(false)
+const selectedLanguage = ref<Language>('en')
 const zoomPercent = ref(82)
 const selectedFaceStatus = ref<'all' | FaceStatus>('all')
 const selectedEntityKey = ref<string | null>(null)
 const viewerElement = ref<HTMLElement | null>(null)
 const zoomElement = ref<HTMLElement | null>(null)
+const pageElement = ref<HTMLElement | null>(null)
 const faceListElement = ref<HTMLElement | null>(null)
+const pageBounds = ref<PageViewportBounds | null>(null)
 let panzoom: PanzoomObject | undefined
+let pageResizeObserver: ResizeObserver | undefined
 
 const selectedFace = computed(() => faces.value.find((face) => face.id === selectedFaceId.value))
 const selectedPersonCandidate = computed(() =>
@@ -105,6 +118,21 @@ const faceStatusCounts = computed<Record<FaceStatus, number>>(() => {
   for (const face of faces.value) counts[face.status] += 1
   return counts
 })
+const translationOptions = computed<readonly ('off' | Language)[]>(() => ['off', 'cs', 'en', 'de', 'fr'])
+const selectedLineText = computed(() => transcription.value[selectedLineIndex.value]?.text ?? '')
+const translationQuery = useQuery({
+  queryKey: computed(() => [
+    'translation',
+    selectedLineIndex.value,
+    selectedLanguage.value,
+    selectedLineText.value,
+  ]),
+  queryFn: ({ signal }) => fetchTranslation(selectedLineText.value, selectedLanguage.value, signal),
+  enabled: computed(() => isTranslationOpen.value && Boolean(selectedLineText.value)),
+  staleTime: 5 * 60_000,
+})
+const currentTranslation = computed(() => translationQuery.data.value?.translation ?? '')
+const translationLoading = computed(() => translationQuery.isFetching.value)
 
 function routeLineIndex(value: unknown) {
   if (typeof value !== 'string') return 0
@@ -124,6 +152,7 @@ function syncRoute() {
       person: selectedFaceId.value ?? undefined,
       selectedPerson: selectedPersonId.value ?? undefined,
       line: line?.id,
+      translate: isTranslationOpen.value ? 'on' : 'off',
     },
   })
 }
@@ -169,6 +198,12 @@ function selectLine(index: number) {
 function selectEntity(index: number, entity: TranscriptionEntitySpan) {
   selectedLineIndex.value = index
   selectedEntityKey.value = transcriptionEntityKey(entity)
+  syncRoute()
+}
+
+function selectTranslation(language: Language | 'off') {
+  isTranslationOpen.value = language !== 'off'
+  if (language !== 'off') selectedLanguage.value = language
   syncRoute()
 }
 
@@ -218,15 +253,32 @@ async function createSimilarPerson(person: SimilarPersonCandidate) {
 
 function setZoom(direction: 'in' | 'out') {
   if (!panzoom) return
-  if (direction === 'in' && zoomPercent.value < maximumZoomPercent) panzoom.zoomIn()
-  if (direction === 'out' && zoomPercent.value > minimumZoomPercent) panzoom.zoomOut()
+  if (direction === 'in' && zoomPercent.value < maximumZoomPercent)
+    panzoom.zoomIn({ animate: false, step: controlledZoomStep })
+  if (direction === 'out' && zoomPercent.value > minimumZoomPercent)
+    panzoom.zoomOut({ animate: false, step: controlledZoomStep })
 }
 function resetView() {
-  panzoom?.reset({ animate: true })
+  panzoom?.reset({ animate: false })
 }
 
 function handleWheel(event: WheelEvent) {
-  panzoom?.zoomWithWheel(event)
+  panzoom?.zoomWithWheel(event, { step: controlledZoomStep })
+}
+
+function updatePageBounds() {
+  const viewer = viewerElement.value
+  const page = pageElement.value
+  if (!viewer || !page) return
+
+  const viewerRect = viewer.getBoundingClientRect()
+  const pageRect = page.getBoundingClientRect()
+  pageBounds.value = {
+    left: pageRect.left - viewerRect.left,
+    top: pageRect.top - viewerRect.top,
+    width: pageRect.width,
+    height: pageRect.height,
+  }
 }
 
 function handleNavigationKeydown(event: KeyboardEvent) {
@@ -256,6 +308,13 @@ watch(
   { immediate: true },
 )
 watch(
+  () => route.query.translate,
+  (translate) => {
+    isTranslationOpen.value = translate === 'on'
+  },
+  { immediate: true },
+)
+watch(
   () => route.query.person,
   (person) => {
     selectedFaceId.value = typeof person === 'string' ? person : null
@@ -278,17 +337,27 @@ onMounted(async () => {
     maxScale: maximumZoomPercent / 100,
     minScale: minimumZoomPercent / 100,
     startScale: 0.82,
-    step: 0.18,
+    step: touchZoomStep,
   })
   viewerElement.value?.addEventListener('wheel', handleWheel, { passive: false })
   zoomElement.value.addEventListener('panzoomchange', ((event: CustomEvent<{ scale: number }>) => {
     zoomPercent.value = Math.round(event.detail.scale * 100)
+    updatePageBounds()
   }) as EventListener)
+  window.addEventListener('resize', updatePageBounds)
+  if (typeof ResizeObserver !== 'undefined' && viewerElement.value && pageElement.value) {
+    pageResizeObserver = new ResizeObserver(updatePageBounds)
+    pageResizeObserver.observe(viewerElement.value)
+    pageResizeObserver.observe(pageElement.value)
+  }
+  updatePageBounds()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleNavigationKeydown)
+  window.removeEventListener('resize', updatePageBounds)
   viewerElement.value?.removeEventListener('wheel', handleWheel)
+  pageResizeObserver?.disconnect()
   panzoom?.destroy()
 })
 </script>
@@ -298,8 +367,10 @@ onBeforeUnmount(() => {
     <DocumentControls :selected-line-index="selectedLineIndex" :line-count="transcription.length"
       :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
       :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
-      @previous-line="previousLine" @next-line="nextLine" @previous-face="previousFace" @next-face="nextFace"
-      @set-zoom="setZoom" @reset-view="resetView" />
+      :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
+      :selected-language="selectedLanguage" @previous-line="previousLine" @next-line="nextLine"
+      @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom" @reset-view="resetView"
+      @select-translation="selectTranslation" />
   </Teleport>
 
   <main class="workspace-grid">
@@ -309,61 +380,38 @@ onBeforeUnmount(() => {
         <DocumentTeleprompter class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
           :transcription="transcription" :selected-line-index="selectedLineIndex"
           :selected-entity-key="selectedEntityKey" :related-entity-key="selectedPersonCandidate?.entityKey ?? null"
-          @select-line="selectLine" @select-entity="selectEntity" @navigate-line="navigateLine" />
+          :is-translation-open="isTranslationOpen" :selected-language="selectedLanguage"
+          :current-translation="currentTranslation" :translation-loading="translationLoading" @select-line="selectLine"
+          @select-entity="selectEntity" @navigate-line="navigateLine" />
       </section>
 
-      <section ref="viewerElement" class="workspace-viewer bg-viewer min-h-0 overflow-hidden"
+      <section ref="viewerElement" class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
         aria-label="Pan and zoom document page">
         <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
-          <div class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
+          <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
             :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
-            <img v-if="pageImageUrl" :src="pageImageUrl" :alt="`Scan ${pageId}`"
-              class="absolute inset-0 size-full object-contain" />
-            <div v-else class="absolute inset-0 flex items-center justify-center text-muted-foreground">
-              <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
-            </div>
-
-            <button v-for="(line, index) in transcription" :key="line.id" type="button"
-              class="absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              :class="index === selectedLineIndex
-                  ? 'border-accent bg-accent/20 ring-1 ring-background/75'
-                  : 'border-transparent hover:border-accent/70 hover:bg-accent/10'
-                " :style="{
-                left: `${line.position.left}%`,
-                top: `${line.position.top}%`,
-                width: `${line.position.width}%`,
-                height: `${line.position.height}%`,
-              }" :aria-label="`Select line ${index + 1}: ${line.text}`" :aria-pressed="index === selectedLineIndex"
-              @click.stop="selectLine(index)" />
-
-            <button v-for="face in faces" :key="face.id" type="button" class="absolute border-2 transition-colors"
-              :class="face.id === selectedFace?.id
-                  ? 'border-secondary bg-secondary/15 ring-2 ring-background/80'
-                  : face.personId === selectedPersonId ||
-                    face.id === selectedPersonCandidate?.faceId
-                    ? 'border-accent bg-accent/25 ring-2 ring-accent/70'
-                    : 'border-accent/60 bg-accent/5 hover:bg-accent/20'
-                " :style="{
-                left: `${face.position.left}%`,
-                top: `${face.position.top}%`,
-                width: `${face.position.width}%`,
-                height: `${face.position.height}%`,
-              }" :aria-label="`Select ${face.name}`" :aria-pressed="face.id === selectedFace?.id"
-              @click.stop="selectFace(face.id)">
-              <span class="absolute -left-0.5 -top-5 bg-foreground px-1.5 py-0.5 font-mono text-[8px] text-background">
-                {{ face.id }}
-              </span>
-            </button>
+            <LoadableImage :src="pageImageUrl" :loading="pageImageLoading" :alt="`Scan ${pageId}`" class="absolute inset-0 size-full"
+              image-class="object-contain">
+              <template #fallback>
+                <div class="flex size-full items-center justify-center text-muted-foreground">
+                  <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
+                </div>
+              </template>
+            </LoadableImage>
           </div>
         </div>
+        <DocumentPageOverlay :page-bounds="pageBounds" :transcription="transcription" :faces="faces"
+          :selected-line-index="selectedLineIndex" :selected-face-id="selectedFace?.id ?? null"
+          :selected-person-id="selectedPersonId" :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
+          @select-line="selectLine" @select-face="selectFace" />
       </section>
 
       <aside class="workspace-selection min-h-0 border-l bg-background" aria-labelledby="selected-person-title">
         <header class="min-h-48 p-5">
           <div v-if="selectedFace" class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3">
             <div class="aspect-square size-24 overflow-hidden bg-muted">
-              <img v-if="selectedFace.portrait" :src="selectedFace.portrait" :alt="selectedFace.name"
-                class="size-full object-cover grayscale" />
+              <LoadableImage :src="selectedFace.portrait" :loading="selectedFace.portraitLoading" :alt="selectedFace.name" class="size-full"
+                image-class="object-cover grayscale" />
             </div>
             <div class="min-w-0">
               <div class="flex items-start justify-between gap-2">

@@ -80,4 +80,9 @@ export const queryKeys = {
     infinitePages: (params?: QueryParams) => ['search', 'pages', 'infinite', params ?? {}] as const,
     documents: (params?: QueryParams) => ['search', 'documents', params ?? {}] as const,
   },
+  translations: {
+    all: ['translations'] as const,
+    detail: (lineId: string, language: string, text: string) =>
+      ['translations', lineId, language, text] as const,
+  },
 } as const
