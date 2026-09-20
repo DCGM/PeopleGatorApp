@@ -3,6 +3,8 @@ import { FileText, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import PeopleGatorIcon from '@/components/custom/PeopleGatorIcon'
+
 defineProps<{
   title?: string
 }>()
@@ -16,8 +18,9 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
 <template>
   <nav class="flex h-13 w-full items-center gap-3 border-b bg-background pl-3 pr-6">
     <div class="flex shrink-0 items-center gap-6">
-      <RouterLink :to="{ name: 'document-search' }" class="z-20 flex h-12 w-28 shrink-0 items-center bg-background">
-        <img src="/PeopleGator-logo.svg" alt="PeopleGator" class="h-auto max-h-11 w-full">
+      <RouterLink :to="{ name: 'document-search' }" aria-label="PeopleGator"
+        class="z-20 flex size-12 shrink-0 items-center justify-center bg-background">
+        <PeopleGatorIcon aria-hidden="true" class="size-10 text-primary" :stroke-width="title ? 1.5 : 1" />
       </RouterLink>
       <div v-if="title" class="hidden flex-col leading-none sm:flex">
         <h1 class="text-lg">{{ title }}</h1>
