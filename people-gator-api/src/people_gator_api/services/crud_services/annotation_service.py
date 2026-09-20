@@ -13,14 +13,15 @@ from people_gator_api.schemas.entities import (
     FaceEmbeddingUpdateRequest,
     FaceListResponse,
     FaceResponse,
+    ModelEmbedding,
 )
 from people_gator_api.services.crud_services.source_resolution_service import (
     resolve_source_reference,
 )
 from people_gator_api.services.weaviate_service.db_schema import (
-    DEFAULT_FACE_VECTOR,
     FACE_COLLECTION,
-    FACE_VECTOR_BY_MODEL,
+    FACE_VECTOR_PREFIX,
+    model_vector_name,
 )
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
@@ -29,13 +30,25 @@ from people_gator_api.services.weaviate_service.utils import (
     fetch_collection_page_with_total_count,
     parse_face,
     reference_id_filter,
-    single_named_vector_payload,
 )
 from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.utils.uuid_utils import new_uuid6
 
-
 logger = logging.getLogger(__name__)
+
+
+def _face_vectors(
+    embeddings: list[ModelEmbedding],
+) -> dict[str, list[float]] | None:
+    vectors: dict[str, list[float]] = {}
+    for embedding in embeddings:
+        vector_name = model_vector_name(FACE_VECTOR_PREFIX, embedding.model_identifier)
+        if vector_name in vectors:
+            raise ValueError(
+                f"duplicate face embedding model: {embedding.model_identifier}"
+            )
+        vectors[vector_name] = embedding.vector
+    return vectors or None
 
 
 def _face_properties(payload: FaceCreateRequest) -> WeaviateProperties:
@@ -114,7 +127,7 @@ async def create_face(
             source_id=source.source_id,
             user_id=user_id,
         ),
-        vector=single_named_vector_payload(DEFAULT_FACE_VECTOR, payload.embedding),
+        vector=_face_vectors(payload.embeddings),
     )
     return _face_result(
         payload,
@@ -127,7 +140,7 @@ async def create_face(
 @trace()
 async def create_face_batch(
     client: WeaviateAsyncClient,
-    payloads: AsyncGenerator[FaceCreateRequest, None],
+    payloads: AsyncGenerator[FaceCreateRequest],
     user_id: uuid.UUID,
 ) -> list[FaceResponse]:
     """Resolve sources and insert face detections as one streamed batch."""
@@ -150,10 +163,7 @@ async def create_face_batch(
                     source_id=source.source_id,
                     user_id=user_id,
                 ),
-                vector=single_named_vector_payload(
-                    DEFAULT_FACE_VECTOR,
-                    payload.embedding,
-                ),
+                vector=_face_vectors(payload.embeddings),
             )
             responses.append(
                 _face_result(
@@ -178,12 +188,11 @@ async def update_face_embedding_batch(
         for payload in payloads:
             await batch.add_object(
                 uuid=payload.detection_id,
-                vector={
-                    FACE_VECTOR_BY_MODEL[payload.model_identifier]: payload.embedding
-                },
+                vector=_face_vectors(payload.embeddings),
             )
-    logger.info("Updated face embeddings", extra={"count": len(payloads)})
-    return len(payloads)
+    updated_count = sum(len(payload.embeddings) for payload in payloads)
+    logger.info("Updated face embeddings", extra={"count": updated_count})
+    return updated_count
 
 
 @trace()
@@ -216,7 +225,7 @@ async def patch_face_entity(
     client: WeaviateAsyncClient,
     user_id: uuid.UUID,
     detection_id: uuid.UUID,
-    entity_id: uuid.UUID,
+    entity_id: uuid.UUID | None,
 ) -> FaceResponse | None:
     del user_id
     logger.info(
@@ -244,7 +253,7 @@ async def patch_face_entity(
     await client.collections.get(FACE_COLLECTION).data.reference_replace(
         from_uuid=detection_id,
         from_property="entity",
-        to=entity_id,
+        to=entity_id if entity_id is not None else [],
     )
     logger.info(
         "patch_face_entity completed",
@@ -281,9 +290,7 @@ async def list_faces(
     if entity_id is not None:
         filters.append(reference_id_filter(link_on="entity", reference_id=entity_id))
     if owner_user_id is not None:
-        filters.append(
-            reference_id_filter(link_on="user", reference_id=owner_user_id)
-        )
+        filters.append(reference_id_filter(link_on="user", reference_id=owner_user_id))
     objects, total_count = await fetch_collection_page_with_total_count(
         client,
         FACE_COLLECTION,

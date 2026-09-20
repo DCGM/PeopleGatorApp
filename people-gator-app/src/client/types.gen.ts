@@ -211,13 +211,9 @@ export type EntityCreateRequest = {
      */
     nlcr_authority_id?: string | null;
     /**
-     * Name Embedding
+     * Embeddings
      */
-    name_embedding?: Array<number> | null;
-    /**
-     * Fulltext Embedding
-     */
-    fulltext_embedding?: Array<number> | null;
+    embeddings?: Array<EntityEmbeddingInput>;
 };
 
 /**
@@ -251,6 +247,52 @@ export type EntityDeleteManyResponse = {
      * Deleted Count
      */
     deleted_count: number;
+};
+
+/**
+ * EntityEmbeddingBatchUpdateResponse
+ */
+export type EntityEmbeddingBatchUpdateResponse = {
+    /**
+     * Updated Count
+     */
+    updated_count: number;
+};
+
+/**
+ * EntityEmbeddingInput
+ *
+ * A model vector for one semantic field of an entity.
+ */
+export type EntityEmbeddingInput = {
+    /**
+     * Model Identifier
+     */
+    model_identifier: string;
+    /**
+     * Vector
+     */
+    vector: Array<number>;
+    /**
+     * Field
+     */
+    field: 'name' | 'description' | 'short_description' | 'fulltext';
+};
+
+/**
+ * EntityEmbeddingUpdateRequest
+ *
+ * Upsert several named vectors for one existing entity.
+ */
+export type EntityEmbeddingUpdateRequest = {
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * Embeddings
+     */
+    embeddings: Array<EntityEmbeddingInput>;
 };
 
 /**
@@ -378,13 +420,9 @@ export type FaceCreateRequest = {
      */
     keypoints: Array<FaceKeypoint>;
     /**
-     * Embedding
+     * Embeddings
      */
-    embedding?: Array<number> | null;
-    /**
-     * Model Identifier
-     */
-    model_identifier?: string | null;
+    embeddings?: Array<ModelEmbedding>;
     /**
      * Entity Id
      */
@@ -417,7 +455,7 @@ export type FaceEmbeddingModel = 'vit_small_patch8_gap_112.cosface_ms1mv3';
 /**
  * FaceEmbeddingUpdateRequest
  *
- * Named vector update for an existing face detection.
+ * Upsert several model vectors for one existing face detection.
  */
 export type FaceEmbeddingUpdateRequest = {
     /**
@@ -425,22 +463,21 @@ export type FaceEmbeddingUpdateRequest = {
      */
     detection_id: string;
     /**
-     * Embedding
+     * Embeddings
      */
-    embedding: Array<number>;
-    model_identifier?: FaceEmbeddingModel;
+    embeddings: Array<ModelEmbedding>;
 };
 
 /**
  * FaceEntityPatchRequest
  *
- * Patch body for reassigning a face annotation to a different entity.
+ * Patch body for assigning a face, or unassigning it with a null entity ID.
  */
 export type FaceEntityPatchRequest = {
     /**
      * Entity Id
      */
-    entity_id: string;
+    entity_id: string | null;
 };
 
 /**
@@ -718,6 +755,22 @@ export type JwksResponse = {
  * Languages supported by the translation endpoint.
  */
 export type Language = 'cs' | 'en' | 'de' | 'fr';
+
+/**
+ * ModelEmbedding
+ *
+ * One vector produced by one explicitly identified embedding model.
+ */
+export type ModelEmbedding = {
+    /**
+     * Model Identifier
+     */
+    model_identifier: string;
+    /**
+     * Vector
+     */
+    vector: Array<number>;
+};
 
 /**
  * OpenIDConfigurationResponse
@@ -1873,6 +1926,34 @@ export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponses = {
 };
 
 export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponse = CreateEntityBatchRouteApiV1EntitiesBatchPostResponses[keyof CreateEntityBatchRouteApiV1EntitiesBatchPostResponses];
+
+export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostData = {
+    /**
+     * Payload
+     */
+    body: Array<EntityEmbeddingUpdateRequest>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/entities:embeddings';
+};
+
+export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostError = UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors[keyof UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors];
+
+export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: EntityEmbeddingBatchUpdateResponse;
+};
+
+export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponse = UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses[keyof UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses];
 
 export type ListFacesRouteApiV1FacesGetData = {
     body?: never;

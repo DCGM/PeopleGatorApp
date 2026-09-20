@@ -6,6 +6,9 @@ export type Face = {
   id: string
   personId: string | null
   name: string
+  shortDescription?: string
+  wikidataId?: string
+  nlcrAuthorityId?: string
   confidence: number
   status: FaceStatus
   position: { left: number; top: number; width: number; height: number }

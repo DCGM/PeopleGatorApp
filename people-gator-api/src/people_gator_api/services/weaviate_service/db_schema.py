@@ -48,16 +48,19 @@ def _graph_ql_safe_name(value: str) -> str:
     return sanitized[:230]
 
 
-DEFAULT_FACE_VECTOR = (
-    FACE_VECTOR_PREFIX
-    + "_"
-    + _graph_ql_safe_name(GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3)
+def model_vector_name(field: str, model_identifier: str) -> str:
+    """Return the stable named-vector slot shared by ingest and schema setup."""
+    return _graph_ql_safe_name(field) + "_" + _graph_ql_safe_name(model_identifier)
+
+
+DEFAULT_FACE_VECTOR = model_vector_name(
+    FACE_VECTOR_PREFIX, GAUNERNST_VIT_SMALL_PATCH8_GAP_112_COSFACE_MS1MV3
 )
-DEFAULT_NAME_VECTOR = (
-    NAME_VECTOR_PREFIX + "_" + _graph_ql_safe_name(MICROSOFT_HARRIER_OSS_V1_0_6B)
+DEFAULT_NAME_VECTOR = model_vector_name(
+    NAME_VECTOR_PREFIX, MICROSOFT_HARRIER_OSS_V1_0_6B
 )
-DEFAULT_FULLTEXT_VECTOR = (
-    FULLTEXT_VECTOR_PREFIX + "_" + _graph_ql_safe_name(MICROSOFT_HARRIER_OSS_V1_0_6B)
+DEFAULT_FULLTEXT_VECTOR = model_vector_name(
+    FULLTEXT_VECTOR_PREFIX, MICROSOFT_HARRIER_OSS_V1_0_6B
 )
 
 FACE_VECTOR_BY_MODEL: dict[FaceEmbeddingModel, str] = {

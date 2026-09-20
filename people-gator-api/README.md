@@ -54,3 +54,16 @@ To inspect backups:
 ```bash
 curl http://localhost:8080/v1/backups/filesystem
 ```
+
+## PostgreSQL persistence demo
+
+An opt-in parallel implementation of the entity/source/occurrence graph lives
+in [`src/people_gator_api/services/postgres_demo`](src/people_gator_api/services/postgres_demo/README.md).
+It demonstrates SQLAlchemy joined inheritance, pgvector embeddings, PostgreSQL
+full-text search, `pg_trgm` name similarity, and relational exclusion of entity
+candidates already linked to a face in a specified document. It is not wired
+into API startup and does not replace Weaviate.
+
+The shared Weaviate/PostgreSQL repository contracts and concrete adapters are
+documented in
+[`src/people_gator_api/services/persistence`](src/people_gator_api/services/persistence/README.md).

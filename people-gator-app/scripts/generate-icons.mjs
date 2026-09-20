@@ -10,7 +10,9 @@ const sourceSvg = await readFile(resolve(publicDir, 'peoplegator-icon.svg'), 'ut
 const stylesheet = await readFile(resolve(root, 'src/style.css'), 'utf8')
 
 function cssColor(name, selector = ':root') {
-  const block = stylesheet.match(new RegExp(`${selector.replace('.', '\\.')}\\s*\\{([^}]*)}`, 'i'))?.[1]
+  const block = stylesheet.match(
+    new RegExp(`${selector.replace('.', '\\.')}\\s*\\{([^}]*)}`, 'i'),
+  )?.[1]
   const match = block?.match(new RegExp(`^\\s*--${name}:\\s*(#[0-9a-f]{6});`, 'im'))
   if (!match) throw new Error(`Missing --${name} color in src/style.css`)
   return match[1]

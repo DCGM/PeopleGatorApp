@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 
-const props = withDefaults(defineProps<{
-  as?: 'h1' | 'p' | 'span'
-  editable?: boolean
-  singleLine?: boolean
-}>(), {
-  as: 'span',
-  editable: false,
-  singleLine: false,
-})
+const props = withDefaults(
+  defineProps<{
+    as?: 'h1' | 'h4' | 'p' | 'span'
+    editable?: boolean
+    singleLine?: boolean
+  }>(),
+  {
+    as: 'span',
+    editable: false,
+    singleLine: false,
+  },
+)
 
 const model = defineModel<string>({ required: true })
 const element = ref<HTMLElement | null>(null)
@@ -32,7 +35,13 @@ watch([model, () => props.editable], syncContent)
 </script>
 
 <template>
-  <component :is="props.as" ref="element" :contenteditable="props.editable ? 'plaintext-only' : 'false'"
-    :role="props.editable ? 'textbox' : undefined" :aria-multiline="props.editable ? !props.singleLine : undefined"
-    @input="updateModel" @keydown="preventLineBreak" />
+  <component
+    :is="props.as"
+    ref="element"
+    :contenteditable="props.editable ? 'plaintext-only' : 'false'"
+    :role="props.editable ? 'textbox' : undefined"
+    :aria-multiline="props.editable ? !props.singleLine : undefined"
+    @input="updateModel"
+    @keydown="preventLineBreak"
+  />
 </template>

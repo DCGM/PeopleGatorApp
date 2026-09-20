@@ -8,20 +8,44 @@ from typing import Literal
 from pydantic import (
     BaseModel,
     Field,
+    field_validator,
     model_validator,
 )
 
 from people_gator_api.schemas.common import GenericListResponse
-from people_gator_api.schemas.enums import (
-    DEFAULT_FACE_EMBEDDING_MODEL,
-    EntityType,
-    FaceEmbeddingModel,
-)
+from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.sources import SourceDescriptorRequest
 
 # ---------------------------------------------------------------------------
 # Entity
 # ---------------------------------------------------------------------------
+
+
+class ModelEmbedding(BaseModel):
+    """One vector produced by one explicitly identified embedding model."""
+
+    model_identifier: str = Field(min_length=1)
+    vector: list[float] = Field(min_length=1)
+
+
+class EntityEmbeddingInput(ModelEmbedding):
+    """A model vector for one semantic field of an entity."""
+
+    field: Literal["name", "description", "short_description", "fulltext"]
+
+
+def _require_unique_entity_embeddings(
+    embeddings: list[EntityEmbeddingInput],
+) -> None:
+    keys = [(embedding.field, embedding.model_identifier) for embedding in embeddings]
+    if len(keys) != len(set(keys)):
+        raise ValueError("each entity field/model embedding pair must be unique")
+
+
+def _require_unique_model_embeddings(embeddings: list[ModelEmbedding]) -> None:
+    models = [embedding.model_identifier for embedding in embeddings]
+    if len(models) != len(set(models)):
+        raise ValueError("each embedding model must be unique")
 
 
 class EntityCreateRequest(BaseModel):
@@ -34,8 +58,36 @@ class EntityCreateRequest(BaseModel):
     aliases: list[str] | None = None
     wikidata_id: str | None = None
     nlcr_authority_id: str | None = None
-    name_embedding: list[float] | None = None
-    fulltext_embedding: list[float] | None = None
+    embeddings: list[EntityEmbeddingInput] = Field(
+        default_factory=list[EntityEmbeddingInput]
+    )
+
+    @field_validator("embeddings")
+    @classmethod
+    def validate_unique_embeddings(
+        cls, embeddings: list[EntityEmbeddingInput]
+    ) -> list[EntityEmbeddingInput]:
+        _require_unique_entity_embeddings(embeddings)
+        return embeddings
+
+
+class EntityEmbeddingUpdateRequest(BaseModel):
+    """Upsert several named vectors for one existing entity."""
+
+    entity_id: uuid.UUID
+    embeddings: list[EntityEmbeddingInput] = Field(min_length=1)
+
+    @field_validator("embeddings")
+    @classmethod
+    def validate_unique_embeddings(
+        cls, embeddings: list[EntityEmbeddingInput]
+    ) -> list[EntityEmbeddingInput]:
+        _require_unique_entity_embeddings(embeddings)
+        return embeddings
+
+
+class EntityEmbeddingBatchUpdateResponse(BaseModel):
+    updated_count: int = Field(ge=0)
 
 
 class EntityPatchRequest(BaseModel):
@@ -132,13 +184,20 @@ class FaceCreateRequest(BaseModel):
     source: SourceDescriptorRequest | None = None
     bounding_box: BoundingBox
     keypoints: list[FaceKeypoint]
-    embedding: list[float] | None = None
-    model_identifier: str | None = None
+    embeddings: list[ModelEmbedding] = Field(default_factory=list[ModelEmbedding])
     entity_id: uuid.UUID | None = None
     confidence: float = Field(ge=0.0, le=1.0)
 
+    @field_validator("embeddings")
+    @classmethod
+    def validate_unique_embeddings(
+        cls, embeddings: list[ModelEmbedding]
+    ) -> list[ModelEmbedding]:
+        _require_unique_model_embeddings(embeddings)
+        return embeddings
+
     @model_validator(mode="after")
-    def validate_source_selector(self) -> "FaceCreateRequest":
+    def validate_source_selector(self) -> FaceCreateRequest:
         has_source_id = self.source_id is not None
         has_source = self.source is not None
         if has_source_id == has_source:
@@ -147,11 +206,18 @@ class FaceCreateRequest(BaseModel):
 
 
 class FaceEmbeddingUpdateRequest(BaseModel):
-    """Named vector update for an existing face detection."""
+    """Upsert several model vectors for one existing face detection."""
 
     detection_id: uuid.UUID
-    embedding: list[float] = Field(min_length=1)
-    model_identifier: FaceEmbeddingModel = DEFAULT_FACE_EMBEDDING_MODEL
+    embeddings: list[ModelEmbedding] = Field(min_length=1)
+
+    @field_validator("embeddings")
+    @classmethod
+    def validate_unique_embeddings(
+        cls, embeddings: list[ModelEmbedding]
+    ) -> list[ModelEmbedding]:
+        _require_unique_model_embeddings(embeddings)
+        return embeddings
 
 
 class FaceEmbeddingBatchUpdateResponse(BaseModel):
@@ -180,6 +246,6 @@ class FaceListResponse(GenericListResponse[FaceResponse]):
 
 
 class FaceEntityPatchRequest(BaseModel):
-    """Patch body for reassigning a face annotation to a different entity."""
+    """Patch body for assigning a face, or unassigning it with a null entity ID."""
 
-    entity_id: uuid.UUID
+    entity_id: uuid.UUID | None

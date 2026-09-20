@@ -212,16 +212,22 @@ export function useDocumentWorkspace(
   })
 
   const faces = computed<Face[]>(() =>
-    (faceQuery.data.value?.items ?? []).map((face, index) => ({
-      id: face.detection_id,
-      personId: face.entity_id ?? null,
-      name: (face.entity_id && onPageEntities.value.get(face.entity_id)?.name) || 'Unknown person',
-      confidence: percentage(face.confidence),
-      status: face.entity_id ? 'assigned' : 'unassigned',
-      portraitLoading: alignedCropQueries.value[index]?.isPending ?? false,
-      position: toPercentBox(face.bounding_box, layoutQuery.data.value),
-      portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
-    })),
+    (faceQuery.data.value?.items ?? []).map((face, index) => {
+      const person = face.entity_id ? onPageEntities.value.get(face.entity_id) : undefined
+      return {
+        id: face.detection_id,
+        personId: face.entity_id ?? null,
+        name: person?.name || 'Unknown person',
+        shortDescription: person?.short_description || undefined,
+        wikidataId: person?.wikidata_id ?? undefined,
+        nlcrAuthorityId: person?.nlcr_authority_id ?? undefined,
+        confidence: percentage(face.confidence),
+        status: face.entity_id ? 'assigned' : 'unassigned',
+        portraitLoading: alignedCropQueries.value[index]?.isPending ?? false,
+        position: toPercentBox(face.bounding_box, layoutQuery.data.value),
+        portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
+      }
+    }),
   )
   const transcription = computed(() =>
     makeTranscription(layoutQuery.data.value, spanQuery.data.value),
@@ -239,12 +245,36 @@ export function useDocumentWorkspace(
     // Assignment mutations invalidate search queries when the data changes.
     staleTime: Number.POSITIVE_INFINITY,
   })
+  const candidateDetailIds = computed(() =>
+    (candidateSearchQuery.data.value?.items ?? []).map((entity) => entity.entity_id),
+  )
+  const candidateDetailQueries = useQueries({
+    queries: computed(() =>
+      candidateDetailIds.value.map((entityId) => ({
+        queryKey: queryKeys.entities.detail(entityId),
+        queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntity(entityId, signal),
+        retry: false,
+      })),
+    ),
+  })
+  const candidateDetails = computed(() => {
+    const result = new Map<string, EntityResponse>()
+    candidateDetailIds.value.forEach((entityId, index) => {
+      const entity = candidateDetailQueries.value[index]?.data
+      if (entity) result.set(entityId, entity)
+    })
+    return result
+  })
 
   const similarPeople = computed<SimilarPersonCandidate[]>(() => {
     const pageIds = new Set(onPageEntityIds.value)
+    const matches = candidateSearchQuery.data.value?.items ?? []
+    const matchingScores = new Map(
+      matches.map((entity) => [entity.entity_id, entity.matching_score]),
+    )
     const candidates = candidateEntities(
       [...onPageEntities.value.values()],
-      candidateSearchQuery.data.value?.items ?? [],
+      matches,
       textTerm.value,
     )
     const lines = transcription.value
@@ -256,19 +286,47 @@ export function useDocumentWorkspace(
         entityLineIndex >= 0
           ? lines[entityLineIndex]?.entities?.find((span) => span.entity_id === entity.entity_id)
           : undefined
+      const nerMentions = lines.reduce(
+        (count, line) =>
+          count +
+          (line.entities?.filter((span) => span.entity_id === entity.entity_id).length ?? 0),
+        0,
+      )
+      const detections = faces.value.filter((face) => face.personId === entity.entity_id).length
+      const matchingScore = matchingScores.get(entity.entity_id)
+      const normalizedFaceSimilarity =
+        matchingScore === undefined
+          ? undefined
+          : matchingScore > 1
+            ? matchingScore / 100
+            : matchingScore
+      const details =
+        candidateDetails.value.get(entity.entity_id) ?? onPageEntities.value.get(entity.entity_id)
       return {
         id: entity.entity_id,
         name: entity.name || 'Unnamed person',
         shortDescription: entity.short_description || undefined,
-        score: 'matching_score' in entity ? percentage(entity.matching_score) : undefined,
-        nerMentions: lines.reduce(
-          (count, line) =>
-            count +
-            (line.entities?.filter((span) => span.entity_id === entity.entity_id).length ?? 0),
-          0,
-        ),
-        detections: faces.value.filter((face) => face.personId === entity.entity_id).length,
+        score: matchingScore === undefined ? undefined : percentage(matchingScore),
+        nerMentions,
+        detections,
         source: pageIds.has(entity.entity_id) ? 'page' : 'database',
+        matchSources: [
+          ...(textTerm.value && matchingScore !== undefined
+            ? ([{ type: 'text-search', score: percentage(matchingScore) }] as const)
+            : []),
+          ...(!textTerm.value && normalizedFaceSimilarity !== undefined
+            ? ([
+                {
+                  type: 'face-match',
+                  distance: Math.max(0, 1 - normalizedFaceSimilarity),
+                },
+              ] as const)
+            : []),
+          ...(nerMentions > 0 ? ([{ type: 'scan-text' }] as const) : []),
+          ...(detections > 0 ? ([{ type: 'scan-face' }] as const) : []),
+        ],
+        wikidataId: details?.wikidata_id || undefined,
+        nlcrAuthorityId: details?.nlcr_authority_id || undefined,
         faceId: faces.value.find((face) => face.personId === entity.entity_id)?.id,
         entityKey: entitySpan ? transcriptionEntityKey(entitySpan) : undefined,
         entityLineIndex: entityLineIndex >= 0 ? entityLineIndex : undefined,
@@ -279,18 +337,23 @@ export function useDocumentWorkspace(
   const createEntity = useCreateEntityMutation()
   const assignFaceMutation = useAssignFaceMutation()
 
-  function assignFace(detectionId: string, entityId: string) {
+  function assignFace(detectionId: string, entityId: string | null) {
     assignFaceMutation.mutate({ detectionId, entityId })
   }
 
-  async function createAndAssign(detectionId: string, name: string) {
-    const entity = await createEntity.mutateAsync({ entity_type: 'person', name })
+  async function createAndAssign(detectionId: string, name: string, shortDescription?: string) {
+    const entity = await createEntity.mutateAsync({
+      entity_type: 'person',
+      name,
+      short_description: shortDescription || null,
+    })
     await assignFaceMutation.mutateAsync({ detectionId, entityId: entity.entity_id })
     return entity
   }
 
   return {
     assignFace,
+    unassignFace: (detectionId: string) => assignFace(detectionId, null),
     assignmentStatus: assignFaceMutation.status,
     createAndAssign,
     error: computed(

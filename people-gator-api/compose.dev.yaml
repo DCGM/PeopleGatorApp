@@ -1,4 +1,24 @@
 services:
+  people-gator-postgres-demo:
+    image: pgvector/pgvector:pg16
+    profiles: [postgres-demo]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: people_gator
+      POSTGRES_USER: people_gator
+      POSTGRES_PASSWORD: people_gator
+    ports:
+      - 5433:5432
+    volumes:
+      - people-gator-postgres-demo-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U people_gator -d people_gator"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - default
+
   people-gator-weaviate-dev:
     # Keep upgrades explicit: persisted Raft and shard formats must not be
     # changed just because the floating `latest` tag moved.
@@ -111,6 +131,9 @@ services:
       - web
       - default
       - logging
+
+volumes:
+  people-gator-postgres-demo-data:
 
 networks:
   web:

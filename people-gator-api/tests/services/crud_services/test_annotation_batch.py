@@ -11,6 +11,8 @@ from people_gator_api.schemas.entities import (
     BoundingBox,
     FaceCreateRequest,
     FaceEmbeddingUpdateRequest,
+    FaceResponse,
+    ModelEmbedding,
 )
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import SourceResponse
@@ -44,6 +46,14 @@ class _BatchStream:
 
     async def __aexit__(self, *_args: object) -> None:
         return None
+
+
+class _ReferenceData:
+    def __init__(self) -> None:
+        self.replacements: list[dict[str, object]] = []
+
+    async def reference_replace(self, **kwargs: object) -> None:
+        self.replacements.append(kwargs)
 
 
 def _client(batch: _Batch) -> SimpleNamespace:
@@ -87,7 +97,16 @@ async def test_create_face_batch_resolves_sources_and_preserves_vectors(
             source_id=source_id,
             bounding_box=BoundingBox(x=index, y=2, width=3, height=4),
             keypoints=[],
-            embedding=[0.1, 0.2] if index == 0 else None,
+            embeddings=(
+                [
+                    ModelEmbedding(
+                        model_identifier="vit_small_patch8_gap_112.cosface_ms1mv3",
+                        vector=[0.1, 0.2],
+                    )
+                ]
+                if index == 0
+                else []
+            ),
             entity_id=entity_ids[index],
             confidence=0.9,
         )
@@ -118,6 +137,50 @@ async def test_create_face_batch_resolves_sources_and_preserves_vectors(
 
 
 @pytest.mark.asyncio
+async def test_patch_face_entity_accepts_null_to_remove_assignment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    detection_id = uuid.uuid4()
+    current = FaceResponse(
+        detection_id=detection_id,
+        source_id=uuid.uuid4(),
+        bounding_box=BoundingBox(x=1, y=2, width=3, height=4),
+        keypoints=[],
+        user_id=uuid.uuid4(),
+        entity_id=uuid.uuid4(),
+        confidence=0.9,
+    )
+    data = _ReferenceData()
+    collection = SimpleNamespace(data=data)
+    client = SimpleNamespace(
+        collections=SimpleNamespace(get=lambda _name: collection),
+    )
+
+    async def fetch_face(*_args: object, **_kwargs: object) -> object:
+        return SimpleNamespace(properties={}, references={}, uuid=detection_id)
+
+    monkeypatch.setattr(annotation_service, "fetch_collection_object", fetch_face)
+    monkeypatch.setattr(annotation_service, "parse_face", lambda *_args: current)
+
+    updated = await annotation_service.patch_face_entity(
+        client,  # pyright: ignore[reportArgumentType]
+        current.user_id,
+        detection_id,
+        None,
+    )
+
+    assert updated is not None
+    assert updated.entity_id is None
+    assert data.replacements == [
+        {
+            "from_uuid": detection_id,
+            "from_property": "entity",
+            "to": [],
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_update_face_embedding_batch_uses_named_vectors() -> None:
     batch = _Batch()
     client = _client(batch)
@@ -127,18 +190,38 @@ async def test_update_face_embedding_batch_uses_named_vectors() -> None:
         client,  # pyright: ignore[reportArgumentType]
         [
             FaceEmbeddingUpdateRequest(
-                detection_id=detection_id,
-                embedding=[float(index), 0.5],
-            )
-            for index, detection_id in enumerate(detection_ids)
+                detection_id=detection_ids[0],
+                embeddings=[
+                    ModelEmbedding(
+                        model_identifier="vit_small_patch8_gap_112.cosface_ms1mv3",
+                        vector=[0.0, 0.5],
+                    ),
+                    ModelEmbedding(
+                        model_identifier="second-face-model",
+                        vector=[0.2, 0.8],
+                    ),
+                ],
+            ),
+            FaceEmbeddingUpdateRequest(
+                detection_id=detection_ids[1],
+                embeddings=[
+                    ModelEmbedding(
+                        model_identifier="vit_small_patch8_gap_112.cosface_ms1mv3",
+                        vector=[1.0, 0.5],
+                    )
+                ],
+            ),
         ],
     )
 
-    assert updated == 2
+    assert updated == 3
     assert batch.objects == [
         {
             "uuid": detection_ids[0],
-            "vector": {DEFAULT_FACE_VECTOR: [0.0, 0.5]},
+            "vector": {
+                DEFAULT_FACE_VECTOR: [0.0, 0.5],
+                "face_second_face_model": [0.2, 0.8],
+            },
         },
         {
             "uuid": detection_ids[1],

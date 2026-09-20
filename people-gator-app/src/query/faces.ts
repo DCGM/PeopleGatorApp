@@ -104,7 +104,7 @@ export function useCreateFacesMutation() {
 export function useAssignFaceMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ detectionId, entityId }: { detectionId: string; entityId: string }) =>
+    mutationFn: ({ detectionId, entityId }: { detectionId: string; entityId: string | null }) =>
       responseData(
         patchFaceEntityRouteApiV1FacesDetectionIdPatch({
           path: { detection_id: detectionId },

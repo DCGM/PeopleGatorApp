@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Check,
   ChevronRight,
   CircleUserRound,
   Images,
@@ -9,6 +10,7 @@ import {
   UserRoundSearch,
   X,
 } from '@lucide/vue'
+import type { AcceptableValue } from 'reka-ui'
 import { computed, ref, watch } from 'vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -26,6 +28,7 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const props = defineProps<{
   faces: PersonDiscoveryFace[]
@@ -46,6 +49,24 @@ const emit = defineEmits<{
 
 const selectedFaceIds = ref<Set<string>>(new Set())
 const selectionAnchorId = ref<string | null>(null)
+type FaceFilter = 'all' | 'unassigned' | 'assigned'
+const faceFilter = ref<FaceFilter>('all')
+const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'assigned', label: 'Assigned elsewhere' },
+]
+const visibleFaces = computed(() =>
+  props.faces.filter((face) => {
+    if (faceFilter.value === 'unassigned') return !face.assignedEntityId
+    if (faceFilter.value === 'assigned') return Boolean(face.assignedEntityId)
+    return true
+  }),
+)
+const unassignedFaceCount = computed(
+  () => props.faces.filter((face) => !face.assignedEntityId).length,
+)
+const assignedFaceCount = computed(() => props.faces.length - unassignedFaceCount.value)
 const selectedFaces = computed(() =>
   props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
 )
@@ -61,19 +82,14 @@ function toggleFaceSelection(faceId: string, event: MouseEvent) {
     event.preventDefault()
     const rangeStart = Math.min(anchorIndex, faceIndex)
     const rangeEnd = Math.max(anchorIndex, faceIndex)
-    selectedFaceIds.value = new Set(
-      props.faces.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
-    )
+    selectedFaceIds.value = new Set([
+      ...selectedFaceIds.value,
+      ...props.faces.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
+    ])
     return
   }
 
-  if (event.ctrlKey || event.metaKey) {
-    toggleFaceFromControl(faceId)
-    return
-  }
-
-  selectedFaceIds.value = new Set([faceId])
-  selectionAnchorId.value = faceId
+  toggleFaceFromControl(faceId)
 }
 
 function toggleFaceFromControl(faceId: string) {
@@ -94,6 +110,12 @@ function assignSelectedFaces() {
     'assignFaces',
     selectedFaces.value.map((face) => face.id),
   )
+}
+
+function updateFaceFilter(value: AcceptableValue | AcceptableValue[]) {
+  if (faceFilterOptions.some((option) => option.value === value)) {
+    faceFilter.value = value as FaceFilter
+  }
 }
 
 watch(
@@ -124,15 +146,44 @@ function initials(name: string) {
       <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
           <small class="font-semibold uppercase text-secondary">Face similarity</small>
-          <h3 id="similar-faces-heading">Faces not linked to {{ props.currentName }}</h3>
+          <h3 id="similar-faces-heading">Similar faces to review</h3>
           <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
             Compared against {{ props.referenceFaceCount }} linked
-            {{ props.referenceFaceCount === 1 ? 'face' : 'faces' }}. Results already linked to this
-            record are excluded.
+            {{ props.referenceFaceCount === 1 ? 'face' : 'faces' }} from {{ props.currentName }}.
+            Open a face to inspect it in its source document, or use the checkbox to assign it.
           </p>
         </div>
         <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
       </div>
+
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        :model-value="faceFilter"
+        class="mt-4 w-full sm:w-auto"
+        aria-label="Filter similar faces by assignment"
+        @update:model-value="updateFaceFilter"
+      >
+        <ToggleGroupItem
+          v-for="option in faceFilterOptions"
+          :key="option.value"
+          :value="option.value"
+          class="min-w-0 px-3 text-xs"
+          :aria-label="option.label"
+        >
+          <span class="truncate">{{ option.label }}</span>
+          <code>
+            {{
+              option.value === 'all'
+                ? props.faces.length
+                : option.value === 'unassigned'
+                  ? unassignedFaceCount
+                  : assignedFaceCount
+            }}
+          </code>
+        </ToggleGroupItem>
+      </ToggleGroup>
 
       <div
         v-if="selectedFaces.length"
@@ -149,7 +200,7 @@ function initials(name: string) {
               {{ selectedReassignmentCount }} will be reassigned from another person.
             </template>
             <template v-else>
-              Ctrl/Cmd-click or use the circle to add faces; Shift-click selects a range.
+              Use the checkboxes to add faces; Shift-click selects a range.
             </template>
           </p>
         </div>
@@ -170,27 +221,34 @@ function initials(name: string) {
       </div>
 
       <div
-        v-if="props.faces.length"
-        class="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+        v-if="visibleFaces.length"
+        class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         aria-live="polite"
       >
         <Item
-          v-for="face in props.faces"
+          v-for="face in visibleFaces"
           :key="face.id"
-          class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border border-transparent bg-transparent p-0 text-muted-foreground shadow-none select-none transition-colors hover:text-primary"
+          class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
           :class="
             selectedFaceIds.has(face.id) &&
             'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'
           "
         >
-          <button
-            type="button"
-            data-face-selection-target="card"
-            class="absolute inset-0 z-10 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-            :aria-label="`Select only face ${face.id}`"
-            :aria-pressed="selectedFaceIds.has(face.id)"
-            @click="toggleFaceSelection(face.id, $event)"
-          ></button>
+          <RouterLink
+            v-if="face.library && face.documentId && face.pageId"
+            data-face-selection-target="open"
+            :to="{
+              name: 'document-page',
+              params: {
+                libraryId: face.library,
+                documentId: face.documentId,
+                pageId: face.pageId,
+              },
+              query: { person: face.id },
+            }"
+            class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            :aria-label="`Open face ${face.id} on its source document`"
+          ></RouterLink>
           <ItemMedia
             variant="image"
             class="relative aspect-square size-auto w-full rounded-none bg-muted"
@@ -210,24 +268,24 @@ function initials(name: string) {
             </LoadableImage>
           </ItemMedia>
           <button
-            v-if="selectedFaces.length"
             type="button"
             data-face-selection-target="control"
-            class="absolute right-2.5 top-2.5 z-20 flex size-6 items-center justify-center rounded-full border-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="absolute right-3 top-3 z-20 flex size-7 items-center justify-center rounded-sm border-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :class="
               selectedFaceIds.has(face.id)
                 ? 'border-accent bg-accent text-accent-foreground'
-                : 'border-border bg-card text-transparent hover:border-accent'
+                : 'border-border bg-card text-muted-foreground hover:border-accent hover:text-primary'
             "
-            :aria-label="`${selectedFaceIds.has(face.id) ? 'Remove' : 'Add'} face ${face.id} ${
-              selectedFaceIds.has(face.id) ? 'from' : 'to'
-            } selection`"
+            :aria-label="`${selectedFaceIds.has(face.id) ? 'Remove' : 'Select'} face ${face.id}${
+              selectedFaceIds.has(face.id) ? ' from assignment' : ' for assignment'
+            }`"
             :aria-pressed="selectedFaceIds.has(face.id)"
-            @click="toggleFaceFromControl(face.id)"
+            @click="toggleFaceSelection(face.id, $event)"
           >
+            <Check v-if="selectedFaceIds.has(face.id)" class="size-4" aria-hidden="true" />
             <span
-              class="size-2 rounded-full bg-current opacity-0"
-              :class="selectedFaceIds.has(face.id) && 'opacity-100'"
+              v-else
+              class="size-2 rounded-full border border-current"
               aria-hidden="true"
             ></span>
           </button>
@@ -249,34 +307,20 @@ function initials(name: string) {
               </code>
             </p>
           </ItemContent>
-          <RouterLink
+          <div
             v-if="face.library && face.documentId && face.pageId"
-            :to="{
-              name: 'document-page',
-              params: {
-                libraryId: face.library,
-                documentId: face.documentId,
-                pageId: face.pageId,
-              },
-              query: { person: face.id },
-            }"
-            class="group/link z-20 flex min-w-0 items-center gap-1 text-sm text-muted-foreground outline-none hover:text-primary focus-visible:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-            :aria-label="`Open face ${face.id} on its page`"
+            class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground"
           >
             <span class="min-w-0 flex-1 truncate">
-              <b
-                class="text-secondary group-hover/link:text-inherit group-focus-visible/link:text-inherit"
-              >
-                {{ face.library }}
-              </b>
+              <b class="text-secondary">{{ face.library }}</b>
               · {{ face.pageLabel }}
             </span>
             <ChevronRight
-              class="size-5 transition-transform group-hover/link:translate-x-1 group-focus-visible/link:translate-x-1"
+              class="size-4 transition-transform group-hover/face:translate-x-1"
               aria-hidden="true"
             />
-          </RouterLink>
-          <div v-else class="z-20 truncate text-sm text-muted-foreground">
+          </div>
+          <div v-else class="truncate text-xs text-muted-foreground">
             Archive location unavailable
           </div>
         </Item>
@@ -292,7 +336,8 @@ function initials(name: string) {
         <p v-else-if="props.referenceFaceCount === 0">
           Link at least one face to this person before searching by appearance.
         </p>
-        <p v-else>No unlinked face matches were found.</p>
+        <p v-else-if="props.faces.length">No faces match this assignment filter.</p>
+        <p v-else>No similar face matches were found.</p>
       </div>
     </section>
 

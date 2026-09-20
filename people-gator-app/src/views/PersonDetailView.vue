@@ -124,7 +124,7 @@ function selectTab(tab: string | number) {
 
         <TabsContent
           value="faces"
-          class="grid gap-4 pt-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+          class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         >
           <RouterLink
             :to="{

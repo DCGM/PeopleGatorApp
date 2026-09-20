@@ -29,7 +29,7 @@ describe('PersonDiscoveryPanel', () => {
     })
   })
 
-  it('selects an item and emits a batch assignment from the action toolbar', async () => {
+  it('selects with the dedicated control and emits a batch assignment', async () => {
     const wrapper = mount(PersonDiscoveryPanel, {
       props: {
         faces: [face('face-match')],
@@ -42,8 +42,8 @@ describe('PersonDiscoveryPanel', () => {
 
     expect(wrapper.text()).toContain('93%')
     expect(wrapper.text()).toContain('Unassigned')
-    expect(wrapper.findAll('[data-face-selection-target="control"]')).toHaveLength(0)
-    await wrapper.get('[aria-label="Select only face face-match"]').trigger('click')
+    expect(wrapper.findAll('[data-face-selection-target="control"]')).toHaveLength(1)
+    await wrapper.get('[aria-label="Select face face-match for assignment"]').trigger('click')
 
     expect(wrapper.get('[role="toolbar"]').text()).toContain('1 face selected')
     expect(wrapper.get('[role="toolbar"]').classes()).toContain('fixed')
@@ -69,16 +69,18 @@ describe('PersonDiscoveryPanel', () => {
       global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
-    await wrapper.get('[aria-label="Select only face face-1"]').trigger('click')
-    await wrapper.get('[aria-label="Select only face face-3"]').trigger('click', { shiftKey: true })
+    await wrapper.get('[aria-label="Select face face-1 for assignment"]').trigger('click')
+    await wrapper
+      .get('[aria-label="Select face face-3 for assignment"]')
+      .trigger('click', { shiftKey: true })
 
     expect(wrapper.get('[role="toolbar"]').text()).toContain('3 faces selected')
     expect(
-      wrapper.findAll('[data-face-selection-target="card"][aria-pressed="true"]'),
+      wrapper.findAll('[data-face-selection-target="control"][aria-pressed="true"]'),
     ).toHaveLength(3)
   })
 
-  it('uses normal click for a single selection and modifier or circle clicks for additive selection', async () => {
+  it('keeps opening a face separate from additive assignment selection', async () => {
     const wrapper = mount(PersonDiscoveryPanel, {
       props: {
         faces: [face('face-1'), face('face-2'), face('face-3')],
@@ -89,19 +91,16 @@ describe('PersonDiscoveryPanel', () => {
       global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
-    await wrapper.get('[aria-label="Select only face face-1"]').trigger('click')
-    await wrapper.get('[aria-label="Select only face face-2"]').trigger('click')
     expect(
-      wrapper.findAll('[data-face-selection-target="card"][aria-pressed="true"]'),
-    ).toHaveLength(1)
+      wrapper.get('[aria-label="Open face face-1 on its source document"]').attributes('href'),
+    ).toBeUndefined()
 
-    await wrapper.get('[aria-label="Select only face face-3"]').trigger('click', { ctrlKey: true })
-    expect(
-      wrapper.findAll('[data-face-selection-target="card"][aria-pressed="true"]'),
-    ).toHaveLength(2)
+    await wrapper.get('[aria-label="Select face face-1 for assignment"]').trigger('click')
+    await wrapper.get('[aria-label="Select face face-2 for assignment"]').trigger('click')
+    expect(wrapper.get('[role="toolbar"]').text()).toContain('2 faces selected')
 
-    await wrapper.get('[aria-label="Add face face-1 to selection"]').trigger('click')
-    expect(wrapper.get('[role="toolbar"]').text()).toContain('3 faces selected')
+    await wrapper.get('[aria-label="Remove face face-1 from assignment"]').trigger('click')
+    expect(wrapper.get('[role="toolbar"]').text()).toContain('1 face selected')
   })
 
   it('uses a chevron link to open the matched face on its source page', () => {

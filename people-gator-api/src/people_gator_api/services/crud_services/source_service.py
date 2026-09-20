@@ -45,6 +45,33 @@ class SourceCreateSpec:
     url: str | None = None
 
 
+def _spec_identity(spec: SourceCreateSpec) -> SourceIdentityKey:
+    return (
+        spec.source_type,
+        canonical_source_uri(spec.url) if spec.url is not None else spec.library or "",
+        spec.document_id,
+        spec.page_id,
+    )
+
+
+def _record_identity(source: SourceRecord) -> SourceIdentityKey:
+    if isinstance(source.metadata, PageSourceMetadata):
+        return (
+            source.source_type,
+            source.metadata.library,
+            source.metadata.document,
+            source.metadata.page,
+        )
+    if isinstance(source.metadata, DocumentSourceMetadata):
+        return (
+            source.source_type,
+            source.metadata.library,
+            source.metadata.document,
+            None,
+        )
+    return (source.source_type, canonical_source_uri(source.uri), None, None)
+
+
 def canonical_page_uri(
     library: str,
     document_id: uuid.UUID,
@@ -61,13 +88,14 @@ def canonical_document_uri(library: str, document_id: uuid.UUID) -> str:
     library = quote(library, safe="")
     return f"https://www.digitalniknihovna.cz/{library}/uuid/uuid:{document_id}"
 
+
 def canonical_source_uri(uri: str) -> str:
     parsed_uri = urlparse(uri)
     query_dict = sorted(parse_qsl(parsed_uri.query))
     normalized_query = urlencode(query_dict)
     normalized_uri = parsed_uri._replace(query=normalized_query).geturl()
     return normalized_uri
-    
+
 
 class SourceResolutionError(ValueError):
     def __init__(self, message: str, *, status_code: int, code: str) -> None:
@@ -107,9 +135,7 @@ def _source_content(
         )
 
     if library is None or document_id is None or page_id is None or url is not None:
-        raise ValueError(
-            "page sources require only library, document_id, and page_id"
-        )
+        raise ValueError("page sources require only library, document_id, and page_id")
     uri = canonical_page_uri(library, document_id, page_id)
     return (
         uri,
@@ -186,9 +212,18 @@ def _source_uri(
     """Return the canonical, hashable database identity for one source."""
     if source_type == SourceKind.image and url is not None:
         return canonical_source_uri(url)
-    if source_type == SourceKind.page and library is not None and document_id is not None and page_id is not None:
+    if (
+        source_type == SourceKind.page
+        and library is not None
+        and document_id is not None
+        and page_id is not None
+    ):
         return canonical_source_uri(canonical_page_uri(library, document_id, page_id))
-    if source_type == SourceKind.document and library is not None and document_id is not None:
+    if (
+        source_type == SourceKind.document
+        and library is not None
+        and document_id is not None
+    ):
         return canonical_source_uri(canonical_document_uri(library, document_id))
     raise ValueError("document sources require library and document_id")
 
@@ -202,8 +237,47 @@ def _source_uuid(
     url: str | None,
 ) -> uuid.UUID:
     """Generate the stable Weaviate ID that enforces identity under races."""
-    source_uri = _source_uri(source_type, library=library, document_id=document_id, page_id=page_id, url=url)
+    source_uri = _source_uri(
+        source_type, library=library, document_id=document_id, page_id=page_id, url=url
+    )
     return uuid.uuid5(_SOURCE_ID_NAMESPACE, f"{source_type.value}:{source_uri}")
+
+
+def source_content(
+    source_type: SourceKind,
+    *,
+    library: str | None = None,
+    document_id: uuid.UUID | None = None,
+    page_id: uuid.UUID | None = None,
+    url: str | None = None,
+) -> tuple[str, SourceMetadata | None]:
+    """Public backend-neutral source validation and canonicalization helper."""
+    return _source_content(
+        source_type,
+        library=library,
+        document_id=document_id,
+        page_id=page_id,
+        url=url,
+    )
+
+
+def stable_source_uuid(
+    source_type: SourceKind,
+    *,
+    library: str | None = None,
+    document_id: uuid.UUID | None = None,
+    page_id: uuid.UUID | None = None,
+    url: str | None = None,
+) -> uuid.UUID:
+    """Return the shared deterministic source ID used by every backend."""
+    return _source_uuid(
+        source_type,
+        library=library,
+        document_id=document_id,
+        page_id=page_id,
+        url=url,
+    )
+
 
 async def _first_source(
     client: WeaviateAsyncClient,
@@ -248,7 +322,9 @@ async def create_source(
     )
     if existing is not None:
         return existing, False
-    source_uuid = _source_uuid(source_type, library=library, document_id=document_id, page_id=page_id, url=url)
+    source_uuid = _source_uuid(
+        source_type, library=library, document_id=document_id, page_id=page_id, url=url
+    )
     source = SourceRecord(
         source_id=source_uuid,
         source_type=source_type,
@@ -263,12 +339,15 @@ async def create_source(
     except Exception:
         # A concurrent importer can win after the identity lookup. Stable IDs
         # turn that race into a duplicate-ID error instead of a duplicate row.
-        raced_source = await get_source(client, source_type=source_type, library=library, document_id=document_id, page_id=page_id, url=url)
-        if (
-            raced_source is not None
-            and raced_source.source_id
-            == source_uuid
-        ):
+        raced_source = await get_source(
+            client,
+            source_type=source_type,
+            library=library,
+            document_id=document_id,
+            page_id=page_id,
+            url=url,
+        )
+        if raced_source is not None and raced_source.source_id == source_uuid:
             return raced_source, False
         raise
     return source, True
@@ -299,31 +378,39 @@ async def create_source_batch(
     ]
     response = await collection.query.fetch_objects(
         filters=Filter.by_id().contains_any(source_uuids),
-        limit=len(specs),
+        limit=len(set(source_uuids)),
         return_references=empty_reference_queries([]),
     )
     resolved_by_uuid: dict[uuid.UUID, SourceRecord] = {}
+    requested_uuid_by_identity = {
+        _spec_identity(spec): source_uuid
+        for source_uuid, spec in zip(source_uuids, specs)
+    }
     for item in response.objects:
         source = parse_source(item.properties, item.references, item.uuid)
-        # Keep the first record if legacy data already contains a duplicate.
-        resolved_by_uuid.setdefault(source.source_id, source)
-    missing = [
-        (source_uuid, spec)
-        for source_uuid, spec in zip(source_uuids, specs)
-        if source_uuid not in resolved_by_uuid
-    ]
+        requested_uuid = requested_uuid_by_identity.get(_record_identity(source))
+        if requested_uuid is not None:
+            # Keep the first record if legacy data already contains a duplicate.
+            resolved_by_uuid.setdefault(requested_uuid, source)
+    missing_by_uuid: dict[uuid.UUID, SourceCreateSpec] = {}
+    for source_uuid, spec in zip(source_uuids, specs):
+        if source_uuid not in resolved_by_uuid:
+            missing_by_uuid.setdefault(source_uuid, spec)
+    missing = list(missing_by_uuid.items())
     async with collection.batch.stream() as batch:
         for source_uuid, spec in missing:
             source_uri, source_metadata = _source_content(
-                spec.source_type, 
-                library=spec.library, 
-                document_id=spec.document_id, 
-                page_id=spec.page_id, 
-                url=spec.url
+                spec.source_type,
+                library=spec.library,
+                document_id=spec.document_id,
+                page_id=spec.page_id,
+                url=spec.url,
             )
             await batch.add_object(
                 uuid=source_uuid,
-                properties=_storage_properties(spec.source_type, source_uri, source_metadata),
+                properties=_storage_properties(
+                    spec.source_type, source_uri, source_metadata
+                ),
             )
             resolved_by_uuid[source_uuid] = SourceRecord(
                 source_id=source_uuid,

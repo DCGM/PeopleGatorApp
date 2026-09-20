@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from people_gator_api.services.embedding_service.http_service import (
     close_embedding_service,
@@ -60,6 +61,13 @@ def get_app() -> FastAPI:
         description="An API for managing people and their relationships, powered by Weaviate, SQLAlchemy and OpenTelemetry.",
         version="0.1.0",
         lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=settings.cors.allow_origin_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.add_middleware(BaseHTTPMiddleware, dispatch=well_known_cors)
 

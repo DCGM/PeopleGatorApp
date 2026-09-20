@@ -82,7 +82,8 @@ describe('App', () => {
   it('keeps the logo when the optional top bar title is omitted', () => {
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
 
-    expect(wrapper.get('img[alt="PeopleGator"]').attributes('src')).toBe('/PeopleGator-logo.svg')
+    const logo = wrapper.get('a[aria-label="PeopleGator"] svg.lucide-people-gator')
+    expect(logo.attributes('stroke-width')).toBe('1.5')
     expect(wrapper.get('nav').text()).not.toContain('People Gator')
   })
 

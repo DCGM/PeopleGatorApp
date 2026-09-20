@@ -1,7 +1,7 @@
 """Entity endpoints (spec §2.1)."""
 
-from collections.abc import AsyncGenerator
 import uuid
+from collections.abc import AsyncGenerator
 
 from fastapi import (
     APIRouter,
@@ -9,22 +9,23 @@ from fastapi import (
     status,
 )
 
-from people_gator_api.schemas.enums import AssignmentType, EntityType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
     EntityDeleteManyResponse,
+    EntityEmbeddingBatchUpdateResponse,
+    EntityEmbeddingUpdateRequest,
     EntityListResponse,
     EntityPatchRequest,
     EntityResponse,
 )
+from people_gator_api.schemas.enums import AssignmentType, EntityType
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     AnnotatorUserDependency,
     BrowseUserDependency,
+    DataIngestUserDependency,
 )
-from people_gator_api.services.database_service import WeaviateSessionDependency
-from people_gator_api.services.http_errors import raise_api_error
 from people_gator_api.services.crud_services.entity_service import (
     create_entity,
     create_entity_batch,
@@ -33,7 +34,11 @@ from people_gator_api.services.crud_services.entity_service import (
     get_entity,
     list_entities,
     patch_entity,
+    update_entity_embeddings_batch,
 )
+from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.http_errors import raise_api_error
+
 router = APIRouter(tags=["entities"])
 
 
@@ -103,14 +108,22 @@ async def create_entity_batch_route(
 ) -> list[EntityResponse]:
     async def async_list(
         iterable: list[EntityCreateRequest],
-    ) -> AsyncGenerator[EntityCreateRequest, None]:
+    ) -> AsyncGenerator[EntityCreateRequest]:
         for item in iterable:
             yield item
 
-    entities = await create_entity_batch(
-        session, async_list(payload), user.user_id
-    )
+    entities = await create_entity_batch(session, async_list(payload), user.user_id)
     return entities
+
+
+@router.post("/entities:embeddings", response_model=EntityEmbeddingBatchUpdateResponse)
+async def update_entity_embeddings_batch_route(
+    payload: list[EntityEmbeddingUpdateRequest],
+    session: WeaviateSessionDependency,
+    _user: DataIngestUserDependency,
+) -> EntityEmbeddingBatchUpdateResponse:
+    updated_count = await update_entity_embeddings_batch(session, payload)
+    return EntityEmbeddingBatchUpdateResponse(updated_count=updated_count)
 
 
 @router.patch("/entities/{entity_id}", response_model=EntityResponse)

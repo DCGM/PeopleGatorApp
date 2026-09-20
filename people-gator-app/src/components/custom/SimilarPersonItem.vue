@@ -1,7 +1,19 @@
 <script setup lang="ts">
-import { Check, ChevronRight, Database, FileText } from '@lucide/vue'
+import {
+  Check,
+  ChevronRight,
+  ExternalLink,
+  LetterText,
+  Scan,
+  ScanFace,
+  Search,
+  UserRound,
+} from '@lucide/vue'
 
-import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
+import type {
+  SimilarPersonCandidate,
+  SimilarPersonMatchSource,
+} from '@/components/custom/similar-people.types'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,9 +26,12 @@ import {
   ItemTitle,
 } from '@/components/ui/item'
 
-defineProps<{
+const props = defineProps<{
   person: SimilarPersonCandidate
   assigned?: boolean
+  reassignment?: boolean
+  assignmentDisabled?: boolean
+  assignmentPending?: boolean
   viewed?: boolean
 }>()
 
@@ -32,12 +47,38 @@ function initials(name: string) {
     .join('')
     .slice(0, 2)
 }
+
+function wikidataHref(value: string) {
+  return /^https?:\/\//i.test(value) ? value : `https://www.wikidata.org/wiki/${value}`
+}
+
+function nlcrAuthorityHref(value: string) {
+  if (/^https?:\/\//i.test(value)) return value
+  return `https://aleph.nkp.cz/F/?func=find-c&local_base=aut&ccl_term=ica=${encodeURIComponent(value)}`
+}
+
+function sourceLabel(source: SimilarPersonMatchSource) {
+  switch (source.type) {
+    case 'text-search':
+      return `Text search score ${formatTextScore(source.score)}`
+    case 'face-match':
+      return `Face match cosine distance ${source.distance.toFixed(2)}`
+    case 'scan-text':
+      return 'Found in scanned text'
+    case 'scan-face':
+      return 'Found in scanned faces'
+  }
+}
+
+function formatTextScore(score: number) {
+  return Math.round(score).toString().padStart(2, '0')
+}
 </script>
 
 <template>
   <Item
     variant="outline"
-    class="relative w-full gap-x-4 gap-y-2 bg-card px-3 py-3 hover:border-accent"
+    class="relative w-full items-start gap-x-4 gap-y-2 bg-card px-3 py-3 hover:border-accent"
     :class="viewed && 'border-accent bg-accent/15 ring-1 ring-accent hover:bg-accent/15'"
   >
     <button
@@ -47,7 +88,8 @@ function initials(name: string) {
       :aria-pressed="viewed"
       @click="emit('preview', person)"
     ></button>
-    <ItemMedia>
+
+    <ItemMedia class="self-start">
       <Avatar class="size-15">
         <AvatarImage
           v-if="person.portrait"
@@ -58,63 +100,115 @@ function initials(name: string) {
         <AvatarFallback class="font-serif">{{ initials(person.name) }}</AvatarFallback>
       </Avatar>
     </ItemMedia>
+
     <ItemContent class="min-w-0 gap-1 overflow-hidden">
-      <ItemTitle class="min-w-0 max-w-full">
+      <ItemTitle class="min-w-0 w-full max-w-full">
         <RouterLink
           :to="{ name: 'person-detail', params: { personId: person.id } }"
-          class="group z-20 flex w-full min-w-0 items-center gap-1 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="group z-20 flex min-w-0 w-full items-center gap-1 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           :aria-label="`Open ${person.name}`"
         >
-          <h4 class="flex w-full min-w-0 items-center gap-1.5">
+          <h4
+            class="flex min-h-8 min-w-0 w-full items-center gap-1.5 rounded-sm border border-transparent px-1 py-0.5"
+          >
             <span class="min-w-0 truncate">{{ person.name }}</span>
             <ChevronRight
-              class="size-[1em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
+              class="size-[1.15em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
               aria-hidden="true"
             />
           </h4>
         </RouterLink>
       </ItemTitle>
       <p
-        v-if="person.shortDescription"
-        class="truncate text-wrap text-xs leading-snug height-[2em] text-muted-foreground"
+        class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
         :title="person.shortDescription"
       >
-        {{ person.shortDescription }}
+        {{ person.shortDescription || 'No description available' }}
       </p>
     </ItemContent>
-    <ItemActions class="z-20">
+
+    <ItemActions
+      v-if="person.matchSources?.length"
+      class="z-20 self-start flex-col items-end gap-1"
+      aria-label="Match sources"
+    >
+      <Badge
+        v-for="(source, index) in person.matchSources"
+        :key="`${source.type}-${index}`"
+        variant="outline"
+        class="min-h-5 font-mono text-xs py-0 text-muted-foreground"
+        :aria-label="sourceLabel(source)"
+        :title="sourceLabel(source)"
+      >
+        <template v-if="source.type === 'text-search'">
+          <Search aria-hidden="true" />
+          <span class="inline-block w-[3ch] text-right tabular-nums">
+            {{ formatTextScore(source.score) }}
+          </span>
+        </template>
+        <template v-else-if="source.type === 'face-match'">
+          <ScanFace aria-hidden="true" />
+          <span class="inline-block w-[4ch] text-right tabular-nums">
+            {{ source.distance.toFixed(2) }}
+          </span>
+        </template>
+        <template v-else-if="source.type === 'scan-text'">
+          <Scan aria-hidden="true" />
+          <LetterText aria-hidden="true" />
+          <span class="sr-only">Found in scanned text</span>
+        </template>
+        <template v-else>
+          <Scan aria-hidden="true" />
+          <UserRound aria-hidden="true" />
+          <span class="sr-only">Found in scanned faces</span>
+        </template>
+      </Badge>
+    </ItemActions>
+
+    <ItemFooter
+      class="relative z-20 w-full shrink-0 items-center border-t pt-2 text-muted-foreground"
+    >
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <a
+          v-if="person.wikidataId"
+          :href="wikidataHref(person.wikidataId)"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex min-w-0 items-center gap-1 text-xs underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
+        >
+          <span class="truncate">Wikidata</span>
+          <ExternalLink class="size-3 shrink-0" aria-hidden="true" />
+        </a>
+        <a
+          v-if="person.nlcrAuthorityId"
+          :href="nlcrAuthorityHref(person.nlcrAuthorityId)"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex min-w-0 items-center gap-1 text-xs underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
+        >
+          <span class="truncate">NLCR AUT</span>
+          <ExternalLink class="size-3 shrink-0" aria-hidden="true" />
+        </a>
+      </div>
+
       <Button
+        v-if="!props.assignmentDisabled"
         type="button"
         size="xs"
         :variant="assigned ? 'secondary' : 'outline'"
+        :class="!assigned && 'text-accent hover:text-accent'"
         :aria-pressed="assigned"
+        :aria-label="
+          assigned
+            ? `Assigned to ${person.name}`
+            : `${reassignment ? 'Reassign' : 'Assign'} to ${person.name}`
+        "
+        :disabled="assigned || props.assignmentPending"
         @click="emit('assign', person)"
       >
         <Check v-if="assigned" aria-hidden="true" />
-        {{ assigned ? 'Linked' : 'Assign' }}
+        {{ assigned ? 'Assigned' : reassignment ? 'Reassign' : 'Assign' }}
       </Button>
-    </ItemActions>
-    <ItemFooter class="w-full shrink-0 items-center border-t pt-2 text-muted-foreground">
-      <p class="min-w-0 flex-1 truncate font-mono text-xs">
-        {{ person.score !== undefined ? `sim ${person.score}%` : 'On this page' }} · dist
-        {{ person.closestMentionDistancePx ?? '—' }} px
-      </p>
-      <div class="flex shrink-0 items-center gap-1">
-        <Badge
-          v-if="person.source === 'database'"
-          variant="outline"
-          class="font-mono text-xs py-0 uppercase text-muted-foreground"
-        >
-          <Database />DB
-        </Badge>
-        <Badge
-          v-if="person.source === 'page'"
-          variant="outline"
-          class="font-mono text-xs py-0 uppercase text-muted-foreground"
-        >
-          <FileText />scan
-        </Badge>
-      </div>
     </ItemFooter>
   </Item>
 </template>

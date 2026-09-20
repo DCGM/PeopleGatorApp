@@ -28,6 +28,12 @@ class OpenTelemetrySettings(BaseModel):
     profiles_path: str = "/v1/profiles"
 
 
+class CorsSettings(BaseModel):
+    allow_origin_regex: str = (
+        r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
+    )
+
+
 class PostgresSettings(BaseModel):
     host: str
     port: int = Field(le=65535, ge=1)
@@ -167,6 +173,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, le=65535, ge=1)
     host: str = "0.0.0.0"
     log_level: str = "INFO"
+    cors: CorsSettings = CorsSettings()
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
     postgres: PostgresSettings
     storage: StorageSettings
