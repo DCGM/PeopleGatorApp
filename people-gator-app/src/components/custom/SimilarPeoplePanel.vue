@@ -3,18 +3,19 @@ import { ChevronsDown, ScanFace, Search, X } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import type { Face } from '@/components/custom/document-page.types'
+import type { Face } from '@/viewmodels/document-workspace.types'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import SimilarPersonItem from '@/components/custom/SimilarPersonItem.vue'
 import SimilarPersonItemSkeleton from '@/components/custom/SimilarPersonItemSkeleton.vue'
-import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
+import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import { Item } from '@/components/ui/item'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 const props = defineProps<{
   people: SimilarPersonCandidate[]
@@ -81,9 +82,12 @@ onMounted(async () => {
   if (typeof IntersectionObserver !== 'undefined') {
     loadMoreObserver = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) loadMoreOnMobile()
+        if (entry?.isIntersecting) loadNextPage()
       },
-      { threshold: 0.75 },
+      {
+        root: resultsElement.value?.querySelector('[data-slot="scroll-area-viewport"]'),
+        threshold: 0.75,
+      },
     )
     if (loadMoreElement.value) loadMoreObserver.observe(loadMoreElement.value)
   }
@@ -100,8 +104,8 @@ function revealNextPage() {
   visiblePageCount.value += 1
 }
 
-function loadMoreOnMobile() {
-  if (!isMobile.value || !hasMorePeople.value || loadingMore.value) return
+function loadNextPage() {
+  if (!hasMorePeople.value || loadingMore.value) return
 
   loadingMore.value = true
   loadMoreTimer = setTimeout(() => {
@@ -184,54 +188,57 @@ defineExpose({ focusSearch })
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
-      <div
-        ref="resultsElement"
-        class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1"
-        aria-live="polite"
-        :aria-busy="props.loading"
-      >
-        <SimilarPersonItem
-          v-for="person in visiblePeople"
-          :key="person.id"
-          :person="person"
-          class="shrink-0"
-          :assigned="props.selectedFace?.personId === person.id"
-          :reassignment="
-            Boolean(props.selectedFace?.personId && props.selectedFace.personId !== person.id)
-          "
-          :assignment-disabled="!props.selectedFace"
-          :assignment-pending="props.assignmentPending"
-          :viewed="viewedPersonId === person.id"
-          @preview="emit('preview', $event)"
-          @assign="emit('assign', $event)"
-        />
-        <SimilarPersonItemSkeleton
-          v-if="props.loading && visiblePeople.length === 0"
-          class="shrink-0"
-        />
-
-        <p
-          v-if="props.people.length === 0 && !props.loading"
-          class="flex flex-1 items-center justify-center py-6 text-center text-sm text-muted-foreground"
+      <div ref="resultsElement" class="min-h-0 flex-1">
+        <ScrollArea
+          type="always"
+          class="size-full"
+          aria-live="polite"
+          :aria-busy="props.loading"
         >
-          No matching people. Add a new identity instead.
-        </p>
+          <div class="flex min-h-full flex-col gap-2 pr-3">
+            <SimilarPersonItem
+              v-for="person in visiblePeople"
+              :key="person.id"
+              :person="person"
+              class="shrink-0"
+              :assigned="props.selectedFace?.personId === person.id"
+              :reassignment="
+                Boolean(props.selectedFace?.personId && props.selectedFace.personId !== person.id)
+              "
+              :assignment-disabled="!props.selectedFace"
+              :assignment-pending="props.assignmentPending"
+              :viewed="viewedPersonId === person.id"
+              @preview="emit('preview', $event)"
+              @assign="emit('assign', $event)"
+            />
+            <SimilarPersonItemSkeleton
+              v-if="props.loading && visiblePeople.length === 0"
+              class="shrink-0"
+            />
 
-        <div v-if="hasMorePeople" ref="loadMoreElement" class="shrink-0">
-          <Item
-            as="button"
-            type="button"
-            variant="outline"
-            class="w-full justify-center gap-2 bg-card px-3 py-3 font-mono text-xs font-semibold uppercase text-accent hover:border-accent hover:bg-accent/10"
-            :class="loadingMore && 'animate-pulse'"
-            :disabled="loadingMore"
-            @click="revealNextPage"
-          >
-            <ChevronsDown class="size-4" aria-hidden="true" />
-            {{ loadingMore ? 'Loading more' : 'Load more people' }}
-            <ChevronsDown class="size-4" aria-hidden="true" />
-          </Item>
-        </div>
+            <p
+              v-if="props.people.length === 0 && !props.loading"
+              class="flex flex-1 items-center justify-center py-6 text-center text-sm text-muted-foreground"
+            >
+              No matching people. Add a new identity instead.
+            </p>
+
+            <div v-if="hasMorePeople" ref="loadMoreElement" class="shrink-0 text-center">
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                class="font-mono text-xs font-semibold uppercase text-accent"
+                :class="loadingMore && 'animate-pulse'"
+                :disabled="loadingMore"
+                @click="revealNextPage"
+              >
+                <ChevronsDown class="size-4" aria-hidden="true" />
+                {{ loadingMore ? 'Loading more' : 'Load more people' }}
+              </Button>
+            </div>
+          </div>
+        </ScrollArea>
       </div>
     </div>
   </section>

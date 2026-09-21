@@ -6,6 +6,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
 
 import App from '../App.vue'
+import DocumentPageOverlay from '../components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
 import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
@@ -20,7 +21,7 @@ vi.mock('@panzoom/panzoom', () => ({
   })),
 }))
 
-vi.mock('@/query/document-search', () => ({
+vi.mock('@/viewmodels/document-search', () => ({
   useDocumentSearch: () => ({
     cards: ref([]),
     error: ref(null),
@@ -32,7 +33,7 @@ vi.mock('@/query/document-search', () => ({
   }),
 }))
 
-vi.mock('@/query/people-search', () => ({
+vi.mock('@/viewmodels/people-search', () => ({
   usePeopleSearch: () => ({
     error: ref(null),
     hasNextPage: ref(false),
@@ -44,7 +45,7 @@ vi.mock('@/query/people-search', () => ({
   }),
 }))
 
-vi.mock('@/query/person-detail', () => ({
+vi.mock('@/viewmodels/person-detail', () => ({
   usePersonDetail: () => ({
     error: ref(null),
     faceIds: ref([]),
@@ -61,7 +62,7 @@ vi.mock('@/query/person-detail', () => ({
   }),
 }))
 
-vi.mock('@/query/document-workspace', () => ({
+vi.mock('@/viewmodels/document-workspace', () => ({
   useDocumentWorkspace: () => ({
     assignFace: vi.fn<() => void>(),
     assignmentStatus: ref('idle'),
@@ -98,6 +99,17 @@ describe('App', () => {
     expect(topBar.text()).not.toContain('People Gator')
     expect(topBar.find('[aria-label="Previous line"]').exists()).toBe(true)
     expect(wrapper.get('main').find('[aria-label="Previous line"]').exists()).toBe(false)
+
+    const badgeNamesToggle = topBar.get('[aria-label="Hide overlay badge names"]')
+    expect(badgeNamesToggle.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(true)
+
+    await badgeNamesToggle.trigger('click')
+
+    expect(topBar.get('[aria-label="Show overlay badge names"]').attributes('aria-pressed')).toBe(
+      'false',
+    )
+    expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(false)
   })
 
   it('uses the full viewer layer as the panzoom coordinate space', async () => {

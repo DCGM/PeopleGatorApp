@@ -5,12 +5,12 @@ import type { PageResponse } from '@/client'
 import type {
   PersonDiscoveryCandidate,
   PersonDiscoveryFace,
-} from '@/components/custom/person-detail.types'
+} from '@/viewmodels/person-detail.types'
 import { fetchEntity } from '@/query/entities'
 import { fetchFaceAlignedCrop, fetchFaces, useAssignFacesMutation } from '@/query/faces'
 import { queryKeys } from '@/query/keys'
 import { fetchPage } from '@/query/media'
-import { useObjectUrlMap } from '@/query/object-url'
+import { useObjectUrlMap } from '@/composables/object-url'
 import { fetchEntitySearch, fetchFaceSearch } from '@/query/search'
 
 const DISCOVERY_LIMIT = 40

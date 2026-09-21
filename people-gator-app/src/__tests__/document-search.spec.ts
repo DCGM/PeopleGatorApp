@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { sourceEntityNames } from '@/query/document-search'
+import { sourceEntityNames } from '@/viewmodels/document-search'
 
 describe('sourceEntityNames', () => {
   it('keeps only the first three unique names for the current source', () => {

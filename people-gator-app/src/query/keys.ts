@@ -82,7 +82,6 @@ export const queryKeys = {
   },
   translations: {
     all: ['translations'] as const,
-    detail: (lineId: string, language: string, text: string) =>
-      ['translations', lineId, language, text] as const,
+    detail: (text: string, language: string) => ['translations', text, language] as const,
   },
 } as const

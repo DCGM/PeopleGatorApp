@@ -11,8 +11,8 @@ import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.v
 import PersonMentionItem from '@/components/custom/PersonMentionItem.vue'
 import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { usePersonDiscovery } from '@/query/person-discovery'
-import { usePersonDetail } from '@/query/person-detail'
+import { usePersonDiscovery } from '@/viewmodels/person-discovery'
+import { usePersonDetail } from '@/viewmodels/person-detail'
 
 const route = useRoute()
 const router = useRouter()

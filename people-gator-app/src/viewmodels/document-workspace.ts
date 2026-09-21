@@ -14,21 +14,21 @@ import type {
   Face,
   TranscriptionEntitySpan,
   TranscriptionLine,
-} from '@/components/custom/document-page.types'
-import { transcriptionEntityKey } from '@/components/custom/document-page.types'
-import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
+} from '@/viewmodels/document-workspace.types'
+import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
+import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import { responseData } from '@/query/api'
 import { fetchEntity, useCreateEntityMutation } from '@/query/entities'
 import { fetchFaces, fetchFaceAlignedCrop, useAssignFaceMutation } from '@/query/faces'
 import { usePageImageQuery, usePageLookupQuery } from '@/query/media'
-import { useObjectUrl, useObjectUrlMap } from '@/query/object-url'
+import { useObjectUrl, useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
 import { fetchEntitySearch } from '@/query/search'
 import {
   candidateEntities,
   candidateSearchParams,
   currentPagePersonIds,
-} from '@/query/similar-people'
+} from '@/viewmodels/similar-people'
 
 function percentage(value: number) {
   return Math.round((value <= 1 ? value * 100 : value) * 10) / 10

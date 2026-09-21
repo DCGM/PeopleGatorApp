@@ -23,7 +23,7 @@ export function fetchTextMentions(params?: TextMentionListParams, signal?: Abort
   )
 }
 
-export function useTextMentionsQuery(
+export function useTextMentionListQuery(
   params?: MaybeRefOrGetter<TextMentionListParams | undefined>,
 ) {
   return useQuery({
@@ -66,7 +66,9 @@ export function useCreateTextMentionsMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: TextMentionCreateRequest[]) =>
-      responseData(createTextMentionBatchRouteApiV1TextMentionsBatchPost({ body, throwOnError: true })),
+      responseData(
+        createTextMentionBatchRouteApiV1TextMentionsBatchPost({ body, throwOnError: true }),
+      ),
     onSuccess: (mentions) => {
       for (const mention of mentions) {
         queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)

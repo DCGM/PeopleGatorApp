@@ -2,10 +2,10 @@ import { useInfiniteQuery, useQueries, type InfiniteData, type QueryKey } from '
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntityResponse, PageResponse, PageSearchResult, SourceResponse } from '@/client'
-import { assignmentType, type AssignmentFilter } from '@/query/assignment'
+import { assignmentType, type AssignmentFilter } from '@/viewmodels/assignment'
 import { fetchEntities } from '@/query/entities'
 import { fetchPage, fetchPageImage, fetchPages, fetchSources } from '@/query/media'
-import { useObjectUrlMap } from '@/query/object-url'
+import { useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
 import { fetchPageSearch } from '@/query/search'
 

@@ -54,7 +54,7 @@ export function useFaceAlignedCropQuery(
   })
 }
 
-export function useFacesQuery(params?: MaybeRefOrGetter<FaceListParams | undefined>) {
+export function useFaceListQuery(params?: MaybeRefOrGetter<FaceListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.faces.list(toValue(params))),
     queryFn: ({ signal }) => fetchFaces(toValue(params), signal),

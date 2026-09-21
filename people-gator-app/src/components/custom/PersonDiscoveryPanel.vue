@@ -17,7 +17,7 @@ import LoadableImage from '@/components/custom/LoadableImage.vue'
 import type {
   PersonDiscoveryCandidate,
   PersonDiscoveryFace,
-} from '@/components/custom/person-detail.types'
+} from '@/viewmodels/person-detail.types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'

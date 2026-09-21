@@ -3,7 +3,7 @@ import { Link, UserRoundX } from '@lucide/vue'
 import type { AcceptableValue } from 'reka-ui'
 import { computed, nextTick, ref, watch, type Component } from 'vue'
 
-import type { Face, FaceStatus } from '@/components/custom/document-page.types'
+import type { Face, FaceStatus } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'

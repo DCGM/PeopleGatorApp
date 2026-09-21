@@ -7,18 +7,22 @@ import type {
   FaceStatus,
   PageViewportBounds,
   TranscriptionLine,
-} from '@/components/custom/document-page.types'
+} from '@/viewmodels/document-workspace.types'
 import { Badge } from '@/components/ui/badge'
 
-const props = defineProps<{
-  pageBounds: PageViewportBounds | null
-  transcription: TranscriptionLine[]
-  faces: Face[]
-  selectedLineIndex: number
-  selectedFaceId: string | null
-  selectedPersonId: string | null
-  selectedCandidateFaceId: string | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    pageBounds: PageViewportBounds | null
+    transcription: TranscriptionLine[]
+    faces: Face[]
+    selectedLineIndex: number
+    selectedFaceId: string | null
+    selectedPersonId: string | null
+    selectedCandidateFaceId: string | null
+    showBadgeNames?: boolean
+  }>(),
+  { showBadgeNames: true },
+)
 
 const emit = defineEmits<{
   selectLine: [index: number]
@@ -101,13 +105,16 @@ function regionStyle(position: Face['position']): CSSProperties {
     >
       <Badge
         data-face-status-badge
-        class="absolute -left-1 -top-7 h-6 max-w-40 gap-1.5 rounded-full border-0 px-2 py-0 text-xs font-light shadow-xs"
-        :class="faceStatusBadgeClasses[face.status]"
+        class="absolute -left-1 -top-7 h-6 rounded-full border-0 py-0 text-xs font-light shadow-xs"
+        :class="[
+          faceStatusBadgeClasses[face.status],
+          showBadgeNames ? 'max-w-40 gap-1.5 px-2' : 'size-6 justify-center p-0',
+        ]"
         :title="face.status === 'assigned' ? 'Assigned' : 'Unassigned'"
         aria-hidden="true"
       >
         <component :is="faceStatusIcons[face.status]" class="size-3.5 shrink-0" />
-        <span class="min-w-0 truncate">{{ face.name }}</span>
+        <span v-if="showBadgeNames" class="min-w-0 truncate">{{ face.name }}</span>
       </Badge>
     </button>
   </div>

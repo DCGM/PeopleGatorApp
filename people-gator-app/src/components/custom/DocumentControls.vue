@@ -10,6 +10,7 @@ import {
   Plus,
   Rows3,
   ScanFace,
+  Tags,
 } from '@lucide/vue'
 
 import type { Language } from '@/client'
@@ -27,6 +28,7 @@ defineProps<{
   translationOptions: readonly ('off' | Language)[]
   isTranslationOpen: boolean
   selectedLanguage: Language
+  showBadgeNames: boolean
 }>()
 
 defineEmits<{
@@ -37,6 +39,7 @@ defineEmits<{
   'set-zoom': [direction: 'in' | 'out']
   'reset-view': []
   'select-translation': [language: Language | 'off']
+  'toggle-badge-names': []
 }>()
 </script>
 
@@ -85,6 +88,22 @@ defineEmits<{
       <Button variant="outline" size="icon-sm" aria-label="Center page" title="Center page"
         @click="$emit('reset-view')">
         <LocateFixed />
+      </Button>
+    </ButtonGroup>
+
+    <ButtonGroup class="shrink-0">
+      <Button
+        variant="outline"
+        size="sm"
+        class="font-mono text-sm"
+        :class="showBadgeNames ? 'bg-muted font-semibold text-foreground' : 'text-muted-foreground'"
+        :aria-label="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
+        :title="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
+        :aria-pressed="showBadgeNames"
+        @click="$emit('toggle-badge-names')"
+      >
+        <Tags />
+        Names
       </Button>
     </ButtonGroup>
 

@@ -2,7 +2,7 @@
 import { Link, UserRoundX } from '@lucide/vue'
 import type { Component } from 'vue'
 
-import type { Face, FaceStatus } from '@/components/custom/document-page.types'
+import type { Face, FaceStatus } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
 

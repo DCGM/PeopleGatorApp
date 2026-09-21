@@ -5,7 +5,7 @@ import {
   candidateEntities,
   candidateSearchParams,
   currentPagePersonIds,
-} from '@/query/similar-people'
+} from '@/viewmodels/similar-people'
 
 describe('similar-people search modes', () => {
   it('sends a face query only with no text, and switches to pure text when typing', () => {

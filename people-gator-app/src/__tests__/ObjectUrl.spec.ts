@@ -1,7 +1,7 @@
 import { effectScope, ref, type Ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { useObjectUrl } from '@/query/object-url'
+import { useObjectUrl } from '@/composables/object-url'
 
 describe('object URL cache', () => {
   afterEach(() => {

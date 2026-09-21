@@ -4,7 +4,7 @@ import { computed, reactive, ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
 import EditableActions from '@/components/custom/EditableActions.vue'
-import type { PersonIdentifiers, PersonProfile } from '@/components/custom/person-detail.types'
+import type { PersonIdentifiers, PersonProfile } from '@/viewmodels/person-detail.types'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 

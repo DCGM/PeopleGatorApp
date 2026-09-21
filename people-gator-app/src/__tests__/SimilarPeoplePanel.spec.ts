@@ -2,8 +2,8 @@ import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
-import type { Face } from '@/components/custom/document-page.types'
-import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
+import type { Face } from '@/viewmodels/document-workspace.types'
+import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 
 const people: SimilarPersonCandidate[] = [
   {
@@ -294,13 +294,14 @@ describe('SimilarPeoplePanel', () => {
       global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
-    expect(wrapper.find('[data-slot="scroll-area-viewport"]').exists()).toBe(false)
+    expect(wrapper.find('[data-slot="scroll-area-viewport"]').exists()).toBe(true)
     expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(3)
     const loadMoreItem = wrapper
       .findAll('button')
       .find((button) => button.text() === 'Load more people')!
-    expect(loadMoreItem.attributes('data-slot')).toBe('item')
-    expect(loadMoreItem.findAll('svg.lucide-chevrons-down')).toHaveLength(2)
+    expect(loadMoreItem.attributes('data-slot')).toBe('button')
+    expect(loadMoreItem.attributes('data-variant')).toBe('link')
+    expect(loadMoreItem.findAll('svg.lucide-chevrons-down')).toHaveLength(1)
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Load more people')!
@@ -319,7 +320,7 @@ describe('SimilarPeoplePanel', () => {
     )
   })
 
-  it('loads the next page when the load-more item enters the mobile viewport', async () => {
+  it('loads the next page when the load-more link enters the scroll viewport', async () => {
     const extendedPeople = [
       ...people,
       { ...people[1]!, id: 'josef-svoboda', name: 'Josef Svoboda' },
@@ -332,7 +333,7 @@ describe('SimilarPeoplePanel', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn().mockReturnValue({
-        matches: true,
+        matches: false,
         addEventListener: vi.fn<() => void>(),
         removeEventListener: vi.fn<() => void>(),
       }),

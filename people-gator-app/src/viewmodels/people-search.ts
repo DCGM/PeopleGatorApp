@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQueries, type InfiniteData, type QueryKey } from '
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntityResponse, SearchEntitiesResult } from '@/client'
-import { assignmentType, type AssignmentFilter } from '@/query/assignment'
+import { assignmentType, type AssignmentFilter } from '@/viewmodels/assignment'
 import { fetchEntities } from '@/query/entities'
 import { fetchFaces } from '@/query/faces'
 import { queryKeys } from '@/query/keys'

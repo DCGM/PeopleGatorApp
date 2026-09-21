@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { AssignmentFilter } from '@/query/assignment'
+import type { AssignmentFilter } from '@/viewmodels/assignment'
 
 defineProps<{
   resultCount: number
@@ -24,7 +24,7 @@ const assignment = defineModel<AssignmentFilter>('assignment', { required: true 
 </script>
 
 <template>
-  <Card class="sticky top-0 z-20 gap-3 rounded-none py-3">
+  <Card class="sticky top-13 z-20 gap-3 rounded-none py-3">
     <CardContent
       class="grid w-full grid-cols-2 gap-2 px-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,11rem)]"
     >

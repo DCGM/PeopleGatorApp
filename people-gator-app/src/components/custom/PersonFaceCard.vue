@@ -2,7 +2,7 @@
 import { ChevronRight } from '@lucide/vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
-import type { PersonFace } from '@/components/custom/person-detail.types'
+import type { PersonFace } from '@/viewmodels/person-detail.types'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 

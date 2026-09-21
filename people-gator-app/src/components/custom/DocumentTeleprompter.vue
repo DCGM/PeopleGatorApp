@@ -7,8 +7,8 @@ import type { EntityType, Language } from '@/client/types.gen'
 import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
-} from '@/components/custom/document-page.types'
-import { transcriptionEntityKey } from '@/components/custom/document-page.types'
+} from '@/viewmodels/document-workspace.types'
+import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 
 type TranscriptionSegment = {
   text: string

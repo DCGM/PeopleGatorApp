@@ -17,12 +17,11 @@ export type UserListParams = NonNullable<ListUsersRouteApiV1UsersGetData['query'
 export function useMeQuery() {
   return useQuery({
     queryKey: queryKeys.auth.me(),
-    queryFn: ({ signal }) =>
-      responseData(getMeRouteApiV1MeGet({ signal, throwOnError: true })),
+    queryFn: ({ signal }) => responseData(getMeRouteApiV1MeGet({ signal, throwOnError: true })),
   })
 }
 
-export function useUsersQuery(params?: MaybeRefOrGetter<UserListParams | undefined>) {
+export function useUserListQuery(params?: MaybeRefOrGetter<UserListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.users.list(toValue(params))),
     queryFn: ({ signal }) =>

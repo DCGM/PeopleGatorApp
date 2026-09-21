@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronRight } from '@lucide/vue'
 
-import type { PersonMention } from '@/components/custom/person-detail.types'
+import type { PersonMention } from '@/viewmodels/person-detail.types'
 
 const props = defineProps<{
   mention: PersonMention

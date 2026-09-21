@@ -82,7 +82,7 @@ export function fetchPageImage(sourceId: string, width?: number, signal?: AbortS
   ) as Promise<Blob>
 }
 
-export function useDocumentsQuery(params?: MaybeRefOrGetter<DocumentListParams | undefined>) {
+export function useDocumentListQuery(params?: MaybeRefOrGetter<DocumentListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.documents.list(toValue(params))),
     queryFn: ({ signal }) => fetchDocuments(toValue(params), signal),
@@ -122,7 +122,7 @@ export function useDocumentLookupQuery(
   })
 }
 
-export function usePagesQuery(params?: MaybeRefOrGetter<PageListParams | undefined>) {
+export function usePageListQuery(params?: MaybeRefOrGetter<PageListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.pages.list(toValue(params))),
     queryFn: ({ signal }) => fetchPages(toValue(params), signal),
@@ -204,7 +204,7 @@ export function usePageMentionSpansQuery(sourceId: MaybeRefOrGetter<string>) {
   })
 }
 
-export function useImagesQuery(params?: MaybeRefOrGetter<ImageListParams | undefined>) {
+export function useImageListQuery(params?: MaybeRefOrGetter<ImageListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.images.list(toValue(params))),
     queryFn: ({ signal }) =>
@@ -261,7 +261,7 @@ export function useImageLookupQuery(url: MaybeRefOrGetter<string>) {
   })
 }
 
-export function useSourcesQuery(params?: MaybeRefOrGetter<SourceListParams | undefined>) {
+export function useSourceListQuery(params?: MaybeRefOrGetter<SourceListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.sources.list(toValue(params))),
     queryFn: ({ signal }) => fetchSources(toValue(params), signal),

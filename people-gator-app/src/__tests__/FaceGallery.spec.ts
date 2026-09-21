@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import FaceGallery from '@/components/custom/FaceGallery.vue'
-import type { Face } from '@/components/custom/document-page.types'
+import type { Face } from '@/viewmodels/document-workspace.types'
 
 const faces: Face[] = [
   {

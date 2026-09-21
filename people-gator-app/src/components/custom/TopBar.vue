@@ -16,7 +16,7 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
 </script>
 
 <template>
-  <nav class="flex h-13 w-full items-center gap-3 border-b bg-background pl-3 pr-6">
+  <nav class="sticky top-0 z-50 flex h-13 w-full items-center gap-3 border-b bg-background pl-3 pr-6">
     <div class="flex shrink-0 items-center gap-6">
       <RouterLink :to="{ name: 'document-search' }" aria-label="PeopleGator"
         class="z-20 flex size-12 shrink-0 items-center justify-center bg-background">

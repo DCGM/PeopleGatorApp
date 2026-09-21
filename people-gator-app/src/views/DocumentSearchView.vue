@@ -6,8 +6,8 @@ import DocumentCardSkeleton from '@/components/custom/DocumentCardSkeleton.vue'
 import DocumentSearchBar from '@/components/custom/DocumentSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
-import { useDocumentSearch } from '@/query/document-search'
-import { normalizeAssignmentFilter } from '@/query/assignment'
+import { useDocumentSearch } from '@/viewmodels/document-search'
+import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
 
 const route = useRoute()
 const router = useRouter()

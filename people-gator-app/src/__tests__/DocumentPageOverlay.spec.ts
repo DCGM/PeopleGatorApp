@@ -63,6 +63,11 @@ describe('DocumentPageOverlay', () => {
 
     await face.trigger('click')
     expect(wrapper.emitted('selectFace')).toEqual([['face-identifier']])
+
+    await wrapper.setProps({ showBadgeNames: false })
+    expect(badge.find('span').exists()).toBe(false)
+    expect(badge.find('svg').exists()).toBe(true)
+    expect(badge.classes()).toContain('size-6')
   })
 
   it('stacks selected regions above unselected regions', async () => {

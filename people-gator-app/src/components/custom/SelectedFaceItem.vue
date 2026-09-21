@@ -14,7 +14,7 @@ import {
 import { ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
-import type { Face } from '@/components/custom/document-page.types'
+import type { Face } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

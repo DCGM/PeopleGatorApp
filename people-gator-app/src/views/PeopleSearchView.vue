@@ -8,8 +8,8 @@ import PeopleCardSkeleton from '@/components/custom/PeopleCardSkeleton.vue'
 import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
-import { usePeopleSearch } from '@/query/people-search'
-import { normalizeAssignmentFilter } from '@/query/assignment'
+import { usePeopleSearch } from '@/viewmodels/people-search'
+import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
 
 const route = useRoute()
 const router = useRouter()

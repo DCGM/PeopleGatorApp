@@ -35,7 +35,7 @@ export function fetchEntity(entityId: string, signal?: AbortSignal) {
   )
 }
 
-export function useEntitiesQuery(params?: MaybeRefOrGetter<EntityListParams | undefined>) {
+export function useEntityListQuery(params?: MaybeRefOrGetter<EntityListParams | undefined>) {
   return useQuery({
     queryKey: computed(() => queryKeys.entities.list(toValue(params))),
     queryFn: ({ signal }) => fetchEntities(toValue(params), signal),

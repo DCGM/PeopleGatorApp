@@ -2,8 +2,8 @@ import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
-import type { PersonDiscoveryFace } from '@/components/custom/person-detail.types'
-import { personDiscoverySignals } from '@/query/person-discovery'
+import type { PersonDiscoveryFace } from '@/viewmodels/person-detail.types'
+import { personDiscoverySignals } from '@/viewmodels/person-discovery'
 
 function face(id: string, score = 93): PersonDiscoveryFace {
   return {

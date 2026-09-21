@@ -29,9 +29,9 @@ vi.mock('@/query/media', () => ({
   fetchSources: mocks.fetchSources,
 }))
 
-import { assignmentType, normalizeAssignmentFilter } from '@/query/assignment'
-import { useDocumentSearch } from '@/query/document-search'
-import { usePeopleSearch } from '@/query/people-search'
+import { assignmentType, normalizeAssignmentFilter } from '@/viewmodels/assignment'
+import { useDocumentSearch } from '@/viewmodels/document-search'
+import { usePeopleSearch } from '@/viewmodels/people-search'
 
 function mountQuery(setup: () => void) {
   const queryClient = new QueryClient({

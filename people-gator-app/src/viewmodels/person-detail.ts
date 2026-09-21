@@ -7,11 +7,11 @@ import type {
   PersonFace,
   PersonMention,
   PersonProfile,
-} from '@/components/custom/person-detail.types'
+} from '@/viewmodels/person-detail.types'
 import { useEntityQuery, usePatchEntityMutation } from '@/query/entities'
 import { fetchFaceAlignedCrop, fetchFaces } from '@/query/faces'
 import { fetchPage, fetchPageImage } from '@/query/media'
-import { useObjectUrlMap } from '@/query/object-url'
+import { useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
 import { fetchTextMentions } from '@/query/text-mentions'
 

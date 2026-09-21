@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
-import { useQuery } from '@tanstack/vue-query'
 import { useDebounce } from '@vueuse/core'
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,12 +14,12 @@ import { topBarContextKey } from '@/components/custom/top-bar-context'
 import type {
   PageViewportBounds,
   TranscriptionEntitySpan,
-} from '@/components/custom/document-page.types'
-import { transcriptionEntityKey } from '@/components/custom/document-page.types'
-import type { SimilarPersonCandidate } from '@/components/custom/similar-people.types'
+} from '@/viewmodels/document-workspace.types'
+import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
+import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import type { Language } from '@/client'
-import { useDocumentWorkspace } from '@/query/document-workspace'
-import { fetchTranslation } from '@/query/translation'
+import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
+import { useTranslationQuery } from '@/query/translation'
 
 const minimumZoomPercent = 55
 const maximumZoomPercent = 350
@@ -58,6 +57,7 @@ const {
 
 const selectedLineIndex = ref(0)
 const isTranslationOpen = ref(false)
+const showBadgeNames = ref(true)
 const selectedLanguage = ref<Language>('en')
 const zoomPercent = ref(82)
 const selectedEntityKey = ref<string | null>(null)
@@ -83,17 +83,11 @@ const translationOptions = computed<readonly ('off' | Language)[]>(() => [
   'fr',
 ])
 const selectedLineText = computed(() => transcription.value[selectedLineIndex.value]?.text ?? '')
-const translationQuery = useQuery({
-  queryKey: computed(() => [
-    'translation',
-    selectedLineIndex.value,
-    selectedLanguage.value,
-    selectedLineText.value,
-  ]),
-  queryFn: ({ signal }) => fetchTranslation(selectedLineText.value, selectedLanguage.value, signal),
-  enabled: computed(() => isTranslationOpen.value && Boolean(selectedLineText.value)),
-  staleTime: 5 * 60_000,
-})
+const translationQuery = useTranslationQuery(
+  selectedLineText,
+  selectedLanguage,
+  computed(() => isTranslationOpen.value),
+)
 const currentTranslation = computed(() => translationQuery.data.value?.translation ?? '')
 const translationLoading = computed(() => translationQuery.isFetching.value)
 
@@ -319,6 +313,7 @@ onBeforeUnmount(() => {
       :translation-options="translationOptions"
       :is-translation-open="isTranslationOpen"
       :selected-language="selectedLanguage"
+      :show-badge-names="showBadgeNames"
       @previous-line="previousLine"
       @next-line="nextLine"
       @previous-face="previousFace"
@@ -326,6 +321,7 @@ onBeforeUnmount(() => {
       @set-zoom="setZoom"
       @reset-view="resetView"
       @select-translation="selectTranslation"
+      @toggle-badge-names="showBadgeNames = !showBadgeNames"
     />
   </Teleport>
 
@@ -388,6 +384,7 @@ onBeforeUnmount(() => {
           :selected-face-id="selectedFace?.id ?? null"
           :selected-person-id="selectedPersonId"
           :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
+          :show-badge-names="showBadgeNames"
           @select-line="selectLine"
           @select-face="selectFace"
         />
