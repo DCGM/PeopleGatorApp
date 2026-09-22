@@ -6,7 +6,6 @@ from typing import Annotated
 from fastapi import Depends, Query
 from pydantic import AnyUrl
 
-from people_gator_api.services.auth_service import BrowseUserDependency
 from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
 )
@@ -19,7 +18,6 @@ from people_gator_api.services.http_errors import raise_api_error
 
 async def source_filter_dependency(
     session: WeaviateSessionDependency,
-    user: BrowseUserDependency,
     source_id: uuid.UUID | None = None,
     page: str | None = Query(
         default=None,
@@ -35,7 +33,6 @@ async def source_filter_dependency(
     ),
 ) -> uuid.UUID | None:
     """Resolve at most one public Source selector to its internal UUID."""
-    del user
     try:
         return await resolve_source_filter(
             session,
