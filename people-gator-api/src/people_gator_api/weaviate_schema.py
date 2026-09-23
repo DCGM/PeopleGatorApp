@@ -10,7 +10,7 @@ from weaviate.classes.config import (
     VectorDistances,
 )
 
-from people_gator_api.schemas.enums import AnnotationType, FaceEmbeddingModel
+from people_gator_api.schemas.enums import FaceEmbeddingModel
 
 # ---------------------------------------------------------------------------
 # Collection names
@@ -67,11 +67,6 @@ FACE_VECTOR_BY_MODEL: dict[FaceEmbeddingModel, str] = {
     FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3: (
         DEFAULT_FACE_VECTOR
     ),
-}
-
-ANNOTATION_COLLECTION_BY_TYPE: dict[AnnotationType, str] = {
-    AnnotationType.face: FACE_COLLECTION,
-    AnnotationType.entity: ENTITY_COLLECTION,
 }
 
 
@@ -372,7 +367,3 @@ ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 ADDITIVE_PROPERTY_MIGRATIONS: dict[str, list[Property]] = {
     FACE_COLLECTION: [FACE_PROPERTIES[0]],
 }
-
-
-def collection_for_annotation_type(annotation_type: AnnotationType) -> str:
-    return ANNOTATION_COLLECTION_BY_TYPE[annotation_type]
