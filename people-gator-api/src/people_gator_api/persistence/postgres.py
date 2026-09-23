@@ -1,4 +1,28 @@
-"""PostgreSQL implementation of the backend-neutral persistence contracts."""
+"""PostgreSQL implementation of the backend-neutral persistence contracts.
+
+The adapter binds every repository in :class:`Database` to one request-scoped
+``AsyncSession``. API schemas are translated explicitly to the joined-table
+SQLAlchemy source hierarchy and the entity, face, mention, alias, embedding,
+and user tables; no ORM type crosses the persistence boundary.
+
+Ordinary lists use deterministic UUID keyset pagination. Their opaque cursor is
+a URL-safe base64 JSON token containing the last UUID and a fingerprint of the
+request without its cursor, which rejects malformed tokens and reuse with
+different filters or options. Search cursors use the same envelope and point to
+an item in the deterministic score/UUID ranking.
+
+Text search uses PostgreSQL ``pg_trgm`` similarity. Face search uses pgvector
+cosine similarity against each requested reference embedding. Scores are
+aggregated within each modality as requested by the schema, ranked with UUID
+tie-breaking, and combined across modalities with reciprocal-rank fusion.
+
+Writes validate referenced rows before mutation and translate integrity errors
+to ``ValueError`` as required by the contracts. Entity deletion unassigns faces
+and mentions, source deletion relies on relational cascades, and referenced
+users cannot be deleted. Each mutating operation commits its unit of work;
+batch methods preserve input order but intentionally expose no stronger
+atomicity guarantee than the backend-neutral contract.
+"""
 
 from __future__ import annotations
 
