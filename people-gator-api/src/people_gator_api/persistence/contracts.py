@@ -2,8 +2,9 @@
 
 Repository methods are asynchronous and operate on API schemas only. Ordinary
 list results are ordered by object UUID ascending; search results are ordered by
-score descending and UUID ascending. Cursors are exclusive. An unknown cursor
-or a cursor produced by different query inputs is invalid.
+score descending and UUID ascending. Cursors are opaque backend-defined strings
+and exclusive. An unknown cursor or a cursor produced by different query inputs
+is invalid.
 
 Filter fields are combined with logical AND and values inside a filter list with
 logical OR. Empty filter lists are invalid. When requested, total_count counts

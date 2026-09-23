@@ -19,13 +19,16 @@ class GenericListRequest(BaseModel):
     """Request one deterministic page of results.
 
     Ordinary lists are ordered by object UUID ascending. Searches are ordered by
-    score descending and then object UUID ascending. The cursor identifies the
-    last item of the preceding request and is always exclusive.
+    score descending and then object UUID ascending. The opaque cursor identifies
+    the last item of the preceding request and is always exclusive.
     """
 
     limit: int = Field(
         ge=0,
-        description="The maximum number of items to return. 0 can be used to get total_count only and no actual items."
+        description=(
+            "The maximum number of items to return. 0 can be used to get"
+            "total_count only and no actual items."
+        )
     )
     return_total_count: bool = Field(
         default=False,
@@ -34,11 +37,11 @@ class GenericListRequest(BaseModel):
             "the cursor and limit."
         ),
     )
-    cursor: uuid.UUID | None = Field(
+    cursor: str | None = Field(
         default=None,
         description=(
-            "Exclusive cursor returned by the preceding request. The query and "
-            "filter must otherwise be identical."
+            "Opaque exclusive cursor returned by the preceding request. It is "
+            "backend-defined and valid only with the same query inputs."
         ),
     )
 
@@ -59,10 +62,12 @@ class GenericListResponse[T: BaseModel](BaseModel):
             "or None when it was not requested."
         ),
     )
-    cursor: uuid.UUID | None = Field(
+    cursor: str | None = Field(
         default=None,
         description=(
-            "Exclusive cursor for the next page, or None when no later item exists."
+            "Opaque exclusive cursor for the next page, or None when no later "
+            "item exists. Expect it beeing non reusable after consumption "
+            "of the next page."
         ),
     )
 
