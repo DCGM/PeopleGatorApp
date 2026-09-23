@@ -1,4 +1,3 @@
-from enum import StrEnum
 from typing import Self
 import uuid
 
@@ -12,6 +11,7 @@ class ErrorResponse(BaseModel):
 
 class GenericActor(BaseModel):
     """A generic actor with an ID and optional name."""
+
     user_id: uuid.UUID
 
 
@@ -28,7 +28,7 @@ class GenericListRequest(BaseModel):
         description=(
             "The maximum number of items to return. 0 can be used to get"
             "total_count only and no actual items."
-        )
+        ),
     )
     return_total_count: bool = Field(
         default=False,
@@ -101,20 +101,19 @@ class ListFilterBase(BaseModel):
         return self
 
 
-class ModelEmbedding[T: StrEnum](BaseModel):
+class ModelEmbedding[T: str](BaseModel):
     """One vector produced by one explicitly identified embedding model."""
 
     model_identifier: T = Field(min_length=1)
     vector: list[FiniteFloat] = Field(
         min_length=1,
         description=(
-            "A non-empty, finite vector whose dimension must match "
-            "model_identifier."
+            "A non-empty, finite vector whose dimension must match model_identifier."
         ),
     )
 
 
-def require_unique_model_embeddings[T: StrEnum](
+def require_unique_model_embeddings[T: str](
     embeddings: list[ModelEmbedding[T]],
 ) -> None:
     models = [embedding.model_identifier for embedding in embeddings]
