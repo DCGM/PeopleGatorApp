@@ -1,23 +1,103 @@
+"""Request-scoped database dependencies.
+
+Core API persistence is exposed only through the backend-neutral Database
+contract. The raw Weaviate dependency remains available for blob-derived
+subresources that are not part of that contract.
+"""
+
 from collections.abc import AsyncGenerator
+from typing import Annotated, Any
+
 from fastapi import Depends
-from typing import Annotated
+from sqlalchemy import URL
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from weaviate import WeaviateAsyncClient
-
-from people_gator_api.services.weaviate_service.client import (
-    close_weaviate,
-    get_weaviate_client,
-    init_weaviate,
+from people_gator_api.persistence.contracts import Database
+from people_gator_api.persistence.postgres import postgres_database
+from people_gator_api.services.postgres_demo.database import (
+    create_postgres_schema,
+    make_postgres_engine,
+    make_postgres_session_factory,
 )
+from people_gator_api.settings import settings
 
 
-async def get_session() -> AsyncGenerator[WeaviateAsyncClient, None]:
+_postgres_engine: AsyncEngine | None = None
+_postgres_sessions: async_sessionmaker[AsyncSession] | None = None
+
+
+def _postgres_url() -> str:
+    config = settings.postgres
+    return URL.create(
+        drivername="postgresql+asyncpg",
+        username=config.user,
+        password=config.password,
+        host=config.host,
+        port=config.port,
+        database=config.database,
+    ).render_as_string(hide_password=False)
+
+
+async def init_postgres() -> None:
+    """Initialize the process-wide engine and request session factory."""
+    global _postgres_engine, _postgres_sessions
+    if _postgres_engine is not None:
+        return
+    _postgres_engine = make_postgres_engine(
+        _postgres_url(),
+        echo=settings.debug,
+    )
+    _postgres_sessions = make_postgres_session_factory(_postgres_engine)
+
+
+async def close_postgres() -> None:
+    """Dispose the process-wide PostgreSQL connection pool."""
+    global _postgres_engine, _postgres_sessions
+    engine = _postgres_engine
+    _postgres_engine = None
+    _postgres_sessions = None
+    if engine is not None:
+        await engine.dispose()
+
+
+async def get_database() -> AsyncGenerator[Database, None]:
+    """Yield one PostgreSQL-backed contract facade per request."""
+    if _postgres_sessions is None:
+        await init_postgres()
+    assert _postgres_sessions is not None
+    async with _postgres_sessions() as session:
+        yield postgres_database(session)
+
+
+type DatabaseDependency = Annotated[Database, Depends(get_database)]
+
+
+async def get_session() -> AsyncGenerator[Any, None]:
+    """Yield the raw vector client only to non-contract legacy subresources."""
+    from people_gator_api.services.weaviate_service.client import get_weaviate_client
+
     yield get_weaviate_client()
 
 
-type WeaviateSessionDependency = Annotated[WeaviateAsyncClient, Depends(get_session)]
+type WeaviateSessionDependency = Annotated[
+    Any,
+    Depends(get_session),
+]
 
 
 async def init_db() -> None:
-    await init_weaviate()
-    await close_weaviate()
+    """Create the PostgreSQL persistence schema."""
+    await init_postgres()
+    assert _postgres_engine is not None
+    await create_postgres_schema(_postgres_engine)
+
+
+__all__ = [
+    "DatabaseDependency",
+    "WeaviateSessionDependency",
+    "close_postgres",
+    "get_database",
+    "get_session",
+    "init_db",
+    "init_postgres",
+]

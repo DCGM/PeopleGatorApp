@@ -16,9 +16,9 @@ from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
 from people_gator_api.routes.v1 import router as v1_router
 from people_gator_api.routes.jwks import router as jwks_router
-from people_gator_api.services.weaviate_service.client import (
-    init_weaviate,
-    close_weaviate,
+from people_gator_api.services.database_service import (
+    close_postgres,
+    init_postgres,
 )
 import dotenv
 
@@ -48,17 +48,17 @@ async def well_known_cors(
 async def lifespan(app: FastAPI):
     await init_embedding_service()
     await init_openrouter_service()
-    await init_weaviate()
+    await init_postgres()
     yield
     await close_embedding_service()
     await close_openrouter_service()
-    await close_weaviate()
+    await close_postgres()
 
 
 def get_app() -> FastAPI:
     app = FastAPI(
         title="People Gator API",
-        description="An API for managing people and their relationships, powered by Weaviate, SQLAlchemy and OpenTelemetry.",
+        description="An API for managing people and their relationships through backend-neutral persistence contracts.",
         version="0.1.0",
         lifespan=lifespan,
     )

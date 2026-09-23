@@ -13,7 +13,7 @@ from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,
     PageCreateRequest,
     PageSourceMetadata,
-    SourceResponse,
+    SourceResponseBase,
     SourceRecordListResponse,
 )
 from people_gator_api.services.crud_services import media_service
@@ -45,7 +45,7 @@ def test_parse_page_source_exposes_typed_archive_identity() -> None:
 
     page = media_service.parse_page_source(source)
 
-    assert page.page_source_id == page_source_id
+    assert page.source_id == page_source_id
     assert page.library == "mzk"
     assert page.document_id == document_id
     assert page.page_id == page_id
@@ -107,7 +107,7 @@ def test_parse_image_source_accepts_arbitrary_image_source() -> None:
         )
     )
 
-    assert image.image_id == image_id
+    assert image.source_id == image_id
     assert str(image.url) == "https://cdn.example.test/path/portrait.jpeg?size=original"
 
 
@@ -126,7 +126,7 @@ def test_parse_document_source_exposes_typed_archive_identity() -> None:
 
     document = media_service.parse_document_source(source)
 
-    assert document.document_source_id == source_id
+    assert document.source_id == source_id
     assert document.library == "mzk"
     assert document.document_id == document_id
 
@@ -142,7 +142,7 @@ async def test_create_document_derives_canonical_uri(
         _client: object,
         source_type: SourceKind,
         **kwargs: object,
-    ) -> tuple[SourceResponse, bool]:
+    ) -> tuple[SourceResponseBase, bool]:
         assert source_type == SourceKind.document
         assert kwargs == {"library": "mzk", "document_id": document_id}
         metadata = DocumentSourceMetadata(library="mzk", document=document_id)
@@ -187,7 +187,7 @@ async def test_get_document_by_path_returns_typed_document(
         _client: object,
         _source_id: uuid.UUID | None = None,
         **kwargs: object,
-    ) -> SourceResponse:
+    ) -> SourceResponseBase:
         assert kwargs == {
             "source_type": SourceKind.document,
             "library": "mzk",
@@ -204,7 +204,7 @@ async def test_get_document_by_path_returns_typed_document(
     )
 
     assert document is not None
-    assert document.document_source_id == document_source_id
+    assert document.source_id == document_source_id
     assert document.document_id == document_id
 
 
@@ -231,7 +231,7 @@ async def test_create_page_reuses_archive_identity_when_url_changes(
         _client: object,
         source_type: SourceKind,
         **kwargs: object,
-    ) -> tuple[SourceResponse, bool]:
+    ) -> tuple[SourceResponseBase, bool]:
         assert source_type == SourceKind.page
         assert kwargs == {
             "library": "mzk",
@@ -252,7 +252,7 @@ async def test_create_page_reuses_archive_identity_when_url_changes(
     )
 
     assert created is False
-    assert page.page_source_id == page_source_id
+    assert page.source_id == page_source_id
 
 
 @pytest.mark.asyncio
@@ -280,7 +280,7 @@ async def test_get_page_by_path_supports_both_canonical_forms(
         _client: object,
         _source_id: uuid.UUID | None = None,
         **kwargs: object,
-    ) -> SourceResponse:
+    ) -> SourceResponseBase:
         assert kwargs == {
             "source_type": SourceKind.page,
             "library": "mzk",
@@ -301,7 +301,7 @@ async def test_get_page_by_path_supports_both_canonical_forms(
     )
 
     assert page is not None
-    assert page.page_source_id == page_source_id
+    assert page.source_id == page_source_id
 
 
 @pytest.mark.asyncio

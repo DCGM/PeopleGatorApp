@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import pytest
 
-from people_gator_api.services.persistence.weaviate import (
+from people_gator_api.persistence.weaviate import (
     WeaviateEntityRepository,
 )
 

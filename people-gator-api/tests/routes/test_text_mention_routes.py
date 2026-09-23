@@ -21,4 +21,10 @@ def test_text_mention_list_exposes_source_and_entity_filters() -> None:
     operation = app.openapi()["paths"]["/text-mentions"]["get"]
     parameters = {parameter["name"] for parameter in operation["parameters"]}
 
-    assert {"source_id", "entity_id", "limit", "after_id"} <= parameters
+    assert {
+        "source_id",
+        "entity_id",
+        "limit",
+        "return_total_count",
+        "cursor",
+    } <= parameters

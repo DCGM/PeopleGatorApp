@@ -27,7 +27,7 @@ from people_gator_api.schemas.sources import (
     PageListResponse,
     PageResponse,
     SourceRecord,
-    SourceResponse,
+    SourceResponseBase,
 )
 from people_gator_api.services.crud_services.source_service import (
     SourceCreateSpec,
@@ -62,7 +62,7 @@ class _ReferencedObject(Protocol):
     references: CrossReferences
 
 
-def parse_page_source(source: SourceResponse) -> PageResponse:
+def parse_page_source(source: SourceResponseBase) -> PageResponse:
     """Map a page Source to its public page representation."""
     if (
         not isinstance(source, SourceRecord)
@@ -71,7 +71,7 @@ def parse_page_source(source: SourceResponse) -> PageResponse:
     ):
         raise ValueError("Source is not a page")
     return PageResponse(
-        page_source_id=source.source_id,
+        source_id=source.source_id,
         library=source.metadata.library,
         document_id=source.metadata.document,
         page_id=source.metadata.page,
@@ -85,7 +85,7 @@ def parse_page_source(source: SourceResponse) -> PageResponse:
     )
 
 
-def parse_document_source(source: SourceResponse) -> DocumentResponse:
+def parse_document_source(source: SourceResponseBase) -> DocumentResponse:
     """Map a document Source to its public document representation."""
     if (
         not isinstance(source, SourceRecord)
@@ -94,7 +94,7 @@ def parse_document_source(source: SourceResponse) -> DocumentResponse:
     ):
         raise ValueError("Source is not a document")
     return DocumentResponse(
-        document_source_id=source.source_id,
+        source_id=source.source_id,
         library=source.metadata.library,
         document_id=source.metadata.document,
         url=AnyUrl(
@@ -106,11 +106,11 @@ def parse_document_source(source: SourceResponse) -> DocumentResponse:
     )
 
 
-def parse_image_source(source: SourceResponse) -> ImageResponse:
+def parse_image_source(source: SourceResponseBase) -> ImageResponse:
     """Map an image-compatible Source to its public image representation."""
     if source.source_type != SourceKind.image:
         raise ValueError("Source is not an image")
-    return ImageResponse(image_id=source.source_id, url=AnyUrl(source.uri))
+    return ImageResponse(source_id=source.source_id, url=AnyUrl(source.url))
 
 
 @trace()
@@ -242,7 +242,7 @@ async def list_pages(
         items=[parse_page_source(source) for source in sources.items],
         total_count=sources.total_count,
         limit=sources.limit,
-        after_id=sources.after_id,
+        cursor=sources.after_id,
     )
 
 
@@ -267,7 +267,7 @@ async def list_documents(
         items=[parse_document_source(source) for source in sources.items],
         total_count=sources.total_count,
         limit=sources.limit,
-        after_id=sources.after_id,
+        cursor=sources.after_id,
     )
 
 
@@ -290,7 +290,7 @@ async def list_images(
         items=[parse_image_source(source) for source in sources.items],
         total_count=sources.total_count,
         limit=sources.limit,
-        after_id=sources.after_id,
+        cursor=sources.after_id,
     )
 
 

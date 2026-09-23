@@ -60,7 +60,7 @@ async def list_users(
     return UserListResponse(
         items=items,
         total_count=total_count,
-        after_id=items[-1].user_id if len(items) == limit and items else None,
+        cursor=items[-1].user_id if len(items) == limit and items else None,
         limit=limit,
     )
 

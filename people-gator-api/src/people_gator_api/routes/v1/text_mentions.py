@@ -1,57 +1,62 @@
-"""Text mention endpoints."""
+"""Text mention endpoints backed only by persistence contracts."""
 
 import uuid
-from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query, status
 
-from people_gator_api.schemas.text_mentions import (
+from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
-    TextMentionEntityPatchRequest,
+    TextMentionListFilter,
+    TextMentionListRequest,
     TextMentionListResponse,
+    TextMentionPatchRequest,
     TextMentionResponse,
+    TextMentionsBatchCreateRequest,
+    TextMentionsBatchPatchRequest,
 )
 from people_gator_api.services.auth_service import (
+    AdminUserDependency,
     AnnotatorUserDependency,
     BrowseUserDependency,
     DataIngestUserDependency,
 )
-from people_gator_api.services.crud_services.text_mention_service import (
-    create_text_mention,
-    create_text_mention_batch,
-    get_text_mention,
-    list_text_mentions,
-    reassign_text_mention_entity,
-)
-from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.services.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["text mentions"])
 
 
-async def _iter_payloads[T](items: list[T]) -> AsyncGenerator[T, None]:
-    for item in items:
-        yield item
-
-
 @router.get("/text-mentions", response_model=TextMentionListResponse)
 async def list_text_mentions_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
-    source_id: uuid.UUID | None = None,
-    entity_id: uuid.UUID | None = None,
+    source_id: list[uuid.UUID] | None = Query(default=None),
+    entity_id: list[uuid.UUID] | None = Query(default=None),
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> TextMentionListResponse:
     del user
-    return await list_text_mentions(
-        session,
-        source_id=source_id,
-        entity_id=entity_id,
-        after_id=after_id,
-        limit=limit,
-    )
+    values = {
+        name: value
+        for name, value in {
+            "source_id": source_id,
+            "entity_id": entity_id,
+        }.items()
+        if value is not None
+    }
+    try:
+        return await database.text_mentions.list(
+            TextMentionListRequest(
+                filter=TextMentionListFilter(**values),
+                limit=limit,
+                return_total_count=return_total_count,
+                cursor=cursor,
+            )
+        )
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
 
 
 @router.post(
@@ -61,11 +66,13 @@ async def list_text_mentions_route(
 )
 async def create_text_mention_route(
     payload: TextMentionCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> TextMentionResponse:
-    del user
-    return await create_text_mention(session, payload)
+    try:
+        return await database.text_mentions.create(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
 
 
 @router.post(
@@ -74,12 +81,39 @@ async def create_text_mention_route(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_text_mention_batch_route(
-    payload: list[TextMentionCreateRequest],
-    session: WeaviateSessionDependency,
+    payload: TextMentionsBatchCreateRequest,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> list[TextMentionResponse]:
+    try:
+        return await database.text_mentions.create_batch(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
+
+
+@router.patch(
+    "/text-mentions:batch",
+    response_model=list[TextMentionResponse | None],
+)
+async def patch_text_mention_batch_route(
+    payload: TextMentionsBatchPatchRequest,
+    database: DatabaseDependency,
+    user: AnnotatorUserDependency,
+) -> list[TextMentionResponse | None]:
+    try:
+        return await database.text_mentions.patch_batch(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
+
+
+@router.delete("/text-mentions:batch", response_model=int)
+async def delete_text_mention_batch_route(
+    mention_id: list[uuid.UUID],
+    database: DatabaseDependency,
+    user: AdminUserDependency,
+) -> int:
     del user
-    return await create_text_mention_batch(session, _iter_payloads(payload))
+    return await database.text_mentions.delete_batch(mention_id)
 
 
 @router.get(
@@ -88,11 +122,11 @@ async def create_text_mention_batch_route(
 )
 async def get_text_mention_route(
     mention_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> TextMentionResponse:
     del user
-    mention = await get_text_mention(session, mention_id)
+    mention = await database.text_mentions.get(mention_id)
     if mention is None:
         raise_api_error(404, "not_found", "Text mention not found")
     return mention
@@ -102,18 +136,30 @@ async def get_text_mention_route(
     "/text-mentions/{mention_id}",
     response_model=TextMentionResponse,
 )
-async def reassign_text_mention_entity_route(
+async def patch_text_mention_route(
     mention_id: uuid.UUID,
-    payload: TextMentionEntityPatchRequest,
-    session: WeaviateSessionDependency,
+    payload: TextMentionPatchRequest,
+    database: DatabaseDependency,
     user: AnnotatorUserDependency,
 ) -> TextMentionResponse:
-    del user
-    mention = await reassign_text_mention_entity(
-        session,
-        mention_id,
-        payload.entity_id,
-    )
+    try:
+        mention = await database.text_mentions.patch(mention_id, payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
     if mention is None:
         raise_api_error(404, "not_found", "Text mention not found")
     return mention
+
+
+@router.delete(
+    "/text-mentions/{mention_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_text_mention_route(
+    mention_id: uuid.UUID,
+    database: DatabaseDependency,
+    user: AdminUserDependency,
+) -> None:
+    del user
+    if not await database.text_mentions.delete(mention_id):
+        raise_api_error(404, "not_found", "Text mention not found")

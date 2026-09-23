@@ -1,99 +1,109 @@
-"""Source endpoints (spec §2.7 simplified source model)."""
+"""Generic source endpoints backed only by persistence contracts."""
 
 import uuid
 
-from fastapi import (
-    APIRouter,
-    Query,
-    status,
-)
+from fastapi import APIRouter, Query, status
 from pydantic import AnyUrl
 
+from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.sources import (
+    SourceListFilter,
+    SourceListRequest,
+    SourceListResponse,
+    SourceResponseBase,
+)
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     DataIngestUserDependency,
 )
-from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.services.http_errors import raise_api_error
-from people_gator_api.services.crud_services.source_service import (
-    delete_source,
-    get_source,
-    list_sources,
-)
-from people_gator_api.schemas.sources import (
-    SourceListResponse,
-    SourceResponse,
-)
+
 
 router = APIRouter(tags=["sources"])
 
 
-def _source_reference(source: SourceResponse) -> SourceResponse:
-    return SourceResponse(
-        source_id=source.source_id,
-        source_type=source.source_type,
-        uri=source.uri,
-    )
-
-
 @router.get("/sources", response_model=SourceListResponse)
 async def list_sources_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
-    url: AnyUrl | None = None,
+    source_type: list[SourceKind] | None = Query(default=None),
+    url: list[AnyUrl] | None = Query(default=None),
+    source_id: list[uuid.UUID] | None = Query(default=None),
+    entity_id: list[uuid.UUID] | None = Query(default=None),
+    detection_id: list[uuid.UUID] | None = Query(default=None),
+    mention_id: list[uuid.UUID] | None = Query(default=None),
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> SourceListResponse:
     del user
-    sources = await list_sources(
-        session,
-        None,
-        after_id,
-        limit,
-        url=str(url) if url is not None else None,
-    )
-    return SourceListResponse(
-        items=[_source_reference(source) for source in sources.items],
-        total_count=sources.total_count,
-        limit=sources.limit,
-        after_id=sources.after_id,
-    )
+    values = {
+        name: value
+        for name, value in {
+            "source_type": source_type,
+            "url": url,
+            "source_id": source_id,
+            "entity_id": entity_id,
+            "detection_id": detection_id,
+            "mention_id": mention_id,
+        }.items()
+        if value is not None
+    }
+    try:
+        return await database.sources.list_sources(
+            SourceListRequest(
+                filter=SourceListFilter.model_validate(values),
+                limit=limit,
+                return_total_count=return_total_count,
+                cursor=cursor,
+            )
+        )
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
 
 
-@router.get("/sources/lookup", response_model=SourceResponse)
+@router.get("/sources/lookup", response_model=SourceResponseBase)
 async def lookup_source_route(
     url: AnyUrl,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
-) -> SourceResponse:
-    """Fetch one source by its ``url``."""
+) -> SourceResponseBase:
+    """Fetch one source by its globally unique URL."""
     del user
-    source = await get_source(session, url=str(url))
-    if source is None:
+    result = await database.sources.list_sources(
+        SourceListRequest(
+            filter=SourceListFilter(url=[url]),
+            limit=2,
+            return_total_count=False,
+        )
+    )
+    if not result.items:
         raise_api_error(404, "not_found", "Source not found")
-    return _source_reference(source)
+    if len(result.items) != 1:
+        raise_api_error(409, "identity_conflict", "Source URL is not unique")
+    return result.items[0]
 
 
-@router.get("/sources/{source_id:uuid}", response_model=SourceResponse)
+@router.get("/sources/{source_id:uuid}", response_model=SourceResponseBase)
 async def get_source_route(
     source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
-) -> SourceResponse:
+) -> SourceResponseBase:
     del user
-    source = await get_source(session, source_id)
+    source = await database.sources.get_source(source_id)
     if source is None:
         raise_api_error(404, "not_found", "Source not found")
-    return _source_reference(source)
+    return source
 
 
 @router.delete("/sources/{source_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source_route(
     source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AdminUserDependency,
 ) -> None:
     del user
-    deleted = await delete_source(session, source_id)
-    if not deleted:
+    if not await database.sources.delete(source_id):
         raise_api_error(404, "not_found", "Source not found")

@@ -38,13 +38,13 @@ from people_gator_api.schemas.pero import (
 from people_gator_api.schemas.sources import (
     PageSourceMetadata,
     SourceRecord,
-    SourceResponse,
+    SourceResponseBase,
 )
 from people_gator_api.services.crud_services import page_layout_service
 from people_gator_api.settings import PageLayoutSettings
 
 
-def _page_source() -> SourceResponse:
+def _page_source() -> SourceResponseBase:
     return SourceRecord(
         source_id=uuid.uuid4(),
         source_type=SourceKind.page,
@@ -125,14 +125,14 @@ def _install_fake_s3(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _install_source_lookup(
-    monkeypatch: pytest.MonkeyPatch, source: SourceResponse
+    monkeypatch: pytest.MonkeyPatch, source: SourceResponseBase
 ) -> None:
     async def fake_resolve(
         _client: object,
         *,
         source_id: uuid.UUID | None,
         page_path: str | None,
-    ) -> SourceResponse:
+    ) -> SourceResponseBase:
         del source_id, page_path
         return source
 

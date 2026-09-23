@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Annotated
 import uuid
 from pydantic import BaseModel, Field, FiniteFloat, field_validator
-from pydantic.experimental.missing_sentinel import MISSING
 from people_gator_api.schemas.common import (
     GenericListResponse,
     ListFilterBase,
@@ -11,6 +10,7 @@ from people_gator_api.schemas.common import (
     GenericListRequest
 )
 from people_gator_api.schemas.enums import FaceEmbeddingModel
+from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 
 # ---------------------------------------------------------------------------
 # Face schemas
@@ -41,7 +41,7 @@ class Keypoint(BaseModel):
 class FaceCreateRequest(BaseModel):
     """Request body for ingesting a face detection."""
 
-    identifier: str | MISSING = Field(
+    identifier: str | MissingType = Field(
         default=MISSING, description="An optional identifier for the face detection."
     )
     bounding_box: BoundingBox = Field(
@@ -56,14 +56,14 @@ class FaceCreateRequest(BaseModel):
         ge=0.0, le=1.0,
         description="The confidence score of the face detection."
     )
-    embeddings: list[FaceEmbedding] | MISSING = Field(
+    embeddings: list[FaceEmbedding] | MissingType = Field(
         default=MISSING,
         description="The embeddings of the face detection."
     )
     source_id: uuid.UUID = Field(
         description="The unique identifier of the source from which the face was detected. Mandatory."
     )
-    entity_id: uuid.UUID | MISSING = Field(
+    entity_id: uuid.UUID | MissingType = Field(
         default=MISSING,
         description="The unique identifier of the entity associated with the face detection.",
     )
@@ -85,20 +85,20 @@ type FacesBatchCreateRequest = Annotated[
 class FacePatchRequest(BaseModel):
     """Patch body for assigning a face, or unassigning it with a null entity ID."""
 
-    entity_id: uuid.UUID | None | MISSING = Field(
+    entity_id: uuid.UUID | None | MissingType = Field(
         default=MISSING,
         description="The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified."
     )
-    embeddings: list[FaceEmbedding] | MISSING = Field(
+    embeddings: list[FaceEmbedding] | MissingType = Field(
         default=MISSING, description="When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op."
     )
 
     @field_validator("embeddings")
     @classmethod
     def validate_unique_embeddings(
-        cls, embeddings: list[FaceEmbedding] | MISSING
-    ) -> list[FaceEmbedding] | MISSING:
-        if embeddings is not MISSING:
+        cls, embeddings: list[FaceEmbedding] | MissingType
+    ) -> list[FaceEmbedding] | MissingType:
+        if not is_missing(embeddings):
             require_unique_model_embeddings(embeddings)
         return embeddings
 
@@ -134,20 +134,20 @@ class FaceListFilter(ListFilterBase):
     Lists of criteria in each field are combined using logical OR.
     """
 
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="Filter by entity IDs."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="Filter by source IDs."
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="Filter by detection IDs."
     )
 
 
 class FaceListRequest(GenericListRequest):
     """Request body for listing faces with optional filters."""
-    filter: FaceListFilter | MISSING = Field(default=MISSING, description="The filter criteria to select faces.")
+    filter: FaceListFilter | MissingType = Field(default=MISSING, description="The filter criteria to select faces.")
 
 
 __all__ = [

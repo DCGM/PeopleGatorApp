@@ -30,8 +30,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pydantic import AnyUrl
-from pydantic.experimental.missing_sentinel import MISSING
 from people_gator_api.schemas.common import GenericActor
+from people_gator_api.schemas.missing import MISSING, MissingType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
@@ -297,12 +297,12 @@ class SourceRepository(ABC):
     async def _lookup[T: SourceResponseBase](
         self,
         cls: type[T],
-        source_id: uuid.UUID | MISSING = MISSING,
-        source_type: SourceKind | MISSING = MISSING,
-        url: AnyUrl | MISSING = MISSING,
-        library: str | MISSING = MISSING,
-        document_id: uuid.UUID | MISSING = MISSING,
-        page_id: uuid.UUID | MISSING = MISSING,
+        source_id: uuid.UUID | MissingType = MISSING,
+        source_type: SourceKind | MissingType = MISSING,
+        url: AnyUrl | MissingType = MISSING,
+        library: str | MissingType = MISSING,
+        document_id: uuid.UUID | MissingType = MISSING,
+        page_id: uuid.UUID | MissingType = MISSING,
     ) -> T | None:
         """Look up and convert a source, returning None for a type mismatch."""
         response = await self.lookup(

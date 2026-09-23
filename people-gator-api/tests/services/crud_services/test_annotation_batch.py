@@ -15,7 +15,7 @@ from people_gator_api.schemas.entities import (
     ModelEmbedding,
 )
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.sources import SourceResponse
+from people_gator_api.schemas.sources import SourceResponseBase
 from people_gator_api.services.crud_services import annotation_service
 from people_gator_api.services.weaviate_service.db_schema import DEFAULT_FACE_VECTOR
 
@@ -66,13 +66,13 @@ async def _resolve_source(
     *,
     source_id: uuid.UUID | None,
     source: object | None,
-) -> SourceResponse:
+) -> SourceResponseBase:
     del source
     assert source_id is not None
-    return SourceResponse(
+    return SourceResponseBase(
         source_id=source_id,
         source_type=SourceKind.image,
-        uri=f"https://example.test/{source_id}",
+        url=f"https://example.test/{source_id}",
     )
 
 

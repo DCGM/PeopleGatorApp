@@ -1,78 +1,79 @@
-"""Face annotation endpoints."""
+"""Face annotation endpoints backed by the persistence contracts."""
 
 import uuid
-from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query, Response, status
 
-from people_gator_api.schemas.entities import (
+from people_gator_api.schemas.faces import (
     FaceCreateRequest,
-    FaceEmbeddingBatchUpdateResponse,
-    FaceEmbeddingUpdateRequest,
-    FaceEntityPatchRequest,
+    FaceListFilter,
+    FaceListRequest,
     FaceListResponse,
+    FacePatchRequest,
     FaceResponse,
+    FacesBatchCreateRequest,
+    FacesBatchPatchRequest,
 )
 from people_gator_api.services.auth_service import (
+    AdminUserDependency,
     AnnotatorUserDependency,
     BrowseUserDependency,
     DataIngestUserDependency,
 )
-from people_gator_api.services.crud_services.aligned_face_crop_service import (
-    get_aligned_face_crop,
+from people_gator_api.services.database_service import (
+    DatabaseDependency,
+    WeaviateSessionDependency,
 )
-from people_gator_api.services.crud_services.annotation_service import (
-    create_face,
-    create_face_batch,
-    get_face,
-    list_faces,
-    patch_face_entity,
-    update_face_embedding_batch,
-)
-from people_gator_api.services.crud_services.source_service import SourceResolutionError
-from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
+
 
 router = APIRouter(tags=["annotations"])
 
 
-async def _iter_payloads[T](items: list[T]) -> AsyncGenerator[T, None]:
-    for item in items:
-        yield item
-
-
 @router.get("/faces", response_model=FaceListResponse)
 async def list_faces_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
-    source_id: uuid.UUID | None = None,
-    entity_id: uuid.UUID | None = None,
-    user_id: uuid.UUID | None = None,
+    source_id: list[uuid.UUID] | None = Query(default=None),
+    entity_id: list[uuid.UUID] | None = Query(default=None),
+    detection_id: list[uuid.UUID] | None = Query(default=None),
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> FaceListResponse:
-    return await list_faces(
-        session,
-        user.user_id,
-        source_id,
-        entity_id,
-        after_id,
-        limit,
-        owner_user_id=user_id,
-    )
+    del user
+    values = {
+        name: value
+        for name, value in {
+            "source_id": source_id,
+            "entity_id": entity_id,
+            "detection_id": detection_id,
+        }.items()
+        if value is not None
+    }
+    try:
+        return await database.faces.list(
+            FaceListRequest(
+                filter=FaceListFilter(**values),
+                limit=limit,
+                return_total_count=return_total_count,
+                cursor=cursor,
+            )
+        )
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
 
 
 @router.post("/faces", response_model=FaceResponse, status_code=status.HTTP_201_CREATED)
 async def create_face_route(
     payload: FaceCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> FaceResponse:
     try:
-        face = await create_face(session, payload, user.user_id)
-    except SourceResolutionError as exc:
-        raise_api_error(exc.status_code, exc.code, exc.message)
-    return face
+        return await database.faces.create(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
 
 
 @router.post(
@@ -81,29 +82,36 @@ async def create_face_route(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_face_batch_route(
-    payload: list[FaceCreateRequest],
-    session: WeaviateSessionDependency,
+    payload: FacesBatchCreateRequest,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> list[FaceResponse]:
     try:
-        faces = await create_face_batch(
-            session,
-            _iter_payloads(payload),
-            user.user_id,
-        )
-    except SourceResolutionError as exc:
-        raise_api_error(exc.status_code, exc.code, exc.message)
-    return faces
+        return await database.faces.create_batch(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
 
 
-@router.post("/faces:embeddings", response_model=FaceEmbeddingBatchUpdateResponse)
-async def update_face_embedding_batch_route(
-    payload: list[FaceEmbeddingUpdateRequest],
-    session: WeaviateSessionDependency,
-    _user: DataIngestUserDependency,
-) -> FaceEmbeddingBatchUpdateResponse:
-    updated_count = await update_face_embedding_batch(session, payload)
-    return FaceEmbeddingBatchUpdateResponse(updated_count=updated_count)
+@router.patch("/faces:batch", response_model=list[FaceResponse | None])
+async def patch_face_batch_route(
+    payload: FacesBatchPatchRequest,
+    database: DatabaseDependency,
+    user: AnnotatorUserDependency,
+) -> list[FaceResponse | None]:
+    try:
+        return await database.faces.patch_batch(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
+
+
+@router.delete("/faces:batch", response_model=int)
+async def delete_face_batch_route(
+    detection_id: list[uuid.UUID],
+    database: DatabaseDependency,
+    user: AdminUserDependency,
+) -> int:
+    del user
+    return await database.faces.delete_batch(detection_id)
 
 
 @router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
@@ -114,6 +122,13 @@ async def get_face_aligned_crop_route(
     max_width: int | None = Query(default=None, gt=0),
 ) -> Response:
     """Return one ArcFace-aligned face crop, kept at the original image scale."""
+    from people_gator_api.services.crud_services.aligned_face_crop_service import (
+        get_aligned_face_crop,
+    )
+    from people_gator_api.services.crud_services.source_service import (
+        SourceResolutionError,
+    )
+
     try:
         crop = await get_aligned_face_crop(
             session, user.user_id, detection_id, max_width=max_width
@@ -130,28 +145,38 @@ async def get_face_aligned_crop_route(
 @router.get("/faces/{detection_id}", response_model=FaceResponse)
 async def get_face_route(
     detection_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> FaceResponse:
-    face = await get_face(session, user.user_id, detection_id)
+    del user
+    face = await database.faces.get(detection_id)
     if face is None:
         raise_api_error(404, "not_found", "Face not found")
     return face
 
 
 @router.patch("/faces/{detection_id}", response_model=FaceResponse)
-async def patch_face_entity_route(
+async def patch_face_route(
     detection_id: uuid.UUID,
-    payload: FaceEntityPatchRequest,
-    session: WeaviateSessionDependency,
+    payload: FacePatchRequest,
+    database: DatabaseDependency,
     user: AnnotatorUserDependency,
 ) -> FaceResponse:
-    face = await patch_face_entity(
-        session,
-        user.user_id,
-        detection_id,
-        payload.entity_id,
-    )
+    try:
+        face = await database.faces.patch(detection_id, payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
     if face is None:
         raise_api_error(404, "not_found", "Face not found")
     return face
+
+
+@router.delete("/faces/{detection_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_face_route(
+    detection_id: uuid.UUID,
+    database: DatabaseDependency,
+    user: AdminUserDependency,
+) -> None:
+    del user
+    if not await database.faces.delete(detection_id):
+        raise_api_error(404, "not_found", "Face not found")

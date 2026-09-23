@@ -10,7 +10,7 @@ from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import (
     ImageCreateRequest,
     SourceDescriptorRequest,
-    SourceResponse,
+    SourceResponseBase,
 )
 from people_gator_api.services.crud_services import annotation_service
 
@@ -28,14 +28,14 @@ async def test_create_face_resolves_source_descriptor(
         *,
         source_id: uuid.UUID | None,
         source: SourceDescriptorRequest | None,
-    ) -> SourceResponse:
+    ) -> SourceResponseBase:
         del client
         assert source_id is None
         assert source is not None
-        return SourceResponse(
+        return SourceResponseBase(
             source_id=resolved_source_id,
             source_type=SourceKind.image,
-            uri=str(source.image.url) if source.image is not None else "",
+            url=str(source.image.url) if source.image is not None else "",
         )
 
     class _Data:

@@ -16,7 +16,8 @@ This repository keeps specification content in focused documents to avoid contra
 - Inference is out of scope for this package; only prepared artifacts are ingested.
 - Search uses a single MVP endpoint: `POST /search`.
 - Fusion weights come only from saved search profiles.
-- All collection endpoints use one cursor envelope: `items`, `cursor`, `limit`, `has_more`.
+- All collection endpoints use the contract list envelope: `items`, opaque
+  string `cursor`, `limit`, and optional `total_count`.
 
 ## Authority Import
 
@@ -55,15 +56,14 @@ To inspect backups:
 curl http://localhost:8080/v1/backups/filesystem
 ```
 
-## PostgreSQL persistence demo
+## PostgreSQL persistence
 
-An opt-in parallel implementation of the entity/source/occurrence graph lives
-in [`src/people_gator_api/services/postgres_demo`](src/people_gator_api/services/postgres_demo/README.md).
-It demonstrates SQLAlchemy joined inheritance, pgvector embeddings, PostgreSQL
-full-text search, `pg_trgm` name similarity, and relational exclusion of entity
-candidates already linked to a face in a specified document. It is not wired
-into API startup and does not replace Weaviate.
+The API persistence boundary is implemented by PostgreSQL using SQLAlchemy,
+pgvector embeddings, and PostgreSQL trigram text search. API routes receive the
+backend-neutral `Database` facade and do not depend on SQLAlchemy sessions.
+The relational models and schema bootstrap currently live in
+[`src/people_gator_api/services/postgres_demo`](src/people_gator_api/services/postgres_demo/README.md).
 
 The shared Weaviate/PostgreSQL repository contracts and concrete adapters are
 documented in
-[`src/people_gator_api/services/persistence`](src/people_gator_api/services/persistence/README.md).
+[`src/people_gator_api/persistence`](src/people_gator_api/persistence/README.md).

@@ -66,8 +66,8 @@ class GenericListResponse[T: BaseModel](BaseModel):
         default=None,
         description=(
             "Opaque exclusive cursor for the next page, or None when no later "
-            "item exists. Expect it beeing non reusable after consumption "
-            "of the next page."
+            "item exists. It is valid only with the same query inputs; clients "
+            "must not parse or construct it."
         ),
     )
 

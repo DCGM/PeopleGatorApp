@@ -11,9 +11,10 @@ repository.
 ## Shared behavior
 
 Ordinary list operations order records by UUID ascending. Search operations
-order by final score descending and UUID ascending. Cursors are exclusive and
-may only be reused with the same query and filter. total_count, when requested,
-counts all filter matches before cursor and limit.
+order by final score descending and UUID ascending. Cursors are opaque strings,
+exclusive, backend-defined, and valid only with the same query inputs.
+`total_count`, when requested, counts all filter matches before cursor and
+limit.
 
 Different filter fields use logical AND. Values inside one filter list use
 logical OR. Empty filter lists are invalid.

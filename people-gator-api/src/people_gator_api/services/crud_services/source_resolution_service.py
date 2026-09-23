@@ -5,7 +5,7 @@ import uuid
 from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.sources import SourceDescriptorRequest, SourceResponse
+from people_gator_api.schemas.sources import SourceDescriptorRequest, SourceResponseBase
 from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
     create_source,
@@ -48,7 +48,7 @@ async def resolve_source_reference(
     *,
     source_id: uuid.UUID | None,
     source: SourceDescriptorRequest | None,
-) -> SourceResponse:
+) -> SourceResponseBase:
     if source_id is not None:
         resolved = await get_source(client, source_id)
         if resolved is None:
@@ -109,7 +109,7 @@ async def resolve_source_filter(
             code="invalid_source_filter",
         )
 
-    source: SourceResponse | None
+    source: SourceResponseBase | None
     if source_id is not None:
         source = await get_source(client, source_id)
         resource = "Source"

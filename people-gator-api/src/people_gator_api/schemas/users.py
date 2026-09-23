@@ -1,13 +1,13 @@
 """Pydantic schemas for API users."""
 
 from pydantic import BaseModel, Field
-from pydantic.experimental.missing_sentinel import MISSING
 from people_gator_api.schemas.common import (
     GenericActor,
     GenericListRequest,
     GenericListResponse,
     ListFilterBase,
 )
+from people_gator_api.schemas.missing import MISSING, MissingType
 
 
 class UserCreateRequest(BaseModel):
@@ -21,23 +21,23 @@ class UserCreateRequest(BaseModel):
 class UserPatchRequest(BaseModel):
     """Request schema for patching an existing user."""
 
-    display_name: str | MISSING = Field(
+    display_name: str | MissingType = Field(
         default=MISSING,
         description="The display name of the user."
     )
-    is_active: bool | MISSING = Field(
+    is_active: bool | MissingType = Field(
         default=MISSING,
         description="Indicates whether the user is active."
     )
-    external_subject: str | MISSING = Field(
+    external_subject: str | MissingType = Field(
         default=MISSING,
         description="The external subject identifier of the user."
     )
-    external_issuer: str | MISSING = Field(
+    external_issuer: str | MissingType = Field(
         default=MISSING,
         description="The external issuer of the user's identity."
     )
-    email: str | None | MISSING = Field(
+    email: str | None | MissingType = Field(
         default=MISSING,
         description="The email address of the user."
     )
@@ -60,29 +60,29 @@ class UserResponse(GenericActor):
 class UserListFilter(ListFilterBase):
     """Filter schema for listing users."""
 
-    display_name: list[str] | MISSING = Field(
+    display_name: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by the display name of the user."
     )
-    is_active: list[bool] | MISSING = Field(
+    is_active: list[bool] | MissingType = Field(
         default=MISSING,
         description="Filter by the active status of the user."
     )
-    external_subject: list[str] | MISSING = Field(
+    external_subject: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by the external subject identifier of the user."
     )
-    external_issuer: list[str] | MISSING = Field(
+    external_issuer: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by the external issuer of the user's identity."
     )
-    email: list[str] | MISSING = Field(
+    email: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by the email address of the user."
     )
 
 class UserListRequest(GenericListRequest):
-    filter: UserListFilter | MISSING = Field(
+    filter: UserListFilter | MissingType = Field(
         default=MISSING,
         description="Filter criteria for listing users."
     )

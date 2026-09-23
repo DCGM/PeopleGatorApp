@@ -33,7 +33,7 @@ from people_gator_api.schemas.entities import (
     FaceKeypoint,
     FaceResponse,
 )
-from people_gator_api.schemas.text_mentions import TextMentionResponse
+from people_gator_api.schemas.mentions import TextMentionResponse
 from people_gator_api.schemas.users import UserResponse
 from people_gator_api.schemas.sources import (
     DocumentSourceMetadata,

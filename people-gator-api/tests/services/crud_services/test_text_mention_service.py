@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from people_gator_api.schemas.text_mentions import (
+from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
     TextMentionResponse,
 )

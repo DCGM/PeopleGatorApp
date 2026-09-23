@@ -10,13 +10,13 @@ from pydantic import (
     Field,
     field_validator,
 )
-from pydantic.experimental.missing_sentinel import MISSING
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
     ListFilterBase,
 )
 from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.missing import MISSING, MissingType
 
 # ---------------------------------------------------------------------------
 # Entity
@@ -32,27 +32,27 @@ class EntityCreateRequest(BaseModel):
         description="The type of the entity. Immutable after creation."
     )
     name: str = Field(description="The name of the entity.")
-    description: str | None | MISSING = Field(
+    description: str | None | MissingType = Field(
         default=MISSING, description="A detailed description of the entity."
     )
-    short_description: str | None | MISSING = Field(
+    short_description: str | None | MissingType = Field(
         default=MISSING, description="A brief description of the entity."
     )
-    aliases: list[str] | MISSING = Field(
+    aliases: list[str] | MissingType = Field(
         default=MISSING, description="Alternative names or aliases for the entity."
     )
-    wikidata_id: str | None | MISSING = Field(
+    wikidata_id: str | None | MissingType = Field(
         default=MISSING, description="The Wikidata identifier for the entity."
     )
-    nlcr_authority_id: str | None | MISSING = Field(
+    nlcr_authority_id: str | None | MissingType = Field(
         default=MISSING, description="The NLCR authority identifier for the entity."
     )
 
     @field_validator("aliases")
     @classmethod
     def validate_aliases(
-        cls, aliases: list[str] | MISSING
-    ) -> list[str] | MISSING:
+        cls, aliases: list[str] | MissingType
+    ) -> list[str] | MissingType:
         if isinstance(aliases, list) and len(aliases) != len(set(aliases)):
             raise ValueError("aliases must be unique")
         return aliases
@@ -66,28 +66,28 @@ type EntityBatchCreateRequest = Annotated[
 class EntityPatchRequest(BaseModel):
     """Request body for patching an existing entity."""
 
-    name: str | MISSING = Field(default=MISSING, description="The name of the entity.")
-    aliases: list[str] | MISSING = Field(
+    name: str | MissingType = Field(default=MISSING, description="The name of the entity.")
+    aliases: list[str] | MissingType = Field(
         default=MISSING, description="Alternative names or aliases for the entity."
     )
-    description: str | None | MISSING = Field(
+    description: str | None | MissingType = Field(
         default=MISSING, description="A detailed description of the entity."
     )
-    short_description: str | None | MISSING = Field(
+    short_description: str | None | MissingType = Field(
         default=MISSING, description="A brief description of the entity."
     )
-    wikidata_id: str | None | MISSING = Field(
+    wikidata_id: str | None | MissingType = Field(
         default=MISSING, description="The Wikidata identifier for the entity."
     )
-    nlcr_authority_id: str | None | MISSING = Field(
+    nlcr_authority_id: str | None | MissingType = Field(
         default=MISSING, description="The NLCR authority identifier for the entity."
     )
 
     @field_validator("aliases")
     @classmethod
     def validate_aliases(
-        cls, aliases: list[str] | MISSING
-    ) -> list[str] | MISSING:
+        cls, aliases: list[str] | MissingType
+    ) -> list[str] | MissingType:
         if isinstance(aliases, list) and len(aliases) != len(set(aliases)):
             raise ValueError("aliases must be unique")
         return aliases
@@ -143,34 +143,34 @@ class EntityListFilter(ListFilterBase):
     Lists of criteria in each field are combined using logical OR.\
     """
 
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="The unique identifiers of the entities."
     )
-    entity_type: list[EntityType] | MISSING = Field(
+    entity_type: list[EntityType] | MissingType = Field(
         default=MISSING, description="The exact type of the entity."
     )
-    wikidata_id: list[str] | MISSING = Field(
+    wikidata_id: list[str] | MissingType = Field(
         default=MISSING, description="The Wikidata identifier for the entity."
     )
-    nlcr_authority_id: list[str] | MISSING = Field(
+    nlcr_authority_id: list[str] | MissingType = Field(
         default=MISSING, description="The NLCR authority identifier for the entity."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="The source identifiers associated with the entity.",
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="The detection identifiers associated with the entity.",
     )
-    mention_id: list[uuid.UUID] | MISSING = Field(
+    mention_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="The mention identifiers associated with the entity.",
     )
-    has_mentions: bool | MISSING = Field(
+    has_mentions: bool | MissingType = Field(
         default=MISSING, description="Whether the entity has mentions."
     )
-    has_detections: bool | MISSING = Field(
+    has_detections: bool | MissingType = Field(
         default=MISSING, description="Whether the entity has detections."
     )
 
@@ -178,7 +178,7 @@ class EntityListFilter(ListFilterBase):
 class EntityListRequest(GenericListRequest):
     """Request body for listing entities with optional filters."""
 
-    filter: EntityListFilter | MISSING = Field(
+    filter: EntityListFilter | MissingType = Field(
         default=MISSING, description="The filter criteria to select entities."
     )
 
@@ -186,7 +186,7 @@ class EntityListRequest(GenericListRequest):
 class EntityDeleteManyRequest(BaseModel):
     """Request body for deleting multiple entities by filter criteria."""
 
-    filter: EntityListFilter | MISSING = Field(
+    filter: EntityListFilter | MissingType = Field(
         default=MISSING,
         description="The filter criteria to select entities for deletion.",
     )

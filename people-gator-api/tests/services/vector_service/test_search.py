@@ -15,10 +15,10 @@ from people_gator_api.schemas.enums import (
     ScoreAggregation,
 )
 from people_gator_api.schemas.search import (
-    FaceSearchQuery,
-    FaceSearchResult,
-    SearchEntitiesQuery,
-    SearchEntitiesResult,
+    SearchFacesRequest,
+    FoundFace,
+    SearchEntitiesRequest,
+    FoundEntity,
 )
 from people_gator_api.services.crud_services import search_service
 from people_gator_api.services.weaviate_service import search as weaviate_search
@@ -34,15 +34,15 @@ def _entity_result(
     score: float,
     *,
     name: str | None = None,
-) -> SearchEntitiesResult:
-    return SearchEntitiesResult(
+) -> FoundEntity:
+    return FoundEntity(
         entity_id=entity_id,
         entity_type=EntityType.person,
         name=name or str(entity_id),
         description="",
         short_description="",
         aliases=[],
-        matching_score=score,
+        score=score,
     )
 
 
@@ -94,7 +94,7 @@ async def test_name_search_uses_bm25_over_name_and_aliases() -> None:
     assert results[0].entity_id == entity_id
     assert results[0].name == "Ada Lovelace"
     assert results[0].aliases == ["Augusta Ada King"]
-    assert results[0].matching_score == 7.5
+    assert results[0].score == 7.5
 
 
 @pytest.mark.asyncio
@@ -227,7 +227,7 @@ async def test_face_grouped_search_aggregates_scores_per_entity() -> None:
     assert results[0].entity_id == entity_id
     assert results[0].name == "Ada Lovelace"
     # max aggregation over similarities 0.9 / 0.7 / 0.5
-    assert results[0].matching_score == pytest.approx(0.9)
+    assert results[0].score == pytest.approx(0.9)
 
 
 @pytest.mark.asyncio
@@ -414,13 +414,13 @@ async def test_fetch_face_vectors_empty_ids_skips_weaviate() -> None:
 async def test_entity_search_returns_empty_for_missing_query_signals() -> None:
     response = await search_service.search_entities(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        SearchEntitiesQuery(),
+        SearchEntitiesRequest(),
     )
 
     assert response.items == []
     assert response.total_count == 0
     assert response.limit == 20
-    assert response.after_id is None
+    assert response.cursor is None
 
 
 @pytest.mark.asyncio
@@ -432,7 +432,7 @@ async def test_entity_search_text_only_uses_bm25(
 
     async def fake_bm25_search(
         _client: object, query: list[str], *, limit: int
-    ) -> list[SearchEntitiesResult]:
+    ) -> list[FoundEntity]:
         captured["query"] = query
         captured["limit"] = limit
         return [_entity_result(entity_id, 3.0)]
@@ -443,14 +443,14 @@ async def test_entity_search_text_only_uses_bm25(
 
     response = await search_service.search_entities(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        SearchEntitiesQuery(q=["Ada"], limit=7),
+        SearchEntitiesRequest(q=["Ada"], limit=7),
     )
 
     assert captured["limit"] == 7
     assert len(response.items) == 1
     assert response.items[0].entity_id == entity_id
     assert response.total_count == 1
-    assert response.after_id == entity_id
+    assert response.cursor == entity_id
     assert response.limit == 7
 
 
@@ -476,7 +476,7 @@ async def test_entity_search_filters_bm25_to_assigned_entities(
         *,
         entity_ids: set[uuid.UUID],
         limit: int,
-    ) -> list[SearchEntitiesResult]:
+    ) -> list[FoundEntity]:
         captured["entity_ids"] = entity_ids
         captured["limit"] = limit
         return [_entity_result(assigned_entity_id, 3.0)]
@@ -490,7 +490,7 @@ async def test_entity_search_filters_bm25_to_assigned_entities(
 
     response = await search_service.search_entities(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        SearchEntitiesQuery(
+        SearchEntitiesRequest(
             q=["Ada"],
             assignment=AssignmentType.face,
             limit=7,
@@ -500,7 +500,7 @@ async def test_entity_search_filters_bm25_to_assigned_entities(
     assert captured == {"entity_ids": {assigned_entity_id}, "limit": 7}
     assert response.items[0].entity_id == assigned_entity_id
     assert response.total_count == 1
-    assert response.after_id == assigned_entity_id
+    assert response.cursor == assigned_entity_id
     assert response.limit == 7
 
 
@@ -529,7 +529,7 @@ async def test_entity_search_face_only_fetches_vectors_and_excludes_reference(
         vector_name: str,
         excluded_face_ids: Sequence[uuid.UUID],
         number_of_groups: int,
-    ) -> list[SearchEntitiesResult]:
+    ) -> list[FoundEntity]:
         captured["vector_name"] = vector_name
         captured["excluded_face_ids"] = excluded_face_ids
         captured["number_of_groups"] = number_of_groups
@@ -544,7 +544,7 @@ async def test_entity_search_face_only_fetches_vectors_and_excludes_reference(
 
     response = await search_service.search_entities(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        SearchEntitiesQuery(q_face_id=[face_id], limit=4),
+        SearchEntitiesRequest(q_face_id=[face_id], limit=4),
     )
 
     assert captured["excluded_face_ids"] == [face_id]
@@ -572,14 +572,14 @@ async def test_entity_search_missing_reference_vectors_falls_back_to_text_only(
         *,
         query_vectors: list[list[float]],
         **_kwargs: object,
-    ) -> list[SearchEntitiesResult]:
+    ) -> list[FoundEntity]:
         # Mirror the real guard: empty vectors short-circuit without Weaviate.
         grouped_calls.append({"query_vectors": query_vectors})
         return []
 
     async def fake_bm25_search(
         _client: object, query: list[str], *, limit: int
-    ) -> list[SearchEntitiesResult]:
+    ) -> list[FoundEntity]:
         captured["query"] = query
         captured["limit"] = limit
         return [_entity_result(uuid.uuid4(), 1.0)]
@@ -596,7 +596,7 @@ async def test_entity_search_missing_reference_vectors_falls_back_to_text_only(
 
     response = await search_service.search_entities(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        SearchEntitiesQuery(q=["Ada"], q_face_id=[uuid.uuid4()]),
+        SearchEntitiesRequest(q=["Ada"], q_face_id=[uuid.uuid4()]),
     )
 
     assert len(response.items) == 1
@@ -621,7 +621,7 @@ def test_fuse_entity_results_ranks_shared_entities_first() -> None:
     )
 
     assert [item.entity_id for item in fused] == [shared_id, first_id]
-    assert all(item.matching_score < 1 for item in fused)
+    assert all(item.score < 1 for item in fused)
 
 
 def test_fuse_entity_results_returns_single_list_unchanged() -> None:
@@ -633,7 +633,7 @@ def test_fuse_entity_results_returns_single_list_unchanged() -> None:
     )
 
     assert [item.entity_id for item in fused] == [first_id]
-    assert fused[0].matching_score == 5.0
+    assert fused[0].score == 5.0
 
 
 def test_fuse_entity_results_handles_all_empty_lists() -> None:
@@ -659,12 +659,12 @@ async def test_face_search_returns_empty_when_reference_vectors_missing(
 
     response = await search_service.search_faces(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        FaceSearchQuery(q_face_id=[uuid.uuid4()]),
+        SearchFacesRequest(q_face_id=[uuid.uuid4()]),
     )
 
     assert response.items == []
     assert response.total_count == 0
-    assert response.after_id is None
+    assert response.cursor is None
 
 
 @pytest.mark.asyncio
@@ -692,12 +692,12 @@ async def test_face_search_excludes_reference_faces_and_paginates(
         vector_name: str,
         excluded_face_ids: Sequence[uuid.UUID],
         limit: int,
-    ) -> list[FaceSearchResult]:
+    ) -> list[FoundFace]:
         captured["vector_name"] = vector_name
         captured["excluded_face_ids"] = excluded_face_ids
         captured["limit"] = limit
         return [
-            FaceSearchResult(
+            FoundFace(
                 face_id=matched_id,
                 matching_score=0.8,
             )
@@ -708,7 +708,7 @@ async def test_face_search_excludes_reference_faces_and_paginates(
 
     response = await search_service.search_faces(
         SimpleNamespace(),  # pyright: ignore[reportArgumentType]
-        FaceSearchQuery(q_face_id=[reference_id], limit=9),
+        SearchFacesRequest(q_face_id=[reference_id], limit=9),
     )
 
     assert captured["excluded_face_ids"] == [reference_id]
@@ -716,5 +716,5 @@ async def test_face_search_excludes_reference_faces_and_paginates(
     assert len(response.items) == 1
     assert response.items[0].face_id == matched_id
     assert response.total_count == 1
-    assert response.after_id == matched_id
+    assert response.cursor == matched_id
     assert response.limit == 9

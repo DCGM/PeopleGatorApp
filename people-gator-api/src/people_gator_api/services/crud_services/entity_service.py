@@ -115,14 +115,14 @@ async def list_entities(
                 items=[],
                 limit=limit,
                 total_count=0,
-                after_id=None,
+                cursor=None,
             )
         filters.append(Filter.by_id().contains_any(sorted(entity_ids)))
     if assignment is not None:
         assigned_entity_ids = await assigned_reference_ids(client, assignment, "entity")
         if not assigned_entity_ids:
             return EntityListResponse(
-                items=[], limit=limit, total_count=0, after_id=None
+                items=[], limit=limit, total_count=0, cursor=None
             )
         filters.append(Filter.by_id().contains_any(sorted(assigned_entity_ids)))
     logger.debug(
@@ -155,7 +155,7 @@ async def list_entities(
         items=items,
         limit=limit,
         total_count=total_count,
-        after_id=items[-1].entity_id if len(items) == limit and items else None,
+        cursor=items[-1].entity_id if len(items) == limit and items else None,
     )
 
 

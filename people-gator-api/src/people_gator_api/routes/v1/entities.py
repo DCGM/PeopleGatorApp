@@ -1,84 +1,90 @@
-"""Entity endpoints (spec §2.1)."""
+"""Entity endpoints backed only by the persistence contracts."""
 
 import uuid
-from collections.abc import AsyncGenerator
 
-from fastapi import (
-    APIRouter,
-    Query,
-    status,
-)
+from fastapi import APIRouter, Query, status
 
 from people_gator_api.schemas.entities import (
+    EntityBatchCreateRequest,
+    EntityBatchPatchRequest,
     EntityCreateRequest,
     EntityDeleteManyRequest,
     EntityDeleteManyResponse,
-    EntityEmbeddingBatchUpdateResponse,
-    EntityEmbeddingUpdateRequest,
+    EntityListFilter,
+    EntityListRequest,
     EntityListResponse,
     EntityPatchRequest,
     EntityResponse,
 )
-from people_gator_api.schemas.enums import AssignmentType, EntityType
+from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.missing import MISSING, MissingType
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     AnnotatorUserDependency,
     BrowseUserDependency,
-    DataIngestUserDependency,
 )
-from people_gator_api.services.crud_services.entity_service import (
-    create_entity,
-    create_entity_batch,
-    delete_entities,
-    delete_entity,
-    get_entity,
-    list_entities,
-    patch_entity,
-    update_entity_embeddings_batch,
-)
-from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.services.http_errors import raise_api_error
+
 
 router = APIRouter(tags=["entities"])
 
 
+def _entity_filter(**values: object) -> EntityListFilter | MissingType:
+    supplied = {name: value for name, value in values.items() if value is not None}
+    return EntityListFilter.model_validate(supplied) if supplied else MISSING
+
+
 @router.get("/entities", response_model=EntityListResponse)
 async def list_entities_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
-    source_id: uuid.UUID | None = None,
-    entity_type: EntityType | None = None,
-    wikidata_id: str | None = None,
-    nlcr_authority_id: str | None = None,
-    user_id: uuid.UUID | None = None,
-    assignment: AssignmentType | None = None,
+    entity_id: list[uuid.UUID] | None = Query(default=None),
+    entity_type: list[EntityType] | None = Query(default=None),
+    wikidata_id: list[str] | None = Query(default=None),
+    nlcr_authority_id: list[str] | None = Query(default=None),
+    source_id: list[uuid.UUID] | None = Query(default=None),
+    detection_id: list[uuid.UUID] | None = Query(default=None),
+    mention_id: list[uuid.UUID] | None = Query(default=None),
+    has_mentions: bool | None = None,
+    has_detections: bool | None = None,
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> EntityListResponse:
+    del user
+    filter_ = _entity_filter(
+        entity_id=entity_id,
+        entity_type=entity_type,
+        wikidata_id=wikidata_id,
+        nlcr_authority_id=nlcr_authority_id,
+        source_id=source_id,
+        detection_id=detection_id,
+        mention_id=mention_id,
+        has_mentions=has_mentions,
+        has_detections=has_detections,
+    )
     try:
-        return await list_entities(
-            session,
-            user.user_id,
-            after_id,
-            limit,
-            entity_type=entity_type,
-            wikidata_id=wikidata_id,
-            nlcr_authority_id=nlcr_authority_id,
-            owner_user_id=user_id,
-            source_id=source_id,
-            assignment=assignment,
+        return await database.entities.list(
+            EntityListRequest(
+                filter=filter_,
+                limit=limit,
+                return_total_count=return_total_count,
+                cursor=cursor,
+            )
         )
     except ValueError as exc:
-        raise_api_error(422, "invalid_filter", str(exc))
+        raise_api_error(422, "invalid_query", str(exc))
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)
 async def get_entity_route(
     entity_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> EntityResponse:
-    entity = await get_entity(session, entity_id)
+    del user
+    entity = await database.entities.get(entity_id)
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
@@ -89,11 +95,13 @@ async def get_entity_route(
 )
 async def create_entity_route(
     payload: EntityCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AnnotatorUserDependency,
 ) -> EntityResponse:
-    entity = await create_entity(session, payload, user.user_id)
-    return entity
+    try:
+        return await database.entities.create(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
 
 
 @router.post(
@@ -102,39 +110,42 @@ async def create_entity_route(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_entity_batch_route(
-    payload: list[EntityCreateRequest],
-    session: WeaviateSessionDependency,
+    payload: EntityBatchCreateRequest,
+    database: DatabaseDependency,
     user: AnnotatorUserDependency,
 ) -> list[EntityResponse]:
-    async def async_list(
-        iterable: list[EntityCreateRequest],
-    ) -> AsyncGenerator[EntityCreateRequest]:
-        for item in iterable:
-            yield item
-
-    entities = await create_entity_batch(session, async_list(payload), user.user_id)
-    return entities
+    try:
+        return await database.entities.create_batch(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_reference", str(exc))
 
 
-@router.post("/entities:embeddings", response_model=EntityEmbeddingBatchUpdateResponse)
-async def update_entity_embeddings_batch_route(
-    payload: list[EntityEmbeddingUpdateRequest],
-    session: WeaviateSessionDependency,
-    _user: DataIngestUserDependency,
-) -> EntityEmbeddingBatchUpdateResponse:
-    updated_count = await update_entity_embeddings_batch(session, payload)
-    return EntityEmbeddingBatchUpdateResponse(updated_count=updated_count)
+@router.patch(
+    "/entities:batch",
+    response_model=list[EntityResponse | None],
+)
+async def patch_entity_batch_route(
+    payload: EntityBatchPatchRequest,
+    database: DatabaseDependency,
+    user: AnnotatorUserDependency,
+) -> list[EntityResponse | None]:
+    try:
+        return await database.entities.patch_batch(payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
 
 
 @router.patch("/entities/{entity_id}", response_model=EntityResponse)
 async def patch_entity_route(
     entity_id: uuid.UUID,
     payload: EntityPatchRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AnnotatorUserDependency,
 ) -> EntityResponse:
-    del user
-    entity = await patch_entity(session, entity_id, payload)
+    try:
+        entity = await database.entities.patch(entity_id, payload, user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_patch", str(exc))
     if entity is None:
         raise_api_error(404, "not_found", "Entity not found")
     return entity
@@ -143,15 +154,11 @@ async def patch_entity_route(
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entity_route(
     entity_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AdminUserDependency,
 ) -> None:
     del user
-    entity = await get_entity(session, entity_id)
-    if entity is None:
-        raise_api_error(404, "not_found", "Entity not found")
-    deleted = await delete_entity(session, entity_id)
-    if not deleted:
+    if not await database.entities.delete(entity_id):
         raise_api_error(404, "not_found", "Entity not found")
 
 
@@ -162,9 +169,11 @@ async def delete_entity_route(
 )
 async def delete_entities_route(
     payload: EntityDeleteManyRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AdminUserDependency,
 ) -> EntityDeleteManyResponse:
     del user
-    response = await delete_entities(session, payload)
-    return response
+    try:
+        return await database.entities.delete_many(payload)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_selector", str(exc))

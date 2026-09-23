@@ -8,7 +8,6 @@ from pydantic import (
     FiniteFloat,
     model_validator,
 )
-from pydantic.experimental.missing_sentinel import MISSING
 from people_gator_api.schemas.entities import EntityListFilter, EntityResponse
 from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
 from people_gator_api.schemas.enums import (
@@ -18,6 +17,7 @@ from people_gator_api.schemas.enums import (
     ScoreFusion
 )
 from people_gator_api.schemas.faces import FaceListFilter, FaceResponse
+from people_gator_api.schemas.missing import MISSING, MissingType
 from people_gator_api.schemas.sources import DocumentListFilter, DocumentResponse, PageListFilter, PageResponse
 
 # Reciprocal-rank fusion uses one-based ranks and equal modality weights.
@@ -53,11 +53,11 @@ class FoundItemBase(BaseModel):
 
 class QueryBase(BaseModel):
     """Base class for search queries."""
-    text: list[str] | MISSING = Field(
+    text: list[str] | MissingType = Field(
         default=MISSING,
         description="Unique, non-blank text queries. Candidate scores are aggregated across them.",
     )
-    face_id: list[uuid.UUID] | MISSING = Field(
+    face_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Unique reference face IDs. Every ID must exist and contain the selected embedding model.",
     )

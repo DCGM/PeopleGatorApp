@@ -3,7 +3,6 @@
 import uuid
 
 from pydantic import BaseModel, Field
-from pydantic.experimental.missing_sentinel import MISSING
 from typing import Annotated
 
 from people_gator_api.schemas.common import (
@@ -11,6 +10,7 @@ from people_gator_api.schemas.common import (
     GenericListResponse,
     ListFilterBase,
 )
+from people_gator_api.schemas.missing import MISSING, MissingType
 
 # ---------------------------------------------------------------------------
 # Text mention schemas
@@ -76,15 +76,15 @@ class TextMentionListFilter(ListFilterBase):
     Filter fields are combined using logical AND.
     Lists of criteria in each field are combined using logical OR.
     """
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="Filter by entity IDs."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(default=MISSING, description="Filter by source IDs.")
+    source_id: list[uuid.UUID] | MissingType = Field(default=MISSING, description="Filter by source IDs.")
 
 
 class TextMentionListRequest(GenericListRequest):
     """Request body for listing text mentions."""
-    filter: TextMentionListFilter | MISSING = Field(default=MISSING)
+    filter: TextMentionListFilter | MissingType = Field(default=MISSING)
 
 
 class TextMentionListResponse(GenericListResponse[TextMentionResponse]):

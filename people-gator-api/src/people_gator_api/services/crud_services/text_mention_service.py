@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 from weaviate import WeaviateAsyncClient
 from weaviate.collections.classes.filters import FilterReturn
 
-from people_gator_api.schemas.text_mentions import (
+from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
     TextMentionListResponse,
     TextMentionResponse,
@@ -160,7 +160,7 @@ async def list_text_mentions(
         items=items,
         total_count=total_count,
         limit=limit,
-        after_id=(
+        cursor=(
             items[-1].mention_id if len(items) == limit and items else None
         ),
     )

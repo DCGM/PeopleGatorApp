@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from people_gator_api.schemas.jwks import (
+from people_gator_api.schemas.auth import (
     JwksResponse,
     OpenIDConfigurationResponse,
     TokenResponse,

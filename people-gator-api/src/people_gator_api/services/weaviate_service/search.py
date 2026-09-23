@@ -26,7 +26,7 @@ from weaviate.collections.classes.types import WeaviateField
 
 from people_gator_api.schemas.entities import BoundingBox
 from people_gator_api.schemas.enums import EntityType, ScoreAggregation
-from people_gator_api.schemas.search import SearchEntitiesResult, FaceSearchResult
+from people_gator_api.schemas.search import FoundEntity, FoundFace
 from people_gator_api.services.weaviate_service.db_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
@@ -54,7 +54,7 @@ async def search_entities_by_names_or_aliases(
     entity_types: Sequence[EntityType] = (),
     entity_ids: Sequence[UUID] | None = None,
     limit: int = _DEFAULT_LIMIT,
-) -> list[SearchEntitiesResult]:
+) -> list[FoundEntity]:
     """Search Entity documents with BM25 across name and aliases."""
     cleaned_name = ", ".join(query_name).strip()
     if not cleaned_name or limit <= 0:
@@ -81,7 +81,7 @@ async def search_entities_by_faces_vectors(
     entity_ids: Sequence[UUID] | None = None,
     number_of_groups: int = _DEFAULT_LIMIT,
     objects_per_group: int = _DEFAULT_OBJECTS_PER_GROUP,
-) -> list[SearchEntitiesResult]:
+) -> list[FoundEntity]:
     """Multi-vector face search with Weaviate-side grouping on the entity reference.
 
     Per-face similarities inside a group are reduced with ``aggregation``.
@@ -112,7 +112,7 @@ async def search_entities_by_faces_vectors(
             return_properties=_ENTITY_REFERENCE_PROPERTIES,
         ),
     )
-    results: list[SearchEntitiesResult] = []
+    results: list[FoundEntity] = []
     for group_name, group in response.groups.items():
         entity_id = _group_name_to_uuid(group_name)
         if entity_id is None or not group.objects:
@@ -136,7 +136,7 @@ async def search_faces_by_vectors(
     vector_name: str,
     excluded_face_ids: Sequence[UUID] = (),
     limit: int = _DEFAULT_LIMIT,
-) -> list[FaceSearchResult]:
+) -> list[FoundFace]:
     """Search the Face collection with several query vectors against one named vector.
 
     Weaviate scores each candidate against every query vector and keeps the
@@ -153,7 +153,7 @@ async def search_faces_by_vectors(
         return_references=empty_reference_queries(["entity", "source"]),
     )
     return [
-        FaceSearchResult(
+        FoundFace(
             face_id=face_object.uuid,
             source_id=_optional_reference_uuid(face_object.references, "source"),
             entity_id=_optional_reference_uuid(face_object.references, "entity"),
@@ -260,15 +260,15 @@ def _grouped_entity_result(
     entity_id: UUID,
     properties: Mapping[str, WeaviateField],
     matching_score: float,
-) -> SearchEntitiesResult:
-    return SearchEntitiesResult(
+) -> FoundEntity:
+    return FoundEntity(
         entity_id=entity_id,
         entity_type=_optional_entity_type(properties),
         name=optional_str(properties, "name") or "",
         description=optional_str(properties, "description") or "",
         short_description=optional_str(properties, "short_description") or "",
         aliases=_optional_alias_text_array(properties),
-        matching_score=matching_score,
+        score=matching_score,
     )
 
 
@@ -334,21 +334,21 @@ def _optional_bounding_box(raw_properties: object) -> BoundingBox | None:
 
 def _entity_object_to_result(
     entity_object: object,
-) -> SearchEntitiesResult:
+) -> FoundEntity:
     object_uuid = getattr(entity_object, "uuid")
     raw_properties = getattr(entity_object, "properties")
     metadata = getattr(entity_object, "metadata", None)
 
     properties = _as_weaviate_properties(raw_properties)
 
-    return SearchEntitiesResult(
+    return FoundEntity(
         entity_id=_field_to_uuid(object_uuid),
         entity_type=_optional_entity_type(properties),
         name=optional_str(properties, "name") or "",
         description=optional_str(properties, "description") or "",
         short_description=optional_str(properties, "short_description") or "",
         aliases=_optional_alias_text_array(properties),
-        matching_score=_metadata_score(metadata),
+        score=_metadata_score(metadata),
     )
 
 

@@ -37,16 +37,24 @@ def test_media_router_exposes_typed_source_and_page_subresource_routes() -> None
     assert "/sources/lookup" in source_paths
 
 
-def test_source_list_only_accepts_url_as_its_filter() -> None:
+def test_source_list_exposes_contract_filters_and_opaque_cursor() -> None:
     app = FastAPI()
     app.include_router(sources_router)
 
     parameters = app.openapi()["paths"]["/sources"]["get"]["parameters"]
     assert {parameter["name"] for parameter in parameters} == {
+        "source_type",
         "url",
+        "source_id",
+        "entity_id",
+        "detection_id",
+        "mention_id",
         "limit",
-        "after_id",
+        "return_total_count",
+        "cursor",
     }
+    cursor = next(parameter for parameter in parameters if parameter["name"] == "cursor")
+    assert cursor["schema"]["anyOf"][0]["type"] == "string"
 
 
 def test_annotation_lists_only_accept_direct_source_filters() -> None:

@@ -33,7 +33,7 @@ from people_gator_api.schemas.sources import (
     ImageCreateRequest,
     PageCreateRequest,
     SourceDescriptorRequest,
-    SourceResponse,
+    SourceResponseBase,
 )
 from people_gator_api.services.crud_services import (
     source_resolution_service,
@@ -42,11 +42,11 @@ from people_gator_api.services.crud_services import (
 from people_gator_api.services.crud_services.source_service import SourceCreateSpec
 
 
-def _source(source_type: SourceKind) -> SourceResponse:
-    return SourceResponse(
+def _source(source_type: SourceKind) -> SourceResponseBase:
+    return SourceResponseBase(
         source_id=uuid.uuid4(),
         source_type=source_type,
-        uri="https://example.test/source",
+        url="https://example.test/source",
     )
 
 
@@ -152,14 +152,14 @@ async def test_create_source_reuses_existing_source(
 ) -> None:
     existing = _source(SourceKind.image)
 
-    async def fake_get_source(*_args: object, **_kwargs: object) -> SourceResponse:
+    async def fake_get_source(*_args: object, **_kwargs: object) -> SourceResponseBase:
         return existing
 
     monkeypatch.setattr(source_service, "get_source", fake_get_source)
     source, created = await source_service.create_source(
         SimpleNamespace(),
         SourceKind.image,
-        url=existing.uri,
+        url=existing.url,
     )
 
     assert source == existing
@@ -274,7 +274,7 @@ async def test_resolve_source_filter_accepts_both_page_paths(
         _client: object,
         _source_id: uuid.UUID | None = None,
         **kwargs: object,
-    ) -> SourceResponse:
+    ) -> SourceResponseBase:
         assert kwargs == {
             "source_type": SourceKind.page,
             "library": "mzk",
@@ -362,7 +362,7 @@ async def test_resolve_source_reference_uses_generic_create(
         _client: object,
         actual_type: SourceKind,
         **actual_kwargs: object,
-    ) -> tuple[SourceResponse, bool]:
+    ) -> tuple[SourceResponseBase, bool]:
         assert actual_type == source_type
         assert actual_kwargs == kwargs
         return expected, True

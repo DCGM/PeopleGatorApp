@@ -23,7 +23,7 @@ from people_gator_api.schemas.pero import PageLayoutModel
 from people_gator_api.schemas.sources import (
     PageSourceMetadata,
     SourceRecord,
-    SourceResponse,
+    SourceResponseBase,
 )
 from people_gator_api.services.crud_services.source_service import (
     SourceResolutionError,
@@ -39,7 +39,7 @@ from people_gator_api.utils.opentelemetry import trace
 
 logger = logging.getLogger(__name__)
 
-def page_layout_key(source: SourceResponse) -> str:
+def page_layout_key(source: SourceResponseBase) -> str:
     """Return the canonical storage key for one page source's layout."""
     if not isinstance(source, SourceRecord):
         raise SourceResolutionError(
@@ -68,7 +68,7 @@ async def resolve_page_source(
     *,
     source_id: uuid.UUID | None,
     page_path: str | None,
-) -> SourceResponse:
+) -> SourceResponseBase:
     """Resolve exactly one selector to a page Source record.
 
     * ``source_id`` — the internal Source UUID.

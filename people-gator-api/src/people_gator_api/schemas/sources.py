@@ -11,14 +11,13 @@ from pydantic import (
     Field,
     model_validator,
 )
-from pydantic.experimental.missing_sentinel import MISSING
-
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
     ListFilterBase,
 )
 from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 
 
 # ---------------------------------------------------------------------------
@@ -78,15 +77,15 @@ class GenericSourceCreateRequest(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    library: str | MISSING = Field(
+    library: str | MissingType = Field(
         default=MISSING,
         description="The library identifier."
     )
-    document_id: uuid.UUID | MISSING = Field(
+    document_id: uuid.UUID | MissingType = Field(
         default=MISSING,
         description="The document identifier."
     )
-    page_id: uuid.UUID | MISSING = Field(
+    page_id: uuid.UUID | MissingType = Field(
         default=MISSING,
         description="The page identifier."
     )
@@ -228,27 +227,27 @@ class GenericSourceLookupRequest(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    source_type: SourceKind | MISSING = Field(
+    source_type: SourceKind | MissingType = Field(
         default=MISSING,
         description="The type of the source."
     )
-    source_id: uuid.UUID | MISSING = Field(
+    source_id: uuid.UUID | MissingType = Field(
         default=MISSING,
         description="The unique identifier of the source."
     )
-    url: AnyUrl | MISSING = Field(
+    url: AnyUrl | MissingType = Field(
         default=MISSING,
         description="The URL of the source."
     )
-    library: str | MISSING = Field(
+    library: str | MissingType = Field(
         default=MISSING,
         description="The library identifier."
     )
-    document_id: uuid.UUID | MISSING = Field(
+    document_id: uuid.UUID | MissingType = Field(
         default=MISSING,
         description="The document identifier."
     )
-    page_id: uuid.UUID | MISSING = Field(
+    page_id: uuid.UUID | MissingType = Field(
         default=MISSING,
         description="The page identifier."
     )
@@ -524,39 +523,39 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
 class GenericSourceListFilter(ListFilterBase):
     """Filter for listing generic sources."""
 
-    source_type: list[SourceKind] | MISSING = Field(
+    source_type: list[SourceKind] | MissingType = Field(
         default=MISSING,
         description="Filter by source type."
     )
-    url: list[AnyUrl] | MISSING = Field(
+    url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
     )
-    library: list[str] | MISSING = Field(
+    library: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by library."
     )
-    document_id: list[uuid.UUID] | MISSING = Field(
+    document_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by document ID."
     )
-    page_id: list[uuid.UUID] | MISSING = Field(
+    page_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by page ID."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by source ID."
     )
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by entity ID that occur on source through text mention or face link."
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked detection ID."
     )
-    mention_id: list[uuid.UUID] | MISSING = Field(
+    mention_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked mention ID."
     )
@@ -565,27 +564,27 @@ class GenericSourceListFilter(ListFilterBase):
 class SourceListFilter(ListFilterBase):
     """Filter for listing all sources."""
 
-    source_type: list[SourceKind] | MISSING = Field(
+    source_type: list[SourceKind] | MissingType = Field(
         default=MISSING,
         description="Filter by source type."
     )
-    url: list[AnyUrl] | MISSING = Field(
+    url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by source ID."
     )
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by entity ID that occur on source through text mention or face link."
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked detection ID."
     )
-    mention_id: list[uuid.UUID] | MISSING = Field(
+    mention_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked mention ID."
     )
@@ -607,35 +606,35 @@ class SourceListFilter(ListFilterBase):
 class PageListFilter(ListFilterBase):
     """Filter for listing pages."""
 
-    url: list[AnyUrl] | MISSING = Field(
+    url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
     )
-    library: list[str] | MISSING = Field(
+    library: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by library."
     )
-    document_id: list[uuid.UUID] | MISSING = Field(
+    document_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by document ID."
     )
-    page_id: list[uuid.UUID] | MISSING = Field(
+    page_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by page ID."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by source ID."
     )
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by entity ID that occur on source through text mention or face link."
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked detection ID."
     )
-    mention_id: list[uuid.UUID] | MISSING = Field(
+    mention_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked mention ID."
     )
@@ -657,31 +656,31 @@ class PageListFilter(ListFilterBase):
 class DocumentListFilter(ListFilterBase):
     """Filter for listing documents."""
 
-    url: list[AnyUrl] | MISSING = Field(
+    url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
     )
-    library: list[str] | MISSING = Field(
+    library: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by library."
     )
-    document_id: list[uuid.UUID] | MISSING = Field(
+    document_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by document ID."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by source ID."
     )
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by entity ID that occur on source through text mention or face link."
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked detection ID."
     )
-    mention_id: list[uuid.UUID] | MISSING = Field(
+    mention_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked mention ID."
     )
@@ -702,23 +701,23 @@ class DocumentListFilter(ListFilterBase):
 class ImageListFilter(ListFilterBase):
     """Filter for listing images."""
 
-    url: list[AnyUrl] | MISSING = Field(
+    url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
     )
-    source_id: list[uuid.UUID] | MISSING = Field(
+    source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by source ID."
     )
-    entity_id: list[uuid.UUID] | MISSING = Field(
+    entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by entity ID that occur on source through text mention or face link."
     )
-    detection_id: list[uuid.UUID] | MISSING = Field(
+    detection_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked detection ID."
     )
-    mention_id: list[uuid.UUID] | MISSING = Field(
+    mention_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
         description="Filter by linked mention ID."
     )
@@ -739,9 +738,9 @@ def to_generic_list_filter(
     | DocumentListFilter
     | ImageListFilter
     | SourceListFilter
-    | MISSING,
+    | MissingType,
     source_type: SourceKind | None = None,
-) -> GenericSourceListFilter | MISSING:
+) -> GenericSourceListFilter | MissingType:
     """Flatten a typed filter while preserving its source-kind constraint."""
 
     if source_type is None:
@@ -752,7 +751,7 @@ def to_generic_list_filter(
         elif isinstance(filter, ImageListFilter):
             source_type = SourceKind.image
 
-    if filter is MISSING:
+    if is_missing(filter):
         if source_type is None:
             return MISSING
         return GenericSourceListFilter(source_type=[source_type])
@@ -768,34 +767,34 @@ def to_generic_list_filter(
 # ---------------------------------------------------------------------------
 
 class SourceListRequest(GenericListRequest):
-    filter: SourceListFilter | MISSING = Field(
+    filter: SourceListFilter | MissingType = Field(
         default=MISSING, description="Filter for listing sources."
     )
 
 
 class PageListRequest(GenericListRequest):
-    filter: PageListFilter | MISSING = Field(
+    filter: PageListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing pages."
     )
 
 
 class DocumentListRequest(GenericListRequest):
-    filter: DocumentListFilter | MISSING = Field(
+    filter: DocumentListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing documents."
     )
 
 
 class ImageListRequest(GenericListRequest):
-    filter: ImageListFilter | MISSING = Field(
+    filter: ImageListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing images."
     )
 
 
 class GenericSourceListRequest(GenericListRequest):
-    filter: GenericSourceListFilter | MISSING = Field(
+    filter: GenericSourceListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing generic sources."
     )

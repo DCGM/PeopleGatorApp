@@ -10,16 +10,16 @@ from weaviate import WeaviateAsyncClient
 
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.search import (
-    DocumentSearchResult,
-    DocumentSearchResultListResponse,
-    FaceSearchQuery,
-    FaceSearchResult,
-    FaceSearchResultListResponse,
-    PageSearchResult,
-    PageSearchResultListResponse,
+    FoundDocument,
+    SearchDocumentsResultListResponse,
+    SearchFacesRequest,
+    FoundFace,
+    SearchFacesResultListResponse,
+    FoundPage,
+    SearchPagesResultListResponse,
     SearchDocumentsQuery,
-    SearchEntitiesQuery,
-    SearchEntitiesResult,
+    SearchEntitiesRequest,
+    FoundEntity,
     SearchEntitiesResultListResponse,
     SearchPagesQuery,
 )
@@ -42,7 +42,7 @@ _RRF_RANK_CONSTANT = 60
 
 
 class SearchEntitiesRequestLike(Protocol):
-    query: SearchEntitiesQuery
+    query: SearchEntitiesRequest
     limit: int
     after_id: uuid.UUID | None
 
@@ -50,7 +50,7 @@ class SearchEntitiesRequestLike(Protocol):
 @trace()
 async def search_entities(
     session: WeaviateAsyncClient,
-    query: SearchEntitiesQuery,
+    query: SearchEntitiesRequest,
 ) -> SearchEntitiesResultListResponse:
     """Search entities by name/alias text, a positive face, or both."""
     if query.q is None and query.q_face_id is None:
@@ -64,7 +64,7 @@ async def search_entities(
     if assigned_entity_ids is not None and not assigned_entity_ids:
         return _empty_entity_search_response(limit=query.limit)
 
-    q_entities: list[SearchEntitiesResult] = []
+    q_entities: list[FoundEntity] = []
     if query.q is not None:
         text_filter_kwargs: dict[str, object] = {}
         if query.entity_types is not None:
@@ -81,7 +81,7 @@ async def search_entities(
             limit=query.limit,
             **text_filter_kwargs,  # pyright: ignore[reportArgumentType]
         )
-    q_face_entities: list[SearchEntitiesResult] = []
+    q_face_entities: list[FoundEntity] = []
     if query.q_face_id is not None:
         face_query_vectors = await fetch_face_vectors(
             session,
@@ -113,15 +113,15 @@ async def search_entities(
         items=items,
         total_count=len(fused_entities),
         limit=query.limit,
-        after_id=items[-1].entity_id if items else None,
+        cursor=items[-1].entity_id if items else None,
     )
 
 
 @trace()
 async def search_faces(
     session: WeaviateAsyncClient,
-    query: FaceSearchQuery,
-) -> FaceSearchResultListResponse:
+    query: SearchFacesRequest,
+) -> SearchFacesResultListResponse:
     """Find faces similar to any of the supplied reference faces."""
     logger.debug("search_faces called", extra={"face_ids": query.q_face_id})
     vector_name = FACE_VECTOR_BY_MODEL[query.embedding_model]
@@ -136,7 +136,7 @@ async def search_faces(
             extra={"face_ids": query.q_face_id, "vector_name": vector_name},
         )
         return _empty_face_search_response(limit=query.limit)
-    faces: list[FaceSearchResult] = await search_faces_by_vectors(
+    faces: list[FoundFace] = await search_faces_by_vectors(
         session,
         query_vectors,
         vector_name=vector_name,
@@ -144,11 +144,11 @@ async def search_faces(
         limit=query.limit,
     )
     logger.info("search_faces completed", extra={"total": len(faces)})
-    return FaceSearchResultListResponse(
+    return SearchFacesResultListResponse(
         items=faces,
         total_count=len(faces),
         limit=query.limit,
-        after_id=faces[-1].face_id if faces else None,
+        cursor=faces[-1].face_id if faces else None,
     )
 
 
@@ -157,22 +157,22 @@ def _empty_entity_search_response(limit: int) -> SearchEntitiesResultListRespons
         items=[],
         total_count=0,
         limit=limit,
-        after_id=None,
+        cursor=None,
     )
 
 
-def _empty_face_search_response(limit: int) -> FaceSearchResultListResponse:
-    return FaceSearchResultListResponse(
+def _empty_face_search_response(limit: int) -> SearchFacesResultListResponse:
+    return SearchFacesResultListResponse(
         items=[],
         total_count=0,
         limit=limit,
-        after_id=None,
+        cursor=None,
     )
 
 
 def _fuse_entity_results(
-    ranked_lists: list[list[SearchEntitiesResult]],
-) -> list[SearchEntitiesResult]:
+    ranked_lists: list[list[FoundEntity]],
+) -> list[FoundEntity]:
     """Fuse heterogeneous BM25 and cosine rankings without mixing raw scores."""
     non_empty_lists = [items for items in ranked_lists if items]
     if not non_empty_lists:
@@ -181,7 +181,7 @@ def _fuse_entity_results(
         return non_empty_lists[0]
 
     fused_scores: dict[uuid.UUID, float] = {}
-    best_items: dict[uuid.UUID, SearchEntitiesResult] = {}
+    best_items: dict[uuid.UUID, FoundEntity] = {}
     for items in non_empty_lists:
         for rank, item in enumerate(items, start=1):
             contribution = 1.0 / (_RRF_RANK_CONSTANT + rank)
@@ -195,7 +195,7 @@ def _fuse_entity_results(
         item.model_copy(update={"matching_score": fused_scores[item.entity_id]})
         for item in best_items.values()
     ]
-    fused.sort(key=lambda item: (-item.matching_score, item.entity_id))
+    fused.sort(key=lambda item: (-item.score, item.entity_id))
     return fused
 
 
@@ -203,7 +203,7 @@ def _fuse_entity_results(
 async def search_pages(
     session: WeaviateAsyncClient,
     query: SearchPagesQuery,
-) -> PageSearchResultListResponse:
+) -> SearchPagesResultListResponse:
     """Search page sources by source UUID or directly linked entity text."""
     archive_filter_kwargs = (
         {"assignment": query.assignment} if query.assignment is not None else {}
@@ -217,7 +217,7 @@ async def search_pages(
         **archive_filter_kwargs,
     )
     items = [
-        PageSearchResult(
+        FoundPage(
             source_id=candidate.source_id,
             document_id=candidate.document_id,
             page_id=candidate.page_id,
@@ -227,11 +227,11 @@ async def search_pages(
         if candidate.document_id is not None and candidate.page_id is not None
     ]
     logger.info("search_pages completed", extra={"total": len(items)})
-    return PageSearchResultListResponse(
+    return SearchPagesResultListResponse(
         items=items,
         total_count=len(items),
         limit=query.limit,
-        after_id=items[-1].source_id if items else None,
+        cursor=items[-1].source_id if items else None,
     )
 
 
@@ -239,7 +239,7 @@ async def search_pages(
 async def search_documents(
     session: WeaviateAsyncClient,
     query: SearchDocumentsQuery,
-) -> DocumentSearchResultListResponse:
+) -> SearchDocumentsResultListResponse:
     """Search document sources by source UUID or directly linked entity text."""
     candidates = await search_archive(
         session,
@@ -249,18 +249,18 @@ async def search_documents(
         limit=query.limit,
     )
     items = [
-        DocumentSearchResult(
+        FoundDocument(
             source_id=candidate.source_id,
             document_id=candidate.document_id,
-            matching_score=candidate.matching_score,
+            score_text=candidate.matching_score,
         )
         for candidate in candidates
         if candidate.document_id is not None
     ]
     logger.info("search_documents completed", extra={"total": len(items)})
-    return DocumentSearchResultListResponse(
+    return SearchDocumentsResultListResponse(
         items=items,
         total_count=len(items),
         limit=query.limit,
-        after_id=items[-1].source_id if items else None,
+        cursor=items[-1].source_id if items else None,
     )

@@ -7,7 +7,9 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
+
 os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__HOST", "localhost")
+os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__PORT", "5432")
 os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__USER", "user")
 os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__PASSWORD", "password")
 os.environ.setdefault("PEOPLE_GATOR_API__POSTGRES__DATABASE", "people_gator")
@@ -26,72 +28,23 @@ os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_PORT", "50051")
 os.environ.setdefault("PEOPLE_GATOR_API__WEAVIATE__GRPC_SECURE", "false")
 os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 
+
 from people_gator_api.app import app
 from people_gator_api.routes.v1.sources import delete_source_route, get_source_route
 from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.sources import SourceResponseBase
 from people_gator_api.schemas.users import UserResponse
 
 
-class FakeCollection:
-    def __init__(self, owner: FakeClient) -> None:
-        super().__init__()
-        self.owner = owner
-
-    @property
-    def data(self) -> FakeData:
-        return FakeData(self.owner)
-
-    @property
-    def query(self) -> FakeQuery:
-        return FakeQuery(self.owner)
-
-
-class FakeData:
-    def __init__(self, owner: FakeClient) -> None:
-        super().__init__()
-        self.owner = owner
-
-    async def delete_by_id(self, object_id: uuid.UUID) -> bool:
-        return self.owner.objects.pop(str(object_id), None) is not None
-
-
-class FakeQuery:
-    def __init__(self, owner: FakeClient) -> None:
-        super().__init__()
-        self.owner = owner
-
-    async def fetch_object_by_id(
-        self,
-        object_id: uuid.UUID,
-        **_kwargs: object,
-    ) -> object | None:
-        entry = self.owner.objects.get(str(object_id))
-        if entry is None:
-            return None
-        return SimpleNamespace(
-            uuid=entry["uuid"],
-            properties=entry["properties"],
-            references={},
-        )
-
-
-class FakeClient:
+class FakeSources:
     def __init__(self) -> None:
-        super().__init__()
-        self.objects: dict[str, dict[str, object]] = {}
+        self.objects: dict[uuid.UUID, SourceResponseBase] = {}
 
-    @property
-    def collections(self) -> FakeCollections:
-        return FakeCollections(self)
+    async def get_source(self, source_id: uuid.UUID) -> SourceResponseBase | None:
+        return self.objects.get(source_id)
 
-
-class FakeCollections:
-    def __init__(self, owner: FakeClient) -> None:
-        super().__init__()
-        self.owner = owner
-
-    def get(self, _collection_name: str) -> FakeCollection:
-        return FakeCollection(self.owner)
+    async def delete(self, source_id: uuid.UUID) -> bool:
+        return self.objects.pop(source_id, None) is not None
 
 
 def _user() -> UserResponse:
@@ -105,54 +58,48 @@ def _user() -> UserResponse:
     )
 
 
-def test_sources_contract_is_read_only_and_has_no_metadata() -> None:
+def test_sources_contract_is_read_only_and_has_no_polymorphic_metadata() -> None:
     openapi = app.openapi()
 
     assert "post" not in openapi["paths"]["/api/v1/sources"]
-    source_properties = openapi["components"]["schemas"]["SourceResponse"]["properties"]
-    assert set(source_properties) == {"source_id", "source_type", "uri"}
+    source_properties = openapi["components"]["schemas"]["SourceResponseBase"][
+        "properties"
+    ]
+    assert set(source_properties) == {"source_id", "source_type", "url"}
 
 
 @pytest.mark.asyncio
-async def test_source_get_delete_roundtrip() -> None:
-    session = FakeClient()
+async def test_source_get_delete_roundtrip_through_contract() -> None:
+    sources = FakeSources()
+    database = SimpleNamespace(sources=sources)
     source_id = uuid.uuid4()
-    uri = "https://example.test/roundtrip-image.jpg"
-    session.objects[str(source_id)] = {
-        "uuid": source_id,
-        "properties": {
-            "source_type": SourceKind.image.value,
-            "uri": uri,
-            "library": None,
-            "document": None,
-            "page": None,
-        },
-    }
+    url = "https://example.test/roundtrip-image.jpg"
+    sources.objects[source_id] = SourceResponseBase(
+        source_id=source_id,
+        source_type=SourceKind.image,
+        url=url,
+    )
 
     fetched = await get_source_route(
         source_id=source_id,
         user=_user(),
-        session=session,  # pyright: ignore[reportArgumentType]
+        database=database,  # type: ignore[arg-type]
     )
     assert fetched.source_id == source_id
-    assert fetched.uri == uri
-    assert fetched.model_dump() == {
-        "source_id": source_id,
-        "source_type": SourceKind.image,
-        "uri": uri,
-    }
+    assert str(fetched.url) == url
+    assert fetched.source_type == SourceKind.image
 
     await delete_source_route(
         source_id=source_id,
         user=_user(),
-        session=session,  # pyright: ignore[reportArgumentType]
+        database=database,  # type: ignore[arg-type]
     )
 
     with pytest.raises(HTTPException) as exc_info:
         await get_source_route(
             source_id=source_id,
             user=_user(),
-            session=session,  # pyright: ignore[reportArgumentType]
+            database=database,  # type: ignore[arg-type]
         )
 
     assert exc_info.value.status_code == 404

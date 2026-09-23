@@ -6,9 +6,8 @@ from fastapi.security import SecurityScopes
 from typing import Annotated, TypedDict
 import argon2
 from people_gator_api.schemas.auth import TokenResponse
-from people_gator_api.schemas.users import UserResponse
-from people_gator_api.services.crud_services.user_service import get_or_create_user
-from people_gator_api.services.database_service import WeaviateSessionDependency
+from people_gator_api.schemas.users import UserCreateRequest, UserResponse
+from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.services.jwk_service import (
     issue_access_token,
     issue_refresh_token,
@@ -119,17 +118,20 @@ async def get_token(
 async def get_current_user(
     security_scopes: SecurityScopes,
     token: Annotated[str, Depends(security)],
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
 ) -> UserResponse:
     """Get the current user from the request context."""
     claims = await verify_access_token(token)
     issuer = claims["iss"]
     subject = claims["sub"]
     scopes = claims["scopes"]
-    user = await get_or_create_user(
-        client=session,
-        external_subject=subject,
-        external_issuer=issuer,
+    user = await database.users.get_or_create(
+        UserCreateRequest(
+            display_name=subject,
+            is_active=True,
+            external_subject=subject,
+            external_issuer=issuer,
+        )
     )
     for scope in security_scopes.scopes:
         if scope not in scopes:

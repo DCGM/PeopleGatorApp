@@ -5,20 +5,29 @@ import uuid
 from fastapi import APIRouter, Query, Response, status
 from pydantic import AnyUrl
 
-from people_gator_api.schemas.enums import AssignmentType
+from people_gator_api.persistence.contracts import CreateResult
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
     DocumentBatchCreateRequest,
     DocumentCreateRequest,
+    DocumentListFilter,
+    DocumentListRequest,
     DocumentListResponse,
+    DocumentLookupRequest,
     DocumentResponse,
     ImageBatchCreateRequest,
     ImageCreateRequest,
+    ImageListFilter,
+    ImageListRequest,
     ImageListResponse,
+    ImageLookupRequest,
     ImageResponse,
     PageBatchCreateRequest,
     PageCreateRequest,
+    PageListFilter,
+    PageListRequest,
     PageListResponse,
+    PageLookupRequest,
     PageResponse,
 )
 from people_gator_api.services.auth_service import (
@@ -26,36 +35,10 @@ from people_gator_api.services.auth_service import (
     BrowseUserDependency,
     DataIngestUserDependency,
 )
-from people_gator_api.services.crud_services.text_mention_span_service import (
-    get_text_mention_spans,
+from people_gator_api.services.database_service import (
+    DatabaseDependency,
+    WeaviateSessionDependency,
 )
-from people_gator_api.services.crud_services.image_content_service import (
-    get_image_content,
-)
-from people_gator_api.services.crud_services.media_service import (
-    create_document,
-    create_document_batch,
-    create_image,
-    create_image_batch,
-    create_page,
-    create_page_batch,
-    get_document,
-    get_document_by_path,
-    get_image,
-    get_image_by_url,
-    get_page,
-    get_page_by_path,
-    list_images,
-    list_documents,
-    list_pages,
-)
-from people_gator_api.services.crud_services.page_image_service import get_page_image
-from people_gator_api.services.crud_services.page_layout_service import get_page_layout
-from people_gator_api.services.crud_services.source_service import (
-    SourceResolutionError,
-    delete_source,
-)
-from people_gator_api.services.database_service import WeaviateSessionDependency
 from people_gator_api.services.http_errors import raise_api_error
 
 router = APIRouter()
@@ -71,6 +54,13 @@ async def _fetch_layout_for_page(
     page_source_id: uuid.UUID,
 ) -> PageLayoutModel:
     """Fetch the stored layout for an already-resolved page."""
+    from people_gator_api.services.crud_services.page_layout_service import (
+        get_page_layout,
+    )
+    from people_gator_api.services.crud_services.source_service import (
+        SourceResolutionError,
+    )
+
     try:
         return await get_page_layout(
             session,
@@ -86,6 +76,13 @@ async def _fetch_text_mention_spans_for_page(
     page_source_id: uuid.UUID,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
+    from people_gator_api.services.crud_services.source_service import (
+        SourceResolutionError,
+    )
+    from people_gator_api.services.crud_services.text_mention_span_service import (
+        get_text_mention_spans,
+    )
+
     try:
         return await get_text_mention_spans(session, page_source_id)
     except SourceResolutionError as exc:
@@ -99,20 +96,27 @@ async def _fetch_text_mention_spans_for_page(
 
 @router.get("/documents", response_model=DocumentListResponse, tags=["documents"])
 async def list_documents_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     library: str | None = None,
     document_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> DocumentListResponse:
     del user
-    return await list_documents(
-        session,
-        after_id,
-        limit,
-        library=library,
-        document_id=document_id,
+    values: dict[str, object] = {}
+    if library is not None:
+        values["library"] = [library]
+    if document_id is not None:
+        values["document_id"] = [document_id]
+    return await database.sources.list_documents(
+        DocumentListRequest(
+            filter=DocumentListFilter.model_validate(values),
+            limit=limit,
+            return_total_count=return_total_count,
+            cursor=cursor,
+        )
     )
 
 
@@ -124,12 +128,12 @@ async def list_documents_route(
 )
 async def create_document_route(
     payload: DocumentCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> DocumentResponse:
     del user
-    document, created = await create_document(session, payload)
-    if not created:
+    document, result = await database.sources.get_or_create_document(payload)
+    if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Document already registered")
     return document
 
@@ -142,11 +146,14 @@ async def create_document_route(
 )
 async def create_document_batch_route(
     payload: DocumentBatchCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> list[DocumentResponse]:
     del user
-    return await create_document_batch(session, payload)
+    return [
+        response
+        for response, _ in await database.sources.get_or_create_document_batch(payload)
+    ]
 
 
 @router.get(
@@ -155,14 +162,16 @@ async def create_document_batch_route(
     tags=["documents"],
 )
 async def lookup_document_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     library: str,
     document_id: uuid.UUID,
 ) -> DocumentResponse:
     """Fetch one document by its canonical library identity."""
     del user
-    resolved = await get_document_by_path(session, library, document_id)
+    resolved = await database.sources.lookup_document(
+        DocumentLookupRequest(library=library, document_id=document_id)
+    )
     if resolved is None:
         raise_api_error(404, "not_found", "Document not found")
     return resolved
@@ -175,14 +184,11 @@ async def lookup_document_route(
 )
 async def get_document_route(
     document_source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> DocumentResponse:
     del user
-    document = await get_document(
-        session,
-        document_source_id,
-    )
+    document = await database.sources.get_document(document_source_id)
     if document is None:
         raise_api_error(404, "not_found", "Document not found")
     return document
@@ -195,19 +201,13 @@ async def get_document_route(
 )
 async def delete_document_route(
     document_source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AdminUserDependency,
 ) -> None:
     del user
-    if (
-        await get_document(
-            session,
-            document_source_id,
-        )
-        is None
-    ):
+    if await database.sources.get_document(document_source_id) is None:
         raise_api_error(404, "not_found", "Document not found")
-    await delete_source(session, document_source_id)
+    await database.sources.delete(document_source_id)
 
 
 # -----------------------------------------------------------------------------
@@ -217,24 +217,30 @@ async def delete_document_route(
 
 @router.get("/pages", response_model=PageListResponse, tags=["pages"])
 async def list_pages_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     library: str | None = None,
     document_id: uuid.UUID | None = None,
     page_id: uuid.UUID | None = None,
-    assignment: AssignmentType | None = None,
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> PageListResponse:
     del user
-    return await list_pages(
-        session,
-        after_id,
-        limit,
-        library=library,
-        document_id=document_id,
-        page_id=page_id,
-        assignment=assignment,
+    values: dict[str, object] = {}
+    if library is not None:
+        values["library"] = [library]
+    if document_id is not None:
+        values["document_id"] = [document_id]
+    if page_id is not None:
+        values["page_id"] = [page_id]
+    return await database.sources.list_pages(
+        PageListRequest(
+            filter=PageListFilter.model_validate(values),
+            limit=limit,
+            return_total_count=return_total_count,
+            cursor=cursor,
+        )
     )
 
 
@@ -246,12 +252,12 @@ async def list_pages_route(
 )
 async def create_page_route(
     payload: PageCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> PageResponse:
     del user
-    page, created = await create_page(session, payload)
-    if not created:
+    page, result = await database.sources.get_or_create_page(payload)
+    if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Page already registered")
     return page
 
@@ -264,16 +270,19 @@ async def create_page_route(
 )
 async def create_page_batch_route(
     payload: PageBatchCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> list[PageResponse]:
     del user
-    return await create_page_batch(session, payload)
+    return [
+        response
+        for response, _ in await database.sources.get_or_create_page_batch(payload)
+    ]
 
 
 @router.get("/pages/lookup", response_model=PageResponse, tags=["pages"])
 async def lookup_page_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     library: str,
     document_id: uuid.UUID,
@@ -281,11 +290,12 @@ async def lookup_page_route(
 ) -> PageResponse:
     """Fetch one page by its canonical library identity."""
     del user
-    resolved = await get_page_by_path(
-        session,
-        library,
-        page_id,
-        document_id=document_id,
+    resolved = await database.sources.lookup_page(
+        PageLookupRequest(
+            library=library,
+            document_id=document_id,
+            page_id=page_id,
+        )
     )
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
@@ -295,11 +305,11 @@ async def lookup_page_route(
 @router.get("/pages/{page_source_id:uuid}", response_model=PageResponse, tags=["pages"])
 async def get_page_route(
     page_source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> PageResponse:
     del user
-    page = await get_page(session, page_source_id)
+    page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     return page
@@ -312,13 +322,20 @@ async def get_page_route(
 )
 async def get_page_image_by_id_route(
     page_source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
+    from people_gator_api.services.crud_services.page_image_service import (
+        get_page_image,
+    )
+    from people_gator_api.services.crud_services.source_service import (
+        SourceResolutionError,
+    )
+
     del user
-    page = await get_page(session, page_source_id)
+    page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
@@ -344,15 +361,16 @@ async def get_page_image_by_id_route(
 )
 async def get_page_layout_by_id_route(
     page_source_id: uuid.UUID,
+    database: DatabaseDependency,
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
 ) -> PageLayoutModel:
     """Fetch the page layout for one page by its Source UUID."""
     del user
-    page = await get_page(session, page_source_id)
+    page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_layout_for_page(session, page.page_source_id)
+    return await _fetch_layout_for_page(session, page.source_id)
 
 
 @router.get(
@@ -362,15 +380,16 @@ async def get_page_layout_by_id_route(
 )
 async def get_text_mention_spans_by_id_route(
     page_source_id: uuid.UUID,
+    database: DatabaseDependency,
     session: WeaviateSessionDependency,
     user: BrowseUserDependency,
 ) -> list[TextMentionSpanModel]:
     """Return word-aligned fuzzy text-mention spans for one page Source UUID."""
     del user
-    page = await get_page(session, page_source_id)
+    page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_text_mention_spans_for_page(session, page.page_source_id)
+    return await _fetch_text_mention_spans_for_page(session, page.source_id)
 
 
 @router.delete(
@@ -380,13 +399,13 @@ async def get_text_mention_spans_by_id_route(
 )
 async def delete_page_route(
     page_source_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AdminUserDependency,
 ) -> None:
     del user
-    if await get_page(session, page_source_id) is None:
+    if await database.sources.get_page(page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
-    await delete_source(session, page_source_id)
+    await database.sources.delete(page_source_id)
 
 
 # -----------------------------------------------------------------------------
@@ -396,18 +415,21 @@ async def delete_page_route(
 
 @router.get("/images", response_model=ImageListResponse, tags=["images"])
 async def list_images_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
-    url: str | None = None,
+    url: AnyUrl | None = None,
     limit: int = Query(default=50, ge=0),
-    after_id: uuid.UUID | None = None,
+    return_total_count: bool = False,
+    cursor: str | None = None,
 ) -> ImageListResponse:
     del user
-    return await list_images(
-        session,
-        after_id,
-        limit,
-        url=url,
+    return await database.sources.list_images(
+        ImageListRequest(
+            filter=ImageListFilter(url=[url]) if url is not None else ImageListFilter(),
+            limit=limit,
+            return_total_count=return_total_count,
+            cursor=cursor,
+        )
     )
 
 
@@ -419,12 +441,12 @@ async def list_images_route(
 )
 async def create_image_route(
     payload: ImageCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> ImageResponse:
     del user
-    image, created = await create_image(session, payload)
-    if not created:
+    image, result = await database.sources.get_or_create_image(payload)
+    if result == CreateResult.EXISTING:
         raise_api_error(409, "already_exists", "Image already registered")
     return image
 
@@ -437,25 +459,25 @@ async def create_image_route(
 )
 async def create_image_batch_route(
     payload: ImageBatchCreateRequest,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: DataIngestUserDependency,
 ) -> list[ImageResponse]:
     del user
-    return await create_image_batch(session, payload)
+    return [
+        response
+        for response, _ in await database.sources.get_or_create_image_batch(payload)
+    ]
 
 
 @router.get("/images/lookup", response_model=ImageResponse, tags=["images"])
 async def lookup_image_route(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     url: AnyUrl,
 ) -> ImageResponse:
     """Fetch one image by its ``url``."""
     del user
-    image = await get_image_by_url(
-        session,
-        str(url),
-    )
+    image = await database.sources.lookup_image(ImageLookupRequest(url=url))
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
     return image
@@ -464,11 +486,11 @@ async def lookup_image_route(
 @router.get("/images/{image_id:uuid}", response_model=ImageResponse, tags=["images"])
 async def get_image_route(
     image_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> ImageResponse:
     del user
-    image = await get_image(session, image_id)
+    image = await database.sources.get_image(image_id)
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
     return image
@@ -477,11 +499,18 @@ async def get_image_route(
 @router.get("/images/{image_id:uuid}/content", response_class=Response, tags=["images"])
 async def get_image_content_by_id_route(
     image_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> Response:
+    from people_gator_api.services.crud_services.image_content_service import (
+        get_image_content,
+    )
+    from people_gator_api.services.crud_services.source_service import (
+        SourceResolutionError,
+    )
+
     del user
-    image = await get_image(session, image_id)
+    image = await database.sources.get_image(image_id)
     if image is None:
         raise_api_error(404, "not_found", "Image not found")
     try:
@@ -498,10 +527,10 @@ async def get_image_content_by_id_route(
 )
 async def delete_image_route(
     image_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: AdminUserDependency,
 ) -> None:
     del user
-    if await get_image(session, image_id) is None:
+    if await database.sources.get_image(image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
-    await delete_source(session, image_id)
+    await database.sources.delete(image_id)
