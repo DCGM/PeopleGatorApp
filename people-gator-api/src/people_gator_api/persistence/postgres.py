@@ -12,7 +12,8 @@ different filters or options. Search cursors use the same envelope and point to
 an item in the deterministic score/UUID ranking.
 
 Text search uses PostgreSQL ``pg_trgm`` similarity. Face search uses pgvector
-cosine similarity against each requested reference embedding. Scores are
+HNSW cosine search to generate a bounded candidate pool for each requested
+reference embedding, then exactly rescores those candidates. Scores are
 aggregated within each modality as requested by the schema, ranked with UUID
 tie-breaking, and combined across modalities with reciprocal-rank fusion.
 
@@ -36,7 +37,22 @@ from typing import Any, TypeVar, cast as type_cast
 
 from pgvector.sqlalchemy import VECTOR
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement, cast, delete, exists, func, or_, select, update
+from sqlalchemy import (
+    ColumnElement,
+    cast,
+    column,
+    delete,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    text,
+    true,
+    update,
+    values,
+)
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +62,7 @@ from people_gator_api.persistence.contracts import (
     CreateResult,
     Database,
     EntityRepository,
+    FaceModelRepository,
     FaceRepository,
     SourceRepository,
     TextMentionRepository,
@@ -64,9 +81,15 @@ from people_gator_api.schemas.entities import (
     EntityResponse,
 )
 from people_gator_api.schemas.enums import EntityType, ScoreAggregation, SourceKind
+from people_gator_api.schemas.face_models import (
+    FaceModelListResponse,
+    FaceModelRegisterRequest,
+    FaceModelResponse,
+)
 from people_gator_api.schemas.faces import (
     BoundingBox,
     FaceCreateRequest,
+    FaceEmbedding as FaceEmbeddingInput,
     FaceListFilter,
     FaceListRequest,
     FaceListResponse,
@@ -128,17 +151,53 @@ from people_gator_api.models import (
     Document,
     Entity,
     Face,
+    FaceEmbedding as FaceEmbeddingRow,
+    FaceModel,
     Image,
     ImageOccurrence,
-    ImageOccurrenceEmbedding,
     Page,
     Source,
     TextMention,
     User,
+    face_embedding_hnsw_index,
 )
 
 
 ModelT = TypeVar("ModelT")
+
+# HNSW returns a bounded face candidate pool for each reference vector. Exact
+# per-entity/source/face scores are then recomputed within the union of those
+# candidates so min/max/average aggregation keeps its existing meaning.
+FACE_SEARCH_CANDIDATE_LIMIT = 200
+HNSW_EF_SEARCH = 400
+
+
+def _cosine_distance(embedding: object, query_vector: object) -> ColumnElement[float]:
+    return type_cast(Any, embedding).cosine_distance(query_vector)
+
+
+def _query_vectors_cte(vectors: dict[uuid.UUID, list[float]], embedding_dim: int):
+    return (
+        values(
+            column("query_id", UUID(as_uuid=True)),
+            column("embedding", VECTOR(embedding_dim)),
+            name="query_vectors",
+        )
+        .data(list(vectors.items()))
+        .cte("query_vectors")
+    )
+
+
+async def _configure_hnsw_search(session: AsyncSession) -> None:
+    await session.execute(text(f"SET LOCAL hnsw.ef_search = {HNSW_EF_SEARCH}"))
+
+
+def _face_embedding_expression(embedding_dim: int) -> ColumnElement[list[float]]:
+    return cast(FaceEmbeddingRow.embedding, VECTOR(embedding_dim))
+
+
+def _face_model_predicate(model_stub: str) -> ColumnElement[bool]:
+    return FaceEmbeddingRow.model_id == literal(model_stub, literal_execute=True)
 
 
 def _strings(values: Iterable[object]) -> list[str]:
@@ -328,7 +387,9 @@ def _search_page(
 
 def _entity_response(entity: Entity) -> EntityResponse:
     if entity.kind is None or entity.name is None:
-        raise ValueError(f"entity {entity.id} does not satisfy the persistence contract")
+        raise ValueError(
+            f"entity {entity.id} does not satisfy the persistence contract"
+        )
     return EntityResponse(
         entity_id=entity.id,
         user_id=entity.user_id,
@@ -585,27 +646,114 @@ def _source_filters(
     return filters
 
 
+async def _registered_face_model(session: AsyncSession, model_stub: str) -> FaceModel:
+    model = await session.get(FaceModel, model_stub)
+    if model is None:
+        raise ValueError(f"face embedding model is not registered: {model_stub}")
+    return model
+
+
+async def _validate_face_embeddings(
+    session: AsyncSession, embeddings: Iterable[FaceEmbeddingInput]
+) -> None:
+    items = list(embeddings)
+    if not items:
+        return
+    stubs = {item.model_identifier for item in items}
+    rows = await session.scalars(select(FaceModel).where(FaceModel.stub.in_(stubs)))
+    registered = {model.stub: model for model in rows}
+    missing = sorted(stubs - registered.keys())
+    if missing:
+        raise ValueError(f"face embedding model is not registered: {missing[0]}")
+    for item in items:
+        expected = registered[item.model_identifier].embedding_dim
+        actual = len(item.vector)
+        if actual != expected:
+            message = f"face embedding model '{item.model_identifier}' requires "
+            message += f"{expected} dimensions, got {actual}"
+            raise ValueError(message)
+
+
 async def _reference_vectors(
     session: AsyncSession,
     face_ids: Sequence[uuid.UUID],
-    model: str,
-) -> dict[uuid.UUID, list[float]]:
+    model_stub: str,
+) -> tuple[dict[uuid.UUID, list[float]], int]:
+    model = await _registered_face_model(session, model_stub)
     rows = await session.execute(
         select(
-            ImageOccurrenceEmbedding.occurrence_id,
-            ImageOccurrenceEmbedding.embedding,
+            FaceEmbeddingRow.face_id,
+            FaceEmbeddingRow.embedding,
         ).where(
-            ImageOccurrenceEmbedding.occurrence_id.in_(face_ids),
-            ImageOccurrenceEmbedding.model == model,
+            FaceEmbeddingRow.face_id.in_(face_ids),
+            FaceEmbeddingRow.model_id == model_stub,
         )
     )
     vectors = {row[0]: list(row[1]) for row in rows.all()}
     missing = [face_id for face_id in face_ids if face_id not in vectors]
     if missing:
-        raise ValueError(
-            f"reference face does not exist or lacks embedding '{model}': {missing[0]}"
+        message = f"reference face does not exist or lacks embedding '{model_stub}': "
+        message += str(missing[0])
+        raise ValueError(message)
+    return vectors, model.embedding_dim
+
+
+def _face_model_response(model: FaceModel) -> FaceModelResponse:
+    return FaceModelResponse(
+        model_stub=model.stub,
+        embedding_dim=model.embedding_dim,
+    )
+
+
+class PostgresFaceModelRepository(FaceModelRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__()
+        self._session = session
+
+    async def register(self, payload: FaceModelRegisterRequest) -> FaceModelResponse:
+        model = await self._session.get(FaceModel, payload.model_stub)
+        if model is None:
+            model = FaceModel(
+                stub=payload.model_stub,
+                embedding_dim=payload.embedding_dim,
+            )
+            self._session.add(model)
+            try:
+                await self._session.flush()
+            except IntegrityError as exc:
+                await self._session.rollback()
+                model = await self._session.get(FaceModel, payload.model_stub)
+                if model is None:
+                    raise ValueError("face model registration conflict") from exc
+                if model.embedding_dim != payload.embedding_dim:
+                    message = f"face model '{payload.model_stub}' is already "
+                    message += f"registered with dimension {model.embedding_dim}"
+                    raise ValueError(message) from exc
+        elif model.embedding_dim != payload.embedding_dim:
+            message = f"face model '{payload.model_stub}' is already registered with "
+            message += f"dimension {model.embedding_dim}"
+            raise ValueError(message)
+
+        index = face_embedding_hnsw_index(model.stub, model.embedding_dim)
+        try:
+            connection = await self._session.connection()
+            await connection.run_sync(
+                lambda sync_connection: index.create(
+                    sync_connection,
+                    checkfirst=True,
+                )
+            )
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+        return _face_model_response(model)
+
+    async def list(self) -> FaceModelListResponse:
+        models = await self._session.scalars(select(FaceModel).order_by(FaceModel.stub))
+        return FaceModelListResponse(
+            items=[_face_model_response(model) for model in models]
         )
-    return vectors
 
 
 class PostgresEntityRepository(EntityRepository):
@@ -634,9 +782,12 @@ class PostgresEntityRepository(EntityRepository):
         await _validate_cursor(self._session, Entity, cursor_id, filters)
         total = None
         if query.return_total_count:
-            total = await self._session.scalar(
-                select(func.count(Entity.id)).where(*filters)
-            ) or 0
+            total = (
+                await self._session.scalar(
+                    select(func.count(Entity.id)).where(*filters)
+                )
+                or 0
+            )
         if query.limit == 0:
             return EntityListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
@@ -814,29 +965,55 @@ class PostgresEntityRepository(EntityRepository):
         face_ids = missing_to_none(query.query.face_id)
         if face_ids is None:
             return {}
-        model = query.query.face_embedding_model.value
-        vectors = await _reference_vectors(self._session, face_ids, model)
+        model_stub = query.query.face_embedding_model
+        vectors, embedding_dim = await _reference_vectors(
+            self._session, face_ids, model_stub
+        )
+        embedding = _face_embedding_expression(embedding_dim)
+        model_filter = _face_model_predicate(model_stub)
+        query_vectors = _query_vectors_cte(vectors, embedding_dim)
+        candidate_distance = _cosine_distance(embedding, query_vectors.c.embedding)
+        nearest_faces = (
+            select(Entity.id.label("candidate_id"))
+            .select_from(FaceEmbeddingRow)
+            .join(Face, Face.id == FaceEmbeddingRow.face_id)
+            .join(Entity, Entity.id == Face.entity_id)
+            .where(*filters, model_filter)
+            .order_by(candidate_distance)
+            .limit(FACE_SEARCH_CANDIDATE_LIMIT)
+        )
+        if query.query.exclude_reference_face_id:
+            nearest_faces = nearest_faces.where(Face.id.not_in(face_ids))
+        nearest_faces = nearest_faces.lateral("nearest_faces")
+        await _configure_hnsw_search(self._session)
+        candidate_ids = list(
+            dict.fromkeys(
+                await self._session.scalars(
+                    select(nearest_faces.c.candidate_id)
+                    .select_from(query_vectors.join(nearest_faces, true()))
+                    .distinct()
+                )
+            )
+        )
+        if not candidate_ids:
+            return {}
+
         collected: dict[uuid.UUID, list[float]] = {}
         for vector in vectors.values():
-            distance = cast(
-                ImageOccurrenceEmbedding.embedding, VECTOR(len(vector))
-            ).cosine_distance(vector)
+            distance = _cosine_distance(embedding, vector)
             statement = (
                 select(Entity.id, func.max(1.0 - distance).label("score"))
-                .join(ImageOccurrence, ImageOccurrence.entity_id == Entity.id)
-                .join(
-                    ImageOccurrenceEmbedding,
-                    ImageOccurrenceEmbedding.occurrence_id == ImageOccurrence.id,
-                )
+                .join(Face, Face.entity_id == Entity.id)
+                .join(FaceEmbeddingRow, FaceEmbeddingRow.face_id == Face.id)
                 .where(
                     *filters,
-                    ImageOccurrenceEmbedding.model == model,
-                    ImageOccurrenceEmbedding.dimensions == len(vector),
+                    Entity.id.in_(candidate_ids),
+                    model_filter,
                 )
                 .group_by(Entity.id)
             )
             if query.query.exclude_reference_face_id:
-                statement = statement.where(ImageOccurrence.id.not_in(face_ids))
+                statement = statement.where(Face.id.not_in(face_ids))
             for item_id, raw_score in (await self._session.execute(statement)).all():
                 collected.setdefault(item_id, []).append(float(raw_score))
         return _aggregate_scores(collected, query.query.score_aggregation)
@@ -910,18 +1087,21 @@ class PostgresSourceRepository(SourceRepository):
         source = await self._session.scalar(statement.limit(1))
         return _source_response(source) if source is not None else None
 
-    async def list(
-        self, query: GenericSourceListRequest
-    ) -> GenericSourceListResponse:
+    async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
         filters = _source_filters(query.filter_)
         fingerprint = _cursor_fingerprint(query)
         cursor_id = _decode_cursor(query.cursor, fingerprint)
         await _validate_cursor(self._session, Source, cursor_id, filters)
         total = None
         if query.return_total_count:
-            total = await self._session.scalar(
-                select(func.count(Source.id)).select_from(self._source).where(*filters)
-            ) or 0
+            total = (
+                await self._session.scalar(
+                    select(func.count(Source.id))
+                    .select_from(self._source)
+                    .where(*filters)
+                )
+                or 0
+            )
         if query.limit == 0:
             return GenericSourceListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
@@ -990,7 +1170,9 @@ class PostgresSourceRepository(SourceRepository):
         by_url = await self._by_url(key)
         if by_identity is not None:
             if str(by_identity.url) != key:
-                raise ValueError("source identity is already registered with another URL")
+                raise ValueError(
+                    "source identity is already registered with another URL"
+                )
             if by_url is not None and by_url.id != by_identity.source_id:
                 raise ValueError("source URL conflicts with another source identity")
             return by_identity, CreateResult.EXISTING
@@ -1056,29 +1238,55 @@ class PostgresSourceRepository(SourceRepository):
         face_ids = missing_to_none(query.query.face_id)
         if face_ids is None:
             return {}
-        embedding_model = query.query.face_embedding_model.value
-        vectors = await _reference_vectors(self._session, face_ids, embedding_model)
+        model_stub = query.query.face_embedding_model
+        vectors, embedding_dim = await _reference_vectors(
+            self._session, face_ids, model_stub
+        )
+        embedding = _face_embedding_expression(embedding_dim)
+        model_filter = _face_model_predicate(model_stub)
+        query_vectors = _query_vectors_cte(vectors, embedding_dim)
+        candidate_distance = _cosine_distance(embedding, query_vectors.c.embedding)
+        nearest_faces = (
+            select(model.id.label("candidate_id"))
+            .select_from(FaceEmbeddingRow)
+            .join(Face, Face.id == FaceEmbeddingRow.face_id)
+            .join(model, Face.source_id == model.id)
+            .where(*filters, model_filter)
+            .order_by(candidate_distance)
+            .limit(FACE_SEARCH_CANDIDATE_LIMIT)
+        )
+        if query.query.exclude_reference_face_id:
+            nearest_faces = nearest_faces.where(Face.id.not_in(face_ids))
+        nearest_faces = nearest_faces.lateral("nearest_faces")
+        await _configure_hnsw_search(self._session)
+        candidate_ids = list(
+            dict.fromkeys(
+                await self._session.scalars(
+                    select(nearest_faces.c.candidate_id)
+                    .select_from(query_vectors.join(nearest_faces, true()))
+                    .distinct()
+                )
+            )
+        )
+        if not candidate_ids:
+            return {}
+
         collected: dict[uuid.UUID, list[float]] = {}
         for vector in vectors.values():
-            distance = cast(
-                ImageOccurrenceEmbedding.embedding, VECTOR(len(vector))
-            ).cosine_distance(vector)
+            distance = _cosine_distance(embedding, vector)
             statement = (
                 select(model.id, func.max(1.0 - distance).label("score"))
-                .join(ImageOccurrence, ImageOccurrence.source_id == model.id)
-                .join(
-                    ImageOccurrenceEmbedding,
-                    ImageOccurrenceEmbedding.occurrence_id == ImageOccurrence.id,
-                )
+                .join(Face, Face.source_id == model.id)
+                .join(FaceEmbeddingRow, FaceEmbeddingRow.face_id == Face.id)
                 .where(
                     *filters,
-                    ImageOccurrenceEmbedding.model == embedding_model,
-                    ImageOccurrenceEmbedding.dimensions == len(vector),
+                    model.id.in_(candidate_ids),
+                    model_filter,
                 )
                 .group_by(model.id)
             )
             if query.query.exclude_reference_face_id:
-                statement = statement.where(ImageOccurrence.id.not_in(face_ids))
+                statement = statement.where(Face.id.not_in(face_ids))
             for item_id, raw_score in (await self._session.execute(statement)).all():
                 collected.setdefault(item_id, []).append(float(raw_score))
         return _aggregate_scores(collected, query.query.score_aggregation)
@@ -1114,11 +1322,15 @@ class PostgresSourceRepository(SourceRepository):
         filters = _source_filters(generic_filter)
         filters.append(Source.source_type == SourceKind.page.value)
         page, cursor, total = await self._search_sources(Page, query, filters)
-        rows = await self._session.scalars(select(Page).where(Page.id.in_([x[0] for x in page])))
+        rows = await self._session.scalars(
+            select(Page).where(Page.id.in_([x[0] for x in page]))
+        )
         by_id = {row.id: row for row in rows.all()}
         items = [
             FoundPage(
-                **PageResponse.from_generic(_source_response(by_id[item_id])).model_dump(),
+                **PageResponse.from_generic(
+                    _source_response(by_id[item_id])
+                ).model_dump(),
                 score=score,
                 text_score=text_score,
                 face_score=face_score,
@@ -1147,7 +1359,9 @@ class PostgresSourceRepository(SourceRepository):
         by_id = {row.id: row for row in rows.all()}
         items = [
             FoundDocument(
-                **DocumentResponse.from_generic(_source_response(by_id[item_id])).model_dump(),
+                **DocumentResponse.from_generic(
+                    _source_response(by_id[item_id])
+                ).model_dump(),
                 score=score,
                 text_score=text_score,
                 face_score=face_score,
@@ -1171,9 +1385,7 @@ class PostgresFaceRepository(FaceRepository):
         if not ids:
             return {}
         rows = await self._session.scalars(
-            select(Face)
-            .where(Face.id.in_(ids))
-            .options(selectinload(Face.embeddings))
+            select(Face).where(Face.id.in_(ids)).options(selectinload(Face.embeddings))
         )
         return {row.id: row for row in rows.unique().all()}
 
@@ -1188,9 +1400,10 @@ class PostgresFaceRepository(FaceRepository):
         await _validate_cursor(self._session, Face, cursor_id, filters)
         total = None
         if query.return_total_count:
-            total = await self._session.scalar(
-                select(func.count(Face.id)).where(*filters)
-            ) or 0
+            total = (
+                await self._session.scalar(select(func.count(Face.id)).where(*filters))
+                or 0
+            )
         if query.limit == 0:
             return FaceListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
@@ -1225,11 +1438,10 @@ class PostgresFaceRepository(FaceRepository):
             keypoints=[[item.x, item.y] for item in payload.keypoints],
             keypoint_types=[item.type for item in payload.keypoints],
         )
-        if embeddings is not None:
+        if embeddings:
             face.embeddings = [
-                ImageOccurrenceEmbedding(
-                    model=value.model_identifier.value,
-                    dimensions=len(value.vector),
+                FaceEmbeddingRow(
+                    model_id=value.model_identifier,
                     embedding=list(value.vector),
                 )
                 for value in embeddings
@@ -1261,6 +1473,14 @@ class PostgresFaceRepository(FaceRepository):
             entity_ids,
             "face entity",
         )
+        await _validate_face_embeddings(
+            self._session,
+            (
+                embedding
+                for payload in payloads
+                for embedding in (missing_to_none(payload.embeddings) or [])
+            ),
+        )
         faces = [self._new(payload, context) for payload in payloads]
         self._session.add_all(faces)
         await _commit(self._session, "face create violates a persistence constraint")
@@ -1269,22 +1489,19 @@ class PostgresFaceRepository(FaceRepository):
     @staticmethod
     def _apply_embeddings(face: Face, payload: FacePatchRequest) -> None:
         embeddings = missing_to_none(payload.embeddings)
-        if embeddings is None:
+        if not embeddings:
             return
-        existing = {item.model: item for item in face.embeddings}
+        existing = {embedding.model_id: embedding for embedding in face.embeddings}
         for value in embeddings:
-            model = value.model_identifier.value
-            embedding = existing.get(model)
+            embedding = existing.get(value.model_identifier)
             if embedding is None:
                 face.embeddings.append(
-                    ImageOccurrenceEmbedding(
-                        model=model,
-                        dimensions=len(value.vector),
+                    FaceEmbeddingRow(
+                        model_id=value.model_identifier,
                         embedding=list(value.vector),
                     )
                 )
             else:
-                embedding.dimensions = len(value.vector)
                 embedding.embedding = list(value.vector)
 
     async def patch(
@@ -1293,9 +1510,7 @@ class PostgresFaceRepository(FaceRepository):
         payload: FacePatchRequest,
         context: GenericActor,
     ) -> FaceResponse | None:
-        command = FacePatchBatchItem(
-            detection_id=detection_id, **payload.model_dump()
-        )
+        command = FacePatchBatchItem(detection_id=detection_id, **payload.model_dump())
         return (await self.patch_batch([command], context))[0]
 
     async def patch_batch(
@@ -1320,6 +1535,14 @@ class PostgresFaceRepository(FaceRepository):
             Entity,
             entity_ids,
             "face entity",
+        )
+        await _validate_face_embeddings(
+            self._session,
+            (
+                embedding
+                for command in commands
+                for embedding in (missing_to_none(command.embeddings) or [])
+            ),
         )
         faces = await self._load_many(ids)
         for command in commands:
@@ -1383,23 +1606,48 @@ class PostgresFaceRepository(FaceRepository):
         face_ids = missing_to_none(query.query.face_id)
         if face_ids is None:
             return {}
-        model = query.query.face_embedding_model.value
-        vectors = await _reference_vectors(self._session, face_ids, model)
+        model_stub = query.query.face_embedding_model
+        vectors, embedding_dim = await _reference_vectors(
+            self._session, face_ids, model_stub
+        )
+        embedding = _face_embedding_expression(embedding_dim)
+        model_filter = _face_model_predicate(model_stub)
+        query_vectors = _query_vectors_cte(vectors, embedding_dim)
+        candidate_distance = _cosine_distance(embedding, query_vectors.c.embedding)
+        nearest_faces = (
+            select(Face.id.label("candidate_id"))
+            .select_from(FaceEmbeddingRow)
+            .join(Face, Face.id == FaceEmbeddingRow.face_id)
+            .where(*filters, model_filter)
+            .order_by(candidate_distance)
+            .limit(FACE_SEARCH_CANDIDATE_LIMIT)
+        )
+        if query.query.exclude_reference_face_id:
+            nearest_faces = nearest_faces.where(Face.id.not_in(face_ids))
+        nearest_faces = nearest_faces.lateral("nearest_faces")
+        await _configure_hnsw_search(self._session)
+        candidate_ids = list(
+            dict.fromkeys(
+                await self._session.scalars(
+                    select(nearest_faces.c.candidate_id)
+                    .select_from(query_vectors.join(nearest_faces, true()))
+                    .distinct()
+                )
+            )
+        )
+        if not candidate_ids:
+            return {}
+
         collected: dict[uuid.UUID, list[float]] = {}
         for vector in vectors.values():
-            distance = cast(
-                ImageOccurrenceEmbedding.embedding, VECTOR(len(vector))
-            ).cosine_distance(vector)
+            distance = _cosine_distance(embedding, vector)
             statement = (
                 select(Face.id, (1.0 - distance).label("score"))
-                .join(
-                    ImageOccurrenceEmbedding,
-                    ImageOccurrenceEmbedding.occurrence_id == Face.id,
-                )
+                .join(FaceEmbeddingRow, FaceEmbeddingRow.face_id == Face.id)
                 .where(
                     *filters,
-                    ImageOccurrenceEmbedding.model == model,
-                    ImageOccurrenceEmbedding.dimensions == len(vector),
+                    Face.id.in_(candidate_ids),
+                    model_filter,
                 )
             )
             if query.query.exclude_reference_face_id:
@@ -1464,9 +1712,12 @@ class PostgresTextMentionRepository(TextMentionRepository):
         await _validate_cursor(self._session, TextMention, cursor_id, filters)
         total = None
         if query.return_total_count:
-            total = await self._session.scalar(
-                select(func.count(TextMention.id)).where(*filters)
-            ) or 0
+            total = (
+                await self._session.scalar(
+                    select(func.count(TextMention.id)).where(*filters)
+                )
+                or 0
+            )
         if query.limit == 0:
             return TextMentionListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
@@ -1516,10 +1767,16 @@ class PostgresTextMentionRepository(TextMentionRepository):
         if not payloads:
             return []
         await _ensure_ids(
-            self._session, Source, [item.source_id for item in payloads], "mention source"
+            self._session,
+            Source,
+            [item.source_id for item in payloads],
+            "mention source",
         )
         await _ensure_ids(
-            self._session, Entity, [item.entity_id for item in payloads], "mention entity"
+            self._session,
+            Entity,
+            [item.entity_id for item in payloads],
+            "mention entity",
         )
         mentions = [self._new(payload) for payload in payloads]
         self._session.add_all(mentions)
@@ -1534,7 +1791,11 @@ class PostgresTextMentionRepository(TextMentionRepository):
     ) -> TextMentionResponse | None:
         return (
             await self.patch_batch(
-                [TextMentionPatchBatchItem(mention_id=mention_id, **payload.model_dump())],
+                [
+                    TextMentionPatchBatchItem(
+                        mention_id=mention_id, **payload.model_dump()
+                    )
+                ],
                 context,
             )
         )[0]
@@ -1553,7 +1814,11 @@ class PostgresTextMentionRepository(TextMentionRepository):
         await _ensure_ids(
             self._session,
             Entity,
-            [command.entity_id for command in commands if command.entity_id is not None],
+            [
+                command.entity_id
+                for command in commands
+                if command.entity_id is not None
+            ],
             "mention entity",
         )
         mentions = await self._load_many(ids)
@@ -1600,9 +1865,10 @@ class PostgresUserRepository(UserRepository):
         await _validate_cursor(self._session, User, cursor_id, filters)
         total = None
         if query.return_total_count:
-            total = await self._session.scalar(
-                select(func.count(User.id)).where(*filters)
-            ) or 0
+            total = (
+                await self._session.scalar(select(func.count(User.id)).where(*filters))
+                or 0
+            )
         if query.limit == 0:
             return UserListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
@@ -1695,6 +1961,7 @@ def postgres_database(session: AsyncSession) -> Database:
         entities=PostgresEntityRepository(session),
         sources=PostgresSourceRepository(session),
         faces=PostgresFaceRepository(session),
+        face_models=PostgresFaceModelRepository(session),
         text_mentions=PostgresTextMentionRepository(session),
         users=PostgresUserRepository(session),
     )
@@ -1702,6 +1969,7 @@ def postgres_database(session: AsyncSession) -> Database:
 
 __all__ = [
     "PostgresEntityRepository",
+    "PostgresFaceModelRepository",
     "PostgresSourceRepository",
     "PostgresFaceRepository",
     "PostgresTextMentionRepository",

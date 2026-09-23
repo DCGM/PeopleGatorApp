@@ -7,9 +7,9 @@ from people_gator_api.schemas.common import (
     ListFilterBase,
     ModelEmbedding,
     require_unique_model_embeddings,
-    GenericListRequest
+    GenericListRequest,
 )
-from people_gator_api.schemas.enums import FaceEmbeddingModel
+from people_gator_api.schemas.face_models import FaceModelStub
 from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 
 # ---------------------------------------------------------------------------
@@ -19,7 +19,8 @@ from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 NUMBER_OF_FACE_KEYPOINTS = 5
 MAX_FACE_BATCH_SIZE = 1_000
 
-FaceEmbedding = ModelEmbedding[FaceEmbeddingModel]
+FaceEmbedding = ModelEmbedding[FaceModelStub]
+
 
 class BoundingBox(BaseModel):
     """Face detection bounding box."""
@@ -50,15 +51,13 @@ class FaceCreateRequest(BaseModel):
     keypoints: list[Keypoint] = Field(
         min_length=NUMBER_OF_FACE_KEYPOINTS,
         max_length=NUMBER_OF_FACE_KEYPOINTS,
-        description="The keypoints of the face detection. Must contain exactly 5 keypoints."
+        description="The keypoints of the face detection. Must contain exactly 5 keypoints.",
     )
     confidence: float = Field(
-        ge=0.0, le=1.0,
-        description="The confidence score of the face detection."
+        ge=0.0, le=1.0, description="The confidence score of the face detection."
     )
     embeddings: list[FaceEmbedding] | MissingType = Field(
-        default=MISSING,
-        description="The embeddings of the face detection."
+        default=MISSING, description="The embeddings of the face detection."
     )
     source_id: uuid.UUID = Field(
         description="The unique identifier of the source from which the face was detected. Mandatory."
@@ -87,10 +86,11 @@ class FacePatchRequest(BaseModel):
 
     entity_id: uuid.UUID | None | MissingType = Field(
         default=MISSING,
-        description="The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified."
+        description="The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified.",
     )
     embeddings: list[FaceEmbedding] | MissingType = Field(
-        default=MISSING, description="When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op."
+        default=MISSING,
+        description="When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op.",
     )
 
     @field_validator("embeddings")
@@ -105,7 +105,10 @@ class FacePatchRequest(BaseModel):
 
 class FacePatchBatchItem(FacePatchRequest):
     """Patch body for assigning a face, or unassigning it with a null entity ID in a batch."""
-    detection_id: uuid.UUID = Field(description="The unique identifier of the face detection.")
+
+    detection_id: uuid.UUID = Field(
+        description="The unique identifier of the face detection."
+    )
 
 
 type FacesBatchPatchRequest = Annotated[
@@ -116,16 +119,35 @@ type FacesBatchPatchRequest = Annotated[
 class FaceResponse(BaseModel):
     """A single face detection record."""
 
-    detection_id: uuid.UUID = Field(description="The unique identifier of the face detection.")
-    identifier: str | None = Field(default=None, description="An optional identifier for the face detection.")
-    source_id: uuid.UUID = Field(description="The unique identifier of the source from which the face was detected.")
-    bounding_box: BoundingBox = Field(description="The bounding box of the face detection.")
-    keypoints: list[Keypoint] = Field(min_length=NUMBER_OF_FACE_KEYPOINTS, max_length=NUMBER_OF_FACE_KEYPOINTS, description="The keypoints of the face detection. Must contain exactly 5 keypoints.")
-    user_id: uuid.UUID = Field(description="The unique identifier of the user who created or owns the face detection.")
-    entity_id: uuid.UUID | None = Field(default=None, description="The unique identifier of the entity associated with the face detection.")
+    detection_id: uuid.UUID = Field(
+        description="The unique identifier of the face detection."
+    )
+    identifier: str | None = Field(
+        default=None, description="An optional identifier for the face detection."
+    )
+    source_id: uuid.UUID = Field(
+        description="The unique identifier of the source from which the face was detected."
+    )
+    bounding_box: BoundingBox = Field(
+        description="The bounding box of the face detection."
+    )
+    keypoints: list[Keypoint] = Field(
+        min_length=NUMBER_OF_FACE_KEYPOINTS,
+        max_length=NUMBER_OF_FACE_KEYPOINTS,
+        description="The keypoints of the face detection. Must contain exactly 5 keypoints.",
+    )
+    user_id: uuid.UUID = Field(
+        description="The unique identifier of the user who created or owns the face detection."
+    )
+    entity_id: uuid.UUID | None = Field(
+        default=None,
+        description="The unique identifier of the entity associated with the face detection.",
+    )
     confidence: float = Field(description="The confidence score of the face detection.")
 
+
 FaceListResponse = GenericListResponse[FaceResponse]
+
 
 class FaceListFilter(ListFilterBase):
     """Filter criteria for listing faces.
@@ -147,7 +169,10 @@ class FaceListFilter(ListFilterBase):
 
 class FaceListRequest(GenericListRequest):
     """Request body for listing faces with optional filters."""
-    filter_: FaceListFilter | MissingType = Field(default=MISSING, description="The filter criteria to select faces.")
+
+    filter_: FaceListFilter | MissingType = Field(
+        default=MISSING, description="The filter criteria to select faces."
+    )
 
 
 __all__ = [

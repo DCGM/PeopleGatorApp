@@ -22,7 +22,7 @@ _client: WeaviateAsyncClient | None = None
 
 
 def _build_client() -> WeaviateAsyncClient:
-    cfg = settings.weaviate
+    cfg = settings.persistence.weaviate
     auth = Auth.api_key(cfg.api_key) if cfg.api_key else None
     return weaviate.use_async_with_custom(
         http_host=cfg.http_host,
@@ -49,7 +49,7 @@ async def init_weaviate() -> None:
     if _client is not None:
         return
 
-    cfg = settings.weaviate
+    cfg = settings.persistence.weaviate
     deadline = time.monotonic() + cfg.startup_timeout_seconds
     attempt = 0
     while True:

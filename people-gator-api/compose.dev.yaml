@@ -1,18 +1,14 @@
 services:
-  people-gator-postgres-demo:
+  people-gator-postgres-dev:
     image: pgvector/pgvector:pg16
-    profiles: [postgres-demo]
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: people_gator
-      POSTGRES_USER: people_gator
-      POSTGRES_PASSWORD: people_gator
+    env_file: .env
     ports:
       - 5433:5432
     volumes:
-      - people-gator-postgres-demo-data:/var/lib/postgresql/data
+      - people-gator-postgres-dev-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U people_gator -d people_gator"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -133,7 +129,7 @@ services:
       - logging
 
 volumes:
-  people-gator-postgres-demo-data:
+  people-gator-postgres-dev-data:
 
 networks:
   web:

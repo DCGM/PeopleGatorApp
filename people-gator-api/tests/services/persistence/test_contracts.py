@@ -9,6 +9,7 @@ import pytest
 from people_gator_api.persistence.contracts import (
     Database,
     EntityRepository,
+    FaceModelRepository,
     FaceRepository,
     SourceRepository,
     TextMentionRepository,
@@ -16,6 +17,7 @@ from people_gator_api.persistence.contracts import (
 )
 from people_gator_api.persistence.postgres import (
     PostgresEntityRepository,
+    PostgresFaceModelRepository,
     PostgresFaceRepository,
     PostgresSourceRepository,
     PostgresTextMentionRepository,
@@ -61,6 +63,7 @@ def test_contract_abstract_surfaces_are_explicit() -> None:
         "delete_batch",
         "search",
     }
+    assert FaceModelRepository.__abstractmethods__ == {"register", "list"}
     assert TextMentionRepository.__abstractmethods__ == {
         "get",
         "list",
@@ -84,6 +87,7 @@ def test_contract_abstract_surfaces_are_explicit() -> None:
 def test_postgres_repositories_fully_implement_contracts() -> None:
     for repository_type in (
         PostgresEntityRepository,
+        PostgresFaceModelRepository,
         PostgresSourceRepository,
         PostgresFaceRepository,
         PostgresTextMentionRepository,
@@ -99,6 +103,7 @@ def test_postgres_database_exposes_only_contract_repositories() -> None:
     assert isinstance(database.entities, EntityRepository)
     assert isinstance(database.sources, SourceRepository)
     assert isinstance(database.faces, FaceRepository)
+    assert isinstance(database.face_models, FaceModelRepository)
     assert isinstance(database.text_mentions, TextMentionRepository)
     assert isinstance(database.users, UserRepository)
 

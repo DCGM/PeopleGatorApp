@@ -1,12 +1,13 @@
 """Relational equivalent of the core Weaviate graph used by People Gator.
 
 The demo deliberately uses joined-table inheritance for the two polymorphic
-families. Embeddings live in model-keyed child tables, which allows a new model
-(and even a new vector dimension) to be added without adding a column.
+families. Embeddings use model-keyed rows with dimension-specific partial HNSW
+indexes for each registered face model.
 """
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from typing import Any
 
@@ -22,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    cast,
     event,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
@@ -312,9 +314,6 @@ class ImageOccurrence(Base):
 
     source: Mapped[Source] = relationship(back_populates="image_occurrences")
     entity: Mapped[Entity | None] = relationship(back_populates="image_occurrences")
-    embeddings: Mapped[list[ImageOccurrenceEmbedding]] = relationship(
-        back_populates="occurrence", cascade="all, delete-orphan"
-    )
 
     __mapper_args__ = {  # noqa: RUF012
         "polymorphic_on": occurrence_type,
@@ -352,34 +351,74 @@ class Face(ImageOccurrence):
         ARRAY(Float(), dimensions=2), nullable=False
     )
     keypoint_types: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=False)
+    embeddings: Mapped[list[FaceEmbedding]] = relationship(
+        back_populates="face",
+        cascade="all, delete-orphan",
+    )
 
     __mapper_args__ = {"polymorphic_identity": "face"}  # noqa: RUF012
 
 
-class ImageOccurrenceEmbedding(Base):
-    """A model-keyed visual embedding for an image occurrence."""
+class FaceModel(Base):
+    """A registered face embedding model and its fixed vector dimension."""
 
-    __tablename__ = "pg_demo_image_occurrence_embeddings"
+    __tablename__ = "pg_demo_face_models"
     __table_args__ = (
-        UniqueConstraint(
-            "occurrence_id", "model", name="uq_pg_demo_occurrence_embedding_model"
-        ),
         CheckConstraint(
-            "dimensions > 0 AND vector_dims(embedding) = dimensions",
-            name="ck_pg_demo_occurrence_embedding_dimensions",
+            "embedding_dim > 0",
+            name="ck_pg_demo_face_model_embedding_dim",
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    stub: Mapped[str] = mapped_column(String(255), primary_key=True)
+    embedding_dim: Mapped[int] = mapped_column(nullable=False)
+
+    embeddings: Mapped[list[FaceEmbedding]] = relationship(back_populates="model")
+
+
+class FaceEmbedding(Base):
+    """One vector for a face and a registered embedding model."""
+
+    __tablename__ = "pg_demo_face_embeddings"
+    __table_args__ = (
+        CheckConstraint(
+            "vector_dims(embedding) > 0",
+            name="ck_pg_demo_face_embedding_nonempty",
+        ),
     )
-    occurrence_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("pg_demo_image_occurrences.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+
+    face_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("pg_demo_faces.id", ondelete="CASCADE"), primary_key=True
     )
-    model: Mapped[str] = mapped_column(String(255), nullable=False)
-    dimensions: Mapped[int] = mapped_column(nullable=False)
+    model_id: Mapped[str] = mapped_column(
+        ForeignKey("pg_demo_face_models.stub", ondelete="RESTRICT"),
+        primary_key=True,
+    )
     embedding: Mapped[list[float]] = mapped_column(VECTOR(), nullable=False)
 
-    occurrence: Mapped[ImageOccurrence] = relationship(back_populates="embeddings")
+    face: Mapped[Face] = relationship(back_populates="embeddings")
+    model: Mapped[FaceModel] = relationship(back_populates="embeddings")
+
+
+_FACE_EMBEDDING_HNSW_INDEXES: dict[tuple[str, int], Index] = {}
+
+
+def face_embedding_hnsw_index(model_stub: str, embedding_dim: int) -> Index:
+    """Build the stable partial HNSW index definition for one face model."""
+    key = (model_stub, embedding_dim)
+    existing = _FACE_EMBEDDING_HNSW_INDEXES.get(key)
+    if existing is not None:
+        return existing
+    digest = hashlib.sha256(model_stub.encode()).hexdigest()[:16]
+    index_name = f"ix_pg_demo_face_embedding_{digest}_hnsw"
+    expression = cast(FaceEmbedding.embedding, VECTOR(embedding_dim)).label("embedding")
+    index = Index(
+        index_name,
+        expression,
+        postgresql_using="hnsw",
+        postgresql_ops={"embedding": "vector_cosine_ops"},
+        postgresql_where=(FaceEmbedding.model_id == model_stub),
+        postgresql_with={"m": 16, "ef_construction": 64},
+    )
+    _FACE_EMBEDDING_HNSW_INDEXES[key] = index
+    return index

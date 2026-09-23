@@ -52,6 +52,11 @@ from people_gator_api.schemas.faces import (
     FacePatchRequest,
     FaceResponse,
 )
+from people_gator_api.schemas.face_models import (
+    FaceModelListResponse,
+    FaceModelRegisterRequest,
+    FaceModelResponse,
+)
 from people_gator_api.schemas.search import (
     SearchDocumentsRequest,
     SearchDocumentsResultListResponse,
@@ -113,6 +118,7 @@ from people_gator_api.schemas.users import (
 class CreateResult(enum.StrEnum):
     EXISTING = "existing"
     CREATED = "created"
+
 
 class EntityRepository(ABC):
     @abstractmethod
@@ -317,7 +323,7 @@ class SourceRepository(ABC):
         )
         if response is None:
             return None
-        response_to_source_kind: dict[type[SourceResponseBase], SourceKind ] = {
+        response_to_source_kind: dict[type[SourceResponseBase], SourceKind] = {
             PageResponse: SourceKind.page,
             DocumentResponse: SourceKind.document,
             ImageResponse: SourceKind.image,
@@ -337,10 +343,7 @@ class SourceRepository(ABC):
         :return: The response containing the page information, or None if not found.
         :rtype: PageResponse | None
         """
-        return await self._lookup(
-            source_id=source_id,
-            cls=PageResponse
-        )
+        return await self._lookup(source_id=source_id, cls=PageResponse)
 
     async def get_document(self, source_id: uuid.UUID) -> DocumentResponse | None:
         """
@@ -352,10 +355,7 @@ class SourceRepository(ABC):
         :return: The response containing the document information, or None if not found.
         :rtype: DocumentResponse | None
         """
-        return await self._lookup(
-            source_id=source_id,
-            cls=DocumentResponse
-        )
+        return await self._lookup(source_id=source_id, cls=DocumentResponse)
 
     async def get_image(self, source_id: uuid.UUID) -> ImageResponse | None:
         """
@@ -367,10 +367,7 @@ class SourceRepository(ABC):
         :return: The response containing the image information, or None if not found.
         :rtype: ImageResponse | None
         """
-        return await self._lookup(
-            source_id=source_id,
-            cls=ImageResponse
-        )
+        return await self._lookup(source_id=source_id, cls=ImageResponse)
 
     async def get_source(self, source_id: uuid.UUID) -> SourceResponseBase | None:
         """
@@ -440,9 +437,7 @@ class SourceRepository(ABC):
         )
 
     @abstractmethod
-    async def list(
-        self, query: GenericSourceListRequest
-    ) -> GenericSourceListResponse:
+    async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
         """
         Retrieve a list of sources based on the query.
 
@@ -704,6 +699,22 @@ class SourceRepository(ABC):
         """
 
 
+class FaceModelRepository(ABC):
+    """Registry of face embedding models available to persistence."""
+
+    @abstractmethod
+    async def register(self, payload: FaceModelRegisterRequest) -> FaceModelResponse:
+        """Register a stub/dimension pair and ensure its vector index exists.
+
+        Re-registering the same pair is idempotent. Reusing a stub with another
+        dimension is invalid.
+        """
+
+    @abstractmethod
+    async def list(self) -> FaceModelListResponse:
+        """List registered models ordered by stub."""
+
+
 class FaceRepository(ABC):
     @abstractmethod
     async def get(self, detection_id: uuid.UUID) -> FaceResponse | None:
@@ -819,9 +830,7 @@ class FaceRepository(ABC):
         """
 
     @abstractmethod
-    async def search(
-        self, query: SearchFacesRequest
-    ) -> SearchFacesResultListResponse:
+    async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
         """
         Search for face entries based on the given query.
 
@@ -892,7 +901,10 @@ class TextMentionRepository(ABC):
 
     @abstractmethod
     async def patch(
-        self, mention_id: uuid.UUID, payload: TextMentionPatchRequest, context: GenericActor
+        self,
+        mention_id: uuid.UUID,
+        payload: TextMentionPatchRequest,
+        context: GenericActor,
     ) -> TextMentionResponse | None:
         """
         Patch an existing text mention entry based on the given payload and context.
@@ -907,7 +919,6 @@ class TextMentionRepository(ABC):
         :return: The response for the patched text mention, or None if not found.
         :rtype: TextMentionResponse | None
         """
-
 
     @abstractmethod
     async def patch_batch(
@@ -952,6 +963,7 @@ class TextMentionRepository(ABC):
 
 class UserRepository(ABC):
     """Users are uniquely identified by (external_issuer, external_subject)."""
+
     @abstractmethod
     async def get(self, user_id: uuid.UUID) -> UserResponse | None:
         """
@@ -1028,5 +1040,6 @@ class Database:
     entities: EntityRepository
     sources: SourceRepository
     faces: FaceRepository
+    face_models: FaceModelRepository
     text_mentions: TextMentionRepository
     users: UserRepository

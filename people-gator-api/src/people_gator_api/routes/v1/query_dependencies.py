@@ -19,7 +19,6 @@ from people_gator_api.schemas.entities import EntityListFilter
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
     EntityType,
-    FaceEmbeddingModel,
     ScoreAggregation,
     ScoreFusion,
     SourceKind,
@@ -127,7 +126,7 @@ def search_query_dependency(
         _model_parameter(QueryBase, "face_id", "query"),
     ] = None,
     face_embedding_model: Annotated[
-        FaceEmbeddingModel,
+        str,
         _model_parameter(QueryBase, "face_embedding_model", "query"),
     ] = DEFAULT_FACE_EMBEDDING_MODEL,
     exclude_reference_face_id: Annotated[

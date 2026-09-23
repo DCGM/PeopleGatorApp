@@ -31,7 +31,7 @@ _postgres_sessions: async_sessionmaker[AsyncSession] | None = None
 
 
 def _postgres_url() -> str:
-    config = settings.postgres
+    config = settings.persistence.postgres
     return URL.create(
         drivername="postgresql+asyncpg",
         username=config.user,
@@ -57,7 +57,7 @@ def make_postgres_session_factory(
 
 
 async def create_postgres_schema(engine: AsyncEngine) -> None:
-    """Create extensions and demo tables; intentionally separate from API startup."""
+    """Create extensions and PostgreSQL persistence tables."""
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
 

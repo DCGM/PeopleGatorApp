@@ -2,7 +2,7 @@ from people_gator_api.schemas.auth import (
     JwkKeyResponse,
     JwksResponse,
     TokenResponse,
-    OpenIDConfigurationResponse
+    OpenIDConfigurationResponse,
 )
 from people_gator_api.schemas.common import (
     ErrorResponse,
@@ -50,6 +50,12 @@ from people_gator_api.schemas.faces import (
     FaceListResponse,
     FaceListFilter,
     FaceListRequest,
+)
+from people_gator_api.schemas.face_models import (
+    FaceModelListResponse,
+    FaceModelRegisterRequest,
+    FaceModelResponse,
+    FaceModelStub,
 )
 from people_gator_api.schemas.mentions import (
     MAX_TEXT_MENTION_BATCH_SIZE,
@@ -190,6 +196,10 @@ __all__ = [
     "FaceListResponse",
     "FaceListFilter",
     "FaceListRequest",
+    "FaceModelListResponse",
+    "FaceModelRegisterRequest",
+    "FaceModelResponse",
+    "FaceModelStub",
     # Mentions
     "MAX_TEXT_MENTION_BATCH_SIZE",
     "TextMentionCreateRequest",

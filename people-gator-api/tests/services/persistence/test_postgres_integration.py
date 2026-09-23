@@ -22,6 +22,7 @@ from people_gator_api.schemas.faces import (
     FaceListRequest,
     Keypoint,
 )
+from people_gator_api.schemas.face_models import FaceModelRegisterRequest
 from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
     TextMentionListFilter,
@@ -48,7 +49,7 @@ from people_gator_api.schemas.users import (
     UserListRequest,
     UserPatchRequest,
 )
-from people_gator_api.services.postgres_demo.database import (
+from people_gator_api.services.database_service import (
     create_postgres_schema,
     make_postgres_engine,
     make_postgres_session_factory,
@@ -72,6 +73,12 @@ async def test_postgres_contract_round_trip() -> None:
 
     async with sessions() as session:
         database = postgres_database(session)
+        await database.face_models.register(
+            FaceModelRegisterRequest(
+                model_stub=DEFAULT_FACE_EMBEDDING_MODEL,
+                embedding_dim=512,
+            )
+        )
         user = await database.users.get_or_create(
             UserCreateRequest(
                 display_name=f"Integration {marker}",
@@ -170,7 +177,7 @@ async def test_postgres_contract_round_trip() -> None:
                     embeddings=[
                         FaceEmbedding(
                             model_identifier=DEFAULT_FACE_EMBEDDING_MODEL,
-                            vector=[1.0, 0.0, 0.0],
+                            vector=[1.0] + [0.0] * 511,
                         )
                     ],
                     source_id=image.source_id,
@@ -190,7 +197,7 @@ async def test_postgres_contract_round_trip() -> None:
                     embeddings=[
                         FaceEmbedding(
                             model_identifier=DEFAULT_FACE_EMBEDDING_MODEL,
-                            vector=[0.9, 0.1, 0.0],
+                            vector=[0.9, 0.1] + [0.0] * 510,
                         )
                     ],
                     source_id=image.source_id,
@@ -223,16 +230,21 @@ async def test_postgres_contract_round_trip() -> None:
             )
             assert mention is not None
             assert mention.entity_id is None
-            assert len(
-                (
-                    await database.text_mentions.list(
-                        TextMentionListRequest(
-                            filter_=TextMentionListFilter(source_id=[page.source_id]),
-                            limit=10,
+            assert (
+                len(
+                    (
+                        await database.text_mentions.list(
+                            TextMentionListRequest(
+                                filter_=TextMentionListFilter(
+                                    source_id=[page.source_id]
+                                ),
+                                limit=10,
+                            )
                         )
-                    )
-                ).items
-            ) == 1
+                    ).items
+                )
+                == 1
+            )
 
             search = await database.entities.search(
                 SearchEntitiesRequest(

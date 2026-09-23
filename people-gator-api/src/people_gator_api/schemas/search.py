@@ -12,13 +12,18 @@ from people_gator_api.schemas.entities import EntityListFilter, EntityResponse
 from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
-    FaceEmbeddingModel,
     ScoreAggregation,
-    ScoreFusion
+    ScoreFusion,
 )
 from people_gator_api.schemas.faces import FaceListFilter, FaceResponse
+from people_gator_api.schemas.face_models import FaceModelStub
 from people_gator_api.schemas.missing import MISSING, MissingType
-from people_gator_api.schemas.sources import DocumentListFilter, DocumentResponse, PageListFilter, PageResponse
+from people_gator_api.schemas.sources import (
+    DocumentListFilter,
+    DocumentResponse,
+    PageListFilter,
+    PageResponse,
+)
 
 # Reciprocal-rank fusion uses one-based ranks and equal modality weights.
 RRF_K = 60
@@ -33,9 +38,7 @@ class FoundItemBase(BaseModel):
 
     text_score: FiniteFloat | None = Field(
         default=None,
-        description=(
-            "Aggregated text relevance, or None when text was not requested."
-        ),
+        description=("Aggregated text relevance, or None when text was not requested."),
     )
     face_score: FiniteFloat | None = Field(
         default=None,
@@ -45,14 +48,13 @@ class FoundItemBase(BaseModel):
     )
     score: FiniteFloat = Field(
         gt=0,
-        description=(
-            "Final reciprocal-rank-fusion score. Higher values rank first."
-        )
+        description=("Final reciprocal-rank-fusion score. Higher values rank first."),
     )
 
 
 class QueryBase(BaseModel):
     """Base class for search queries."""
+
     text: list[str] | MissingType = Field(
         default=MISSING,
         description="Unique, non-blank text queries. Candidate scores are aggregated across them.",
@@ -61,7 +63,7 @@ class QueryBase(BaseModel):
         default=MISSING,
         description="Unique reference face IDs. Every ID must exist and contain the selected embedding model.",
     )
-    face_embedding_model: FaceEmbeddingModel = Field(
+    face_embedding_model: FaceModelStub = Field(
         default=DEFAULT_FACE_EMBEDDING_MODEL,
         description="The face embedding model used for the search.",
     )
@@ -138,6 +140,7 @@ SearchEntitiesRequest = GenericSearchRequest[EntityListFilter]
 # Face similarity search
 # ---------------------------------------------------------------------------
 
+
 class FoundFace(FaceResponse, FoundItemBase):
     """A single result from a nearest-neighbour search over a face collection."""
 
@@ -173,6 +176,7 @@ SearchPagesRequest = GenericSearchRequest[PageListFilter]
 
 class FoundDocument(DocumentResponse, FoundItemBase):
     """A single result from a nearest-neighbour search over a document collection."""
+
 
 """List response for document similarity search results."""
 SearchDocumentsResultListResponse = GenericListResponse[FoundDocument]

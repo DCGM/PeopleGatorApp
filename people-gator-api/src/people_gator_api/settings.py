@@ -118,6 +118,11 @@ class WeaviateSettings(BaseModel):
     startup_retry_interval_seconds: float = Field(default=2.0, gt=0)
 
 
+class PersistenceSettings(BaseModel):
+    postgres: PostgresSettings
+    weaviate: WeaviateSettings
+
+
 class EmbeddingServiceSettings(BaseModel):
     detect_and_embed_image_url: str = "http://localhost:8001/v1/faces/detect"
     embed_image_url: str = "http://localhost:8001/v1/embeddings/image"
@@ -175,11 +180,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors: CorsSettings = CorsSettings()
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
-    postgres: PostgresSettings
+    persistence: PersistenceSettings
     storage: StorageSettings
     jwk: JwkSettings = JwkSettings()
     keycloak: KeycloakSettings
-    weaviate: WeaviateSettings
     embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
     openrouter: OpenRouterSettings
     image_content: ImageContentSettings = ImageContentSettings()

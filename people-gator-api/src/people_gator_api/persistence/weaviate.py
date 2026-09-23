@@ -33,6 +33,12 @@ from people_gator_api.schemas.search import (
     SearchEntitiesResultListResponse,
     SearchPagesQuery,
 )
+from people_gator_api.schemas.enums import DEFAULT_FACE_EMBEDDING_MODEL
+from people_gator_api.schemas.face_models import (
+    FaceModelListResponse,
+    FaceModelRegisterRequest,
+    FaceModelResponse,
+)
 from people_gator_api.schemas.sources import SourceRecord, SourceRecordListResponse
 from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
@@ -59,6 +65,7 @@ from people_gator_api.persistence.contracts import (
     EntityListQuery,
     EntityPatchCommand,
     EntityRepository,
+    FaceModelRepository,
     FaceListQuery,
     FacePatchCommand,
     FaceRepository,
@@ -561,12 +568,35 @@ class WeaviateUserRepository(UserRepository):
         )
 
 
+class WeaviateFaceModelRepository(FaceModelRepository):
+    """Expose the statically configured Weaviate face vector model."""
+
+    _model = FaceModelResponse(
+        model_stub=DEFAULT_FACE_EMBEDDING_MODEL,
+        embedding_dim=512,
+    )
+
+    async def register(self, payload: FaceModelRegisterRequest) -> FaceModelResponse:
+        if (
+            payload.model_stub != self._model.model_stub
+            or payload.embedding_dim != self._model.embedding_dim
+        ):
+            raise ValueError(
+                "dynamic face model registration is only supported by PostgreSQL"
+            )
+        return self._model
+
+    async def list(self) -> FaceModelListResponse:
+        return FaceModelListResponse(items=[self._model])
+
+
 def weaviate_database(client: WeaviateAsyncClient) -> Database:
     """Bind all repositories to one request-scoped Weaviate client."""
     return Database(
         entities=WeaviateEntityRepository(client),
         sources=WeaviateSourceRepository(client),
         faces=WeaviateFaceRepository(client),
+        face_models=WeaviateFaceModelRepository(),
         text_mentions=WeaviateTextMentionRepository(client),
         users=WeaviateUserRepository(client),
     )
