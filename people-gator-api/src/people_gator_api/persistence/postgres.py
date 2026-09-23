@@ -941,11 +941,15 @@ class PostgresEntityRepository(EntityRepository):
             return {}
         collected: dict[uuid.UUID, list[float]] = {}
         for term in terms:
+            normalized_term = func.lower(func.unaccent(term))
             score = func.greatest(
-                func.similarity(func.coalesce(Entity.name, ""), term),
+                func.similarity(func.coalesce(Entity.name_normalized, ""), normalized_term),
                 func.similarity(func.coalesce(Entity.description, ""), term),
                 func.similarity(func.coalesce(Entity.short_description, ""), term),
-                func.coalesce(func.max(func.similarity(Alias.name, term)), 0.0),
+                func.coalesce(
+                    func.max(func.similarity(Alias.name_normalized, normalized_term)),
+                    0.0,
+                ),
             )
             rows = await self._session.execute(
                 select(Entity.id, score.label("score"))

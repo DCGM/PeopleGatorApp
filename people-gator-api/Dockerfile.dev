@@ -11,7 +11,7 @@ uv sync --locked --no-install-project
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
-RUN uv run people-gator-version
+#RUN uv run people-gator-version
 
 ENV PEOPLE_GATOR_API__PORT=8000
 ENV PEOPLE_GATOR_API__HOST="0.0.0.0"

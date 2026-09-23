@@ -18,8 +18,9 @@ from people_gator_api.routes.v1 import router as v1_router
 from people_gator_api.routes.jwks import router as jwks_router
 from people_gator_api.services.database_service import (
     close_postgres,
-    init_postgres,
+    init_db,
 )
+from people_gator_api.utils.version_info import get_version_info
 import dotenv
 
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
@@ -48,7 +49,7 @@ async def well_known_cors(
 async def lifespan(app: FastAPI):
     await init_embedding_service()
     await init_openrouter_service()
-    await init_postgres()
+    await init_db()
     yield
     await close_embedding_service()
     await close_openrouter_service()
@@ -59,7 +60,7 @@ def get_app() -> FastAPI:
     app = FastAPI(
         title="People Gator API",
         description="An API for managing people and their relationships through backend-neutral persistence contracts.",
-        version="0.1.0",
+        version=get_version_info().full_version,
         lifespan=lifespan,
     )
     app.add_middleware(

@@ -11,6 +11,7 @@ from pydantic import (
     Field,
     model_validator,
 )
+from people_gator_api.batch_settings import batch_settings
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
@@ -198,7 +199,7 @@ class ImageCreateRequest(SourceCreateRequestBase):
 
 # A bounded batch keeps the single preflight query and its exact OR filter at a
 # predictable size while still making large imports practical.
-MAX_MEDIA_BATCH_SIZE = 1_000
+MAX_MEDIA_BATCH_SIZE = batch_settings.max_media_batch_size
 type PageBatchCreateRequest = Annotated[
     list[PageCreateRequest], Field(max_length=MAX_MEDIA_BATCH_SIZE)
 ]

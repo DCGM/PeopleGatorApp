@@ -10,6 +10,7 @@ from pydantic import (
     Field,
     field_validator,
 )
+from people_gator_api.batch_settings import batch_settings
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
@@ -22,7 +23,7 @@ from people_gator_api.schemas.missing import MISSING, MissingType
 # Entity
 # ---------------------------------------------------------------------------
 
-MAX_ENTITY_BATCH_SIZE = 1_000
+MAX_ENTITY_BATCH_SIZE = batch_settings.max_entity_batch_size
 
 
 class EntityCreateRequest(BaseModel):

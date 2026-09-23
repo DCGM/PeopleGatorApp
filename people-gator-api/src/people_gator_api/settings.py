@@ -10,6 +10,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from people_gator_api.batch_settings import BatchSettings
 from people_gator_api.schemas.enums import Language
 
 
@@ -178,6 +179,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, le=65535, ge=1)
     host: str = "0.0.0.0"
     log_level: str = "INFO"
+    batch: BatchSettings = Field(default_factory=BatchSettings)
     cors: CorsSettings = CorsSettings()
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
     persistence: PersistenceSettings
