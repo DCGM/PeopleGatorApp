@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -10,6 +10,7 @@ import {
   type UserPatchRequest,
 } from '@/client'
 import { responseData } from '@/query/api'
+import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type UserListParams = NonNullable<ListUsersRouteApiV1UsersGetData['query']>
@@ -21,13 +22,23 @@ export function useMeQuery() {
   })
 }
 
-export function useUserListQuery(params?: MaybeRefOrGetter<UserListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.users.list(toValue(params))),
-    queryFn: ({ signal }) =>
+export function useUserListQuery(
+  params?: MaybeRefOrGetter<UserListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.users.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) =>
       responseData(
-        listUsersRouteApiV1UsersGet({ query: toValue(params), signal, throwOnError: true }),
+        listUsersRouteApiV1UsersGet({
+          query: withCursor(toValue(params), pageParam),
+          signal,
+          throwOnError: true,
+        }),
       ),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 

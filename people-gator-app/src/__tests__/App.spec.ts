@@ -69,7 +69,10 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     createAndAssign: vi.fn<() => void>(),
     error: ref(null),
     faces: ref([]),
+    hasNextPage: ref(false),
+    isFetchingNextPage: ref(false),
     isLoading: ref(false),
+    loadMore: vi.fn<() => void>(),
     pageDimensions: ref({ width: 210, height: 297 }),
     pageImageLoading: ref(false),
     pageImageUrl: ref(''),
@@ -84,7 +87,7 @@ describe('App', () => {
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
 
     const logo = wrapper.get('a[aria-label="PeopleGator"] svg.lucide-people-gator')
-    expect(logo.attributes('stroke-width')).toBe('1.5')
+    expect(logo.attributes('stroke-width')).toBe('1')
     expect(wrapper.get('nav').text()).not.toContain('People Gator')
   })
 

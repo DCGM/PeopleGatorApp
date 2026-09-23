@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/vue-query'
+import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { PageResponse } from '@/client'
@@ -11,7 +11,7 @@ import { fetchFaceAlignedCrop, fetchFaces, useAssignFacesMutation } from '@/quer
 import { queryKeys } from '@/query/keys'
 import { fetchPage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
-import { fetchEntitySearch, fetchFaceSearch } from '@/query/search'
+import { useEntitySearchQuery, useFaceSearchQuery } from '@/query/search'
 
 const DISCOVERY_LIMIT = 40
 const DISCOVERY_GC_TIME = 60 * 60_000
@@ -23,9 +23,9 @@ function percentage(value: number) {
 export function personDiscoverySignals(faceIds: string[], nameQuery: string) {
   const name = nameQuery.trim()
   return {
-    ...(name && { q: [name] }),
-    ...(faceIds.length && { q_face_id: faceIds }),
-    entity_type: ['person'] as Array<'person'>,
+    ...(name && { 'query.text': [name] }),
+    ...(faceIds.length && { 'query.face_id': faceIds }),
+    'filter.entity_type': ['person'] as Array<'person'>,
     limit: DISCOVERY_LIMIT,
   }
 }
@@ -39,23 +39,17 @@ export function usePersonDiscovery(
   const faceIds = computed(() => [...new Set(toValue(referenceFaceIds))])
   const canSearchFaces = computed(() => toValue(enabled) && faceIds.value.length > 0)
 
-  const faceSearchQuery = useQuery({
-    queryKey: computed(() =>
-      queryKeys.search.faces({ q_face_id: faceIds.value, limit: DISCOVERY_LIMIT }),
-    ),
-    queryFn: ({ signal }) =>
-      fetchFaceSearch({ q_face_id: faceIds.value, limit: DISCOVERY_LIMIT }, signal),
-    enabled: canSearchFaces,
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: DISCOVERY_GC_TIME,
-  })
+  const faceSearchQuery = useFaceSearchQuery(
+    computed(() => ({ 'query.face_id': faceIds.value, limit: DISCOVERY_LIMIT })),
+    canSearchFaces,
+  )
 
   const faceMatches = computed(() =>
-    (faceSearchQuery.data.value?.items ?? []).filter(
-      (face) => face.entity_id !== toValue(personId),
-    ),
+    (faceSearchQuery.data.value?.pages ?? [])
+      .flatMap((page) => page.items)
+      .filter((face) => face.entity_id !== toValue(personId)),
   )
-  const matchedFaceIds = computed(() => faceMatches.value.map((face) => face.face_id))
+  const matchedFaceIds = computed(() => faceMatches.value.map((face) => face.detection_id))
   const matchedSourceIds = computed(() => [
     ...new Set(faceMatches.value.flatMap((face) => (face.source_id ? [face.source_id] : []))),
   ])
@@ -128,12 +122,12 @@ export function usePersonDiscovery(
     faceMatches.value.map((face, index) => {
       const page = face.source_id ? matchedPages.value.get(face.source_id) : undefined
       return {
-        id: face.face_id,
-        portrait: matchedCropUrls.value.get(face.face_id) ?? '',
+        id: face.detection_id,
+        portrait: matchedCropUrls.value.get(face.detection_id) ?? '',
         portraitLoading:
-          !matchedCropUrls.value.has(face.face_id) &&
+          !matchedCropUrls.value.has(face.detection_id) &&
           (matchedCropQueries.value[index]?.isPending ?? false),
-        score: percentage(face.matching_score),
+        score: percentage(face.face_score ?? face.score),
         assignedEntityId: face.entity_id ?? null,
         assignedEntityName: face.entity_id
           ? (assignedEntityNames.value.get(face.entity_id) ?? face.entity_id)
@@ -152,27 +146,21 @@ export function usePersonDiscovery(
   const canSearchPeople = computed(
     () => toValue(enabled) && (faceIds.value.length > 0 || Boolean(toValue(nameQuery).trim())),
   )
-  const entitySearchQuery = useQuery({
-    queryKey: computed(() => queryKeys.search.entities(entitySearchParams.value)),
-    queryFn: ({ signal }) => fetchEntitySearch(entitySearchParams.value, signal),
-    enabled: canSearchPeople,
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: DISCOVERY_GC_TIME,
-  })
+  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearchPeople)
   const entityMatches = computed(() =>
-    (entitySearchQuery.data.value?.items ?? []).filter(
-      (entity) =>
-        entity.entity_id !== toValue(personId) &&
-        (entity.entity_type === 'person' || entity.entity_type === null),
-    ),
+    (entitySearchQuery.data.value?.pages ?? [])
+      .flatMap((page) => page.items)
+      .filter(
+        (entity) => entity.entity_id !== toValue(personId) && entity.entity_type === 'person',
+      ),
   )
 
   const candidateFaceQueries = useQueries({
     queries: computed(() =>
       entityMatches.value.map((entity) => ({
-        queryKey: queryKeys.faces.list({ entity_id: entity.entity_id, limit: 1 }),
+        queryKey: queryKeys.faces.list({ 'filter.entity_id': [entity.entity_id], limit: 1 }),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
-          fetchFaces({ entity_id: entity.entity_id, limit: 1 }, signal),
+          fetchFaces({ 'filter.entity_id': [entity.entity_id], limit: 1 }, signal),
         staleTime: Number.POSITIVE_INFINITY,
         gcTime: DISCOVERY_GC_TIME,
       })),

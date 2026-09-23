@@ -22,9 +22,9 @@ function face(id: string, score = 93): PersonDiscoveryFace {
 describe('PersonDiscoveryPanel', () => {
   it('builds a combined person search from face and name signals', () => {
     expect(personDiscoverySignals(['face-1', 'face-2'], '  Ada Lovelace  ')).toEqual({
-      q: ['Ada Lovelace'],
-      q_face_id: ['face-1', 'face-2'],
-      entity_type: ['person'],
+      'query.text': ['Ada Lovelace'],
+      'query.face_id': ['face-1', 'face-2'],
+      'filter.entity_type': ['person'],
       limit: 40,
     })
   })

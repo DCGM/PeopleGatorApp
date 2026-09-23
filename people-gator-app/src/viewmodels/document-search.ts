@@ -1,13 +1,13 @@
-import { useInfiniteQuery, useQueries, type InfiniteData, type QueryKey } from '@tanstack/vue-query'
+import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-import type { EntityResponse, PageResponse, PageSearchResult, SourceResponse } from '@/client'
+import type { EntityResponse, PageResponse } from '@/client'
 import { assignmentType, type AssignmentFilter } from '@/viewmodels/assignment'
 import { fetchEntities } from '@/query/entities'
-import { fetchPage, fetchPageImage, fetchPages, fetchSources } from '@/query/media'
+import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
-import { fetchPageSearch } from '@/query/search'
+import { usePageResultsQuery } from '@/query/search'
 
 export type DocumentSearchCard = {
   sourceId: string
@@ -17,12 +17,6 @@ export type DocumentSearchCard = {
   names: string[]
   thumbnailUrl: string
   thumbnailLoading: boolean
-}
-
-type DocumentResultPage = {
-  items: Array<PageResponse | PageSearchResult | SourceResponse>
-  totalCount: number
-  nextPage: string | number | undefined
 }
 
 const DOCUMENT_CACHE_TIME = 10 * 60_000
@@ -45,25 +39,6 @@ export function sourceEntityNames(
   return names
 }
 
-async function fetchPageSources(afterId: string | undefined, limit: number, signal: AbortSignal) {
-  const pageSources: SourceResponse[] = []
-  let nextCursor = afterId
-
-  while (pageSources.length < limit) {
-    const response = await fetchSources(
-      { limit: limit - pageSources.length, after_id: nextCursor },
-      signal,
-    )
-    pageSources.push(...response.items.filter((source) => source.source_type === 'page'))
-
-    const previousCursor = nextCursor
-    nextCursor = response.after_id ?? undefined
-    if (!nextCursor || nextCursor === previousCursor) break
-  }
-
-  return { items: pageSources, nextCursor }
-}
-
 export function useDocumentSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<AssignmentFilter>,
@@ -71,87 +46,19 @@ export function useDocumentSearch(
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentType(toValue(filter)))
-
-  const pageResultsQuery = useInfiniteQuery<
-    DocumentResultPage,
-    Error,
-    InfiniteData<DocumentResultPage, string | number>,
-    QueryKey,
-    string | number
-  >({
-    queryKey: computed(() =>
-      normalizedSearch.value
-        ? queryKeys.search.infinitePages({
-            q: normalizedSearch.value,
-            assignment: assignment.value,
-            limit: pageSize,
-          })
-        : queryKeys.pages.infinite({ assignment: assignment.value, limit: pageSize }),
-    ),
-    queryFn: async ({ pageParam, signal }): Promise<DocumentResultPage> => {
-      if (normalizedSearch.value) {
-        // Search pages currently has no cursor parameter. Request one look-ahead
-        // result and append only the newly revealed slice.
-        const pageIndex = typeof pageParam === 'number' ? pageParam : 0
-        const pageEnd = (pageIndex + 1) * pageSize
-        const response = await fetchPageSearch(
-          {
-            q: normalizedSearch.value,
-            assignment: assignment.value,
-            limit: pageEnd + 1,
-          },
-          signal,
-        )
-        const hasNextPage = response.items.length > pageEnd
-
-        return {
-          items: response.items.slice(pageIndex * pageSize, pageEnd),
-          totalCount: hasNextPage ? pageEnd + 1 : response.items.length,
-          nextPage: hasNextPage ? pageIndex + 1 : undefined,
-        }
-      }
-
-      if (assignment.value) {
-        const pageIndex = typeof pageParam === 'number' ? pageParam : 0
-        const pageEnd = (pageIndex + 1) * pageSize
-        const response = await fetchPages(
-          { assignment: assignment.value, limit: pageEnd + 1 },
-          signal,
-        )
-        const hasNextPage = response.items.length > pageEnd
-        return {
-          items: response.items.slice(pageIndex * pageSize, pageEnd),
-          totalCount: response.total_count,
-          nextPage: hasNextPage ? pageIndex + 1 : undefined,
-        }
-      }
-
-      // Weaviate rejects cursors combined with the implicit page-type filter
-      // used by `/pages`. Enumerate the unfiltered source collection by cursor,
-      // retain page sources, then resolve their page metadata below.
-      const afterId = typeof pageParam === 'string' ? pageParam : undefined
-      const [response, pageCount] = await Promise.all([
-        fetchPageSources(afterId, pageSize, signal),
-        afterId ? Promise.resolve(undefined) : fetchPages({ limit: 0 }, signal),
-      ])
-      return {
-        items: response.items,
-        totalCount: pageCount?.total_count ?? 0,
-        nextPage: response.nextCursor,
-      }
-    },
-    initialPageParam: 0 as string | number,
-    getNextPageParam: (lastPage) => lastPage.nextPage,
-    staleTime: DOCUMENT_CACHE_TIME,
-    gcTime: DOCUMENT_GC_TIME,
-    refetchOnWindowFocus: false,
-  })
+  const pageResultsQuery = usePageResultsQuery(
+    computed(() => ({
+      query: normalizedSearch.value,
+      assignment: assignment.value,
+      limit: pageSize,
+    })),
+  )
 
   const resultSourceIds = computed(() => {
     const sourceIds = new Set<string>()
     for (const page of pageResultsQuery.data.value?.pages ?? []) {
       for (const item of page.items) {
-        sourceIds.add('page_source_id' in item ? item.page_source_id : item.source_id)
+        sourceIds.add(item.source_id)
       }
     }
     return [...sourceIds]
@@ -182,9 +89,9 @@ export function useDocumentSearch(
   const entityQueries = useQueries({
     queries: computed(() =>
       resultSourceIds.value.map((sourceId) => ({
-        queryKey: queryKeys.entities.list({ source_id: sourceId, limit: 3 }),
+        queryKey: queryKeys.entities.list({ 'filter.source_id': [sourceId], limit: 3 }),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
-          fetchEntities({ source_id: sourceId, limit: 3 }, signal),
+          fetchEntities({ 'filter.source_id': [sourceId], limit: 3 }, signal),
         staleTime: DOCUMENT_CACHE_TIME,
         gcTime: DOCUMENT_GC_TIME,
       })),
@@ -242,7 +149,7 @@ export function useDocumentSearch(
     isLoading,
     loadMore: pageResultsQuery.fetchNextPage,
     resultCount: computed(() => {
-      if (normalizedSearch.value) return resultSourceIds.value.length
+      if (normalizedSearch.value || assignment.value) return resultSourceIds.value.length
       return pageResultsQuery.data.value?.pages[0]?.totalCount ?? 0
     }),
   }

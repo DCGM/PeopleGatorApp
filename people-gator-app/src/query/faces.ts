@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -7,11 +7,13 @@ import {
   getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet,
   getFaceRouteApiV1FacesDetectionIdGet,
   listFacesRouteApiV1FacesGet,
-  patchFaceEntityRouteApiV1FacesDetectionIdPatch,
+  patchFaceBatchRouteApiV1FacesBatchPatch,
+  patchFaceRouteApiV1FacesDetectionIdPatch,
   type FaceCreateRequest,
   type ListFacesRouteApiV1FacesGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
+import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type FaceListParams = NonNullable<ListFacesRouteApiV1FacesGetData['query']>
@@ -54,10 +56,16 @@ export function useFaceAlignedCropQuery(
   })
 }
 
-export function useFaceListQuery(params?: MaybeRefOrGetter<FaceListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.faces.list(toValue(params))),
-    queryFn: ({ signal }) => fetchFaces(toValue(params), signal),
+export function useFaceListQuery(
+  params?: MaybeRefOrGetter<FaceListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.faces.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) => fetchFaces(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 
@@ -106,7 +114,7 @@ export function useAssignFaceMutation() {
   return useMutation({
     mutationFn: ({ detectionId, entityId }: { detectionId: string; entityId: string | null }) =>
       responseData(
-        patchFaceEntityRouteApiV1FacesDetectionIdPatch({
+        patchFaceRouteApiV1FacesDetectionIdPatch({
           path: { detection_id: detectionId },
           body: { entity_id: entityId },
           throwOnError: true,
@@ -125,37 +133,19 @@ export function useAssignFaceMutation() {
 export function useAssignFacesMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({
-      detectionIds,
-      entityId,
-    }: {
-      detectionIds: string[]
-      entityId: string
-    }) => {
-      const results = await Promise.allSettled(
-        detectionIds.map((detectionId) =>
-          responseData(
-            patchFaceEntityRouteApiV1FacesDetectionIdPatch({
-              path: { detection_id: detectionId },
-              body: { entity_id: entityId },
-              throwOnError: true,
-            }),
-          ),
-        ),
-      )
-      const faces = results.flatMap((result) =>
-        result.status === 'fulfilled' ? [result.value] : [],
-      )
-      const failedCount = results.length - faces.length
-      if (failedCount) {
-        throw new Error(
-          `${failedCount} of ${results.length} face assignments failed. Successful assignments were kept.`,
-        )
-      }
-      return faces
-    },
+    mutationFn: ({ detectionIds, entityId }: { detectionIds: string[]; entityId: string }) =>
+      responseData(
+        patchFaceBatchRouteApiV1FacesBatchPatch({
+          body: detectionIds.map((detectionId) => ({
+            detection_id: detectionId,
+            entity_id: entityId,
+          })),
+          throwOnError: true,
+        }),
+      ),
     onSuccess: (faces) => {
       for (const face of faces) {
+        if (!face) continue
         queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       }
     },

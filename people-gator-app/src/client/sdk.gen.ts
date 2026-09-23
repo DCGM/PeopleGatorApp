@@ -2,7 +2,7 @@
 
 import { type Client, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { CreateDocumentBatchRouteApiV1DocumentsBatchPostData, CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors, CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses, CreateDocumentRouteApiV1DocumentsPostData, CreateDocumentRouteApiV1DocumentsPostErrors, CreateDocumentRouteApiV1DocumentsPostResponses, CreateEntityBatchRouteApiV1EntitiesBatchPostData, CreateEntityBatchRouteApiV1EntitiesBatchPostErrors, CreateEntityBatchRouteApiV1EntitiesBatchPostResponses, CreateEntityRouteApiV1EntitiesPostData, CreateEntityRouteApiV1EntitiesPostErrors, CreateEntityRouteApiV1EntitiesPostResponses, CreateFaceBatchRouteApiV1FacesBatchPostData, CreateFaceBatchRouteApiV1FacesBatchPostErrors, CreateFaceBatchRouteApiV1FacesBatchPostResponses, CreateFaceRouteApiV1FacesPostData, CreateFaceRouteApiV1FacesPostErrors, CreateFaceRouteApiV1FacesPostResponses, CreateImageBatchRouteApiV1ImagesBatchPostData, CreateImageBatchRouteApiV1ImagesBatchPostErrors, CreateImageBatchRouteApiV1ImagesBatchPostResponses, CreateImageRouteApiV1ImagesPostData, CreateImageRouteApiV1ImagesPostErrors, CreateImageRouteApiV1ImagesPostResponses, CreatePageBatchRouteApiV1PagesBatchPostData, CreatePageBatchRouteApiV1PagesBatchPostErrors, CreatePageBatchRouteApiV1PagesBatchPostResponses, CreatePageRouteApiV1PagesPostData, CreatePageRouteApiV1PagesPostErrors, CreatePageRouteApiV1PagesPostResponses, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses, CreateTextMentionRouteApiV1TextMentionsPostData, CreateTextMentionRouteApiV1TextMentionsPostErrors, CreateTextMentionRouteApiV1TextMentionsPostResponses, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses, DeleteEntitiesRouteApiV1EntitiesDeleteData, DeleteEntitiesRouteApiV1EntitiesDeleteErrors, DeleteEntitiesRouteApiV1EntitiesDeleteResponses, DeleteEntityRouteApiV1EntitiesEntityIdDeleteData, DeleteEntityRouteApiV1EntitiesEntityIdDeleteErrors, DeleteEntityRouteApiV1EntitiesEntityIdDeleteResponses, DeleteImageRouteApiV1ImagesImageIdDeleteData, DeleteImageRouteApiV1ImagesImageIdDeleteErrors, DeleteImageRouteApiV1ImagesImageIdDeleteResponses, DeletePageRouteApiV1PagesPageSourceIdDeleteData, DeletePageRouteApiV1PagesPageSourceIdDeleteErrors, DeletePageRouteApiV1PagesPageSourceIdDeleteResponses, DeleteSourceRouteApiV1SourcesSourceIdDeleteData, DeleteSourceRouteApiV1SourcesSourceIdDeleteErrors, DeleteSourceRouteApiV1SourcesSourceIdDeleteResponses, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetData, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses, GetEntityRouteApiV1EntitiesEntityIdGetData, GetEntityRouteApiV1EntitiesEntityIdGetErrors, GetEntityRouteApiV1EntitiesEntityIdGetResponses, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetData, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses, GetFaceRouteApiV1FacesDetectionIdGetData, GetFaceRouteApiV1FacesDetectionIdGetErrors, GetFaceRouteApiV1FacesDetectionIdGetResponses, GetImageContentByIdRouteApiV1ImagesImageIdContentGetData, GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors, GetImageContentByIdRouteApiV1ImagesImageIdContentGetResponses, GetImageRouteApiV1ImagesImageIdGetData, GetImageRouteApiV1ImagesImageIdGetErrors, GetImageRouteApiV1ImagesImageIdGetResponses, GetJwksWellKnownJwksJsonGetData, GetJwksWellKnownJwksJsonGetResponses, GetMeRouteApiV1MeGetData, GetMeRouteApiV1MeGetResponses, GetOpenidConfigurationWellKnownOpenidConfigurationGetData, GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetData, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetResponses, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetData, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses, GetPageRouteApiV1PagesPageSourceIdGetData, GetPageRouteApiV1PagesPageSourceIdGetErrors, GetPageRouteApiV1PagesPageSourceIdGetResponses, GetSourceRouteApiV1SourcesSourceIdGetData, GetSourceRouteApiV1SourcesSourceIdGetErrors, GetSourceRouteApiV1SourcesSourceIdGetResponses, GetTextMentionRouteApiV1TextMentionsMentionIdGetData, GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors, GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetData, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses, GetTokenTokenLoginPostData, GetTokenTokenLoginPostErrors, GetTokenTokenLoginPostResponses, GetUserRouteApiV1UsersUserIdGetData, GetUserRouteApiV1UsersUserIdGetErrors, GetUserRouteApiV1UsersUserIdGetResponses, HealthApiV1HealthGetData, HealthApiV1HealthGetResponses, HomeApiV1GetData, HomeApiV1GetResponses, ListDocumentsRouteApiV1DocumentsGetData, ListDocumentsRouteApiV1DocumentsGetErrors, ListDocumentsRouteApiV1DocumentsGetResponses, ListEntitiesRouteApiV1EntitiesGetData, ListEntitiesRouteApiV1EntitiesGetErrors, ListEntitiesRouteApiV1EntitiesGetResponses, ListFacesRouteApiV1FacesGetData, ListFacesRouteApiV1FacesGetErrors, ListFacesRouteApiV1FacesGetResponses, ListImagesRouteApiV1ImagesGetData, ListImagesRouteApiV1ImagesGetErrors, ListImagesRouteApiV1ImagesGetResponses, ListPagesRouteApiV1PagesGetData, ListPagesRouteApiV1PagesGetErrors, ListPagesRouteApiV1PagesGetResponses, ListSourcesRouteApiV1SourcesGetData, ListSourcesRouteApiV1SourcesGetErrors, ListSourcesRouteApiV1SourcesGetResponses, ListTextMentionsRouteApiV1TextMentionsGetData, ListTextMentionsRouteApiV1TextMentionsGetErrors, ListTextMentionsRouteApiV1TextMentionsGetResponses, ListUsersRouteApiV1UsersGetData, ListUsersRouteApiV1UsersGetErrors, ListUsersRouteApiV1UsersGetResponses, LookupDocumentRouteApiV1DocumentsLookupGetData, LookupDocumentRouteApiV1DocumentsLookupGetErrors, LookupDocumentRouteApiV1DocumentsLookupGetResponses, LookupImageRouteApiV1ImagesLookupGetData, LookupImageRouteApiV1ImagesLookupGetErrors, LookupImageRouteApiV1ImagesLookupGetResponses, LookupPageRouteApiV1PagesLookupGetData, LookupPageRouteApiV1PagesLookupGetErrors, LookupPageRouteApiV1PagesLookupGetResponses, LookupSourceRouteApiV1SourcesLookupGetData, LookupSourceRouteApiV1SourcesLookupGetErrors, LookupSourceRouteApiV1SourcesLookupGetResponses, PatchEntityRouteApiV1EntitiesEntityIdPatchData, PatchEntityRouteApiV1EntitiesEntityIdPatchErrors, PatchEntityRouteApiV1EntitiesEntityIdPatchResponses, PatchFaceEntityRouteApiV1FacesDetectionIdPatchData, PatchFaceEntityRouteApiV1FacesDetectionIdPatchErrors, PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses, PatchUserRouteApiV1UsersUserIdPatchData, PatchUserRouteApiV1UsersUserIdPatchErrors, PatchUserRouteApiV1UsersUserIdPatchResponses, ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchData, ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors, ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses, RefreshTokenTokenRefreshPostData, RefreshTokenTokenRefreshPostErrors, RefreshTokenTokenRefreshPostResponses, SearchDocumentsGetApiV1SearchDocumentsGetData, SearchDocumentsGetApiV1SearchDocumentsGetErrors, SearchDocumentsGetApiV1SearchDocumentsGetResponses, SearchEntitiesGetApiV1SearchEntitiesGetData, SearchEntitiesGetApiV1SearchEntitiesGetErrors, SearchEntitiesGetApiV1SearchEntitiesGetResponses, SearchFacesGetApiV1SearchFacesGetData, SearchFacesGetApiV1SearchFacesGetErrors, SearchFacesGetApiV1SearchFacesGetResponses, SearchPagesGetApiV1SearchPagesGetData, SearchPagesGetApiV1SearchPagesGetErrors, SearchPagesGetApiV1SearchPagesGetResponses, TranslateRouteApiV1TranslatePostData, TranslateRouteApiV1TranslatePostErrors, TranslateRouteApiV1TranslatePostResponses, UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostData, UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors, UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses, UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostData, UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors, UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses } from './types.gen';
+import type { CreateDocumentBatchRouteApiV1DocumentsBatchPostData, CreateDocumentBatchRouteApiV1DocumentsBatchPostErrors, CreateDocumentBatchRouteApiV1DocumentsBatchPostResponses, CreateDocumentRouteApiV1DocumentsPostData, CreateDocumentRouteApiV1DocumentsPostErrors, CreateDocumentRouteApiV1DocumentsPostResponses, CreateEntityBatchRouteApiV1EntitiesBatchPostData, CreateEntityBatchRouteApiV1EntitiesBatchPostErrors, CreateEntityBatchRouteApiV1EntitiesBatchPostResponses, CreateEntityRouteApiV1EntitiesPostData, CreateEntityRouteApiV1EntitiesPostErrors, CreateEntityRouteApiV1EntitiesPostResponses, CreateFaceBatchRouteApiV1FacesBatchPostData, CreateFaceBatchRouteApiV1FacesBatchPostErrors, CreateFaceBatchRouteApiV1FacesBatchPostResponses, CreateFaceRouteApiV1FacesPostData, CreateFaceRouteApiV1FacesPostErrors, CreateFaceRouteApiV1FacesPostResponses, CreateImageBatchRouteApiV1ImagesBatchPostData, CreateImageBatchRouteApiV1ImagesBatchPostErrors, CreateImageBatchRouteApiV1ImagesBatchPostResponses, CreateImageRouteApiV1ImagesPostData, CreateImageRouteApiV1ImagesPostErrors, CreateImageRouteApiV1ImagesPostResponses, CreatePageBatchRouteApiV1PagesBatchPostData, CreatePageBatchRouteApiV1PagesBatchPostErrors, CreatePageBatchRouteApiV1PagesBatchPostResponses, CreatePageRouteApiV1PagesPostData, CreatePageRouteApiV1PagesPostErrors, CreatePageRouteApiV1PagesPostResponses, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses, CreateTextMentionRouteApiV1TextMentionsPostData, CreateTextMentionRouteApiV1TextMentionsPostErrors, CreateTextMentionRouteApiV1TextMentionsPostResponses, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses, DeleteEntitiesRouteApiV1EntitiesDeleteData, DeleteEntitiesRouteApiV1EntitiesDeleteErrors, DeleteEntitiesRouteApiV1EntitiesDeleteResponses, DeleteEntityRouteApiV1EntitiesEntityIdDeleteData, DeleteEntityRouteApiV1EntitiesEntityIdDeleteErrors, DeleteEntityRouteApiV1EntitiesEntityIdDeleteResponses, DeleteFaceBatchRouteApiV1FacesBatchDeleteData, DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors, DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses, DeleteFaceRouteApiV1FacesDetectionIdDeleteData, DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors, DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses, DeleteImageRouteApiV1ImagesImageIdDeleteData, DeleteImageRouteApiV1ImagesImageIdDeleteErrors, DeleteImageRouteApiV1ImagesImageIdDeleteResponses, DeletePageRouteApiV1PagesPageSourceIdDeleteData, DeletePageRouteApiV1PagesPageSourceIdDeleteErrors, DeletePageRouteApiV1PagesPageSourceIdDeleteResponses, DeleteSourceRouteApiV1SourcesSourceIdDeleteData, DeleteSourceRouteApiV1SourcesSourceIdDeleteErrors, DeleteSourceRouteApiV1SourcesSourceIdDeleteResponses, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses, DeleteUserBatchRouteApiV1UsersBatchDeleteData, DeleteUserBatchRouteApiV1UsersBatchDeleteErrors, DeleteUserBatchRouteApiV1UsersBatchDeleteResponses, DeleteUserRouteApiV1UsersUserIdDeleteData, DeleteUserRouteApiV1UsersUserIdDeleteErrors, DeleteUserRouteApiV1UsersUserIdDeleteResponses, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetData, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetErrors, GetDocumentRouteApiV1DocumentsDocumentSourceIdGetResponses, GetEntityRouteApiV1EntitiesEntityIdGetData, GetEntityRouteApiV1EntitiesEntityIdGetErrors, GetEntityRouteApiV1EntitiesEntityIdGetResponses, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetData, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetErrors, GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses, GetFaceRouteApiV1FacesDetectionIdGetData, GetFaceRouteApiV1FacesDetectionIdGetErrors, GetFaceRouteApiV1FacesDetectionIdGetResponses, GetImageContentByIdRouteApiV1ImagesImageIdContentGetData, GetImageContentByIdRouteApiV1ImagesImageIdContentGetErrors, GetImageContentByIdRouteApiV1ImagesImageIdContentGetResponses, GetImageRouteApiV1ImagesImageIdGetData, GetImageRouteApiV1ImagesImageIdGetErrors, GetImageRouteApiV1ImagesImageIdGetResponses, GetJwksWellKnownJwksJsonGetData, GetJwksWellKnownJwksJsonGetResponses, GetMeRouteApiV1MeGetData, GetMeRouteApiV1MeGetResponses, GetOpenidConfigurationWellKnownOpenidConfigurationGetData, GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetData, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetErrors, GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetResponses, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetData, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetErrors, GetPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGetResponses, GetPageRouteApiV1PagesPageSourceIdGetData, GetPageRouteApiV1PagesPageSourceIdGetErrors, GetPageRouteApiV1PagesPageSourceIdGetResponses, GetSourceRouteApiV1SourcesSourceIdGetData, GetSourceRouteApiV1SourcesSourceIdGetErrors, GetSourceRouteApiV1SourcesSourceIdGetResponses, GetTextMentionRouteApiV1TextMentionsMentionIdGetData, GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors, GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetData, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetErrors, GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGetResponses, GetTokenTokenLoginPostData, GetTokenTokenLoginPostErrors, GetTokenTokenLoginPostResponses, GetUserRouteApiV1UsersUserIdGetData, GetUserRouteApiV1UsersUserIdGetErrors, GetUserRouteApiV1UsersUserIdGetResponses, HealthApiV1HealthGetData, HealthApiV1HealthGetResponses, HomeApiV1GetData, HomeApiV1GetResponses, ListDocumentsRouteApiV1DocumentsGetData, ListDocumentsRouteApiV1DocumentsGetErrors, ListDocumentsRouteApiV1DocumentsGetResponses, ListEntitiesRouteApiV1EntitiesGetData, ListEntitiesRouteApiV1EntitiesGetErrors, ListEntitiesRouteApiV1EntitiesGetResponses, ListFaceModelsRouteApiV1FaceModelsGetData, ListFaceModelsRouteApiV1FaceModelsGetResponses, ListFacesRouteApiV1FacesGetData, ListFacesRouteApiV1FacesGetErrors, ListFacesRouteApiV1FacesGetResponses, ListImagesRouteApiV1ImagesGetData, ListImagesRouteApiV1ImagesGetErrors, ListImagesRouteApiV1ImagesGetResponses, ListPagesRouteApiV1PagesGetData, ListPagesRouteApiV1PagesGetErrors, ListPagesRouteApiV1PagesGetResponses, ListSourcesRouteApiV1SourcesGetData, ListSourcesRouteApiV1SourcesGetErrors, ListSourcesRouteApiV1SourcesGetResponses, ListTextMentionsRouteApiV1TextMentionsGetData, ListTextMentionsRouteApiV1TextMentionsGetErrors, ListTextMentionsRouteApiV1TextMentionsGetResponses, ListUsersRouteApiV1UsersGetData, ListUsersRouteApiV1UsersGetErrors, ListUsersRouteApiV1UsersGetResponses, LookupDocumentRouteApiV1DocumentsLookupGetData, LookupDocumentRouteApiV1DocumentsLookupGetErrors, LookupDocumentRouteApiV1DocumentsLookupGetResponses, LookupImageRouteApiV1ImagesLookupGetData, LookupImageRouteApiV1ImagesLookupGetErrors, LookupImageRouteApiV1ImagesLookupGetResponses, LookupPageRouteApiV1PagesLookupGetData, LookupPageRouteApiV1PagesLookupGetErrors, LookupPageRouteApiV1PagesLookupGetResponses, LookupSourceRouteApiV1SourcesLookupGetData, LookupSourceRouteApiV1SourcesLookupGetErrors, LookupSourceRouteApiV1SourcesLookupGetResponses, PatchEntityBatchRouteApiV1EntitiesBatchPatchData, PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors, PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses, PatchEntityRouteApiV1EntitiesEntityIdPatchData, PatchEntityRouteApiV1EntitiesEntityIdPatchErrors, PatchEntityRouteApiV1EntitiesEntityIdPatchResponses, PatchFaceBatchRouteApiV1FacesBatchPatchData, PatchFaceBatchRouteApiV1FacesBatchPatchErrors, PatchFaceBatchRouteApiV1FacesBatchPatchResponses, PatchFaceRouteApiV1FacesDetectionIdPatchData, PatchFaceRouteApiV1FacesDetectionIdPatchErrors, PatchFaceRouteApiV1FacesDetectionIdPatchResponses, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchData, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchData, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses, PatchUserRouteApiV1UsersUserIdPatchData, PatchUserRouteApiV1UsersUserIdPatchErrors, PatchUserRouteApiV1UsersUserIdPatchResponses, RefreshTokenTokenRefreshPostData, RefreshTokenTokenRefreshPostErrors, RefreshTokenTokenRefreshPostResponses, RegisterFaceModelRouteApiV1FaceModelsPostData, RegisterFaceModelRouteApiV1FaceModelsPostErrors, RegisterFaceModelRouteApiV1FaceModelsPostResponses, SearchDocumentsGetApiV1SearchDocumentsGetData, SearchDocumentsGetApiV1SearchDocumentsGetErrors, SearchDocumentsGetApiV1SearchDocumentsGetResponses, SearchEntitiesGetApiV1SearchEntitiesGetData, SearchEntitiesGetApiV1SearchEntitiesGetErrors, SearchEntitiesGetApiV1SearchEntitiesGetResponses, SearchFacesGetApiV1SearchFacesGetData, SearchFacesGetApiV1SearchFacesGetErrors, SearchFacesGetApiV1SearchFacesGetResponses, SearchPagesGetApiV1SearchPagesGetData, SearchPagesGetApiV1SearchPagesGetErrors, SearchPagesGetApiV1SearchPagesGetResponses, TranslateRouteApiV1TranslatePostData, TranslateRouteApiV1TranslatePostErrors, TranslateRouteApiV1TranslatePostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -33,16 +33,15 @@ export const searchEntitiesGetApiV1SearchEntitiesGet = <ThrowOnError extends boo
  */
 export const searchFacesGetApiV1SearchFacesGet = <ThrowOnError extends boolean = false>(options?: Options<SearchFacesGetApiV1SearchFacesGetData, ThrowOnError>) => (options?.client ?? client).get<SearchFacesGetApiV1SearchFacesGetResponses, SearchFacesGetApiV1SearchFacesGetErrors, ThrowOnError>({
     responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/search-faces',
     ...options
 });
 
 /**
  * Search Pages Get
- *
- * Search pages with one free-text or UUID query.
  */
-export const searchPagesGetApiV1SearchPagesGet = <ThrowOnError extends boolean = false>(options: Options<SearchPagesGetApiV1SearchPagesGetData, ThrowOnError>) => (options.client ?? client).get<SearchPagesGetApiV1SearchPagesGetResponses, SearchPagesGetApiV1SearchPagesGetErrors, ThrowOnError>({
+export const searchPagesGetApiV1SearchPagesGet = <ThrowOnError extends boolean = false>(options?: Options<SearchPagesGetApiV1SearchPagesGetData, ThrowOnError>) => (options?.client ?? client).get<SearchPagesGetApiV1SearchPagesGetResponses, SearchPagesGetApiV1SearchPagesGetErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/search-pages',
@@ -51,10 +50,8 @@ export const searchPagesGetApiV1SearchPagesGet = <ThrowOnError extends boolean =
 
 /**
  * Search Documents Get
- *
- * Search documents with one free-text or UUID query.
  */
-export const searchDocumentsGetApiV1SearchDocumentsGet = <ThrowOnError extends boolean = false>(options: Options<SearchDocumentsGetApiV1SearchDocumentsGetData, ThrowOnError>) => (options.client ?? client).get<SearchDocumentsGetApiV1SearchDocumentsGetResponses, SearchDocumentsGetApiV1SearchDocumentsGetErrors, ThrowOnError>({
+export const searchDocumentsGetApiV1SearchDocumentsGet = <ThrowOnError extends boolean = false>(options?: Options<SearchDocumentsGetApiV1SearchDocumentsGetData, ThrowOnError>) => (options?.client ?? client).get<SearchDocumentsGetApiV1SearchDocumentsGetResponses, SearchDocumentsGetApiV1SearchDocumentsGetErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/search-documents',
@@ -133,9 +130,9 @@ export const patchEntityRouteApiV1EntitiesEntityIdPatch = <ThrowOnError extends 
 });
 
 /**
- * Create Entity Batch Route
+ * Patch Entity Batch Route
  */
-export const createEntityBatchRouteApiV1EntitiesBatchPost = <ThrowOnError extends boolean = false>(options: Options<CreateEntityBatchRouteApiV1EntitiesBatchPostData, ThrowOnError>) => (options.client ?? client).post<CreateEntityBatchRouteApiV1EntitiesBatchPostResponses, CreateEntityBatchRouteApiV1EntitiesBatchPostErrors, ThrowOnError>({
+export const patchEntityBatchRouteApiV1EntitiesBatchPatch = <ThrowOnError extends boolean = false>(options: Options<PatchEntityBatchRouteApiV1EntitiesBatchPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses, PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/entities:batch',
@@ -147,12 +144,12 @@ export const createEntityBatchRouteApiV1EntitiesBatchPost = <ThrowOnError extend
 });
 
 /**
- * Update Entity Embeddings Batch Route
+ * Create Entity Batch Route
  */
-export const updateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPost = <ThrowOnError extends boolean = false>(options: Options<UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostData, ThrowOnError>) => (options.client ?? client).post<UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses, UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors, ThrowOnError>({
+export const createEntityBatchRouteApiV1EntitiesBatchPost = <ThrowOnError extends boolean = false>(options: Options<CreateEntityBatchRouteApiV1EntitiesBatchPostData, ThrowOnError>) => (options.client ?? client).post<CreateEntityBatchRouteApiV1EntitiesBatchPostResponses, CreateEntityBatchRouteApiV1EntitiesBatchPostErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/v1/entities:embeddings',
+    url: '/api/v1/entities:batch',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -185,9 +182,9 @@ export const createFaceRouteApiV1FacesPost = <ThrowOnError extends boolean = fal
 });
 
 /**
- * Create Face Batch Route
+ * Delete Face Batch Route
  */
-export const createFaceBatchRouteApiV1FacesBatchPost = <ThrowOnError extends boolean = false>(options: Options<CreateFaceBatchRouteApiV1FacesBatchPostData, ThrowOnError>) => (options.client ?? client).post<CreateFaceBatchRouteApiV1FacesBatchPostResponses, CreateFaceBatchRouteApiV1FacesBatchPostErrors, ThrowOnError>({
+export const deleteFaceBatchRouteApiV1FacesBatchDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteFaceBatchRouteApiV1FacesBatchDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses, DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/faces:batch',
@@ -199,12 +196,26 @@ export const createFaceBatchRouteApiV1FacesBatchPost = <ThrowOnError extends boo
 });
 
 /**
- * Update Face Embedding Batch Route
+ * Patch Face Batch Route
  */
-export const updateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPost = <ThrowOnError extends boolean = false>(options: Options<UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostData, ThrowOnError>) => (options.client ?? client).post<UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses, UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors, ThrowOnError>({
+export const patchFaceBatchRouteApiV1FacesBatchPatch = <ThrowOnError extends boolean = false>(options: Options<PatchFaceBatchRouteApiV1FacesBatchPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchFaceBatchRouteApiV1FacesBatchPatchResponses, PatchFaceBatchRouteApiV1FacesBatchPatchErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/api/v1/faces:embeddings',
+    url: '/api/v1/faces:batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create Face Batch Route
+ */
+export const createFaceBatchRouteApiV1FacesBatchPost = <ThrowOnError extends boolean = false>(options: Options<CreateFaceBatchRouteApiV1FacesBatchPostData, ThrowOnError>) => (options.client ?? client).post<CreateFaceBatchRouteApiV1FacesBatchPostResponses, CreateFaceBatchRouteApiV1FacesBatchPostErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/faces:batch',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -224,6 +235,15 @@ export const getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet = <Throw
 });
 
 /**
+ * Delete Face Route
+ */
+export const deleteFaceRouteApiV1FacesDetectionIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteFaceRouteApiV1FacesDetectionIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses, DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/faces/{detection_id}',
+    ...options
+});
+
+/**
  * Get Face Route
  */
 export const getFaceRouteApiV1FacesDetectionIdGet = <ThrowOnError extends boolean = false>(options: Options<GetFaceRouteApiV1FacesDetectionIdGetData, ThrowOnError>) => (options.client ?? client).get<GetFaceRouteApiV1FacesDetectionIdGetResponses, GetFaceRouteApiV1FacesDetectionIdGetErrors, ThrowOnError>({
@@ -234,12 +254,36 @@ export const getFaceRouteApiV1FacesDetectionIdGet = <ThrowOnError extends boolea
 });
 
 /**
- * Patch Face Entity Route
+ * Patch Face Route
  */
-export const patchFaceEntityRouteApiV1FacesDetectionIdPatch = <ThrowOnError extends boolean = false>(options: Options<PatchFaceEntityRouteApiV1FacesDetectionIdPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses, PatchFaceEntityRouteApiV1FacesDetectionIdPatchErrors, ThrowOnError>({
+export const patchFaceRouteApiV1FacesDetectionIdPatch = <ThrowOnError extends boolean = false>(options: Options<PatchFaceRouteApiV1FacesDetectionIdPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchFaceRouteApiV1FacesDetectionIdPatchResponses, PatchFaceRouteApiV1FacesDetectionIdPatchErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/faces/{detection_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Face Models Route
+ */
+export const listFaceModelsRouteApiV1FaceModelsGet = <ThrowOnError extends boolean = false>(options?: Options<ListFaceModelsRouteApiV1FaceModelsGetData, ThrowOnError>) => (options?.client ?? client).get<ListFaceModelsRouteApiV1FaceModelsGetResponses, unknown, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/face-models',
+    ...options
+});
+
+/**
+ * Register Face Model Route
+ */
+export const registerFaceModelRouteApiV1FaceModelsPost = <ThrowOnError extends boolean = false>(options: Options<RegisterFaceModelRouteApiV1FaceModelsPostData, ThrowOnError>) => (options.client ?? client).post<RegisterFaceModelRouteApiV1FaceModelsPostResponses, RegisterFaceModelRouteApiV1FaceModelsPostErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/face-models',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -272,6 +316,34 @@ export const createTextMentionRouteApiV1TextMentionsPost = <ThrowOnError extends
 });
 
 /**
+ * Delete Text Mention Batch Route
+ */
+export const deleteTextMentionBatchRouteApiV1TextMentionsBatchDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses, DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/text-mentions:batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Patch Text Mention Batch Route
+ */
+export const patchTextMentionBatchRouteApiV1TextMentionsBatchPatch = <ThrowOnError extends boolean = false>(options: Options<PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses, PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/text-mentions:batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Create Text Mention Batch Route
  */
 export const createTextMentionBatchRouteApiV1TextMentionsBatchPost = <ThrowOnError extends boolean = false>(options: Options<CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData, ThrowOnError>) => (options.client ?? client).post<CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses, CreateTextMentionBatchRouteApiV1TextMentionsBatchPostErrors, ThrowOnError>({
@@ -286,6 +358,15 @@ export const createTextMentionBatchRouteApiV1TextMentionsBatchPost = <ThrowOnErr
 });
 
 /**
+ * Delete Text Mention Route
+ */
+export const deleteTextMentionRouteApiV1TextMentionsMentionIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/text-mentions/{mention_id}',
+    ...options
+});
+
+/**
  * Get Text Mention Route
  */
 export const getTextMentionRouteApiV1TextMentionsMentionIdGet = <ThrowOnError extends boolean = false>(options: Options<GetTextMentionRouteApiV1TextMentionsMentionIdGetData, ThrowOnError>) => (options.client ?? client).get<GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses, GetTextMentionRouteApiV1TextMentionsMentionIdGetErrors, ThrowOnError>({
@@ -296,9 +377,9 @@ export const getTextMentionRouteApiV1TextMentionsMentionIdGet = <ThrowOnError ex
 });
 
 /**
- * Reassign Text Mention Entity Route
+ * Patch Text Mention Route
  */
-export const reassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatch = <ThrowOnError extends boolean = false>(options: Options<ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchData, ThrowOnError>) => (options.client ?? client).patch<ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses, ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors, ThrowOnError>({
+export const patchTextMentionRouteApiV1TextMentionsMentionIdPatch = <ThrowOnError extends boolean = false>(options: Options<PatchTextMentionRouteApiV1TextMentionsMentionIdPatchData, ThrowOnError>) => (options.client ?? client).patch<PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses, PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors, ThrowOnError>({
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/text-mentions/{mention_id}',
@@ -322,7 +403,7 @@ export const listSourcesRouteApiV1SourcesGet = <ThrowOnError extends boolean = f
 /**
  * Lookup Source Route
  *
- * Fetch one source by its ``url``.
+ * Fetch one source by its globally unique URL.
  */
 export const lookupSourceRouteApiV1SourcesLookupGet = <ThrowOnError extends boolean = false>(options: Options<LookupSourceRouteApiV1SourcesLookupGetData, ThrowOnError>) => (options.client ?? client).get<LookupSourceRouteApiV1SourcesLookupGetResponses, LookupSourceRouteApiV1SourcesLookupGetErrors, ThrowOnError>({
     responseType: 'json',
@@ -618,6 +699,29 @@ export const listUsersRouteApiV1UsersGet = <ThrowOnError extends boolean = false
     responseType: 'json',
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/users',
+    ...options
+});
+
+/**
+ * Delete User Batch Route
+ */
+export const deleteUserBatchRouteApiV1UsersBatchDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteUserBatchRouteApiV1UsersBatchDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteUserBatchRouteApiV1UsersBatchDeleteResponses, DeleteUserBatchRouteApiV1UsersBatchDeleteErrors, ThrowOnError>({
+    responseType: 'json',
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/users:batch',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Delete User Route
+ */
+export const deleteUserRouteApiV1UsersUserIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteUserRouteApiV1UsersUserIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteUserRouteApiV1UsersUserIdDeleteResponses, DeleteUserRouteApiV1UsersUserIdDeleteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/users/{user_id}',
     ...options
 });
 

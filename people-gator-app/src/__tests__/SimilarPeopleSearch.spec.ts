@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { EntityResponse, SearchEntitiesResult } from '@/client'
+import type { EntityResponse, FoundEntity } from '@/client'
 import {
   candidateEntities,
   candidateSearchParams,
@@ -9,9 +9,18 @@ import {
 
 describe('similar-people search modes', () => {
   it('sends a face query only with no text, and switches to pure text when typing', () => {
-    expect(candidateSearchParams('face-1', '')).toEqual({ q_face_id: ['face-1'], limit: 50 })
-    expect(candidateSearchParams('face-1', '  Novak  ')).toEqual({ q: ['Novak'], limit: 50 })
-    expect(candidateSearchParams(null, 'Novak')).toEqual({ q: ['Novak'], limit: 50 })
+    expect(candidateSearchParams('face-1', '')).toEqual({
+      'query.face_id': ['face-1'],
+      limit: 50,
+    })
+    expect(candidateSearchParams('face-1', '  Novak  ')).toEqual({
+      'query.text': ['Novak'],
+      limit: 50,
+    })
+    expect(candidateSearchParams(null, 'Novak')).toEqual({
+      'query.text': ['Novak'],
+      limit: 50,
+    })
     expect(candidateSearchParams(null, '  ')).toBeUndefined()
   })
 
@@ -22,7 +31,6 @@ describe('similar-people search modes', () => {
         [
           { entity_id: 'on-face', entity_type: 'person' },
           { entity_id: 'on-mention', entity_type: 'person' },
-        { entity_id: 'not-person', entity_type: 'place' },
         ],
       ),
     ).toEqual(['on-face', 'on-mention'])
@@ -31,9 +39,24 @@ describe('similar-people search modes', () => {
   it('retains page identities without text, but uses only server matches with text', () => {
     const onPage = [{ entity_id: 'on-page', name: 'Anna' }] as EntityResponse[]
     const matches = [
-      { entity_id: 'in-database', name: 'Johanna', aliases: ['Novak'], matching_score: 0.7 },
-      { entity_id: 'on-page', name: 'Anna', matching_score: 0.6 },
-    ] as SearchEntitiesResult[]
+      {
+        entity_id: 'in-database',
+        entity_type: 'person',
+        name: 'Johanna',
+        aliases: ['Novak'],
+        score: 0.7,
+        text_score: 0.7,
+        user_id: 'user-1',
+      },
+      {
+        entity_id: 'on-page',
+        entity_type: 'person',
+        name: 'Anna',
+        score: 0.6,
+        text_score: 0.6,
+        user_id: 'user-1',
+      },
+    ] as FoundEntity[]
 
     expect(candidateEntities(onPage, matches, '').map((person) => person.entity_id)).toEqual([
       'in-database',

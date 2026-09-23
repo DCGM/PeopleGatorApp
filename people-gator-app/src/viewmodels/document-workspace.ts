@@ -1,11 +1,8 @@
-import { useQueries, useQuery } from '@tanstack/vue-query'
+import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
-  getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet,
-  getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet,
   type BoundingBox,
-  type EntityResponse,
   type EntityType,
   type PageLayoutModel,
   type TextMentionSpanModel,
@@ -17,18 +14,15 @@ import type {
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
-import { responseData } from '@/query/api'
-import { fetchEntity, useCreateEntityMutation } from '@/query/entities'
-import { fetchFaces, fetchFaceAlignedCrop, useAssignFaceMutation } from '@/query/faces'
+import { useCreateEntityMutation, useEntityListQuery } from '@/query/entities'
+import { fetchFaceAlignedCrop, useAssignFaceMutation, useFaceListQuery } from '@/query/faces'
 import { usePageImageQuery, usePageLookupQuery } from '@/query/media'
+import { usePageLayoutQuery, usePageMentionSpansQuery } from '@/query/pages'
 import { useObjectUrl, useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
-import { fetchEntitySearch } from '@/query/search'
-import {
-  candidateEntities,
-  candidateSearchParams,
-  currentPagePersonIds,
-} from '@/viewmodels/similar-people'
+import { useEntitySearchQuery, type EntitySearchRecord } from '@/query/search'
+import { useTextMentionListQuery } from '@/query/text-mentions'
+import { candidateSearchParams } from '@/viewmodels/similar-people'
 
 function percentage(value: number) {
   return Math.round((value <= 1 ? value * 100 : value) * 10) / 10
@@ -127,45 +121,40 @@ export function useDocumentWorkspace(
   candidateTerm: MaybeRefOrGetter<string>,
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
-  const sourceId = computed(() => pageQuery.data.value?.page_source_id ?? '')
-
-  const layoutQuery = useQuery({
-    queryKey: computed(() => queryKeys.pages.layout(sourceId.value)),
-    queryFn: ({ signal }) =>
-      responseData(
-        getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet({
-          path: { page_source_id: sourceId.value },
-          signal,
-          throwOnError: true,
-        }),
-      ),
-    enabled: computed(() => Boolean(sourceId.value)),
-  })
-  const spanQuery = useQuery({
-    queryKey: computed(() => queryKeys.pages.mentionSpans(sourceId.value)),
-    queryFn: ({ signal }) =>
-      responseData(
-        getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet({
-          path: { page_source_id: sourceId.value },
-          signal,
-          throwOnError: true,
-        }),
-      ),
-    enabled: computed(() => Boolean(sourceId.value)),
-  })
-  const faceQuery = useQuery({
-    queryKey: computed(() => queryKeys.faces.list({ source_id: sourceId.value, limit: 100 })),
-    queryFn: ({ signal }) => fetchFaces({ source_id: sourceId.value, limit: 100 }, signal),
-    enabled: computed(() => Boolean(sourceId.value)),
-  })
+  const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
+  const hasPage = computed(() => Boolean(sourceId.value))
+  const layoutQuery = usePageLayoutQuery(sourceId)
+  const spanQuery = usePageMentionSpansQuery(sourceId)
+  const faceQuery = useFaceListQuery(
+    computed(() => ({ 'filter.source_id': [sourceId.value], limit: 100 })),
+    hasPage,
+  )
+  const faceRecords = computed(() =>
+    (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
+  const onPageEntityQuery = useEntityListQuery(
+    computed(() => ({
+      'filter.source_id': [sourceId.value],
+      limit: 100,
+    })),
+    hasPage,
+  )
+  const onPageEntityRecords = computed(() =>
+    (onPageEntityQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
+  const mentionQuery = useTextMentionListQuery(
+    computed(() => ({ 'filter.source_id': [sourceId.value], limit: 100 })),
+    hasPage,
+  )
+  const mentions = computed(() =>
+    (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
   const pageImageQuery = usePageImageQuery(sourceId, 1024)
   const pageImageUrl = useObjectUrl(computed(() => pageImageQuery.data.value))
 
   // Aligned face crops (ArcFace-aligned, 1:1) are fetched per detection and
   // used as the face portraits instead of the full page image.
-  const faceIds = computed(() =>
-    (faceQuery.data.value?.items ?? []).map((face) => face.detection_id),
-  )
+  const faceIds = computed(() => faceRecords.value.map((face) => face.detection_id))
   const alignedCropQueries = useQueries({
     queries: computed(() =>
       faceIds.value.map((detectionId) => ({
@@ -187,33 +176,14 @@ export function useDocumentWorkspace(
   })
   const alignedCropUrls = useObjectUrlMap(alignedCropBlobs)
 
-  // The page's faces and OCR spans both carry the page source_id. These are
-  // authoritative for the "On this page" filter; entity search results do not
-  // expose source membership and the search endpoint ignores source_id today.
-  const onPageEntityIds = computed(() =>
-    currentPagePersonIds(faceQuery.data.value?.items ?? [], spanQuery.data.value ?? []),
-  )
-  const onPageEntityQueries = useQueries({
-    queries: computed(() =>
-      onPageEntityIds.value.map((entityId) => ({
-        queryKey: queryKeys.entities.detail(entityId),
-        queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntity(entityId, signal),
-        retry: false,
-      })),
-    ),
-  })
-  const onPageEntities = computed(() => {
-    const result = new Map<string, EntityResponse>()
-    onPageEntityIds.value.forEach((entityId, index) => {
-      const entity = onPageEntityQueries.value[index]?.data
-      if (entity) result.set(entityId, entity)
-    })
-    return result
-  })
+  // Source-filtered entities are authoritative for the "On this page" state;
+  // ranked entity search results do not expose source membership.
 
   const faces = computed<Face[]>(() =>
-    (faceQuery.data.value?.items ?? []).map((face, index) => {
-      const person = face.entity_id ? onPageEntities.value.get(face.entity_id) : undefined
+    faceRecords.value.map((face, index) => {
+      const person = face.entity_id
+        ? onPageEntityRecords.value.find((entity) => entity.entity_id === face.entity_id)
+        : undefined
       return {
         id: face.detection_id,
         personId: face.entity_id ?? null,
@@ -237,48 +207,32 @@ export function useDocumentWorkspace(
   const searchParams = computed(() =>
     candidateSearchParams(toValue(selectedFaceId), textTerm.value),
   )
-  const candidateSearchQuery = useQuery({
-    queryKey: computed(() => queryKeys.search.entities(searchParams.value)),
-    queryFn: ({ signal }) => fetchEntitySearch(searchParams.value!, signal),
-    enabled: computed(() => Boolean(searchParams.value)),
-    // Reuse the face result when switching between face and text modes.
-    // Assignment mutations invalidate search queries when the data changes.
-    staleTime: Number.POSITIVE_INFINITY,
-  })
-  const candidateDetailIds = computed(() =>
-    (candidateSearchQuery.data.value?.items ?? []).map((entity) => entity.entity_id),
+  const isSearchMode = computed(() => Boolean(searchParams.value))
+  const candidateSearchQuery = useEntitySearchQuery(
+    computed(() => searchParams.value ?? { limit: 0 }),
+    isSearchMode,
   )
-  const candidateDetailQueries = useQueries({
-    queries: computed(() =>
-      candidateDetailIds.value.map((entityId) => ({
-        queryKey: queryKeys.entities.detail(entityId),
-        queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntity(entityId, signal),
-        retry: false,
-      })),
-    ),
-  })
-  const candidateDetails = computed(() => {
-    const result = new Map<string, EntityResponse>()
-    candidateDetailIds.value.forEach((entityId, index) => {
-      const entity = candidateDetailQueries.value[index]?.data
-      if (entity) result.set(entityId, entity)
-    })
-    return result
-  })
+  const candidateMatches = computed(() =>
+    (candidateSearchQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
+  const onPageEntities = computed(
+    () => new Map(onPageEntityRecords.value.map((entity) => [entity.entity_id, entity])),
+  )
+  const candidateRecords = computed<EntitySearchRecord[]>(() =>
+    isSearchMode.value ? candidateMatches.value : onPageEntityRecords.value,
+  )
 
   const similarPeople = computed<SimilarPersonCandidate[]>(() => {
-    const pageIds = new Set(onPageEntityIds.value)
-    const matches = candidateSearchQuery.data.value?.items ?? []
+    const pageIds = new Set(onPageEntities.value.keys())
+    const matches = candidateMatches.value
     const matchingScores = new Map(
-      matches.map((entity) => [entity.entity_id, entity.matching_score]),
-    )
-    const candidates = candidateEntities(
-      [...onPageEntities.value.values()],
-      matches,
-      textTerm.value,
+      matches.map((entity) => [
+        entity.entity_id,
+        textTerm.value ? (entity.text_score ?? entity.score) : (entity.face_score ?? entity.score),
+      ]),
     )
     const lines = transcription.value
-    return candidates.map((entity) => {
+    return candidateRecords.value.map((entity) => {
       const entityLineIndex = lines.findIndex((line) =>
         line.entities?.some((span) => span.entity_id === entity.entity_id),
       )
@@ -286,12 +240,9 @@ export function useDocumentWorkspace(
         entityLineIndex >= 0
           ? lines[entityLineIndex]?.entities?.find((span) => span.entity_id === entity.entity_id)
           : undefined
-      const nerMentions = lines.reduce(
-        (count, line) =>
-          count +
-          (line.entities?.filter((span) => span.entity_id === entity.entity_id).length ?? 0),
-        0,
-      )
+      const nerMentions = mentions.value.filter(
+        (mention) => mention.entity_id === entity.entity_id,
+      ).length
       const detections = faces.value.filter((face) => face.personId === entity.entity_id).length
       const matchingScore = matchingScores.get(entity.entity_id)
       const normalizedFaceSimilarity =
@@ -300,8 +251,6 @@ export function useDocumentWorkspace(
           : matchingScore > 1
             ? matchingScore / 100
             : matchingScore
-      const details =
-        candidateDetails.value.get(entity.entity_id) ?? onPageEntities.value.get(entity.entity_id)
       return {
         id: entity.entity_id,
         name: entity.name || 'Unnamed person',
@@ -325,14 +274,31 @@ export function useDocumentWorkspace(
           ...(nerMentions > 0 ? ([{ type: 'scan-text' }] as const) : []),
           ...(detections > 0 ? ([{ type: 'scan-face' }] as const) : []),
         ],
-        wikidataId: details?.wikidata_id || undefined,
-        nlcrAuthorityId: details?.nlcr_authority_id || undefined,
+        wikidataId: entity.wikidata_id || undefined,
+        nlcrAuthorityId: entity.nlcr_authority_id || undefined,
         faceId: faces.value.find((face) => face.personId === entity.entity_id)?.id,
         entityKey: entitySpan ? transcriptionEntityKey(entitySpan) : undefined,
         entityLineIndex: entityLineIndex >= 0 ? entityLineIndex : undefined,
       }
     })
   })
+
+  const hasNextPage = computed(() =>
+    isSearchMode.value
+      ? candidateSearchQuery.hasNextPage.value
+      : onPageEntityQuery.hasNextPage.value,
+  )
+  const isFetchingNextPage = computed(() =>
+    isSearchMode.value
+      ? candidateSearchQuery.isFetchingNextPage.value
+      : onPageEntityQuery.isFetchingNextPage.value,
+  )
+
+  function loadMore() {
+    return isSearchMode.value
+      ? candidateSearchQuery.fetchNextPage()
+      : onPageEntityQuery.fetchNextPage()
+  }
 
   const createEntity = useCreateEntityMutation()
   const assignFaceMutation = useAssignFaceMutation()
@@ -357,12 +323,26 @@ export function useDocumentWorkspace(
     assignmentStatus: assignFaceMutation.status,
     createAndAssign,
     error: computed(
-      () => pageQuery.error.value || layoutQuery.error.value || faceQuery.error.value,
+      () =>
+        pageQuery.error.value ||
+        layoutQuery.error.value ||
+        spanQuery.error.value ||
+        faceQuery.error.value ||
+        mentionQuery.error.value ||
+        (isSearchMode.value ? candidateSearchQuery.error.value : onPageEntityQuery.error.value),
     ),
     faces,
+    hasNextPage,
+    isFetchingNextPage,
     isLoading: computed(
-      () => pageQuery.isPending.value || layoutQuery.isPending.value || faceQuery.isPending.value,
+      () =>
+        pageQuery.isPending.value ||
+        layoutQuery.isPending.value ||
+        spanQuery.isPending.value ||
+        faceQuery.isPending.value ||
+        mentionQuery.isPending.value,
     ),
+    loadMore,
     page: pageQuery.data,
     pageDimensions: computed(() => ({
       height: layoutQuery.data.value?.page_size[0] ?? 297,
@@ -372,8 +352,8 @@ export function useDocumentWorkspace(
     pageImageUrl,
     similarPeopleLoading: computed(
       () =>
-        (Boolean(searchParams.value) && candidateSearchQuery.isPending.value) ||
-        (!textTerm.value && onPageEntityQueries.value.some((query) => query.isPending)),
+        (isSearchMode.value && candidateSearchQuery.isPending.value) ||
+        (!isSearchMode.value && onPageEntityQuery.isPending.value),
     ),
     similarPeople,
     transcription,

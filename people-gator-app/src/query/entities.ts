@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -15,6 +15,7 @@ import {
   type ListEntitiesRouteApiV1EntitiesGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
+import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type EntityListParams = NonNullable<ListEntitiesRouteApiV1EntitiesGetData['query']>
@@ -35,10 +36,17 @@ export function fetchEntity(entityId: string, signal?: AbortSignal) {
   )
 }
 
-export function useEntityListQuery(params?: MaybeRefOrGetter<EntityListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.entities.list(toValue(params))),
-    queryFn: ({ signal }) => fetchEntities(toValue(params), signal),
+export function useEntityListQuery(
+  params?: MaybeRefOrGetter<EntityListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.entities.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) =>
+      fetchEntities(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 

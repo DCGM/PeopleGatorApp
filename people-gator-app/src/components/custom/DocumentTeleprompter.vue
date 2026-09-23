@@ -34,14 +34,10 @@ const emit = defineEmits<{
 
 const entityClasses = {
   person: 'border-b-2 border-secondary/60 text-secondary',
-  place: 'border-b-2 border-accent/60 text-accent',
-  date: 'border-b border-foreground/40 text-foreground',
 } satisfies Record<EntityType, string>
 
 const entityLabels = {
   person: 'Person',
-  place: 'Place',
-  date: 'Date',
 } satisfies Record<EntityType, string>
 
 const hoveredEntityKey = ref<string | null>(null)

@@ -45,7 +45,10 @@ const {
   createAndAssign,
   error,
   faces,
+  hasNextPage,
+  isFetchingNextPage,
   isLoading,
+  loadMore,
   pageDimensions,
   pageImageLoading,
   pageImageUrl,
@@ -80,7 +83,6 @@ const translationOptions = computed<readonly ('off' | Language)[]>(() => [
   'cs',
   'en',
   'de',
-  'fr',
 ])
 const selectedLineText = computed(() => transcription.value[selectedLineIndex.value]?.text ?? '')
 const translationQuery = useTranslationQuery(
@@ -406,9 +408,12 @@ onBeforeUnmount(() => {
       :loading="
         isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
       "
+      :has-next-page="hasNextPage"
+      :is-fetching-next-page="isFetchingNextPage"
       :selected-face="selectedFace ?? null"
       :viewed-person-id="selectedPersonId"
       :assignment-pending="assignmentStatus === 'pending'"
+      @load-more="loadMore()"
       @preview="previewSimilarPerson"
       @assign="assignSimilarPerson"
       @create="createSimilarPerson"

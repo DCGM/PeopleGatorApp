@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -6,11 +6,12 @@ import {
   createTextMentionBatchRouteApiV1TextMentionsBatchPost,
   getTextMentionRouteApiV1TextMentionsMentionIdGet,
   listTextMentionsRouteApiV1TextMentionsGet,
-  reassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatch,
+  patchTextMentionRouteApiV1TextMentionsMentionIdPatch,
   type ListTextMentionsRouteApiV1TextMentionsGetData,
   type TextMentionCreateRequest,
 } from '@/client'
 import { responseData } from '@/query/api'
+import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type TextMentionListParams = NonNullable<
@@ -25,10 +26,15 @@ export function fetchTextMentions(params?: TextMentionListParams, signal?: Abort
 
 export function useTextMentionListQuery(
   params?: MaybeRefOrGetter<TextMentionListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
 ) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.textMentions.list(toValue(params))),
-    queryFn: ({ signal }) => fetchTextMentions(toValue(params), signal),
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.textMentions.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) =>
+      fetchTextMentions(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 
@@ -86,7 +92,7 @@ export function useReassignTextMentionMutation() {
   return useMutation({
     mutationFn: ({ mentionId, entityId }: { mentionId: string; entityId: string }) =>
       responseData(
-        reassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatch({
+        patchTextMentionRouteApiV1TextMentionsMentionIdPatch({
           path: { mention_id: mentionId },
           body: { entity_id: entityId },
           throwOnError: true,

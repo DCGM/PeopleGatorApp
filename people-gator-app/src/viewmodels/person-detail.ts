@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from '@tanstack/vue-query'
+import { useQueries } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 
 import type { PageResponse } from '@/client'
@@ -9,11 +9,11 @@ import type {
   PersonProfile,
 } from '@/viewmodels/person-detail.types'
 import { useEntityQuery, usePatchEntityMutation } from '@/query/entities'
-import { fetchFaceAlignedCrop, fetchFaces } from '@/query/faces'
+import { fetchFaceAlignedCrop, useFaceListQuery } from '@/query/faces'
 import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
-import { fetchTextMentions } from '@/query/text-mentions'
+import { useTextMentionListQuery } from '@/query/text-mentions'
 
 function percentage(value: number) {
   return Math.round(value <= 1 ? value * 100 : value)
@@ -25,26 +25,22 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const entityQuery = useEntityQuery(personId)
   const patchEntity = usePatchEntityMutation()
 
-  const faceQuery = useQuery({
-    queryKey: computed(() => queryKeys.faces.list({ entity_id: toValue(personId), limit: 100 })),
-    queryFn: ({ signal }) => fetchFaces({ entity_id: toValue(personId), limit: 100 }, signal),
-    enabled: computed(() => Boolean(toValue(personId))),
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: PERSON_DETAIL_GC_TIME,
-  })
-  const mentionQuery = useQuery({
-    queryKey: computed(() =>
-      queryKeys.textMentions.list({ entity_id: toValue(personId), limit: 100 }),
-    ),
-    queryFn: ({ signal }) =>
-      fetchTextMentions({ entity_id: toValue(personId), limit: 100 }, signal),
-    enabled: computed(() => Boolean(toValue(personId))),
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: PERSON_DETAIL_GC_TIME,
-  })
+  const hasPerson = computed(() => Boolean(toValue(personId)))
+  const faceQuery = useFaceListQuery(
+    computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })),
+    hasPerson,
+  )
+  const mentionQuery = useTextMentionListQuery(
+    computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })),
+    hasPerson,
+  )
 
-  const faceRecords = computed(() => faceQuery.data.value?.items ?? [])
-  const mentionRecords = computed(() => mentionQuery.data.value?.items ?? [])
+  const faceRecords = computed(() =>
+    (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
+  const mentionRecords = computed(() =>
+    (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
   const sourceIds = computed(() => [
     ...new Set([
       ...faceRecords.value.map((face) => face.source_id),

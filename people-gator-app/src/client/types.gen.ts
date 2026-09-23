@@ -5,13 +5,6 @@ export type ClientOptions = {
 };
 
 /**
- * AssignmentType
- *
- * Assigned annotation kind used to filter people and sources.
- */
-export type AssignmentType = 'face' | 'text_mention';
-
-/**
  * Body_get_token_token_login_post
  */
 export type BodyGetTokenTokenLoginPost = {
@@ -82,39 +75,20 @@ export type DocumentCreateRequest = {
 };
 
 /**
- * DocumentListResponse
- *
- * A paginated list of documents.
- */
-export type DocumentListResponse = {
-    /**
-     * Items
-     */
-    items: Array<DocumentResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
  * DocumentResponse
  *
  * A document with its archive identity.
  */
 export type DocumentResponse = {
     /**
-     * Document Source Id
+     * Source Id
      */
-    document_source_id: string;
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
     /**
      * Library
      */
@@ -123,60 +97,6 @@ export type DocumentResponse = {
      * Document Id
      */
     document_id: string;
-    /**
-     * Url
-     */
-    url: string;
-};
-
-/**
- * DocumentSearchResult
- *
- * A document search hit resolved to its archive source.
- */
-export type DocumentSearchResult = {
-    /**
-     * Source Id
-     *
-     * Source record for the document.
-     */
-    source_id: string;
-    /**
-     * Document Id
-     *
-     * Archive document identity.
-     */
-    document_id: string;
-    /**
-     * Matching Score
-     *
-     * Fused BM25 relevance score.
-     */
-    matching_score: number;
-};
-
-/**
- * DocumentSearchResultListResponse
- *
- * A paginated list of document search results.
- */
-export type DocumentSearchResultListResponse = {
-    /**
-     * Items
-     */
-    items: Array<DocumentSearchResult>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
 };
 
 /**
@@ -185,52 +105,66 @@ export type DocumentSearchResultListResponse = {
  * Request body for creating a new entity.
  */
 export type EntityCreateRequest = {
-    entity_type?: EntityType | null;
+    /**
+     * The type of the entity. Immutable after creation.
+     */
+    entity_type: EntityType;
     /**
      * Name
+     *
+     * The name of the entity.
      */
-    name?: string | null;
+    name: string;
     /**
      * Description
+     *
+     * A detailed description of the entity.
      */
     description?: string | null;
     /**
      * Short Description
+     *
+     * A brief description of the entity.
      */
     short_description?: string | null;
     /**
      * Aliases
+     *
+     * Alternative names or aliases for the entity.
      */
-    aliases?: Array<string> | null;
+    aliases?: Array<string>;
     /**
      * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
      */
     wikidata_id?: string | null;
     /**
      * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
      */
     nlcr_authority_id?: string | null;
-    /**
-     * Embeddings
-     */
-    embeddings?: Array<EntityEmbeddingInput>;
 };
 
 /**
  * EntityDeleteManyRequest
  *
- * Request body for deleting multiple entities by selector.
+ * Request body for deleting multiple entities by filter criteria.
  */
 export type EntityDeleteManyRequest = {
     /**
-     * Delete All
+     * Filter
+     *
+     * The filter criteria to select entities for deletion.
      */
-    delete_all?: boolean;
-    entity_type?: EntityType | null;
+    filter?: EntityListFilter;
     /**
-     * Entity Ids
+     * Limit
+     *
+     * The maximum number of entities to delete, selected by entity UUID ascending.
      */
-    entity_ids?: Array<string> | null;
+    limit: number;
 };
 
 /**
@@ -240,83 +174,124 @@ export type EntityDeleteManyRequest = {
  */
 export type EntityDeleteManyResponse = {
     /**
-     * Mode
-     */
-    mode: 'all' | 'entity_type' | 'entity_ids';
-    /**
      * Deleted Count
      */
     deleted_count: number;
 };
 
 /**
- * EntityEmbeddingBatchUpdateResponse
- */
-export type EntityEmbeddingBatchUpdateResponse = {
-    /**
-     * Updated Count
-     */
-    updated_count: number;
-};
-
-/**
- * EntityEmbeddingInput
+ * EntityListFilter
  *
- * A model vector for one semantic field of an entity.
+ * Filter criteria for listing entities.
+ * Every field is optional and can be used to narrow down the results.
+ * Filter fields are combined using logical AND.
+ * Lists of criteria in each field are combined using logical OR.
  */
-export type EntityEmbeddingInput = {
-    /**
-     * Model Identifier
-     */
-    model_identifier: string;
-    /**
-     * Vector
-     */
-    vector: Array<number>;
-    /**
-     * Field
-     */
-    field: 'name' | 'description' | 'short_description' | 'fulltext';
-};
-
-/**
- * EntityEmbeddingUpdateRequest
- *
- * Upsert several named vectors for one existing entity.
- */
-export type EntityEmbeddingUpdateRequest = {
+export type EntityListFilter = {
     /**
      * Entity Id
+     *
+     * The unique identifiers of the entities.
      */
-    entity_id: string;
+    entity_id?: Array<string>;
     /**
-     * Embeddings
+     * Entity Type
+     *
+     * The exact type of the entity.
      */
-    embeddings: Array<EntityEmbeddingInput>;
+    entity_type?: Array<EntityType>;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: Array<string>;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: Array<string>;
+    /**
+     * Source Id
+     *
+     * The source identifiers associated with the entity.
+     */
+    source_id?: Array<string>;
+    /**
+     * Detection Id
+     *
+     * The detection identifiers associated with the entity.
+     */
+    detection_id?: Array<string>;
+    /**
+     * Mention Id
+     *
+     * The mention identifiers associated with the entity.
+     */
+    mention_id?: Array<string>;
+    /**
+     * Has Mentions
+     *
+     * Whether the entity has mentions.
+     */
+    has_mentions?: boolean;
+    /**
+     * Has Detections
+     *
+     * Whether the entity has detections.
+     */
+    has_detections?: boolean;
 };
 
 /**
- * EntityListResponse
+ * EntityPatchBatchItem
  *
- * A paginated list of entities.
+ * An item representing a single entity patch operation in a batch.
  */
-export type EntityListResponse = {
+export type EntityPatchBatchItem = {
     /**
-     * Items
+     * Name
+     *
+     * The name of the entity.
      */
-    items: Array<EntityResponse>;
+    name?: string;
     /**
-     * Total Count
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
      */
-    total_count: number;
+    aliases?: Array<string>;
     /**
-     * Limit
+     * Description
+     *
+     * A detailed description of the entity.
      */
-    limit: number;
+    description?: string | null;
     /**
-     * After Id
+     * Short Description
+     *
+     * A brief description of the entity.
      */
-    after_id?: string | null;
+    short_description?: string | null;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity to be patched.
+     */
+    entity_id: string;
 };
 
 /**
@@ -327,26 +302,38 @@ export type EntityListResponse = {
 export type EntityPatchRequest = {
     /**
      * Name
+     *
+     * The name of the entity.
      */
-    name?: string | null;
+    name?: string;
     /**
      * Aliases
+     *
+     * Alternative names or aliases for the entity.
      */
-    aliases?: Array<string> | null;
+    aliases?: Array<string>;
     /**
      * Description
+     *
+     * A detailed description of the entity.
      */
     description?: string | null;
     /**
      * Short Description
+     *
+     * A brief description of the entity.
      */
     short_description?: string | null;
     /**
      * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
      */
     wikidata_id?: string | null;
     /**
      * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
      */
     nlcr_authority_id?: string | null;
 };
@@ -359,35 +346,54 @@ export type EntityPatchRequest = {
 export type EntityResponse = {
     /**
      * Entity Id
+     *
+     * The unique identifier of the entity.
      */
     entity_id: string;
-    entity_type: EntityType | null;
+    /**
+     * The type of the entity.
+     */
+    entity_type: EntityType;
     /**
      * Name
+     *
+     * The name of the entity.
      */
-    name: string | null;
+    name: string;
     /**
      * Description
+     *
+     * A detailed description of the entity.
      */
-    description: string | null;
+    description?: string | null;
     /**
      * Short Description
+     *
+     * A brief description of the entity.
      */
-    short_description: string | null;
+    short_description?: string | null;
     /**
      * Aliases
+     *
+     * Alternative names or aliases for the entity.
      */
-    aliases: Array<string> | null;
+    aliases?: Array<string> | null;
     /**
      * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
      */
-    wikidata_id: string | null;
+    wikidata_id?: string | null;
     /**
      * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
      */
-    nlcr_authority_id: string | null;
+    nlcr_authority_id?: string | null;
     /**
      * User Id
+     *
+     * The unique identifier of the user who created or owns the entity.
      */
     user_id: string;
 };
@@ -397,7 +403,7 @@ export type EntityResponse = {
  *
  * Entity type discriminator for normalized identity classes.
  */
-export type EntityType = 'person' | 'place' | 'date';
+export type EntityType = 'person';
 
 /**
  * FaceCreateRequest
@@ -407,121 +413,137 @@ export type EntityType = 'person' | 'place' | 'date';
 export type FaceCreateRequest = {
     /**
      * Identifier
+     *
+     * An optional identifier for the face detection.
      */
-    identifier?: string | null;
+    identifier?: string;
     /**
-     * Source Id
+     * The bounding box of the face detection.
      */
-    source_id?: string | null;
-    source?: SourceDescriptorRequest | null;
     bounding_box: BoundingBox;
     /**
      * Keypoints
+     *
+     * The keypoints of the face detection. Must contain exactly 5 keypoints.
      */
-    keypoints: Array<FaceKeypoint>;
-    /**
-     * Embeddings
-     */
-    embeddings?: Array<ModelEmbedding>;
-    /**
-     * Entity Id
-     */
-    entity_id?: string | null;
+    keypoints: [
+        Keypoint,
+        Keypoint,
+        Keypoint,
+        Keypoint,
+        Keypoint
+    ];
     /**
      * Confidence
+     *
+     * The confidence score of the face detection.
      */
     confidence: number;
-};
-
-/**
- * FaceEmbeddingBatchUpdateResponse
- *
- * Summary of a face embedding backfill batch.
- */
-export type FaceEmbeddingBatchUpdateResponse = {
-    /**
-     * Updated Count
-     */
-    updated_count: number;
-};
-
-/**
- * FaceEmbeddingModel
- *
- * Known face embedding models with named vectors in the Face collection.
- */
-export type FaceEmbeddingModel = 'vit_small_patch8_gap_112.cosface_ms1mv3';
-
-/**
- * FaceEmbeddingUpdateRequest
- *
- * Upsert several model vectors for one existing face detection.
- */
-export type FaceEmbeddingUpdateRequest = {
-    /**
-     * Detection Id
-     */
-    detection_id: string;
     /**
      * Embeddings
+     *
+     * The embeddings of the face detection.
      */
-    embeddings: Array<ModelEmbedding>;
-};
-
-/**
- * FaceEntityPatchRequest
- *
- * Patch body for assigning a face, or unassigning it with a null entity ID.
- */
-export type FaceEntityPatchRequest = {
+    embeddings?: Array<ModelEmbeddingFaceModelStub>;
+    /**
+     * Source Id
+     *
+     * The unique identifier of the source from which the face was detected. Mandatory.
+     */
+    source_id: string;
     /**
      * Entity Id
+     *
+     * The unique identifier of the entity associated with the face detection.
      */
-    entity_id: string | null;
+    entity_id?: string;
 };
 
 /**
- * FaceKeypoint
- *
- * One keypoint of a face detection.
+ * FaceModelListResponse
  */
-export type FaceKeypoint = {
-    /**
-     * Type
-     */
-    type: string;
-    /**
-     * X
-     */
-    x: number;
-    /**
-     * Y
-     */
-    y: number;
-};
-
-/**
- * FaceListResponse
- *
- * A paginated list of face detections.
- */
-export type FaceListResponse = {
+export type FaceModelListResponse = {
     /**
      * Items
      */
-    items: Array<FaceResponse>;
+    items: Array<FaceModelResponse>;
+};
+
+/**
+ * FaceModelRegisterRequest
+ *
+ * Register one model before storing or searching its face vectors.
+ */
+export type FaceModelRegisterRequest = {
     /**
-     * Total Count
+     * Stable identifier stored with each embedding.
      */
-    total_count: number;
+    model_stub: FaceModelStub;
     /**
-     * Limit
+     * Embedding Dim
+     *
+     * Number of elements in every vector produced by the model.
      */
-    limit: number;
+    embedding_dim: number;
+};
+
+/**
+ * FaceModelResponse
+ */
+export type FaceModelResponse = {
+    model_stub: FaceModelStub;
     /**
-     * After Id
+     * Embedding Dim
      */
-    after_id?: string | null;
+    embedding_dim: number;
+};
+
+export type FaceModelStub = string;
+
+/**
+ * FacePatchBatchItem
+ *
+ * Patch body for assigning a face, or unassigning it with a null entity ID in a batch.
+ */
+export type FacePatchBatchItem = {
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified.
+     */
+    entity_id?: string | null;
+    /**
+     * Embeddings
+     *
+     * When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op.
+     */
+    embeddings?: Array<ModelEmbeddingFaceModelStub>;
+    /**
+     * Detection Id
+     *
+     * The unique identifier of the face detection.
+     */
+    detection_id: string;
+};
+
+/**
+ * FacePatchRequest
+ *
+ * Patch body for assigning a face, or unassigning it with a null entity ID.
+ */
+export type FacePatchRequest = {
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified.
+     */
+    entity_id?: string | null;
+    /**
+     * Embeddings
+     *
+     * When provided, upsert each named model vector; unmentioned vectors remain unchanged. An empty list is a no-op.
+     */
+    embeddings?: Array<ModelEmbeddingFaceModelStub>;
 };
 
 /**
@@ -532,93 +554,610 @@ export type FaceListResponse = {
 export type FaceResponse = {
     /**
      * Detection Id
+     *
+     * The unique identifier of the face detection.
      */
     detection_id: string;
     /**
      * Identifier
+     *
+     * An optional identifier for the face detection.
      */
     identifier?: string | null;
     /**
      * Source Id
+     *
+     * The unique identifier of the source from which the face was detected.
      */
     source_id: string;
+    /**
+     * The bounding box of the face detection.
+     */
     bounding_box: BoundingBox;
     /**
      * Keypoints
+     *
+     * The keypoints of the face detection. Must contain exactly 5 keypoints.
      */
-    keypoints: Array<FaceKeypoint>;
+    keypoints: [
+        Keypoint,
+        Keypoint,
+        Keypoint,
+        Keypoint,
+        Keypoint
+    ];
     /**
      * User Id
+     *
+     * The unique identifier of the user who created or owns the face detection.
      */
     user_id: string;
     /**
      * Entity Id
+     *
+     * The unique identifier of the entity associated with the face detection.
      */
     entity_id?: string | null;
     /**
      * Confidence
+     *
+     * The confidence score of the face detection.
      */
     confidence: number;
 };
 
 /**
- * FaceSearchResult
+ * FoundDocument
  *
- * A single face detection matched against the supplied query faces.
+ * A single result from a nearest-neighbour search over a document collection.
  */
-export type FaceSearchResult = {
+export type FoundDocument = {
     /**
-     * Face Id
+     * Text Score
      *
-     * The matched face detection ID.
+     * Aggregated text relevance, or None when text was not requested.
      */
-    face_id: string;
+    text_score?: number | null;
+    /**
+     * Face Score
+     *
+     * Aggregated cosine similarity, or None when faces were not requested.
+     */
+    face_score?: number | null;
+    /**
+     * Score
+     *
+     * Final reciprocal-rank-fusion score. Higher values rank first.
+     */
+    score: number;
     /**
      * Source Id
-     *
-     * Source containing the matched face.
      */
-    source_id?: string | null;
+    source_id: string;
+    source_type: SourceKind;
     /**
-     * Entity Id
-     *
-     * Entity the matched face is assigned to.
+     * Url
      */
-    entity_id?: string | null;
+    url: string;
     /**
-     * Bounding box of the matched face.
+     * Library
      */
-    bounding_box?: BoundingBox | null;
+    library: string;
     /**
-     * Matching Score
-     *
-     * Cosine similarity to the closest supplied query face.
+     * Document Id
      */
-    matching_score: number;
+    document_id: string;
 };
 
 /**
- * FaceSearchResultListResponse
+ * FoundEntity
  *
- * A paginated list of face similarity results.
+ * A single result from a nearest-neighbour search over an annotation collection.
  */
-export type FaceSearchResultListResponse = {
+export type FoundEntity = {
+    /**
+     * Text Score
+     *
+     * Aggregated text relevance, or None when text was not requested.
+     */
+    text_score?: number | null;
+    /**
+     * Face Score
+     *
+     * Aggregated cosine similarity, or None when faces were not requested.
+     */
+    face_score?: number | null;
+    /**
+     * Score
+     *
+     * Final reciprocal-rank-fusion score. Higher values rank first.
+     */
+    score: number;
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity.
+     */
+    entity_id: string;
+    /**
+     * The type of the entity.
+     */
+    entity_type: EntityType;
+    /**
+     * Name
+     *
+     * The name of the entity.
+     */
+    name: string;
+    /**
+     * Description
+     *
+     * A detailed description of the entity.
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     *
+     * A brief description of the entity.
+     */
+    short_description?: string | null;
+    /**
+     * Aliases
+     *
+     * Alternative names or aliases for the entity.
+     */
+    aliases?: Array<string> | null;
+    /**
+     * Wikidata Id
+     *
+     * The Wikidata identifier for the entity.
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     *
+     * The NLCR authority identifier for the entity.
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * User Id
+     *
+     * The unique identifier of the user who created or owns the entity.
+     */
+    user_id: string;
+};
+
+/**
+ * FoundFace
+ *
+ * A single result from a nearest-neighbour search over a face collection.
+ */
+export type FoundFace = {
+    /**
+     * Text Score
+     *
+     * Aggregated text relevance, or None when text was not requested.
+     */
+    text_score?: number | null;
+    /**
+     * Face Score
+     *
+     * Aggregated cosine similarity, or None when faces were not requested.
+     */
+    face_score?: number | null;
+    /**
+     * Score
+     *
+     * Final reciprocal-rank-fusion score. Higher values rank first.
+     */
+    score: number;
+    /**
+     * Detection Id
+     *
+     * The unique identifier of the face detection.
+     */
+    detection_id: string;
+    /**
+     * Identifier
+     *
+     * An optional identifier for the face detection.
+     */
+    identifier?: string | null;
+    /**
+     * Source Id
+     *
+     * The unique identifier of the source from which the face was detected.
+     */
+    source_id: string;
+    /**
+     * The bounding box of the face detection.
+     */
+    bounding_box: BoundingBox;
+    /**
+     * Keypoints
+     *
+     * The keypoints of the face detection. Must contain exactly 5 keypoints.
+     */
+    keypoints: [
+        Keypoint,
+        Keypoint,
+        Keypoint,
+        Keypoint,
+        Keypoint
+    ];
+    /**
+     * User Id
+     *
+     * The unique identifier of the user who created or owns the face detection.
+     */
+    user_id: string;
+    /**
+     * Entity Id
+     *
+     * The unique identifier of the entity associated with the face detection.
+     */
+    entity_id?: string | null;
+    /**
+     * Confidence
+     *
+     * The confidence score of the face detection.
+     */
+    confidence: number;
+};
+
+/**
+ * FoundPage
+ *
+ * A single result from a nearest-neighbour search over a page collection.
+ */
+export type FoundPage = {
+    /**
+     * Text Score
+     *
+     * Aggregated text relevance, or None when text was not requested.
+     */
+    text_score?: number | null;
+    /**
+     * Face Score
+     *
+     * Aggregated cosine similarity, or None when faces were not requested.
+     */
+    face_score?: number | null;
+    /**
+     * Score
+     *
+     * Final reciprocal-rank-fusion score. Higher values rank first.
+     */
+    score: number;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Library
+     */
+    library: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Page Id
+     */
+    page_id: string;
+};
+
+/**
+ * GenericListResponse[DocumentResponse]
+ */
+export type GenericListResponseDocumentResponse = {
     /**
      * Items
      */
-    items: Array<FaceSearchResult>;
-    /**
-     * Total Count
-     */
-    total_count: number;
+    items: Array<DocumentResponse>;
     /**
      * Limit
+     *
+     * The requested page size, not the number of returned items.
      */
     limit: number;
     /**
-     * After Id
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
      */
-    after_id?: string | null;
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[EntityResponse]
+ */
+export type GenericListResponseEntityResponse = {
+    /**
+     * Items
+     */
+    items: Array<EntityResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[FaceResponse]
+ */
+export type GenericListResponseFaceResponse = {
+    /**
+     * Items
+     */
+    items: Array<FaceResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[FoundDocument]
+ */
+export type GenericListResponseFoundDocument = {
+    /**
+     * Items
+     */
+    items: Array<FoundDocument>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[FoundEntity]
+ */
+export type GenericListResponseFoundEntity = {
+    /**
+     * Items
+     */
+    items: Array<FoundEntity>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[FoundFace]
+ */
+export type GenericListResponseFoundFace = {
+    /**
+     * Items
+     */
+    items: Array<FoundFace>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[FoundPage]
+ */
+export type GenericListResponseFoundPage = {
+    /**
+     * Items
+     */
+    items: Array<FoundPage>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[ImageResponse]
+ */
+export type GenericListResponseImageResponse = {
+    /**
+     * Items
+     */
+    items: Array<ImageResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[PageResponse]
+ */
+export type GenericListResponsePageResponse = {
+    /**
+     * Items
+     */
+    items: Array<PageResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[SourceResponseBase]
+ */
+export type GenericListResponseSourceResponseBase = {
+    /**
+     * Items
+     */
+    items: Array<SourceResponseBase>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[UserResponse]
+ */
+export type GenericListResponseUserResponse = {
+    /**
+     * Items
+     */
+    items: Array<UserResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
 };
 
 /**
@@ -654,39 +1193,16 @@ export type ImageCreateRequest = {
 };
 
 /**
- * ImageListResponse
- *
- * A paginated list of images.
- */
-export type ImageListResponse = {
-    /**
-     * Items
-     */
-    items: Array<ImageResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
  * ImageResponse
  *
  * An image identified by an arbitrary URL.
  */
 export type ImageResponse = {
     /**
-     * Image Id
+     * Source Id
      */
-    image_id: string;
+    source_id: string;
+    source_type: SourceKind;
     /**
      * Url
      */
@@ -750,24 +1266,41 @@ export type JwksResponse = {
 };
 
 /**
+ * Keypoint
+ *
+ * One keypoint of a face detection.
+ */
+export type Keypoint = {
+    /**
+     * Type
+     */
+    type: string;
+    /**
+     * X
+     */
+    x: number;
+    /**
+     * Y
+     */
+    y: number;
+};
+
+/**
  * Language
  *
  * Languages supported by the translation endpoint.
  */
-export type Language = 'cs' | 'en' | 'de' | 'fr';
+export type Language = 'cs' | 'en' | 'de';
 
 /**
- * ModelEmbedding
- *
- * One vector produced by one explicitly identified embedding model.
+ * ModelEmbedding[FaceModelStub]
  */
-export type ModelEmbedding = {
-    /**
-     * Model Identifier
-     */
-    model_identifier: string;
+export type ModelEmbeddingFaceModelStub = {
+    model_identifier: FaceModelStub;
     /**
      * Vector
+     *
+     * A non-empty, finite vector whose dimension must match model_identifier.
      */
     vector: Array<number>;
 };
@@ -856,39 +1389,20 @@ export type PageLayoutModel = {
 };
 
 /**
- * PageListResponse
- *
- * A paginated list of pages.
- */
-export type PageListResponse = {
-    /**
-     * Items
-     */
-    items: Array<PageResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
  * PageResponse
  *
  * A page with its archive identity.
  */
 export type PageResponse = {
     /**
-     * Page Source Id
+     * Source Id
      */
-    page_source_id: string;
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
     /**
      * Library
      */
@@ -901,66 +1415,6 @@ export type PageResponse = {
      * Page Id
      */
     page_id: string;
-    /**
-     * Url
-     */
-    url: string;
-};
-
-/**
- * PageSearchResult
- *
- * A page search hit resolved to its archive source.
- */
-export type PageSearchResult = {
-    /**
-     * Source Id
-     *
-     * Source record for the page.
-     */
-    source_id: string;
-    /**
-     * Document Id
-     *
-     * Archive document containing the page.
-     */
-    document_id: string;
-    /**
-     * Page Id
-     *
-     * Archive page identity.
-     */
-    page_id: string;
-    /**
-     * Matching Score
-     *
-     * Fused BM25 relevance score.
-     */
-    matching_score: number;
-};
-
-/**
- * PageSearchResultListResponse
- *
- * A paginated list of page search results.
- */
-export type PageSearchResultListResponse = {
-    /**
-     * Items
-     */
-    items: Array<PageSearchResult>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
 };
 
 /**
@@ -1022,92 +1476,16 @@ export type RootResponse = {
 /**
  * ScoreAggregation
  *
- * How per-face matching scores are aggregated into a single entity score.
+ * How per-modality scores are aggregated into a single entity score.
  */
 export type ScoreAggregation = 'min' | 'max' | 'average';
 
 /**
- * SearchEntitiesResult
+ * ScoreFusion
  *
- * A single result from a nearest-neighbour search over an annotation collection.
+ * How scores from different modalities are fused into a single entity score.
  */
-export type SearchEntitiesResult = {
-    /**
-     * Entity Id
-     *
-     * The entity ID of the annotation.
-     */
-    entity_id: string;
-    /**
-     * The entity type of the annotation.
-     */
-    entity_type: EntityType | null;
-    /**
-     * Name
-     *
-     * The name of the annotation.
-     */
-    name: string;
-    /**
-     * Description
-     *
-     * The description of the annotation.
-     */
-    description: string;
-    /**
-     * Short Description
-     *
-     * The short description of the annotation.
-     */
-    short_description: string;
-    /**
-     * Aliases
-     *
-     * The aliases of the annotation.
-     */
-    aliases: Array<string>;
-    /**
-     * Matching Score
-     *
-     * The matching score of the annotation.
-     */
-    matching_score: number;
-};
-
-/**
- * SearchEntitiesResultListResponse
- *
- * A paginated list of search results.
- */
-export type SearchEntitiesResultListResponse = {
-    /**
-     * Items
-     */
-    items: Array<SearchEntitiesResult>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
- * SourceDescriptorRequest
- *
- * Source selector used by annotation ingest endpoints.
- */
-export type SourceDescriptorRequest = {
-    page?: PageCreateRequest | null;
-    document?: DocumentCreateRequest | null;
-    image?: ImageCreateRequest | null;
-};
+export type ScoreFusion = 'rrf';
 
 /**
  * SourceKind
@@ -1117,44 +1495,20 @@ export type SourceDescriptorRequest = {
 export type SourceKind = 'page' | 'document' | 'image';
 
 /**
- * SourceListResponse
- *
- * A paginated list of sources.
- */
-export type SourceListResponse = {
-    /**
-     * Items
-     */
-    items: Array<SourceResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
- * SourceResponse
+ * SourceResponseBase
  *
  * A linkable reference to a typed source.
  */
-export type SourceResponse = {
+export type SourceResponseBase = {
     /**
      * Source Id
      */
     source_id: string;
     source_type: SourceKind;
     /**
-     * Uri
+     * Url
      */
-    uri: string;
+    url: string;
 };
 
 /**
@@ -1199,32 +1553,28 @@ export type TextLineModel = {
 export type TextMentionCreateRequest = {
     /**
      * Name
+     *
+     * The name of the entity being mentioned.
      */
     name: string;
     /**
      * Context
+     *
+     * The context in which the entity name was found.
      */
     context?: string | null;
     /**
      * Entity Id
+     *
+     * The ID of the entity being mentioned.
      */
     entity_id: string;
     /**
      * Source Id
+     *
+     * The ID of the source where the entity name was found.
      */
     source_id: string;
-};
-
-/**
- * TextMentionEntityPatchRequest
- *
- * Request body for assigning a mention to another entity.
- */
-export type TextMentionEntityPatchRequest = {
-    /**
-     * Entity Id
-     */
-    entity_id: string;
 };
 
 /**
@@ -1238,17 +1588,51 @@ export type TextMentionListResponse = {
      */
     items: Array<TextMentionResponse>;
     /**
-     * Total Count
-     */
-    total_count: number;
-    /**
      * Limit
+     *
+     * The requested page size, not the number of returned items.
      */
     limit: number;
     /**
-     * After Id
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
      */
-    after_id?: string | null;
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * TextMentionPatchBatchItem
+ *
+ * Request body for assigning a mention to another entity in a batch.
+ */
+export type TextMentionPatchBatchItem = {
+    /**
+     * Entity Id
+     */
+    entity_id: string | null;
+    /**
+     * Mention Id
+     */
+    mention_id: string;
+};
+
+/**
+ * TextMentionPatchRequest
+ *
+ * Assign a mention to an entity, or unassign it with null.
+ */
+export type TextMentionPatchRequest = {
+    /**
+     * Entity Id
+     */
+    entity_id: string | null;
 };
 
 /**
@@ -1272,7 +1656,7 @@ export type TextMentionResponse = {
     /**
      * Entity Id
      */
-    entity_id: string;
+    entity_id: string | null;
     /**
      * Source Id
      */
@@ -1337,109 +1721,128 @@ export type TokenResponse = {
 
 /**
  * TranslationRequest
+ *
+ * Request schema for translating text into a target language.
  */
 export type TranslationRequest = {
     /**
      * Text
+     *
+     * The text to be translated.
      */
     text: string;
+    /**
+     * Target language to translate ``text`` into.
+     */
     language: Language;
 };
 
 /**
  * TranslationResponse
+ *
+ * Response schema for a translation request.
  */
 export type TranslationResponse = {
     /**
      * Text
+     *
+     * The original text to be translated.
      */
     text: string;
     /**
      * Translation
+     *
+     * The translated text.
      */
     translation: string;
+    /**
+     * The language of the original text automatically detected.
+     */
     source_language: Language;
+    /**
+     * The language into which the text was translated.
+     */
     target_language: Language;
 };
 
 /**
- * UserListResponse
- *
- * A paginated list of users.
- */
-export type UserListResponse = {
-    /**
-     * Items
-     */
-    items: Array<UserResponse>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * After Id
-     */
-    after_id?: string | null;
-};
-
-/**
  * UserPatchRequest
+ *
+ * Request schema for patching an existing user.
  */
 export type UserPatchRequest = {
     /**
      * Display Name
+     *
+     * The display name of the user.
      */
-    display_name?: string | null;
+    display_name?: string;
     /**
      * Is Active
+     *
+     * Indicates whether the user is active.
      */
-    is_active?: boolean | null;
+    is_active?: boolean;
     /**
      * External Subject
+     *
+     * The external subject identifier of the user.
      */
-    external_subject?: string | null;
+    external_subject?: string;
     /**
      * External Issuer
+     *
+     * The external issuer of the user's identity.
      */
-    external_issuer?: string | null;
+    external_issuer?: string;
     /**
      * Email
+     *
+     * The email address of the user.
      */
     email?: string | null;
 };
 
 /**
  * UserResponse
+ *
+ * Response schema for a user.
  */
 export type UserResponse = {
-    /**
-     * Display Name
-     */
-    display_name: string;
-    /**
-     * Is Active
-     */
-    is_active: boolean;
-    /**
-     * External Subject
-     */
-    external_subject: string;
-    /**
-     * External Issuer
-     */
-    external_issuer: string;
     /**
      * User Id
      */
     user_id: string;
     /**
      * Email
+     *
+     * The email address of the user.
      */
     email: string | null;
+    /**
+     * Display Name
+     *
+     * The display name of the user.
+     */
+    display_name: string;
+    /**
+     * Is Active
+     *
+     * Indicates whether the user is active.
+     */
+    is_active: boolean;
+    /**
+     * External Subject
+     *
+     * The external subject identifier of the user.
+     */
+    external_subject: string;
+    /**
+     * External Issuer
+     *
+     * The external issuer of the user's identity.
+     */
+    external_issuer: string;
 };
 
 /**
@@ -1475,53 +1878,109 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     path?: never;
     query?: {
         /**
-         * Q
+         * Query.Text
+         *
+         * Unique, non-blank text queries. Candidate scores are aggregated across them.
          */
-        q?: Array<string> | null;
+        'query.text'?: Array<string> | null;
         /**
-         * Q Face Id
+         * Query.Face Id
+         *
+         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
          */
-        q_face_id?: Array<string> | null;
+        'query.face_id'?: Array<string> | null;
         /**
-         * Entity Type
+         * Query.Face Embedding Model
+         *
+         * The face embedding model used for the search.
          */
-        entity_type?: Array<EntityType> | null;
+        'query.face_embedding_model'?: string;
         /**
-         * Assignment
+         * Query.Exclude Reference Face Id
+         *
+         * Whether to exclude the reference face ID from the search results.
          */
-        assignment?: AssignmentType | null;
-        model?: FaceEmbeddingModel;
-        aggregation?: ScoreAggregation;
+        'query.exclude_reference_face_id'?: boolean;
+        /**
+         * How higher-is-better candidate scores within each modality are aggregated across query items.
+         */
+        'query.score_aggregation'?: ScoreAggregation;
+        /**
+         * How independently ranked modality result lists are fused.
+         */
+        'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Entity Id
+         *
+         * The unique identifiers of the entities.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Type
+         *
+         * The exact type of the entity.
+         */
+        'filter.entity_type'?: Array<EntityType> | null;
+        /**
+         * Filter.Wikidata Id
+         *
+         * The Wikidata identifier for the entity.
+         */
+        'filter.wikidata_id'?: Array<string> | null;
+        /**
+         * Filter.Nlcr Authority Id
+         *
+         * The NLCR authority identifier for the entity.
+         */
+        'filter.nlcr_authority_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * The source identifiers associated with the entity.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * The detection identifiers associated with the entity.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * The mention identifiers associated with the entity.
+         */
+        'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Has Mentions
+         *
+         * Whether the entity has mentions.
+         */
+        'filter.has_mentions'?: boolean | null;
+        /**
+         * Filter.Has Detections
+         *
+         * Whether the entity has detections.
+         */
+        'filter.has_detections'?: boolean | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
-         */
-        after_id?: string | null;
-        /**
-         * Source Id
-         */
-        source_id?: string | null;
-        /**
-         * Page
+         * Return Total Count
          *
-         * Canonical page identity: library/page_id or library/document_id/page_id.
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        page?: string | null;
+        return_total_count?: boolean;
         /**
-         * Document
+         * Cursor
          *
-         * Canonical document identity: library/document_id.
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
-        document?: string | null;
-        /**
-         * Image
-         *
-         * Exact URL of an image Source.
-         */
-        image?: string | null;
+        cursor?: string | null;
     };
     url: '/api/v1/search-entities';
 };
@@ -1539,7 +1998,7 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetResponses = {
     /**
      * Successful Response
      */
-    200: SearchEntitiesResultListResponse;
+    200: GenericListResponseFoundEntity;
 };
 
 export type SearchEntitiesGetApiV1SearchEntitiesGetResponse = SearchEntitiesGetApiV1SearchEntitiesGetResponses[keyof SearchEntitiesGetApiV1SearchEntitiesGetResponses];
@@ -1549,14 +2008,73 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
     path?: never;
     query?: {
         /**
-         * Q Face Id
+         * Query.Text
+         *
+         * Unique, non-blank text queries. Candidate scores are aggregated across them.
          */
-        q_face_id?: Array<string>;
-        model?: FaceEmbeddingModel;
+        'query.text'?: Array<string> | null;
+        /**
+         * Query.Face Id
+         *
+         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         */
+        'query.face_id'?: Array<string> | null;
+        /**
+         * Query.Face Embedding Model
+         *
+         * The face embedding model used for the search.
+         */
+        'query.face_embedding_model'?: string;
+        /**
+         * Query.Exclude Reference Face Id
+         *
+         * Whether to exclude the reference face ID from the search results.
+         */
+        'query.exclude_reference_face_id'?: boolean;
+        /**
+         * How higher-is-better candidate scores within each modality are aggregated across query items.
+         */
+        'query.score_aggregation'?: ScoreAggregation;
+        /**
+         * How independently ranked modality result lists are fused.
+         */
+        'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity IDs.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source IDs.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by detection IDs.
+         */
+        'filter.detection_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
+        /**
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
+         */
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/search-faces';
 };
@@ -1574,7 +2092,7 @@ export type SearchFacesGetApiV1SearchFacesGetResponses = {
     /**
      * Successful Response
      */
-    200: FaceSearchResultListResponse;
+    200: GenericListResponseFoundFace;
 };
 
 export type SearchFacesGetApiV1SearchFacesGetResponse = SearchFacesGetApiV1SearchFacesGetResponses[keyof SearchFacesGetApiV1SearchFacesGetResponses];
@@ -1582,43 +2100,105 @@ export type SearchFacesGetApiV1SearchFacesGetResponse = SearchFacesGetApiV1Searc
 export type SearchPagesGetApiV1SearchPagesGetData = {
     body?: never;
     path?: never;
-    query: {
+    query?: {
         /**
-         * Q
+         * Query.Text
          *
-         * Page Source UUID or directly linked entity name/alias.
+         * Unique, non-blank text queries. Candidate scores are aggregated across them.
          */
-        q: string;
+        'query.text'?: Array<string> | null;
+        /**
+         * Query.Face Id
+         *
+         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         */
+        'query.face_id'?: Array<string> | null;
+        /**
+         * Query.Face Embedding Model
+         *
+         * The face embedding model used for the search.
+         */
+        'query.face_embedding_model'?: string;
+        /**
+         * Query.Exclude Reference Face Id
+         *
+         * Whether to exclude the reference face ID from the search results.
+         */
+        'query.exclude_reference_face_id'?: boolean;
+        /**
+         * How higher-is-better candidate scores within each modality are aggregated across query items.
+         */
+        'query.score_aggregation'?: ScoreAggregation;
+        /**
+         * How independently ranked modality result lists are fused.
+         */
+        'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Url
+         *
+         * Filter by URL.
+         */
+        'filter.url'?: Array<string> | null;
+        /**
+         * Filter.Library
+         *
+         * Filter by library.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Id
+         *
+         * Filter by document ID.
+         */
+        'filter.document_id'?: Array<string> | null;
+        /**
+         * Filter.Page Id
+         *
+         * Filter by page ID.
+         */
+        'filter.page_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source ID.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity ID that occur on source through text mention or face link.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by linked detection ID.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * Filter by linked mention ID.
+         */
+        'filter.mention_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * Assignment
-         */
-        assignment?: AssignmentType | null;
-        /**
-         * Source Id
-         */
-        source_id?: string | null;
-        /**
-         * Page
+         * Return Total Count
          *
-         * Canonical page identity: library/page_id or library/document_id/page_id.
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        page?: string | null;
+        return_total_count?: boolean;
         /**
-         * Document
+         * Cursor
          *
-         * Canonical document identity: library/document_id.
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
-        document?: string | null;
-        /**
-         * Image
-         *
-         * Exact URL of an image Source.
-         */
-        image?: string | null;
+        cursor?: string | null;
     };
     url: '/api/v1/search-pages';
 };
@@ -1636,7 +2216,7 @@ export type SearchPagesGetApiV1SearchPagesGetResponses = {
     /**
      * Successful Response
      */
-    200: PageSearchResultListResponse;
+    200: GenericListResponseFoundPage;
 };
 
 export type SearchPagesGetApiV1SearchPagesGetResponse = SearchPagesGetApiV1SearchPagesGetResponses[keyof SearchPagesGetApiV1SearchPagesGetResponses];
@@ -1644,39 +2224,99 @@ export type SearchPagesGetApiV1SearchPagesGetResponse = SearchPagesGetApiV1Searc
 export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
     body?: never;
     path?: never;
-    query: {
+    query?: {
         /**
-         * Q
+         * Query.Text
          *
-         * Document Source UUID or directly linked entity name/alias.
+         * Unique, non-blank text queries. Candidate scores are aggregated across them.
          */
-        q: string;
+        'query.text'?: Array<string> | null;
+        /**
+         * Query.Face Id
+         *
+         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         */
+        'query.face_id'?: Array<string> | null;
+        /**
+         * Query.Face Embedding Model
+         *
+         * The face embedding model used for the search.
+         */
+        'query.face_embedding_model'?: string;
+        /**
+         * Query.Exclude Reference Face Id
+         *
+         * Whether to exclude the reference face ID from the search results.
+         */
+        'query.exclude_reference_face_id'?: boolean;
+        /**
+         * How higher-is-better candidate scores within each modality are aggregated across query items.
+         */
+        'query.score_aggregation'?: ScoreAggregation;
+        /**
+         * How independently ranked modality result lists are fused.
+         */
+        'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Url
+         *
+         * Filter by URL.
+         */
+        'filter.url'?: Array<string> | null;
+        /**
+         * Filter.Library
+         *
+         * Filter by library.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Id
+         *
+         * Filter by document ID.
+         */
+        'filter.document_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source ID.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity ID that occur on source through text mention or face link.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by linked detection ID.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * Filter by linked mention ID.
+         */
+        'filter.mention_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * Source Id
-         */
-        source_id?: string | null;
-        /**
-         * Page
+         * Return Total Count
          *
-         * Canonical page identity: library/page_id or library/document_id/page_id.
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        page?: string | null;
+        return_total_count?: boolean;
         /**
-         * Document
+         * Cursor
          *
-         * Canonical document identity: library/document_id.
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
-        document?: string | null;
-        /**
-         * Image
-         *
-         * Exact URL of an image Source.
-         */
-        image?: string | null;
+        cursor?: string | null;
     };
     url: '/api/v1/search-documents';
 };
@@ -1694,7 +2334,7 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetResponses = {
     /**
      * Successful Response
      */
-    200: DocumentSearchResultListResponse;
+    200: GenericListResponseFoundDocument;
 };
 
 export type SearchDocumentsGetApiV1SearchDocumentsGetResponse = SearchDocumentsGetApiV1SearchDocumentsGetResponses[keyof SearchDocumentsGetApiV1SearchDocumentsGetResponses];
@@ -1729,37 +2369,77 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     path?: never;
     query?: {
         /**
-         * Source Id
+         * Filter.Entity Id
+         *
+         * The unique identifiers of the entities.
          */
-        source_id?: string | null;
+        'filter.entity_id'?: Array<string> | null;
         /**
-         * Entity Type
+         * Filter.Entity Type
+         *
+         * The exact type of the entity.
          */
-        entity_type?: EntityType | null;
+        'filter.entity_type'?: Array<EntityType> | null;
         /**
-         * Wikidata Id
+         * Filter.Wikidata Id
+         *
+         * The Wikidata identifier for the entity.
          */
-        wikidata_id?: string | null;
+        'filter.wikidata_id'?: Array<string> | null;
         /**
-         * Nlcr Authority Id
+         * Filter.Nlcr Authority Id
+         *
+         * The NLCR authority identifier for the entity.
          */
-        nlcr_authority_id?: string | null;
+        'filter.nlcr_authority_id'?: Array<string> | null;
         /**
-         * User Id
+         * Filter.Source Id
+         *
+         * The source identifiers associated with the entity.
          */
-        user_id?: string | null;
+        'filter.source_id'?: Array<string> | null;
         /**
-         * Assignment
+         * Filter.Detection Id
+         *
+         * The detection identifiers associated with the entity.
          */
-        assignment?: AssignmentType | null;
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * The mention identifiers associated with the entity.
+         */
+        'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Has Mentions
+         *
+         * Whether the entity has mentions.
+         */
+        'filter.has_mentions'?: boolean | null;
+        /**
+         * Filter.Has Detections
+         *
+         * Whether the entity has detections.
+         */
+        'filter.has_detections'?: boolean | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/entities';
 };
@@ -1777,7 +2457,7 @@ export type ListEntitiesRouteApiV1EntitiesGetResponses = {
     /**
      * Successful Response
      */
-    200: EntityListResponse;
+    200: GenericListResponseEntityResponse;
 };
 
 export type ListEntitiesRouteApiV1EntitiesGetResponse = ListEntitiesRouteApiV1EntitiesGetResponses[keyof ListEntitiesRouteApiV1EntitiesGetResponses];
@@ -1897,6 +2577,36 @@ export type PatchEntityRouteApiV1EntitiesEntityIdPatchResponses = {
 
 export type PatchEntityRouteApiV1EntitiesEntityIdPatchResponse = PatchEntityRouteApiV1EntitiesEntityIdPatchResponses[keyof PatchEntityRouteApiV1EntitiesEntityIdPatchResponses];
 
+export type PatchEntityBatchRouteApiV1EntitiesBatchPatchData = {
+    /**
+     * Payload
+     */
+    body: Array<EntityPatchBatchItem>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/entities:batch';
+};
+
+export type PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchEntityBatchRouteApiV1EntitiesBatchPatchError = PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors[keyof PatchEntityBatchRouteApiV1EntitiesBatchPatchErrors];
+
+export type PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses = {
+    /**
+     * Response Patch Entity Batch Route Api V1 Entities Batch Patch
+     *
+     * Successful Response
+     */
+    200: Array<EntityResponse | null>;
+};
+
+export type PatchEntityBatchRouteApiV1EntitiesBatchPatchResponse = PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses[keyof PatchEntityBatchRouteApiV1EntitiesBatchPatchResponses];
+
 export type CreateEntityBatchRouteApiV1EntitiesBatchPostData = {
     /**
      * Payload
@@ -1927,58 +2637,46 @@ export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponses = {
 
 export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponse = CreateEntityBatchRouteApiV1EntitiesBatchPostResponses[keyof CreateEntityBatchRouteApiV1EntitiesBatchPostResponses];
 
-export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostData = {
-    /**
-     * Payload
-     */
-    body: Array<EntityEmbeddingUpdateRequest>;
-    path?: never;
-    query?: never;
-    url: '/api/v1/entities:embeddings';
-};
-
-export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostError = UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors[keyof UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostErrors];
-
-export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: EntityEmbeddingBatchUpdateResponse;
-};
-
-export type UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponse = UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses[keyof UpdateEntityEmbeddingsBatchRouteApiV1EntitiesEmbeddingsPostResponses];
-
 export type ListFacesRouteApiV1FacesGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Source Id
+         * Filter.Entity Id
+         *
+         * Filter by entity IDs.
          */
-        source_id?: string | null;
+        'filter.entity_id'?: Array<string> | null;
         /**
-         * Entity Id
+         * Filter.Source Id
+         *
+         * Filter by source IDs.
          */
-        entity_id?: string | null;
+        'filter.source_id'?: Array<string> | null;
         /**
-         * User Id
+         * Filter.Detection Id
+         *
+         * Filter by detection IDs.
          */
-        user_id?: string | null;
+        'filter.detection_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/faces';
 };
@@ -1996,7 +2694,7 @@ export type ListFacesRouteApiV1FacesGetResponses = {
     /**
      * Successful Response
      */
-    200: FaceListResponse;
+    200: GenericListResponseFaceResponse;
 };
 
 export type ListFacesRouteApiV1FacesGetResponse = ListFacesRouteApiV1FacesGetResponses[keyof ListFacesRouteApiV1FacesGetResponses];
@@ -2025,6 +2723,66 @@ export type CreateFaceRouteApiV1FacesPostResponses = {
 };
 
 export type CreateFaceRouteApiV1FacesPostResponse = CreateFaceRouteApiV1FacesPostResponses[keyof CreateFaceRouteApiV1FacesPostResponses];
+
+export type DeleteFaceBatchRouteApiV1FacesBatchDeleteData = {
+    /**
+     * Detection Id
+     */
+    body: Array<string>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/faces:batch';
+};
+
+export type DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteFaceBatchRouteApiV1FacesBatchDeleteError = DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors[keyof DeleteFaceBatchRouteApiV1FacesBatchDeleteErrors];
+
+export type DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses = {
+    /**
+     * Response Delete Face Batch Route Api V1 Faces Batch Delete
+     *
+     * Successful Response
+     */
+    200: number;
+};
+
+export type DeleteFaceBatchRouteApiV1FacesBatchDeleteResponse = DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses[keyof DeleteFaceBatchRouteApiV1FacesBatchDeleteResponses];
+
+export type PatchFaceBatchRouteApiV1FacesBatchPatchData = {
+    /**
+     * Payload
+     */
+    body: Array<FacePatchBatchItem>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/faces:batch';
+};
+
+export type PatchFaceBatchRouteApiV1FacesBatchPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchFaceBatchRouteApiV1FacesBatchPatchError = PatchFaceBatchRouteApiV1FacesBatchPatchErrors[keyof PatchFaceBatchRouteApiV1FacesBatchPatchErrors];
+
+export type PatchFaceBatchRouteApiV1FacesBatchPatchResponses = {
+    /**
+     * Response Patch Face Batch Route Api V1 Faces Batch Patch
+     *
+     * Successful Response
+     */
+    200: Array<FaceResponse | null>;
+};
+
+export type PatchFaceBatchRouteApiV1FacesBatchPatchResponse = PatchFaceBatchRouteApiV1FacesBatchPatchResponses[keyof PatchFaceBatchRouteApiV1FacesBatchPatchResponses];
 
 export type CreateFaceBatchRouteApiV1FacesBatchPostData = {
     /**
@@ -2055,34 +2813,6 @@ export type CreateFaceBatchRouteApiV1FacesBatchPostResponses = {
 };
 
 export type CreateFaceBatchRouteApiV1FacesBatchPostResponse = CreateFaceBatchRouteApiV1FacesBatchPostResponses[keyof CreateFaceBatchRouteApiV1FacesBatchPostResponses];
-
-export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostData = {
-    /**
-     * Payload
-     */
-    body: Array<FaceEmbeddingUpdateRequest>;
-    path?: never;
-    query?: never;
-    url: '/api/v1/faces:embeddings';
-};
-
-export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostError = UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors[keyof UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostErrors];
-
-export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: FaceEmbeddingBatchUpdateResponse;
-};
-
-export type UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponse = UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses[keyof UpdateFaceEmbeddingBatchRouteApiV1FacesEmbeddingsPostResponses];
 
 export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetData = {
     body?: never;
@@ -2117,6 +2847,36 @@ export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses 
     200: unknown;
 };
 
+export type DeleteFaceRouteApiV1FacesDetectionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Detection Id
+         */
+        detection_id: string;
+    };
+    query?: never;
+    url: '/api/v1/faces/{detection_id}';
+};
+
+export type DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteFaceRouteApiV1FacesDetectionIdDeleteError = DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors[keyof DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors];
+
+export type DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteFaceRouteApiV1FacesDetectionIdDeleteResponse = DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses[keyof DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses];
+
 export type GetFaceRouteApiV1FacesDetectionIdGetData = {
     body?: never;
     path: {
@@ -2147,8 +2907,8 @@ export type GetFaceRouteApiV1FacesDetectionIdGetResponses = {
 
 export type GetFaceRouteApiV1FacesDetectionIdGetResponse = GetFaceRouteApiV1FacesDetectionIdGetResponses[keyof GetFaceRouteApiV1FacesDetectionIdGetResponses];
 
-export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchData = {
-    body: FaceEntityPatchRequest;
+export type PatchFaceRouteApiV1FacesDetectionIdPatchData = {
+    body: FacePatchRequest;
     path: {
         /**
          * Detection Id
@@ -2159,44 +2919,99 @@ export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchData = {
     url: '/api/v1/faces/{detection_id}';
 };
 
-export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchErrors = {
+export type PatchFaceRouteApiV1FacesDetectionIdPatchErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchError = PatchFaceEntityRouteApiV1FacesDetectionIdPatchErrors[keyof PatchFaceEntityRouteApiV1FacesDetectionIdPatchErrors];
+export type PatchFaceRouteApiV1FacesDetectionIdPatchError = PatchFaceRouteApiV1FacesDetectionIdPatchErrors[keyof PatchFaceRouteApiV1FacesDetectionIdPatchErrors];
 
-export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses = {
+export type PatchFaceRouteApiV1FacesDetectionIdPatchResponses = {
     /**
      * Successful Response
      */
     200: FaceResponse;
 };
 
-export type PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponse = PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses[keyof PatchFaceEntityRouteApiV1FacesDetectionIdPatchResponses];
+export type PatchFaceRouteApiV1FacesDetectionIdPatchResponse = PatchFaceRouteApiV1FacesDetectionIdPatchResponses[keyof PatchFaceRouteApiV1FacesDetectionIdPatchResponses];
+
+export type ListFaceModelsRouteApiV1FaceModelsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/face-models';
+};
+
+export type ListFaceModelsRouteApiV1FaceModelsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FaceModelListResponse;
+};
+
+export type ListFaceModelsRouteApiV1FaceModelsGetResponse = ListFaceModelsRouteApiV1FaceModelsGetResponses[keyof ListFaceModelsRouteApiV1FaceModelsGetResponses];
+
+export type RegisterFaceModelRouteApiV1FaceModelsPostData = {
+    body: FaceModelRegisterRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/face-models';
+};
+
+export type RegisterFaceModelRouteApiV1FaceModelsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RegisterFaceModelRouteApiV1FaceModelsPostError = RegisterFaceModelRouteApiV1FaceModelsPostErrors[keyof RegisterFaceModelRouteApiV1FaceModelsPostErrors];
+
+export type RegisterFaceModelRouteApiV1FaceModelsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: FaceModelResponse;
+};
+
+export type RegisterFaceModelRouteApiV1FaceModelsPostResponse = RegisterFaceModelRouteApiV1FaceModelsPostResponses[keyof RegisterFaceModelRouteApiV1FaceModelsPostResponses];
 
 export type ListTextMentionsRouteApiV1TextMentionsGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Source Id
+         * Filter.Entity Id
+         *
+         * Filter by entity IDs.
          */
-        source_id?: string | null;
+        'filter.entity_id'?: Array<string> | null;
         /**
-         * Entity Id
+         * Filter.Source Id
+         *
+         * Filter by source IDs.
          */
-        entity_id?: string | null;
+        'filter.source_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/text-mentions';
 };
@@ -2244,6 +3059,66 @@ export type CreateTextMentionRouteApiV1TextMentionsPostResponses = {
 
 export type CreateTextMentionRouteApiV1TextMentionsPostResponse = CreateTextMentionRouteApiV1TextMentionsPostResponses[keyof CreateTextMentionRouteApiV1TextMentionsPostResponses];
 
+export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData = {
+    /**
+     * Mention Id
+     */
+    body: Array<string>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/text-mentions:batch';
+};
+
+export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteError = DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors[keyof DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteErrors];
+
+export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses = {
+    /**
+     * Response Delete Text Mention Batch Route Api V1 Text Mentions Batch Delete
+     *
+     * Successful Response
+     */
+    200: number;
+};
+
+export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponse = DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses[keyof DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteResponses];
+
+export type PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchData = {
+    /**
+     * Payload
+     */
+    body: Array<TextMentionPatchBatchItem>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/text-mentions:batch';
+};
+
+export type PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchError = PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors[keyof PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchErrors];
+
+export type PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses = {
+    /**
+     * Response Patch Text Mention Batch Route Api V1 Text Mentions Batch Patch
+     *
+     * Successful Response
+     */
+    200: Array<TextMentionResponse | null>;
+};
+
+export type PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponse = PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses[keyof PatchTextMentionBatchRouteApiV1TextMentionsBatchPatchResponses];
+
 export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostData = {
     /**
      * Payload
@@ -2273,6 +3148,36 @@ export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses = {
 };
 
 export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponse = CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses[keyof CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses];
+
+export type DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Mention Id
+         */
+        mention_id: string;
+    };
+    query?: never;
+    url: '/api/v1/text-mentions/{mention_id}';
+};
+
+export type DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteError = DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors[keyof DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors];
+
+export type DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponse = DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses[keyof DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses];
 
 export type GetTextMentionRouteApiV1TextMentionsMentionIdGetData = {
     body?: never;
@@ -2304,8 +3209,8 @@ export type GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses = {
 
 export type GetTextMentionRouteApiV1TextMentionsMentionIdGetResponse = GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses[keyof GetTextMentionRouteApiV1TextMentionsMentionIdGetResponses];
 
-export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchData = {
-    body: TextMentionEntityPatchRequest;
+export type PatchTextMentionRouteApiV1TextMentionsMentionIdPatchData = {
+    body: TextMentionPatchRequest;
     path: {
         /**
          * Mention Id
@@ -2316,40 +3221,82 @@ export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchData = 
     url: '/api/v1/text-mentions/{mention_id}';
 };
 
-export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors = {
+export type PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchError = ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors[keyof ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchErrors];
+export type PatchTextMentionRouteApiV1TextMentionsMentionIdPatchError = PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors[keyof PatchTextMentionRouteApiV1TextMentionsMentionIdPatchErrors];
 
-export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses = {
+export type PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses = {
     /**
      * Successful Response
      */
     200: TextMentionResponse;
 };
 
-export type ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponse = ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses[keyof ReassignTextMentionEntityRouteApiV1TextMentionsMentionIdPatchResponses];
+export type PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponse = PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses[keyof PatchTextMentionRouteApiV1TextMentionsMentionIdPatchResponses];
 
 export type ListSourcesRouteApiV1SourcesGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Url
+         * Filter.Source Type
+         *
+         * Filter by source type.
          */
-        url?: string | null;
+        'filter.source_type'?: Array<SourceKind> | null;
+        /**
+         * Filter.Url
+         *
+         * Filter by URL.
+         */
+        'filter.url'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source ID.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity ID that occur on source through text mention or face link.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by linked detection ID.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * Filter by linked mention ID.
+         */
+        'filter.mention_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/sources';
 };
@@ -2367,7 +3314,7 @@ export type ListSourcesRouteApiV1SourcesGetResponses = {
     /**
      * Successful Response
      */
-    200: SourceListResponse;
+    200: GenericListResponseSourceResponseBase;
 };
 
 export type ListSourcesRouteApiV1SourcesGetResponse = ListSourcesRouteApiV1SourcesGetResponses[keyof ListSourcesRouteApiV1SourcesGetResponses];
@@ -2397,7 +3344,7 @@ export type LookupSourceRouteApiV1SourcesLookupGetResponses = {
     /**
      * Successful Response
      */
-    200: SourceResponse;
+    200: SourceResponseBase;
 };
 
 export type LookupSourceRouteApiV1SourcesLookupGetResponse = LookupSourceRouteApiV1SourcesLookupGetResponses[keyof LookupSourceRouteApiV1SourcesLookupGetResponses];
@@ -2457,7 +3404,7 @@ export type GetSourceRouteApiV1SourcesSourceIdGetResponses = {
     /**
      * Successful Response
      */
-    200: SourceResponse;
+    200: SourceResponseBase;
 };
 
 export type GetSourceRouteApiV1SourcesSourceIdGetResponse = GetSourceRouteApiV1SourcesSourceIdGetResponses[keyof GetSourceRouteApiV1SourcesSourceIdGetResponses];
@@ -2467,21 +3414,65 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
     path?: never;
     query?: {
         /**
-         * Library
+         * Filter.Url
+         *
+         * Filter by URL.
          */
-        library?: string | null;
+        'filter.url'?: Array<string> | null;
         /**
-         * Document Id
+         * Filter.Library
+         *
+         * Filter by library.
          */
-        document_id?: string | null;
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Id
+         *
+         * Filter by document ID.
+         */
+        'filter.document_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source ID.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity ID that occur on source through text mention or face link.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by linked detection ID.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * Filter by linked mention ID.
+         */
+        'filter.mention_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/documents';
 };
@@ -2499,7 +3490,7 @@ export type ListDocumentsRouteApiV1DocumentsGetResponses = {
     /**
      * Successful Response
      */
-    200: DocumentListResponse;
+    200: GenericListResponseDocumentResponse;
 };
 
 export type ListDocumentsRouteApiV1DocumentsGetResponse = ListDocumentsRouteApiV1DocumentsGetResponses[keyof ListDocumentsRouteApiV1DocumentsGetResponses];
@@ -2658,29 +3649,71 @@ export type ListPagesRouteApiV1PagesGetData = {
     path?: never;
     query?: {
         /**
-         * Library
+         * Filter.Url
+         *
+         * Filter by URL.
          */
-        library?: string | null;
+        'filter.url'?: Array<string> | null;
         /**
-         * Document Id
+         * Filter.Library
+         *
+         * Filter by library.
          */
-        document_id?: string | null;
+        'filter.library'?: Array<string> | null;
         /**
-         * Page Id
+         * Filter.Document Id
+         *
+         * Filter by document ID.
          */
-        page_id?: string | null;
+        'filter.document_id'?: Array<string> | null;
         /**
-         * Assignment
+         * Filter.Page Id
+         *
+         * Filter by page ID.
          */
-        assignment?: AssignmentType | null;
+        'filter.page_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source ID.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity ID that occur on source through text mention or face link.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by linked detection ID.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * Filter by linked mention ID.
+         */
+        'filter.mention_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/pages';
 };
@@ -2698,7 +3731,7 @@ export type ListPagesRouteApiV1PagesGetResponses = {
     /**
      * Successful Response
      */
-    200: PageListResponse;
+    200: GenericListResponsePageResponse;
 };
 
 export type ListPagesRouteApiV1PagesGetResponse = ListPagesRouteApiV1PagesGetResponses[keyof ListPagesRouteApiV1PagesGetResponses];
@@ -2956,17 +3989,53 @@ export type ListImagesRouteApiV1ImagesGetData = {
     path?: never;
     query?: {
         /**
-         * Url
+         * Filter.Url
+         *
+         * Filter by URL.
          */
-        url?: string | null;
+        'filter.url'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source ID.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity ID that occur on source through text mention or face link.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Detection Id
+         *
+         * Filter by linked detection ID.
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Mention Id
+         *
+         * Filter by linked mention ID.
+         */
+        'filter.mention_id'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/images';
 };
@@ -2984,7 +4053,7 @@ export type ListImagesRouteApiV1ImagesGetResponses = {
     /**
      * Successful Response
      */
-    200: ImageListResponse;
+    200: GenericListResponseImageResponse;
 };
 
 export type ListImagesRouteApiV1ImagesGetResponse = ListImagesRouteApiV1ImagesGetResponses[keyof ListImagesRouteApiV1ImagesGetResponses];
@@ -3183,17 +4252,53 @@ export type ListUsersRouteApiV1UsersGetData = {
     path?: never;
     query?: {
         /**
-         * Is Active
+         * Filter.Display Name
+         *
+         * Filter by the display name of the user.
          */
-        is_active?: boolean | null;
+        'filter.display_name'?: Array<string> | null;
+        /**
+         * Filter.Is Active
+         *
+         * Filter by the active status of the user.
+         */
+        'filter.is_active'?: Array<boolean> | null;
+        /**
+         * Filter.External Subject
+         *
+         * Filter by the external subject identifier of the user.
+         */
+        'filter.external_subject'?: Array<string> | null;
+        /**
+         * Filter.External Issuer
+         *
+         * Filter by the external issuer of the user's identity.
+         */
+        'filter.external_issuer'?: Array<string> | null;
+        /**
+         * Filter.Email
+         *
+         * Filter by the email address of the user.
+         */
+        'filter.email'?: Array<string> | null;
         /**
          * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
          */
         limit?: number;
         /**
-         * After Id
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
          */
-        after_id?: string | null;
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
     };
     url: '/api/v1/users';
 };
@@ -3211,10 +4316,70 @@ export type ListUsersRouteApiV1UsersGetResponses = {
     /**
      * Successful Response
      */
-    200: UserListResponse;
+    200: GenericListResponseUserResponse;
 };
 
 export type ListUsersRouteApiV1UsersGetResponse = ListUsersRouteApiV1UsersGetResponses[keyof ListUsersRouteApiV1UsersGetResponses];
+
+export type DeleteUserBatchRouteApiV1UsersBatchDeleteData = {
+    /**
+     * User Id
+     */
+    body: Array<string>;
+    path?: never;
+    query?: never;
+    url: '/api/v1/users:batch';
+};
+
+export type DeleteUserBatchRouteApiV1UsersBatchDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteUserBatchRouteApiV1UsersBatchDeleteError = DeleteUserBatchRouteApiV1UsersBatchDeleteErrors[keyof DeleteUserBatchRouteApiV1UsersBatchDeleteErrors];
+
+export type DeleteUserBatchRouteApiV1UsersBatchDeleteResponses = {
+    /**
+     * Response Delete User Batch Route Api V1 Users Batch Delete
+     *
+     * Successful Response
+     */
+    200: number;
+};
+
+export type DeleteUserBatchRouteApiV1UsersBatchDeleteResponse = DeleteUserBatchRouteApiV1UsersBatchDeleteResponses[keyof DeleteUserBatchRouteApiV1UsersBatchDeleteResponses];
+
+export type DeleteUserRouteApiV1UsersUserIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/users/{user_id}';
+};
+
+export type DeleteUserRouteApiV1UsersUserIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteUserRouteApiV1UsersUserIdDeleteError = DeleteUserRouteApiV1UsersUserIdDeleteErrors[keyof DeleteUserRouteApiV1UsersUserIdDeleteErrors];
+
+export type DeleteUserRouteApiV1UsersUserIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteUserRouteApiV1UsersUserIdDeleteResponse = DeleteUserRouteApiV1UsersUserIdDeleteResponses[keyof DeleteUserRouteApiV1UsersUserIdDeleteResponses];
 
 export type GetUserRouteApiV1UsersUserIdGetData = {
     body?: never;

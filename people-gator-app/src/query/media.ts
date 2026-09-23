@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -16,10 +16,8 @@ import {
   getImageContentByIdRouteApiV1ImagesImageIdContentGet,
   getImageRouteApiV1ImagesImageIdGet,
   getPageImageByIdRouteApiV1PagesPageSourceIdImageGet,
-  getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet,
   getPageRouteApiV1PagesPageSourceIdGet,
   getSourceRouteApiV1SourcesSourceIdGet,
-  getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet,
   listDocumentsRouteApiV1DocumentsGet,
   listImagesRouteApiV1ImagesGet,
   listPagesRouteApiV1PagesGet,
@@ -37,6 +35,7 @@ import {
   type PageCreateRequest,
 } from '@/client'
 import { responseData } from '@/query/api'
+import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type DocumentListParams = NonNullable<ListDocumentsRouteApiV1DocumentsGetData['query']>
@@ -82,10 +81,17 @@ export function fetchPageImage(sourceId: string, width?: number, signal?: AbortS
   ) as Promise<Blob>
 }
 
-export function useDocumentListQuery(params?: MaybeRefOrGetter<DocumentListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.documents.list(toValue(params))),
-    queryFn: ({ signal }) => fetchDocuments(toValue(params), signal),
+export function useDocumentListQuery(
+  params?: MaybeRefOrGetter<DocumentListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.documents.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) =>
+      fetchDocuments(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 
@@ -122,10 +128,16 @@ export function useDocumentLookupQuery(
   })
 }
 
-export function usePageListQuery(params?: MaybeRefOrGetter<PageListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.pages.list(toValue(params))),
-    queryFn: ({ signal }) => fetchPages(toValue(params), signal),
+export function usePageListQuery(
+  params?: MaybeRefOrGetter<PageListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.pages.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) => fetchPages(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 
@@ -174,43 +186,23 @@ export function usePageImageQuery(
   })
 }
 
-export function usePageLayoutQuery(sourceId: MaybeRefOrGetter<string>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.pages.layout(toValue(sourceId))),
-    queryFn: ({ signal }) =>
+export function useImageListQuery(
+  params?: MaybeRefOrGetter<ImageListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.images.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) =>
       responseData(
-        getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet({
-          path: { page_source_id: toValue(sourceId) },
+        listImagesRouteApiV1ImagesGet({
+          query: withCursor(toValue(params), pageParam),
           signal,
           throwOnError: true,
         }),
       ),
-    enabled: computed(() => Boolean(toValue(sourceId))),
-  })
-}
-
-export function usePageMentionSpansQuery(sourceId: MaybeRefOrGetter<string>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.pages.mentionSpans(toValue(sourceId))),
-    queryFn: ({ signal }) =>
-      responseData(
-        getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet({
-          path: { page_source_id: toValue(sourceId) },
-          signal,
-          throwOnError: true,
-        }),
-      ),
-    enabled: computed(() => Boolean(toValue(sourceId))),
-  })
-}
-
-export function useImageListQuery(params?: MaybeRefOrGetter<ImageListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.images.list(toValue(params))),
-    queryFn: ({ signal }) =>
-      responseData(
-        listImagesRouteApiV1ImagesGet({ query: toValue(params), signal, throwOnError: true }),
-      ),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 
@@ -261,10 +253,17 @@ export function useImageLookupQuery(url: MaybeRefOrGetter<string>) {
   })
 }
 
-export function useSourceListQuery(params?: MaybeRefOrGetter<SourceListParams | undefined>) {
-  return useQuery({
-    queryKey: computed(() => queryKeys.sources.list(toValue(params))),
-    queryFn: ({ signal }) => fetchSources(toValue(params), signal),
+export function useSourceListQuery(
+  params?: MaybeRefOrGetter<SourceListParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => queryKeys.sources.infinite(toValue(params))),
+    queryFn: ({ pageParam, signal }) =>
+      fetchSources(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
   })
 }
 

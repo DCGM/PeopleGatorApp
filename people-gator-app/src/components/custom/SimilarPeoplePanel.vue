@@ -23,6 +23,8 @@ const props = defineProps<{
   viewedPersonId: string | null
   loading?: boolean
   assignmentPending?: boolean
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -30,6 +32,7 @@ const emit = defineEmits<{
   assign: [person: SimilarPersonCandidate]
   create: [person: SimilarPersonCandidate]
   unassign: []
+  loadMore: []
 }>()
 
 const query = defineModel<string>('searchTerm', { default: '' })
@@ -37,7 +40,7 @@ const visiblePageCount = ref(1)
 const resultsElement = ref<HTMLElement | null>(null)
 const searchRegionElement = ref<HTMLElement | null>(null)
 const loadMoreElement = ref<HTMLElement | null>(null)
-const loadingMore = ref(false)
+const localLoadingMore = ref(false)
 
 const mobilePageSize = 3
 const minimumResultHeight = 120
@@ -56,7 +59,9 @@ const pageSize = computed(() => {
   )
 })
 const visiblePeople = computed(() => props.people.slice(0, visiblePageCount.value * pageSize.value))
-const hasMorePeople = computed(() => visiblePeople.value.length < props.people.length)
+const hasMoreLoadedPeople = computed(() => visiblePeople.value.length < props.people.length)
+const hasMorePeople = computed(() => hasMoreLoadedPeople.value || Boolean(props.hasNextPage))
+const loadingMore = computed(() => localLoadingMore.value || Boolean(props.isFetchingNextPage))
 
 watch(query, () => {
   visiblePageCount.value = 1
@@ -100,18 +105,25 @@ onBeforeUnmount(() => {
 })
 
 function revealNextPage() {
-  if (!hasMorePeople.value || loadingMore.value) return
+  if (loadingMore.value) return
+  if (hasMoreLoadedPeople.value) {
+    visiblePageCount.value += 1
+    return
+  }
+  if (!props.hasNextPage) return
+
   visiblePageCount.value += 1
+  emit('loadMore')
 }
 
 function loadNextPage() {
   if (!hasMorePeople.value || loadingMore.value) return
 
-  loadingMore.value = true
+  localLoadingMore.value = true
   loadMoreTimer = setTimeout(() => {
-    visiblePageCount.value += 1
-    loadingMore.value = false
+    localLoadingMore.value = false
     loadMoreTimer = undefined
+    revealNextPage()
   }, 150)
 }
 
@@ -189,12 +201,7 @@ defineExpose({ focusSearch })
         </InputGroupAddon>
       </InputGroup>
       <div ref="resultsElement" class="min-h-0 flex-1">
-        <ScrollArea
-          type="always"
-          class="size-full"
-          aria-live="polite"
-          :aria-busy="props.loading"
-        >
+        <ScrollArea type="always" class="size-full" aria-live="polite" :aria-busy="props.loading">
           <div class="flex min-h-full flex-col gap-2 pr-3">
             <SimilarPersonItem
               v-for="person in visiblePeople"

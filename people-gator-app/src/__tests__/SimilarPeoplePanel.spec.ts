@@ -276,6 +276,41 @@ describe('SimilarPeoplePanel', () => {
     })
   })
 
+  it('requests another result page after revealing the loaded candidates', async () => {
+    const initialPeople = [...people, { ...people[1]!, id: 'josef-svoboda', name: 'Josef Svoboda' }]
+    const wrapper = mount(SimilarPeoplePanel, {
+      props: {
+        people: initialPeople,
+        selectedFace: unassignedFace,
+        viewedPersonId: null,
+        hasNextPage: true,
+      },
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+
+    const loadMore = wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Load more people')!
+    await loadMore.trigger('click')
+
+    expect(wrapper.emitted('loadMore')).toEqual([[]])
+    expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(3)
+
+    await wrapper.setProps({ isFetchingNextPage: true })
+    expect(loadMore.attributes('disabled')).toBeDefined()
+    expect(loadMore.text()).toBe('Loading more')
+
+    await wrapper.setProps({
+      people: [...initialPeople, { ...people[1]!, id: 'alena-horakova', name: 'Alena Horakova' }],
+      hasNextPage: false,
+      isFetchingNextPage: false,
+    })
+    expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(4)
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Load more people')).toBe(
+      false,
+    )
+  })
+
   it('progressively reveals long candidate lists', async () => {
     const extendedPeople = [
       ...people,

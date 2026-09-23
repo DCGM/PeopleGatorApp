@@ -22,6 +22,7 @@ export const queryKeys = {
     all: ['faces'] as const,
     lists: () => ['faces', 'list'] as const,
     list: (params?: QueryParams) => ['faces', 'list', params ?? {}] as const,
+    infinite: (params?: QueryParams) => ['faces', 'list', 'infinite', params ?? {}] as const,
     detail: (detectionId: string) => ['faces', 'detail', detectionId] as const,
     alignedCrop: (detectionId: string, maxWidth?: number) =>
       ['faces', 'aligned-crop', detectionId, maxWidth] as const,
@@ -30,11 +31,14 @@ export const queryKeys = {
     all: ['text-mentions'] as const,
     lists: () => ['text-mentions', 'list'] as const,
     list: (params?: QueryParams) => ['text-mentions', 'list', params ?? {}] as const,
+    infinite: (params?: QueryParams) =>
+      ['text-mentions', 'list', 'infinite', params ?? {}] as const,
     detail: (mentionId: string) => ['text-mentions', 'detail', mentionId] as const,
   },
   sources: {
     all: ['sources'] as const,
     list: (params?: QueryParams) => ['sources', 'list', params ?? {}] as const,
+    infinite: (params?: QueryParams) => ['sources', 'list', 'infinite', params ?? {}] as const,
     detail: (sourceId: string) => ['sources', 'detail', sourceId] as const,
     lookup: (url: string) => ['sources', 'lookup', url] as const,
   },
@@ -42,6 +46,7 @@ export const queryKeys = {
     all: ['documents'] as const,
     lists: () => ['documents', 'list'] as const,
     list: (params?: QueryParams) => ['documents', 'list', params ?? {}] as const,
+    infinite: (params?: QueryParams) => ['documents', 'list', 'infinite', params ?? {}] as const,
     detail: (sourceId: string) => ['documents', 'detail', sourceId] as const,
     lookup: (library: string, documentId: string) =>
       ['documents', 'lookup', library, documentId] as const,
@@ -61,6 +66,7 @@ export const queryKeys = {
   images: {
     all: ['images'] as const,
     list: (params?: QueryParams) => ['images', 'list', params ?? {}] as const,
+    infinite: (params?: QueryParams) => ['images', 'list', 'infinite', params ?? {}] as const,
     detail: (imageId: string) => ['images', 'detail', imageId] as const,
     lookup: (url: string) => ['images', 'lookup', url] as const,
     content: (imageId: string) => ['images', 'content', imageId] as const,
@@ -68,6 +74,7 @@ export const queryKeys = {
   users: {
     all: ['users'] as const,
     list: (params?: QueryParams) => ['users', 'list', params ?? {}] as const,
+    infinite: (params?: QueryParams) => ['users', 'list', 'infinite', params ?? {}] as const,
     detail: (userId: string) => ['users', 'detail', userId] as const,
   },
   search: {
@@ -76,9 +83,12 @@ export const queryKeys = {
     infiniteEntities: (params?: QueryParams) =>
       ['search', 'entities', 'infinite', params ?? {}] as const,
     faces: (params?: QueryParams) => ['search', 'faces', params ?? {}] as const,
+    infiniteFaces: (params?: QueryParams) => ['search', 'faces', 'infinite', params ?? {}] as const,
     pages: (params?: QueryParams) => ['search', 'pages', params ?? {}] as const,
     infinitePages: (params?: QueryParams) => ['search', 'pages', 'infinite', params ?? {}] as const,
     documents: (params?: QueryParams) => ['search', 'documents', params ?? {}] as const,
+    infiniteDocuments: (params?: QueryParams) =>
+      ['search', 'documents', 'infinite', params ?? {}] as const,
   },
   translations: {
     all: ['translations'] as const,
