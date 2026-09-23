@@ -38,3 +38,10 @@ class OpenIDConfigurationResponse(BaseModel):
     scopes_supported: list[str]
     subject_types_supported: list[str]
     token_endpoint_auth_methods_supported: list[str]
+
+__all__ = [
+    "JwkKeyResponse",
+    "JwksResponse",
+    "TokenResponse",
+    "OpenIDConfigurationResponse",
+]

@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import SecurityScopes
 from typing import Annotated, TypedDict
 import argon2
-from people_gator_api.schemas.jwks import TokenResponse
+from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserResponse
 from people_gator_api.services.crud_services.user_service import get_or_create_user
 from people_gator_api.services.database_service import WeaviateSessionDependency

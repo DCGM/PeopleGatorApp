@@ -1,34 +1,18 @@
 from enum import StrEnum
 
 
-class AnnotationType(StrEnum):
-    """Annotation entities in the simplified ER diagram."""
-
-    entity = "entity"
-    face = "face"
-
-
-class AssignmentType(StrEnum):
-    """Assigned annotation kind used to filter people and sources."""
-
-    face = "face"
-    text_mention = "text_mention"
-
-
 class EntityType(StrEnum):
     """Entity type discriminator for normalized identity classes."""
 
-    person = "person"
-    place = "place"
-    date = "date"
+    person = "person" # Person entity type
 
 
 class SourceKind(StrEnum):
     """Physical type of a SOURCE record."""
 
-    page = "page"
-    document = "document"
-    image = "image"
+    page = "page" # Page source
+    document = "document" # Document source
+    image = "image" # Image source
 
 
 class FaceEmbeddingModel(StrEnum):
@@ -45,17 +29,31 @@ DEFAULT_FACE_EMBEDDING_MODEL = (
 
 
 class ScoreAggregation(StrEnum):
-    """How per-face matching scores are aggregated into a single entity score."""
+    """How per-modality scores are aggregated into a single entity score."""
 
-    min = "min"
-    max = "max"
-    average = "average"
+    min = "min" # Minimum score aggregation
+    max = "max" # Maximum score aggregation
+    average = "average" # Average score aggregation
 
+class ScoreFusion(StrEnum):
+    """How scores from different modalities are fused into a single entity score."""
+
+    rrf = "rrf" # Reciprocal Rank Fusion
 
 class Language(StrEnum):
     """Languages supported by the translation endpoint."""
 
-    czech = "cs"
-    english = "en"
-    german = "de"
-    french = "fr"
+    czech = "cs" # Czech language
+    english = "en" # English language
+    german = "de" # German language
+
+
+__all__ = [
+    "EntityType",
+    "SourceKind",
+    "FaceEmbeddingModel",
+    "DEFAULT_FACE_EMBEDDING_MODEL",
+    "ScoreAggregation",
+    "ScoreFusion",
+    "Language",
+]

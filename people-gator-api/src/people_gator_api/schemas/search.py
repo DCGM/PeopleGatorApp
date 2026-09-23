@@ -1,220 +1,202 @@
 """Pydantic schemas for search and search endpoints."""
 
+from typing import Self
 import uuid
-
 from pydantic import (
-    AliasChoices,
     BaseModel,
     Field,
+    FiniteFloat,
+    model_validator,
 )
-from people_gator_api.schemas.common import GenericListResponse
-from people_gator_api.schemas.entities import BoundingBox
+from pydantic.experimental.missing_sentinel import MISSING
+from people_gator_api.schemas.entities import EntityListFilter, EntityResponse
+from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
 from people_gator_api.schemas.enums import (
-    AssignmentType,
-    EntityType,
+    DEFAULT_FACE_EMBEDDING_MODEL,
     FaceEmbeddingModel,
     ScoreAggregation,
+    ScoreFusion
 )
+from people_gator_api.schemas.faces import FaceListFilter, FaceResponse
+from people_gator_api.schemas.sources import DocumentListFilter, DocumentResponse, PageListFilter, PageResponse
+
+# Reciprocal-rank fusion uses one-based ranks and equal modality weights.
+RRF_K = 60
 
 # ---------------------------------------------------------------------------
-# Search result type
+# Base classes for search results and queries
 # ---------------------------------------------------------------------------
 
 
-class SearchEntitiesResult(BaseModel):
+class FoundItemBase(BaseModel):
+    """Search scores use higher-is-better semantics."""
+
+    text_score: FiniteFloat | None = Field(
+        default=None,
+        description=(
+            "Aggregated text relevance, or None when text was not requested."
+        ),
+    )
+    face_score: FiniteFloat | None = Field(
+        default=None,
+        description=(
+            "Aggregated cosine similarity, or None when faces were not requested."
+        ),
+    )
+    score: FiniteFloat = Field(
+        gt=0,
+        description=(
+            "Final reciprocal-rank-fusion score. Higher values rank first."
+        )
+    )
+
+
+class QueryBase(BaseModel):
+    """Base class for search queries."""
+    text: list[str] | MISSING = Field(
+        default=MISSING,
+        description="Unique, non-blank text queries. Candidate scores are aggregated across them.",
+    )
+    face_id: list[uuid.UUID] | MISSING = Field(
+        default=MISSING,
+        description="Unique reference face IDs. Every ID must exist and contain the selected embedding model.",
+    )
+    face_embedding_model: FaceEmbeddingModel = Field(
+        default=DEFAULT_FACE_EMBEDDING_MODEL,
+        description="The face embedding model used for the search.",
+    )
+    exclude_reference_face_id: bool = Field(
+        default=True,
+        description="Whether to exclude the reference face ID from the search results.",
+    )
+    score_aggregation: ScoreAggregation = Field(
+        default=ScoreAggregation.min,
+        description="How higher-is-better candidate scores within each modality are aggregated across query items.",
+    )
+    score_fusion: ScoreFusion = Field(
+        default=ScoreFusion.rrf,
+        description="How independently ranked modality result lists are fused.",
+    )
+
+    @model_validator(mode="after")
+    def validate_modalities(self) -> Self:
+        text_values = self.text if isinstance(self.text, list) else []
+        face_ids = self.face_id if isinstance(self.face_id, list) else []
+        if not text_values and not face_ids:
+            raise ValueError(
+                "provide at least one non-empty search modality: text or face_id"
+            )
+
+        if any(not value.strip() for value in text_values):
+            raise ValueError("text queries must not be blank")
+        if len(text_values) != len(set(text_values)):
+            raise ValueError("text queries must be unique")
+        if len(face_ids) != len(set(face_ids)):
+            raise ValueError("face_id values must be unique")
+        return self
+
+
+class GenericSearchRequest[F: BaseModel](GenericListRequest):
+    """Backend-neutral multimodal search request.
+
+    Each modality ranks candidates independently after score aggregation. RRF
+    uses one-based ranks, RRF_K, and equal modality weight. Results order by
+    final score descending and object UUID ascending. With one modality, the
+    final score contains one RRF term.
+    Raw text relevance is backend-native; the contract standardizes score direction,
+    aggregation, fusion, and deterministic tie-breaking, not identical raw values.
+    """
+
+    query: QueryBase = Field(
+        ...,
+        description="The search query containing text and face IDs.",
+    )
+    filter: F | None = Field(
+        default=None,
+        description="Optional filter to apply to the search results.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entity search result type
+# ---------------------------------------------------------------------------
+
+
+class FoundEntity(EntityResponse, FoundItemBase):
     """A single result from a nearest-neighbour search over an annotation collection."""
 
-    entity_id: uuid.UUID = Field(..., description="The entity ID of the annotation.")
-    entity_type: EntityType | None = Field(
-        ..., description="The entity type of the annotation."
-    )
-    name: str = Field(..., description="The name of the annotation.")
-    description: str = Field(..., description="The description of the annotation.")
-    short_description: str = Field(
-        ..., description="The short description of the annotation."
-    )
-    aliases: list[str] = Field(..., description="The aliases of the annotation.")
-    matching_score: float = Field(
-        ..., description="The matching score of the annotation."
-    )
+
+"""List response for entity search results."""
+SearchEntitiesResultListResponse = GenericListResponse[FoundEntity]
 
 
-class SearchEntitiesResultListResponse(GenericListResponse[SearchEntitiesResult]):
-    """A paginated list of search results."""
-
-    items: list[SearchEntitiesResult]
-
-
-# ---------------------------------------------------------------------------
-# Search request and response
-# ---------------------------------------------------------------------------
-
-
-class SearchEntitiesQuery(BaseModel):
-    """Typed query signals the caller wants to find matches for."""
-
-    q: list[str] | None = Field(
-        default=None,
-        description="Name or alias text to search for.",
-    )
-    q_face_id: list[uuid.UUID] | None = Field(
-        default=None,
-        description="Reference face detection whose identity should rank nearby.",
-    )
-    entity_types: list[EntityType] | EntityType | None = Field(
-        default=None,
-        description="Optional entity type filter(s).",
-    )
-    source_id: uuid.UUID | None = Field(
-        default=None,
-        description="Only return entities occurring in this document or page Source.",
-    )
-    assignment: AssignmentType | None = Field(
-        default=None,
-        description="Only return entities with this assigned annotation kind.",
-    )
-    embedding_model: FaceEmbeddingModel = Field(
-        default=FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3,
-        description="Named face vector used for q_face_id search.",
-    )
-    aggregation: ScoreAggregation = Field(
-        default=ScoreAggregation.max,
-        description="How matching face scores are aggregated per entity.",
-    )
-    limit: int = Field(
-        default=20,
-        ge=0,
-        validation_alias=AliasChoices("limit", "query_limit"),
-        description="The maximum number of results to return.",
-    )
-    after_id: uuid.UUID | None = Field(
-        default=None,
-        validation_alias=AliasChoices("after_id", "query_after_id"),
-        description="The ID of the last result from the previous page of results.",
-    )
+"""Request type for entity search."""
+SearchEntitiesRequest = GenericSearchRequest[EntityListFilter]
 
 
 # ---------------------------------------------------------------------------
 # Face similarity search
 # ---------------------------------------------------------------------------
 
-
-class FaceSearchResult(BaseModel):
-    """A single face detection matched against the supplied query faces."""
-
-    face_id: uuid.UUID = Field(..., description="The matched face detection ID.")
-    source_id: uuid.UUID | None = Field(
-        default=None, description="Source containing the matched face."
-    )
-    entity_id: uuid.UUID | None = Field(
-        default=None, description="Entity the matched face is assigned to."
-    )
-    bounding_box: BoundingBox | None = Field(
-        default=None, description="Bounding box of the matched face."
-    )
-    matching_score: float = Field(
-        ...,
-        description="Cosine similarity to the closest supplied query face.",
-    )
+class FoundFace(FaceResponse, FoundItemBase):
+    """A single result from a nearest-neighbour search over a face collection."""
 
 
-class FaceSearchResultListResponse(GenericListResponse[FaceSearchResult]):
-    """A paginated list of face similarity results."""
+"""List response for face similarity search results."""
+SearchFacesResultListResponse = GenericListResponse[FoundFace]
 
-    items: list[FaceSearchResult]
 
+"""Request type for face similarity search."""
+SearchFacesRequest = GenericSearchRequest[FaceListFilter]
 
 # ---------------------------------------------------------------------------
-# Page and document search
+# Page similarity search
 # ---------------------------------------------------------------------------
 
 
-class PageSearchResult(BaseModel):
-    """A page search hit resolved to its archive source."""
-
-    source_id: uuid.UUID = Field(..., description="Source record for the page.")
-    document_id: uuid.UUID = Field(
-        ..., description="Archive document containing the page."
-    )
-    page_id: uuid.UUID = Field(..., description="Archive page identity.")
-    matching_score: float = Field(..., description="Fused BM25 relevance score.")
+class FoundPage(PageResponse, FoundItemBase):
+    """A single result from a nearest-neighbour search over a page collection."""
 
 
-class PageSearchResultListResponse(GenericListResponse[PageSearchResult]):
-    """A paginated list of page search results."""
-
-    items: list[PageSearchResult]
+"""List response for page similarity search results."""
+SearchPagesResultListResponse = GenericListResponse[FoundPage]
 
 
-class DocumentSearchResult(BaseModel):
-    """A document search hit resolved to its archive source."""
-
-    source_id: uuid.UUID = Field(..., description="Source record for the document.")
-    document_id: uuid.UUID = Field(..., description="Archive document identity.")
-    matching_score: float = Field(..., description="Fused BM25 relevance score.")
+"""Request type for page similarity search."""
+SearchPagesRequest = GenericSearchRequest[PageListFilter]
 
 
-class DocumentSearchResultListResponse(GenericListResponse[DocumentSearchResult]):
-    """A paginated list of document search results."""
-
-    items: list[DocumentSearchResult]
-
-
-class SearchPagesQuery(BaseModel):
-    """Search pages by directly linked entity text or Source UUID."""
-
-    q: str = Field(
-        ...,
-        min_length=1,
-        description="Free text name, alias, or page Source UUID.",
-    )
-    source_id: uuid.UUID | None = Field(
-        default=None,
-        description="Only return this page Source.",
-    )
-    assignment: AssignmentType | None = Field(
-        default=None,
-        description="Only return pages with this assigned annotation kind.",
-    )
-    limit: int = Field(
-        default=20,
-        ge=0,
-        description="The maximum number of page results to return.",
-    )
+# ---------------------------------------------------------------------------
+# Document similarity search
+# ---------------------------------------------------------------------------
 
 
-class SearchDocumentsQuery(BaseModel):
-    """Search documents by directly linked entity text or Source UUID."""
+class FoundDocument(DocumentResponse, FoundItemBase):
+    """A single result from a nearest-neighbour search over a document collection."""
 
-    q: str = Field(
-        ...,
-        min_length=1,
-        description="Free text name, alias, or document Source UUID.",
-    )
-    source_id: uuid.UUID | None = Field(
-        default=None,
-        description="Only return this document Source.",
-    )
-    limit: int = Field(
-        default=20,
-        ge=0,
-        description="The maximum number of document results to return.",
-    )
+"""List response for document similarity search results."""
+SearchDocumentsResultListResponse = GenericListResponse[FoundDocument]
 
 
-class FaceSearchQuery(BaseModel):
-    """Query for faces similar to a set of reference faces."""
+"""Request type for document similarity search."""
+SearchDocumentsRequest = GenericSearchRequest[DocumentListFilter]
 
-    q_face_id: list[uuid.UUID] = Field(
-        default_factory=list[uuid.UUID],
-        description="Reference face detection IDs the results should be similar to.",
-    )
-    embedding_model: FaceEmbeddingModel = Field(
-        default=FaceEmbeddingModel.gaunernst_vit_small_patch8_gap_112_cosface_ms1mv3,
-        description="Named face vector to search by.",
-    )
-    limit: int = Field(
-        default=20,
-        ge=0,
-        description="The maximum number of results to return.",
-    )
+
+__all__ = [
+    "FoundItemBase",
+    "RRF_K",
+    "QueryBase",
+    "GenericSearchRequest",
+    "FoundEntity",
+    "SearchEntitiesResultListResponse",
+    "SearchEntitiesRequest",
+    "FoundFace",
+    "SearchFacesResultListResponse",
+    "SearchFacesRequest",
+    "FoundPage",
+    "SearchPagesResultListResponse",
+    "SearchPagesRequest",
+    "FoundDocument",
+    "SearchDocumentsResultListResponse",
+    "SearchDocumentsRequest",
+]

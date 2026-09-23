@@ -4,6 +4,10 @@ from pydantic import BaseModel, Field
 
 from people_gator_api.schemas.enums import EntityType
 
+# ---------------------------------------------------------------------------
+# Page layout and text mention schemas adopted from Pero OCR
+# ---------------------------------------------------------------------------
+
 
 class TextLineModel(BaseModel):
     id: str

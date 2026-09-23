@@ -32,16 +32,16 @@ from people_gator_api.schemas.enums import (
     SourceKind,
 )
 from people_gator_api.schemas.search import (
-    DocumentSearchResult,
-    DocumentSearchResultListResponse,
-    FaceSearchQuery,
-    FaceSearchResult,
-    FaceSearchResultListResponse,
-    PageSearchResult,
-    PageSearchResultListResponse,
+    FoundDocument,
+    SearchDocumentsResultListResponse,
+    SearchFacesRequest,
+    FoundFace,
+    SearchFacesResultListResponse,
+    FoundPage,
+    SearchPagesResultListResponse,
     SearchDocumentsQuery,
-    SearchEntitiesQuery,
-    SearchEntitiesResult,
+    SearchEntitiesRequest,
+    FoundEntity,
     SearchEntitiesResultListResponse,
     SearchPagesQuery,
 )
@@ -51,7 +51,7 @@ from people_gator_api.schemas.sources import (
     SourceRecord,
     SourceRecordListResponse,
 )
-from people_gator_api.schemas.text_mentions import (
+from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
     TextMentionListResponse,
     TextMentionResponse,
@@ -67,7 +67,7 @@ from people_gator_api.services.crud_services.source_service import (
     source_content,
     stable_source_uuid,
 )
-from people_gator_api.services.persistence.contracts import (
+from people_gator_api.persistence.contracts import (
     Database,
     EntityListQuery,
     EntityPatchCommand,
@@ -84,7 +84,7 @@ from people_gator_api.services.persistence.contracts import (
     UserListQuery,
     UserPatchCommand,
     UserRepository,
-    WriteContext,
+    GenericActor,
 )
 from people_gator_api.services.postgres_demo.models import (
     Alias,
@@ -254,7 +254,7 @@ class PostgresEntityRepository(EntityRepository):
             items=items,
             total_count=total or 0,
             limit=query.limit,
-            after_id=items[-1].entity_id
+            cursor=items[-1].entity_id
             if len(items) == query.limit and items
             else None,
         )
@@ -288,16 +288,16 @@ class PostgresEntityRepository(EntityRepository):
             )
         return entity
 
-    async def insert(
-        self, payload: EntityCreateRequest, context: WriteContext
+    async def create(
+        self, payload: EntityCreateRequest, context: GenericActor
     ) -> EntityResponse:
         entity = self._new(payload, context.user_id)
         self._session.add(entity)
         await self._session.commit()
         return _entity_response(entity)
 
-    async def import_batch(
-        self, payloads: Sequence[EntityCreateRequest], context: WriteContext
+    async def create_batch(
+        self, payloads: Sequence[EntityCreateRequest], context: GenericActor
     ) -> list[EntityResponse]:
         entities = [self._new(payload, context.user_id) for payload in payloads]
         self._session.add_all(entities)
@@ -414,11 +414,11 @@ class PostgresEntityRepository(EntityRepository):
         )
 
     async def search(
-        self, query: SearchEntitiesQuery
+        self, query: SearchEntitiesRequest
     ) -> SearchEntitiesResultListResponse:
         if not query.q:
             return SearchEntitiesResultListResponse(
-                items=[], total_count=0, limit=query.limit, after_id=None
+                items=[], total_count=0, limit=query.limit, cursor=None
             )
         term = " ".join(query.q).strip()
         score = func.greatest(
@@ -443,14 +443,14 @@ class PostgresEntityRepository(EntityRepository):
             statement = statement.where(Entity.kind.in_([item.value for item in types]))
         rows = (await self._session.execute(statement)).all()
         items = [
-            SearchEntitiesResult(
+            FoundEntity(
                 entity_id=entity.id,
                 entity_type=EntityType(entity.kind) if entity.kind else None,
                 name=entity.name or "",
                 description=entity.description or "",
                 short_description=entity.short_description or "",
                 aliases=[alias.name for alias in entity.aliases],
-                matching_score=float(rank),
+                score=float(rank),
             )
             for entity, rank in rows
         ]
@@ -458,7 +458,7 @@ class PostgresEntityRepository(EntityRepository):
             items=items,
             total_count=len(items),
             limit=query.limit,
-            after_id=items[-1].entity_id if items else None,
+            cursor=items[-1].entity_id if items else None,
         )
 
 
@@ -468,7 +468,7 @@ class PostgresSourceRepository(SourceRepository):
         self._session = session
         self._source = with_polymorphic(Source, [Document, Page, Image])
 
-    async def get(self, lookup: SourceLookup) -> SourceRecord | None:
+    async def lookup(self, lookup: SourceLookup) -> SourceRecord | None:
         statement = select(self._source)
         if lookup.source_id is not None:
             statement = statement.where(Source.id == lookup.source_id)
@@ -563,7 +563,7 @@ class PostgresSourceRepository(SourceRepository):
             )
         return Image(id=source_id, url=url)
 
-    async def insert(self, spec: SourceCreateSpec) -> tuple[SourceRecord, bool]:
+    async def get_or_create(self, spec: SourceCreateSpec) -> tuple[SourceRecord, bool]:
         source = self._new(spec)
         existing = await self._session.get(Source, source.id)
         if existing is not None:
@@ -572,7 +572,7 @@ class PostgresSourceRepository(SourceRepository):
         await self._session.commit()
         return _source_record(source), True
 
-    async def import_batch(
+    async def get_or_create_batch(
         self, specs: Sequence[SourceCreateSpec]
     ) -> list[SourceRecord]:
         candidates = [self._new(spec) for spec in specs]
@@ -607,17 +607,17 @@ class PostgresSourceRepository(SourceRepository):
 
     async def search_pages(
         self, query: SearchPagesQuery
-    ) -> PageSearchResultListResponse:
+    ) -> SearchPagesResultListResponse:
         try:
             source_id = uuid.UUID(query.q)
         except ValueError:
-            return PageSearchResultListResponse(
+            return SearchPagesResultListResponse(
                 items=[], total_count=0, limit=query.limit
             )
         page = await self._session.get(Page, source_id)
         items = (
             [
-                PageSearchResult(
+                FoundPage(
                     source_id=page.id,
                     document_id=page.document_id,
                     page_id=page.page_id,
@@ -627,32 +627,32 @@ class PostgresSourceRepository(SourceRepository):
             if page is not None
             else []
         )
-        return PageSearchResultListResponse(
+        return SearchPagesResultListResponse(
             items=items, total_count=len(items), limit=query.limit
         )
 
     async def search_documents(
         self, query: SearchDocumentsQuery
-    ) -> DocumentSearchResultListResponse:
+    ) -> SearchDocumentsResultListResponse:
         try:
             source_id = uuid.UUID(query.q)
         except ValueError:
-            return DocumentSearchResultListResponse(
+            return SearchDocumentsResultListResponse(
                 items=[], total_count=0, limit=query.limit
             )
         document = await self._session.get(Document, source_id)
         items = (
             [
-                DocumentSearchResult(
+                FoundDocument(
                     source_id=document.id,
                     document_id=document.document_id,
-                    matching_score=1.0,
+                    score_text=1.0,
                 )
             ]
             if document is not None
             else []
         )
-        return DocumentSearchResultListResponse(
+        return SearchDocumentsResultListResponse(
             items=items, total_count=len(items), limit=query.limit
         )
 
@@ -724,9 +724,9 @@ class PostgresFaceRepository(FaceRepository):
             spec = SourceCreateSpec(
                 source_type=SourceKind.image, url=str(descriptor.image.url)
             )
-        return (await self._sources.insert(spec))[0].source_id
+        return (await self._sources.get_or_create(spec))[0].source_id
 
-    async def _new(self, payload: FaceCreateRequest, context: WriteContext) -> Face:
+    async def _new(self, payload: FaceCreateRequest, context: GenericActor) -> Face:
         if len(payload.keypoints) != 5:
             raise ValueError("Face requires exactly five keypoints")
         face = Face(
@@ -755,23 +755,23 @@ class PostgresFaceRepository(FaceRepository):
             )
         return face
 
-    async def insert(
-        self, payload: FaceCreateRequest, context: WriteContext
+    async def create(
+        self, payload: FaceCreateRequest, context: GenericActor
     ) -> FaceResponse:
         face = await self._new(payload, context)
         self._session.add(face)
         await self._session.commit()
         return _face_response(face)
 
-    async def import_batch(
-        self, payloads: Sequence[FaceCreateRequest], context: WriteContext
+    async def create_batch(
+        self, payloads: Sequence[FaceCreateRequest], context: GenericActor
     ) -> list[FaceResponse]:
         faces = [await self._new(payload, context) for payload in payloads]
         self._session.add_all(faces)
         await self._session.commit()
         return [_face_response(face) for face in faces]
 
-    async def patch_entity(
+    async def patch(
         self, detection_id: uuid.UUID, entity_id: uuid.UUID | None
     ) -> FaceResponse | None:
         face = (await self._load_many([detection_id])).get(detection_id)
@@ -846,9 +846,9 @@ class PostgresFaceRepository(FaceRepository):
         await self._session.commit()
         return result.rowcount  # type: ignore[attr-defined]
 
-    async def search(self, query: FaceSearchQuery) -> FaceSearchResultListResponse:
+    async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
         if not query.q_face_id:
-            return FaceSearchResultListResponse(
+            return SearchFacesResultListResponse(
                 items=[], total_count=0, limit=query.limit
             )
         references = await self._session.scalars(
@@ -859,7 +859,7 @@ class PostgresFaceRepository(FaceRepository):
         )
         reference_vectors = [row.embedding for row in references.all()]
         if not reference_vectors:
-            return FaceSearchResultListResponse(
+            return SearchFacesResultListResponse(
                 items=[], total_count=0, limit=query.limit
             )
         candidates: dict[uuid.UUID, tuple[Face, float]] = {}
@@ -887,7 +887,7 @@ class PostgresFaceRepository(FaceRepository):
                     candidates[face.id] = (face, similarity)
         ranked = sorted(candidates.values(), key=lambda item: -item[1])[: query.limit]
         items = [
-            FaceSearchResult(
+            FoundFace(
                 face_id=face.id,
                 source_id=face.source_id,
                 entity_id=face.entity_id,
@@ -896,7 +896,7 @@ class PostgresFaceRepository(FaceRepository):
             )
             for face, score in ranked
         ]
-        return FaceSearchResultListResponse(
+        return SearchFacesResultListResponse(
             items=items, total_count=len(items), limit=query.limit
         )
 
@@ -942,7 +942,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             items=items,
             total_count=total or 0,
             limit=query.limit,
-            after_id=items[-1].mention_id
+            cursor=items[-1].mention_id
             if len(items) == query.limit and items
             else None,
         )
@@ -956,13 +956,13 @@ class PostgresTextMentionRepository(TextMentionRepository):
             source_id=payload.source_id,
         )
 
-    async def insert(self, payload: TextMentionCreateRequest) -> TextMentionResponse:
+    async def create(self, payload: TextMentionCreateRequest) -> TextMentionResponse:
         mention = self._new(payload)
         self._session.add(mention)
         await self._session.commit()
         return _mention_response(mention)
 
-    async def import_batch(
+    async def create_batch(
         self, payloads: Sequence[TextMentionCreateRequest]
     ) -> list[TextMentionResponse]:
         mentions = [self._new(payload) for payload in payloads]
@@ -970,7 +970,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         await self._session.commit()
         return [_mention_response(mention) for mention in mentions]
 
-    async def patch_entity(
+    async def patch(
         self, mention_id: uuid.UUID, entity_id: uuid.UUID
     ) -> TextMentionResponse | None:
         mention = (await self._load_many([mention_id])).get(mention_id)
@@ -1039,14 +1039,14 @@ class PostgresUserRepository(UserRepository):
             items=items,
             total_count=total or 0,
             limit=query.limit,
-            after_id=items[-1].user_id if len(items) == query.limit and items else None,
+            cursor=items[-1].user_id if len(items) == query.limit and items else None,
         )
 
     @staticmethod
     def _new(payload: UserCreateRequest) -> User:
         return User(**payload.model_dump())
 
-    async def insert(self, payload: UserCreateRequest) -> UserResponse:
+    async def get_or_create(self, payload: UserCreateRequest) -> UserResponse:
         user = self._new(payload)
         self._session.add(user)
         await self._session.commit()

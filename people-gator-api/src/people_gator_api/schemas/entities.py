@@ -3,249 +3,213 @@
 from __future__ import annotations
 
 import uuid
-from typing import Literal
+from typing import Annotated
 
 from pydantic import (
     BaseModel,
     Field,
     field_validator,
-    model_validator,
 )
-
-from people_gator_api.schemas.common import GenericListResponse
+from pydantic.experimental.missing_sentinel import MISSING
+from people_gator_api.schemas.common import (
+    GenericListRequest,
+    GenericListResponse,
+    ListFilterBase,
+)
 from people_gator_api.schemas.enums import EntityType
-from people_gator_api.schemas.sources import SourceDescriptorRequest
 
 # ---------------------------------------------------------------------------
 # Entity
 # ---------------------------------------------------------------------------
 
-
-class ModelEmbedding(BaseModel):
-    """One vector produced by one explicitly identified embedding model."""
-
-    model_identifier: str = Field(min_length=1)
-    vector: list[float] = Field(min_length=1)
-
-
-class EntityEmbeddingInput(ModelEmbedding):
-    """A model vector for one semantic field of an entity."""
-
-    field: Literal["name", "description", "short_description", "fulltext"]
-
-
-def _require_unique_entity_embeddings(
-    embeddings: list[EntityEmbeddingInput],
-) -> None:
-    keys = [(embedding.field, embedding.model_identifier) for embedding in embeddings]
-    if len(keys) != len(set(keys)):
-        raise ValueError("each entity field/model embedding pair must be unique")
-
-
-def _require_unique_model_embeddings(embeddings: list[ModelEmbedding]) -> None:
-    models = [embedding.model_identifier for embedding in embeddings]
-    if len(models) != len(set(models)):
-        raise ValueError("each embedding model must be unique")
+MAX_ENTITY_BATCH_SIZE = 1_000
 
 
 class EntityCreateRequest(BaseModel):
     """Request body for creating a new entity."""
 
-    entity_type: EntityType | None = None
-    name: str | None = None
-    description: str | None = None
-    short_description: str | None = None
-    aliases: list[str] | None = None
-    wikidata_id: str | None = None
-    nlcr_authority_id: str | None = None
-    embeddings: list[EntityEmbeddingInput] = Field(
-        default_factory=list[EntityEmbeddingInput]
+    entity_type: EntityType = Field(
+        description="The type of the entity. Immutable after creation."
+    )
+    name: str = Field(description="The name of the entity.")
+    description: str | None | MISSING = Field(
+        default=MISSING, description="A detailed description of the entity."
+    )
+    short_description: str | None | MISSING = Field(
+        default=MISSING, description="A brief description of the entity."
+    )
+    aliases: list[str] | MISSING = Field(
+        default=MISSING, description="Alternative names or aliases for the entity."
+    )
+    wikidata_id: str | None | MISSING = Field(
+        default=MISSING, description="The Wikidata identifier for the entity."
+    )
+    nlcr_authority_id: str | None | MISSING = Field(
+        default=MISSING, description="The NLCR authority identifier for the entity."
     )
 
-    @field_validator("embeddings")
+    @field_validator("aliases")
     @classmethod
-    def validate_unique_embeddings(
-        cls, embeddings: list[EntityEmbeddingInput]
-    ) -> list[EntityEmbeddingInput]:
-        _require_unique_entity_embeddings(embeddings)
-        return embeddings
+    def validate_aliases(
+        cls, aliases: list[str] | MISSING
+    ) -> list[str] | MISSING:
+        if isinstance(aliases, list) and len(aliases) != len(set(aliases)):
+            raise ValueError("aliases must be unique")
+        return aliases
 
 
-class EntityEmbeddingUpdateRequest(BaseModel):
-    """Upsert several named vectors for one existing entity."""
-
-    entity_id: uuid.UUID
-    embeddings: list[EntityEmbeddingInput] = Field(min_length=1)
-
-    @field_validator("embeddings")
-    @classmethod
-    def validate_unique_embeddings(
-        cls, embeddings: list[EntityEmbeddingInput]
-    ) -> list[EntityEmbeddingInput]:
-        _require_unique_entity_embeddings(embeddings)
-        return embeddings
-
-
-class EntityEmbeddingBatchUpdateResponse(BaseModel):
-    updated_count: int = Field(ge=0)
+type EntityBatchCreateRequest = Annotated[
+    list[EntityCreateRequest], Field(max_length=MAX_ENTITY_BATCH_SIZE)
+]
 
 
 class EntityPatchRequest(BaseModel):
     """Request body for patching an existing entity."""
 
-    name: str | None = None
-    aliases: list[str] | None = None
-    description: str | None = None
-    short_description: str | None = None
-    wikidata_id: str | None = None
-    nlcr_authority_id: str | None = None
+    name: str | MISSING = Field(default=MISSING, description="The name of the entity.")
+    aliases: list[str] | MISSING = Field(
+        default=MISSING, description="Alternative names or aliases for the entity."
+    )
+    description: str | None | MISSING = Field(
+        default=MISSING, description="A detailed description of the entity."
+    )
+    short_description: str | None | MISSING = Field(
+        default=MISSING, description="A brief description of the entity."
+    )
+    wikidata_id: str | None | MISSING = Field(
+        default=MISSING, description="The Wikidata identifier for the entity."
+    )
+    nlcr_authority_id: str | None | MISSING = Field(
+        default=MISSING, description="The NLCR authority identifier for the entity."
+    )
+
+    @field_validator("aliases")
+    @classmethod
+    def validate_aliases(
+        cls, aliases: list[str] | MISSING
+    ) -> list[str] | MISSING:
+        if isinstance(aliases, list) and len(aliases) != len(set(aliases)):
+            raise ValueError("aliases must be unique")
+        return aliases
+
+
+class EntityPatchBatchItem(EntityPatchRequest):
+    """An item representing a single entity patch operation in a batch."""
+
+    entity_id: uuid.UUID = Field(
+        description="The unique identifier of the entity to be patched."
+    )
+
+
+type EntityBatchPatchRequest = Annotated[
+    list[EntityPatchBatchItem], Field(max_length=MAX_ENTITY_BATCH_SIZE)
+]
 
 
 class EntityResponse(BaseModel):
     """A single entity record."""
 
-    entity_id: uuid.UUID
-    entity_type: EntityType | None
-    name: str | None
-    description: str | None
-    short_description: str | None
-    aliases: list[str] | None
-    wikidata_id: str | None
-    nlcr_authority_id: str | None
-    user_id: uuid.UUID
+    entity_id: uuid.UUID = Field(description="The unique identifier of the entity.")
+    entity_type: EntityType = Field(description="The type of the entity.")
+    name: str = Field(description="The name of the entity.")
+    description: str | None = Field(
+        default=None, description="A detailed description of the entity."
+    )
+    short_description: str | None = Field(
+        default=None, description="A brief description of the entity."
+    )
+    aliases: list[str] | None = Field(
+        default=None, description="Alternative names or aliases for the entity."
+    )
+    wikidata_id: str | None = Field(
+        default=None, description="The Wikidata identifier for the entity."
+    )
+    nlcr_authority_id: str | None = Field(
+        default=None, description="The NLCR authority identifier for the entity."
+    )
+    user_id: uuid.UUID = Field(
+        description="The unique identifier of the user who created or owns the entity."
+    )
 
 
-class EntityListResponse(GenericListResponse[EntityResponse]):
-    """A paginated list of entities."""
+EntityListResponse = GenericListResponse[EntityResponse]
 
-    items: list[EntityResponse]
+
+class EntityListFilter(ListFilterBase):
+    """\
+    Filter criteria for listing entities.
+    Every field is optional and can be used to narrow down the results.
+    Filter fields are combined using logical AND.
+    Lists of criteria in each field are combined using logical OR.\
+    """
+
+    entity_id: list[uuid.UUID] | MISSING = Field(
+        default=MISSING, description="The unique identifiers of the entities."
+    )
+    entity_type: list[EntityType] | MISSING = Field(
+        default=MISSING, description="The exact type of the entity."
+    )
+    wikidata_id: list[str] | MISSING = Field(
+        default=MISSING, description="The Wikidata identifier for the entity."
+    )
+    nlcr_authority_id: list[str] | MISSING = Field(
+        default=MISSING, description="The NLCR authority identifier for the entity."
+    )
+    source_id: list[uuid.UUID] | MISSING = Field(
+        default=MISSING,
+        description="The source identifiers associated with the entity.",
+    )
+    detection_id: list[uuid.UUID] | MISSING = Field(
+        default=MISSING,
+        description="The detection identifiers associated with the entity.",
+    )
+    mention_id: list[uuid.UUID] | MISSING = Field(
+        default=MISSING,
+        description="The mention identifiers associated with the entity.",
+    )
+    has_mentions: bool | MISSING = Field(
+        default=MISSING, description="Whether the entity has mentions."
+    )
+    has_detections: bool | MISSING = Field(
+        default=MISSING, description="Whether the entity has detections."
+    )
+
+
+class EntityListRequest(GenericListRequest):
+    """Request body for listing entities with optional filters."""
+
+    filter: EntityListFilter | MISSING = Field(
+        default=MISSING, description="The filter criteria to select entities."
+    )
 
 
 class EntityDeleteManyRequest(BaseModel):
-    """Request body for deleting multiple entities by selector."""
+    """Request body for deleting multiple entities by filter criteria."""
 
-    delete_all: bool = False
-    entity_type: EntityType | None = None
-    entity_ids: list[uuid.UUID] | None = None
-
-    @model_validator(mode="after")
-    def validate_selector(self) -> EntityDeleteManyRequest:
-        has_type = self.entity_type is not None
-        has_ids = bool(self.entity_ids)
-
-        if self.delete_all:
-            if has_type or has_ids:
-                raise ValueError(
-                    "When delete_all is true, entity_type and entity_ids must be omitted"
-                )
-            return self
-
-        if not has_type and not has_ids:
-            raise ValueError(
-                "Provide at least one selector: delete_all, entity_type, or entity_ids"
-            )
-        return self
+    filter: EntityListFilter | MISSING = Field(
+        default=MISSING,
+        description="The filter criteria to select entities for deletion.",
+    )
+    limit: int = Field(ge=1, description="The maximum number of entities to delete, selected by entity UUID ascending.")
 
 
 class EntityDeleteManyResponse(BaseModel):
     """Summary of a bulk entity delete operation."""
 
-    mode: Literal["all", "entity_type", "entity_ids"]
     deleted_count: int = Field(ge=0)
 
 
-# ---------------------------------------------------------------------------
-# Faces
-# ---------------------------------------------------------------------------
-
-
-class BoundingBox(BaseModel):
-    """Face detection bounding box."""
-
-    x: int
-    y: int
-    width: int
-    height: int
-
-
-class FaceKeypoint(BaseModel):
-    """One keypoint of a face detection."""
-
-    type: str
-    x: float
-    y: float
-
-
-class FaceCreateRequest(BaseModel):
-    """Request body for ingesting a face detection."""
-
-    identifier: str | None = None
-    source_id: uuid.UUID | None = None
-    source: SourceDescriptorRequest | None = None
-    bounding_box: BoundingBox
-    keypoints: list[FaceKeypoint]
-    embeddings: list[ModelEmbedding] = Field(default_factory=list[ModelEmbedding])
-    entity_id: uuid.UUID | None = None
-    confidence: float = Field(ge=0.0, le=1.0)
-
-    @field_validator("embeddings")
-    @classmethod
-    def validate_unique_embeddings(
-        cls, embeddings: list[ModelEmbedding]
-    ) -> list[ModelEmbedding]:
-        _require_unique_model_embeddings(embeddings)
-        return embeddings
-
-    @model_validator(mode="after")
-    def validate_source_selector(self) -> FaceCreateRequest:
-        has_source_id = self.source_id is not None
-        has_source = self.source is not None
-        if has_source_id == has_source:
-            raise ValueError("provide exactly one of source_id or source")
-        return self
-
-
-class FaceEmbeddingUpdateRequest(BaseModel):
-    """Upsert several model vectors for one existing face detection."""
-
-    detection_id: uuid.UUID
-    embeddings: list[ModelEmbedding] = Field(min_length=1)
-
-    @field_validator("embeddings")
-    @classmethod
-    def validate_unique_embeddings(
-        cls, embeddings: list[ModelEmbedding]
-    ) -> list[ModelEmbedding]:
-        _require_unique_model_embeddings(embeddings)
-        return embeddings
-
-
-class FaceEmbeddingBatchUpdateResponse(BaseModel):
-    """Summary of a face embedding backfill batch."""
-
-    updated_count: int = Field(ge=0)
-
-
-class FaceResponse(BaseModel):
-    """A single face detection record."""
-
-    detection_id: uuid.UUID
-    identifier: str | None = None
-    source_id: uuid.UUID
-    bounding_box: BoundingBox
-    keypoints: list[FaceKeypoint]
-    user_id: uuid.UUID
-    entity_id: uuid.UUID | None = Field(default=None)
-    confidence: float
-
-
-class FaceListResponse(GenericListResponse[FaceResponse]):
-    """A paginated list of face detections."""
-
-    items: list[FaceResponse]
-
-
-class FaceEntityPatchRequest(BaseModel):
-    """Patch body for assigning a face, or unassigning it with a null entity ID."""
-
-    entity_id: uuid.UUID | None
+__all__ = [
+    "MAX_ENTITY_BATCH_SIZE",
+    "EntityCreateRequest",
+    "EntityBatchCreateRequest",
+    "EntityPatchRequest",
+    "EntityPatchBatchItem",
+    "EntityBatchPatchRequest",
+    "EntityResponse",
+    "EntityListResponse",
+    "EntityListFilter",
+    "EntityListRequest",
+    "EntityDeleteManyRequest",
+    "EntityDeleteManyResponse",
+]

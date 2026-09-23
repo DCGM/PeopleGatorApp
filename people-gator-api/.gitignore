@@ -3,6 +3,7 @@ notebooks/
 __pycache__/
 *.py[codz]
 *$py.class
+src/people_gator_api/_version.py
 
 # C extensions
 *.so
