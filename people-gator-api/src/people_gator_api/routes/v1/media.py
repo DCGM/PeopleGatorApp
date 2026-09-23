@@ -2,29 +2,32 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Response, status
 from pydantic import AnyUrl
 
 from people_gator_api.persistence.contracts import CreateResult
+from people_gator_api.routes.v1.query_dependencies import (
+    DocumentListFilterDependency,
+    ImageListFilterDependency,
+    ListRequestDependency,
+    PageListFilterDependency,
+)
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
     DocumentBatchCreateRequest,
     DocumentCreateRequest,
-    DocumentListFilter,
     DocumentListRequest,
     DocumentListResponse,
     DocumentLookupRequest,
     DocumentResponse,
     ImageBatchCreateRequest,
     ImageCreateRequest,
-    ImageListFilter,
     ImageListRequest,
     ImageListResponse,
     ImageLookupRequest,
     ImageResponse,
     PageBatchCreateRequest,
     PageCreateRequest,
-    PageListFilter,
     PageListRequest,
     PageListResponse,
     PageLookupRequest,
@@ -39,7 +42,7 @@ from people_gator_api.services.database_service import (
     DatabaseDependency,
     WeaviateSessionDependency,
 )
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 router = APIRouter()
 
@@ -98,24 +101,16 @@ async def _fetch_text_mention_spans_for_page(
 async def list_documents_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
-    library: str | None = None,
-    document_id: uuid.UUID | None = None,
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: DocumentListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> DocumentListResponse:
     del user
-    values: dict[str, object] = {}
-    if library is not None:
-        values["library"] = [library]
-    if document_id is not None:
-        values["document_id"] = [document_id]
     return await database.sources.list_documents(
         DocumentListRequest(
-            filter=DocumentListFilter.model_validate(values),
-            limit=limit,
-            return_total_count=return_total_count,
-            cursor=cursor,
+            filter_=filter,
+            limit=list_request.limit,
+            return_total_count=list_request.return_total_count,
+            cursor=list_request.cursor,
         )
     )
 
@@ -219,27 +214,16 @@ async def delete_document_route(
 async def list_pages_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
-    library: str | None = None,
-    document_id: uuid.UUID | None = None,
-    page_id: uuid.UUID | None = None,
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: PageListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> PageListResponse:
     del user
-    values: dict[str, object] = {}
-    if library is not None:
-        values["library"] = [library]
-    if document_id is not None:
-        values["document_id"] = [document_id]
-    if page_id is not None:
-        values["page_id"] = [page_id]
     return await database.sources.list_pages(
         PageListRequest(
-            filter=PageListFilter.model_validate(values),
-            limit=limit,
-            return_total_count=return_total_count,
-            cursor=cursor,
+            filter_=filter,
+            limit=list_request.limit,
+            return_total_count=list_request.return_total_count,
+            cursor=list_request.cursor,
         )
     )
 
@@ -417,18 +401,16 @@ async def delete_page_route(
 async def list_images_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
-    url: AnyUrl | None = None,
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: ImageListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> ImageListResponse:
     del user
     return await database.sources.list_images(
         ImageListRequest(
-            filter=ImageListFilter(url=[url]) if url is not None else ImageListFilter(),
-            limit=limit,
-            return_total_count=return_total_count,
-            cursor=cursor,
+            filter_=filter,
+            limit=list_request.limit,
+            return_total_count=list_request.return_total_count,
+            cursor=list_request.cursor,
         )
     )
 

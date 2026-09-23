@@ -147,7 +147,7 @@ class FaceListFilter(ListFilterBase):
 
 class FaceListRequest(GenericListRequest):
     """Request body for listing faces with optional filters."""
-    filter: FaceListFilter | MissingType = Field(default=MISSING, description="The filter criteria to select faces.")
+    filter_: FaceListFilter | MissingType = Field(default=MISSING, description="The filter criteria to select faces.")
 
 
 __all__ = [

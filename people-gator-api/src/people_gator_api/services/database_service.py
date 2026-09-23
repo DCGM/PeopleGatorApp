@@ -9,16 +9,20 @@ from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
 from fastapi import Depends
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy import URL
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
 
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.persistence.postgres import postgres_database
-from people_gator_api.services.postgres_demo.database import (
-    create_postgres_schema,
-    make_postgres_engine,
-    make_postgres_session_factory,
-)
+from people_gator_api.models import Base
+
 from people_gator_api.settings import settings
 
 
@@ -36,6 +40,26 @@ def _postgres_url() -> str:
         port=config.port,
         database=config.database,
     ).render_as_string(hide_password=False)
+
+def make_postgres_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
+    """Build an asyncpg engine for the isolated demo database."""
+    if not database_url.startswith("postgresql+asyncpg://"):
+        raise ValueError("database_url must use the postgresql+asyncpg driver")
+
+    return create_async_engine(database_url, echo=echo, pool_pre_ping=True)
+
+
+def make_postgres_session_factory(
+    engine: AsyncEngine,
+) -> async_sessionmaker[AsyncSession]:
+    """Create non-expiring sessions suitable for request-scoped dependencies."""
+    return async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def create_postgres_schema(engine: AsyncEngine) -> None:
+    """Create extensions and demo tables; intentionally separate from API startup."""
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
 
 
 async def init_postgres() -> None:

@@ -84,7 +84,7 @@ class TextMentionListFilter(ListFilterBase):
 
 class TextMentionListRequest(GenericListRequest):
     """Request body for listing text mentions."""
-    filter: TextMentionListFilter | MissingType = Field(default=MISSING)
+    filter_: TextMentionListFilter | MissingType = Field(default=MISSING)
 
 
 class TextMentionListResponse(GenericListResponse[TextMentionResponse]):

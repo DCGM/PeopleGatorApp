@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 
 from people_gator_api.schemas.entities import (
     EntityBatchCreateRequest,
@@ -10,67 +10,42 @@ from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityDeleteManyRequest,
     EntityDeleteManyResponse,
-    EntityListFilter,
     EntityListRequest,
     EntityListResponse,
     EntityPatchRequest,
     EntityResponse,
 )
-from people_gator_api.schemas.enums import EntityType
-from people_gator_api.schemas.missing import MISSING, MissingType
+from people_gator_api.routes.v1.query_dependencies import (
+    EntityListFilterDependency,
+    ListRequestDependency,
+)
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     AnnotatorUserDependency,
     BrowseUserDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["entities"])
-
-
-def _entity_filter(**values: object) -> EntityListFilter | MissingType:
-    supplied = {name: value for name, value in values.items() if value is not None}
-    return EntityListFilter.model_validate(supplied) if supplied else MISSING
 
 
 @router.get("/entities", response_model=EntityListResponse)
 async def list_entities_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
-    entity_id: list[uuid.UUID] | None = Query(default=None),
-    entity_type: list[EntityType] | None = Query(default=None),
-    wikidata_id: list[str] | None = Query(default=None),
-    nlcr_authority_id: list[str] | None = Query(default=None),
-    source_id: list[uuid.UUID] | None = Query(default=None),
-    detection_id: list[uuid.UUID] | None = Query(default=None),
-    mention_id: list[uuid.UUID] | None = Query(default=None),
-    has_mentions: bool | None = None,
-    has_detections: bool | None = None,
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: EntityListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> EntityListResponse:
     del user
-    filter_ = _entity_filter(
-        entity_id=entity_id,
-        entity_type=entity_type,
-        wikidata_id=wikidata_id,
-        nlcr_authority_id=nlcr_authority_id,
-        source_id=source_id,
-        detection_id=detection_id,
-        mention_id=mention_id,
-        has_mentions=has_mentions,
-        has_detections=has_detections,
-    )
     try:
         return await database.entities.list(
             EntityListRequest(
-                filter=filter_,
-                limit=limit,
-                return_total_count=return_total_count,
-                cursor=cursor,
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
             )
         )
     except ValueError as exc:

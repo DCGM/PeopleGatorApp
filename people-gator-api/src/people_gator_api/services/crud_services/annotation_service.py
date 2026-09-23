@@ -18,7 +18,7 @@ from people_gator_api.schemas.entities import (
 from people_gator_api.services.crud_services.source_resolution_service import (
     resolve_source_reference,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     FACE_COLLECTION,
     FACE_VECTOR_PREFIX,
     model_vector_name,

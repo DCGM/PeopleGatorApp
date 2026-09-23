@@ -6,7 +6,7 @@ from weaviate.classes.config import DataType, Property, ReferenceProperty
 from weaviate.exceptions import UnexpectedStatusCodeError
 
 from people_gator_api.services.weaviate_service import client
-from people_gator_api.services.weaviate_service import db_schema
+from people_gator_api import weaviate_schema
 
 
 class _FakeCollections:
@@ -109,29 +109,29 @@ def test_ordered_collection_specs_respect_reference_dependencies() -> None:
     ordered_collection_names = [
         collection_name
         for collection_name, _ in client.ordered_collection_specs(
-            db_schema.ALL_COLLECTION_SPECS
+            weaviate_schema.ALL_COLLECTION_SPECS
         )
     ]
 
     assert ordered_collection_names.index(
-        db_schema.USER_COLLECTION
-    ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
+        weaviate_schema.USER_COLLECTION
+    ) < ordered_collection_names.index(weaviate_schema.ENTITY_COLLECTION)
     assert ordered_collection_names.index(
-        db_schema.ENTITY_COLLECTION
-    ) < ordered_collection_names.index(db_schema.TEXT_MENTION_COLLECTION)
+        weaviate_schema.ENTITY_COLLECTION
+    ) < ordered_collection_names.index(weaviate_schema.TEXT_MENTION_COLLECTION)
     assert ordered_collection_names.index(
-        db_schema.SOURCE_COLLECTION
-    ) < ordered_collection_names.index(db_schema.TEXT_MENTION_COLLECTION)
+        weaviate_schema.SOURCE_COLLECTION
+    ) < ordered_collection_names.index(weaviate_schema.TEXT_MENTION_COLLECTION)
     assert ordered_collection_names.index(
-        db_schema.SOURCE_COLLECTION
-    ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
+        weaviate_schema.SOURCE_COLLECTION
+    ) < ordered_collection_names.index(weaviate_schema.ENTITY_COLLECTION)
     assert ordered_collection_names.index(
-        db_schema.USER_COLLECTION
-    ) < ordered_collection_names.index(db_schema.ENTITY_COLLECTION)
+        weaviate_schema.USER_COLLECTION
+    ) < ordered_collection_names.index(weaviate_schema.ENTITY_COLLECTION)
 
 
 def test_ordered_collection_specs_reject_cycles() -> None:
-    cyclic_specs: dict[str, db_schema.CollectionSpec] = {
+    cyclic_specs: dict[str, weaviate_schema.CollectionSpec] = {
         "Alpha": (
             [],
             [
@@ -165,7 +165,7 @@ async def test_ensure_collections_creates_only_missing_collections() -> None:
     collection_names_in_order = [
         collection_name
         for collection_name, _ in client.ordered_collection_specs(
-            db_schema.ALL_COLLECTION_SPECS
+            weaviate_schema.ALL_COLLECTION_SPECS
         )
     ]
     existing_collections = set(collection_names_in_order[:2])
@@ -205,7 +205,7 @@ async def test_ensure_collections_runs_existence_checks_before_create_calls() ->
     expected_collection_names = [
         collection_name
         for collection_name, _ in client.ordered_collection_specs(
-            db_schema.ALL_COLLECTION_SPECS
+            weaviate_schema.ALL_COLLECTION_SPECS
         )
     ]
     assert existence_checks == expected_collection_names
@@ -247,7 +247,7 @@ async def test_add_missing_properties_is_additive_and_idempotent() -> None:
 
     await client._add_missing_properties(  # pyright: ignore[reportArgumentType]
         fake_client,
-        db_schema.FACE_COLLECTION,
+        weaviate_schema.FACE_COLLECTION,
         [existing, missing],
     )
 

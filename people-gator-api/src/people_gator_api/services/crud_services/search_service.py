@@ -27,7 +27,7 @@ from people_gator_api.services.weaviate_service.archive_search import search_arc
 from people_gator_api.services.weaviate_service.assignments import (
     assigned_reference_ids,
 )
-from people_gator_api.services.weaviate_service.db_schema import FACE_VECTOR_BY_MODEL
+from people_gator_api.weaviate_schema import FACE_VECTOR_BY_MODEL
 from people_gator_api.services.weaviate_service.search import (
     fetch_face_vectors,
     search_entities_by_faces_vectors,

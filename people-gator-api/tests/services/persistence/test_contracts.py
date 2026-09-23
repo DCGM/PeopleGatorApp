@@ -106,7 +106,7 @@ def test_postgres_database_exposes_only_contract_repositories() -> None:
 def test_postgres_cursor_is_opaque_and_bound_to_query_inputs() -> None:
     item_id = uuid.uuid4()
     query = EntityListRequest(
-        filter=EntityListFilter(entity_id=[item_id]),
+        filter_=EntityListFilter(entity_id=[item_id]),
         limit=20,
     )
     fingerprint = _cursor_fingerprint(query)
@@ -116,7 +116,7 @@ def test_postgres_cursor_is_opaque_and_bound_to_query_inputs() -> None:
     assert _decode_cursor(cursor, fingerprint) == item_id
 
     changed_query = EntityListRequest(
-        filter=EntityListFilter(entity_id=[item_id]),
+        filter_=EntityListFilter(entity_id=[item_id]),
         limit=10,
     )
     with pytest.raises(ValueError, match="different query"):

@@ -18,7 +18,7 @@ from weaviate.collections.classes.types import WeaviateProperties
 from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.services.crud_services.page_layout_service import get_page_layout
-from people_gator_api.services.weaviate_service.db_schema import TEXT_MENTION_COLLECTION
+from people_gator_api.weaviate_schema import TEXT_MENTION_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
     optional_entity_type,
     reference_id_filter,

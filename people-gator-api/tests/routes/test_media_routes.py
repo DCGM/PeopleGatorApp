@@ -43,12 +43,12 @@ def test_source_list_exposes_contract_filters_and_opaque_cursor() -> None:
 
     parameters = app.openapi()["paths"]["/sources"]["get"]["parameters"]
     assert {parameter["name"] for parameter in parameters} == {
-        "source_type",
-        "url",
-        "source_id",
-        "entity_id",
-        "detection_id",
-        "mention_id",
+        "filter.source_type",
+        "filter.url",
+        "filter.source_id",
+        "filter.entity_id",
+        "filter.detection_id",
+        "filter.mention_id",
         "limit",
         "return_total_count",
         "cursor",
@@ -67,15 +67,15 @@ def test_annotation_lists_only_accept_direct_source_filters() -> None:
         parameter["name"]
         for parameter in spec["paths"]["/faces"]["get"]["parameters"]
     }
-    source_selectors = {"source_id", "page", "document", "image"}
-    assert face_parameters & source_selectors == {"source_id"}
-    assert "entity_id" in face_parameters
+    source_selectors = {"filter.source_id", "page", "document", "image"}
+    assert face_parameters & source_selectors == {"filter.source_id"}
+    assert "filter.entity_id" in face_parameters
 
     entity_parameters = {
         parameter["name"]
         for parameter in spec["paths"]["/entities"]["get"]["parameters"]
     }
-    assert entity_parameters & source_selectors == {"source_id"}
+    assert entity_parameters & source_selectors == {"filter.source_id"}
 
     assert "/page-mentions" not in spec["paths"]
     assert "/document-mentions" not in spec["paths"]

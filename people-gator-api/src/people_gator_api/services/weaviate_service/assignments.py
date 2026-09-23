@@ -11,7 +11,7 @@ from weaviate.classes.query import Filter
 from weaviate.collections.classes.internal import CrossReferences
 
 from people_gator_api.schemas.enums import AssignmentType
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,
 )

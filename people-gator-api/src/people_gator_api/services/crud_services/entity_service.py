@@ -25,7 +25,7 @@ from people_gator_api.services.crud_services.media_service import (
 from people_gator_api.services.weaviate_service.assignments import (
     assigned_reference_ids,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     model_vector_name,
 )

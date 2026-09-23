@@ -16,7 +16,7 @@ from people_gator_api.schemas.entities import (
     ModelEmbedding,
 )
 from people_gator_api.services.crud_services import entity_service
-from people_gator_api.services.weaviate_service.db_schema import model_vector_name
+from people_gator_api.weaviate_schema import model_vector_name
 
 
 class _Data:

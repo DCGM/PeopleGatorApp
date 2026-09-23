@@ -38,7 +38,7 @@ from people_gator_api.services.crud_services.source_service import (
     get_source,
     list_sources,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,
 )

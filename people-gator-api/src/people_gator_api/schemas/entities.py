@@ -178,7 +178,7 @@ class EntityListFilter(ListFilterBase):
 class EntityListRequest(GenericListRequest):
     """Request body for listing entities with optional filters."""
 
-    filter: EntityListFilter | MissingType = Field(
+    filter_: EntityListFilter | MissingType = Field(
         default=MISSING, description="The filter criteria to select entities."
     )
 

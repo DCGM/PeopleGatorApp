@@ -14,7 +14,7 @@ from people_gator_api.services.weaviate_service.archive_search import (
     _entity_source_ranking,
     _source_candidate_from_properties,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,

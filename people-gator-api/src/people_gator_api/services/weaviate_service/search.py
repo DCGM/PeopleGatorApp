@@ -27,7 +27,7 @@ from weaviate.collections.classes.types import WeaviateField
 from people_gator_api.schemas.entities import BoundingBox
 from people_gator_api.schemas.enums import EntityType, ScoreAggregation
 from people_gator_api.schemas.search import FoundEntity, FoundFace
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
 )

@@ -2,21 +2,24 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 
 from people_gator_api.schemas.users import (
-    UserListFilter,
     UserListRequest,
     UserListResponse,
     UserPatchRequest,
     UserResponse,
+)
+from people_gator_api.routes.v1.query_dependencies import (
+    ListRequestDependency,
+    UserListFilterDependency,
 )
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
     AnnotatorUserDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["users"])
@@ -31,34 +34,17 @@ async def get_me_route(current_user: AnnotatorUserDependency) -> UserResponse:
 async def list_users_route(
     database: DatabaseDependency,
     current_user: AdminUserDependency,
-    display_name: list[str] | None = Query(default=None),
-    is_active: list[bool] | None = Query(default=None),
-    external_subject: list[str] | None = Query(default=None),
-    external_issuer: list[str] | None = Query(default=None),
-    email: list[str] | None = Query(default=None),
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: UserListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> UserListResponse:
     del current_user
-    values = {
-        name: value
-        for name, value in {
-            "display_name": display_name,
-            "is_active": is_active,
-            "external_subject": external_subject,
-            "external_issuer": external_issuer,
-            "email": email,
-        }.items()
-        if value is not None
-    }
     try:
         return await database.users.list(
             UserListRequest(
-                filter=UserListFilter.model_validate(values),
-                limit=limit,
-                return_total_count=return_total_count,
-                cursor=cursor,
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
             )
         )
     except ValueError as exc:

@@ -16,7 +16,7 @@ from weaviate.collections.classes.types import WeaviateProperties
 
 from people_gator_api.schemas.enums import AssignmentType, SourceKind
 from people_gator_api.services.weaviate_service.assignments import source_has_assignment
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
     SOURCE_COLLECTION,

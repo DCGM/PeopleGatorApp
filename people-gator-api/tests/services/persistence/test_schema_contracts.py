@@ -38,12 +38,12 @@ def test_typed_source_list_conversion_preserves_kind_and_count_request() -> None
     image = to_generic_list_request(ImageListRequest(limit=5))
     generic = to_generic_list_request(SourceListRequest(limit=5))
 
-    assert not is_missing(page.filter)
-    assert page.filter.source_type == [SourceKind.page]
+    assert not is_missing(page.filter_)
+    assert page.filter_.source_type == [SourceKind.page]
     assert page.return_total_count is True
-    assert not is_missing(image.filter)
-    assert image.filter.source_type == [SourceKind.image]
-    assert generic.filter is MISSING
+    assert not is_missing(image.filter_)
+    assert image.filter_.source_type == [SourceKind.image]
+    assert generic.filter_ is MISSING
 
 
 def test_source_lookup_requires_one_complete_identity() -> None:

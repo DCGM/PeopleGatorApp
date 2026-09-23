@@ -121,7 +121,7 @@ async def test_postgres_contract_round_trip() -> None:
 
             first_page = await database.entities.list(
                 EntityListRequest(
-                    filter=EntityListFilter(entity_id=created_entity_ids),
+                    filter_=EntityListFilter(entity_id=created_entity_ids),
                     limit=1,
                     return_total_count=True,
                 )
@@ -132,7 +132,7 @@ async def test_postgres_contract_round_trip() -> None:
 
             second_page = await database.entities.list(
                 EntityListRequest(
-                    filter=EntityListFilter(entity_id=created_entity_ids),
+                    filter_=EntityListFilter(entity_id=created_entity_ids),
                     limit=1,
                     return_total_count=True,
                     cursor=first_page.cursor,
@@ -143,7 +143,7 @@ async def test_postgres_contract_round_trip() -> None:
             with pytest.raises(ValueError, match="different query"):
                 await database.entities.list(
                     EntityListRequest(
-                        filter=EntityListFilter(entity_id=[entities[0].entity_id]),
+                        filter_=EntityListFilter(entity_id=[entities[0].entity_id]),
                         limit=1,
                         return_total_count=True,
                         cursor=first_page.cursor,
@@ -201,7 +201,7 @@ async def test_postgres_contract_round_trip() -> None:
             assert (
                 await database.faces.list(
                     FaceListRequest(
-                        filter=FaceListFilter(entity_id=[entities[0].entity_id]),
+                        filter_=FaceListFilter(entity_id=[entities[0].entity_id]),
                         limit=10,
                     )
                 )
@@ -227,7 +227,7 @@ async def test_postgres_contract_round_trip() -> None:
                 (
                     await database.text_mentions.list(
                         TextMentionListRequest(
-                            filter=TextMentionListFilter(source_id=[page.source_id]),
+                            filter_=TextMentionListFilter(source_id=[page.source_id]),
                             limit=10,
                         )
                     )
@@ -237,7 +237,7 @@ async def test_postgres_contract_round_trip() -> None:
             search = await database.entities.search(
                 SearchEntitiesRequest(
                     query=QueryBase(text=[f"Ada {marker}"]),
-                    filter=EntityListFilter(entity_id=created_entity_ids),
+                    filter_=EntityListFilter(entity_id=created_entity_ids),
                     limit=10,
                     return_total_count=True,
                 )
@@ -248,7 +248,7 @@ async def test_postgres_contract_round_trip() -> None:
             face_search = await database.faces.search(
                 SearchFacesRequest(
                     query=QueryBase(face_id=[face.detection_id]),
-                    filter=FaceListFilter(detection_id=[other_face.detection_id]),
+                    filter_=FaceListFilter(detection_id=[other_face.detection_id]),
                     limit=10,
                 )
             )
@@ -258,7 +258,7 @@ async def test_postgres_contract_round_trip() -> None:
             entity_face_search = await database.entities.search(
                 SearchEntitiesRequest(
                     query=QueryBase(face_id=[face.detection_id]),
-                    filter=EntityListFilter(entity_id=[entities[1].entity_id]),
+                    filter_=EntityListFilter(entity_id=[entities[1].entity_id]),
                     limit=10,
                 )
             )
@@ -267,7 +267,7 @@ async def test_postgres_contract_round_trip() -> None:
             page_search = await database.sources.search_pages(
                 SearchPagesRequest(
                     query=QueryBase(text=["integration"]),
-                    filter=PageListFilter(source_id=[page.source_id]),
+                    filter_=PageListFilter(source_id=[page.source_id]),
                     limit=10,
                 )
             )
@@ -276,7 +276,7 @@ async def test_postgres_contract_round_trip() -> None:
             document_search = await database.sources.search_documents(
                 SearchDocumentsRequest(
                     query=QueryBase(text=["integration"]),
-                    filter=DocumentListFilter(source_id=[document.source_id]),
+                    filter_=DocumentListFilter(source_id=[document.source_id]),
                     limit=10,
                 )
             )
@@ -290,7 +290,7 @@ async def test_postgres_contract_round_trip() -> None:
             assert (
                 await database.users.list(
                     UserListRequest(
-                        filter=UserListFilter(display_name=[f"Changed {marker}"]),
+                        filter_=UserListFilter(display_name=[f"Changed {marker}"]),
                         limit=10,
                     )
                 )

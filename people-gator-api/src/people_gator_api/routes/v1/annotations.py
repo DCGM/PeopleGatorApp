@@ -6,13 +6,16 @@ from fastapi import APIRouter, Query, Response, status
 
 from people_gator_api.schemas.faces import (
     FaceCreateRequest,
-    FaceListFilter,
     FaceListRequest,
     FaceListResponse,
     FacePatchRequest,
     FaceResponse,
     FacesBatchCreateRequest,
     FacesBatchPatchRequest,
+)
+from people_gator_api.routes.v1.query_dependencies import (
+    FaceListFilterDependency,
+    ListRequestDependency,
 )
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
@@ -24,7 +27,7 @@ from people_gator_api.services.database_service import (
     DatabaseDependency,
     WeaviateSessionDependency,
 )
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["annotations"])
@@ -34,30 +37,17 @@ router = APIRouter(tags=["annotations"])
 async def list_faces_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
-    source_id: list[uuid.UUID] | None = Query(default=None),
-    entity_id: list[uuid.UUID] | None = Query(default=None),
-    detection_id: list[uuid.UUID] | None = Query(default=None),
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: FaceListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> FaceListResponse:
     del user
-    values = {
-        name: value
-        for name, value in {
-            "source_id": source_id,
-            "entity_id": entity_id,
-            "detection_id": detection_id,
-        }.items()
-        if value is not None
-    }
     try:
         return await database.faces.list(
             FaceListRequest(
-                filter=FaceListFilter(**values),
-                limit=limit,
-                return_total_count=return_total_count,
-                cursor=cursor,
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
             )
         )
     except ValueError as exc:

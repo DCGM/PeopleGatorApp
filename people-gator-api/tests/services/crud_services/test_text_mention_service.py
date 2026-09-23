@@ -10,7 +10,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionResponse,
 )
 from people_gator_api.services.crud_services import text_mention_service
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     TEXT_MENTION_COLLECTION,
 )
 

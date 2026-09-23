@@ -22,7 +22,7 @@ from people_gator_api.schemas.search import (
 )
 from people_gator_api.services.crud_services import search_service
 from people_gator_api.services.weaviate_service import search as weaviate_search
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
     FACE_VECTOR_BY_MODEL,

@@ -123,7 +123,7 @@ from people_gator_api.schemas.users import (
     UserPatchRequest,
     UserResponse,
 )
-from people_gator_api.services.postgres_demo.models import (
+from people_gator_api.models import (
     Alias,
     Document,
     Entity,
@@ -628,7 +628,7 @@ class PostgresEntityRepository(EntityRepository):
         return _entity_response(entity) if entity is not None else None
 
     async def list(self, query: EntityListRequest) -> EntityListResponse:
-        filters = _entity_filters(query.filter)
+        filters = _entity_filters(query.filter_)
         fingerprint = _cursor_fingerprint(query)
         cursor_id = _decode_cursor(query.cursor, fingerprint)
         await _validate_cursor(self._session, Entity, cursor_id, filters)
@@ -844,7 +844,7 @@ class PostgresEntityRepository(EntityRepository):
     async def search(
         self, query: SearchEntitiesRequest
     ) -> SearchEntitiesResultListResponse:
-        filters = _entity_filters(query.filter)
+        filters = _entity_filters(query.filter_)
         ranked = _fuse_scores(
             await self._text_scores(query, filters),
             await self._face_scores(query, filters),
@@ -913,7 +913,7 @@ class PostgresSourceRepository(SourceRepository):
     async def list(
         self, query: GenericSourceListRequest
     ) -> GenericSourceListResponse:
-        filters = _source_filters(query.filter)
+        filters = _source_filters(query.filter_)
         fingerprint = _cursor_fingerprint(query)
         cursor_id = _decode_cursor(query.cursor, fingerprint)
         await _validate_cursor(self._session, Source, cursor_id, filters)
@@ -1109,7 +1109,7 @@ class PostgresSourceRepository(SourceRepository):
         self, query: SearchPagesRequest
     ) -> SearchPagesResultListResponse:
         generic_filter = (
-            query.filter.to_generic() if query.filter is not None else MISSING
+            query.filter_.to_generic() if query.filter_ is not None else MISSING
         )
         filters = _source_filters(generic_filter)
         filters.append(Source.source_type == SourceKind.page.value)
@@ -1136,7 +1136,7 @@ class PostgresSourceRepository(SourceRepository):
         self, query: SearchDocumentsRequest
     ) -> SearchDocumentsResultListResponse:
         generic_filter = (
-            query.filter.to_generic() if query.filter is not None else MISSING
+            query.filter_.to_generic() if query.filter_ is not None else MISSING
         )
         filters = _source_filters(generic_filter)
         filters.append(Source.source_type == SourceKind.document.value)
@@ -1182,7 +1182,7 @@ class PostgresFaceRepository(FaceRepository):
         return _face_response(face) if face is not None else None
 
     async def list(self, query: FaceListRequest) -> FaceListResponse:
-        filters = _face_filters(query.filter)
+        filters = _face_filters(query.filter_)
         fingerprint = _cursor_fingerprint(query)
         cursor_id = _decode_cursor(query.cursor, fingerprint)
         await _validate_cursor(self._session, Face, cursor_id, filters)
@@ -1409,7 +1409,7 @@ class PostgresFaceRepository(FaceRepository):
         return _aggregate_scores(collected, query.query.score_aggregation)
 
     async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
-        filters = _face_filters(query.filter)
+        filters = _face_filters(query.filter_)
         ranked = _fuse_scores(
             await self._text_scores(query, filters),
             await self._face_scores(query, filters),
@@ -1458,7 +1458,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         return _mention_response(mention) if mention is not None else None
 
     async def list(self, query: TextMentionListRequest) -> TextMentionListResponse:
-        filters = _mention_filters(query.filter)
+        filters = _mention_filters(query.filter_)
         fingerprint = _cursor_fingerprint(query)
         cursor_id = _decode_cursor(query.cursor, fingerprint)
         await _validate_cursor(self._session, TextMention, cursor_id, filters)
@@ -1594,7 +1594,7 @@ class PostgresUserRepository(UserRepository):
         return _user_response(user) if user is not None else None
 
     async def list(self, query: UserListRequest) -> UserListResponse:
-        filters = _user_filters(query.filter)
+        filters = _user_filters(query.filter_)
         fingerprint = _cursor_fingerprint(query)
         cursor_id = _decode_cursor(query.cursor, fingerprint)
         await _validate_cursor(self._session, User, cursor_id, filters)

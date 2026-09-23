@@ -73,7 +73,7 @@ from people_gator_api.persistence.contracts import (
     UserRepository,
     GenericActor,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,

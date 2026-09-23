@@ -14,7 +14,7 @@ from people_gator_api.schemas.users import (
     UserPatchRequest,
     UserResponse,
 )
-from people_gator_api.services.weaviate_service.db_schema import USER_COLLECTION
+from people_gator_api.weaviate_schema import USER_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,

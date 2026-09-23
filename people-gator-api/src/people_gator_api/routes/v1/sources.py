@@ -2,10 +2,13 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 from pydantic import AnyUrl
 
-from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.routes.v1.query_dependencies import (
+    ListRequestDependency,
+    SourceListFilterDependency,
+)
 from people_gator_api.schemas.sources import (
     SourceListFilter,
     SourceListRequest,
@@ -17,7 +20,7 @@ from people_gator_api.services.auth_service import (
     DataIngestUserDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["sources"])
@@ -27,36 +30,17 @@ router = APIRouter(tags=["sources"])
 async def list_sources_route(
     database: DatabaseDependency,
     user: DataIngestUserDependency,
-    source_type: list[SourceKind] | None = Query(default=None),
-    url: list[AnyUrl] | None = Query(default=None),
-    source_id: list[uuid.UUID] | None = Query(default=None),
-    entity_id: list[uuid.UUID] | None = Query(default=None),
-    detection_id: list[uuid.UUID] | None = Query(default=None),
-    mention_id: list[uuid.UUID] | None = Query(default=None),
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: SourceListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> SourceListResponse:
     del user
-    values = {
-        name: value
-        for name, value in {
-            "source_type": source_type,
-            "url": url,
-            "source_id": source_id,
-            "entity_id": entity_id,
-            "detection_id": detection_id,
-            "mention_id": mention_id,
-        }.items()
-        if value is not None
-    }
     try:
         return await database.sources.list_sources(
             SourceListRequest(
-                filter=SourceListFilter.model_validate(values),
-                limit=limit,
-                return_total_count=return_total_count,
-                cursor=cursor,
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
             )
         )
     except ValueError as exc:
@@ -73,7 +57,7 @@ async def lookup_source_route(
     del user
     result = await database.sources.list_sources(
         SourceListRequest(
-            filter=SourceListFilter(url=[url]),
+            filter_=SourceListFilter(url=[url]),
             limit=2,
             return_total_count=False,
         )

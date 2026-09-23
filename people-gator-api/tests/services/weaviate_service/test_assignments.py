@@ -10,7 +10,7 @@ from people_gator_api.services.weaviate_service.assignments import (
     assigned_reference_ids,
     source_has_assignment,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,
 )

@@ -19,7 +19,7 @@ from people_gator_api.schemas.sources import (
     SourceMetadata,
     SourceRecord,
 )
-from people_gator_api.services.weaviate_service.db_schema import SOURCE_COLLECTION
+from people_gator_api.weaviate_schema import SOURCE_COLLECTION
 from people_gator_api.services.weaviate_service.utils import (
     combine_filters,
     empty_reference_queries,

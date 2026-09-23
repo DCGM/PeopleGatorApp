@@ -12,7 +12,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionListResponse,
     TextMentionResponse,
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     TEXT_MENTION_COLLECTION,
 )
 from people_gator_api.services.weaviate_service.utils import (

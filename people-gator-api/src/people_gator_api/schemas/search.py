@@ -111,7 +111,7 @@ class GenericSearchRequest[F: BaseModel](GenericListRequest):
         ...,
         description="The search query containing text and face IDs.",
     )
-    filter: F | None = Field(
+    filter_: F | None = Field(
         default=None,
         description="Optional filter to apply to the search results.",
     )

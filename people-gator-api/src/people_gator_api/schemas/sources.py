@@ -767,34 +767,34 @@ def to_generic_list_filter(
 # ---------------------------------------------------------------------------
 
 class SourceListRequest(GenericListRequest):
-    filter: SourceListFilter | MissingType = Field(
+    filter_: SourceListFilter | MissingType = Field(
         default=MISSING, description="Filter for listing sources."
     )
 
 
 class PageListRequest(GenericListRequest):
-    filter: PageListFilter | MissingType = Field(
+    filter_: PageListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing pages."
     )
 
 
 class DocumentListRequest(GenericListRequest):
-    filter: DocumentListFilter | MissingType = Field(
+    filter_: DocumentListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing documents."
     )
 
 
 class ImageListRequest(GenericListRequest):
-    filter: ImageListFilter | MissingType = Field(
+    filter_: ImageListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing images."
     )
 
 
 class GenericSourceListRequest(GenericListRequest):
-    filter: GenericSourceListFilter | MissingType = Field(
+    filter_: GenericSourceListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing generic sources."
     )
@@ -816,7 +816,7 @@ def to_generic_list_request(
         source_type = None
 
     return GenericSourceListRequest(
-        filter=to_generic_list_filter(request.filter, source_type),
+        filter_=to_generic_list_filter(request.filter_, source_type),
         limit=request.limit,
         return_total_count=request.return_total_count,
         cursor=request.cursor,

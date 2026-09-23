@@ -17,7 +17,7 @@ from people_gator_api.schemas.sources import (
     SourceRecordListResponse,
 )
 from people_gator_api.services.crud_services import media_service
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     FACE_COLLECTION,
     TEXT_MENTION_COLLECTION,
 )

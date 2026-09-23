@@ -13,7 +13,7 @@ from people_gator_api.services.crud_services.source_resolution_service import (
     resolve_source_filter,
 )
 from people_gator_api.services.database_service import WeaviateSessionDependency
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 
 async def source_filter_dependency(

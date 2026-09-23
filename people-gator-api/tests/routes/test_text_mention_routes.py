@@ -22,8 +22,8 @@ def test_text_mention_list_exposes_source_and_entity_filters() -> None:
     parameters = {parameter["name"] for parameter in operation["parameters"]}
 
     assert {
-        "source_id",
-        "entity_id",
+        "filter.source_id",
+        "filter.entity_id",
         "limit",
         "return_total_count",
         "cursor",

@@ -7,7 +7,7 @@ from people_gator_api.schemas.translation import (
     TranslationResponse,
 )
 from people_gator_api.services.auth_service import BrowseUserDependency
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 from people_gator_api.services.openrouter_service import (
     OpenRouterError,
     get_openrouter_service,

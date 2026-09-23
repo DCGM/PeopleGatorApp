@@ -82,7 +82,7 @@ class UserListFilter(ListFilterBase):
     )
 
 class UserListRequest(GenericListRequest):
-    filter: UserListFilter | MissingType = Field(
+    filter_: UserListFilter | MissingType = Field(
         default=MISSING,
         description="Filter criteria for listing users."
     )

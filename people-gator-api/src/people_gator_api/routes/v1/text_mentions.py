@@ -2,17 +2,20 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 
 from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
-    TextMentionListFilter,
     TextMentionListRequest,
     TextMentionListResponse,
     TextMentionPatchRequest,
     TextMentionResponse,
     TextMentionsBatchCreateRequest,
     TextMentionsBatchPatchRequest,
+)
+from people_gator_api.routes.v1.query_dependencies import (
+    ListRequestDependency,
+    TextMentionListFilterDependency,
 )
 from people_gator_api.services.auth_service import (
     AdminUserDependency,
@@ -21,7 +24,7 @@ from people_gator_api.services.auth_service import (
     DataIngestUserDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
-from people_gator_api.services.http_errors import raise_api_error
+from people_gator_api.utils.http_errors import raise_api_error
 
 
 router = APIRouter(tags=["text mentions"])
@@ -31,28 +34,17 @@ router = APIRouter(tags=["text mentions"])
 async def list_text_mentions_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
-    source_id: list[uuid.UUID] | None = Query(default=None),
-    entity_id: list[uuid.UUID] | None = Query(default=None),
-    limit: int = Query(default=50, ge=0),
-    return_total_count: bool = False,
-    cursor: str | None = None,
+    filter: TextMentionListFilterDependency,
+    list_request: ListRequestDependency,
 ) -> TextMentionListResponse:
     del user
-    values = {
-        name: value
-        for name, value in {
-            "source_id": source_id,
-            "entity_id": entity_id,
-        }.items()
-        if value is not None
-    }
     try:
         return await database.text_mentions.list(
             TextMentionListRequest(
-                filter=TextMentionListFilter(**values),
-                limit=limit,
-                return_total_count=return_total_count,
-                cursor=cursor,
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
             )
         )
     except ValueError as exc:

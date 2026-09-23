@@ -10,7 +10,7 @@ from weaviate.classes.config import Property, ReferenceProperty
 from weaviate.classes.init import Auth
 
 from people_gator_api.settings import settings
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     ADDITIVE_PROPERTY_MIGRATIONS,
     ALL_COLLECTION_SPECS,
     CollectionSpec,

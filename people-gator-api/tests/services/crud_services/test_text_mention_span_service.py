@@ -18,7 +18,7 @@ from people_gator_api.services.crud_services.text_mention_span_service import (
     _fetch_text_mentions,  # pyright: ignore[reportPrivateUsage]
     _match_text_mention_spans,  # pyright: ignore[reportPrivateUsage]
 )
-from people_gator_api.services.weaviate_service.db_schema import (
+from people_gator_api.weaviate_schema import (
     TEXT_MENTION_COLLECTION,
 )
 
