@@ -3,7 +3,7 @@ from typing import Any, cast
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from people_gator_api.batch_settings import BatchSettings, batch_settings
+from people_gator_api.settings import BatchSettings, batch_settings
 from people_gator_api.schemas.entities import (
     MAX_ENTITY_BATCH_SIZE,
     EntityBatchCreateRequest,

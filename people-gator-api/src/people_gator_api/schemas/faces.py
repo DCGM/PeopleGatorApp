@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Annotated
 import uuid
 from pydantic import BaseModel, Field, FiniteFloat, field_validator
-from people_gator_api.batch_settings import batch_settings
+from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
     GenericListResponse,
     ListFilterBase,
@@ -18,7 +18,7 @@ from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 # ---------------------------------------------------------------------------
 
 NUMBER_OF_FACE_KEYPOINTS = 5
-MAX_FACE_BATCH_SIZE = batch_settings.max_face_batch_size
+MAX_FACE_BATCH_SIZE = settings.batch.max_face_batch_size
 
 FaceEmbedding = ModelEmbedding[FaceModelStub]
 

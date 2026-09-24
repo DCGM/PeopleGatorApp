@@ -1,5 +1,3 @@
-from enum import StrEnum
-
 from pydantic import (
     BaseModel,
     Field,
@@ -9,17 +7,12 @@ from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
 )
-
-from people_gator_api.batch_settings import BatchSettings
 from people_gator_api.schemas.enums import Language
 
 
-class SearchEntityAggregationMode(StrEnum):
-    best_annotation = "best_annotation"
-    average_annotation = "average_annotation"
-
-
 class OpenTelemetrySettings(BaseModel):
+    """OpenTelemetry configuration settings."""
+
     enabled: bool = True
     http_endpoint: str = "http://lgtm:4318"
     grpc_endpoint: str = "http://lgtm:4317"
@@ -29,13 +22,24 @@ class OpenTelemetrySettings(BaseModel):
     profiles_path: str = "/v1/profiles"
 
 
+class BatchSettings(BaseModel):
+    """Maximum request sizes for batch API operations."""
+
+    max_entity_batch_size: int = Field(default=10_000, gt=0)
+    max_face_batch_size: int = Field(default=10_000, gt=0)
+    max_text_mention_batch_size: int = Field(default=10_000, gt=0)
+    max_media_batch_size: int = Field(default=10_000, gt=0)
+
+
 class CorsSettings(BaseModel):
-    allow_origin_regex: str = (
-        r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
-    )
+    """CORS (Cross-Origin Resource Sharing) configuration settings."""
+
+    allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
 
 
 class PostgresSettings(BaseModel):
+    """PostgreSQL database connection settings."""
+
     host: str
     port: int = Field(le=65535, ge=1)
     user: str
@@ -44,6 +48,8 @@ class PostgresSettings(BaseModel):
 
 
 class S3Settings(BaseModel):
+    """S3 storage settings."""
+
     access_key_id: str
     secret_access_key: str
     bucket_name: str
@@ -138,9 +144,7 @@ class OpenRouterSettings(BaseModel):
     model: str = "deepseek/deepseek-v4-flash"
     base_url: str = "https://openrouter.ai/api/v1"
     request_timeout_seconds: float = Field(default=30.0, gt=0)
-    allowed_languages: list[Language] = Field(
-        default_factory=lambda: list(Language)
-    )
+    allowed_languages: list[Language] = Field(default_factory=lambda: list(Language))
 
 
 class KeycloakSettings(BaseModel):

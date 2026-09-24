@@ -5,7 +5,7 @@ import uuid
 from pydantic import BaseModel, Field
 from typing import Annotated
 
-from people_gator_api.batch_settings import batch_settings
+from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
@@ -18,7 +18,7 @@ from people_gator_api.schemas.missing import MISSING, MissingType
 # ---------------------------------------------------------------------------
 
 
-MAX_TEXT_MENTION_BATCH_SIZE = batch_settings.max_text_mention_batch_size
+MAX_TEXT_MENTION_BATCH_SIZE = settings.batch.max_text_mention_batch_size
 
 
 class TextMentionCreateRequest(BaseModel):
