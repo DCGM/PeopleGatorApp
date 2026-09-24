@@ -26,8 +26,8 @@ import asyncio
 import pytest
 from botocore.exceptions import ClientError
 
-from people_gator_api.services.crud_services import image_content_service
-from people_gator_api.services.crud_services.image_content_service import (
+from people_gator_api.services.media import image_content
+from people_gator_api.services.media.image_content import (
     get_image_content,
     image_content_key,
     image_media_type,
@@ -42,7 +42,7 @@ def test_image_content_key_uses_configured_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        image_content_service.settings,
+        image_content.settings,
         "image_content",
         ImageContentSettings(key_prefix="originals/images"),
     )
@@ -65,9 +65,9 @@ def test_get_image_content_missing_object_returns_404(
             "GetObject",
         )
 
-    monkeypatch.setattr(image_content_service, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr(image_content, "read_bytes", fake_read_bytes)
 
-    with pytest.raises(image_content_service.SourceResolutionError) as exc_info:
+    with pytest.raises(image_content.SourceResolutionError) as exc_info:
         asyncio.run(get_image_content(_URL))
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "not_found"
@@ -80,9 +80,9 @@ def test_get_image_content_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["key"] = key
         return b"\x89PNG\r\n\x1a\nfake-bytes"
 
-    monkeypatch.setattr(image_content_service, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr(image_content, "read_bytes", fake_read_bytes)
     monkeypatch.setattr(
-        image_content_service.settings,
+        image_content.settings,
         "image_content",
         ImageContentSettings(key_prefix="originals/images"),
     )

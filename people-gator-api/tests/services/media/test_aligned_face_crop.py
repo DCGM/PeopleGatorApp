@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
-from typing import cast
 
 os.environ.setdefault("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST", "localhost")
 os.environ.setdefault("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER", "user")
@@ -27,10 +26,13 @@ os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 import numpy as np
 import pytest
 from botocore.exceptions import ClientError
+from pydantic import AnyUrl
 
-from people_gator_api.schemas.entities import BoundingBox, FaceKeypoint, FaceResponse
-from people_gator_api.services.crud_services import aligned_face_crop_service
-from people_gator_api.services.crud_services.aligned_face_crop_service import (
+from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.faces import BoundingBox, FaceResponse, Keypoint
+from people_gator_api.schemas.sources import GenericSourceResponse, page_url
+from people_gator_api.services.media import aligned_face_crop
+from people_gator_api.services.media.aligned_face_crop import (
     AlignedFaceCropContent,
     get_aligned_face_crop,
 )
@@ -48,14 +50,27 @@ def _face(*, left_eye_x: float = 38.0) -> FaceResponse:
         source_id=_SOURCE_ID,
         bounding_box=BoundingBox(x=10, y=20, width=100, height=100),
         keypoints=[
-            FaceKeypoint(type="left_eye", x=left_eye_x, y=52.0),
-            FaceKeypoint(type="right_eye", x=74.0, y=52.0),
-            FaceKeypoint(type="nose", x=56.0, y=72.0),
-            FaceKeypoint(type="left_mouth_corner", x=42.0, y=92.0),
-            FaceKeypoint(type="right_mouth_corner", x=71.0, y=92.0),
+            Keypoint(type="left_eye", x=left_eye_x, y=52.0),
+            Keypoint(type="right_eye", x=74.0, y=52.0),
+            Keypoint(type="nose", x=56.0, y=72.0),
+            Keypoint(type="left_mouth_corner", x=42.0, y=92.0),
+            Keypoint(type="right_mouth_corner", x=71.0, y=92.0),
         ],
         user_id=_USER_ID,
         confidence=0.99,
+    )
+
+
+def _source() -> GenericSourceResponse:
+    document_id = uuid.UUID("57877a35-c00a-42d2-9515-05a8a6843d8f")
+    page_id = uuid.UUID("88400acc-fb2f-41af-ae63-a1e77a21b1db")
+    return GenericSourceResponse(
+        source_id=_SOURCE_ID,
+        source_type=SourceKind.page,
+        url=AnyUrl(page_url("mzk", document_id, page_id)),
+        library="mzk",
+        document_id=document_id,
+        page_id=page_id,
     )
 
 
@@ -67,16 +82,13 @@ def test_crop_cache_is_invalidated_when_keypoint_position_changes(
         cache_key_prefix="face-crop-cache",
     )
     monkeypatch.setattr(
-        aligned_face_crop_service.settings, "aligned_face_crop", crop_cfg
+        aligned_face_crop.settings, "aligned_face_crop", crop_cfg
     )
 
     current_face = _face()
     objects: dict[str, bytes] = {}
     source_reads = 0
     renders = 0
-
-    async def fake_get_face(*_args: object) -> FaceResponse:
-        return current_face
 
     async def fake_read_source(*_args: object) -> bytes:
         nonlocal source_reads
@@ -104,15 +116,14 @@ def test_crop_cache_is_invalidated_when_keypoint_position_changes(
     async def fake_write_bytes(key: str, data: bytes) -> None:
         objects[key] = data
 
-    monkeypatch.setattr(aligned_face_crop_service, "get_face", fake_get_face)
     monkeypatch.setattr(
-        aligned_face_crop_service, "_read_face_source_image", fake_read_source
+        aligned_face_crop, "_read_face_source_image", fake_read_source
     )
     monkeypatch.setattr(
-        aligned_face_crop_service, "_render_aligned_crop", fake_render
+        aligned_face_crop, "_render_aligned_crop", fake_render
     )
-    monkeypatch.setattr(aligned_face_crop_service, "read_bytes", fake_read_bytes)
-    monkeypatch.setattr(aligned_face_crop_service, "write_bytes", fake_write_bytes)
+    monkeypatch.setattr(aligned_face_crop, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr(aligned_face_crop, "write_bytes", fake_write_bytes)
 
     async def scenario() -> tuple[
         AlignedFaceCropContent,
@@ -120,23 +131,17 @@ def test_crop_cache_is_invalidated_when_keypoint_position_changes(
         AlignedFaceCropContent,
     ]:
         nonlocal current_face
-        first = await get_aligned_face_crop(
-            None, _USER_ID, _DETECTION_ID  # type: ignore[arg-type]
-        )
+        first = await get_aligned_face_crop(_USER_ID, current_face, _source())
         pending = list(
-            aligned_face_crop_service._background_cache_writes  # pyright: ignore[reportPrivateUsage]
+            aligned_face_crop._background_cache_writes  # pyright: ignore[reportPrivateUsage]
         )
         await asyncio.gather(*pending)
-        second = await get_aligned_face_crop(
-            None, _USER_ID, _DETECTION_ID  # type: ignore[arg-type]
-        )
+        second = await get_aligned_face_crop(_USER_ID, current_face, _source())
 
         current_face = _face(left_eye_x=39.0)
-        changed = await get_aligned_face_crop(
-            None, _USER_ID, _DETECTION_ID  # type: ignore[arg-type]
-        )
+        changed = await get_aligned_face_crop(_USER_ID, current_face, _source())
         pending = list(
-            aligned_face_crop_service._background_cache_writes  # pyright: ignore[reportPrivateUsage]
+            aligned_face_crop._background_cache_writes  # pyright: ignore[reportPrivateUsage]
         )
         await asyncio.gather(*pending)
         return first, second, changed
@@ -159,13 +164,10 @@ def test_crop_cache_is_invalidated_when_keypoint_position_changes(
 
 def test_disabled_crop_cache_always_renders(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        aligned_face_crop_service.settings,
+        aligned_face_crop.settings,
         "aligned_face_crop",
         AlignedFaceCropSettings(cache_enabled=False),
     )
-
-    async def fake_get_face(*_args: object) -> FaceResponse:
-        return _face()
 
     async def fake_read_source(*_args: object) -> bytes:
         return b"source-image"
@@ -176,22 +178,19 @@ def test_disabled_crop_cache_always_renders(monkeypatch: pytest.MonkeyPatch) -> 
     async def fail_cache_access(*_args: object) -> bytes:
         raise AssertionError("disabled cache must not access object storage")
 
-    monkeypatch.setattr(aligned_face_crop_service, "get_face", fake_get_face)
     monkeypatch.setattr(
-        aligned_face_crop_service, "_read_face_source_image", fake_read_source
+        aligned_face_crop, "_read_face_source_image", fake_read_source
     )
     monkeypatch.setattr(
-        aligned_face_crop_service, "_render_aligned_crop", fake_render
+        aligned_face_crop, "_render_aligned_crop", fake_render
     )
-    monkeypatch.setattr(aligned_face_crop_service, "read_bytes", fail_cache_access)
-    monkeypatch.setattr(aligned_face_crop_service, "write_bytes", fail_cache_access)
+    monkeypatch.setattr(aligned_face_crop, "read_bytes", fail_cache_access)
+    monkeypatch.setattr(aligned_face_crop, "write_bytes", fail_cache_access)
 
-    result = cast(
-        AlignedFaceCropContent,
-        asyncio.run(
-            get_aligned_face_crop(None, _USER_ID, _DETECTION_ID)  # type: ignore[arg-type]
-        ),
-    )
+    async def render() -> AlignedFaceCropContent:
+        return await get_aligned_face_crop(_USER_ID, _face(), _source())
+
+    result = asyncio.run(render())
 
     assert result == AlignedFaceCropContent(
         content=b"rendered",

@@ -29,8 +29,8 @@ import pytest
 from botocore.exceptions import ClientError
 from PIL import Image
 
-from people_gator_api.services.crud_services import page_image_service
-from people_gator_api.services.crud_services.page_image_service import (
+from people_gator_api.services.media import page_image
+from people_gator_api.services.media.page_image import (
     PageImageContent,
     get_page_image,
     page_image_key,
@@ -56,7 +56,7 @@ def _enable_cache(
         enabled=True,
         key_prefix="page-image-cache",
     )
-    monkeypatch.setattr(page_image_service.settings, "page_image_cache", cache_cfg)
+    monkeypatch.setattr(page_image.settings, "page_image_cache", cache_cfg)
     return cache_cfg
 
 
@@ -76,8 +76,8 @@ def _install_fake_cache(
     async def fake_write_bytes(key: str, data: bytes) -> None:
         objects[key] = data
 
-    monkeypatch.setattr(page_image_service, "read_bytes", fake_read_bytes)
-    monkeypatch.setattr(page_image_service, "write_bytes", fake_write_bytes)
+    monkeypatch.setattr(page_image, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr(page_image, "write_bytes", fake_write_bytes)
     return objects
 
 
@@ -95,7 +95,7 @@ async def _get_page_image_and_drain(
     """
     result = await get_page_image(*args, **kwargs)  # type: ignore[arg-type]
     pending = list(
-        page_image_service._background_cache_writes  # pyright: ignore[reportPrivateUsage]
+        page_image._background_cache_writes  # pyright: ignore[reportPrivateUsage]
     )
     if pending:
         await asyncio.gather(*pending)
@@ -106,7 +106,7 @@ def test_page_image_key_uses_configured_scan_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        page_image_service.settings,
+        page_image.settings,
         "page_image",
         PageImageSettings(key_prefix="archive/scans"),
     )
@@ -135,7 +135,7 @@ def test_get_page_image_rejects_unknown_width(
 ) -> None:
     cache_cfg = _enable_cache(monkeypatch)
 
-    with pytest.raises(page_image_service.SourceResolutionError) as exc_info:
+    with pytest.raises(page_image.SourceResolutionError) as exc_info:
         asyncio.run(
             get_page_image(
                 _LIBRARY,
@@ -195,7 +195,7 @@ def test_get_page_image_disabled_cache_streams_original(
 ) -> None:
     cache_cfg = _enable_cache(monkeypatch)
     monkeypatch.setattr(
-        page_image_service.settings,
+        page_image.settings,
         "page_image_cache",
         cache_cfg.model_copy(update={"enabled": False}),
     )
@@ -220,7 +220,7 @@ def test_get_page_image_missing_original_returns_404(
 ) -> None:
     _install_fake_cache(monkeypatch)
 
-    with pytest.raises(page_image_service.SourceResolutionError) as exc_info:
+    with pytest.raises(page_image.SourceResolutionError) as exc_info:
         asyncio.run(get_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID))
 
     assert exc_info.value.status_code == 404

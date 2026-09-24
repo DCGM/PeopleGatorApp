@@ -13,6 +13,7 @@ from people_gator_api.schemas.faces import (
     FacesBatchCreateRequest,
     FacesBatchPatchRequest,
 )
+from people_gator_api.schemas.sources import GenericSourceLookupRequest
 from people_gator_api.routes.v1.query_dependencies import (
     FaceListFilterDependency,
     ListRequestDependency,
@@ -25,7 +26,6 @@ from people_gator_api.services.auth_service import (
 )
 from people_gator_api.services.database_service import (
     DatabaseDependency,
-    WeaviateSessionDependency,
 )
 from people_gator_api.utils.http_errors import raise_api_error
 
@@ -107,21 +107,30 @@ async def delete_face_batch_route(
 @router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
 async def get_face_aligned_crop_route(
     detection_id: uuid.UUID,
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     user: BrowseUserDependency,
     max_width: int | None = Query(default=None, gt=0),
 ) -> Response:
     """Return one ArcFace-aligned face crop, kept at the original image scale."""
-    from people_gator_api.services.crud_services.aligned_face_crop_service import (
+    from people_gator_api.services.media.aligned_face_crop import (
         get_aligned_face_crop,
     )
-    from people_gator_api.services.crud_services.source_service import (
-        SourceResolutionError,
-    )
+    from people_gator_api.services.media.errors import SourceResolutionError
 
+    face = await database.faces.get(detection_id)
+    if face is None:
+        raise_api_error(404, "not_found", "Face not found")
+    source = await database.sources.lookup(
+        GenericSourceLookupRequest(source_id=face.source_id)
+    )
+    if source is None:
+        raise_api_error(404, "not_found", "Face source not found")
     try:
         crop = await get_aligned_face_crop(
-            session, user.user_id, detection_id, max_width=max_width
+            user.user_id,
+            face,
+            source,
+            max_width=max_width,
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)

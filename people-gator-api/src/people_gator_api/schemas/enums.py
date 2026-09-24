@@ -1,5 +1,7 @@
 from enum import StrEnum
 
+from people_gator_api.languages import Language
+
 
 class EntityType(StrEnum):
     """Entity type discriminator for normalized identity classes."""
@@ -40,14 +42,6 @@ class ScoreFusion(StrEnum):
     """How scores from different modalities are fused into a single entity score."""
 
     rrf = "rrf"  # Reciprocal Rank Fusion
-
-
-class Language(StrEnum):
-    """Languages supported by the translation endpoint."""
-
-    czech = "cs"  # Czech language
-    english = "en"  # English language
-    german = "de"  # German language
 
 
 __all__ = [

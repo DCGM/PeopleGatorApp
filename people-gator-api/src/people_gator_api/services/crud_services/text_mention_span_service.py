@@ -11,20 +11,14 @@ from difflib import SequenceMatcher
 from typing import Protocol, cast
 
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import QueryReference
+from weaviate.classes.query import Filter, QueryReference
 from weaviate.collections.classes.internal import CrossReferences
 from weaviate.collections.classes.types import WeaviateProperties
 
 from people_gator_api.schemas.enums import EntityType
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
-from people_gator_api.services.crud_services.page_layout_service import get_page_layout
+from people_gator_api.services.media.page_layout import get_page_layout
 from people_gator_api.weaviate_schema import TEXT_MENTION_COLLECTION
-from people_gator_api.services.weaviate_service.utils import (
-    optional_entity_type,
-    reference_id_filter,
-    require_reference_uuid,
-    require_str,
-)
 from people_gator_api.utils.opentelemetry import trace
 
 
@@ -63,16 +57,48 @@ class _Match:
     score: float
 
 
+def _reference_id_filter(link_on: str, reference_id: uuid.UUID):
+    return Filter.by_ref(link_on=link_on).by_id().equal(reference_id)
+
+
+def _require_reference_uuid(references: CrossReferences, key: str) -> uuid.UUID:
+    if key not in references or not references[key].objects:
+        raise KeyError(f"Missing reference {key!r}.")
+    return references[key].objects[0].uuid
+
+
+def _require_str(properties: WeaviateProperties, key: str) -> str:
+    value = properties.get(key)
+    if not isinstance(value, str):
+        raise TypeError(f"Property {key!r} is not a string.")
+    return value
+
+
+def _optional_entity_type(
+    properties: WeaviateProperties, key: str
+) -> EntityType | None:
+    value = properties.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"Property {key!r} is not a string.")
+    return EntityType(value)
+
+
 @trace()
 async def get_text_mention_spans(
     client: WeaviateAsyncClient,
     page_source_id: uuid.UUID,
+    *,
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
 ) -> list[TextMentionSpanModel]:
     """Return fuzzy, word-aligned spans for a page's stored text mentions."""
     layout = await get_page_layout(
-        client,
-        source_id=page_source_id,
-        page_path=None,
+        library,
+        document_id,
+        page_id,
     )
     mentions = await _fetch_text_mentions(client, page_source_id)
     return _match_text_mention_spans(layout, mentions)
@@ -88,7 +114,7 @@ async def _fetch_text_mentions(
     after_id: uuid.UUID | None = None
     while True:
         response = await collection.query.fetch_objects(
-            filters=reference_id_filter(
+            filters=_reference_id_filter(
                 link_on="source",
                 reference_id=page_source_id,
             ),
@@ -114,16 +140,16 @@ async def _fetch_text_mentions(
 
 
 def _text_mention_text(item: _TextMentionObject) -> _TextMentionText:
-    entity_id = require_reference_uuid(item.references, "entity")
+    entity_id = _require_reference_uuid(item.references, "entity")
     linked_entities = item.references["entity"].objects
     return _TextMentionText(
         mention_id=item.uuid,
         entity_id=entity_id,
-        entity_type=optional_entity_type(
+        entity_type=_optional_entity_type(
             linked_entities[0].properties,
             "entity_type",
         ),
-        name=require_str(item.properties, "name"),
+        name=_require_str(item.properties, "name"),
     )
 
 

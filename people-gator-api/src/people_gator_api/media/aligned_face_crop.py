@@ -24,18 +24,13 @@ import numpy as np
 from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image
 from pydantic import BaseModel
-from weaviate import WeaviateAsyncClient
 
-from people_gator_api.schemas.entities import FaceKeypoint, FaceResponse
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.sources import PageSourceMetadata
-from people_gator_api.services.crud_services.annotation_service import get_face
-from people_gator_api.services.crud_services.image_content_service import get_image_content
-from people_gator_api.services.crud_services.page_image_service import get_page_image
-from people_gator_api.services.crud_services.source_service import (
-    SourceResolutionError,
-    get_source,
-)
+from people_gator_api.schemas.faces import FaceResponse, Keypoint
+from people_gator_api.schemas.sources import GenericSourceResponse
+from people_gator_api.media.errors import SourceResolutionError
+from people_gator_api.media.image_content import get_image_content
+from people_gator_api.media.page_image import get_page_image
 from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
 from people_gator_api.settings import AlignedFaceCropSettings, settings
 from people_gator_api.utils.opentelemetry import trace
@@ -158,7 +153,7 @@ def _reference_keypoints(crop_cfg: AlignedFaceCropSettings) -> np.ndarray:
     return _ARCFACE_REFERENCE_112 * scale
 
 
-def _ordered_keypoints(keypoints: list[FaceKeypoint]) -> np.ndarray:
+def _ordered_keypoints(keypoints: list[Keypoint]) -> np.ndarray:
     """Return the 5 required keypoints as an ``(5, 2)`` array in template order."""
     by_type = {keypoint.type: (keypoint.x, keypoint.y) for keypoint in keypoints}
     missing = [kp_type for kp_type in _REQUIRED_KEYPOINT_TYPES if kp_type not in by_type]
@@ -247,25 +242,22 @@ def _render_aligned_crop(
 
 
 async def _read_face_source_image(
-    client: WeaviateAsyncClient,
-    face: FaceResponse,
+    source: GenericSourceResponse,
 ) -> bytes:
     """Fetch the full-resolution bytes of the image a face was detected in."""
-    source = await get_source(client, face.source_id)
-    if source is None:
-        raise SourceResolutionError(
-            "Face source not found", status_code=404, code="not_found"
-        )
     if source.source_type == SourceKind.image:
-        content, _media_type = await get_image_content(source.uri)
+        content, _media_type = await get_image_content(str(source.url))
         return content
-    if source.source_type == SourceKind.page and isinstance(
-        source.metadata, PageSourceMetadata
+    if (
+        source.source_type == SourceKind.page
+        and source.library is not None
+        and source.document_id is not None
+        and source.page_id is not None
     ):
         page_image = await get_page_image(
-            source.metadata.library,
-            source.metadata.document,
-            source.metadata.page,
+            source.library,
+            source.document_id,
+            source.page_id,
             max_width=None,
         )
         return page_image.content
@@ -278,17 +270,18 @@ async def _read_face_source_image(
 
 @trace()
 async def get_aligned_face_crop(
-    client: WeaviateAsyncClient,
     user_id: uuid.UUID,
-    detection_id: uuid.UUID,
+    face: FaceResponse,
+    source: GenericSourceResponse,
     *,
     max_width: int | None = None,
 ) -> AlignedFaceCropContent:
-    """Return one ArcFace-aligned crop for a face detection."""
-    face = await get_face(client, user_id, detection_id)
-    if face is None:
+    """Render a crop from resolved metadata and object storage only."""
+    if source.source_id != face.source_id:
         raise SourceResolutionError(
-            "Face not found", status_code=404, code="not_found"
+            "Face source does not match the supplied source",
+            status_code=422,
+            code="source_mismatch",
         )
     crop_cfg = settings.aligned_face_crop
     if max_width is not None and max_width > crop_cfg.max_output_width:
@@ -309,7 +302,7 @@ async def get_aligned_face_crop(
                 cache_hit=True,
             )
 
-    image_bytes = await _read_face_source_image(client, face)
+    image_bytes = await _read_face_source_image(source)
     content = await asyncio.to_thread(
         _render_aligned_crop, image_bytes, keypoints, crop_cfg, max_width
     )

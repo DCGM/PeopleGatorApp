@@ -23,7 +23,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from PIL import Image
 from pydantic import BaseModel
 
-from people_gator_api.services.crud_services.source_service import SourceResolutionError
+from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
 from people_gator_api.settings import PageImageCacheSettings, settings
 

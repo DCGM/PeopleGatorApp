@@ -53,22 +53,19 @@ router = APIRouter()
 
 
 async def _fetch_layout_for_page(
-    session: WeaviateSessionDependency,
-    page_source_id: uuid.UUID,
+    page: PageResponse,
 ) -> PageLayoutModel:
-    """Fetch the stored layout for an already-resolved page."""
-    from people_gator_api.services.crud_services.page_layout_service import (
+    """Fetch the stored layout using an already-resolved page identity."""
+    from people_gator_api.services.media.page_layout import (
         get_page_layout,
     )
-    from people_gator_api.services.crud_services.source_service import (
-        SourceResolutionError,
-    )
+    from people_gator_api.services.media.errors import SourceResolutionError
 
     try:
         return await get_page_layout(
-            session,
-            source_id=page_source_id,
-            page_path=None,
+            page.library,
+            page.document_id,
+            page.page_id,
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
@@ -76,18 +73,22 @@ async def _fetch_layout_for_page(
 
 async def _fetch_text_mention_spans_for_page(
     session: WeaviateSessionDependency,
-    page_source_id: uuid.UUID,
+    page: PageResponse,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
-    from people_gator_api.services.crud_services.source_service import (
-        SourceResolutionError,
-    )
     from people_gator_api.services.crud_services.text_mention_span_service import (
         get_text_mention_spans,
     )
+    from people_gator_api.services.media.errors import SourceResolutionError
 
     try:
-        return await get_text_mention_spans(session, page_source_id)
+        return await get_text_mention_spans(
+            session,
+            page.source_id,
+            library=page.library,
+            document_id=page.document_id,
+            page_id=page.page_id,
+        )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
 
@@ -311,12 +312,10 @@ async def get_page_image_by_id_route(
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
-    from people_gator_api.services.crud_services.page_image_service import (
+    from people_gator_api.services.media.page_image import (
         get_page_image,
     )
-    from people_gator_api.services.crud_services.source_service import (
-        SourceResolutionError,
-    )
+    from people_gator_api.services.media.errors import SourceResolutionError
 
     del user
     page = await database.sources.get_page(page_source_id)
@@ -346,7 +345,6 @@ async def get_page_image_by_id_route(
 async def get_page_layout_by_id_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    session: WeaviateSessionDependency,
     user: BrowseUserDependency,
 ) -> PageLayoutModel:
     """Fetch the page layout for one page by its Source UUID."""
@@ -354,7 +352,7 @@ async def get_page_layout_by_id_route(
     page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_layout_for_page(session, page.source_id)
+    return await _fetch_layout_for_page(page)
 
 
 @router.get(
@@ -373,7 +371,7 @@ async def get_text_mention_spans_by_id_route(
     page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_text_mention_spans_for_page(session, page.source_id)
+    return await _fetch_text_mention_spans_for_page(session, page)
 
 
 @router.delete(
@@ -484,12 +482,10 @@ async def get_image_content_by_id_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> Response:
-    from people_gator_api.services.crud_services.image_content_service import (
+    from people_gator_api.services.media.image_content import (
         get_image_content,
     )
-    from people_gator_api.services.crud_services.source_service import (
-        SourceResolutionError,
-    )
+    from people_gator_api.services.media.errors import SourceResolutionError
 
     del user
     image = await database.sources.get_image(image_id)

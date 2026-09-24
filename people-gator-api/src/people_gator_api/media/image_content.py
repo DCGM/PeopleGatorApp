@@ -15,7 +15,7 @@ import posixpath
 from urllib.parse import urlparse
 from botocore.exceptions import ClientError
 
-from people_gator_api.services.crud_services.source_service import SourceResolutionError
+from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.services.s3_filesystem import read_bytes
 from people_gator_api.settings import settings
 
