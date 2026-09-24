@@ -25,7 +25,7 @@ from people_gator_api.schemas.pero import (
     RegionLayoutModel,
     TextLineModel,
 )
-from people_gator_api.services.media import page_layout
+from people_gator_api.media import page_layout
 from people_gator_api.settings import PageLayoutSettings
 
 

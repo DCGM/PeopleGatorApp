@@ -26,8 +26,8 @@ import asyncio
 import pytest
 from botocore.exceptions import ClientError
 
-from people_gator_api.services.media import image_content
-from people_gator_api.services.media.image_content import (
+from people_gator_api.media import image_content
+from people_gator_api.media.image_content import (
     get_image_content,
     image_content_key,
     image_media_type,

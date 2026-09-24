@@ -31,8 +31,8 @@ from pydantic import AnyUrl
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.faces import BoundingBox, FaceResponse, Keypoint
 from people_gator_api.schemas.sources import GenericSourceResponse, page_url
-from people_gator_api.services.media import aligned_face_crop
-from people_gator_api.services.media.aligned_face_crop import (
+from people_gator_api.media import aligned_face_crop
+from people_gator_api.media.aligned_face_crop import (
     AlignedFaceCropContent,
     get_aligned_face_crop,
 )

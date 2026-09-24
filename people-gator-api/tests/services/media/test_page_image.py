@@ -29,8 +29,8 @@ import pytest
 from botocore.exceptions import ClientError
 from PIL import Image
 
-from people_gator_api.services.media import page_image
-from people_gator_api.services.media.page_image import (
+from people_gator_api.media import page_image
+from people_gator_api.media.page_image import (
     PageImageContent,
     get_page_image,
     page_image_key,

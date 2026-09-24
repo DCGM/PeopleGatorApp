@@ -205,6 +205,17 @@ async def test_postgres_contract_round_trip() -> None:
                 ),
                 user,
             )
+            entities_for_image = await database.entities.list(
+                EntityListRequest(
+                    filter_=EntityListFilter(source_id=[image.source_id]),
+                    limit=10,
+                    return_total_count=True,
+                )
+            )
+            assert {item.entity_id for item in entities_for_image.items} == set(
+                created_entity_ids
+            )
+            assert entities_for_image.total_count == 2
             assert (
                 await database.faces.list(
                     FaceListRequest(
@@ -230,6 +241,15 @@ async def test_postgres_contract_round_trip() -> None:
             )
             assert mention is not None
             assert mention.entity_id is None
+            entities_for_page = await database.entities.list(
+                EntityListRequest(
+                    filter_=EntityListFilter(source_id=[page.source_id]),
+                    limit=10,
+                    return_total_count=True,
+                )
+            )
+            assert entities_for_page.items == []
+            assert entities_for_page.total_count == 0
             assert (
                 len(
                     (

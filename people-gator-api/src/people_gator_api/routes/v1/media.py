@@ -56,10 +56,10 @@ async def _fetch_layout_for_page(
     page: PageResponse,
 ) -> PageLayoutModel:
     """Fetch the stored layout using an already-resolved page identity."""
-    from people_gator_api.services.media.page_layout import (
+    from people_gator_api.media.page_layout import (
         get_page_layout,
     )
-    from people_gator_api.services.media.errors import SourceResolutionError
+    from people_gator_api.media.errors import SourceResolutionError
 
     try:
         return await get_page_layout(
@@ -79,7 +79,7 @@ async def _fetch_text_mention_spans_for_page(
     from people_gator_api.services.crud_services.text_mention_span_service import (
         get_text_mention_spans,
     )
-    from people_gator_api.services.media.errors import SourceResolutionError
+    from people_gator_api.media.errors import SourceResolutionError
 
     try:
         return await get_text_mention_spans(
@@ -312,10 +312,10 @@ async def get_page_image_by_id_route(
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
-    from people_gator_api.services.media.page_image import (
+    from people_gator_api.media.page_image import (
         get_page_image,
     )
-    from people_gator_api.services.media.errors import SourceResolutionError
+    from people_gator_api.media.errors import SourceResolutionError
 
     del user
     page = await database.sources.get_page(page_source_id)
@@ -482,10 +482,10 @@ async def get_image_content_by_id_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> Response:
-    from people_gator_api.services.media.image_content import (
+    from people_gator_api.media.image_content import (
         get_image_content,
     )
-    from people_gator_api.services.media.errors import SourceResolutionError
+    from people_gator_api.media.errors import SourceResolutionError
 
     del user
     image = await database.sources.get_image(image_id)

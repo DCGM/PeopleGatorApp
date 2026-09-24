@@ -112,10 +112,10 @@ async def get_face_aligned_crop_route(
     max_width: int | None = Query(default=None, gt=0),
 ) -> Response:
     """Return one ArcFace-aligned face crop, kept at the original image scale."""
-    from people_gator_api.services.media.aligned_face_crop import (
+    from people_gator_api.media.aligned_face_crop import (
         get_aligned_face_crop,
     )
-    from people_gator_api.services.media.errors import SourceResolutionError
+    from people_gator_api.media.errors import SourceResolutionError
 
     face = await database.faces.get(detection_id)
     if face is None:
