@@ -542,18 +542,22 @@ def _entity_filters(
         filters.append(Entity.nlcr_authority_id.in_(authority_ids))
     source_ids = missing_to_none(filter_values.source_id)
     if source_ids is not None:
-        filters.append(
-            or_(
-                exists().where(
-                    ImageOccurrence.entity_id == Entity.id,
-                    ImageOccurrence.source_id.in_(source_ids),
-                ),
-                exists().where(
-                    TextMention.entity_id == Entity.id,
-                    TextMention.source_id.in_(source_ids),
-                ),
-            )
+        # Resolve the usually small set of linked entity IDs from the source
+        # indexes first.  Expressing this as two OR-ed correlated EXISTS
+        # predicates makes PostgreSQL scan entities in UUID order to satisfy
+        # list pagination; a source with no linked entities consequently scans
+        # the entire entity table before it can return an empty page.
+        linked_entity_ids = union_all(
+            select(ImageOccurrence.entity_id).where(
+                ImageOccurrence.source_id.in_(source_ids),
+                ImageOccurrence.entity_id.is_not(None),
+            ),
+            select(TextMention.entity_id).where(
+                TextMention.source_id.in_(source_ids),
+                TextMention.entity_id.is_not(None),
+            ),
         )
+        filters.append(Entity.id.in_(linked_entity_ids))
     detection_ids = missing_to_none(filter_values.detection_id)
     if detection_ids is not None:
         filters.append(

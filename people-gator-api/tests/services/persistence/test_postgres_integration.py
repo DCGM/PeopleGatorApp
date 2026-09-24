@@ -234,6 +234,15 @@ async def test_postgres_contract_round_trip() -> None:
                 ),
                 user,
             )
+            linked_entities_for_page = await database.entities.list(
+                EntityListRequest(
+                    filter_=EntityListFilter(source_id=[page.source_id]),
+                    limit=10,
+                )
+            )
+            assert [item.entity_id for item in linked_entities_for_page.items] == [
+                entities[0].entity_id
+            ]
             mention = await database.text_mentions.patch(
                 mention.mention_id,
                 TextMentionPatchRequest(entity_id=None),
