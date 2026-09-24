@@ -49,6 +49,7 @@ from sqlalchemy import (
     select,
     text,
     true,
+    union_all,
     update,
     values,
 )
@@ -172,6 +173,12 @@ ModelT = TypeVar("ModelT")
 FACE_SEARCH_CANDIDATE_LIMIT = 200
 HNSW_EF_SEARCH = 400
 
+# Text search has the same two-stage shape as vector search: use indexes to
+# retrieve a small pool per signal, then calculate the existing exact score on
+# the union.  Without this bound, the alias join and similarity calls scan the
+# entire entity catalogue for every query term.
+TEXT_SEARCH_CANDIDATE_LIMIT = 200
+
 
 def _cosine_distance(embedding: object, query_vector: object) -> ColumnElement[float]:
     return type_cast(Any, embedding).cosine_distance(query_vector)
@@ -187,6 +194,52 @@ def _query_vectors_cte(vectors: dict[uuid.UUID, list[float]], embedding_dim: int
         .data(list(vectors.items()))
         .cte("query_vectors")
     )
+
+
+def _entity_text_candidates(
+    normalized_term: ColumnElement[str],
+    filters: Sequence[ColumnElement[bool]],
+):
+    """Return index-backed entity candidates for one text query.
+
+    Keep the branches separate so PostgreSQL can use the trigram GIN index on
+    each name column. Combining these predicates around the alias join causes
+    a catalogue-wide aggregate.
+    """
+    entity_name_score = func.word_similarity(
+        normalized_term,
+        Entity.name_normalized,
+    )
+    entity_names = (
+        select(Entity.id.label("candidate_id"))
+        .where(
+            *filters,
+            Entity.name_normalized.op("%>")(normalized_term),
+        )
+        .order_by(entity_name_score.desc())
+        .limit(TEXT_SEARCH_CANDIDATE_LIMIT)
+    )
+
+    alias_name_score = func.word_similarity(
+        normalized_term,
+        Alias.name_normalized,
+    )
+    alias_names = select(Alias.entity_id.label("candidate_id"))
+    if filters:
+        alias_names = alias_names.join(Entity, Entity.id == Alias.entity_id)
+    alias_names = (
+        alias_names.where(
+            *filters,
+            Alias.name_normalized.op("%>")(normalized_term),
+        )
+        .order_by(alias_name_score.desc())
+        .limit(TEXT_SEARCH_CANDIDATE_LIMIT)
+    )
+
+    candidates = union_all(entity_names, alias_names).subquery(
+        "entity_text_candidates"
+    )
+    return select(candidates.c.candidate_id).distinct()
 
 
 @trace("postgres.hnsw.configure")
@@ -950,19 +1003,26 @@ class PostgresEntityRepository(EntityRepository):
         collected: dict[uuid.UUID, list[float]] = {}
         for term in terms:
             normalized_term = func.lower(func.unaccent(term))
+            candidate_ids = _entity_text_candidates(
+                normalized_term,
+                filters,
+            )
             score = func.greatest(
-                func.similarity(func.coalesce(Entity.name_normalized, ""), normalized_term),
-                func.similarity(func.coalesce(Entity.description, ""), term),
-                func.similarity(func.coalesce(Entity.short_description, ""), term),
+                func.word_similarity(
+                    normalized_term,
+                    func.coalesce(Entity.name_normalized, ""),
+                ),
                 func.coalesce(
-                    func.max(func.similarity(Alias.name_normalized, normalized_term)),
+                    func.max(
+                        func.word_similarity(normalized_term, Alias.name_normalized)
+                    ),
                     0.0,
                 ),
             )
             rows = await self._session.execute(
                 select(Entity.id, score.label("score"))
                 .outerjoin(Alias, Alias.entity_id == Entity.id)
-                .where(*filters)
+                .where(*filters, Entity.id.in_(candidate_ids))
                 .group_by(Entity.id)
             )
             for item_id, raw_score in rows.all():
