@@ -7,7 +7,19 @@ import pytest
 from fastapi import FastAPI
 
 from people_gator_api.routes.v1.media import router
+from people_gator_api.schemas.common import GenericListResponse
+from people_gator_api.schemas.entities import (
+    EntityListFilter,
+    EntityListRequest,
+    EntityResponse,
+)
 from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.mentions import (
+    TextMentionListFilter,
+    TextMentionListResponse,
+    TextMentionListRequest,
+    TextMentionResponse,
+)
 from people_gator_api.schemas.pero import (
     PageLayoutModel,
     RegionLayoutModel,
@@ -17,9 +29,6 @@ from people_gator_api.services.crud_services.text_mention_span_service import (
     _TextMentionText,  # pyright: ignore[reportPrivateUsage]
     _fetch_text_mentions,  # pyright: ignore[reportPrivateUsage]
     _match_text_mention_spans,  # pyright: ignore[reportPrivateUsage]
-)
-from people_gator_api.weaviate_schema import (
-    TEXT_MENTION_COLLECTION,
 )
 
 
@@ -149,41 +158,59 @@ def test_text_mention_spans_do_not_cross_layout_regions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_text_mentions_uses_source_link_and_linked_entity_type() -> None:
+async def test_fetch_text_mentions_uses_persistence_contracts() -> None:
     page_source_id = uuid.uuid4()
     mention_id = uuid.uuid4()
     entity_id = uuid.uuid4()
-    captured: dict[str, object] = {}
+    unassigned_mention_id = uuid.uuid4()
+    mention_queries: list[TextMentionListRequest] = []
+    entity_queries: list[EntityListRequest] = []
 
-    class _Query:
-        async def fetch_objects(self, **kwargs: object) -> SimpleNamespace:
-            captured.update(kwargs)
-            return SimpleNamespace(
-                objects=[
-                    SimpleNamespace(
-                        uuid=mention_id,
-                        properties={"name": "Ada Lovelace"},
-                        references={
-                            "entity": SimpleNamespace(
-                                objects=[
-                                    SimpleNamespace(
-                                        uuid=entity_id,
-                                        properties={"entity_type": "person"},
-                                    )
-                                ]
-                            )
-                        },
-                    )
-                ]
+    class _TextMentions:
+        async def list(self, query: TextMentionListRequest) -> TextMentionListResponse:
+            mention_queries.append(query)
+            return TextMentionListResponse(
+                items=[
+                    TextMentionResponse(
+                        mention_id=mention_id,
+                        name="Ada Lovelace",
+                        context=None,
+                        entity_id=entity_id,
+                        source_id=page_source_id,
+                    ),
+                    TextMentionResponse(
+                        mention_id=unassigned_mention_id,
+                        name="Unassigned",
+                        context=None,
+                        entity_id=None,
+                        source_id=page_source_id,
+                    ),
+                ],
+                limit=100,
             )
 
-    class _Collections:
-        def get(self, name: str) -> SimpleNamespace:
-            assert name == TEXT_MENTION_COLLECTION
-            return SimpleNamespace(query=_Query())
+    class _Entities:
+        async def list(
+            self, query: EntityListRequest
+        ) -> GenericListResponse[EntityResponse]:
+            entity_queries.append(query)
+            return GenericListResponse[EntityResponse](
+                items=[
+                    EntityResponse(
+                        entity_id=entity_id,
+                        entity_type=EntityType.person,
+                        name="Ada Lovelace",
+                        user_id=uuid.uuid4(),
+                    )
+                ],
+                limit=1,
+            )
 
     mentions = await _fetch_text_mentions(
-        SimpleNamespace(collections=_Collections()),  # pyright: ignore[reportArgumentType]
+        SimpleNamespace(  # pyright: ignore[reportArgumentType]
+            text_mentions=_TextMentions(),
+            entities=_Entities(),
+        ),
         page_source_id,
     )
 
@@ -195,8 +222,14 @@ async def test_fetch_text_mentions_uses_source_link_and_linked_entity_type() -> 
             "Ada Lovelace",
         )
     ]
-    assert captured["return_properties"] == ["name"]
-    assert captured["return_references"] is not None
+    assert len(mention_queries) == 1
+    assert len(entity_queries) == 1
+    mention_filter = mention_queries[0].filter_
+    entity_filter = entity_queries[0].filter_
+    assert isinstance(mention_filter, TextMentionListFilter)
+    assert isinstance(entity_filter, EntityListFilter)
+    assert mention_filter.source_id == [page_source_id]
+    assert entity_filter.entity_id == [entity_id]
 
 
 def test_text_mention_span_route_requires_page_source_id() -> None:

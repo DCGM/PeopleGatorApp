@@ -40,7 +40,6 @@ from people_gator_api.services.auth_service import (
 )
 from people_gator_api.services.database_service import (
     DatabaseDependency,
-    WeaviateSessionDependency,
 )
 from people_gator_api.utils.http_errors import raise_api_error
 
@@ -72,7 +71,7 @@ async def _fetch_layout_for_page(
 
 
 async def _fetch_text_mention_spans_for_page(
-    session: WeaviateSessionDependency,
+    database: DatabaseDependency,
     page: PageResponse,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
@@ -83,7 +82,7 @@ async def _fetch_text_mention_spans_for_page(
 
     try:
         return await get_text_mention_spans(
-            session,
+            database,
             page.source_id,
             library=page.library,
             document_id=page.document_id,
@@ -363,7 +362,6 @@ async def get_page_layout_by_id_route(
 async def get_text_mention_spans_by_id_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    session: WeaviateSessionDependency,
     user: BrowseUserDependency,
 ) -> list[TextMentionSpanModel]:
     """Return word-aligned fuzzy text-mention spans for one page Source UUID."""
@@ -371,7 +369,7 @@ async def get_text_mention_spans_by_id_route(
     page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_text_mention_spans_for_page(session, page)
+    return await _fetch_text_mention_spans_for_page(database, page)
 
 
 @router.delete(

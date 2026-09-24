@@ -8,29 +8,23 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Protocol, cast
 
-from weaviate import WeaviateAsyncClient
-from weaviate.classes.query import Filter, QueryReference
-from weaviate.collections.classes.internal import CrossReferences
-from weaviate.collections.classes.types import WeaviateProperties
-
+from people_gator_api.persistence.contracts import Database
+from people_gator_api.schemas.entities import EntityListFilter, EntityListRequest
 from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.mentions import (
+    TextMentionListFilter,
+    TextMentionListRequest,
+    TextMentionResponse,
+)
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.media.page_layout import get_page_layout
-from people_gator_api.weaviate_schema import TEXT_MENTION_COLLECTION
 from people_gator_api.utils.opentelemetry import trace
 
 
 _TEXT_MENTION_PAGE_SIZE = 100
 _MIN_SIMILARITY = 0.8
 _WORD_PATTERN = re.compile(r"[^\W_]+(?:[’'\-][^\W_]+)*", re.UNICODE)
-
-
-class _TextMentionObject(Protocol):
-    uuid: uuid.UUID
-    properties: WeaviateProperties
-    references: CrossReferences
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,37 +51,9 @@ class _Match:
     score: float
 
 
-def _reference_id_filter(link_on: str, reference_id: uuid.UUID):
-    return Filter.by_ref(link_on=link_on).by_id().equal(reference_id)
-
-
-def _require_reference_uuid(references: CrossReferences, key: str) -> uuid.UUID:
-    if key not in references or not references[key].objects:
-        raise KeyError(f"Missing reference {key!r}.")
-    return references[key].objects[0].uuid
-
-
-def _require_str(properties: WeaviateProperties, key: str) -> str:
-    value = properties.get(key)
-    if not isinstance(value, str):
-        raise TypeError(f"Property {key!r} is not a string.")
-    return value
-
-
-def _optional_entity_type(
-    properties: WeaviateProperties, key: str
-) -> EntityType | None:
-    value = properties.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError(f"Property {key!r} is not a string.")
-    return EntityType(value)
-
-
 @trace()
 async def get_text_mention_spans(
-    client: WeaviateAsyncClient,
+    database: Database,
     page_source_id: uuid.UUID,
     *,
     library: str,
@@ -100,57 +66,56 @@ async def get_text_mention_spans(
         document_id,
         page_id,
     )
-    mentions = await _fetch_text_mentions(client, page_source_id)
+    mentions = await _fetch_text_mentions(database, page_source_id)
     return _match_text_mention_spans(layout, mentions)
 
 
 async def _fetch_text_mentions(
-    client: WeaviateAsyncClient,
+    database: Database,
     page_source_id: uuid.UUID,
 ) -> list[_TextMentionText]:
     """Fetch every text mention linked to the requested page source."""
-    collection = client.collections.get(TEXT_MENTION_COLLECTION)
     mentions: list[_TextMentionText] = []
-    after_id: uuid.UUID | None = None
+    cursor: str | None = None
     while True:
-        response = await collection.query.fetch_objects(
-            filters=_reference_id_filter(
-                link_on="source",
-                reference_id=page_source_id,
-            ),
-            limit=_TEXT_MENTION_PAGE_SIZE,
-            after=after_id,
-            return_properties=["name"],
-            return_references=QueryReference(
-                link_on="entity",
-                return_properties=["entity_type"],
-            ),
+        response = await database.text_mentions.list(
+            TextMentionListRequest(
+                filter_=TextMentionListFilter(source_id=[page_source_id]),
+                limit=_TEXT_MENTION_PAGE_SIZE,
+                cursor=cursor,
+            )
         )
-        objects = cast(list[_TextMentionObject], list(response.objects))
-        if not objects:
+        assigned: list[tuple[TextMentionResponse, uuid.UUID]] = []
+        for item in response.items:
+            if item.entity_id is not None:
+                assigned.append((item, item.entity_id))
+        entity_ids = list(dict.fromkeys(entity_id for _item, entity_id in assigned))
+        entity_types: dict[uuid.UUID, EntityType] = {}
+        if entity_ids:
+            entities = await database.entities.list(
+                EntityListRequest(
+                    filter_=EntityListFilter(entity_id=entity_ids),
+                    limit=len(entity_ids),
+                )
+            )
+            entity_types = {
+                entity.entity_id: entity.entity_type for entity in entities.items
+            }
+        mentions.extend(
+            _TextMentionText(
+                mention_id=item.mention_id,
+                entity_id=entity_id,
+                entity_type=entity_types.get(entity_id),
+                name=item.name,
+            )
+            for item, entity_id in assigned
+        )
+        if response.cursor is None:
             break
-        mentions.extend(_text_mention_text(item) for item in objects)
-        if len(objects) < _TEXT_MENTION_PAGE_SIZE:
-            break
-        next_after_id = objects[-1].uuid
-        if next_after_id == after_id:
-            raise RuntimeError("Weaviate text mention pagination did not advance")
-        after_id = next_after_id
+        if response.cursor == cursor:
+            raise RuntimeError("Text mention pagination did not advance")
+        cursor = response.cursor
     return mentions
-
-
-def _text_mention_text(item: _TextMentionObject) -> _TextMentionText:
-    entity_id = _require_reference_uuid(item.references, "entity")
-    linked_entities = item.references["entity"].objects
-    return _TextMentionText(
-        mention_id=item.uuid,
-        entity_id=entity_id,
-        entity_type=_optional_entity_type(
-            linked_entities[0].properties,
-            "entity_type",
-        ),
-        name=_require_str(item.properties, "name"),
-    )
 
 
 def _match_text_mention_spans(
