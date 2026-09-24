@@ -145,6 +145,10 @@ class FaceResponse(BaseModel):
         description="The unique identifier of the entity associated with the face detection.",
     )
     confidence: float = Field(description="The confidence score of the face detection.")
+    embeddings: list[str] = Field(
+        default_factory=list,
+        description="The embedding model identifiers available for the face detection. Embedding vectors are not returned.",
+    )
 
 
 FaceListResponse = GenericListResponse[FaceResponse]

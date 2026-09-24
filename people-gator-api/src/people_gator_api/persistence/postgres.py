@@ -497,6 +497,7 @@ def _face_response(face: Face) -> FaceResponse:
             Keypoint(type=kind, x=point[0], y=point[1])
             for kind, point in zip(face.keypoint_types, face.keypoints, strict=True)
         ],
+        embeddings=sorted(embedding.model_id for embedding in face.embeddings),
     )
 
 
@@ -1488,6 +1489,7 @@ class PostgresFaceRepository(FaceRepository):
         rows = list(
             await self._session.scalars(
                 select(Face)
+                .options(selectinload(Face.embeddings))
                 .where(*page_filters)
                 .order_by(Face.id)
                 .limit(query.limit + 1)

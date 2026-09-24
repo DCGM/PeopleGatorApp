@@ -185,6 +185,7 @@ async def test_postgres_contract_round_trip() -> None:
                 ),
                 user,
             )
+            assert face.embeddings == [DEFAULT_FACE_EMBEDDING_MODEL]
             other_face = await database.faces.create(
                 FaceCreateRequest(
                     identifier=f"other-{marker}",
@@ -205,6 +206,7 @@ async def test_postgres_contract_round_trip() -> None:
                 ),
                 user,
             )
+            assert other_face.embeddings == [DEFAULT_FACE_EMBEDDING_MODEL]
             entities_for_image = await database.entities.list(
                 EntityListRequest(
                     filter_=EntityListFilter(source_id=[image.source_id]),
@@ -216,14 +218,16 @@ async def test_postgres_contract_round_trip() -> None:
                 created_entity_ids
             )
             assert entities_for_image.total_count == 2
-            assert (
+            listed_face = (
                 await database.faces.list(
                     FaceListRequest(
                         filter_=FaceListFilter(entity_id=[entities[0].entity_id]),
                         limit=10,
                     )
                 )
-            ).items[0].detection_id == face.detection_id
+            ).items[0]
+            assert listed_face.detection_id == face.detection_id
+            assert listed_face.embeddings == [DEFAULT_FACE_EMBEDDING_MODEL]
 
             mention = await database.text_mentions.create(
                 TextMentionCreateRequest(
@@ -295,6 +299,7 @@ async def test_postgres_contract_round_trip() -> None:
             )
             assert face_search.items[0].detection_id == other_face.detection_id
             assert face_search.items[0].face_score is not None
+            assert face_search.items[0].embeddings == [DEFAULT_FACE_EMBEDDING_MODEL]
 
             entity_face_search = await database.entities.search(
                 SearchEntitiesRequest(
