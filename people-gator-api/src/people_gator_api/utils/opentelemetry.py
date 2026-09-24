@@ -27,7 +27,10 @@ from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrument
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.weaviate import WeaviateInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from urllib.parse import urljoin
 
@@ -92,10 +95,15 @@ def initialize_opentelemetry():
     system_metric_instrumentator = SystemMetricsInstrumentor()
     fastapi_instrumentor = FastAPIInstrumentor()
     aiohttp_client_instrumentor = AioHttpClientInstrumentor()
+    asyncpg_instrumentor = AsyncPGInstrumentor()
     weaviate_instrumentor = WeaviateInstrumentor()
     logging_instrumentator.instrument(set_logging_format=True)
     system_metric_instrumentator.instrument()
     aiohttp_client_instrumentor.instrument()
+    # This captures driver-level operations such as connection acquisition and
+    # prepared statement execution. SQLAlchemy spans are attached per engine
+    # below so calls made through the ORM retain both layers of context.
+    asyncpg_instrumentor.instrument()
     weaviate_instrumentor.instrument()
 
     return (
@@ -103,3 +111,8 @@ def initialize_opentelemetry():
         aiohttp_client_instrumentor,
         weaviate_instrumentor,
     )
+
+
+def instrument_sqlalchemy_engine(engine: AsyncEngine) -> None:
+    """Attach SQL query spans to an already-created async SQLAlchemy engine."""
+    SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine)

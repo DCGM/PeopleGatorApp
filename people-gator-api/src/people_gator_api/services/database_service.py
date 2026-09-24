@@ -24,6 +24,7 @@ from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.models import Base
 
 from people_gator_api.settings import settings
+from people_gator_api.utils.opentelemetry import instrument_sqlalchemy_engine
 
 
 _postgres_engine: AsyncEngine | None = None
@@ -46,7 +47,12 @@ def make_postgres_engine(database_url: str, *, echo: bool = False) -> AsyncEngin
     if not database_url.startswith("postgresql+asyncpg://"):
         raise ValueError("database_url must use the postgresql+asyncpg driver")
 
-    return create_async_engine(database_url, echo=echo, pool_pre_ping=True)
+    engine = create_async_engine(database_url, echo=echo, pool_pre_ping=True)
+    if settings.otel.enabled:
+        # The SQLAlchemy instrumentor needs the sync facade of an async engine.
+        # This creates parent SQL spans around the asyncpg driver spans.
+        instrument_sqlalchemy_engine(engine)
+    return engine
 
 
 def make_postgres_session_factory(

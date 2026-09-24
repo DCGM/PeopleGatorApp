@@ -146,6 +146,7 @@ from people_gator_api.schemas.users import (
     UserPatchRequest,
     UserResponse,
 )
+from people_gator_api.utils.opentelemetry import trace
 from people_gator_api.models import (
     Alias,
     Document,
@@ -188,6 +189,7 @@ def _query_vectors_cte(vectors: dict[uuid.UUID, list[float]], embedding_dim: int
     )
 
 
+@trace("postgres.hnsw.configure")
 async def _configure_hnsw_search(session: AsyncSession) -> None:
     await session.execute(text(f"SET LOCAL hnsw.ef_search = {HNSW_EF_SEARCH}"))
 
@@ -204,6 +206,7 @@ def _strings(values: Iterable[object]) -> list[str]:
     return [str(value) for value in values]
 
 
+@trace("postgres.commit")
 async def _commit(session: AsyncSession, message: str) -> None:
     try:
         await session.commit()
@@ -212,6 +215,7 @@ async def _commit(session: AsyncSession, message: str) -> None:
         raise ValueError(message) from exc
 
 
+@trace("postgres.validate_ids")
 async def _ensure_ids(
     session: AsyncSession,
     model: type[ModelT],
@@ -234,6 +238,7 @@ async def _ensure_ids(
         raise ValueError(f"{label} does not exist: {missing[0]}")
 
 
+@trace("postgres.validate_cursor")
 async def _validate_cursor(
     session: AsyncSession,
     model: type[ModelT],
@@ -646,6 +651,7 @@ def _source_filters(
     return filters
 
 
+@trace("postgres.face_model.load")
 async def _registered_face_model(session: AsyncSession, model_stub: str) -> FaceModel:
     model = await session.get(FaceModel, model_stub)
     if model is None:
@@ -653,6 +659,7 @@ async def _registered_face_model(session: AsyncSession, model_stub: str) -> Face
     return model
 
 
+@trace("postgres.face_embeddings.validate")
 async def _validate_face_embeddings(
     session: AsyncSession, embeddings: Iterable[FaceEmbeddingInput]
 ) -> None:
@@ -674,6 +681,7 @@ async def _validate_face_embeddings(
             raise ValueError(message)
 
 
+@trace("postgres.face_search.load_reference_vectors")
 async def _reference_vectors(
     session: AsyncSession,
     face_ids: Sequence[uuid.UUID],
