@@ -8,12 +8,16 @@ from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
-from people_gator_api.models import FaceModel, Page, face_embedding_hnsw_index
+from people_gator_api.models import Entity, FaceModel, Page, face_embedding_hnsw_index
 from people_gator_api.persistence.postgres import (
     PostgresEntityRepository,
     PostgresFaceModelRepository,
     PostgresFaceRepository,
     PostgresSourceRepository,
+)
+from people_gator_api.persistence.postgres.utils import (
+    FACE_SEARCH_REPRESENTATIVE_LIMIT,
+    representative_face_vectors,
 )
 from people_gator_api.schemas.enums import DEFAULT_FACE_EMBEDDING_MODEL
 from people_gator_api.schemas.face_models import FaceModelRegisterRequest
@@ -102,17 +106,21 @@ async def test_entity_face_scores_use_lateral_hnsw_candidates() -> None:
             query=QueryBase(face_id=[reference_id]),
             limit=10,
         ),
-        [],
+        [Entity.kind == "person"],
     )
 
     assert scores == {candidate_id: 0.75}
-    candidate_statement = session.scalars.await_args.args[0]
-    compiled = candidate_statement.compile(dialect=postgresql.dialect())
+    score_statement = session.execute.await_args_list[2].args[0]
+    compiled = score_statement.compile(dialect=postgresql.dialect())
     sql = str(compiled)
     assert "JOIN LATERAL" in sql
     assert "<=> query_vectors.embedding" in sql
+    assert "AS VECTOR(512)" in sql
+    assert "face_scores_by_representative" in sql
     assert "ORDER BY" in sql
+    assert sql.count("pg_demo_entities.kind") == 2
     assert 200 in compiled.params.values()
+    session.scalars.assert_not_awaited()
     assert str(session.execute.await_args_list[1].args[0]) == (
         "SET LOCAL hnsw.ef_search = 400"
     )
@@ -161,10 +169,44 @@ async def test_other_face_score_paths_use_lateral_hnsw_candidates(
         scores = await method(request, [])
 
     assert scores == {candidate_id: 0.5}
-    candidate_statement = session.scalars.await_args.args[0]
-    compiled = candidate_statement.compile(dialect=postgresql.dialect())
+    score_statement = session.execute.await_args_list[2].args[0]
+    compiled = score_statement.compile(dialect=postgresql.dialect())
     sql = str(compiled)
     assert "JOIN LATERAL" in sql
     assert "<=> query_vectors.embedding" in sql
+    assert "AS VECTOR(512)" in sql
     assert expected_table in sql
     assert 200 in compiled.params.values()
+    session.scalars.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_many_face_queries_are_reduced_to_weighted_representatives() -> None:
+    vectors = {
+        uuid.UUID(int=index + 1): [
+            1.0 if index % 2 == 0 else -1.0,
+            float(index % 3) / 100.0,
+        ]
+        for index in range(FACE_SEARCH_REPRESENTATIVE_LIMIT * 4)
+    }
+
+    representatives = await representative_face_vectors(vectors)
+
+    assert len(representatives) <= FACE_SEARCH_REPRESENTATIVE_LIMIT
+    assert sum(item.weight for item in representatives) == len(vectors)
+    assert all(item.weight > 0 for item in representatives)
+    assert all(item.embedding == vectors[item.query_id] for item in representatives)
+
+
+@pytest.mark.asyncio
+async def test_small_face_queries_keep_every_vector_exactly() -> None:
+    vectors = {
+        uuid.uuid4(): [1.0, 0.0],
+        uuid.uuid4(): [0.0, 1.0],
+    }
+
+    representatives = await representative_face_vectors(vectors)
+
+    assert [item.query_id for item in representatives] == list(vectors)
+    assert [item.embedding for item in representatives] == list(vectors.values())
+    assert [item.weight for item in representatives] == [1, 1]

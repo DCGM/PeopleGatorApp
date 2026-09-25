@@ -62,12 +62,16 @@ column to `vector(<dimension>)` and uses `WHERE model_id = <stub>`, so models
 with different dimensions can share the table while each search uses a
 dimension-specific index.
 
-Face search retrieves at most 200 nearest faces per reference vector through a
-lateral HNSW query, unions the resulting candidates, and then computes exact
-candidate scores so min/max/average aggregation retains its documented
-meaning. A model must be registered through the admin API before its vectors
-can be written or searched; registration is idempotent when the stub and
-dimension match and rejects changing the dimension of an existing stub.
+Face search uses at most eight query representatives and retrieves at most 200
+nearest faces per representative through a lateral HNSW query. Searches with
+eight or fewer reference faces remain exact. Larger sets use deterministic
+spherical k-means centroids; cluster sizes weight average aggregation, while
+min/max aggregate over the covered query regions. Candidate generation and
+rescoring run in one statement, with result filters applied at both stages, so
+database work is bounded independently of the number of reference faces. A
+model must be registered through the admin API before its vectors can be
+written or searched; registration is idempotent when the stub and dimension
+match and rejects changing the dimension of an existing stub.
 
 ## Batch behavior
 

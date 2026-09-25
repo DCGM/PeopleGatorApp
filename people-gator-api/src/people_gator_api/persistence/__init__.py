@@ -1,17 +1,8 @@
-"""Backend-neutral persistence contracts with lazily loaded adapters."""
+"""
+Backend-neutral persistence contracts with lazily loaded adapters.
+"""
 
 from typing import TYPE_CHECKING, Any
-
-from people_gator_api.persistence.contracts import (
-    CreateResult,
-    Database,
-    EntityRepository,
-    FaceModelRepository,
-    FaceRepository,
-    SourceRepository,
-    TextMentionRepository,
-    UserRepository,
-)
 from people_gator_api.schemas.common import GenericActor
 
 if TYPE_CHECKING:
@@ -32,14 +23,6 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
-    "CreateResult",
-    "Database",
-    "EntityRepository",
-    "FaceModelRepository",
-    "FaceRepository",
-    "SourceRepository",
-    "TextMentionRepository",
-    "UserRepository",
     "GenericActor",
     "postgres_database",
     "weaviate_database",
