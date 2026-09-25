@@ -7,9 +7,11 @@ import { useRoute, useRouter } from 'vue-router'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
+import CurrentFacePanel from '@/components/custom/CurrentFacePanel.vue'
 import FaceGallery from '@/components/custom/FaceGallery.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
-import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
+import SimilarPeopleResults from '@/components/custom/SimilarPeopleResults.vue'
+import SimilarPeopleSearch from '@/components/custom/SimilarPeopleSearch.vue'
 import { topBarContextKey } from '@/components/custom/top-bar-context'
 import type {
   PageViewportBounds,
@@ -68,6 +70,7 @@ const viewerElement = ref<HTMLElement | null>(null)
 const zoomElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
 const pageBounds = ref<PageViewportBounds | null>(null)
+const similarPeopleSearch = ref<InstanceType<typeof SimilarPeopleSearch> | null>(null)
 let panzoom: PanzoomObject | undefined
 let pageResizeObserver: ResizeObserver | undefined
 
@@ -78,12 +81,7 @@ const selectedPersonCandidate = computed(() =>
 const selectedFaceIndex = computed(() =>
   faces.value.findIndex((face) => face.id === selectedFaceId.value),
 )
-const translationOptions = computed<readonly ('off' | Language)[]>(() => [
-  'off',
-  'cs',
-  'en',
-  'de',
-])
+const translationOptions = computed<readonly ('off' | Language)[]>(() => ['off', 'cs', 'en', 'de'])
 const selectedLineText = computed(() => transcription.value[selectedLineIndex.value]?.text ?? '')
 const translationQuery = useTranslationQuery(
   selectedLineText,
@@ -185,11 +183,15 @@ function assignSimilarPerson(person: SimilarPersonCandidate) {
   syncRoute()
 }
 
-async function createSimilarPerson(person: SimilarPersonCandidate) {
+async function createSimilarPerson(person: { name: string; shortDescription?: string }) {
   if (!selectedFace.value) return
   const entity = await createAndAssign(selectedFace.value.id, person.name, person.shortDescription)
   selectedPersonId.value = entity.entity_id
   syncRoute()
+}
+
+function focusSimilarPeopleSearch() {
+  similarPeopleSearch.value?.focus()
 }
 
 function setZoom(direction: 'in' | 'out') {
@@ -304,134 +306,71 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport v-if="topBarContext" :to="topBarContext">
-    <DocumentControls
-      :selected-line-index="selectedLineIndex"
-      :line-count="transcription.length"
-      :selected-face-index="selectedFaceIndex"
-      :face-count="faces.length"
-      :zoom-percent="zoomPercent"
-      :minimum-zoom-percent="minimumZoomPercent"
-      :maximum-zoom-percent="maximumZoomPercent"
-      :translation-options="translationOptions"
-      :is-translation-open="isTranslationOpen"
-      :selected-language="selectedLanguage"
-      :show-badge-names="showBadgeNames"
-      @previous-line="previousLine"
-      @next-line="nextLine"
-      @previous-face="previousFace"
-      @next-face="nextFace"
-      @set-zoom="setZoom"
-      @reset-view="resetView"
-      @select-translation="selectTranslation"
-      @toggle-badge-names="showBadgeNames = !showBadgeNames"
-    />
+    <DocumentControls :selected-line-index="selectedLineIndex" :line-count="transcription.length"
+      :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
+      :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
+      :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
+      :selected-language="selectedLanguage" :show-badge-names="showBadgeNames" @previous-line="previousLine"
+      @next-line="nextLine" @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom"
+      @reset-view="resetView" @select-translation="selectTranslation"
+      @toggle-badge-names="showBadgeNames = !showBadgeNames" />
   </Teleport>
 
   <main class="workspace-grid">
-    <div class="workspace-fold">
-      <section
-        class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"
-        aria-labelledby="page-transcription-title"
-      >
-        <DocumentTeleprompter
-          class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
-          :transcription="transcription"
-          :selected-line-index="selectedLineIndex"
-          :selected-entity-key="selectedEntityKey"
-          :related-entity-key="selectedPersonCandidate?.entityKey ?? null"
-          :is-translation-open="isTranslationOpen"
-          :selected-language="selectedLanguage"
-          :current-translation="currentTranslation"
-          :translation-loading="translationLoading"
-          @select-line="selectLine"
-          @select-entity="selectEntity"
-          @navigate-line="navigateLine"
-        />
-      </section>
+    <section class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"
+      aria-labelledby="page-transcription-title">
+      <DocumentTeleprompter class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
+        :transcription="transcription" :selected-line-index="selectedLineIndex" :selected-entity-key="selectedEntityKey"
+        :related-entity-key="selectedPersonCandidate?.entityKey ?? null" :is-translation-open="isTranslationOpen"
+        :selected-language="selectedLanguage" :current-translation="currentTranslation"
+        :translation-loading="translationLoading" @select-line="selectLine" @select-entity="selectEntity"
+        @navigate-line="navigateLine" />
+    </section>
 
-      <section
-        ref="viewerElement"
-        class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
-        aria-label="Pan and zoom document page"
-      >
-        <div
-          ref="zoomElement"
-          class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
-        >
-          <div
-            ref="pageElement"
-            class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
-            :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }"
-          >
-            <LoadableImage
-              :src="pageImageUrl"
-              :loading="pageImageLoading"
-              :alt="`Scan ${pageId}`"
-              class="absolute inset-0 size-full"
-              image-class="object-contain"
-            >
-              <template #fallback>
-                <div class="flex size-full items-center justify-center text-muted-foreground">
-                  <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
-                </div>
-              </template>
-            </LoadableImage>
-          </div>
+    <section ref="viewerElement" class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
+      aria-label="Pan and zoom document page">
+      <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
+        <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
+          :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
+          <LoadableImage :src="pageImageUrl" :loading="pageImageLoading" :alt="`Scan ${pageId}`"
+            class="absolute inset-0 size-full" image-class="object-contain">
+            <template #fallback>
+              <div class="flex size-full items-center justify-center text-muted-foreground">
+                <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
+              </div>
+            </template>
+          </LoadableImage>
         </div>
-        <DocumentPageOverlay
-          :page-bounds="pageBounds"
-          :transcription="transcription"
-          :faces="faces"
-          :selected-line-index="selectedLineIndex"
-          :selected-face-id="selectedFace?.id ?? null"
-          :selected-person-id="selectedPersonId"
-          :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
-          :show-badge-names="showBadgeNames"
-          @select-line="selectLine"
-          @select-face="selectFace"
-        />
-      </section>
+      </div>
+      <DocumentPageOverlay :page-bounds="pageBounds" :transcription="transcription" :faces="faces"
+        :selected-line-index="selectedLineIndex" :selected-face-id="selectedFace?.id ?? null"
+        :selected-person-id="selectedPersonId" :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
+        :show-badge-names="showBadgeNames" @select-line="selectLine" @select-face="selectFace" />
+    </section>
 
-      <FaceGallery
-        class="workspace-selection"
-        :faces="faces"
-        :selected-face-id="selectedFace?.id ?? null"
-        :loading="isLoading"
-        @select="selectFace"
-      />
-    </div>
+    <FaceGallery class="workspace-galery" :faces="faces" :selected-face-id="selectedFace?.id ?? null"
+      :loading="isLoading" @select="selectFace" />
 
-    <SimilarPeoplePanel
-      v-model:search-term="candidateTerm"
-      class="workspace-similar border-l"
-      :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []"
-      :loading="
-        isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
-      "
-      :has-next-page="hasNextPage"
-      :is-fetching-next-page="isFetchingNextPage"
-      :selected-face="selectedFace ?? null"
-      :viewed-person-id="selectedPersonId"
-      :assignment-pending="assignmentStatus === 'pending'"
-      @load-more="loadMore()"
-      @preview="previewSimilarPerson"
-      @assign="assignSimilarPerson"
-      @create="createSimilarPerson"
-      @unassign="unassignSelectedFace"
-    />
+    <CurrentFacePanel class="workspace-current border-t bg-background p-5" :face="selectedFace ?? null"
+      :assignment-pending="assignmentStatus === 'pending'" @find-profile="focusSimilarPeopleSearch"
+      @create="createSimilarPerson" @unassign="unassignSelectedFace" />
+    <SimilarPeopleSearch ref="similarPeopleSearch" v-model="candidateTerm"
+      class="workspace-search bg-background px-5 pb-5" :selected-face="selectedFace ?? null" />
+    <SimilarPeopleResults class="workspace-results min-h-0 bg-background px-5 pb-5"
+      :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []" :loading="isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
+        " :has-next-page="hasNextPage" :is-fetching-next-page="isFetchingNextPage"
+      :selected-face="selectedFace ?? null" :viewed-person-id="selectedPersonId"
+      :assignment-pending="assignmentStatus === 'pending'" :search-term="candidateTerm" @load-more="loadMore()"
+      @preview="previewSimilarPerson" @assign="assignSimilarPerson" />
   </main>
 </template>
 
 <style scoped>
 .workspace-grid {
-  min-height: calc(100vh - 3.25rem);
-}
-
-.workspace-fold {
   display: grid;
-  height: calc(100dvh - 3.25rem);
+  min-height: calc(100vh - 3.25rem);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(28rem, calc(78dvh - 14rem)) auto auto auto minmax(24rem, 60dvh);
 }
 
 .workspace-viewer {
@@ -439,9 +378,22 @@ onBeforeUnmount(() => {
   grid-row: 2;
 }
 
-.workspace-selection {
+.workspace-galery {
   grid-column: 1;
   grid-row: 3;
+}
+
+.workspace-current {
+  grid-row: 4;
+}
+
+.workspace-search {
+  grid-row: 5;
+}
+
+.workspace-results {
+  grid-row: 6;
+  overflow: hidden;
 }
 
 .workspace-teleprompter {
@@ -453,15 +405,11 @@ onBeforeUnmount(() => {
 .bg-viewer {
   background-color: var(--color-muted);
   background-image:
-    linear-gradient(
+    linear-gradient(color-mix(in srgb, var(--color-foreground) 5.5%, transparent) 1px,
+      transparent 1px),
+    linear-gradient(90deg,
       color-mix(in srgb, var(--color-foreground) 5.5%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--color-foreground) 5.5%, transparent) 1px,
-      transparent 1px
-    );
+      transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -471,22 +419,17 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1024px) {
   .workspace-grid {
-    display: grid;
     height: calc(100vh - 3.25rem);
     grid-template-columns: minmax(0, 1fr) 25rem;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .workspace-fold {
-    display: contents;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
   }
 
   .workspace-viewer {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 2 / 5;
   }
 
-  .workspace-selection {
+  .workspace-galery {
     grid-column: 2;
     grid-row: 1;
   }
@@ -497,39 +440,51 @@ onBeforeUnmount(() => {
     height: auto;
   }
 
-  .workspace-similar {
+  .workspace-current,
+  .workspace-search,
+  .workspace-results {
     grid-column: 2;
+    border-left-width: 1px;
+  }
+
+  .workspace-current {
     grid-row: 2;
-    overflow: hidden;
+  }
+
+  .workspace-search {
+    grid-row: 3;
+  }
+
+  .workspace-results {
+    grid-row: 4;
   }
 }
 
 @media (min-width: 1536px) {
   .workspace-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) 25rem;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 25rem;
   }
 
   .workspace-viewer {
-    grid-column: 1 / 3;
-    grid-row: 1 / 3;
+    grid-column: 2;
+    grid-row: 1 / 5;
   }
 
-  .workspace-selection {
+  .workspace-galery {
+    grid-column: 3;
+  }
+
+  .workspace-current,
+  .workspace-search,
+  .workspace-results {
     grid-column: 3;
   }
 
   .workspace-teleprompter {
-    grid-column: 2;
-    grid-row: 3;
-    border-top-width: 1px;
-    border-left-width: 1px;
+    grid-column: 1;
+    grid-row: 1 / 5;
+    border-right-width: 1px;
     border-bottom-width: 0;
-  }
-
-  .workspace-similar {
-    grid-column: 3;
-    grid-row: 2 / 4;
   }
 }
 </style>

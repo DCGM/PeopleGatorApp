@@ -38,6 +38,16 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const faceRecords = computed(() =>
     (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
+  const faceEmbeddingModel = computed(
+    () => faceRecords.value.find((face) => face.embeddings?.length)?.embeddings?.[0] ?? null,
+  )
+  const similarityFaceIds = computed(() => {
+    const model = faceEmbeddingModel.value
+    if (!model) return []
+    return faceRecords.value
+      .filter((face) => face.embeddings?.includes(model))
+      .map((face) => face.detection_id)
+  })
   const mentionRecords = computed(() =>
     (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
@@ -194,7 +204,8 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   return {
     entity: entityQuery.data,
     error: entityQuery.error,
-    faceIds: detectionIds,
+    faceEmbeddingModel,
+    faceIds: similarityFaceIds,
     faces,
     identifiers,
     isLoading: computed(

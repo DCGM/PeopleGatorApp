@@ -9,8 +9,9 @@ import {
 
 describe('similar-people search modes', () => {
   it('sends a face query only with no text, and switches to pure text when typing', () => {
-    expect(candidateSearchParams('face-1', '')).toEqual({
+    expect(candidateSearchParams('face-1', '', 'face-model')).toEqual({
       'query.face_id': ['face-1'],
+      'query.face_embedding_model': 'face-model',
       limit: 50,
     })
     expect(candidateSearchParams('face-1', '  Novak  ')).toEqual({
@@ -22,6 +23,7 @@ describe('similar-people search modes', () => {
       limit: 50,
     })
     expect(candidateSearchParams(null, '  ')).toBeUndefined()
+    expect(candidateSearchParams('face-without-embedding', '')).toBeUndefined()
   })
 
   it('classifies page membership using assigned faces and person mention spans', () => {

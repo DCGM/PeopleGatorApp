@@ -5,10 +5,17 @@ import type { EntitySearchParams } from '@/query/search'
 export function candidateSearchParams(
   selectedFaceId: string | null,
   searchTerm: string,
+  faceEmbeddingModel?: string,
 ): EntitySearchParams | undefined {
   const text = searchTerm.trim()
   if (text) return { 'query.text': [text], limit: 50 }
-  if (selectedFaceId) return { 'query.face_id': [selectedFaceId], limit: 50 }
+  if (selectedFaceId && faceEmbeddingModel) {
+    return {
+      'query.face_id': [selectedFaceId],
+      'query.face_embedding_model': faceEmbeddingModel,
+      limit: 50,
+    }
+  }
   return undefined
 }
 

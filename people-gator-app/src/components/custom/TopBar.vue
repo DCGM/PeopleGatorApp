@@ -20,10 +20,10 @@ const isPeopleRoute = computed(() => route.name === 'people-search' || route.nam
     <div class="flex shrink-0 items-center gap-6">
       <RouterLink :to="{ name: 'document-search' }" aria-label="PeopleGator"
         class="z-20 flex size-12 shrink-0 items-center justify-center bg-background">
-        <PeopleGatorIcon aria-hidden="true" class="size-10 text-primary" :stroke-width="title ? 1.5 : 1" />
+        <PeopleGatorIcon aria-hidden="true" class="size-10 text-primary" stroke-width="1" />
       </RouterLink>
       <div v-if="title" class="hidden flex-col leading-none sm:flex">
-        <h1 class="text-lg">{{ title }}</h1>
+        <h1 class="text-lg font-extralight">{{ title }}</h1>
       </div>
     </div>
 

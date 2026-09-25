@@ -186,6 +186,7 @@ export function useDocumentWorkspace(
         : undefined
       return {
         id: face.detection_id,
+        embeddingModel: face.embeddings?.[0],
         personId: face.entity_id ?? null,
         name: person?.name || 'Unknown person',
         shortDescription: person?.short_description || undefined,
@@ -204,8 +205,12 @@ export function useDocumentWorkspace(
   )
 
   const textTerm = computed(() => toValue(candidateTerm).trim())
+  const selectedFaceEmbedding = computed(() => {
+    const id = toValue(selectedFaceId)
+    return faceRecords.value.find((face) => face.detection_id === id)?.embeddings?.[0]
+  })
   const searchParams = computed(() =>
-    candidateSearchParams(toValue(selectedFaceId), textTerm.value),
+    candidateSearchParams(toValue(selectedFaceId), textTerm.value, selectedFaceEmbedding.value),
   )
   const isSearchMode = computed(() => Boolean(searchParams.value))
   const candidateSearchQuery = useEntitySearchQuery(

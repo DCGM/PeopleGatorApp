@@ -20,11 +20,19 @@ function percentage(value: number) {
   return Math.round(value <= 1 ? value * 100 : value)
 }
 
-export function personDiscoverySignals(faceIds: string[], nameQuery: string) {
+export function personDiscoverySignals(
+  faceIds: string[],
+  faceEmbeddingModel: string | null,
+  nameQuery: string,
+) {
   const name = nameQuery.trim()
   return {
     ...(name && { 'query.text': [name] }),
-    ...(faceIds.length && { 'query.face_id': faceIds }),
+    ...(faceIds.length &&
+      faceEmbeddingModel && {
+        'query.face_id': faceIds,
+        'query.face_embedding_model': faceEmbeddingModel,
+      }),
     'filter.entity_type': ['person'] as Array<'person'>,
     limit: DISCOVERY_LIMIT,
   }
@@ -33,14 +41,22 @@ export function personDiscoverySignals(faceIds: string[], nameQuery: string) {
 export function usePersonDiscovery(
   personId: MaybeRefOrGetter<string>,
   referenceFaceIds: MaybeRefOrGetter<string[]>,
+  referenceFaceModel: MaybeRefOrGetter<string | null>,
   nameQuery: MaybeRefOrGetter<string>,
   enabled: MaybeRefOrGetter<boolean>,
 ) {
   const faceIds = computed(() => [...new Set(toValue(referenceFaceIds))])
-  const canSearchFaces = computed(() => toValue(enabled) && faceIds.value.length > 0)
+  const hasFaceSignal = computed(
+    () => faceIds.value.length > 0 && Boolean(toValue(referenceFaceModel)),
+  )
+  const canSearchFaces = computed(() => toValue(enabled) && hasFaceSignal.value)
 
   const faceSearchQuery = useFaceSearchQuery(
-    computed(() => ({ 'query.face_id': faceIds.value, limit: DISCOVERY_LIMIT })),
+    computed(() => ({
+      'query.face_id': faceIds.value,
+      'query.face_embedding_model': toValue(referenceFaceModel) ?? undefined,
+      limit: DISCOVERY_LIMIT,
+    })),
     canSearchFaces,
   )
 
@@ -141,10 +157,10 @@ export function usePersonDiscovery(
   )
 
   const entitySearchParams = computed(() =>
-    personDiscoverySignals(faceIds.value, toValue(nameQuery)),
+    personDiscoverySignals(faceIds.value, toValue(referenceFaceModel), toValue(nameQuery)),
   )
   const canSearchPeople = computed(
-    () => toValue(enabled) && (faceIds.value.length > 0 || Boolean(toValue(nameQuery).trim())),
+    () => toValue(enabled) && (hasFaceSignal.value || Boolean(toValue(nameQuery).trim())),
   )
   const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearchPeople)
   const entityMatches = computed(() =>

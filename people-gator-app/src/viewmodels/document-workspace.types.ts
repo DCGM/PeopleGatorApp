@@ -4,6 +4,7 @@ export type FaceStatus = 'assigned' | 'unassigned'
 
 export type Face = {
   id: string
+  embeddingModel?: string
   personId: string | null
   name: string
   shortDescription?: string

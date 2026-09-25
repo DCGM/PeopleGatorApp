@@ -20,6 +20,7 @@ const personId = computed(() => String(route.params.personId))
 
 const {
   error,
+  faceEmbeddingModel,
   faceIds,
   faces,
   identifiers,
@@ -74,6 +75,7 @@ const {
 } = usePersonDiscovery(
   personId,
   faceIds,
+  faceEmbeddingModel,
   debouncedPersonSearchTerm,
   computed(() => activeTab.value === 'discover'),
 )

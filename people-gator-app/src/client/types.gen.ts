@@ -604,6 +604,12 @@ export type FaceResponse = {
      * The confidence score of the face detection.
      */
     confidence: number;
+    /**
+     * Embeddings
+     *
+     * The embedding model identifiers available for the face detection. Embedding vectors are not returned.
+     */
+    embeddings?: Array<string>;
 };
 
 /**
@@ -803,6 +809,12 @@ export type FoundFace = {
      * The confidence score of the face detection.
      */
     confidence: number;
+    /**
+     * Embeddings
+     *
+     * The embedding model identifiers available for the face detection. Embedding vectors are not returned.
+     */
+    embeddings?: Array<string>;
 };
 
 /**
