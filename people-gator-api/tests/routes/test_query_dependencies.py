@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from people_gator_api.routes.v1 import router
 from people_gator_api.routes.v1.query_dependencies import (
     FaceListFilterDependency,
+    PageListFilterDependency,
     SearchListRequestDependency,
     SearchQueryDependency,
 )
@@ -69,6 +70,9 @@ LIST_FILTERS = {
         "entity_id",
         "detection_id",
         "mention_id",
+        "has_mentions",
+        "has_faces",
+        "has_entities",
     },
     "/images": {
         "url",
@@ -165,6 +169,30 @@ def test_dependencies_parse_dotted_parameters_into_typed_models() -> None:
         "limit": 7,
         "return_total_count": True,
         "cursor": "opaque",
+    }
+
+
+def test_page_dependency_preserves_false_presence_filters() -> None:
+    app = FastAPI()
+
+    async def _probe(filter: PageListFilterDependency) -> dict[str, object]:
+        return filter.model_dump(mode="json")
+
+    app.get("/probe")(_probe)
+    response = TestClient(app).get(
+        "/probe",
+        params={
+            "filter.has_mentions": "true",
+            "filter.has_faces": "false",
+            "filter.has_entities": "false",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "has_mentions": True,
+        "has_faces": False,
+        "has_entities": False,
     }
 
 

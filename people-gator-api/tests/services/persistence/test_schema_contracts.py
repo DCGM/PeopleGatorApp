@@ -22,6 +22,7 @@ from people_gator_api.schemas.sources import (
     GenericSourceLookupRequest,
     GenericSourceResponse,
     ImageListRequest,
+    PageListFilter,
     PageListRequest,
     PageResponse,
     SourceListRequest,
@@ -44,6 +45,18 @@ def test_typed_source_list_conversion_preserves_kind_and_count_request() -> None
     assert not is_missing(image.filter_)
     assert image.filter_.source_type == [SourceKind.image]
     assert generic.filter_ is MISSING
+
+
+def test_page_annotation_filters_are_preserved_by_generic_conversion() -> None:
+    generic = PageListFilter(
+        has_mentions=True,
+        has_faces=False,
+        has_entities=True,
+    ).to_generic()
+
+    assert generic.has_mentions is True
+    assert generic.has_faces is False
+    assert generic.has_entities is True
 
 
 def test_source_lookup_requires_one_complete_identity() -> None:

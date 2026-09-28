@@ -11,6 +11,24 @@ import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
 import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
 
+const documentWorkspaceMock = vi.hoisted(() => ({
+  faces: [] as Array<Record<string, unknown>>,
+  similarPeople: [] as Array<Record<string, unknown>>,
+  transcription: [] as Array<{
+    id: string
+    text: string
+    position: { left: number; top: number; width: number; height: number }
+    entities: Array<{
+      entity_id: string
+      label: 'person'
+      text: string
+      line_id: string
+      start_index: number
+      end_index: number
+    }>
+  }>,
+}))
+
 vi.mock('@panzoom/panzoom', () => ({
   default: vi.fn<() => object>(() => ({
     destroy: vi.fn<() => void>(),
@@ -48,11 +66,13 @@ vi.mock('@/viewmodels/people-search', () => ({
 vi.mock('@/viewmodels/person-detail', () => ({
   usePersonDetail: () => ({
     error: ref(null),
+    faceCount: ref(0),
     faceIds: ref([]),
-    faces: ref([]),
+    faces: ref(documentWorkspaceMock.faces),
     identifiers: ref({ wikidataId: '', nationalLibraryAuthorityId: '' }),
     isLoading: ref(false),
     libraryCount: ref(0),
+    mentionCount: ref(0),
     mentions: ref([]),
     portrait: ref(''),
     portraitLoading: ref(false),
@@ -76,9 +96,9 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     pageDimensions: ref({ width: 210, height: 297 }),
     pageImageLoading: ref(false),
     pageImageUrl: ref(''),
-    similarPeople: ref([]),
+    similarPeople: ref(documentWorkspaceMock.similarPeople),
     similarPeopleLoading: ref(false),
-    transcription: ref([]),
+    transcription: ref(documentWorkspaceMock.transcription),
   }),
 }))
 
@@ -145,7 +165,7 @@ describe('App', () => {
         ],
         selectedLineIndex: 0,
         selectedEntityKey: null,
-        relatedEntityKey: null,
+        relatedEntityId: null,
         isTranslationOpen: true,
         selectedLanguage: 'en',
         currentTranslation: 'Hello',
@@ -170,7 +190,7 @@ describe('App', () => {
         ],
         selectedLineIndex: 0,
         selectedEntityKey: null,
-        relatedEntityKey: null,
+        relatedEntityId: null,
         isTranslationOpen: true,
         selectedLanguage: 'en',
         translationLoading: true,
@@ -180,6 +200,122 @@ describe('App', () => {
     expect(wrapper.get('[aria-label="Loading translation"]').attributes('aria-busy')).toBe('true')
     expect(wrapper.find('.animate-pulse').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('No translation available')
+  })
+
+  it('highlights every transcription span belonging to the selected person', () => {
+    const wrapper = mount(DocumentTeleprompter, {
+      props: {
+        transcription: [
+          {
+            id: 'line-1',
+            text: 'Ada met Grace',
+            position: { left: 0, top: 0, width: 50, height: 10 },
+            entities: [
+              {
+                entity_id: 'person-ada',
+                label: 'person',
+                text: 'Ada',
+                line_id: 'line-1',
+                start_index: 0,
+                end_index: 3,
+              },
+              {
+                entity_id: 'person-grace',
+                label: 'person',
+                text: 'Grace',
+                line_id: 'line-1',
+                start_index: 8,
+                end_index: 13,
+              },
+            ],
+          },
+          {
+            id: 'line-2',
+            text: 'Ada wrote notes',
+            position: { left: 0, top: 10, width: 50, height: 10 },
+            entities: [
+              {
+                entity_id: 'person-ada',
+                label: 'person',
+                text: 'Ada',
+                line_id: 'line-2',
+                start_index: 0,
+                end_index: 3,
+              },
+            ],
+          },
+        ],
+        selectedLineIndex: 0,
+        selectedEntityKey: null,
+        relatedEntityId: 'person-ada',
+      },
+    })
+
+    const spans = wrapper.findAll('mark.transcription-entity')
+    expect(spans[0]?.attributes('style')).toContain('2px solid var(--accent)')
+    expect(spans[1]?.attributes('style')).not.toContain('2px solid var(--accent)')
+    expect(spans[2]?.attributes('style')).toContain('2px solid var(--accent)')
+  })
+
+  it('selects a person when its transcription span is clicked', async () => {
+    documentWorkspaceMock.faces = [
+      {
+        id: 'face-ada',
+        embeddingModel: 'face-model',
+        personId: 'person-ada',
+        name: 'Ada Lovelace',
+        confidence: 98,
+        status: 'assigned',
+        position: { left: 0, top: 0, width: 10, height: 10 },
+        portrait: '',
+        portraitLoading: false,
+      },
+    ]
+    documentWorkspaceMock.similarPeople = [
+      {
+        id: 'person-ada',
+        name: 'Ada Lovelace',
+        nerMentions: 1,
+        detections: 1,
+        source: 'page',
+      },
+    ]
+    documentWorkspaceMock.transcription = [
+      {
+        id: 'line-ada',
+        text: 'Ada Lovelace',
+        position: { left: 0, top: 0, width: 50, height: 10 },
+        entities: [
+          {
+            entity_id: 'person-ada',
+            label: 'person',
+            text: 'Ada Lovelace',
+            line_id: 'line-ada',
+            start_index: 0,
+            end_index: 12,
+          },
+        ],
+      },
+    ]
+    await router.push('/libraries/library/documents/document/pages/page?person=face-ada')
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+
+    await wrapper.get('[aria-label="Show people with similar faces"]').trigger('click')
+    await wrapper.get('[aria-label="Search people"]').setValue('Grace')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('mark.transcription-entity').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query.selectedPerson).toBe('person-ada')
+    expect(router.currentRoute.value.query.line).toBe('line-ada')
+    expect(wrapper.get('[aria-label="Search people"]').element).toHaveProperty('value', '')
+    expect(wrapper.get('[aria-label="Show people on this page"]').attributes('data-state')).toBe(
+      'on',
+    )
+    documentWorkspaceMock.faces = []
+    documentWorkspaceMock.similarPeople = []
+    documentWorkspaceMock.transcription = []
   })
 
   it('removes page-number navigation from document search', async () => {

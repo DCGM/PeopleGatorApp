@@ -26,7 +26,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.faces import FaceResponse, Keypoint
+from people_gator_api.schemas.faces import FaceKeypointType, FaceResponse, Keypoint
 from people_gator_api.schemas.sources import GenericSourceResponse
 from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.image_content import get_image_content
@@ -47,11 +47,11 @@ _background_cache_writes: set[asyncio.Task[None]] = set()
 # Documented keypoint order: left_eye, right_eye, nose, left_mouth_corner,
 # right_mouth_corner (see people-gator-data-models instructions).
 _REQUIRED_KEYPOINT_TYPES = (
-    "left_eye",
-    "right_eye",
-    "nose",
-    "left_mouth_corner",
-    "right_mouth_corner",
+    FaceKeypointType.left_eye,
+    FaceKeypointType.right_eye,
+    FaceKeypointType.nose,
+    FaceKeypointType.mouth_left,
+    FaceKeypointType.mouth_right,
 )
 
 # Standard ArcFace 5-point reference template for a 112x112 output canvas.
@@ -153,7 +153,7 @@ def _reference_keypoints(crop_cfg: AlignedFaceCropSettings) -> np.ndarray:
     return _ARCFACE_REFERENCE_112 * scale
 
 
-def _ordered_keypoints(keypoints: list[Keypoint]) -> np.ndarray:
+def _ordered_keypoints(keypoints: list[Keypoint[FaceKeypointType]]) -> np.ndarray:
     """Return the 5 required keypoints as an ``(5, 2)`` array in template order."""
     by_type = {keypoint.type: (keypoint.x, keypoint.y) for keypoint in keypoints}
     missing = [kp_type for kp_type in _REQUIRED_KEYPOINT_TYPES if kp_type not in by_type]

@@ -10,6 +10,13 @@ Filter fields are combined with logical AND and values inside a filter list with
 logical OR. Empty filter lists are invalid. When requested, total_count counts
 all matching records before cursor and limit.
 
+For page filters, ``has_mentions`` and ``has_faces`` test for the existence of
+at least one text mention or face detection, whether assigned to an entity or
+not. ``has_entities`` tests for at least one text mention or face detection
+that is assigned to an entity. A true value requires that presence and a false
+value requires its absence. These filters are combined with each other and all
+other supplied fields using logical AND.
+
 Successful batch results preserve input order. Patch batches require unique
 object IDs; duplicate IDs are invalid. Delete batches de-duplicate IDs and count
 each stored object once. Empty batches succeed with an empty result or zero.
@@ -18,6 +25,9 @@ cannot roll back may retain earlier successful writes.
 
 References named by create or patch payloads must already exist. Missing
 references are errors. Deleting an entity unassigns its faces and text mentions;
+merging an entity reassigns its faces and text mentions to the target, copies
+unique aliases to the target, and deletes the source atomically, leaving the
+target's other fields unchanged;
 deleting a source cascades its faces and text mentions; deleting a referenced
 user is rejected. Invalid cursors and duplicate patch IDs raise ValueError.
 """
@@ -39,6 +49,9 @@ from people_gator_api.schemas.entities import (
     EntityListFilter,
     EntityListRequest,
     EntityListResponse,
+    EntityMergeResponse,
+    EntityMergeBatchResponse,
+    EntityMergeTargetPatch,
     EntityPatchRequest,
     EntityPatchBatchItem,
     EntityResponse,
@@ -220,6 +233,42 @@ class EntityRepository(ABC):
         """Delete an entity and unassign its faces and text mentions.
 
         Return False when the entity does not exist.
+        """
+
+    async def merge(
+        self,
+        target_entity_id: uuid.UUID,
+        source_entity_id: uuid.UUID,
+        target_patch: EntityMergeTargetPatch | None = None,
+    ) -> EntityMergeResponse | None:
+        """Merge one source into the target using the batch operation."""
+        result = await self.merge_batch(
+            target_entity_id, [source_entity_id], target_patch=target_patch
+        )
+        if result is None:
+            return None
+        return EntityMergeResponse(
+            source_entity_id=source_entity_id,
+            target_entity_id=target_entity_id,
+            faces_reassigned=result.faces_reassigned,
+            text_mentions_reassigned=result.text_mentions_reassigned,
+            merged_entity=result.merged_entity,
+        )
+
+    @abstractmethod
+    async def merge_batch(
+        self,
+        target_entity_id: uuid.UUID,
+        source_entity_ids: Sequence[uuid.UUID],
+        target_patch: EntityMergeTargetPatch | None = None,
+    ) -> EntityMergeBatchResponse | None:
+        """Atomically merge all sources into the target and delete the sources.
+
+        Source aliases absent from the target are added to it. Explicit description
+        and short description values update the target; null clears them, while
+        omitted values preserve them. Other fields are preserved. Return None if the target or any
+        source is missing. Source IDs must be nonempty, unique, and distinct from the
+        target ID; invalid IDs raise ValueError.
         """
 
     async def delete_batch(

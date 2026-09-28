@@ -245,6 +245,80 @@ export type EntityListFilter = {
 };
 
 /**
+ * EntityMergeBatchRequest
+ *
+ * Identify the sources to merge into the entity addressed by the URL.
+ */
+export type EntityMergeBatchRequest = {
+    /**
+     * Source Entity Ids
+     */
+    source_entity_ids: Array<string>;
+};
+
+/**
+ * EntityMergeBatchResponse
+ *
+ * Result of merging and deleting multiple source entities.
+ */
+export type EntityMergeBatchResponse = {
+    /**
+     * Source Entity Ids
+     */
+    source_entity_ids: Array<string>;
+    /**
+     * Target Entity Id
+     */
+    target_entity_id: string;
+    /**
+     * Faces Reassigned
+     */
+    faces_reassigned: number;
+    /**
+     * Text Mentions Reassigned
+     */
+    text_mentions_reassigned: number;
+    merged_entity: EntityResponse;
+};
+
+/**
+ * EntityMergeFromRequest
+ *
+ * Identify the source to merge into the entity addressed by the URL.
+ */
+export type EntityMergeFromRequest = {
+    /**
+     * Source Entity Id
+     */
+    source_entity_id: string;
+};
+
+/**
+ * EntityMergeResponse
+ *
+ * Result of merging and deleting a source entity.
+ */
+export type EntityMergeResponse = {
+    /**
+     * Source Entity Id
+     */
+    source_entity_id: string;
+    /**
+     * Target Entity Id
+     */
+    target_entity_id: string;
+    /**
+     * Faces Reassigned
+     */
+    faces_reassigned: number;
+    /**
+     * Text Mentions Reassigned
+     */
+    text_mentions_reassigned: number;
+    merged_entity: EntityResponse;
+};
+
+/**
  * EntityPatchBatchItem
  *
  * An item representing a single entity patch operation in a batch.
@@ -427,11 +501,11 @@ export type FaceCreateRequest = {
      * The keypoints of the face detection. Must contain exactly 5 keypoints.
      */
     keypoints: [
-        Keypoint,
-        Keypoint,
-        Keypoint,
-        Keypoint,
-        Keypoint
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType
     ];
     /**
      * Confidence
@@ -458,6 +532,13 @@ export type FaceCreateRequest = {
      */
     entity_id?: string;
 };
+
+/**
+ * FaceKeypointType
+ *
+ * Types of keypoints for face detection.
+ */
+export type FaceKeypointType = 'left_eye' | 'right_eye' | 'nose' | 'left_mouth_corner' | 'right_mouth_corner';
 
 /**
  * FaceModelListResponse
@@ -580,11 +661,11 @@ export type FaceResponse = {
      * The keypoints of the face detection. Must contain exactly 5 keypoints.
      */
     keypoints: [
-        Keypoint,
-        Keypoint,
-        Keypoint,
-        Keypoint,
-        Keypoint
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType
     ];
     /**
      * User Id
@@ -785,11 +866,11 @@ export type FoundFace = {
      * The keypoints of the face detection. Must contain exactly 5 keypoints.
      */
     keypoints: [
-        Keypoint,
-        Keypoint,
-        Keypoint,
-        Keypoint,
-        Keypoint
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType,
+        KeypointFaceKeypointType
     ];
     /**
      * User Id
@@ -1278,15 +1359,10 @@ export type JwksResponse = {
 };
 
 /**
- * Keypoint
- *
- * One keypoint of a face detection.
+ * Keypoint[FaceKeypointType]
  */
-export type Keypoint = {
-    /**
-     * Type
-     */
-    type: string;
+export type KeypointFaceKeypointType = {
+    type: FaceKeypointType;
     /**
      * X
      */
@@ -2194,6 +2270,24 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Has Mentions
+         *
+         * Filter by whether the page has at least one text mention.
+         */
+        'filter.has_mentions'?: boolean | null;
+        /**
+         * Filter.Has Faces
+         *
+         * Filter by whether the page has at least one face detection.
+         */
+        'filter.has_faces'?: boolean | null;
+        /**
+         * Filter.Has Entities
+         *
+         * Filter by whether the page has at least one entity assigned to a text mention or face detection.
+         */
+        'filter.has_entities'?: boolean | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -2648,6 +2742,66 @@ export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponses = {
 };
 
 export type CreateEntityBatchRouteApiV1EntitiesBatchPostResponse = CreateEntityBatchRouteApiV1EntitiesBatchPostResponses[keyof CreateEntityBatchRouteApiV1EntitiesBatchPostResponses];
+
+export type MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostData = {
+    body: EntityMergeFromRequest;
+    path: {
+        /**
+         * Target Entity Id
+         */
+        target_entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/entities/{target_entity_id}:merge';
+};
+
+export type MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostError = MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostErrors[keyof MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostErrors];
+
+export type MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: EntityMergeResponse;
+};
+
+export type MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostResponse = MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostResponses[keyof MergeEntityRouteApiV1EntitiesTargetEntityIdMergePostResponses];
+
+export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostData = {
+    body: EntityMergeBatchRequest;
+    path: {
+        /**
+         * Target Entity Id
+         */
+        target_entity_id: string;
+    };
+    query?: never;
+    url: '/api/v1/entities/{target_entity_id}:merge-batch';
+};
+
+export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostError = MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostErrors[keyof MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostErrors];
+
+export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: EntityMergeBatchResponse;
+};
+
+export type MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponse = MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses[keyof MergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPostResponses];
 
 export type ListFacesRouteApiV1FacesGetData = {
     body?: never;
@@ -3708,6 +3862,24 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Filter by linked mention ID.
          */
         'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Has Mentions
+         *
+         * Filter by whether the page has at least one text mention.
+         */
+        'filter.has_mentions'?: boolean | null;
+        /**
+         * Filter.Has Faces
+         *
+         * Filter by whether the page has at least one face detection.
+         */
+        'filter.has_faces'?: boolean | null;
+        /**
+         * Filter.Has Entities
+         *
+         * Filter by whether the page has at least one entity assigned to a text mention or face detection.
+         */
+        'filter.has_entities'?: boolean | null;
         /**
          * Limit
          *

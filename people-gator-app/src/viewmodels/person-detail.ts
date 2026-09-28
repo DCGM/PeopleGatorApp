@@ -27,11 +27,19 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
 
   const hasPerson = computed(() => Boolean(toValue(personId)))
   const faceQuery = useFaceListQuery(
-    computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })),
+    computed(() => ({
+      'filter.entity_id': [toValue(personId)],
+      limit: 100,
+      return_total_count: true,
+    })),
     hasPerson,
   )
   const mentionQuery = useTextMentionListQuery(
-    computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })),
+    computed(() => ({
+      'filter.entity_id': [toValue(personId)],
+      limit: 100,
+      return_total_count: true,
+    })),
     hasPerson,
   )
 
@@ -205,6 +213,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
     entity: entityQuery.data,
     error: entityQuery.error,
     faceEmbeddingModel,
+    faceCount: computed(() => faceQuery.data.value?.pages[0]?.total_count ?? 0),
     faceIds: similarityFaceIds,
     faces,
     identifiers,
@@ -213,6 +222,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
         entityQuery.isPending.value || faceQuery.isPending.value || mentionQuery.isPending.value,
     ),
     libraryCount: computed(() => new Set(faces.value.map((face) => face.library)).size),
+    mentionCount: computed(() => mentionQuery.data.value?.pages[0]?.total_count ?? 0),
     mentions,
     portrait: computed(() => faces.value[0]?.portrait ?? ''),
     portraitLoading: computed(() => faces.value[0]?.portraitLoading ?? false),

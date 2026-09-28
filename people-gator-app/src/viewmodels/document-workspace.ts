@@ -22,7 +22,10 @@ import { useObjectUrl, useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
 import { useEntitySearchQuery, type EntitySearchRecord } from '@/query/search'
 import { useTextMentionListQuery } from '@/query/text-mentions'
-import { candidateSearchParams } from '@/viewmodels/similar-people'
+import {
+  candidateSearchParams,
+  type CandidateBrowseMode,
+} from '@/viewmodels/similar-people'
 
 function percentage(value: number) {
   return Math.round((value <= 1 ? value * 100 : value) * 10) / 10
@@ -119,6 +122,7 @@ export function useDocumentWorkspace(
   pageId: MaybeRefOrGetter<string>,
   selectedFaceId: MaybeRefOrGetter<string | null>,
   candidateTerm: MaybeRefOrGetter<string>,
+  candidateBrowseMode: MaybeRefOrGetter<CandidateBrowseMode> = 'page',
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
@@ -210,12 +214,20 @@ export function useDocumentWorkspace(
     return faceRecords.value.find((face) => face.detection_id === id)?.embeddings?.[0]
   })
   const searchParams = computed(() =>
-    candidateSearchParams(toValue(selectedFaceId), textTerm.value, selectedFaceEmbedding.value),
+    candidateSearchParams(
+      toValue(selectedFaceId),
+      textTerm.value,
+      selectedFaceEmbedding.value,
+      toValue(candidateBrowseMode),
+    ),
   )
-  const isSearchMode = computed(() => Boolean(searchParams.value))
+  const resultMode = computed<'page' | 'face' | 'text'>(() =>
+    textTerm.value ? 'text' : toValue(candidateBrowseMode),
+  )
+  const searchEnabled = computed(() => Boolean(searchParams.value))
   const candidateSearchQuery = useEntitySearchQuery(
     computed(() => searchParams.value ?? { limit: 0 }),
-    isSearchMode,
+    searchEnabled,
   )
   const candidateMatches = computed(() =>
     (candidateSearchQuery.data.value?.pages ?? []).flatMap((page) => page.items),
@@ -224,7 +236,7 @@ export function useDocumentWorkspace(
     () => new Map(onPageEntityRecords.value.map((entity) => [entity.entity_id, entity])),
   )
   const candidateRecords = computed<EntitySearchRecord[]>(() =>
-    isSearchMode.value ? candidateMatches.value : onPageEntityRecords.value,
+    resultMode.value === 'page' ? onPageEntityRecords.value : candidateMatches.value,
   )
 
   const similarPeople = computed<SimilarPersonCandidate[]>(() => {
@@ -289,20 +301,20 @@ export function useDocumentWorkspace(
   })
 
   const hasNextPage = computed(() =>
-    isSearchMode.value
-      ? candidateSearchQuery.hasNextPage.value
-      : onPageEntityQuery.hasNextPage.value,
+    resultMode.value === 'page'
+      ? onPageEntityQuery.hasNextPage.value
+      : candidateSearchQuery.hasNextPage.value,
   )
   const isFetchingNextPage = computed(() =>
-    isSearchMode.value
-      ? candidateSearchQuery.isFetchingNextPage.value
-      : onPageEntityQuery.isFetchingNextPage.value,
+    resultMode.value === 'page'
+      ? onPageEntityQuery.isFetchingNextPage.value
+      : candidateSearchQuery.isFetchingNextPage.value,
   )
 
   function loadMore() {
-    return isSearchMode.value
-      ? candidateSearchQuery.fetchNextPage()
-      : onPageEntityQuery.fetchNextPage()
+    return resultMode.value === 'page'
+      ? onPageEntityQuery.fetchNextPage()
+      : candidateSearchQuery.fetchNextPage()
   }
 
   const createEntity = useCreateEntityMutation()
@@ -334,7 +346,9 @@ export function useDocumentWorkspace(
         spanQuery.error.value ||
         faceQuery.error.value ||
         mentionQuery.error.value ||
-        (isSearchMode.value ? candidateSearchQuery.error.value : onPageEntityQuery.error.value),
+        (resultMode.value === 'page'
+          ? onPageEntityQuery.error.value
+          : candidateSearchQuery.error.value),
     ),
     faces,
     hasNextPage,
@@ -357,8 +371,8 @@ export function useDocumentWorkspace(
     pageImageUrl,
     similarPeopleLoading: computed(
       () =>
-        (isSearchMode.value && candidateSearchQuery.isPending.value) ||
-        (!isSearchMode.value && onPageEntityQuery.isPending.value),
+        (resultMode.value === 'page' && onPageEntityQuery.isPending.value) ||
+        (resultMode.value !== 'page' && searchEnabled.value && candidateSearchQuery.isPending.value),
     ),
     similarPeople,
     transcription,

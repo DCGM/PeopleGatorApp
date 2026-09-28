@@ -59,6 +59,26 @@ watch(
   },
 )
 
+watch(
+  [() => props.viewedPersonId, () => props.people],
+  async ([personId]) => {
+    if (!personId) return
+    const personIndex = props.people.findIndex((person) => person.id === personId)
+    if (personIndex < 0) return
+
+    visiblePageCount.value = Math.max(
+      visiblePageCount.value,
+      Math.ceil((personIndex + 1) / pageSize.value),
+    )
+    await nextTick()
+    const selected = resultsElement.value?.querySelector<HTMLElement>(
+      '[data-person-viewed="true"]',
+    )
+    selected?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  },
+  { immediate: true, flush: 'post' },
+)
+
 watch(loadMoreElement, (element, previousElement) => {
   if (previousElement) loadMoreObserver?.unobserve(previousElement)
   if (element) loadMoreObserver?.observe(element)
@@ -136,6 +156,7 @@ function loadNextPage() {
           :assignment-disabled="!props.selectedFace"
           :assignment-pending="props.assignmentPending"
           :viewed="viewedPersonId === person.id"
+          :data-person-viewed="viewedPersonId === person.id"
           @preview="emit('preview', $event)"
           @assign="emit('assign', $event)"
         />

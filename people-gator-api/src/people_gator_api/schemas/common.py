@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Self
 import uuid
 
@@ -112,6 +113,21 @@ class ModelEmbedding[T: str](BaseModel):
         ),
     )
 
+class BoundingBox(BaseModel):
+    """Face detection bounding box."""
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
+class Keypoint[T: StrEnum](BaseModel):
+    """One keypoint of a face detection."""
+
+    type: T
+    x: FiniteFloat
+    y: FiniteFloat
 
 def require_unique_model_embeddings[T: str](
     embeddings: list[ModelEmbedding[T]],

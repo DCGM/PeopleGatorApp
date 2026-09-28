@@ -1,15 +1,18 @@
 import type { EntityResponse, FoundEntity, TextMentionSpanModel } from '@/client'
 import type { EntitySearchParams } from '@/query/search'
 
+export type CandidateBrowseMode = 'page' | 'face'
+
 /** Face similarity and text search are distinct modes, never a fused request. */
 export function candidateSearchParams(
   selectedFaceId: string | null,
   searchTerm: string,
   faceEmbeddingModel?: string,
+  browseMode: CandidateBrowseMode = 'face',
 ): EntitySearchParams | undefined {
   const text = searchTerm.trim()
   if (text) return { 'query.text': [text], limit: 50 }
-  if (selectedFaceId && faceEmbeddingModel) {
+  if (browseMode === 'face' && selectedFaceId && faceEmbeddingModel) {
     return {
       'query.face_id': [selectedFaceId],
       'query.face_embedding_model': faceEmbeddingModel,

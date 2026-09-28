@@ -8,10 +8,8 @@ import {
   type SearchPagesGetApiV1SearchPagesGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
-import { fetchFaces } from '@/query/faces'
 import { queryKeys } from '@/query/keys'
 import { fetchPages } from '@/query/media'
-import { fetchTextMentions } from '@/query/text-mentions'
 import {
   cursorResultPage,
   SEARCH_CACHE_TIME,
@@ -25,53 +23,14 @@ export type PageSearchRecord = PageResponse | FoundPage
 
 export type PageResultsParams = {
   query: string
-  assignment?: 'face' | 'text_mention'
+  'filter.has_entities'?: boolean
+  'filter.has_faces'?: boolean
+  'filter.has_mentions'?: boolean
   cursor?: string | null
   limit?: number
 }
 
 type PageResultsPage = InfiniteResultPage<PageSearchRecord, string | null>
-
-async function pageHasAssignment(
-  sourceId: string,
-  assignment: NonNullable<PageResultsParams['assignment']>,
-  signal: AbortSignal,
-) {
-  let cursor: string | null = null
-
-  do {
-    const previousCursor: string | null = cursor
-    const response: {
-      items: Array<{ entity_id?: string | null }>
-      cursor?: string | null
-    } =
-      assignment === 'face'
-        ? await fetchFaces({ 'filter.source_id': [sourceId], limit: 100, cursor }, signal)
-        : await fetchTextMentions({ 'filter.source_id': [sourceId], limit: 100, cursor }, signal)
-
-    if (response.items.some((item) => item.entity_id)) return true
-    cursor = response.cursor ?? null
-    if (cursor === previousCursor) break
-  } while (cursor)
-
-  return false
-}
-
-async function filterPageAssignments(
-  page: PageResultsPage,
-  assignment: PageResultsParams['assignment'],
-  signal: AbortSignal,
-): Promise<PageResultsPage> {
-  if (!assignment) return page
-
-  const matches = await Promise.all(
-    page.items.map((item) => pageHasAssignment(item.source_id, assignment, signal)),
-  )
-  return {
-    ...page,
-    items: page.items.filter((_item, index) => matches[index]),
-  }
-}
 
 export function fetchPageSearch(params: PageSearchParams, signal?: AbortSignal) {
   return responseData(
@@ -127,7 +86,9 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
       const keyParams = {
-        assignment: resolvedParams.assignment,
+        'filter.has_entities': resolvedParams['filter.has_entities'],
+        'filter.has_faces': resolvedParams['filter.has_faces'],
+        'filter.has_mentions': resolvedParams['filter.has_mentions'],
         cursor: resolvedParams.cursor,
         limit: searchPageSize(resolvedParams.limit),
         return_total_count: true,
@@ -140,25 +101,26 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
       const pageSize = searchPageSize(resolvedParams.limit)
+      const filters = {
+        'filter.has_entities': resolvedParams['filter.has_entities'],
+        'filter.has_faces': resolvedParams['filter.has_faces'],
+        'filter.has_mentions': resolvedParams['filter.has_mentions'],
+      }
 
       if (query) {
-        return filterPageAssignments(
-          await fetchPageSearchPage(
-            { 'query.text': [query], limit: pageSize, return_total_count: true },
-            pageParam,
-            pageSize,
-            signal,
-          ),
-          resolvedParams.assignment,
+        return fetchPageSearchPage(
+          { 'query.text': [query], ...filters, limit: pageSize, return_total_count: true },
+          pageParam,
+          pageSize,
           signal,
         )
       }
 
       const response = await fetchPages(
-        { limit: pageSize, return_total_count: true, cursor: pageParam },
+        { ...filters, limit: pageSize, return_total_count: true, cursor: pageParam },
         signal,
       )
-      return filterPageAssignments(cursorResultPage(response), resolvedParams.assignment, signal)
+      return cursorResultPage(response)
     },
     initialPageParam: computed(() => toValue(params).cursor ?? null),
     getNextPageParam: (lastPage, _pages, lastPageParam) =>

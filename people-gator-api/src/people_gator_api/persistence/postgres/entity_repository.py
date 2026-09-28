@@ -25,6 +25,8 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyResponse,
     EntityListRequest,
     EntityListResponse,
+    EntityMergeBatchResponse,
+    EntityMergeTargetPatch,
     EntityPatchBatchItem,
     EntityPatchRequest,
     EntityResponse,
@@ -200,6 +202,86 @@ class PostgresEntityRepository(EntityRepository):
     async def delete(self, entity_id: uuid.UUID) -> bool:
         result = await self.delete_batch([entity_id])
         return result.deleted_count == 1
+
+    async def merge_batch(
+        self,
+        target_entity_id: uuid.UUID,
+        source_entity_ids: Sequence[uuid.UUID],
+        target_patch: EntityMergeTargetPatch | None = None,
+    ) -> EntityMergeBatchResponse | None:
+        if not source_entity_ids:
+            raise ValueError("source_entity_ids must not be empty")
+        if len(source_entity_ids) != len(set(source_entity_ids)):
+            raise ValueError("source_entity_ids must be unique")
+        if target_entity_id in source_entity_ids:
+            raise ValueError("source and target entity must differ")
+
+        try:
+            # A stable lock order avoids deadlocks between simultaneous merges.
+            entities = {
+                entity.id: entity
+                for entity in (
+                    await self._session.scalars(
+                        select(Entity)
+                        .where(Entity.id.in_([target_entity_id, *source_entity_ids]))
+                        .order_by(Entity.id)
+                        .with_for_update()
+                        .options(selectinload(Entity.aliases))
+                    )
+                ).all()
+            }
+            if len(entities) != len(source_entity_ids) + 1:
+                await self._session.rollback()
+                return None
+
+            target = entities[target_entity_id]
+            if target_patch is not None:
+                if not is_missing(target_patch.description):
+                    target.description = target_patch.description
+                if not is_missing(target_patch.short_description):
+                    target.short_description = target_patch.short_description
+            target_alias_names = {alias.name for alias in target.aliases}
+            for source_id in source_entity_ids:
+                for alias in entities[source_id].aliases:
+                    if alias.name not in target_alias_names:
+                        target.aliases.append(Alias(name=alias.name))
+                        target_alias_names.add(alias.name)
+
+            face_result = type_cast(
+                CursorResult[Any],
+                await self._session.execute(
+                    update(ImageOccurrence)
+                    .where(
+                        ImageOccurrence.entity_id.in_(source_entity_ids),
+                        ImageOccurrence.occurrence_type == "face",
+                    )
+                    .values(entity_id=target_entity_id)
+                ),
+            )
+            mention_result = type_cast(
+                CursorResult[Any],
+                await self._session.execute(
+                    update(TextMention)
+                    .where(TextMention.entity_id.in_(source_entity_ids))
+                    .values(entity_id=target_entity_id)
+                ),
+            )
+            await self._session.execute(
+                delete(Entity).where(Entity.id.in_(source_entity_ids))
+            )
+            response = EntityMergeBatchResponse(
+                source_entity_ids=list(source_entity_ids),
+                target_entity_id=target_entity_id,
+                faces_reassigned=int(face_result.rowcount or 0),
+                text_mentions_reassigned=int(mention_result.rowcount or 0),
+                merged_entity=entity_response(entities[target_entity_id]),
+            )
+            await commit(self._session, "entity merge failed")
+        except Exception:
+            await self._session.rollback()
+            raise
+
+        return response
 
     async def delete_batch(
         self, entity_ids: Sequence[uuid.UUID]

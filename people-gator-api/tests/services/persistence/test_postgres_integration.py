@@ -42,6 +42,7 @@ from people_gator_api.schemas.sources import (
     ImageCreateRequest,
     PageCreateRequest,
     PageListFilter,
+    PageListRequest,
 )
 from people_gator_api.schemas.users import (
     UserCreateRequest,
@@ -238,6 +239,20 @@ async def test_postgres_contract_round_trip() -> None:
                 ),
                 user,
             )
+            annotated_page = await database.sources.list_pages(
+                PageListRequest(
+                    filter_=PageListFilter(
+                        source_id=[page.source_id],
+                        has_mentions=True,
+                        has_faces=False,
+                        has_entities=True,
+                    ),
+                    limit=10,
+                )
+            )
+            assert [item.source_id for item in annotated_page.items] == [
+                page.source_id
+            ]
             linked_entities_for_page = await database.entities.list(
                 EntityListRequest(
                     filter_=EntityListFilter(source_id=[page.source_id]),
@@ -254,6 +269,19 @@ async def test_postgres_contract_round_trip() -> None:
             )
             assert mention is not None
             assert mention.entity_id is None
+            page_without_assigned_entities = await database.sources.list_pages(
+                PageListRequest(
+                    filter_=PageListFilter(
+                        source_id=[page.source_id],
+                        has_mentions=True,
+                        has_entities=False,
+                    ),
+                    limit=10,
+                )
+            )
+            assert [
+                item.source_id for item in page_without_assigned_entities.items
+            ] == [page.source_id]
             entities_for_page = await database.entities.list(
                 EntityListRequest(
                     filter_=EntityListFilter(source_id=[page.source_id]),

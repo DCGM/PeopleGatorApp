@@ -1,5 +1,6 @@
 export type AssignmentFilter = 'all' | 'faces' | 'mentions'
 export type AssignmentType = 'face' | 'text_mention'
+export type PageContentFilter = 'all' | 'entities' | 'faces' | 'mentions'
 
 export function normalizeAssignmentFilter(value: unknown): AssignmentFilter {
   if (value === 'faces' || value === 'mentions') return value
@@ -18,4 +19,18 @@ export function assignmentType(filter: AssignmentFilter): AssignmentType | undef
   if (filter === 'faces') return 'face'
   if (filter === 'mentions') return 'text_mention'
   return undefined
+}
+
+export function normalizePageContentFilter(value: unknown): PageContentFilter {
+  if (value === 'entities' || value === 'faces' || value === 'mentions') return value
+  if (value === 'names') return 'mentions'
+  return 'all'
+}
+
+export function pageContentFilter(filter: PageContentFilter) {
+  return {
+    'filter.has_entities': filter === 'entities' ? true : undefined,
+    'filter.has_faces': filter === 'faces' ? true : undefined,
+    'filter.has_mentions': filter === 'mentions' ? true : undefined,
+  }
 }

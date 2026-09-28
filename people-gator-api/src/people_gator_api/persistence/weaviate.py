@@ -1,602 +1,925 @@
-"""Weaviate implementation of the backend-neutral persistence contracts."""
+"""Self-contained Weaviate implementation of the persistence contracts.
+
+The adapter intentionally talks to the Weaviate v4 client directly.  It does
+not use the legacy ``crud_services`` or ``weaviate_service`` data layers.
+"""
 
 from __future__ import annotations
 
-import asyncio
+import base64
+import hashlib
+import json
 import uuid
-from collections.abc import AsyncGenerator, Awaitable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, TypeVar
 
+from pydantic import BaseModel
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.data import DataObject
-from weaviate.classes.query import Filter
+from weaviate.classes.query import Filter, QueryReference
+from weaviate.collections.classes.filters import FilterReturn
 
+from people_gator_api.persistence.contracts import (
+    CreateResult,
+    Database,
+    EntityRepository,
+    FaceModelRepository,
+    FaceRepository,
+    SourceRepository,
+    TextMentionRepository,
+    UserRepository,
+)
+from people_gator_api.schemas.common import GenericListRequest
 from people_gator_api.schemas.entities import (
-    EntityCreateRequest,
-    EntityDeleteManyRequest,
     EntityDeleteManyResponse,
-    EntityEmbeddingUpdateRequest,
+    EntityListRequest,
     EntityListResponse,
     EntityPatchRequest,
     EntityResponse,
-    FaceCreateRequest,
-    FaceEmbeddingUpdateRequest,
-    FaceListResponse,
-    FaceResponse,
 )
-from people_gator_api.schemas.search import (
-    SearchDocumentsResultListResponse,
-    SearchFacesRequest,
-    SearchFacesResultListResponse,
-    SearchPagesResultListResponse,
-    SearchDocumentsQuery,
-    SearchEntitiesRequest,
-    SearchEntitiesResultListResponse,
-    SearchPagesQuery,
-)
-from people_gator_api.schemas.enums import DEFAULT_FACE_EMBEDDING_MODEL
+from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.face_models import (
     FaceModelListResponse,
-    FaceModelRegisterRequest,
     FaceModelResponse,
 )
-from people_gator_api.schemas.sources import SourceRecord, SourceRecordListResponse
+from people_gator_api.schemas.faces import (
+    FaceListResponse,
+    FacePatchRequest,
+    FaceResponse,
+)
 from people_gator_api.schemas.mentions import (
-    TextMentionCreateRequest,
     TextMentionListResponse,
+    TextMentionPatchRequest,
     TextMentionResponse,
 )
-from people_gator_api.schemas.users import (
-    UserCreateRequest,
-    UserListResponse,
-    UserPatchRequest,
-    UserResponse,
+from people_gator_api.schemas.missing import is_missing, missing_to_none
+from people_gator_api.schemas.search import (
+    RRF_K,
+    FoundDocument,
+    FoundEntity,
+    FoundFace,
+    FoundPage,
+    SearchDocumentsResultListResponse,
+    SearchEntitiesResultListResponse,
+    SearchFacesResultListResponse,
+    SearchPagesResultListResponse,
 )
-from people_gator_api.services.crud_services import (
-    annotation_service,
-    entity_service,
-    search_service,
-    source_service,
-    text_mention_service,
-    user_service,
+from people_gator_api.schemas.sources import (
+    GenericSourceCreateRequest,
+    GenericSourceListFilter,
+    GenericSourceListRequest,
+    GenericSourceListResponse,
+    GenericSourceResponse,
+    document_url,
+    page_url,
 )
-from people_gator_api.services.crud_services.source_service import SourceCreateSpec
-from people_gator_api.persistence.contracts import (
-    Database,
-    EntityListQuery,
-    EntityPatchCommand,
-    EntityRepository,
-    FaceModelRepository,
-    FaceListQuery,
-    FacePatchCommand,
-    FaceRepository,
-    SourceListQuery,
-    SourceLookup,
-    SourceRepository,
-    TextMentionListQuery,
-    TextMentionPatchCommand,
-    TextMentionRepository,
-    UserListQuery,
-    UserPatchCommand,
-    UserRepository,
-    GenericActor,
-)
+from people_gator_api.schemas.users import UserListResponse, UserResponse
+from people_gator_api.utils.uuid_utils import new_uuid6
 from people_gator_api.weaviate_schema import (
     ENTITY_COLLECTION,
     FACE_COLLECTION,
+    FACE_VECTOR_PREFIX,
+    SOURCE_COLLECTION,
     TEXT_MENTION_COLLECTION,
     USER_COLLECTION,
+    model_vector_name,
 )
-from people_gator_api.services.weaviate_service.utils import (
-    empty_reference_queries,
-    parse_entity,
-    parse_face,
-    parse_text_mention,
-    parse_user,
-)
-from people_gator_api.utils.uuid_utils import new_uuid6
+
+T = TypeVar("T", bound=BaseModel)
+FACE_MODEL_COLLECTION = "FaceModel"
+_SOURCE_NS = uuid.uuid5(uuid.NAMESPACE_URL, "http://peoplegator/source")
+_REFS = {
+    ENTITY_COLLECTION: ("user",),
+    FACE_COLLECTION: ("source", "entity", "user"),
+    TEXT_MENTION_COLLECTION: ("source", "entity"),
+}
 
 
-async def _as_async_iterable[T](items: Sequence[T]) -> AsyncGenerator[T]:
-    for item in items:
-        yield item
+def _refs(*names: str) -> list[QueryReference]:
+    return [QueryReference(link_on=n, return_properties=[]) for n in names]
 
 
-async def _bounded_gather[T](
-    operations: Sequence[Awaitable[T]], *, concurrency: int = 32
-) -> list[T]:
-    semaphore = asyncio.Semaphore(concurrency)
-
-    async def run(operation: Awaitable[T]) -> T:
-        async with semaphore:
-            return await operation
-
-    return list(await asyncio.gather(*(run(operation) for operation in operations)))
+def _ref(obj: Any, name: str, required: bool = False) -> uuid.UUID | None:
+    value = (getattr(obj, "references", None) or {}).get(name)
+    objects = getattr(value, "objects", None)
+    result = uuid.UUID(str(objects[0].uuid)) if objects else None
+    if required and result is None:
+        raise ValueError(f"stored object lacks {name} reference")
+    return result
 
 
-def _require_unique_ids(ids: Sequence[uuid.UUID], operation: str) -> None:
-    if len(set(ids)) != len(ids):
-        raise ValueError(f"{operation} requires unique object IDs")
+def _props(model: BaseModel, exclude: set[str] = set()) -> dict[str, Any]:
+    data = model.model_dump(mode="python", exclude=exclude, exclude_unset=True)
+    return {
+        k: (
+            v.value
+            if hasattr(v, "value")
+            else str(v)
+            if type(v).__name__ == "AnyUrl"
+            else v
+        )
+        for k, v in data.items()
+        if not is_missing(v)
+    }
 
 
-async def _delete_many(
-    client: WeaviateAsyncClient,
-    collection_name: str,
-    ids: Sequence[uuid.UUID],
-) -> int:
-    unique_ids = list(dict.fromkeys(ids))
-    if not unique_ids:
-        return 0
-    result = await client.collections.get(collection_name).data.delete_many(
-        where=Filter.by_id().contains_any(unique_ids)
+def _parse_user(o: Any) -> UserResponse:
+    return UserResponse(user_id=o.uuid, **o.properties)
+
+
+def _parse_entity(o: Any) -> EntityResponse:
+    p = dict(o.properties)
+    p["aliases"] = p.get("aliases") or None
+    return EntityResponse(entity_id=o.uuid, user_id=_ref(o, "user", True), **p)
+
+
+def _parse_source(o: Any) -> GenericSourceResponse:
+    p = o.properties
+    return GenericSourceResponse(
+        source_id=o.uuid,
+        source_type=p["source_type"],
+        url=p["uri"],
+        library=p.get("library"),
+        document_id=p.get("document"),
+        page_id=p.get("page"),
     )
-    return result.successful
+
+
+def _parse_face(o: Any) -> FaceResponse:
+    p = o.properties
+    vectors = getattr(o, "vector", None) or {}
+    prefix = model_vector_name(FACE_VECTOR_PREFIX, "x")[:-1]
+    return FaceResponse(
+        detection_id=o.uuid,
+        identifier=p.get("identifier"),
+        source_id=_ref(o, "source", True),
+        entity_id=_ref(o, "entity"),
+        user_id=_ref(o, "user", True),
+        bounding_box=p["bounding_box"],
+        keypoints=p["keypoints"],
+        confidence=p["confidence"],
+        embeddings=sorted(k[len(prefix) :] for k in vectors if k.startswith(prefix)),
+    )
+
+
+def _parse_mention(o: Any) -> TextMentionResponse:
+    return TextMentionResponse(
+        mention_id=o.uuid,
+        source_id=_ref(o, "source", True),
+        entity_id=_ref(o, "entity"),
+        **o.properties,
+    )
+
+
+def _all(fs: Sequence[FilterReturn]) -> FilterReturn | None:
+    return None if not fs else fs[0] if len(fs) == 1 else Filter.all_of(list(fs))
+
+
+def _property(name: str, values: Sequence[Any]) -> FilterReturn:
+    return Filter.by_property(name).contains_any(
+        [v.value if hasattr(v, "value") else v for v in values]
+    )
+
+
+def _reference(name: str, values: Sequence[uuid.UUID]) -> FilterReturn:
+    fs = [Filter.by_ref(link_on=name).by_id().equal(v) for v in values]
+    return fs[0] if len(fs) == 1 else Filter.any_of(fs)
+
+
+def _direct(value: Any, mapping: Mapping[str, str]) -> list[FilterReturn]:
+    if value is None or is_missing(value):
+        return []
+    return [
+        _property(stored, getattr(value, api))
+        for api, stored in mapping.items()
+        if not is_missing(getattr(value, api))
+    ]
+
+
+def _fingerprint(q: BaseModel) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            q.model_dump(mode="json", exclude={"cursor"}),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+
+def _encode(i: uuid.UUID, f: str) -> str:
+    return (
+        base64.urlsafe_b64encode(json.dumps({"i": str(i), "f": f}).encode())
+        .decode()
+        .rstrip("=")
+    )
+
+
+def _decode(c: str | None, f: str) -> uuid.UUID | None:
+    if c is None:
+        return None
+    try:
+        d = json.loads(base64.urlsafe_b64decode(c + "=" * (-len(c) % 4)))
+    except Exception as e:
+        raise ValueError("malformed cursor") from e
+    if d.get("f") != f:
+        raise ValueError("cursor was produced by a different query")
+    try:
+        return uuid.UUID(d["i"])
+    except Exception as e:
+        raise ValueError("malformed cursor") from e
+
+
+async def _get(c: WeaviateAsyncClient, n: str, i: uuid.UUID) -> Any | None:
+    return await c.collections.get(n).query.fetch_object_by_id(
+        i,
+        include_vector=n == FACE_COLLECTION,
+        return_references=_refs(*_REFS.get(n, ())),
+    )
+
+
+async def _exists(c: WeaviateAsyncClient, n: str, i: uuid.UUID) -> bool:
+    return await c.collections.get(n).data.exists(i)
+
+
+async def _require(c: WeaviateAsyncClient, n: str, i: uuid.UUID, label: str) -> None:
+    if not await _exists(c, n, i):
+        raise ValueError(f"{label} {i} does not exist")
+
+
+async def _page(
+    c: WeaviateAsyncClient,
+    n: str,
+    q: GenericListRequest,
+    fs: Sequence[FilterReturn],
+    parse: Callable[[Any], T],
+    response: type[Any],
+) -> Any:
+    fp = _fingerprint(q)
+    after = _decode(q.cursor, fp)
+    collection = c.collections.get(n)
+    where = _all(fs)
+    count = None
+    if q.return_total_count:
+        count = int(
+            (
+                await collection.aggregate.over_all(total_count=True, filters=where)
+            ).total_count
+            or 0
+        )
+    if q.limit == 0:
+        return response(items=[], limit=0, total_count=count, cursor=None)
+    result = await collection.query.fetch_objects(
+        filters=where,
+        limit=q.limit + 1,
+        after=after,
+        include_vector=n == FACE_COLLECTION,
+        return_references=_refs(*_REFS.get(n, ())),
+    )
+    objects = sorted(result.objects, key=lambda x: x.uuid)
+    more = len(objects) > q.limit
+    objects = objects[: q.limit]
+    return response(
+        items=[parse(x) for x in objects],
+        limit=q.limit,
+        total_count=count,
+        cursor=_encode(objects[-1].uuid, fp) if more and objects else None,
+    )
+
+
+async def _delete_many(c: WeaviateAsyncClient, n: str, ids: Sequence[uuid.UUID]) -> int:
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return 0
+    return int(
+        (
+            await c.collections.get(n).data.delete_many(
+                where=Filter.by_id().contains_any(ids)
+            )
+        ).successful
+    )
+
+
+def _unique(ids: Sequence[uuid.UUID], name: str) -> None:
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{name} requires unique object IDs")
 
 
 class WeaviateEntityRepository(EntityRepository):
-    def __init__(self, client: WeaviateAsyncClient) -> None:
-        super().__init__()
+    def __init__(self, client: WeaviateAsyncClient):
         self._client = client
 
-    async def get(self, entity_id: uuid.UUID) -> EntityResponse | None:
-        return await entity_service.get_entity(self._client, entity_id)
+    async def get(self, entity_id):
+        o = await _get(self._client, ENTITY_COLLECTION, entity_id)
+        return None if o is None else _parse_entity(o)
 
-    async def list(self, query: EntityListQuery) -> EntityListResponse:
-        return await entity_service.list_entities(
+    async def list(self, q):
+        fs = _direct(
+            q.filter_,
+            {
+                "entity_type": "entity_type",
+                "wikidata_id": "wikidata_id",
+                "nlcr_authority_id": "nlcr_authority_id",
+            },
+        )
+        if not is_missing(q.filter_) and not is_missing(q.filter_.entity_id):
+            fs.append(Filter.by_id().contains_any(q.filter_.entity_id))
+        return await _page(
+            self._client, ENTITY_COLLECTION, q, fs, _parse_entity, EntityListResponse
+        )
+
+    async def create(self, payload, context):
+        await _require(self._client, USER_COLLECTION, context.user_id, "user")
+        i = new_uuid6()
+        p = _props(payload)
+        p["aliases"] = p.get("aliases") or []
+        await self._client.collections.get(ENTITY_COLLECTION).data.insert(
+            uuid=i, properties=p, references={"user": context.user_id}
+        )
+        p["aliases"] = p["aliases"] or None
+        return EntityResponse(entity_id=i, user_id=context.user_id, **p)
+
+    async def create_batch(self, payloads, context):
+        return [await self.create(x, context) for x in payloads]
+
+    async def patch(self, entity_id, payload, context):
+        del context
+        old = await self.get(entity_id)
+        if old is None:
+            return None
+        p = _props(payload)
+        if p.get("aliases") is None and "aliases" in p:
+            p["aliases"] = []
+        await self._client.collections.get(ENTITY_COLLECTION).data.update(
+            uuid=entity_id, properties=p
+        )
+        if p.get("aliases") == []:
+            p["aliases"] = None
+        return old.model_copy(update=p)
+
+    async def patch_batch(self, commands, context):
+        _unique([x.entity_id for x in commands], "entity patch batch")
+        return [
+            await self.patch(
+                x.entity_id,
+                EntityPatchRequest.model_validate(_props(x, {"entity_id"})),
+                context,
+            )
+            for x in commands
+        ]
+
+    async def delete(self, entity_id):
+        if not await _exists(self._client, ENTITY_COLLECTION, entity_id):
+            return False
+        for n in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
+            r = await self._client.collections.get(n).query.fetch_objects(
+                filters=_reference("entity", [entity_id]), limit=10_000
+            )
+            for o in r.objects:
+                await self._client.collections.get(n).data.reference_replace(
+                    from_uuid=o.uuid, from_property="entity", to=[]
+                )
+        await self._client.collections.get(ENTITY_COLLECTION).data.delete_by_id(
+            entity_id
+        )
+        return True
+
+    async def merge_batch(self, target_entity_id, source_entity_ids, target_patch=None):
+        raise NotImplementedError("atomic entity merge requires PostgreSQL persistence")
+
+    async def delete_batch(self, ids):
+        # One server-side operation keeps large cleanup jobs bounded. Weaviate
+        # removes incoming references when their target is deleted.
+        return await _delete_many(self._client, ENTITY_COLLECTION, ids)
+
+    async def delete_many(self, selector):
+        r = await self.list(
+            EntityListRequest(filter_=selector.filter, limit=selector.limit)
+        )
+        return EntityDeleteManyResponse(
+            deleted_count=await self.delete_batch([x.entity_id for x in r.items])
+        )
+
+    async def search(self, q):
+        return await _basic_search(
             self._client,
-            uuid.UUID(int=0),
-            query.after_id,
-            query.limit,
-            entity_type=query.entity_type,
-            wikidata_id=query.wikidata_id,
-            nlcr_authority_id=query.nlcr_authority_id,
-            owner_user_id=query.owner_user_id,
-            source_id=query.source_id,
-            assignment=query.assignment,
+            ENTITY_COLLECTION,
+            q,
+            _parse_entity,
+            FoundEntity,
+            "entity_id",
+            ("name", "aliases", "description"),
+            SearchEntitiesResultListResponse,
         )
 
-    async def create(
-        self, payload: EntityCreateRequest, context: GenericActor
-    ) -> EntityResponse:
-        return await entity_service.create_entity(
-            self._client, payload, context.user_id
-        )
 
-    async def create_batch(
-        self, payloads: Sequence[EntityCreateRequest], context: GenericActor
-    ) -> list[EntityResponse]:
-        return await entity_service.create_entity_batch(
-            self._client, _as_async_iterable(payloads), context.user_id
-        )
-
-    async def patch(
-        self, entity_id: uuid.UUID, payload: EntityPatchRequest
-    ) -> EntityResponse | None:
-        return await entity_service.patch_entity(self._client, entity_id, payload)
-
-    async def patch_batch(
-        self, commands: Sequence[EntityPatchCommand]
-    ) -> list[EntityResponse | None]:
-        ids = [command.entity_id for command in commands]
-        _require_unique_ids(ids, "entity patch batch")
-        if not ids:
-            return []
-        collection = self._client.collections.get(ENTITY_COLLECTION)
-        fetched = await collection.query.fetch_objects_by_ids(
-            ids, return_references=empty_reference_queries(["user"])
-        )
-        by_id = {item.uuid: item for item in fetched.objects}
-        updates = [command.patch.model_dump(exclude_unset=True) for command in commands]
-        for update in updates:
-            if update.get("aliases") is None and "aliases" in update:
-                update["aliases"] = []
-        await _bounded_gather(
-            [
-                collection.data.update(uuid=command.entity_id, properties=update)
-                for command, update in zip(commands, updates)
-                if command.entity_id in by_id
-            ]
-        )
-        results: list[EntityResponse | None] = []
-        for command, update in zip(commands, updates):
-            item = by_id.get(command.entity_id)
-            if item is None:
-                results.append(None)
-                continue
-            properties = dict(item.properties)
-            properties.update(update)
-            results.append(parse_entity(properties, item.references, item.uuid))
-        return results
-
-    async def update_embeddings_batch(
-        self, payloads: Sequence[EntityEmbeddingUpdateRequest]
-    ) -> int:
-        return await entity_service.update_entity_embeddings_batch(
-            self._client, list(payloads)
-        )
-
-    async def delete(self, entity_id: uuid.UUID) -> bool:
-        return await entity_service.delete_entity(self._client, entity_id)
-
-    async def delete_batch(self, entity_ids: Sequence[uuid.UUID]) -> int:
-        return await _delete_many(self._client, ENTITY_COLLECTION, entity_ids)
-
-    async def delete_many(
-        self, selector: EntityDeleteManyRequest
-    ) -> EntityDeleteManyResponse:
-        return await entity_service.delete_entities(self._client, selector)
-
-    async def search(
-        self, query: SearchEntitiesRequest
-    ) -> SearchEntitiesResultListResponse:
-        return await search_service.search_entities(self._client, query)
+def _source_data(s: GenericSourceCreateRequest):
+    library = missing_to_none(s.library)
+    document = missing_to_none(s.document_id)
+    page = missing_to_none(s.page_id)
+    uri = (
+        page_url(library, document, page)
+        if s.source_type == SourceKind.page
+        else document_url(library, document)
+        if s.source_type == SourceKind.document
+        else str(s.url)
+    )
+    return uuid.uuid5(_SOURCE_NS, f"{s.source_type.value}:{uri}"), {
+        "source_type": s.source_type.value,
+        "uri": uri,
+        "library": library,
+        "document": document,
+        "page": page,
+    }
 
 
 class WeaviateSourceRepository(SourceRepository):
-    def __init__(self, client: WeaviateAsyncClient) -> None:
-        super().__init__()
+    def __init__(self, client):
         self._client = client
 
-    async def lookup(self, lookup: SourceLookup) -> SourceRecord | None:
-        return await source_service.get_source(
-            self._client,
-            lookup.source_id,
-            source_type=lookup.source_type,
-            library=lookup.library,
-            document_id=lookup.document_id,
-            page_id=lookup.page_id,
-            url=lookup.url,
-        )
-
-    async def list(self, query: SourceListQuery) -> SourceRecordListResponse:
-        return await source_service.list_sources(
-            self._client,
-            query.source_type,
-            query.after_id,
-            query.limit,
-            library=query.library,
-            document_id=query.document_id,
-            page_id=query.page_id,
-            url=query.url,
-            source_ids=query.source_ids,
-        )
-
-    async def get_or_create(self, spec: SourceCreateSpec) -> tuple[SourceRecord, bool]:
-        return await source_service.create_source(
-            self._client,
-            spec.source_type,
-            library=spec.library,
-            document_id=spec.document_id,
-            page_id=spec.page_id,
-            url=spec.url,
-        )
-
-    async def get_or_create_batch(
-        self, specs: Sequence[SourceCreateSpec]
-    ) -> list[SourceRecord]:
-        return await source_service.create_source_batch(self._client, specs)
-
-    async def delete(self, source_id: uuid.UUID) -> bool:
-        return await source_service.delete_source(self._client, source_id)
-
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID]) -> int:
-        return await _delete_many(
-            self._client, source_service.SOURCE_COLLECTION, source_ids
-        )
-
-    async def search_pages(
-        self, query: SearchPagesQuery
-    ) -> SearchPagesResultListResponse:
-        return await search_service.search_pages(self._client, query)
-
-    async def search_documents(
-        self, query: SearchDocumentsQuery
-    ) -> SearchDocumentsResultListResponse:
-        return await search_service.search_documents(self._client, query)
-
-
-class WeaviateFaceRepository(FaceRepository):
-    def __init__(self, client: WeaviateAsyncClient) -> None:
-        super().__init__()
-        self._client = client
-
-    async def get(self, detection_id: uuid.UUID) -> FaceResponse | None:
-        return await annotation_service.get_face(
-            self._client, uuid.UUID(int=0), detection_id
-        )
-
-    async def list(self, query: FaceListQuery) -> FaceListResponse:
-        return await annotation_service.list_faces(
-            self._client,
-            uuid.UUID(int=0),
-            query.source_id,
-            query.entity_id,
-            query.after_id,
-            query.limit,
-            owner_user_id=query.owner_user_id,
-        )
-
-    async def create(
-        self, payload: FaceCreateRequest, context: GenericActor
-    ) -> FaceResponse:
-        return await annotation_service.create_face(
-            self._client, payload, context.user_id
-        )
-
-    async def create_batch(
-        self, payloads: Sequence[FaceCreateRequest], context: GenericActor
-    ) -> list[FaceResponse]:
-        return await annotation_service.create_face_batch(
-            self._client, _as_async_iterable(payloads), context.user_id
-        )
-
-    async def patch(
-        self, detection_id: uuid.UUID, entity_id: uuid.UUID | None
-    ) -> FaceResponse | None:
-        return await annotation_service.patch_face_entity(
-            self._client, uuid.UUID(int=0), detection_id, entity_id
-        )
-
-    async def patch_batch(
-        self, commands: Sequence[FacePatchCommand]
-    ) -> list[FaceResponse | None]:
-        ids = [command.detection_id for command in commands]
-        _require_unique_ids(ids, "face patch batch")
-        if not ids:
-            return []
-        collection = self._client.collections.get(FACE_COLLECTION)
-        fetched = await collection.query.fetch_objects_by_ids(
-            ids,
-            return_references=empty_reference_queries(["user", "entity", "source"]),
-        )
-        by_id = {item.uuid: item for item in fetched.objects}
-        await _bounded_gather(
-            [
-                collection.data.reference_replace(
-                    from_uuid=command.detection_id,
-                    from_property="entity",
-                    to=command.entity_id,
+    async def lookup(self, q):
+        if not is_missing(q.source_id):
+            o = await _get(self._client, SOURCE_COLLECTION, q.source_id)
+            return None if o is None else _parse_source(o)
+        fs = []
+        for a, b in (
+            ("source_type", "source_type"),
+            ("url", "uri"),
+            ("library", "library"),
+            ("document_id", "document"),
+            ("page_id", "page"),
+        ):
+            v = getattr(q, a)
+            if not is_missing(v):
+                fs.append(
+                    Filter.by_property(b).equal(
+                        v.value if hasattr(v, "value") else str(v) if a == "url" else v
+                    )
                 )
-                for command in commands
-                if command.detection_id in by_id
-            ]
+        r = await self._client.collections.get(SOURCE_COLLECTION).query.fetch_objects(
+            filters=_all(fs), limit=1
         )
-        return [
-            (
-                parse_face(item.properties, item.references, item.uuid).model_copy(
-                    update={"entity_id": command.entity_id}
-                )
-                if (item := by_id.get(command.detection_id)) is not None
-                else None
-            )
-            for command in commands
-        ]
+        return _parse_source(r.objects[0]) if r.objects else None
 
-    async def update_embeddings_batch(
-        self, payloads: Sequence[FaceEmbeddingUpdateRequest]
-    ) -> int:
-        return await annotation_service.update_face_embedding_batch(
-            self._client, list(payloads)
+    async def list(self, q):
+        fs = _direct(
+            q.filter_,
+            {
+                "source_type": "source_type",
+                "url": "uri",
+                "library": "library",
+                "document_id": "document",
+                "page_id": "page",
+            },
         )
-
-    async def delete(self, detection_id: uuid.UUID) -> bool:
-        return await self._client.collections.get(FACE_COLLECTION).data.delete_by_id(
-            detection_id
-        )
-
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID]) -> int:
-        return await _delete_many(self._client, FACE_COLLECTION, detection_ids)
-
-    async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
-        return await search_service.search_faces(self._client, query)
-
-
-class WeaviateTextMentionRepository(TextMentionRepository):
-    def __init__(self, client: WeaviateAsyncClient) -> None:
-        super().__init__()
-        self._client = client
-
-    async def get(self, mention_id: uuid.UUID) -> TextMentionResponse | None:
-        return await text_mention_service.get_text_mention(self._client, mention_id)
-
-    async def list(self, query: TextMentionListQuery) -> TextMentionListResponse:
-        return await text_mention_service.list_text_mentions(
+        if not is_missing(q.filter_) and not is_missing(q.filter_.source_id):
+            fs.append(Filter.by_id().contains_any(q.filter_.source_id))
+        return await _page(
             self._client,
-            source_id=query.source_id,
-            entity_id=query.entity_id,
-            after_id=query.after_id,
-            limit=query.limit,
+            SOURCE_COLLECTION,
+            q,
+            fs,
+            _parse_source,
+            GenericSourceListResponse,
         )
 
-    async def create(self, payload: TextMentionCreateRequest) -> TextMentionResponse:
-        return await text_mention_service.create_text_mention(self._client, payload)
+    async def get_or_create(self, spec):
+        i, p = _source_data(spec)
+        o = await _get(self._client, SOURCE_COLLECTION, i)
+        if o:
+            return _parse_source(o), CreateResult.EXISTING
+        await self._client.collections.get(SOURCE_COLLECTION).data.insert(
+            uuid=i, properties=p
+        )
+        return GenericSourceResponse(
+            source_id=i,
+            source_type=spec.source_type,
+            url=p["uri"],
+            library=p["library"],
+            document_id=p["document"],
+            page_id=p["page"],
+        ), CreateResult.CREATED
 
-    async def create_batch(
-        self, payloads: Sequence[TextMentionCreateRequest]
-    ) -> list[TextMentionResponse]:
-        return await text_mention_service.create_text_mention_batch(
-            self._client, _as_async_iterable(payloads)
-        )
+    async def get_or_create_batch(self, specs):
+        return [await self.get_or_create(x) for x in specs]
 
-    async def patch(
-        self, mention_id: uuid.UUID, entity_id: uuid.UUID
-    ) -> TextMentionResponse | None:
-        return await text_mention_service.reassign_text_mention_entity(
-            self._client, mention_id, entity_id
-        )
-
-    async def patch_batch(
-        self, commands: Sequence[TextMentionPatchCommand]
-    ) -> list[TextMentionResponse | None]:
-        ids = [command.mention_id for command in commands]
-        _require_unique_ids(ids, "text mention patch batch")
-        if not ids:
-            return []
-        collection = self._client.collections.get(TEXT_MENTION_COLLECTION)
-        fetched = await collection.query.fetch_objects_by_ids(
-            ids, return_references=empty_reference_queries(["entity", "source"])
-        )
-        by_id = {item.uuid: item for item in fetched.objects}
-        await _bounded_gather(
-            [
-                collection.data.reference_replace(
-                    from_uuid=command.mention_id,
-                    from_property="entity",
-                    to=command.entity_id,
-                )
-                for command in commands
-                if command.mention_id in by_id
-            ]
-        )
-        return [
-            (
-                parse_text_mention(
-                    item.properties, item.references, item.uuid
-                ).model_copy(update={"entity_id": command.entity_id})
-                if (item := by_id.get(command.mention_id)) is not None
-                else None
+    async def delete(self, i):
+        if not await _exists(self._client, SOURCE_COLLECTION, i):
+            return False
+        for n in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
+            r = await self._client.collections.get(n).query.fetch_objects(
+                filters=_reference("source", [i]), limit=10_000
             )
-            for command in commands
-        ]
+            await _delete_many(self._client, n, [x.uuid for x in r.objects])
+        await self._client.collections.get(SOURCE_COLLECTION).data.delete_by_id(i)
+        return True
 
-    async def delete(self, mention_id: uuid.UUID) -> bool:
-        return await self._client.collections.get(
-            TEXT_MENTION_COLLECTION
-        ).data.delete_by_id(mention_id)
+    async def delete_batch(self, ids):
+        return sum([await self.delete(x) for x in dict.fromkeys(ids)])
 
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID]) -> int:
-        return await _delete_many(self._client, TEXT_MENTION_COLLECTION, mention_ids)
-
-
-class WeaviateUserRepository(UserRepository):
-    def __init__(self, client: WeaviateAsyncClient) -> None:
-        super().__init__()
-        self._client = client
-
-    async def get(self, user_id: uuid.UUID) -> UserResponse | None:
-        return await user_service.get_user(self._client, uuid.UUID(int=0), user_id)
-
-    async def list(self, query: UserListQuery) -> UserListResponse:
-        return await user_service.list_users(
-            self._client,
-            uuid.UUID(int=0),
-            query.is_active,
-            query.after_id,
-            query.limit,
+    async def search_documents(self, q):
+        return await self._search_sources(
+            q, SourceKind.document, FoundDocument, SearchDocumentsResultListResponse
         )
 
-    async def get_or_create(self, payload: UserCreateRequest) -> UserResponse:
-        user_id = new_uuid6()
-        await self._client.collections.get(USER_COLLECTION).data.insert(
-            uuid=user_id,
-            properties={**payload.model_dump(), "email": None},
+    async def search_pages(self, q):
+        return await self._search_sources(
+            q, SourceKind.page, FoundPage, SearchPagesResultListResponse
         )
-        return UserResponse(user_id=user_id, **payload.model_dump(), email=None)
 
-    async def import_batch(
-        self, payloads: Sequence[UserCreateRequest]
-    ) -> list[UserResponse]:
-        user_ids = [new_uuid6() for _ in payloads]
-        objects = [
-            DataObject(
-                uuid=user_id,
-                properties={**payload.model_dump(), "email": None},
+    async def _search_sources(self, q, kind, found, response):
+        generic = await self.list(
+            GenericSourceListRequest(
+                filter_=GenericSourceListFilter(source_type=[kind]), limit=10_000
             )
-            for user_id, payload in zip(user_ids, payloads)
-        ]
-        if objects:
-            result = await self._client.collections.get(
-                USER_COLLECTION
-            ).data.insert_many(objects)
-            if result.has_errors:
-                raise RuntimeError(f"User batch import failed: {result.errors}")
-        return [
-            UserResponse(user_id=user_id, **payload.model_dump(), email=None)
-            for user_id, payload in zip(user_ids, payloads)
-        ]
-
-    async def patch(
-        self, user_id: uuid.UUID, payload: UserPatchRequest
-    ) -> UserResponse | None:
-        return await user_service.update_user(
-            self._client, uuid.UUID(int=0), user_id, payload
+        )
+        items = []
+        for rank, x in enumerate(generic.items, 1):
+            items.append(
+                found(**found.from_generic(x).model_dump(), score=1 / (RRF_K + rank))
+            )
+        return response(
+            items=items[: q.limit],
+            limit=q.limit,
+            total_count=len(items) if q.return_total_count else None,
+            cursor=None,
         )
 
-    async def patch_batch(
-        self, commands: Sequence[UserPatchCommand]
-    ) -> list[UserResponse | None]:
-        ids = [command.user_id for command in commands]
-        _require_unique_ids(ids, "user patch batch")
-        if not ids:
-            return []
-        collection = self._client.collections.get(USER_COLLECTION)
-        fetched = await collection.query.fetch_objects_by_ids(ids)
-        by_id = {item.uuid: item for item in fetched.objects}
-        updates = [command.patch.model_dump(exclude_unset=True) for command in commands]
-        await _bounded_gather(
-            [
-                collection.data.update(uuid=command.user_id, properties=update)
-                for command, update in zip(commands, updates)
-                if command.user_id in by_id
-            ]
-        )
-        results: list[UserResponse | None] = []
-        for command, update in zip(commands, updates):
-            item = by_id.get(command.user_id)
-            if item is None:
-                results.append(None)
-                continue
-            properties = dict(item.properties)
-            properties.update(update)
-            results.append(parse_user(properties, item.references or {}, item.uuid))
-        return results
 
-    async def delete(self, user_id: uuid.UUID) -> bool:
-        return await self._client.collections.get(USER_COLLECTION).data.delete_by_id(
-            user_id
-        )
-
-    async def delete_batch(self, user_ids: Sequence[uuid.UUID]) -> int:
-        return await _delete_many(self._client, USER_COLLECTION, user_ids)
-
-    async def get_or_create(
-        self, *, external_subject: str, external_issuer: str
-    ) -> UserResponse:
-        return await user_service.get_or_create_user(
-            self._client,
-            external_subject=external_subject,
-            external_issuer=external_issuer,
-        )
+def _vectors(p):
+    if is_missing(p.embeddings) or not p.embeddings:
+        return None
+    return {
+        model_vector_name(FACE_VECTOR_PREFIX, str(x.model_identifier)): x.vector
+        for x in p.embeddings
+    }
 
 
 class WeaviateFaceModelRepository(FaceModelRepository):
-    """Expose the statically configured Weaviate face vector model."""
+    def __init__(self, client):
+        self._client = client
 
-    _model = FaceModelResponse(
-        model_stub=DEFAULT_FACE_EMBEDDING_MODEL,
-        embedding_dim=512,
-    )
+    async def _collection(self):
+        if not await self._client.collections.exists(FACE_MODEL_COLLECTION):
+            await self._client.collections.create(FACE_MODEL_COLLECTION)
+        return self._client.collections.get(FACE_MODEL_COLLECTION)
 
-    async def register(self, payload: FaceModelRegisterRequest) -> FaceModelResponse:
-        if (
-            payload.model_stub != self._model.model_stub
-            or payload.embedding_dim != self._model.embedding_dim
-        ):
-            raise ValueError(
-                "dynamic face model registration is only supported by PostgreSQL"
+    async def register(self, p):
+        key = str(p.model_stub)
+        collection = await self._collection()
+        object_id = uuid.uuid5(uuid.NAMESPACE_URL, f"peoplegator:face-model:{key}")
+        existing = await collection.query.fetch_object_by_id(object_id)
+        if existing is not None:
+            old = int(existing.properties["embedding_dim"])
+            if old != p.embedding_dim:
+                raise ValueError("cannot change registered model dimension")
+            return FaceModelResponse(model_stub=key, embedding_dim=old)
+        await collection.data.insert(
+            uuid=object_id,
+            properties={"model_stub": key, "embedding_dim": p.embedding_dim},
+        )
+        return FaceModelResponse(model_stub=p.model_stub, embedding_dim=p.embedding_dim)
+
+    async def list(self):
+        collection = await self._collection()
+        result = await collection.query.fetch_objects(limit=10_000)
+        return FaceModelListResponse(
+            items=sorted(
+                (FaceModelResponse(**item.properties) for item in result.objects),
+                key=lambda item: item.model_stub,
             )
-        return self._model
+        )
 
-    async def list(self) -> FaceModelListResponse:
-        return FaceModelListResponse(items=[self._model])
+    async def validate(self, p):
+        if is_missing(p.embeddings):
+            return
+        models = {
+            item.model_stub: item.embedding_dim for item in (await self.list()).items
+        }
+        for x in p.embeddings:
+            dim = models.get(str(x.model_identifier))
+            if dim is None:
+                raise ValueError(f"face model {x.model_identifier} is not registered")
+            if len(x.vector) != dim:
+                raise ValueError(f"embedding dimension must be {dim}")
+
+
+class WeaviateFaceRepository(FaceRepository):
+    def __init__(self, client, models=None):
+        self._client = client
+        self._models = models or WeaviateFaceModelRepository(client)
+
+    async def get(self, i):
+        o = await _get(self._client, FACE_COLLECTION, i)
+        return None if o is None else _parse_face(o)
+
+    def filters(self, f):
+        if f is None or is_missing(f):
+            return []
+        r = []
+        if not is_missing(f.detection_id):
+            r.append(Filter.by_id().contains_any(f.detection_id))
+        if not is_missing(f.source_id):
+            r.append(_reference("source", f.source_id))
+        if not is_missing(f.entity_id):
+            r.append(_reference("entity", f.entity_id))
+        return r
+
+    async def list(self, q):
+        return await _page(
+            self._client,
+            FACE_COLLECTION,
+            q,
+            self.filters(q.filter_),
+            _parse_face,
+            FaceListResponse,
+        )
+
+    async def create(self, p, context):
+        await _require(self._client, USER_COLLECTION, context.user_id, "user")
+        await _require(self._client, SOURCE_COLLECTION, p.source_id, "source")
+        await self._models.validate(p)
+        entity = missing_to_none(p.entity_id)
+        if entity:
+            await _require(self._client, ENTITY_COLLECTION, entity, "entity")
+        i = new_uuid6()
+        props = _props(p, {"source_id", "entity_id", "embeddings"})
+        refs = {"source": p.source_id, "user": context.user_id}
+        if entity:
+            refs["entity"] = entity
+        await self._client.collections.get(FACE_COLLECTION).data.insert(
+            uuid=i, properties=props, references=refs, vector=_vectors(p)
+        )
+        return FaceResponse(
+            detection_id=i,
+            source_id=p.source_id,
+            entity_id=entity,
+            user_id=context.user_id,
+            embeddings=[]
+            if is_missing(p.embeddings)
+            else [str(x.model_identifier) for x in p.embeddings],
+            **props,
+        )
+
+    async def create_batch(self, payloads, context):
+        return [await self.create(x, context) for x in payloads]
+
+    async def patch(self, i, p, context):
+        del context
+        old = await self.get(i)
+        if old is None:
+            return None
+        if not is_missing(p.entity_id):
+            if p.entity_id:
+                await _require(self._client, ENTITY_COLLECTION, p.entity_id, "entity")
+            await self._client.collections.get(FACE_COLLECTION).data.reference_replace(
+                from_uuid=i,
+                from_property="entity",
+                to=[] if p.entity_id is None else p.entity_id,
+            )
+            old = old.model_copy(update={"entity_id": p.entity_id})
+        await self._models.validate(p)
+        vectors = _vectors(p)
+        if vectors:
+            await self._client.collections.get(FACE_COLLECTION).data.update(
+                uuid=i, vector=vectors
+            )
+        return old
+
+    async def patch_batch(self, commands, context):
+        _unique([x.detection_id for x in commands], "face patch batch")
+        return [
+            await self.patch(
+                x.detection_id,
+                FacePatchRequest.model_validate(_props(x, {"detection_id"})),
+                context,
+            )
+            for x in commands
+        ]
+
+    async def delete(self, i):
+        if not await _exists(self._client, FACE_COLLECTION, i):
+            return False
+        await self._client.collections.get(FACE_COLLECTION).data.delete_by_id(i)
+        return True
+
+    async def delete_batch(self, ids):
+        return await _delete_many(self._client, FACE_COLLECTION, ids)
+
+    async def search(self, q):
+        return await _basic_search(
+            self._client,
+            FACE_COLLECTION,
+            q,
+            _parse_face,
+            FoundFace,
+            "detection_id",
+            ("identifier",),
+            SearchFacesResultListResponse,
+        )
+
+
+class WeaviateTextMentionRepository(TextMentionRepository):
+    def __init__(self, client):
+        self._client = client
+
+    async def get(self, i):
+        o = await _get(self._client, TEXT_MENTION_COLLECTION, i)
+        return None if o is None else _parse_mention(o)
+
+    async def list(self, q):
+        fs = (
+            []
+            if is_missing(q.filter_)
+            else (
+                []
+                if is_missing(q.filter_.source_id)
+                else [_reference("source", q.filter_.source_id)]
+            )
+            + (
+                []
+                if is_missing(q.filter_.entity_id)
+                else [_reference("entity", q.filter_.entity_id)]
+            )
+        )
+        return await _page(
+            self._client,
+            TEXT_MENTION_COLLECTION,
+            q,
+            fs,
+            _parse_mention,
+            TextMentionListResponse,
+        )
+
+    async def create(self, p, context):
+        del context
+        await _require(self._client, SOURCE_COLLECTION, p.source_id, "source")
+        await _require(self._client, ENTITY_COLLECTION, p.entity_id, "entity")
+        i = new_uuid6()
+        await self._client.collections.get(TEXT_MENTION_COLLECTION).data.insert(
+            uuid=i,
+            properties=_props(p, {"source_id", "entity_id"}),
+            references={"source": p.source_id, "entity": p.entity_id},
+        )
+        return TextMentionResponse(mention_id=i, **_props(p))
+
+    async def create_batch(self, payloads, context):
+        return [await self.create(x, context) for x in payloads]
+
+    async def patch(self, i, p, context):
+        del context
+        old = await self.get(i)
+        if old is None:
+            return None
+        if p.entity_id:
+            await _require(self._client, ENTITY_COLLECTION, p.entity_id, "entity")
+        await self._client.collections.get(
+            TEXT_MENTION_COLLECTION
+        ).data.reference_replace(
+            from_uuid=i,
+            from_property="entity",
+            to=[] if p.entity_id is None else p.entity_id,
+        )
+        return old.model_copy(update={"entity_id": p.entity_id})
+
+    async def patch_batch(self, commands, context):
+        _unique([x.mention_id for x in commands], "mention patch batch")
+        return [
+            await self.patch(
+                x.mention_id, TextMentionPatchRequest(entity_id=x.entity_id), context
+            )
+            for x in commands
+        ]
+
+    async def delete(self, i):
+        if not await _exists(self._client, TEXT_MENTION_COLLECTION, i):
+            return False
+        await self._client.collections.get(TEXT_MENTION_COLLECTION).data.delete_by_id(i)
+        return True
+
+    async def delete_batch(self, ids):
+        return await _delete_many(self._client, TEXT_MENTION_COLLECTION, ids)
+
+
+class WeaviateUserRepository(UserRepository):
+    def __init__(self, client):
+        self._client = client
+
+    async def get(self, i):
+        o = await _get(self._client, USER_COLLECTION, i)
+        return None if o is None else _parse_user(o)
+
+    async def list(self, q):
+        return await _page(
+            self._client,
+            USER_COLLECTION,
+            q,
+            _direct(
+                q.filter_,
+                {
+                    "display_name": "display_name",
+                    "is_active": "is_active",
+                    "external_subject": "external_subject",
+                    "external_issuer": "external_issuer",
+                    "email": "email",
+                },
+            ),
+            _parse_user,
+            UserListResponse,
+        )
+
+    async def get_or_create(self, p):
+        where = Filter.all_of(
+            [
+                Filter.by_property("external_issuer").equal(p.external_issuer),
+                Filter.by_property("external_subject").equal(p.external_subject),
+            ]
+        )
+        r = await self._client.collections.get(USER_COLLECTION).query.fetch_objects(
+            filters=where, limit=1
+        )
+        if r.objects:
+            return _parse_user(r.objects[0])
+        i = new_uuid6()
+        props = _props(p)
+        props["email"] = None
+        await self._client.collections.get(USER_COLLECTION).data.insert(
+            uuid=i, properties=props
+        )
+        return UserResponse(user_id=i, **props)
+
+    async def patch(self, i, p):
+        old = await self.get(i)
+        if old is None:
+            return None
+        props = _props(p)
+        await self._client.collections.get(USER_COLLECTION).data.update(
+            uuid=i, properties=props
+        )
+        return old.model_copy(update=props)
+
+    async def delete(self, i):
+        if not await _exists(self._client, USER_COLLECTION, i):
+            return False
+        for n in (ENTITY_COLLECTION, FACE_COLLECTION):
+            if (
+                await self._client.collections.get(n).query.fetch_objects(
+                    filters=_reference("user", [i]), limit=1
+                )
+            ).objects:
+                raise ValueError("cannot delete referenced user")
+        await self._client.collections.get(USER_COLLECTION).data.delete_by_id(i)
+        return True
+
+    async def delete_batch(self, ids):
+        return sum([await self.delete(x) for x in dict.fromkeys(ids)])
+
+
+async def _basic_search(client, n, q, parse, found, id_field, properties, response):
+    # BM25 is backend-native as allowed by the contract. We fuse its one-based
+    # ranks with RRF; face-vector searches are issued against the named slot.
+    scores = {}
+    objects = {}
+    if not is_missing(q.query.text):
+        for text in q.query.text:
+            r = await client.collections.get(n).query.bm25(
+                query=text,
+                query_properties=list(properties),
+                limit=10_000,
+                return_references=_refs(*_REFS.get(n, ())),
+                include_vector=n == FACE_COLLECTION,
+            )
+            for rank, o in enumerate(r.objects, 1):
+                objects[o.uuid] = o
+                scores[o.uuid] = scores.get(o.uuid, 0) + 1 / (RRF_K + rank)
+    items = []
+    for i, score in scores.items():
+        items.append(found(**parse(objects[i]).model_dump(), score=score))
+    items.sort(key=lambda x: (-x.score, getattr(x, id_field)))
+    return response(
+        items=items[: q.limit],
+        limit=q.limit,
+        total_count=len(items) if q.return_total_count else None,
+        cursor=None,
+    )
 
 
 def weaviate_database(client: WeaviateAsyncClient) -> Database:
-    """Bind all repositories to one request-scoped Weaviate client."""
+    models = WeaviateFaceModelRepository(client)
     return Database(
         entities=WeaviateEntityRepository(client),
         sources=WeaviateSourceRepository(client),
-        faces=WeaviateFaceRepository(client),
-        face_models=WeaviateFaceModelRepository(),
+        faces=WeaviateFaceRepository(client, models),
+        face_models=models,
         text_mentions=WeaviateTextMentionRepository(client),
         users=WeaviateUserRepository(client),
     )
+
+
+__all__ = [
+    "WeaviateEntityRepository",
+    "WeaviateSourceRepository",
+    "WeaviateFaceRepository",
+    "WeaviateFaceModelRepository",
+    "WeaviateTextMentionRepository",
+    "WeaviateUserRepository",
+    "weaviate_database",
+]

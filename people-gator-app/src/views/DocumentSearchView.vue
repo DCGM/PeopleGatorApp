@@ -7,14 +7,14 @@ import DocumentSearchBar from '@/components/custom/DocumentSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { useDocumentSearch } from '@/viewmodels/document-search'
-import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
+import { normalizePageContentFilter } from '@/viewmodels/assignment'
 
 const route = useRoute()
 const router = useRouter()
 
 const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
-const assignment = ref(normalizeAssignmentFilter(route.query.assignment))
+const assignment = ref(normalizePageContentFilter(route.query.assignment))
 const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
   useDocumentSearch(searchTerm, assignment, resultsPerPage)
 

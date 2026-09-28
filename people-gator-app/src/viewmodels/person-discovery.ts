@@ -6,7 +6,7 @@ import type {
   PersonDiscoveryCandidate,
   PersonDiscoveryFace,
 } from '@/viewmodels/person-detail.types'
-import { fetchEntity } from '@/query/entities'
+import { fetchEntity, useMergeEntitiesMutation } from '@/query/entities'
 import { fetchFaceAlignedCrop, fetchFaces, useAssignFacesMutation } from '@/query/faces'
 import { queryKeys } from '@/query/keys'
 import { fetchPage } from '@/query/media'
@@ -228,6 +228,7 @@ export function usePersonDiscovery(
   )
 
   const assignFacesMutation = useAssignFacesMutation()
+  const mergeEntitiesMutation = useMergeEntitiesMutation()
 
   return {
     assignFaces: (faceIdsToAssign: string[]) => {
@@ -238,11 +239,21 @@ export function usePersonDiscovery(
       })
     },
     assignmentStatus: assignFacesMutation.status,
+    mergePeople: (sourceEntityIds: string[]) => {
+      const uniqueSourceIds = [...new Set(sourceEntityIds)].filter((id) => id !== toValue(personId))
+      if (!uniqueSourceIds.length) return
+      mergeEntitiesMutation.mutate({
+        targetEntityId: toValue(personId),
+        sourceEntityIds: uniqueSourceIds,
+      })
+    },
+    mergeStatus: mergeEntitiesMutation.status,
     error: computed(
       () =>
         faceSearchQuery.error.value ??
         entitySearchQuery.error.value ??
-        assignFacesMutation.error.value,
+        assignFacesMutation.error.value ??
+        mergeEntitiesMutation.error.value,
     ),
     isLoadingFaces: computed(
       () =>

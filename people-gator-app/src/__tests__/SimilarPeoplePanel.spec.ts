@@ -39,6 +39,7 @@ const people: SimilarPersonCandidate[] = [
 
 const unassignedFace: Face = {
   id: 'face-current',
+  embeddingModel: 'face-model',
   personId: null,
   name: 'Unknown person',
   confidence: 91,
@@ -120,7 +121,7 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.get('[data-slot="item-content"]').classes()).toContain('overflow-hidden')
   })
 
-  it('keeps all server matches visible without a source selector', async () => {
+  it('switches empty searches between page and face candidates, while text overrides the source', async () => {
     const wrapper = mount(SimilarPeoplePanel, {
       props: {
         people,
@@ -130,10 +131,18 @@ describe('SimilarPeoplePanel', () => {
       global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
+    expect(wrapper.get('[aria-label="Show people on this page"]').attributes('data-state')).toBe(
+      'on',
+    )
+    await wrapper.get('[aria-label="Show people with similar faces"]').trigger('click')
+    expect(wrapper.get('[aria-label="Show people with similar faces"]').attributes('data-state')).toBe(
+      'on',
+    )
+
     await wrapper.get('[aria-label="Search people"]').setValue('an alias')
     expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(2)
-    expect(wrapper.find('[aria-label="Database"]').exists()).toBe(false)
-    expect(wrapper.find('[aria-label="On this page"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Choose candidate source"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Showing database name and alias matches.')
   })
 
   it('does not append a loading row while refreshing existing candidates', () => {
@@ -415,6 +424,50 @@ describe('SimilarPeoplePanel', () => {
       wrapper.unmount()
       vi.useRealTimers()
       vi.unstubAllGlobals()
+    }
+  })
+
+  it('reveals and scrolls the selected person into view', async () => {
+    const extendedPeople = [
+      ...people,
+      { ...people[1]!, id: 'josef-svoboda', name: 'Josef Svoboda' },
+      { ...people[1]!, id: 'alena-horakova', name: 'Alena Horáková' },
+      { ...people[1]!, id: 'jan-novak', name: 'Jan Novák' },
+    ]
+    const scrollIntoView = vi.fn()
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    const wrapper = mount(SimilarPeoplePanel, {
+      props: {
+        people: extendedPeople,
+        selectedFace: unassignedFace,
+        viewedPersonId: null,
+      },
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+
+    try {
+      expect(wrapper.find('[aria-label="Preview Jan Novák on this page"]').exists()).toBe(false)
+
+      await wrapper.setProps({ viewedPersonId: 'jan-novak' })
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.get('[aria-label="Preview Jan Novák on this page"]')).toBeDefined()
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' })
+    } finally {
+      wrapper.unmount()
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+          configurable: true,
+          value: originalScrollIntoView,
+        })
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+      }
     }
   })
 })

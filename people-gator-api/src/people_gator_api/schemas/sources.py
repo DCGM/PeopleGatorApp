@@ -560,6 +560,21 @@ class GenericSourceListFilter(ListFilterBase):
         default=MISSING,
         description="Filter by linked mention ID."
     )
+    has_mentions: bool | MissingType = Field(
+        default=MISSING,
+        description="Filter by whether the page has at least one text mention."
+    )
+    has_faces: bool | MissingType = Field(
+        default=MISSING,
+        description="Filter by whether the page has at least one face detection."
+    )
+    has_entities: bool | MissingType = Field(
+        default=MISSING,
+        description=(
+            "Filter by whether the page has at least one entity assigned to a "
+            "text mention or face detection."
+        ),
+    )
 
 
 class SourceListFilter(ListFilterBase):
@@ -639,6 +654,21 @@ class PageListFilter(ListFilterBase):
         default=MISSING,
         description="Filter by linked mention ID."
     )
+    has_mentions: bool | MissingType = Field(
+        default=MISSING,
+        description="Filter by whether the page has at least one text mention."
+    )
+    has_faces: bool | MissingType = Field(
+        default=MISSING,
+        description="Filter by whether the page has at least one face detection."
+    )
+    has_entities: bool | MissingType = Field(
+        default=MISSING,
+        description=(
+            "Filter by whether the page has at least one entity assigned to a "
+            "text mention or face detection."
+        ),
+    )
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
@@ -651,6 +681,9 @@ class PageListFilter(ListFilterBase):
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
+            has_mentions=self.has_mentions,
+            has_faces=self.has_faces,
+            has_entities=self.has_entities,
         )
 
 

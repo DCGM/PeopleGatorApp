@@ -12,6 +12,10 @@ from people_gator_api.schemas.entities import (
     EntityDeleteManyResponse,
     EntityListRequest,
     EntityListResponse,
+    EntityMergeFromRequest,
+    EntityMergeResponse,
+    EntityMergeBatchRequest,
+    EntityMergeBatchResponse,
     EntityPatchRequest,
     EntityResponse,
 )
@@ -135,6 +139,54 @@ async def delete_entity_route(
     del user
     if not await database.entities.delete(entity_id):
         raise_api_error(404, "not_found", "Entity not found")
+
+
+@router.post(
+    "/entities/{target_entity_id}:merge",
+    response_model=EntityMergeResponse,
+    summary="Merge one entity into this target",
+    description="Reassign the source entity's faces and text mentions to the target in the URL, add its aliases without duplicates, then delete the source. Optional description fields update the target; null clears them and omission preserves them.",
+)
+async def merge_entity_route(
+    target_entity_id: uuid.UUID,
+    payload: EntityMergeFromRequest,
+    database: DatabaseDependency,
+    user: AdminUserDependency,
+) -> EntityMergeResponse:
+    del user
+    try:
+        result = await database.entities.merge(
+            target_entity_id, payload.source_entity_id, target_patch=payload
+        )
+    except ValueError as exc:
+        raise_api_error(409, "invalid_merge", str(exc))
+    if result is None:
+        raise_api_error(404, "not_found", "Source or target entity not found")
+    return result
+
+
+@router.post(
+    "/entities/{target_entity_id}:merge-batch",
+    response_model=EntityMergeBatchResponse,
+    summary="Merge multiple entities into this target",
+    description="Atomically reassign every source entity's faces and text mentions to the target in the URL, add their aliases without duplicates, then delete all sources. Optional description fields update the target; null clears them and omission preserves them.",
+)
+async def merge_entity_batch_route(
+    target_entity_id: uuid.UUID,
+    payload: EntityMergeBatchRequest,
+    database: DatabaseDependency,
+    user: AdminUserDependency,
+) -> EntityMergeBatchResponse:
+    del user
+    try:
+        result = await database.entities.merge_batch(
+            target_entity_id, payload.source_entity_ids, target_patch=payload
+        )
+    except ValueError as exc:
+        raise_api_error(409, "invalid_merge", str(exc))
+    if result is None:
+        raise_api_error(404, "not_found", "Target or source entity not found")
+    return result
 
 
 @router.delete(

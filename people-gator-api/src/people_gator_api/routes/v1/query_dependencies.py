@@ -353,6 +353,18 @@ def page_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(PageListFilter, "mention_id", "filter"),
     ] = None,
+    has_mentions: Annotated[
+        bool | None,
+        _model_parameter(PageListFilter, "has_mentions", "filter"),
+    ] = None,
+    has_faces: Annotated[
+        bool | None,
+        _model_parameter(PageListFilter, "has_faces", "filter"),
+    ] = None,
+    has_entities: Annotated[
+        bool | None,
+        _model_parameter(PageListFilter, "has_entities", "filter"),
+    ] = None,
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
@@ -364,6 +376,9 @@ def page_list_filter_dependency(
         entity_id=entity_id,
         detection_id=detection_id,
         mention_id=mention_id,
+        has_mentions=has_mentions,
+        has_faces=has_faces,
+        has_entities=has_entities,
     )
 
 

@@ -19,6 +19,7 @@ import type {
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
+import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
 import { useTranslationQuery } from '@/query/translation'
@@ -40,6 +41,8 @@ const selectedPersonId = ref<string | null>(
   typeof route.query.selectedPerson === 'string' ? route.query.selectedPerson : null,
 )
 const candidateTerm = ref('')
+const candidateBrowseMode = ref<CandidateBrowseMode>('page')
+const candidateSearchResetKey = ref(0)
 const debouncedCandidateTerm = useDebounce(candidateTerm, 250)
 const {
   assignFace,
@@ -58,7 +61,14 @@ const {
   similarPeopleLoading,
   transcription,
   unassignFace,
-} = useDocumentWorkspace(libraryId, documentId, pageId, selectedFaceId, debouncedCandidateTerm)
+} = useDocumentWorkspace(
+  libraryId,
+  documentId,
+  pageId,
+  selectedFaceId,
+  debouncedCandidateTerm,
+  candidateBrowseMode,
+)
 
 const selectedLineIndex = ref(0)
 const isTranslationOpen = ref(false)
@@ -114,9 +124,16 @@ function syncRoute() {
   })
 }
 
+function showOnPageEntities() {
+  candidateTerm.value = ''
+  candidateBrowseMode.value = 'page'
+  candidateSearchResetKey.value += 1
+}
+
 function selectFace(faceId: string) {
   selectedFaceId.value = faceId
   selectedPersonId.value = faces.value.find((face) => face.id === faceId)?.personId ?? null
+  if (selectedPersonId.value) showOnPageEntities()
   syncRoute()
 }
 
@@ -137,6 +154,8 @@ function selectLine(index: number) {
 function selectEntity(index: number, entity: TranscriptionEntitySpan) {
   selectedLineIndex.value = index
   selectedEntityKey.value = transcriptionEntityKey(entity)
+  selectedPersonId.value = entity.entity_id ?? null
+  if (selectedPersonId.value) showOnPageEntities()
   syncRoute()
 }
 
@@ -321,7 +340,7 @@ onBeforeUnmount(() => {
       aria-labelledby="page-transcription-title">
       <DocumentTeleprompter class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
         :transcription="transcription" :selected-line-index="selectedLineIndex" :selected-entity-key="selectedEntityKey"
-        :related-entity-key="selectedPersonCandidate?.entityKey ?? null" :is-translation-open="isTranslationOpen"
+        :related-entity-id="selectedPersonId" :is-translation-open="isTranslationOpen"
         :selected-language="selectedLanguage" :current-translation="currentTranslation"
         :translation-loading="translationLoading" @select-line="selectLine" @select-entity="selectEntity"
         @navigate-line="navigateLine" />
@@ -354,13 +373,14 @@ onBeforeUnmount(() => {
     <CurrentFacePanel class="workspace-current border-t bg-background p-5" :face="selectedFace ?? null"
       :assignment-pending="assignmentStatus === 'pending'" @find-profile="focusSimilarPeopleSearch"
       @create="createSimilarPerson" @unassign="unassignSelectedFace" />
-    <SimilarPeopleSearch ref="similarPeopleSearch" v-model="candidateTerm"
+    <SimilarPeopleSearch :key="candidateSearchResetKey" ref="similarPeopleSearch" v-model="candidateTerm"
+      v-model:result-mode="candidateBrowseMode"
       class="workspace-search bg-background px-5 pb-5" :selected-face="selectedFace ?? null" />
     <SimilarPeopleResults class="workspace-results min-h-0 bg-background px-5 pb-5"
       :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []" :loading="isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
         " :has-next-page="hasNextPage" :is-fetching-next-page="isFetchingNextPage"
       :selected-face="selectedFace ?? null" :viewed-person-id="selectedPersonId"
-      :assignment-pending="assignmentStatus === 'pending'" :search-term="candidateTerm" @load-more="loadMore()"
+      :assignment-pending="assignmentStatus === 'pending'" :search-term="`${candidateBrowseMode}:${candidateTerm}`" @load-more="loadMore()"
       @preview="previewSimilarPerson" @assign="assignSimilarPerson" />
   </main>
 </template>

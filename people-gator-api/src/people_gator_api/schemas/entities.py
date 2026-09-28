@@ -200,6 +200,60 @@ class EntityDeleteManyResponse(BaseModel):
     deleted_count: int = Field(ge=0)
 
 
+class EntityMergeTargetPatch(BaseModel):
+    """Optional target fields to update as part of an entity merge."""
+
+    description: str | None | MissingType = Field(
+        default=MISSING,
+        description="New target description; null clears it and omission preserves it.",
+    )
+    short_description: str | None | MissingType = Field(
+        default=MISSING,
+        description="New target short description; null clears it and omission preserves it.",
+    )
+
+
+class EntityMergeFromRequest(EntityMergeTargetPatch):
+    """Identify the source to merge into the entity addressed by the URL."""
+
+    source_entity_id: uuid.UUID
+
+
+class EntityMergeBatchRequest(EntityMergeTargetPatch):
+    """Identify the sources to merge into the entity addressed by the URL."""
+
+    source_entity_ids: list[uuid.UUID] = Field(
+        min_length=1, max_length=MAX_ENTITY_BATCH_SIZE
+    )
+
+    @field_validator("source_entity_ids")
+    @classmethod
+    def validate_unique_source_ids(cls, source_entity_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+        if len(source_entity_ids) != len(set(source_entity_ids)):
+            raise ValueError("source_entity_ids must be unique")
+        return source_entity_ids
+
+
+class EntityMergeResponse(BaseModel):
+    """Result of merging and deleting a source entity."""
+
+    source_entity_id: uuid.UUID
+    target_entity_id: uuid.UUID
+    faces_reassigned: int = Field(ge=0)
+    text_mentions_reassigned: int = Field(ge=0)
+    merged_entity: EntityResponse
+
+
+class EntityMergeBatchResponse(BaseModel):
+    """Result of merging and deleting multiple source entities."""
+
+    source_entity_ids: list[uuid.UUID]
+    target_entity_id: uuid.UUID
+    faces_reassigned: int = Field(ge=0)
+    text_mentions_reassigned: int = Field(ge=0)
+    merged_entity: EntityResponse
+
+
 __all__ = [
     "MAX_ENTITY_BATCH_SIZE",
     "EntityCreateRequest",
@@ -213,4 +267,9 @@ __all__ = [
     "EntityListRequest",
     "EntityDeleteManyRequest",
     "EntityDeleteManyResponse",
+    "EntityMergeFromRequest",
+    "EntityMergeTargetPatch",
+    "EntityMergeResponse",
+    "EntityMergeBatchRequest",
+    "EntityMergeBatchResponse",
 ]

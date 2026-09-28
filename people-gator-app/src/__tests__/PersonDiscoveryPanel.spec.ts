@@ -85,7 +85,29 @@ describe('PersonDiscoveryPanel', () => {
     ).toHaveLength(3)
   })
 
-  it('keeps opening a face separate from additive assignment selection', async () => {
+  it('shift-selects a range when clicking the face cards in selection mode', async () => {
+    const wrapper = mount(PersonDiscoveryPanel, {
+      props: {
+        faces: [face('face-1'), face('face-2'), face('face-3')],
+        people: [],
+        currentName: 'Ada Lovelace',
+        referenceFaceCount: 1,
+      },
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+
+    await wrapper.get('[aria-label="Select face face-1 for assignment"]').trigger('click')
+    await wrapper
+      .get('[aria-label="Add face face-3 to selection"]')
+      .trigger('click', { shiftKey: true })
+
+    expect(wrapper.get('[role="toolbar"]').text()).toContain('3 faces selected')
+    expect(
+      wrapper.findAll('[data-face-selection-target="control"][aria-pressed="true"]'),
+    ).toHaveLength(3)
+  })
+
+  it('makes face clicks additive once assignment selection is enabled', async () => {
     const wrapper = mount(PersonDiscoveryPanel, {
       props: {
         faces: [face('face-1'), face('face-2'), face('face-3')],
@@ -101,7 +123,14 @@ describe('PersonDiscoveryPanel', () => {
     ).toBeUndefined()
 
     await wrapper.get('[aria-label="Select face face-1 for assignment"]').trigger('click')
-    await wrapper.get('[aria-label="Select face face-2 for assignment"]').trigger('click')
+    expect(wrapper.find('[aria-label="Open face face-2 on its source document"]').exists()).toBe(
+      false,
+    )
+
+    await wrapper.get('[aria-label="Add face face-2 to selection"]').trigger('click')
+    expect(wrapper.get('[role="toolbar"]').text()).toContain('2 faces selected')
+
+    await wrapper.get('[aria-label="Face face-1 is selected"]').trigger('click')
     expect(wrapper.get('[role="toolbar"]').text()).toContain('2 faces selected')
 
     await wrapper.get('[aria-label="Remove face face-1 from assignment"]').trigger('click')
@@ -176,5 +205,39 @@ describe('PersonDiscoveryPanel', () => {
     })
     expect(wrapper.text()).toContain('Face')
     expect(wrapper.text()).toContain('Name')
+  })
+
+  it('selects people and emits their IDs for a batch merge', async () => {
+    const wrapper = mount(PersonDiscoveryPanel, {
+      props: {
+        faces: [],
+        people: ['Ada King', 'Grace Hopper', 'Joan Clarke'].map((name, index) => ({
+          id: `person-${index + 1}`,
+          name,
+          shortDescription: '',
+          aliases: [],
+          portrait: '',
+          portraitLoading: false,
+        })),
+        currentName: 'Ada Lovelace',
+        referenceFaceCount: 1,
+      },
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+
+    await wrapper.get('[aria-label="Select Ada King for merge"]').trigger('click')
+    await wrapper
+      .get('[aria-label="Select Joan Clarke for merge"]')
+      .trigger('click', { shiftKey: true })
+
+    expect(wrapper.get('[aria-label="Selected person actions"]').text()).toContain(
+      '3 people selected',
+    )
+    expect(wrapper.findAll('[aria-label$="from merge"][aria-pressed="true"]')).toHaveLength(3)
+    await wrapper.get('[aria-label="Selected person actions"] button:last-child').trigger('click')
+    expect(wrapper.emitted('mergePeople')).toEqual([[['person-1', 'person-2', 'person-3']]])
+
+    await wrapper.setProps({ mergeSucceeded: true })
+    expect(wrapper.find('[aria-label="Selected person actions"]').exists()).toBe(false)
   })
 })

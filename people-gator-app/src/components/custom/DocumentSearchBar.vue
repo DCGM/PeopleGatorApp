@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { AssignmentFilter } from '@/viewmodels/assignment'
+import type { PageContentFilter } from '@/viewmodels/assignment'
 
 defineProps<{
   resultCount: number
@@ -20,7 +20,7 @@ defineProps<{
 }>()
 
 const searchTerm = defineModel<string>('searchTerm', { required: true })
-const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
+const assignment = defineModel<PageContentFilter>('assignment', { required: true })
 </script>
 
 <template>
@@ -39,14 +39,15 @@ const assignment = defineModel<AssignmentFilter>('assignment', { required: true 
       </InputGroup>
       <Select v-model="assignment">
         <SelectTrigger class="w-full rounded-none">
-          <SelectValue placeholder="Assignment" />
+          <SelectValue placeholder="Page content" />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectLabel>Assignment</SelectLabel>
+            <SelectLabel>Page content</SelectLabel>
             <SelectItem value="all">All pages</SelectItem>
-            <SelectItem value="faces">Assigned faces</SelectItem>
-            <SelectItem value="mentions">Assigned mentions</SelectItem>
+            <SelectItem value="entities">Contains assigned entities</SelectItem>
+            <SelectItem value="faces">Contains faces</SelectItem>
+            <SelectItem value="mentions">Contains mentions</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>

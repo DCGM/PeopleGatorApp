@@ -32,6 +32,8 @@ import {
   assignmentEntityFilter,
   assignmentType,
   normalizeAssignmentFilter,
+  normalizePageContentFilter,
+  pageContentFilter,
 } from '@/viewmodels/assignment'
 import { useDocumentSearch } from '@/viewmodels/document-search'
 import { usePeopleSearch } from '@/viewmodels/people-search'
@@ -122,6 +124,15 @@ describe('assignment search filters', () => {
     expect(assignmentEntityFilter('mentions')).toEqual({
       hasDetections: undefined,
       hasMentions: true,
+    })
+    expect(normalizePageContentFilter('entities')).toBe('entities')
+    expect(normalizePageContentFilter('faces')).toBe('faces')
+    expect(normalizePageContentFilter('mentions')).toBe('mentions')
+    expect(normalizePageContentFilter('invalid')).toBe('all')
+    expect(pageContentFilter('entities')).toEqual({
+      'filter.has_entities': true,
+      'filter.has_faces': undefined,
+      'filter.has_mentions': undefined,
     })
   })
 
@@ -248,7 +259,7 @@ describe('assignment search filters', () => {
     wrapper.unmount()
   })
 
-  it('keeps only pages with assigned mentions when searching', async () => {
+  it('sends the mention-content filter when searching pages', async () => {
     mocks.searchPages.mockResolvedValue({
       data: { items: [page], total_count: 1, limit: 12, cursor: null },
     })
@@ -260,6 +271,9 @@ describe('assignment search filters', () => {
     expect(mocks.searchPages).toHaveBeenCalledWith({
       query: {
         'query.text': ['Ada'],
+        'filter.has_entities': undefined,
+        'filter.has_faces': undefined,
+        'filter.has_mentions': true,
         limit: 12,
         return_total_count: true,
         cursor: null,
@@ -267,14 +281,11 @@ describe('assignment search filters', () => {
       throwOnError: true,
       signal: expect.any(AbortSignal),
     })
-    expect(mocks.fetchTextMentions).toHaveBeenCalledWith(
-      { 'filter.source_id': ['page-1'], limit: 100, cursor: null },
-      expect.any(AbortSignal),
-    )
+    expect(mocks.fetchTextMentions).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
-  it('keeps only pages with assigned faces while browsing', async () => {
+  it('sends the face-content filter while browsing pages', async () => {
     mocks.fetchPages.mockResolvedValue({
       items: [page],
       total_count: 1,
@@ -287,11 +298,35 @@ describe('assignment search filters', () => {
     await flushPromises()
 
     expect(mocks.fetchPages).toHaveBeenCalledWith(
-      { limit: 12, return_total_count: true, cursor: null },
+      {
+        'filter.has_entities': undefined,
+        'filter.has_faces': true,
+        'filter.has_mentions': undefined,
+        limit: 12,
+        return_total_count: true,
+        cursor: null,
+      },
       expect.any(AbortSignal),
     )
-    expect(mocks.fetchFaces).toHaveBeenCalledWith(
-      { 'filter.source_id': ['page-1'], limit: 100, cursor: null },
+    expect(mocks.fetchFaces).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('sends the assigned-entity filter while browsing pages', async () => {
+    const wrapper = mountQuery(() => {
+      useDocumentSearch(ref(''), ref('entities'), 12)
+    })
+    await flushPromises()
+
+    expect(mocks.fetchPages).toHaveBeenCalledWith(
+      {
+        'filter.has_entities': true,
+        'filter.has_faces': undefined,
+        'filter.has_mentions': undefined,
+        limit: 12,
+        return_total_count: true,
+        cursor: null,
+      },
       expect.any(AbortSignal),
     )
     wrapper.unmount()
@@ -321,12 +356,26 @@ describe('assignment search filters', () => {
 
     expect(mocks.fetchPages).toHaveBeenNthCalledWith(
       1,
-      { limit: 12, return_total_count: true, cursor: null },
+      {
+        'filter.has_entities': undefined,
+        'filter.has_faces': undefined,
+        'filter.has_mentions': undefined,
+        limit: 12,
+        return_total_count: true,
+        cursor: null,
+      },
       expect.any(AbortSignal),
     )
     expect(mocks.fetchPages).toHaveBeenNthCalledWith(
       2,
-      { limit: 12, return_total_count: true, cursor: 'page-1' },
+      {
+        'filter.has_entities': undefined,
+        'filter.has_faces': undefined,
+        'filter.has_mentions': undefined,
+        limit: 12,
+        return_total_count: true,
+        cursor: 'page-1',
+      },
       expect.any(AbortSignal),
     )
     wrapper.unmount()

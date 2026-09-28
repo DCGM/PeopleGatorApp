@@ -8,6 +8,8 @@ import {
   deleteEntityRouteApiV1EntitiesEntityIdDelete,
   getEntityRouteApiV1EntitiesEntityIdGet,
   listEntitiesRouteApiV1EntitiesGet,
+  mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost,
+  mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost,
   patchEntityRouteApiV1EntitiesEntityIdPatch,
   type EntityCreateRequest,
   type EntityDeleteManyRequest,
@@ -101,6 +103,51 @@ export function usePatchEntityMutation() {
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+    },
+  })
+}
+
+export function useMergeEntitiesMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      targetEntityId,
+      sourceEntityIds,
+    }: {
+      targetEntityId: string
+      sourceEntityIds: string[]
+    }) => {
+      if (sourceEntityIds.length === 1) {
+        return await responseData(
+          mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost({
+            path: { target_entity_id: targetEntityId },
+            body: { source_entity_id: sourceEntityIds[0]! },
+            throwOnError: true,
+          }),
+        )
+      }
+      return await responseData(
+        mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost({
+          path: { target_entity_id: targetEntityId },
+          body: { source_entity_ids: sourceEntityIds },
+          throwOnError: true,
+        }),
+      )
+    },
+    onSuccess: (result, { sourceEntityIds }) => {
+      for (const sourceEntityId of sourceEntityIds) {
+        queryClient.removeQueries({ queryKey: queryKeys.entities.detail(sourceEntityId) })
+      }
+      queryClient.setQueryData(
+        queryKeys.entities.detail(result.target_entity_id),
+        result.merged_entity,
+      )
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.faces.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
+      ])
     },
   })
 }

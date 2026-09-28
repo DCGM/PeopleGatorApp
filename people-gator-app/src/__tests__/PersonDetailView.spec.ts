@@ -1,0 +1,88 @@
+import { mount, RouterLinkStub } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
+
+import PersonDetailView from '@/views/PersonDetailView.vue'
+
+vi.mock('@/viewmodels/person-detail', () => ({
+  usePersonDetail: () => ({
+    error: ref(null),
+    faceCount: ref(0),
+    faceEmbeddingModel: ref(null),
+    faceIds: ref([]),
+    faces: ref([]),
+    identifiers: ref({ wikidataId: '', nationalLibraryAuthorityId: '' }),
+    isLoading: ref(false),
+    libraryCount: ref(1),
+    mentionCount: ref(1),
+    mentions: ref([
+      {
+        id: 'mention-1',
+        excerpt: 'Ada Lovelace wrote about the engine.',
+        matchedText: 'Ada Lovelace',
+        library: 'nlp',
+        documentId: 'document-1',
+        documentTitle: 'Document 1',
+        pageId: 'page-1',
+        pageLabel: '1',
+      },
+    ]),
+    portrait: ref(''),
+    portraitLoading: ref(false),
+    profile: ref({
+      name: 'Ada Lovelace',
+      shortDescription: '',
+      article: '',
+      aliases: [],
+    }),
+    updateIdentifiers: vi.fn(),
+    updateProfile: vi.fn(),
+  }),
+}))
+
+vi.mock('@/viewmodels/person-discovery', () => ({
+  usePersonDiscovery: () => ({
+    assignFaces: vi.fn(),
+    assignmentStatus: ref('idle'),
+    error: ref(null),
+    isLoadingFaces: ref(false),
+    isLoadingPeople: ref(false),
+    similarFaces: ref([]),
+    similarPeople: ref([]),
+  }),
+}))
+
+describe('PersonDetailView', () => {
+  it('links mentions to the page with their person selected', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/people/:personId', name: 'person-detail', component: PersonDetailView },
+        {
+          path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
+          name: 'document-page',
+          component: { template: '<div />' },
+        },
+      ],
+    })
+    await router.push('/people/person-ada?tab=mentions')
+    await router.isReady()
+
+    const wrapper = mount(PersonDetailView, {
+      global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+    })
+    const mentionLink = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((link) => {
+        const target = link.props('to')
+        return typeof target !== 'string' && target?.name === 'document-page'
+      })
+
+    expect(mentionLink?.props('to')).toEqual({
+      name: 'document-page',
+      params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
+      query: { selectedPerson: 'person-ada' },
+    })
+  })
+})

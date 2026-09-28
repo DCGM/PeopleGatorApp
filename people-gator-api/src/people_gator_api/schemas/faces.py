@@ -1,9 +1,12 @@
 from __future__ import annotations
 from typing import Annotated
 import uuid
-from pydantic import BaseModel, Field, FiniteFloat, field_validator
+from pydantic import BaseModel, Field, field_validator
+from people_gator_api.schemas.enums import FaceKeypointType
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
+    Keypoint,
+    BoundingBox,
     GenericListResponse,
     ListFilterBase,
     ModelEmbedding,
@@ -21,23 +24,7 @@ NUMBER_OF_FACE_KEYPOINTS = 5
 MAX_FACE_BATCH_SIZE = settings.batch.max_face_batch_size
 
 FaceEmbedding = ModelEmbedding[FaceModelStub]
-
-
-class BoundingBox(BaseModel):
-    """Face detection bounding box."""
-
-    x: int = Field(ge=0)
-    y: int = Field(ge=0)
-    width: int = Field(gt=0)
-    height: int = Field(gt=0)
-
-
-class Keypoint(BaseModel):
-    """One keypoint of a face detection."""
-
-    type: str
-    x: FiniteFloat
-    y: FiniteFloat
+FaceKeypoint = Keypoint[FaceKeypointType]
 
 
 class FaceCreateRequest(BaseModel):
@@ -49,7 +36,7 @@ class FaceCreateRequest(BaseModel):
     bounding_box: BoundingBox = Field(
         description="The bounding box of the face detection."
     )
-    keypoints: list[Keypoint] = Field(
+    keypoints: list[FaceKeypoint] = Field(
         min_length=NUMBER_OF_FACE_KEYPOINTS,
         max_length=NUMBER_OF_FACE_KEYPOINTS,
         description="The keypoints of the face detection. Must contain exactly 5 keypoints.",
@@ -132,7 +119,7 @@ class FaceResponse(BaseModel):
     bounding_box: BoundingBox = Field(
         description="The bounding box of the face detection."
     )
-    keypoints: list[Keypoint] = Field(
+    keypoints: list[FaceKeypoint] = Field(
         min_length=NUMBER_OF_FACE_KEYPOINTS,
         max_length=NUMBER_OF_FACE_KEYPOINTS,
         description="The keypoints of the face detection. Must contain exactly 5 keypoints.",

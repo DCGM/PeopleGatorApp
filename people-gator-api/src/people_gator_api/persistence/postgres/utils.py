@@ -67,7 +67,7 @@ from people_gator_api.schemas.entities import (
     EntityListFilter,
     EntityResponse,
 )
-from people_gator_api.schemas.enums import EntityType, ScoreAggregation, SourceKind
+from people_gator_api.schemas.enums import EntityType, FaceKeypointType, ScoreAggregation, SourceKind
 from people_gator_api.schemas.face_models import (
     FaceModelResponse,
 )
@@ -637,7 +637,7 @@ def face_response(face: Face) -> FaceResponse:
             height=int(box["height"]),
         ),
         keypoints=[
-            Keypoint(type=kind, x=point[0], y=point[1])
+            Keypoint(type=FaceKeypointType(kind), x=point[0], y=point[1])
             for kind, point in zip(face.keypoint_types, face.keypoints, strict=True)
         ],
         embeddings=sorted(embedding.model_id for embedding in face.embeddings),
@@ -695,10 +695,12 @@ def entity_filters(
             select(ImageOccurrence.entity_id).where(
                 ImageOccurrence.source_id.in_(source_ids),
                 ImageOccurrence.entity_id.is_not(None),
+                ImageOccurrence.entity_id == Entity.id,
             ),
             select(TextMention.entity_id).where(
                 TextMention.source_id.in_(source_ids),
                 TextMention.entity_id.is_not(None),
+                TextMention.entity_id == Entity.id,
             ),
         )
         filters.append(Entity.id.in_(linked_entity_ids))
@@ -849,6 +851,31 @@ def source_filters(
                 TextMention.id.in_(mention_ids),
             )
         )
+    has_mentions = missing_to_none(filter_values.has_mentions)
+    if has_mentions is not None:
+        predicate = exists().where(TextMention.source_id == Source.id)
+        filters.append(predicate if has_mentions else ~predicate)
+    has_faces = missing_to_none(filter_values.has_faces)
+    if has_faces is not None:
+        predicate = exists().where(
+            Face.source_id == Source.id,
+            Face.id == ImageOccurrence.id,
+        )
+        filters.append(predicate if has_faces else ~predicate)
+    has_entities = missing_to_none(filter_values.has_entities)
+    if has_entities is not None:
+        predicate = or_(
+            exists().where(
+                TextMention.source_id == Source.id,
+                TextMention.entity_id.is_not(None),
+            ),
+            exists().where(
+                Face.source_id == Source.id,
+                Face.id == ImageOccurrence.id,
+                Face.entity_id.is_not(None),
+            ),
+        )
+        filters.append(predicate if has_entities else ~predicate)
     return filters
 
 

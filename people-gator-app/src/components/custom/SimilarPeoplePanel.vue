@@ -6,6 +6,7 @@ import SimilarPeopleResults from '@/components/custom/SimilarPeopleResults.vue'
 import SimilarPeopleSearch from '@/components/custom/SimilarPeopleSearch.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
+import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 
 const props = defineProps<{
   people: SimilarPersonCandidate[]
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 }>()
 
 const query = defineModel<string>('searchTerm', { default: '' })
+const resultMode = ref<CandidateBrowseMode>('page')
 const search = ref<InstanceType<typeof SimilarPeopleSearch> | null>(null)
 
 function createPerson(profile: { name: string; shortDescription?: string }) {
@@ -64,7 +66,12 @@ defineExpose({ focusSearch })
       @create="createPerson"
       @unassign="emit('unassign')"
     />
-    <SimilarPeopleSearch ref="search" v-model="query" :selected-face="props.selectedFace" />
+    <SimilarPeopleSearch
+      ref="search"
+      v-model="query"
+      v-model:result-mode="resultMode"
+      :selected-face="props.selectedFace"
+    />
     <SimilarPeopleResults
       class="min-h-0 flex-1"
       :people="props.people"
@@ -74,7 +81,7 @@ defineExpose({ focusSearch })
       :assignment-pending="props.assignmentPending"
       :has-next-page="props.hasNextPage"
       :is-fetching-next-page="props.isFetchingNextPage"
-      :search-term="query"
+      :search-term="`${resultMode}:${query}`"
       @load-more="emit('loadMore')"
       @preview="emit('preview', $event)"
       @assign="emit('assign', $event)"

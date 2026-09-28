@@ -21,11 +21,13 @@ const personId = computed(() => String(route.params.personId))
 const {
   error,
   faceEmbeddingModel,
+  faceCount,
   faceIds,
   faces,
   identifiers,
   isLoading,
   libraryCount,
+  mentionCount,
   mentions,
   portrait,
   portraitLoading,
@@ -70,6 +72,8 @@ const {
   error: discoveryError,
   isLoadingFaces,
   isLoadingPeople,
+  mergePeople,
+  mergeStatus,
   similarFaces,
   similarPeople,
 } = usePersonDiscovery(
@@ -99,8 +103,8 @@ function selectTab(tab: string | number) {
         :person-id="personId"
         :portrait="portrait"
         :portrait-loading="portraitLoading"
-        :face-count="faces.length"
-        :mention-count="mentions.length"
+        :face-count="faceCount"
+        :mention-count="mentionCount"
         :library-count="libraryCount"
         :wikidata-id="identifiers.wikidataId"
         :national-library-authority-id="identifiers.nationalLibraryAuthorityId"
@@ -113,11 +117,11 @@ function selectTab(tab: string | number) {
         <TabsList aria-label="Person record sections" class="gap-2 mt-4">
           <TabsTrigger value="faces">
             <ScanFace class="size-4" aria-hidden="true" /> Faces
-            <span class="font-mono">{{ faces.length }}</span>
+            <span class="font-mono">{{ faceCount }}</span>
           </TabsTrigger>
           <TabsTrigger value="mentions">
             <Image class="size-4" aria-hidden="true" /> Mentions
-            <span class="font-mono">{{ mentions.length }}</span>
+            <span class="font-mono">{{ mentionCount }}</span>
           </TabsTrigger>
           <TabsTrigger value="discover">
             <UserRoundSearch class="size-4" aria-hidden="true" /> Discover
@@ -154,6 +158,7 @@ function selectTab(tab: string | number) {
                 documentId: mention.documentId,
                 pageId: mention.pageId,
               },
+              query: { selectedPerson: personId },
             }"
             class="group block py-6 outline-none"
           >
@@ -170,10 +175,14 @@ function selectTab(tab: string | number) {
             :current-name="profile.name"
             :reference-face-count="faceIds.length"
             :assigning-faces="assignmentStatus === 'pending'"
+            :merging-people="mergeStatus === 'pending'"
+            :merge-succeeded="mergeStatus === 'success'"
+            :merge-failed="mergeStatus === 'error'"
             :loading-faces="isLoadingFaces"
             :loading-people="isLoadingPeople"
             :error="discoveryError"
             @assign-faces="assignFaces"
+            @merge-people="mergePeople"
           />
         </TabsContent>
       </Tabs>

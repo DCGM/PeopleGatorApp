@@ -2,7 +2,7 @@ import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntityResponse, PageResponse } from '@/client'
-import { assignmentType, type AssignmentFilter } from '@/viewmodels/assignment'
+import { pageContentFilter, type PageContentFilter } from '@/viewmodels/assignment'
 import { fetchEntities } from '@/query/entities'
 import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
@@ -41,15 +41,15 @@ export function sourceEntityNames(
 
 export function useDocumentSearch(
   searchTerm: MaybeRefOrGetter<string>,
-  filter: MaybeRefOrGetter<AssignmentFilter>,
+  filter: MaybeRefOrGetter<PageContentFilter>,
   pageSize = 12,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
-  const assignment = computed(() => assignmentType(toValue(filter)))
+  const contentFilter = computed(() => pageContentFilter(toValue(filter)))
   const pageResultsQuery = usePageResultsQuery(
     computed(() => ({
       query: normalizedSearch.value,
-      assignment: assignment.value,
+      ...contentFilter.value,
       limit: pageSize,
     })),
   )
@@ -149,7 +149,6 @@ export function useDocumentSearch(
     isLoading,
     loadMore: pageResultsQuery.fetchNextPage,
     resultCount: computed(() => {
-      if (normalizedSearch.value || assignment.value) return resultSourceIds.value.length
       return pageResultsQuery.data.value?.pages[0]?.totalCount ?? 0
     }),
   }

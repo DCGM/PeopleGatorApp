@@ -36,6 +36,9 @@ const props = defineProps<{
   currentName: string
   referenceFaceCount: number
   assigningFaces?: boolean
+  mergingPeople?: boolean
+  mergeSucceeded?: boolean
+  mergeFailed?: boolean
   loadingFaces?: boolean
   loadingPeople?: boolean
   error?: unknown
@@ -45,10 +48,13 @@ const searchTerm = defineModel<string>('searchTerm', { default: '' })
 
 const emit = defineEmits<{
   assignFaces: [faceIds: string[]]
+  mergePeople: [entityIds: string[]]
 }>()
 
 const selectedFaceIds = ref<Set<string>>(new Set())
+const selectedPersonIds = ref<Set<string>>(new Set())
 const selectionAnchorId = ref<string | null>(null)
+const personSelectionAnchorId = ref<string | null>(null)
 type FaceFilter = 'all' | 'unassigned' | 'assigned'
 const faceFilter = ref<FaceFilter>('all')
 const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
@@ -70,26 +76,37 @@ const assignedFaceCount = computed(() => props.faces.length - unassignedFaceCoun
 const selectedFaces = computed(() =>
   props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
 )
+const selectedPeople = computed(() =>
+  props.people.filter((person) => selectedPersonIds.value.has(person.id)),
+)
+const selectionEnabled = computed(() => selectedFaceIds.value.size > 0)
 const selectedReassignmentCount = computed(
   () => selectedFaces.value.filter((face) => face.assignedEntityId).length,
 )
 
 function toggleFaceSelection(faceId: string, event: MouseEvent) {
-  const faceIndex = props.faces.findIndex((face) => face.id === faceId)
-  const anchorIndex = props.faces.findIndex((face) => face.id === selectionAnchorId.value)
-
-  if (event.shiftKey && anchorIndex >= 0 && faceIndex >= 0) {
+  clearPersonSelection()
+  if (event.shiftKey && addFaceRangeToSelection(faceId)) {
     event.preventDefault()
-    const rangeStart = Math.min(anchorIndex, faceIndex)
-    const rangeEnd = Math.max(anchorIndex, faceIndex)
-    selectedFaceIds.value = new Set([
-      ...selectedFaceIds.value,
-      ...props.faces.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
-    ])
     return
   }
 
   toggleFaceFromControl(faceId)
+}
+
+function addFaceRangeToSelection(faceId: string) {
+  const faceIndex = props.faces.findIndex((face) => face.id === faceId)
+  const anchorIndex = props.faces.findIndex((face) => face.id === selectionAnchorId.value)
+
+  if (anchorIndex < 0 || faceIndex < 0) return false
+
+  const rangeStart = Math.min(anchorIndex, faceIndex)
+  const rangeEnd = Math.max(anchorIndex, faceIndex)
+  selectedFaceIds.value = new Set([
+    ...selectedFaceIds.value,
+    ...props.faces.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
+  ])
+  return true
 }
 
 function toggleFaceFromControl(faceId: string) {
@@ -100,9 +117,62 @@ function toggleFaceFromControl(faceId: string) {
   selectionAnchorId.value = faceId
 }
 
+function addFaceToSelection(faceId: string, event: MouseEvent) {
+  clearPersonSelection()
+  if (event.shiftKey && addFaceRangeToSelection(faceId)) return
+  if (selectedFaceIds.value.has(faceId)) return
+  selectedFaceIds.value = new Set([...selectedFaceIds.value, faceId])
+  selectionAnchorId.value = faceId
+}
+
 function clearFaceSelection() {
   selectedFaceIds.value = new Set()
   selectionAnchorId.value = null
+}
+
+function addPersonRangeToSelection(personId: string) {
+  const personIndex = props.people.findIndex((person) => person.id === personId)
+  const anchorIndex = props.people.findIndex(
+    (person) => person.id === personSelectionAnchorId.value,
+  )
+  if (personIndex < 0 || anchorIndex < 0) return false
+  const start = Math.min(personIndex, anchorIndex)
+  const end = Math.max(personIndex, anchorIndex)
+  selectedPersonIds.value = new Set([
+    ...selectedPersonIds.value,
+    ...props.people.slice(start, end + 1).map((person) => person.id),
+  ])
+  return true
+}
+
+function togglePersonSelection(personId: string, event: MouseEvent) {
+  clearFaceSelection()
+  if (event.shiftKey && addPersonRangeToSelection(personId)) return
+  const nextSelection = new Set(selectedPersonIds.value)
+  if (nextSelection.has(personId)) nextSelection.delete(personId)
+  else nextSelection.add(personId)
+  selectedPersonIds.value = nextSelection
+  personSelectionAnchorId.value = personId
+}
+
+function addPersonToSelection(personId: string, event: MouseEvent) {
+  clearFaceSelection()
+  if (event.shiftKey && addPersonRangeToSelection(personId)) return
+  if (selectedPersonIds.value.has(personId)) return
+  selectedPersonIds.value = new Set([...selectedPersonIds.value, personId])
+  personSelectionAnchorId.value = personId
+}
+
+function clearPersonSelection() {
+  selectedPersonIds.value = new Set()
+  personSelectionAnchorId.value = null
+}
+
+function mergeSelectedPeople() {
+  emit(
+    'mergePeople',
+    selectedPeople.value.map((person) => person.id),
+  )
 }
 
 function assignSelectedFaces() {
@@ -128,6 +198,26 @@ watch(
     if (selectionAnchorId.value && !available.has(selectionAnchorId.value)) {
       selectionAnchorId.value = null
     }
+  },
+)
+
+watch(
+  () => props.people.map((person) => person.id),
+  (availablePersonIds) => {
+    const available = new Set(availablePersonIds)
+    selectedPersonIds.value = new Set(
+      [...selectedPersonIds.value].filter((personId) => available.has(personId)),
+    )
+    if (personSelectionAnchorId.value && !available.has(personSelectionAnchorId.value)) {
+      personSelectionAnchorId.value = null
+    }
+  },
+)
+
+watch(
+  () => props.mergeSucceeded,
+  (succeeded) => {
+    if (succeeded) clearPersonSelection()
   },
 )
 
@@ -200,7 +290,7 @@ function initials(name: string) {
               {{ selectedReassignmentCount }} will be reassigned from another person.
             </template>
             <template v-else>
-              Use the checkboxes to add faces; Shift-click selects a range.
+              Click faces to add them; use the checkboxes to remove them or Shift-select a range.
             </template>
           </p>
         </div>
@@ -235,7 +325,7 @@ function initials(name: string) {
           "
         >
           <RouterLink
-            v-if="face.library && face.documentId && face.pageId"
+            v-if="!selectionEnabled && face.library && face.documentId && face.pageId"
             data-face-selection-target="open"
             :to="{
               name: 'document-page',
@@ -249,6 +339,18 @@ function initials(name: string) {
             class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             :aria-label="`Open face ${face.id} on its source document`"
           ></RouterLink>
+          <button
+            v-else-if="selectionEnabled"
+            type="button"
+            data-face-selection-target="add"
+            class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            :aria-label="
+              selectedFaceIds.has(face.id)
+                ? `Face ${face.id} is selected`
+                : `Add face ${face.id} to selection`
+            "
+            @click="addFaceToSelection(face.id, $event)"
+          ></button>
           <ItemMedia
             variant="image"
             class="relative aspect-square size-auto w-full rounded-none bg-muted"
@@ -376,19 +478,93 @@ function initials(name: string) {
       </div>
 
       <div
+        v-if="selectedPeople.length"
+        class="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-4xl flex-col gap-3 border border-accent bg-card p-3 shadow-lg sm:flex-row sm:items-center sm:justify-between"
+        role="toolbar"
+        aria-label="Selected person actions"
+      >
+        <div class="min-w-0">
+          <p class="font-semibold">
+            {{ selectedPeople.length }}
+            {{ selectedPeople.length === 1 ? 'person' : 'people' }} selected
+          </p>
+          <p class="text-xs text-muted-foreground">
+            Their faces and mentions will move to {{ props.currentName }}. The selected records will
+            be deleted.
+          </p>
+          <p v-if="props.mergeFailed" class="text-xs text-destructive">
+            Merge failed. Check the selected records and try again.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            :disabled="props.mergingPeople"
+            @click="clearPersonSelection"
+            >Clear</Button
+          >
+          <Button
+            type="button"
+            size="sm"
+            :disabled="props.mergingPeople"
+            @click="mergeSelectedPeople"
+          >
+            <LinkIcon aria-hidden="true" />
+            {{ props.mergingPeople ? 'Merging…' : `Merge into ${props.currentName}` }}
+          </Button>
+        </div>
+      </div>
+
+      <div
         v-if="props.people.length"
         class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
         aria-live="polite"
       >
-        <RouterLink
-          v-for="person in props.people"
-          :key="person.id"
-          :to="{ name: 'person-detail', params: { personId: person.id } }"
-          class="group min-w-0 outline-none"
-        >
+        <div v-for="person in props.people" :key="person.id" class="group relative min-w-0">
+          <RouterLink
+            v-if="!selectedPersonIds.size"
+            :to="{ name: 'person-detail', params: { personId: person.id } }"
+            class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :aria-label="`Open ${person.name}`"
+          />
+          <button
+            v-else
+            type="button"
+            :disabled="props.mergingPeople"
+            class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :aria-label="
+              selectedPersonIds.has(person.id)
+                ? `${person.name} is selected`
+                : `Add ${person.name} to selection`
+            "
+            @click="addPersonToSelection(person.id, $event)"
+          ></button>
           <Card
             class="h-full flex-row items-center gap-4 rounded-none p-4 shadow-none transition-colors group-hover:border-accent group-focus-visible:border-ring group-focus-visible:ring-2 group-focus-visible:ring-ring/50"
+            :class="selectedPersonIds.has(person.id) && 'border-secondary bg-secondary/20'"
           >
+            <button
+              type="button"
+              :disabled="props.mergingPeople"
+              class="absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-sm border-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :class="
+                selectedPersonIds.has(person.id)
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:border-accent hover:text-primary'
+              "
+              :aria-label="`${selectedPersonIds.has(person.id) ? 'Remove' : 'Select'} ${person.name} ${selectedPersonIds.has(person.id) ? 'from merge' : 'for merge'}`"
+              :aria-pressed="selectedPersonIds.has(person.id)"
+              @click="togglePersonSelection(person.id, $event)"
+            >
+              <Check v-if="selectedPersonIds.has(person.id)" class="size-4" aria-hidden="true" />
+              <span
+                v-else
+                class="size-2 rounded-full border border-current"
+                aria-hidden="true"
+              ></span>
+            </button>
             <div class="size-16 shrink-0 border bg-muted">
               <LoadableImage
                 :src="person.portrait"
@@ -422,7 +598,7 @@ function initials(name: string) {
               aria-hidden="true"
             />
           </Card>
-        </RouterLink>
+        </div>
       </div>
 
       <div
@@ -436,7 +612,8 @@ function initials(name: string) {
       </div>
 
       <p v-if="props.error" class="mt-4 text-sm text-destructive">
-        The discovery request or face assignment could not be completed. Try again shortly.
+        The discovery request, face assignment, or person merge could not be completed. Try again
+        shortly.
       </p>
     </section>
   </div>

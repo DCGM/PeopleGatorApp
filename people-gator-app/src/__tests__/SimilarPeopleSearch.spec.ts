@@ -24,6 +24,7 @@ describe('similar-people search modes', () => {
     })
     expect(candidateSearchParams(null, '  ')).toBeUndefined()
     expect(candidateSearchParams('face-without-embedding', '')).toBeUndefined()
+    expect(candidateSearchParams('face-1', '', 'face-model', 'page')).toBeUndefined()
   })
 
   it('classifies page membership using assigned faces and person mention spans', () => {

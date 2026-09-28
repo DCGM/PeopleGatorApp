@@ -43,6 +43,15 @@ class ScoreFusion(StrEnum):
 
     rrf = "rrf"  # Reciprocal Rank Fusion
 
+class FaceKeypointType(StrEnum):
+    """Types of keypoints for face detection."""
+
+    left_eye = "left_eye"
+    right_eye = "right_eye"
+    nose = "nose"
+    mouth_left = "left_mouth_corner"
+    mouth_right = "right_mouth_corner"
+
 
 __all__ = [
     "EntityType",
@@ -52,4 +61,5 @@ __all__ = [
     "ScoreAggregation",
     "ScoreFusion",
     "Language",
+    "FaceKeypointType",
 ]

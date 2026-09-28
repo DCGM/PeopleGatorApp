@@ -37,16 +37,18 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
+    "@shadcn/lint": "^0.2.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^24.13.4",
+    "@typescript-eslint/parser": "^8.70.1",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vitest/eslint-plugin": "^1.6.23",
     "@vue/eslint-config-typescript": "^14.9.0",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^10.7.0",
+    "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-oxlint": "~1.82.0",
     "eslint-plugin-vue": "~10.9.2",
@@ -67,5 +69,8 @@
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
+  },
+  "allowScripts": {
+    "vue-demi@0.14.10": true
   }
 }
