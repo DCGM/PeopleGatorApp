@@ -6,10 +6,16 @@ from typing import Any, cast as type_cast
 
 from sqlalchemy import (
     ColumnElement,
+    Float,
+    column,
     delete,
     func,
+    or_,
     select,
+    union_all,
+    values,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import with_polymorphic
@@ -21,6 +27,7 @@ from people_gator_api.persistence.contracts import (
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.missing import (
     MISSING,
+    MissingType,
     missing_to_none,
 )
 from people_gator_api.schemas.search import (
@@ -33,6 +40,7 @@ from people_gator_api.schemas.search import (
 )
 from people_gator_api.schemas.sources import (
     DocumentResponse,
+    GenericSourceListFilter,
     GenericSourceCreateRequest,
     GenericSourceListRequest,
     GenericSourceListResponse,
@@ -41,10 +49,15 @@ from people_gator_api.schemas.sources import (
     PageResponse,
 )
 from people_gator_api.models import (
+    Alias,
     Document,
+    Entity,
+    Face,
     Image,
+    ImageOccurrence,
     Page,
     Source,
+    TextMention,
 )
 from people_gator_api.persistence.postgres.utils import (
     aggregate_scores,
@@ -55,10 +68,14 @@ from people_gator_api.persistence.postgres.utils import (
     decode_cursor,
     next_cursor,
     fuse_scores,
+    entity_text_candidates,
     search_page,
     source_response,
     source_filters,
 )
+
+SOURCE_TEXT_CANDIDATE_LIMIT = 200
+
 
 class PostgresSourceRepository(SourceRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -226,18 +243,120 @@ class PostgresSourceRepository(SourceRepository):
             return {}
         collected: dict[uuid.UUID, list[float]] = {}
         for term in terms:
-            score = func.greatest(
-                func.similarity(Source.url, term),
-                func.similarity(model.library, term),
+            # Exact archive identifiers remain useful alongside entity names.
+            # These predicates use the URL and library btree indexes instead of
+            # calculating trigram similarity for every source in the library.
+            direct = await self._session.scalars(
+                select(model.id)
+                .where(*filters, or_(Source.url == term, model.library == term))
+                .order_by(model.id)
+                .limit(SOURCE_TEXT_CANDIDATE_LIMIT)
             )
-            rows = await self._session.execute(
-                select(model.id, score.label("score")).where(*filters)
+            term_scores = {source_id: 1.0 for source_id in direct.all()}
+
+            normalized_term = func.lower(func.unaccent(term))
+            candidate_ids = entity_text_candidates(normalized_term, [])
+            entity_score = func.greatest(
+                func.word_similarity(
+                    normalized_term, func.coalesce(Entity.name_normalized, "")
+                ),
+                func.coalesce(
+                    func.max(
+                        func.word_similarity(normalized_term, Alias.name_normalized)
+                    ),
+                    0.0,
+                ),
             )
-            for item_id, raw_score in rows.all():
-                value = float(raw_score)
-                if value > 0:
-                    collected.setdefault(item_id, []).append(value)
+            entity_rows = await self._session.execute(
+                select(Entity.id, entity_score.label("score"))
+                .outerjoin(Alias, Alias.entity_id == Entity.id)
+                .where(Entity.id.in_(candidate_ids))
+                .group_by(Entity.id)
+            )
+            matched_entities = [
+                (entity_id, float(score))
+                for entity_id, score in entity_rows.all()
+                if float(score) > 0
+            ]
+            if matched_entities:
+                for source_id, score in await self._entity_source_scores(
+                    model, matched_entities, filters
+                ):
+                    term_scores[source_id] = max(term_scores.get(source_id, 0.0), score)
+            for source_id, score in term_scores.items():
+                collected.setdefault(source_id, []).append(score)
         return aggregate_scores(collected, query.query.score_aggregation)
+
+    async def _entity_source_scores(
+        self,
+        model: type[Page] | type[Document],
+        matched_entities: list[tuple[uuid.UUID, float]],
+        filters: Sequence[ColumnElement[bool]],
+    ) -> list[tuple[uuid.UUID, float]]:
+        """Resolve bounded entity matches to sources through their occurrences."""
+        entity_scores = (
+            values(
+                column("entity_id", UUID(as_uuid=True)),
+                column("score", Float),
+                name="matched_entity_scores",
+            )
+            .data(matched_entities)
+            .cte("matched_entity_scores")
+        )
+        mentions = select(
+            TextMention.source_id.label("source_id"), entity_scores.c.score
+        ).join(entity_scores, entity_scores.c.entity_id == TextMention.entity_id)
+        faces = (
+            select(ImageOccurrence.source_id.label("source_id"), entity_scores.c.score)
+            .select_from(ImageOccurrence)
+            .join(Face.__table__, Face.__table__.c.id == ImageOccurrence.id)
+            .join(entity_scores, entity_scores.c.entity_id == ImageOccurrence.entity_id)
+        )
+        if model is Document:
+            # Mentions and faces live on pages; surface their parent document too.
+            pages = Page.__table__
+            documents = Document.__table__
+            mention_pages = (
+                select(documents.c.id.label("source_id"), entity_scores.c.score)
+                .select_from(entity_scores)
+                .join(TextMention, TextMention.entity_id == entity_scores.c.entity_id)
+                .join(pages, pages.c.id == TextMention.source_id)
+                .join(
+                    documents,
+                    (documents.c.library == pages.c.library)
+                    & (documents.c.document_id == pages.c.document_id),
+                )
+            )
+            face_pages = (
+                select(documents.c.id.label("source_id"), entity_scores.c.score)
+                .select_from(entity_scores)
+                .join(
+                    ImageOccurrence,
+                    ImageOccurrence.entity_id == entity_scores.c.entity_id,
+                )
+                .join(Face.__table__, Face.__table__.c.id == ImageOccurrence.id)
+                .join(pages, pages.c.id == ImageOccurrence.source_id)
+                .join(
+                    documents,
+                    (documents.c.library == pages.c.library)
+                    & (documents.c.document_id == pages.c.document_id),
+                )
+            )
+            links = union_all(mentions, faces, mention_pages, face_pages).subquery(
+                "entity_source_links"
+            )
+        else:
+            links = union_all(mentions, faces).subquery("entity_source_links")
+        score = func.max(links.c.score)
+        rows = await self._session.execute(
+            select(model.id, score.label("score"))
+            .join(links, links.c.source_id == model.id)
+            .where(*filters)
+            .group_by(model.id)
+            .order_by(score.desc(), model.id)
+            .limit(SOURCE_TEXT_CANDIDATE_LIMIT)
+        )
+        return [(source_id, float(raw_score)) for source_id, raw_score in rows.all()]
 
     async def _source_face_scores(
         self,
@@ -280,14 +399,39 @@ class PostgresSourceRepository(SourceRepository):
         )
         return page, cursor, len(ranked)
 
+    @staticmethod
+    def _search_filters(
+        model: type[Page] | type[Document],
+        generic_filter: GenericSourceListFilter | MissingType,
+    ) -> list[ColumnElement[bool]]:
+        filter_values = missing_to_none(generic_filter)
+        source_kind = SourceKind.page if model is Page else SourceKind.document
+        if filter_values is None:
+            return [Source.source_type == source_kind.value]
+        base = filter_values.model_copy(
+            update={"library": MISSING, "document_id": MISSING, "page_id": MISSING}
+        )
+        filters = source_filters(base)
+        libraries = missing_to_none(filter_values.library)
+        if libraries is not None:
+            filters.append(model.library.in_(libraries))
+        document_ids = missing_to_none(filter_values.document_id)
+        if document_ids is not None:
+            filters.append(model.document_id.in_(document_ids))
+        if model is Page:
+            page_ids = missing_to_none(filter_values.page_id)
+            if page_ids is not None:
+                filters.append(Page.page_id.in_(page_ids))
+        filters.append(Source.source_type == source_kind.value)
+        return filters
+
     async def search_pages(
         self, query: SearchPagesRequest
     ) -> SearchPagesResultListResponse:
         generic_filter = (
             query.filter_.to_generic() if query.filter_ is not None else MISSING
         )
-        filters = source_filters(generic_filter)
-        filters.append(Source.source_type == SourceKind.page.value)
+        filters = self._search_filters(Page, generic_filter)
         page, cursor, total = await self._search_sources(Page, query, filters)
         rows = await self._session.scalars(
             select(Page).where(Page.id.in_([x[0] for x in page]))
@@ -317,8 +461,7 @@ class PostgresSourceRepository(SourceRepository):
         generic_filter = (
             query.filter_.to_generic() if query.filter_ is not None else MISSING
         )
-        filters = source_filters(generic_filter)
-        filters.append(Source.source_type == SourceKind.document.value)
+        filters = self._search_filters(Document, generic_filter)
         page, cursor, total = await self._search_sources(Document, query, filters)
         rows = await self._session.scalars(
             select(Document).where(Document.id.in_([x[0] for x in page]))
