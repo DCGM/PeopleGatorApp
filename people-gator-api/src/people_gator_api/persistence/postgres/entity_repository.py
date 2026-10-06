@@ -40,7 +40,7 @@ from people_gator_api.schemas.search import (
     SearchEntitiesRequest,
     SearchEntitiesResultListResponse,
 )
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     Alias,
     Entity,
     ImageOccurrence,

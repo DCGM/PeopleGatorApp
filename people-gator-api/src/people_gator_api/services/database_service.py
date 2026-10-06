@@ -28,7 +28,7 @@ from sqlalchemy import URL
 
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.persistence.postgres import postgres_database
-from people_gator_api.models import Base
+from people_gator_api.persistence.postgres.models import Base
 
 from people_gator_api.settings import settings
 from people_gator_api.utils.opentelemetry import instrument_sqlalchemy_engine

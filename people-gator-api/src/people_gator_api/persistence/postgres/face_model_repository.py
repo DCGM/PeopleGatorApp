@@ -10,7 +10,7 @@ from people_gator_api.schemas.face_models import (
     FaceModelResponse,
 )
 from sqlalchemy import select
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     FaceModel,
     face_embedding_hnsw_index,
 )

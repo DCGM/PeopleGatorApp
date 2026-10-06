@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
-from people_gator_api.models import Entity, FaceModel, Page, face_embedding_hnsw_index
+from people_gator_api.persistence.postgres.models import Entity, FaceModel, Page, face_embedding_hnsw_index
 from people_gator_api.persistence.postgres import (
     PostgresEntityRepository,
     PostgresFaceModelRepository,

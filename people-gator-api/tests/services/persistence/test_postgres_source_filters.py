@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
-from people_gator_api.models import Source
+from people_gator_api.persistence.postgres.models import Source
 from people_gator_api.persistence.postgres.utils import source_filters
 from people_gator_api.schemas.sources import PageListFilter
 

@@ -22,27 +22,30 @@ WEAVIATE = {
 
 
 def test_postgres_is_default_with_optional_weaviate() -> None:
-    config = PersistenceSettings(postgres=POSTGRES)
+    config = PersistenceSettings.model_validate({"postgres": POSTGRES})
     assert config.backend == "postgres"
     assert config.weaviate is None
     assert isinstance(config.postgres, PersistenceBaseSetting)
-    assert PersistenceSettings(postgres=POSTGRES, weaviate=WEAVIATE).backend == "postgres"
+    assert (
+        PersistenceSettings.model_validate({"postgres": POSTGRES, "weaviate": WEAVIATE}).backend
+        == "postgres"
+    )
 
 
 @pytest.mark.parametrize("postgres_enabled,weaviate_enabled", [(False, False), (True, True)])
 def test_requires_exactly_one_backend(postgres_enabled: bool, weaviate_enabled: bool) -> None:
     with pytest.raises(ValidationError, match="Exactly one persistence backend"):
-        PersistenceSettings(
-            postgres={**POSTGRES, "enabled": postgres_enabled},
-            weaviate={**WEAVIATE, "enabled": weaviate_enabled},
-        )
+        PersistenceSettings.model_validate({
+            "postgres": {**POSTGRES, "enabled": postgres_enabled},
+            "weaviate": {**WEAVIATE, "enabled": weaviate_enabled},
+        })
 
 
 def test_missing_backend_and_connection_fields_are_rejected() -> None:
     with pytest.raises(ValidationError, match="Exactly one persistence backend"):
-        PersistenceSettings()
+        PersistenceSettings.model_validate({})
     with pytest.raises(ValidationError):
-        PersistenceSettings(weaviate={"enabled": True})
+        PersistenceSettings.model_validate({"weaviate": {"enabled": True}})
 
 
 def test_weaviate_environment_without_postgres(monkeypatch: pytest.MonkeyPatch) -> None:

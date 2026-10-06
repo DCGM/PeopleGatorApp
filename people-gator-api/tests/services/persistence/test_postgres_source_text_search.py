@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
-from people_gator_api.models import Document, Page
+from people_gator_api.persistence.postgres.models import Document, Page
 from people_gator_api.persistence.postgres import PostgresSourceRepository
 from people_gator_api.schemas.search import QueryBase, SearchPagesRequest
 from people_gator_api.schemas.sources import DocumentListFilter, PageListFilter

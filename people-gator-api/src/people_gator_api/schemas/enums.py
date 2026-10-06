@@ -1,6 +1,12 @@
 from enum import StrEnum
 
-from people_gator_api.languages import Language
+
+class Language(StrEnum):
+    """Languages supported by the translation endpoint."""
+
+    czech = "cs"
+    english = "en"
+    german = "de"
 
 
 class EntityType(StrEnum):

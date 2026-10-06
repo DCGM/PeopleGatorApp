@@ -98,7 +98,7 @@ from people_gator_api.schemas.users import (
     UserResponse,
 )
 from people_gator_api.utils.opentelemetry import trace
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     Alias,
     Document,
     Entity,

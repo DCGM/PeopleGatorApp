@@ -11,7 +11,7 @@ from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
 )
-from people_gator_api.languages import Language
+from people_gator_api.schemas.enums import Language
 
 
 class OpenTelemetrySettings(BaseModel):

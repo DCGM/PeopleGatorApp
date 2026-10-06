@@ -28,7 +28,7 @@ from people_gator_api.schemas.users import (
     UserPatchRequest,
     UserResponse,
 )
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     Entity,
     Face,
     User,

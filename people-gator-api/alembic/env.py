@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.schema import Index, SchemaItem
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from people_gator_api.models import Base, INDEX_NAME_PREFIX
+from people_gator_api.persistence.postgres.models import Base, INDEX_NAME_PREFIX
 from people_gator_api.settings import settings
 
 

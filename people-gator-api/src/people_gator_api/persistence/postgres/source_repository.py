@@ -48,7 +48,7 @@ from people_gator_api.schemas.sources import (
     GenericSourceResponse,
     PageResponse,
 )
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     Alias,
     Document,
     Entity,

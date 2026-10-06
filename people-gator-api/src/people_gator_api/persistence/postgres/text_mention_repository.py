@@ -24,7 +24,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionPatchRequest,
     TextMentionResponse,
 )
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     Entity,
     Source,
     TextMention,

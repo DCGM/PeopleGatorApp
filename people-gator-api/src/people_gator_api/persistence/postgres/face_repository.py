@@ -35,7 +35,7 @@ from people_gator_api.schemas.search import (
     SearchFacesRequest,
     SearchFacesResultListResponse,
 )
-from people_gator_api.models import (
+from people_gator_api.persistence.postgres.models import (
     Alias,
     Entity,
     Face,
