@@ -24,7 +24,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from people_gator_api.media.errors import SourceResolutionError
-from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
+from people_gator_api.services.filesystem_service import read_bytes, write_bytes
 from people_gator_api.settings import PageImageCacheSettings, settings
 
 
@@ -105,7 +105,9 @@ def _render_jpeg(data: bytes, width: int, quality: int) -> bytes:
         return buffer.getvalue()
 
 
-def _is_missing_object(exc: ClientError) -> bool:
+def _is_missing_object(exc: ClientError | FileNotFoundError) -> bool:
+    if isinstance(exc, FileNotFoundError):
+        return True
     code = exc.response.get("Error", {}).get("Code")
     return code in {"404", "NoSuchKey", "NotFound"}
 
@@ -114,11 +116,11 @@ async def _read_cache(key: str) -> bytes | None:
     """Return cached bytes or ``None`` when the derivative is not stored."""
     try:
         return await read_bytes(key)
-    except ClientError as exc:
+    except (ClientError, FileNotFoundError) as exc:
         if not _is_missing_object(exc):
             logger.warning("page image cache read failed", extra={"key": key})
         return None
-    except BotoCoreError:
+    except (BotoCoreError, OSError):
         logger.warning("page image cache read failed", extra={"key": key})
         return None
 
@@ -127,7 +129,7 @@ async def _write_cache(key: str, data: bytes) -> None:
     """Upload a derivative to the cache prefix (best effort)."""
     try:
         await write_bytes(key, data)
-    except (ClientError, BotoCoreError):
+    except (ClientError, BotoCoreError, OSError):
         logger.warning("page image cache write failed", extra={"key": key})
 
 
@@ -147,7 +149,7 @@ async def _read_original(key: str) -> bytes:
     """Read an original page scan and translate a missing object to a 404."""
     try:
         return await read_bytes(key)
-    except ClientError as exc:
+    except (ClientError, FileNotFoundError) as exc:
         logger.info("page image not found", extra={"key": key})
         raise SourceResolutionError(
             "Page image not found",

@@ -11,7 +11,7 @@ from joserfc.jwk import (
 from joserfc.jws import JWSRegistry
 from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, encode, decode
 from starlette import status
-from people_gator_api.services.s3_filesystem import open_file
+from people_gator_api.services.filesystem_service import open_file
 from people_gator_api.settings import settings
 
 

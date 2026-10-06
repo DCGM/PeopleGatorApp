@@ -31,7 +31,7 @@ from people_gator_api.schemas.sources import GenericSourceResponse
 from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.image_content import get_image_content
 from people_gator_api.media.page_image import get_page_image
-from people_gator_api.services.s3_filesystem import read_bytes, write_bytes
+from people_gator_api.services.filesystem_service import read_bytes, write_bytes
 from people_gator_api.settings import AlignedFaceCropSettings, settings
 from people_gator_api.utils.opentelemetry import trace
 
@@ -109,7 +109,9 @@ def _cache_key(
     )
 
 
-def _is_missing_object(exc: ClientError) -> bool:
+def _is_missing_object(exc: ClientError | FileNotFoundError) -> bool:
+    if isinstance(exc, FileNotFoundError):
+        return True
     code = exc.response.get("Error", {}).get("Code")
     return code in {"404", "NoSuchKey", "NotFound"}
 
@@ -118,11 +120,11 @@ async def _read_cache(key: str) -> bytes | None:
     """Return cached crop bytes, treating cache errors as misses."""
     try:
         return await read_bytes(key)
-    except ClientError as exc:
+    except (ClientError, FileNotFoundError) as exc:
         if not _is_missing_object(exc):
             logger.warning("aligned face crop cache read failed", extra={"key": key})
         return None
-    except BotoCoreError:
+    except (BotoCoreError, OSError):
         logger.warning("aligned face crop cache read failed", extra={"key": key})
         return None
 
@@ -131,7 +133,7 @@ async def _write_cache(key: str, data: bytes) -> None:
     """Store crop bytes without allowing cache failures to fail the request."""
     try:
         await write_bytes(key, data)
-    except (ClientError, BotoCoreError):
+    except (ClientError, BotoCoreError, OSError):
         logger.warning("aligned face crop cache write failed", extra={"key": key})
 
 

@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 from botocore.exceptions import ClientError
 
 from people_gator_api.media.errors import SourceResolutionError
-from people_gator_api.services.s3_filesystem import read_bytes
+from people_gator_api.services.filesystem_service import read_bytes
 from people_gator_api.settings import settings
 
 
@@ -58,7 +58,7 @@ async def get_image_content(
     key = image_content_key(url)
     try:
         content = await read_bytes(key)
-    except ClientError as exc:
+    except (ClientError, FileNotFoundError) as exc:
         logger.info("image content not found", extra={"key": key})
         raise SourceResolutionError(
             "Image not found",

@@ -1,7 +1,11 @@
+from pathlib import Path
+from typing import Literal, Self
+
 from pydantic import (
     BaseModel,
     Field,
     computed_field,
+    model_validator,
 )
 from pydantic_settings import (
     BaseSettings,
@@ -58,8 +62,22 @@ class S3Settings(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
 
 
+class LocalStorageSettings(BaseModel):
+    """Root directory for local object storage."""
+
+    root: Path = Path("./storage")
+
+
 class StorageSettings(BaseModel):
-    s3: S3Settings
+    backend: Literal["s3", "local"] = "s3"
+    s3: S3Settings | None = None
+    local: LocalStorageSettings = Field(default_factory=LocalStorageSettings)
+
+    @model_validator(mode="after")
+    def validate_backend(self) -> Self:
+        if self.backend == "s3" and self.s3 is None:
+            raise ValueError("storage.s3 is required when storage.backend is 's3'")
+        return self
 
 
 class ImageContentSettings(BaseModel):

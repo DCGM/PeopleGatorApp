@@ -49,6 +49,7 @@ dependencies = [
     "uuid6>=2025.0.1",
     "uvicorn>=0.46.0",
     "weaviate-client>=4.21.2",
+    "aiofile>=3.12.3",
 ]
 
 [project.scripts]

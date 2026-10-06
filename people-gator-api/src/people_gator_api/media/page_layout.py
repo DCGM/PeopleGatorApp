@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from people_gator_api.schemas.pero import PageLayoutModel
 from people_gator_api.media.errors import SourceResolutionError
-from people_gator_api.services.s3_filesystem import open_file
+from people_gator_api.services.filesystem_service import open_file
 from people_gator_api.settings import settings
 from people_gator_api.utils.opentelemetry import trace
 
@@ -47,7 +47,7 @@ async def get_page_layout(
     try:
         async with open_file(key, mode="r") as f:
             raw = f.read()
-    except ClientError as exc:
+    except (ClientError, FileNotFoundError) as exc:
         logger.info("page layout not found", extra={"key": key})
         raise SourceResolutionError(
             "Page layout not found",
@@ -78,7 +78,7 @@ async def put_page_layout(
     try:
         async with open_file(key, mode="w") as f:
             f.write(payload)
-    except ClientError as exc:
+    except (ClientError, OSError) as exc:
         logger.exception("failed to upload page layout", extra={"key": key})
         raise SourceResolutionError(
             "Failed to store page layout",

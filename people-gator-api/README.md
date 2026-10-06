@@ -19,6 +19,20 @@ This repository keeps specification content in focused documents to avoid contra
 - All collection endpoints use the contract list envelope: `items`, opaque
   string `cursor`, `limit`, and optional `total_count`.
 
+## Filesystem storage
+
+Storage defaults to S3. To use local storage instead, configure:
+
+```dotenv
+PEOPLE_GATOR_API__STORAGE__BACKEND=local
+PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/var/lib/people-gator/storage
+```
+
+Local mode does not require S3 credentials. Services use `get_filesystem()` and
+FastAPI routes can inject `FilesystemDependency` from
+`people_gator_api.services.filesystem_service`. See the
+[filesystem documentation](src/people_gator_api/filesystem/README.md) for usage.
+
 ## Authority Import
 
 Authority ingestion CLI now lives in `people-gator-common` as `people-gator-import-authorities`.
