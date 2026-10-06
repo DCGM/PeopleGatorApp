@@ -1,6 +1,12 @@
+from typing import cast
 import uuid
 
-from people_gator_api.schemas.faces import BoundingBox, FaceResponse, Keypoint
+from people_gator_api.schemas.faces import (
+    BoundingBox,
+    FaceResponse,
+    FaceKeypoint,
+    FaceKeypointType,
+)
 
 
 def _face_response(**changes: object) -> FaceResponse:
@@ -9,8 +15,8 @@ def _face_response(**changes: object) -> FaceResponse:
         "source_id": uuid.uuid4(),
         "bounding_box": BoundingBox(x=1, y=2, width=3, height=4),
         "keypoints": [
-            Keypoint(type=f"k{index}", x=float(index), y=float(index))
-            for index in range(5)
+            FaceKeypoint(type=cast(FaceKeypointType, keypoint_type), x=float(index), y=float(index))
+            for index, keypoint_type in enumerate(["left_eye", "right_eye", "nose", "right_mouth_corner", "left_mouth_corner"])
         ],
         "user_id": uuid.uuid4(),
         "confidence": 0.9,

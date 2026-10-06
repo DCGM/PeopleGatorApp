@@ -3,7 +3,7 @@ from typing import Any, cast
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from people_gator_api.settings import BatchSettings, batch_settings
+from people_gator_api.settings import Settings, BatchSettings, settings
 from people_gator_api.schemas.entities import (
     MAX_ENTITY_BATCH_SIZE,
     EntityBatchCreateRequest,
@@ -27,13 +27,13 @@ def _max_items(annotation: Any) -> int:
 
 
 def test_batch_schema_limits_come_from_settings() -> None:
-    assert MAX_ENTITY_BATCH_SIZE == batch_settings.max_entity_batch_size
-    assert MAX_FACE_BATCH_SIZE == batch_settings.max_face_batch_size
+    assert MAX_ENTITY_BATCH_SIZE == settings.batch.max_entity_batch_size
+    assert MAX_FACE_BATCH_SIZE == settings.batch.max_face_batch_size
     assert (
         MAX_TEXT_MENTION_BATCH_SIZE
-        == batch_settings.max_text_mention_batch_size
+        == settings.batch.max_text_mention_batch_size
     )
-    assert MAX_MEDIA_BATCH_SIZE == batch_settings.max_media_batch_size
+    assert MAX_MEDIA_BATCH_SIZE == settings.batch.max_media_batch_size
 
     assert _max_items(EntityBatchCreateRequest) == MAX_ENTITY_BATCH_SIZE
     assert _max_items(FacesBatchCreateRequest) == MAX_FACE_BATCH_SIZE
@@ -50,10 +50,14 @@ def test_batch_settings_support_environment_overrides(
     monkeypatch.setenv(
         "PEOPLE_GATOR_API__BATCH__MAX_ENTITY_BATCH_SIZE", "37"
     )
+    monkeypatch.setenv(
+        "PEOPLE_GATOR_API__BATCH__MAX_FACE_BATCH_SIZE", "42"
+    )
 
-    configured = BatchSettings()
+    settings = Settings() # type: ignore[reportGeneralTypeIssues]
 
-    assert configured.max_entity_batch_size == 37
+    assert settings.batch.max_entity_batch_size == 37
+    assert settings.batch.max_face_batch_size == 42
 
 
 def test_batch_settings_require_positive_sizes() -> None:

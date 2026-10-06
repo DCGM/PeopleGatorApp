@@ -49,8 +49,8 @@ class FaceKeypointType(StrEnum):
     left_eye = "left_eye"
     right_eye = "right_eye"
     nose = "nose"
-    mouth_left = "left_mouth_corner"
-    mouth_right = "right_mouth_corner"
+    left_mouth_corner = "left_mouth_corner"
+    right_mouth_corner = "right_mouth_corner"
 
 
 __all__ = [

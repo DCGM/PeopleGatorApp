@@ -118,7 +118,7 @@ def test_media_batch_routes_expose_bounded_array_interfaces() -> None:
         ]["schema"]
 
         assert request_schema["type"] == "array"
-        assert request_schema["maxItems"] == 1_000
+        assert request_schema["maxItems"] == 10_000
         assert response_schema["type"] == "array"
         assert response_schema["items"] == {
             "$ref": f"#/components/schemas/{response_schema_name}"

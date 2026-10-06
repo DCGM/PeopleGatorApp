@@ -4,6 +4,7 @@ import os
 from types import SimpleNamespace
 import uuid
 
+from pydantic import AnyUrl
 import pytest
 from fastapi import HTTPException
 
@@ -38,6 +39,7 @@ from people_gator_api.schemas.users import UserResponse
 
 class FakeSources:
     def __init__(self) -> None:
+        super().__init__()
         self.objects: dict[uuid.UUID, SourceResponseBase] = {}
 
     async def get_source(self, source_id: uuid.UUID) -> SourceResponseBase | None:
@@ -77,7 +79,7 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
     sources.objects[source_id] = SourceResponseBase(
         source_id=source_id,
         source_type=SourceKind.image,
-        url=url,
+        url=AnyUrl(url),
     )
 
     fetched = await get_source_route(

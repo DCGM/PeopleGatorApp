@@ -50,8 +50,8 @@ _REQUIRED_KEYPOINT_TYPES = (
     FaceKeypointType.left_eye,
     FaceKeypointType.right_eye,
     FaceKeypointType.nose,
-    FaceKeypointType.mouth_left,
-    FaceKeypointType.mouth_right,
+    FaceKeypointType.left_mouth_corner,
+    FaceKeypointType.right_mouth_corner,
 )
 
 # Standard ArcFace 5-point reference template for a 112x112 output canvas.

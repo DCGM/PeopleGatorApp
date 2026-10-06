@@ -29,7 +29,7 @@ from botocore.exceptions import ClientError
 from pydantic import AnyUrl
 
 from people_gator_api.schemas.enums import SourceKind
-from people_gator_api.schemas.faces import BoundingBox, FaceResponse, Keypoint
+from people_gator_api.schemas.faces import BoundingBox, FaceResponse, FaceKeypoint, FaceKeypointType
 from people_gator_api.schemas.sources import GenericSourceResponse, page_url
 from people_gator_api.media import aligned_face_crop
 from people_gator_api.media.aligned_face_crop import (
@@ -50,11 +50,11 @@ def _face(*, left_eye_x: float = 38.0) -> FaceResponse:
         source_id=_SOURCE_ID,
         bounding_box=BoundingBox(x=10, y=20, width=100, height=100),
         keypoints=[
-            Keypoint(type="left_eye", x=left_eye_x, y=52.0),
-            Keypoint(type="right_eye", x=74.0, y=52.0),
-            Keypoint(type="nose", x=56.0, y=72.0),
-            Keypoint(type="left_mouth_corner", x=42.0, y=92.0),
-            Keypoint(type="right_mouth_corner", x=71.0, y=92.0),
+            FaceKeypoint(type=FaceKeypointType.left_eye, x=left_eye_x, y=52.0),
+            FaceKeypoint(type=FaceKeypointType.right_eye, x=74.0, y=52.0),
+            FaceKeypoint(type=FaceKeypointType.nose, x=56.0, y=72.0),
+            FaceKeypoint(type=FaceKeypointType.left_mouth_corner, x=42.0, y=92.0),
+            FaceKeypoint(type=FaceKeypointType.right_mouth_corner, x=71.0, y=92.0),
         ],
         user_id=_USER_ID,
         confidence=0.99,

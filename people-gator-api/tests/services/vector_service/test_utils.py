@@ -169,7 +169,7 @@ async def test_fetch_collection_page_with_total_count_skips_object_fetch_for_zer
     client = types.SimpleNamespace(collections=_Collections())
 
     objects, total_count = await module.fetch_collection_page_with_total_count(
-        client,  # type: ignore[reportArgumentType] - test double for WeaviateAsyncClient
+        client,
         collection_name="ignored",
         filters=None,
         limit=0,

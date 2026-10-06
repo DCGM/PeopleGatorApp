@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from people_gator_api.schemas.enums import (
-    AssignmentType,
     EntityType,
     FaceEmbeddingModel,
     ScoreAggregation,
