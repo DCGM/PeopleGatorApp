@@ -22,10 +22,12 @@ from people_gator_api.persistence.postgres import (
     PostgresSourceRepository,
     PostgresTextMentionRepository,
     PostgresUserRepository,
-    _cursor_fingerprint,
-    _decode_cursor,
-    _encode_cursor,
     postgres_database,
+)
+from people_gator_api.persistence.postgres.utils import (
+    cursor_fingerprint as _cursor_fingerprint,
+    decode_cursor as _decode_cursor,
+    encode_cursor as _encode_cursor,
 )
 from people_gator_api.schemas.entities import EntityListFilter, EntityListRequest
 

@@ -41,7 +41,13 @@ class CorsSettings(BaseModel):
     allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
 
 
-class PostgresSettings(BaseModel):
+class PersistenceBaseSetting(BaseModel):
+    """Shared configuration for a persistence backend."""
+
+    enabled: bool = True
+
+
+class PostgresSettings(PersistenceBaseSetting):
     """PostgreSQL database connection settings."""
 
     host: str
@@ -51,7 +57,13 @@ class PostgresSettings(BaseModel):
     database: str
 
 
-class S3Settings(BaseModel):
+class FilesystemBaseSetting(BaseModel):
+    """Shared configuration for a filesystem backend."""
+
+    enabled: bool = True
+
+
+class S3Settings(FilesystemBaseSetting):
     """S3 storage settings."""
 
     access_key_id: str
@@ -62,22 +74,33 @@ class S3Settings(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
 
 
-class LocalStorageSettings(BaseModel):
+class LocalStorageSettings(FilesystemBaseSetting):
     """Root directory for local object storage."""
 
+    enabled: bool = False
     root: Path = Path("./storage")
 
 
 class StorageSettings(BaseModel):
-    backend: Literal["s3", "local"] = "s3"
+    model_config = {"extra": "forbid"}
     s3: S3Settings | None = None
     local: LocalStorageSettings = Field(default_factory=LocalStorageSettings)
 
     @model_validator(mode="after")
     def validate_backend(self) -> Self:
-        if self.backend == "s3" and self.s3 is None:
-            raise ValueError("storage.s3 is required when storage.backend is 's3'")
+        enabled_count = sum(
+            config is not None and config.enabled
+            for config in (self.s3, self.local)
+        )
+        if enabled_count != 1:
+            raise ValueError("Exactly one filesystem backend must be enabled")
         return self
+
+
+    @property
+    def backend(self) -> Literal["s3", "local"]:
+        """Backend selected by the validated enabled flags."""
+        return "local" if self.local.enabled else "s3"
 
 
 class ImageContentSettings(BaseModel):
@@ -131,7 +154,8 @@ class JwkSettings(BaseModel):
     cache_ttl_seconds: int = Field(default=3600, gt=0)
 
 
-class WeaviateSettings(BaseModel):
+class WeaviateSettings(PersistenceBaseSetting):
+    enabled: bool = False
     http_host: str
     http_port: int = Field(le=65535, ge=1)
     http_secure: bool
@@ -144,8 +168,26 @@ class WeaviateSettings(BaseModel):
 
 
 class PersistenceSettings(BaseModel):
-    postgres: PostgresSettings
-    weaviate: WeaviateSettings
+    """Configure exactly one enabled persistence backend."""
+
+    postgres: PostgresSettings | None = None
+    weaviate: WeaviateSettings | None = None
+
+    @model_validator(mode="after")
+    def validate_backend(self) -> Self:
+        enabled_count = sum(
+            config is not None and config.enabled
+            for config in (self.postgres, self.weaviate)
+        )
+        if enabled_count != 1:
+            raise ValueError("Exactly one persistence backend must be enabled")
+        return self
+
+    @property
+    def backend(self) -> Literal["postgres", "weaviate"]:
+        """Backend selected by the validated enabled flags."""
+        return "postgres" if self.postgres is not None and self.postgres.enabled else "weaviate"
+
 
 
 class EmbeddingServiceSettings(BaseModel):

@@ -1,6 +1,6 @@
 import re
 
-from people_gator_api import weaviate_schema
+from people_gator_api.persistence.weaviate import schema as weaviate_schema
 
 
 def test_source_schema_stores_archive_identity_at_top_level() -> None:

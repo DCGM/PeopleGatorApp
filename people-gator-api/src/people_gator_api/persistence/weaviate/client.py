@@ -1,28 +1,32 @@
-"""Weaviate async client lifecycle management."""
+"""Weaviate client construction and collection schema management."""
 
 import asyncio
 import logging
-import time
 
 import weaviate
 from weaviate import WeaviateAsyncClient
-from weaviate.classes.config import Property, ReferenceProperty
+from weaviate.classes.config import (
+    Configure,
+    Property,
+    ReferenceProperty,
+    VectorDistances,
+)
 from weaviate.classes.init import Auth
 
-from people_gator_api.settings import settings
-from people_gator_api.weaviate_schema import (
+from people_gator_api.persistence.weaviate.schema import (
     ADDITIVE_PROPERTY_MIGRATIONS,
     ALL_COLLECTION_SPECS,
     CollectionSpec,
 )
+from people_gator_api.settings import settings
 
 logger = logging.getLogger(__name__)
-
-_client: WeaviateAsyncClient | None = None
 
 
 def _build_client() -> WeaviateAsyncClient:
     cfg = settings.persistence.weaviate
+    if cfg is None:
+        raise ValueError("Weaviate requires persistence.weaviate configuration")
     auth = Auth.api_key(cfg.api_key) if cfg.api_key else None
     return weaviate.use_async_with_custom(
         http_host=cfg.http_host,
@@ -40,91 +44,12 @@ def build_weaviate_client() -> WeaviateAsyncClient:
     return _build_client()
 
 
-async def init_weaviate() -> None:
-    """Connect the async Weaviate client and ensure collection schemas exist.
-
-    Call once during application startup (e.g. from FastAPI lifespan).
-    """
-    global _client  # noqa: PLW0603
-    if _client is not None:
-        return
-
-    cfg = settings.persistence.weaviate
-    deadline = time.monotonic() + cfg.startup_timeout_seconds
-    attempt = 0
-    while True:
-        attempt += 1
-        candidate = _build_client()
-        try:
-            await candidate.connect()
-            await _ensure_collections(candidate)
-        except Exception as exc:
-            # A failed connect can still allocate HTTP/gRPC resources. Close
-            # the whole candidate and build a fresh client for the next try.
-            await candidate.close()
-            remaining_seconds = deadline - time.monotonic()
-            if remaining_seconds <= 0:
-                logger.error(
-                    "Unable to initialise Weaviate within %.1f seconds",
-                    cfg.startup_timeout_seconds,
-                )
-                raise
-            delay_seconds = min(
-                cfg.startup_retry_interval_seconds,
-                remaining_seconds,
-            )
-            logger.warning(
-                "Weaviate is not ready (attempt %s); retrying in %.1f seconds: %s",
-                attempt,
-                delay_seconds,
-                exc,
-            )
-            await asyncio.sleep(delay_seconds)
-            continue
-
-        _client = candidate
-        logger.info(
-            "Weaviate client connected and schema is ready",
-            extra={
-                "http_host": cfg.http_host,
-                "http_port": cfg.http_port,
-                "attempt": attempt,
-            },
-        )
-        return
-
-
-async def close_weaviate() -> None:
-    """Close the async Weaviate client.
-
-    Call once during application shutdown (e.g. from FastAPI lifespan).
-    """
-    global _client  # noqa: PLW0603
-    if _client is not None:
-        await _client.close()
-        _client = None
-        logger.info("Weaviate client closed")
-
-
-def get_weaviate_client() -> WeaviateAsyncClient:
-    """Return the connected WeaviateAsyncClient.
-
-    Raises RuntimeError if :func:`init_weaviate` has not been called.
-    """
-    if _client is None:
-        raise RuntimeError(
-            "Weaviate client is not initialised.  "
-            + "Ensure init_weaviate() has been awaited during startup."
-        )
-    return _client
-
-
 # ---------------------------------------------------------------------------
 # Idempotent schema bootstrap
 # ---------------------------------------------------------------------------
 
 
-async def _ensure_collections(
+async def ensure_collections(
     client: WeaviateAsyncClient,
     *,
     retry_delay_seconds: float = 2.0,
@@ -161,15 +86,23 @@ async def _ensure_collections(
                 name=collection_name,
                 description="Canonical People Gator persistence collection.",
                 properties=properties,
-                references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
-                vector_config=vector_config,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
+                references=[reference for reference in references],
+                vector_config=[
+                    Configure.Vectors.self_provided(
+                        name=vector.name,
+                        vector_index_config=Configure.VectorIndex.hnsw(
+                            distance_metric=VectorDistances.COSINE,
+                        ),
+                    )
+                    for vector in vector_config
+                ],
             )
         else:
             await client.collections.create(
                 name=collection_name,
                 description="Canonical People Gator persistence collection.",
                 properties=properties,
-                references=references,  # pyright: ignore[reportArgumentType] - Weaviate expects these concrete configs at runtime but types them against invariant private base classes.
+                references=[reference for reference in references],
             )
         logger.info("Created Weaviate collection: %s", collection_name)
 

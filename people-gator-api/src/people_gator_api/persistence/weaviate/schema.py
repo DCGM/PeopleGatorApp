@@ -1,13 +1,12 @@
 """Explicit Weaviate collection schema for canonical API persistence."""
 
 import re
+from dataclasses import dataclass
 
 from weaviate.classes.config import (
-    Configure,
     DataType,
     Property,
     ReferenceProperty,
-    VectorDistances,
 )
 
 from people_gator_api.schemas.enums import FaceEmbeddingModel
@@ -183,31 +182,33 @@ def _object_array_property(
     )
 
 
-def _named_vector(name: str) -> object:
-    return Configure.Vectors.self_provided(
-        name=name,
-        vector_index_config=Configure.VectorIndex.hnsw(
-            distance_metric=VectorDistances.COSINE,
-        ),
-    )
+@dataclass(frozen=True, slots=True)
+class VectorSpec:
+    """A self-provided named vector using a cosine HNSW index."""
+
+    name: str
 
 
-def default_name_plus_fulltext_vector_config() -> list[object]:
+def _named_vector(name: str) -> VectorSpec:
+    return VectorSpec(name=name)
+
+
+def default_name_plus_fulltext_vector_config() -> list[VectorSpec]:
     return [
         _named_vector(DEFAULT_NAME_VECTOR),
         _named_vector(DEFAULT_FULLTEXT_VECTOR),
     ]
 
 
-def default_fulltext_vector_config() -> list[object]:
+def default_fulltext_vector_config() -> list[VectorSpec]:
     return [_named_vector(DEFAULT_FULLTEXT_VECTOR)]
 
 
-def default_name_vector_config() -> list[object]:
+def default_name_vector_config() -> list[VectorSpec]:
     return [_named_vector(DEFAULT_NAME_VECTOR)]
 
 
-def default_face_vector_config() -> list[object]:
+def default_face_vector_config() -> list[VectorSpec]:
     return [_named_vector(DEFAULT_FACE_VECTOR)]
 
 
@@ -320,7 +321,7 @@ TEXT_MENTION_REFERENCES: list[ReferenceProperty] = [
     ),
 ]
 
-type CollectionVectorConfig = list[object] | None
+type CollectionVectorConfig = list[VectorSpec] | None
 type CollectionSpec = tuple[
     list[Property], list[ReferenceProperty], CollectionVectorConfig
 ]

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 from people_gator_api.models import Entity
-from people_gator_api.persistence.postgres import _entity_filters
+from people_gator_api.persistence.postgres.utils import entity_filters as _entity_filters
 from people_gator_api.schemas.entities import EntityListFilter
 from people_gator_api.schemas.enums import EntityType
 

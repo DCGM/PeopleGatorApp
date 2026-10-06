@@ -24,9 +24,14 @@ This repository keeps specification content in focused documents to avoid contra
 Storage defaults to S3. To use local storage instead, configure:
 
 ```dotenv
-PEOPLE_GATOR_API__STORAGE__BACKEND=local
+PEOPLE_GATOR_API__STORAGE__LOCAL__ENABLED=true
 PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/var/lib/people-gator/storage
 ```
+
+Exactly one backend must be enabled. Configured S3 defaults to enabled; local
+storage defaults to disabled. If S3 settings are also supplied, set
+`PEOPLE_GATOR_API__STORAGE__S3__ENABLED=false` when enabling local storage.
+The `STORAGE__BACKEND` selector is replaced by these enabled flags.
 
 Local mode does not require S3 credentials. Services use `get_filesystem()` and
 FastAPI routes can inject `FilesystemDependency` from
@@ -69,6 +74,20 @@ To inspect backups:
 ```bash
 curl http://localhost:8080/v1/backups/filesystem
 ```
+
+## Persistence selection
+
+Exactly one persistence backend must be enabled. Configured PostgreSQL defaults
+to enabled; Weaviate defaults to disabled. To select Weaviate when both are
+configured:
+
+```dotenv
+PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__ENABLED=false
+PEOPLE_GATOR_API__PERSISTENCE__WEAVIATE__ENABLED=true
+```
+
+Unused connection configurations can be omitted. See the
+[persistence documentation](src/people_gator_api/persistence/README.md) for details.
 
 ## PostgreSQL persistence
 

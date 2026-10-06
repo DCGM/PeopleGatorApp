@@ -5,8 +5,9 @@ import pytest
 from weaviate.classes.config import DataType, Property, ReferenceProperty
 from weaviate.exceptions import UnexpectedStatusCodeError
 
-from people_gator_api.services.weaviate_service import client
-from people_gator_api import weaviate_schema
+from people_gator_api.persistence.weaviate import client
+from people_gator_api.services import database_service
+from people_gator_api.persistence.weaviate import schema as weaviate_schema
 
 
 class _FakeCollections:
@@ -89,20 +90,26 @@ async def test_init_weaviate_rebuilds_client_after_failed_connect(
     ensure_collections = AsyncMock()
     sleep = AsyncMock()
 
-    monkeypatch.setattr(client, "_client", None)
-    monkeypatch.setattr(client, "_build_client", lambda: next(clients))
-    monkeypatch.setattr(client, "_ensure_collections", ensure_collections)
+    monkeypatch.setattr(database_service, "_weaviate_client", None)
+    monkeypatch.setattr(client, "build_weaviate_client", lambda: next(clients))
+    monkeypatch.setattr(client, "ensure_collections", ensure_collections)
     monkeypatch.setattr(client.asyncio, "sleep", sleep)
 
-    await client.init_weaviate()
+    await database_service.init_weaviate()
 
     assert failed_client.close_calls == 1
     assert connected_client.connect_calls == 1
-    assert client.get_weaviate_client() is connected_client
+    assert database_service.get_weaviate_client() is connected_client
     ensure_collections.assert_awaited_once_with(connected_client)
     sleep.assert_awaited_once()
 
-    await client.close_weaviate()
+    await database_service.init_weaviate()
+    assert connected_client.connect_calls == 1
+    await database_service.close_weaviate()
+    await database_service.close_weaviate()
+    assert connected_client.close_calls == 1
+    with pytest.raises(RuntimeError, match="not initialised"):
+        database_service.get_weaviate_client()
 
 
 def test_ordered_collection_specs_respect_reference_dependencies() -> None:
@@ -171,7 +178,7 @@ async def test_ensure_collections_creates_only_missing_collections() -> None:
     existing_collections = set(collection_names_in_order[:2])
     fake_client = _FakeWeaviateClient(existing_collections)
 
-    await client._ensure_collections(fake_client)  # type: ignore[arg-type]
+    await client.ensure_collections(fake_client)  # type: ignore[arg-type]
 
     expected_created = [
         collection_name
@@ -185,7 +192,7 @@ async def test_ensure_collections_creates_only_missing_collections() -> None:
 async def test_ensure_collections_runs_existence_checks_before_create_calls() -> None:
     fake_client = _FakeWeaviateClient(existing_collections=set())
 
-    await client._ensure_collections(fake_client)  # type: ignore[arg-type]
+    await client.ensure_collections(fake_client)  # type: ignore[arg-type]
 
     first_create_index = next(
         index
@@ -219,7 +226,7 @@ async def test_ensure_collections_retries_transient_collection_errors() -> None:
         transient_failures=2,
     )
 
-    await client._ensure_collections(fake_client, retry_delay_seconds=0.0)  # type: ignore[arg-type]
+    await client.ensure_collections(fake_client, retry_delay_seconds=0.0)  # type: ignore[arg-type]
 
     assert fake_client.collections.exists_attempts > 2
 

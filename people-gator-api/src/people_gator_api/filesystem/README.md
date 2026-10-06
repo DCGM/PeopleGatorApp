@@ -48,13 +48,19 @@ S3 remains the default backend and requires the existing `storage.s3` credential
 To use local storage, set:
 
 ```dotenv
-PEOPLE_GATOR_API__STORAGE__BACKEND=local
+PEOPLE_GATOR_API__STORAGE__LOCAL__ENABLED=true
 PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/var/lib/people-gator/storage
 ```
 
 The local root defaults to `./storage`, relative to the process working directory.
+Exactly one backend must be enabled. Configured S3 defaults to enabled; local
+storage defaults to disabled. If S3 settings are also supplied, set
+`PEOPLE_GATOR_API__STORAGE__S3__ENABLED=false` when enabling local storage.
+The `STORAGE__BACKEND` selector is replaced by these enabled flags.
+
 Local mode does not require S3 settings. To select S3, set
-`PEOPLE_GATOR_API__STORAGE__BACKEND=s3` and supply the existing S3 settings.
+`PEOPLE_GATOR_API__STORAGE__S3__ENABLED=true`, disable local storage, and supply
+the existing S3 settings.
 
 Application media, derivative caches, page layouts, and JWK loading use this
 selection through `people_gator_api.services.filesystem_service`. Services can

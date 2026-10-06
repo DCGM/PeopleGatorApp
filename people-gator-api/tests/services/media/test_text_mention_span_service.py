@@ -25,7 +25,7 @@ from people_gator_api.schemas.pero import (
     RegionLayoutModel,
     TextLineModel,
 )
-from people_gator_api.services.crud_services.text_mention_span_service import (
+from people_gator_api.media.text_mention_spans import (
     _TextMentionText,  # pyright: ignore[reportPrivateUsage]
     _fetch_text_mentions,  # pyright: ignore[reportPrivateUsage]
     _match_text_mention_spans,  # pyright: ignore[reportPrivateUsage]

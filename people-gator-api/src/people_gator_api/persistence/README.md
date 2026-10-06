@@ -84,6 +84,30 @@ Batch operations are not guaranteed to be atomic. If an operation raises,
 backends without rollback support may retain earlier successful writes.
 Callers must not infer PostgreSQL transaction behavior from this interface.
 
+## Configuration
+
+Both backend settings inherit `PersistenceBaseSetting` and expose `enabled`.
+Exactly one persistence backend must be enabled. Configured PostgreSQL defaults
+to enabled; Weaviate defaults to disabled. Either configuration can be omitted
+when unused. Supplied configurations require their connection fields even when
+disabled.
+
+To select Weaviate when both connections are configured:
+
+```dotenv
+PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__ENABLED=false
+PEOPLE_GATOR_API__PERSISTENCE__WEAVIATE__ENABLED=true
+```
+
+If PostgreSQL configuration is omitted, omit its enabled variable too. To select
+PostgreSQL, enable it and disable or omit Weaviate. Application startup initializes
+the selected backend's schema; `DatabaseDependency` uses its adapter for requests.
+Shutdown releases initialized database resources. Alembic remains specific to
+PostgreSQL and requires its connection configuration.
+
+Routes use `DatabaseDependency` for either backend. OCR span rendering is handled
+by `media/text_mention_spans.py` through the persistence contracts.
+
 ## Binding a backend
 
 Backend factories are loaded lazily and return the same facade:
@@ -102,3 +126,24 @@ Backend factories are loaded lazily and return the same facade:
 
 The adapters may be migrated independently, but both must implement the
 observable behavior above.
+
+## Weaviate ownership
+
+`persistence/weaviate` owns repository implementations, client construction,
+collection schemas, and backend query helpers. `services/database_service.py`
+owns process-wide client state, startup retries, shutdown, and request dependencies
+for both database backends. There is no separate Weaviate service package.
+
+The public factory remains `people_gator_api.persistence.weaviate.weaviate_database`.
+Collection definitions are in `people_gator_api.persistence.weaviate.schema`;
+client construction and schema setup are in its `client` module.
+
+The Weaviate package passes the repository's strict Pyright configuration:
+
+```bash
+.venv/bin/pyright --pythonpath .venv/bin/python src/people_gator_api/persistence/weaviate
+```
+
+All repository methods use their contract parameter names and request/response
+types. Client results are validated at the schema boundary; named vector specs
+are declarative and built through the public Weaviate configuration API.

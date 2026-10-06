@@ -1,12 +1,19 @@
 """Request-scoped database dependencies.
 
-Core API persistence is exposed only through the backend-neutral Database
-contract. The raw Weaviate dependency remains available for blob-derived
-subresources that are not part of that contract.
+API persistence is exposed through the backend-neutral Database contract.
+This module owns the process-wide lifecycle of both database backends.
 """
 
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
 from collections.abc import AsyncGenerator
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated
+
+if TYPE_CHECKING:
+    from weaviate import WeaviateAsyncClient
 
 from fastapi import Depends
 
@@ -27,12 +34,17 @@ from people_gator_api.settings import settings
 from people_gator_api.utils.opentelemetry import instrument_sqlalchemy_engine
 
 
+logger = logging.getLogger(__name__)
+
+_weaviate_client: WeaviateAsyncClient | None = None
 _postgres_engine: AsyncEngine | None = None
 _postgres_sessions: async_sessionmaker[AsyncSession] | None = None
 
 
 def _postgres_url() -> str:
     config = settings.persistence.postgres
+    if config is None:
+        raise ValueError("PostgreSQL requires persistence.postgres configuration")
     return URL.create(
         drivername="postgresql+asyncpg",
         username=config.user,
@@ -41,6 +53,7 @@ def _postgres_url() -> str:
         port=config.port,
         database=config.database,
     ).render_as_string(hide_password=False)
+
 
 def make_postgres_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
     """Build an asyncpg engine for the isolated demo database."""
@@ -90,8 +103,100 @@ async def close_postgres() -> None:
         await engine.dispose()
 
 
+async def init_weaviate() -> None:
+    """Connect the async Weaviate client and ensure collection schemas exist.
+
+    Call once during application startup (e.g. from FastAPI lifespan).
+    """
+    from people_gator_api.persistence.weaviate.client import (
+        build_weaviate_client,
+        ensure_collections,
+    )
+
+    global _weaviate_client  # noqa: PLW0603
+    if _weaviate_client is not None:
+        return
+
+    cfg = settings.persistence.weaviate
+    if cfg is None:
+        raise ValueError("Weaviate requires persistence.weaviate configuration")
+    deadline = time.monotonic() + cfg.startup_timeout_seconds
+    attempt = 0
+    while True:
+        attempt += 1
+        candidate = build_weaviate_client()
+        try:
+            await candidate.connect()
+            await ensure_collections(candidate)
+        except Exception as exc:
+            # A failed connect can still allocate HTTP/gRPC resources. Close
+            # the whole candidate and build a fresh client for the next try.
+            await candidate.close()
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0:
+                logger.error(
+                    "Unable to initialise Weaviate within %.1f seconds",
+                    cfg.startup_timeout_seconds,
+                )
+                raise
+            delay_seconds = min(
+                cfg.startup_retry_interval_seconds,
+                remaining_seconds,
+            )
+            logger.warning(
+                "Weaviate is not ready (attempt %s); retrying in %.1f seconds: %s",
+                attempt,
+                delay_seconds,
+                exc,
+            )
+            await asyncio.sleep(delay_seconds)
+            continue
+
+        _weaviate_client = candidate
+        logger.info(
+            "Weaviate client connected and schema is ready",
+            extra={
+                "http_host": cfg.http_host,
+                "http_port": cfg.http_port,
+                "attempt": attempt,
+            },
+        )
+        return
+
+
+async def close_weaviate() -> None:
+    """Close the async Weaviate client.
+
+    Call once during application shutdown (e.g. from FastAPI lifespan).
+    """
+    global _weaviate_client  # noqa: PLW0603
+    if _weaviate_client is not None:
+        await _weaviate_client.close()
+        _weaviate_client = None
+        logger.info("Weaviate client closed")
+
+
+def get_weaviate_client() -> WeaviateAsyncClient:
+    """Return the connected WeaviateAsyncClient.
+
+    Raises RuntimeError if :func:`init_weaviate` has not been called.
+    """
+    if _weaviate_client is None:
+        raise RuntimeError(
+            "Weaviate client is not initialised.  "
+            + "Ensure init_weaviate() has been awaited during startup."
+        )
+    return _weaviate_client
+
+
 async def get_database() -> AsyncGenerator[Database, None]:
-    """Yield one PostgreSQL-backed contract facade per request."""
+    """Yield a contract facade for the enabled persistence backend."""
+    if settings.persistence.backend == "weaviate":
+        from people_gator_api.persistence.weaviate import weaviate_database
+
+        yield weaviate_database(get_weaviate_client())
+        return
+
     if _postgres_sessions is None:
         await init_postgres()
     assert _postgres_sessions is not None
@@ -102,32 +207,30 @@ async def get_database() -> AsyncGenerator[Database, None]:
 type DatabaseDependency = Annotated[Database, Depends(get_database)]
 
 
-async def get_session() -> AsyncGenerator[Any, None]:
-    """Yield the raw vector client only to non-contract legacy subresources."""
-    from people_gator_api.services.weaviate_service.client import get_weaviate_client
-
-    yield get_weaviate_client()
-
-
-type WeaviateSessionDependency = Annotated[
-    Any,
-    Depends(get_session),
-]
-
-
 async def init_db() -> None:
-    """Create the PostgreSQL persistence schema."""
+    """Initialize the enabled persistence backend and its schema."""
+    if settings.persistence.backend == "weaviate":
+        await init_weaviate()
+        return
     await init_postgres()
     assert _postgres_engine is not None
     await create_postgres_schema(_postgres_engine)
 
 
+async def close_db() -> None:
+    """Release persistence resources initialized by the application."""
+    await close_postgres()
+    await close_weaviate()
+
+
 __all__ = [
     "DatabaseDependency",
-    "WeaviateSessionDependency",
+    "close_db",
     "close_postgres",
+    "close_weaviate",
     "get_database",
-    "get_session",
+    "get_weaviate_client",
     "init_db",
     "init_postgres",
+    "init_weaviate",
 ]

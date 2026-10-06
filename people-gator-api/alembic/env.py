@@ -54,6 +54,8 @@ def include_object(
 
 def postgres_url() -> URL:
     postgres = settings.persistence.postgres
+    if postgres is None:
+        raise ValueError("PostgreSQL migrations require persistence.postgres configuration")
     return URL.create(
         drivername="postgresql+asyncpg",
         username=postgres.user,

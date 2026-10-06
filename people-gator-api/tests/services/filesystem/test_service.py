@@ -16,14 +16,14 @@ from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.services import filesystem_service
 from people_gator_api.services.filesystem_service import FilesystemDependency, get_filesystem
 from people_gator_api.settings import (
-    LocalStorageSettings, Settings, StorageSettings, settings,
+    FilesystemBaseSetting, LocalStorageSettings, Settings, StorageSettings, settings,
 )
 
 
 @pytest.fixture
 def local_storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> LocalFilesystem:
     monkeypatch.setattr(settings, "storage", StorageSettings(
-        backend="local", local=LocalStorageSettings(root=tmp_path),
+        local=LocalStorageSettings(enabled=True, root=tmp_path),
     ))
     filesystem = get_filesystem()
     assert isinstance(filesystem, LocalFilesystem)
@@ -36,18 +36,39 @@ def test_backend_validation_and_default() -> None:
         "bucket_name": "bucket", "region": "eu-central-1",
     })
     assert config.backend == "s3"
-    assert StorageSettings(backend="local").s3 is None
-    with pytest.raises(ValidationError, match="storage.s3 is required"):
+    assert StorageSettings(local={"enabled": True}).s3 is None
+    with pytest.raises(ValidationError, match="Exactly one filesystem backend"):
         StorageSettings()
     with pytest.raises(ValidationError):
         StorageSettings.model_validate({"backend": "invalid"})
+
+
+@pytest.mark.parametrize("s3_enabled,local_enabled", [(False, False), (True, True)])
+def test_requires_exactly_one_enabled_backend(s3_enabled: bool, local_enabled: bool) -> None:
+    with pytest.raises(ValidationError, match="Exactly one filesystem backend"):
+        StorageSettings(s3={
+            "enabled": s3_enabled,
+            "access_key_id": "test", "secret_access_key": "test",
+            "bucket_name": "bucket", "region": "eu-central-1",
+        }, local={"enabled": local_enabled})
+
+
+def test_local_backend_with_disabled_s3() -> None:
+    config = StorageSettings(s3={
+        "enabled": False,
+        "access_key_id": "test", "secret_access_key": "test",
+        "bucket_name": "bucket", "region": "eu-central-1",
+    }, local={"enabled": True})
+    assert config.backend == "local"
+    assert isinstance(config.local, FilesystemBaseSetting)
+    assert isinstance(config.s3, FilesystemBaseSetting)
 
 
 def test_local_environment_settings_without_s3(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for name in list(os.environ):
         if name.startswith("PEOPLE_GATOR_API__STORAGE"):
             monkeypatch.delenv(name)
-    monkeypatch.setenv("PEOPLE_GATOR_API__STORAGE__BACKEND", "local")
+    monkeypatch.setenv("PEOPLE_GATOR_API__STORAGE__LOCAL__ENABLED", "true")
     monkeypatch.setenv("PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT", str(tmp_path))
     other_settings = settings.model_dump(exclude={"storage"})
     configured = Settings(_env_file=None, **other_settings)

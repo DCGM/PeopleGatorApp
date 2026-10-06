@@ -17,7 +17,7 @@ from people_gator_api.settings import settings
 from people_gator_api.routes.v1 import router as v1_router
 from people_gator_api.routes.jwks import router as jwks_router
 from people_gator_api.services.database_service import (
-    close_postgres,
+    close_db,
     init_db,
 )
 from people_gator_api.utils.version_info import get_version_info
@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
     yield
     await close_embedding_service()
     await close_openrouter_service()
-    await close_postgres()
+    await close_db()
 
 
 def get_app() -> FastAPI:

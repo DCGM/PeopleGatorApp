@@ -75,7 +75,7 @@ async def _fetch_text_mention_spans_for_page(
     page: PageResponse,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
-    from people_gator_api.services.crud_services.text_mention_span_service import (
+    from people_gator_api.media.text_mention_spans import (
         get_text_mention_spans,
     )
     from people_gator_api.media.errors import SourceResolutionError
