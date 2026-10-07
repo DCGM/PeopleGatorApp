@@ -1,6 +1,6 @@
 name: people-gator-dev
 
-# Start with: docker compose up --build
+# Start with: docker compose -f compose.dev.yaml up --build --watch
 services:
   traefik:
     image: traefik:v3.6
@@ -67,8 +67,8 @@ services:
       PEOPLE_GATOR_API__OPENROUTER__API_KEY: ${OPENROUTER_API_KEY:-}
       WATCHFILES_FORCE_POLLING: "true"
     volumes:
-      - ./people-gator-api/src:/app/src
       - api-data:/data
+      # Auth reads this file on login/refresh; keep it read-only and outside Watch.
       - ./people-gator-api/example.users.json:/data/peoplegator_api/users.json:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
@@ -76,6 +76,34 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    develop:
+      watch:
+        - path: ./people-gator-api
+          action: sync
+          target: /app
+          initial_sync: true
+          ignore:
+            # .dockerignore supplies cache, virtualenv, and local-file exclusions.
+            # Build inputs have separate rebuild rules.
+            - pyproject.toml
+            - uv.lock
+            - .python-version
+            - Dockerfile.dev
+            - Dockerfile
+            - .dockerignore
+            - compose*.yaml
+            # This file is already bind-mounted at the auth storage path.
+            - example.users.json
+        - path: ./people-gator-api/pyproject.toml
+          action: rebuild
+        - path: ./people-gator-api/uv.lock
+          action: rebuild
+        - path: ./people-gator-api/.python-version
+          action: rebuild
+        - path: ./people-gator-api/Dockerfile.dev
+          action: rebuild
+        - path: ./people-gator-api/.dockerignore
+          action: rebuild
     labels:
       traefik.enable: "true"
       traefik.http.routers.people-gator-dev-api.entrypoints: web
@@ -99,15 +127,34 @@ services:
       VITE_API_BASE_URL: .
       VITE_API_USERNAME: test
       VITE_API_PASSWORD: test
-    volumes:
-      - ./people-gator-app:/app
-      - /app/node_modules
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 12
       start_period: 15s
+    develop:
+      watch:
+        - path: ./people-gator-app
+          action: sync
+          target: /app
+          initial_sync: true
+          ignore:
+            # .dockerignore also excludes dependencies and generated/local files.
+            # Build inputs must only trigger rebuilds, never source synchronization.
+            - package.json
+            - package-lock.json
+            - Dockerfile.dev
+            - .dockerignore
+            - compose*.yaml
+        - path: ./people-gator-app/package.json
+          action: rebuild
+        - path: ./people-gator-app/package-lock.json
+          action: rebuild
+        - path: ./people-gator-app/Dockerfile.dev
+          action: rebuild
+        - path: ./people-gator-app/.dockerignore
+          action: rebuild
     labels:
       traefik.enable: "true"
       traefik.http.routers.people-gator-dev-app.entrypoints: web
