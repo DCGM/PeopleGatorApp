@@ -18,9 +18,10 @@ import io
 import logging
 import posixpath
 import uuid
+from weakref import WeakValueDictionary
 
 from botocore.exceptions import BotoCoreError, ClientError
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from people_gator_api.media.errors import SourceResolutionError
@@ -35,6 +36,17 @@ _JPEG_MEDIA_TYPE = "image/jpeg"
 # Keeps references to fire-and-forget cache-write tasks so they aren't
 # garbage-collected mid-flight; entries are discarded once each task finishes.
 _background_cache_writes: set[asyncio.Task[None]] = set()
+_cache_writes_by_key: dict[str, set[asyncio.Task[None]]] = {}
+_page_locks: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
+
+
+def _page_lock(key: str) -> asyncio.Lock:
+    """Serialize reads and replacements for a page in this worker."""
+    lock = _page_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _page_locks[key] = lock
+    return lock
 
 
 class PageImageContent(BaseModel):
@@ -143,6 +155,15 @@ def _schedule_cache_write(key: str, data: bytes) -> None:
     task = asyncio.create_task(_write_cache(key, data))
     _background_cache_writes.add(task)
     task.add_done_callback(_background_cache_writes.discard)
+    pending = _cache_writes_by_key.setdefault(key, set())
+    pending.add(task)
+
+    def discard(completed: asyncio.Task[None]) -> None:
+        pending.discard(completed)
+        if not pending:
+            _cache_writes_by_key.pop(key, None)
+
+    task.add_done_callback(discard)
 
 
 async def _read_original(key: str) -> bytes:
@@ -159,6 +180,20 @@ async def _read_original(key: str) -> bytes:
 
 
 async def get_page_image(
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
+    *,
+    max_width: int | None = None,
+) -> PageImageContent:
+    """Return the original scan or a cached JPEG resized to ``max_width``."""
+    async with _page_lock(page_image_key(library, document_id, page_id)):
+        return await _get_page_image(
+            library, document_id, page_id, max_width=max_width
+        )
+
+
+async def _get_page_image(
     library: str,
     document_id: uuid.UUID,
     page_id: uuid.UUID,
@@ -204,3 +239,61 @@ async def get_page_image(
     return PageImageContent(
         content=rendered, media_type=_JPEG_MEDIA_TYPE, cache_hit=False
     )
+
+
+def _prepare_jpeg(data: bytes) -> bytes:
+    """Validate uploaded pixels and normalize non-JPEG images for scan storage."""
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.load()
+            if image.format == "JPEG":
+                return data
+            buffer = io.BytesIO()
+            image.convert("RGB").save(buffer, format="JPEG", quality=95)
+            return buffer.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise SourceResolutionError(
+            "Upload must contain a valid image",
+            status_code=422,
+            code="invalid_image",
+        ) from exc
+
+
+async def put_page_image(
+    library: str,
+    document_id: uuid.UUID,
+    page_id: uuid.UUID,
+    content: bytes,
+) -> int:
+    """Replace a scan and its derivatives, returning the stored scan byte size."""
+    jpeg = await asyncio.to_thread(_prepare_jpeg, content)
+    cache_cfg = settings.page_image_cache
+    # Refresh even when caching is disabled, so re-enabling it cannot expose
+    # derivatives from before this replacement.
+    derivatives = {
+        _cache_key(cache_cfg, library, document_id, page_id, width):
+        await asyncio.to_thread(_render_jpeg, jpeg, width, cache_cfg.quality)
+        for width in cache_cfg.widths
+    }
+    key = page_image_key(library, document_id, page_id)
+    async with _page_lock(key):
+        # Let older writes finish before replacing their bytes. The page lock
+        # prevents a GET in this worker from scheduling another stale write.
+        pending = [
+            task for cache_key in derivatives
+            for task in _cache_writes_by_key.get(cache_key, ())
+        ]
+        if pending:
+            await asyncio.gather(*pending)
+        try:
+            await write_bytes(key, jpeg)
+            for cache_key, data in derivatives.items():
+                await write_bytes(cache_key, data)
+        except (ClientError, BotoCoreError, OSError) as exc:
+            logger.exception("failed to upload page image", extra={"key": key})
+            raise SourceResolutionError(
+                "Failed to store page image",
+                status_code=502,
+                code="storage_error",
+            ) from exc
+    return len(jpeg)

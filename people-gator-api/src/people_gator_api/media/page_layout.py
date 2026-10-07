@@ -9,7 +9,7 @@ import logging
 import posixpath
 import uuid
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import ValidationError
 
 from people_gator_api.schemas.pero import PageLayoutModel
@@ -71,14 +71,14 @@ async def put_page_layout(
     document_id: uuid.UUID,
     page_id: uuid.UUID,
     layout: PageLayoutModel,
-) -> PageLayoutModel:
-    """Store one validated page layout directly in object storage."""
+) -> int:
+    """Store one validated layout, returning its serialized UTF-8 byte size."""
     key = page_layout_key(library, document_id, page_id)
     payload = layout.model_dump_json(indent=2)
     try:
         async with open_file(key, mode="w") as f:
             f.write(payload)
-    except (ClientError, OSError) as exc:
+    except (ClientError, BotoCoreError, OSError) as exc:
         logger.exception("failed to upload page layout", extra={"key": key})
         raise SourceResolutionError(
             "Failed to store page layout",
@@ -86,4 +86,4 @@ async def put_page_layout(
             code="storage_error",
         ) from exc
     logger.info("page layout stored", extra={"key": key})
-    return layout
+    return len(payload.encode("utf-8"))

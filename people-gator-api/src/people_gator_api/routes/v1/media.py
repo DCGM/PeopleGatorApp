@@ -1,10 +1,16 @@
 """Typed media and page-subresource endpoints backed by Source records."""
 
 import uuid
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Response, UploadFile, status
 from pydantic import AnyUrl
 
+from people_gator_api.media.errors import SourceResolutionError
+from people_gator_api.media.image_content import get_image_content
+from people_gator_api.media.page_image import get_page_image, put_page_image
+from people_gator_api.media.page_layout import get_page_layout, put_page_layout
+from people_gator_api.media.text_mention_spans import get_text_mention_spans
 from people_gator_api.persistence.contracts import CreateResult
 from people_gator_api.routes.v1.query_dependencies import (
     DocumentListFilterDependency,
@@ -12,6 +18,7 @@ from people_gator_api.routes.v1.query_dependencies import (
     ListRequestDependency,
     PageListFilterDependency,
 )
+from people_gator_api.schemas.common import FileUploadResponse
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
     DocumentBatchCreateRequest,
@@ -55,11 +62,6 @@ async def _fetch_layout_for_page(
     page: PageResponse,
 ) -> PageLayoutModel:
     """Fetch the stored layout using an already-resolved page identity."""
-    from people_gator_api.media.page_layout import (
-        get_page_layout,
-    )
-    from people_gator_api.media.errors import SourceResolutionError
-
     try:
         return await get_page_layout(
             page.library,
@@ -75,11 +77,6 @@ async def _fetch_text_mention_spans_for_page(
     page: PageResponse,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
-    from people_gator_api.media.text_mention_spans import (
-        get_text_mention_spans,
-    )
-    from people_gator_api.media.errors import SourceResolutionError
-
     try:
         return await get_text_mention_spans(
             database,
@@ -311,11 +308,6 @@ async def get_page_image_by_id_route(
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
-    from people_gator_api.media.page_image import (
-        get_page_image,
-    )
-    from people_gator_api.media.errors import SourceResolutionError
-
     del user
     page = await database.sources.get_page(page_source_id)
     if page is None:
@@ -336,6 +328,36 @@ async def get_page_image_by_id_route(
     )
 
 
+@router.put(
+    "/pages/{page_source_id:uuid}/image",
+    response_model=FileUploadResponse,
+    tags=["pages"],
+)
+async def put_page_image_by_id_route(
+    page_source_id: uuid.UUID,
+    file: UploadFile,
+    database: DatabaseDependency,
+    user: DataIngestUserDependency,
+) -> FileUploadResponse:
+    """Create or replace a page scan from a multipart image file upload."""
+    del user
+    page = await database.sources.get_page(page_source_id)
+    if page is None:
+        raise_api_error(404, "not_found", "Page not found")
+    try:
+        size_bytes = await put_page_image(
+            page.library, page.document_id, page.page_id, await file.read()
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return FileUploadResponse(
+        source_id=page.source_id,
+        uploaded_at=datetime.now(UTC),
+        size_bytes=size_bytes,
+        media_type="image/jpeg",
+    )
+
+
 @router.get(
     "/pages/{page_source_id:uuid}/page-layout",
     response_model=PageLayoutModel,
@@ -352,6 +374,36 @@ async def get_page_layout_by_id_route(
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     return await _fetch_layout_for_page(page)
+
+
+@router.put(
+    "/pages/{page_source_id:uuid}/page-layout",
+    response_model=FileUploadResponse,
+    tags=["pages"],
+)
+async def put_page_layout_by_id_route(
+    page_source_id: uuid.UUID,
+    payload: PageLayoutModel,
+    database: DatabaseDependency,
+    user: DataIngestUserDependency,
+) -> FileUploadResponse:
+    """Create or replace a page's layout with a validated JSON document."""
+    del user
+    page = await database.sources.get_page(page_source_id)
+    if page is None:
+        raise_api_error(404, "not_found", "Page not found")
+    try:
+        size_bytes = await put_page_layout(
+            page.library, page.document_id, page.page_id, payload
+        )
+    except SourceResolutionError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
+    return FileUploadResponse(
+        source_id=page.source_id,
+        uploaded_at=datetime.now(UTC),
+        size_bytes=size_bytes,
+        media_type="application/json",
+    )
 
 
 @router.get(
@@ -480,11 +532,6 @@ async def get_image_content_by_id_route(
     database: DatabaseDependency,
     user: BrowseUserDependency,
 ) -> Response:
-    from people_gator_api.media.image_content import (
-        get_image_content,
-    )
-    from people_gator_api.media.errors import SourceResolutionError
-
     del user
     image = await database.sources.get_image(image_id)
     if image is None:

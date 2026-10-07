@@ -6,6 +6,7 @@ from people_gator_api.schemas.auth import (
 )
 from people_gator_api.schemas.common import (
     ErrorResponse,
+    FileUploadResponse,
     GenericActor,
     GenericListRequest,
     GenericListResponse,
@@ -155,6 +156,7 @@ __all__ = [
     "OpenIDConfigurationResponse",
     # Common
     "ErrorResponse",
+    "FileUploadResponse",
     "GenericActor",
     "GenericListRequest",
     "GenericListResponse",

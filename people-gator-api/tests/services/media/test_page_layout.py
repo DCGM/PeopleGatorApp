@@ -115,7 +115,7 @@ async def test_put_page_layout_stores_canonical_key(
     )
 
     expected_key = f"ocr/page-layouts/{_LIBRARY}/{_DOCUMENT_ID}/{_PAGE_ID}.json"
-    assert stored == layout
+    assert stored == len(_FakeS3Context.store[expected_key].encode("utf-8"))
     assert PageLayoutModel.model_validate_json(_FakeS3Context.store[expected_key]) == layout
 
 

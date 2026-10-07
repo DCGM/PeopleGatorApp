@@ -2,12 +2,29 @@ from enum import StrEnum
 from typing import Self
 import uuid
 
-from pydantic import BaseModel, Field, FiniteFloat, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, FiniteFloat, model_validator
 
 
 class ErrorResponse(BaseModel):
     code: str
     message: str
+
+
+class FileUploadResponse(BaseModel):
+    """Receipt returned after a source's file has been successfully stored."""
+
+    source_id: uuid.UUID = Field(description="Source whose file was uploaded.")
+    uploaded_at: AwareDatetime = Field(
+        description="UTC timestamp when storage of the file completed.",
+    )
+    size_bytes: int = Field(
+        ge=0,
+        description=(
+            "Size of the stored file in bytes, after any conversion or "
+            "serialization. Excludes cached image derivatives."
+        ),
+    )
+    media_type: str = Field(min_length=1, description="Media type of the stored file.")
 
 
 class GenericActor(BaseModel):
@@ -139,6 +156,7 @@ def require_unique_model_embeddings[T: str](
 
 __all__ = [
     "ErrorResponse",
+    "FileUploadResponse",
     "GenericActor",
     "GenericListRequest",
     "GenericListResponse",

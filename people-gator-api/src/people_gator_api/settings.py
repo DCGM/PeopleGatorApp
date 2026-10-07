@@ -220,8 +220,8 @@ class CorsSettings(BaseModel):
 class JwkSettings(BaseModel):
     key_path: str = "peoplegator_api/jwks.json"
     key_cache_ttl_seconds: int = Field(default=3600, gt=0)
-    issuer: str = "https://dev.people-gator.capturemyhand.com"
-    audience: str = "dev.people-gator.capturemyhand.com"
+    issuer: str = "https://preview.peoplegator.dev"
+    audience: str = "preview.peoplegator.dev"
     
 
 # --------------------------------------------------------------------------------------

@@ -24,6 +24,7 @@ os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 import asyncio
 import io
 import uuid
+from typing import cast
 
 import pytest
 from botocore.exceptions import ClientError
@@ -225,3 +226,73 @@ def test_get_page_image_missing_original_returns_404(
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_replacement_waits_for_pending_derivative_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_cfg = _enable_cache(monkeypatch)
+    cache_cfg.widths = [256]
+    objects = _install_fake_cache(monkeypatch)
+    _store_original(objects, _png_bytes())
+    cache_key = f"page-image-cache/{_LIBRARY}/{_DOCUMENT_ID}/{_PAGE_ID}/256.jpg"
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def delayed_write(key: str, data: bytes) -> None:
+        if key == cache_key and not started.is_set():
+            started.set()
+            await release.wait()
+        objects[key] = data
+
+    monkeypatch.setattr(page_image, "write_bytes", delayed_write)
+    await get_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID, max_width=256)
+    await asyncio.wait_for(started.wait(), timeout=5)
+    upload = io.BytesIO()
+    Image.new("RGB", (400, 200), "blue").save(upload, format="JPEG")
+    lock = page_image._page_lock(  # pyright: ignore[reportPrivateUsage]
+        page_image_key(_LIBRARY, _DOCUMENT_ID, _PAGE_ID)
+    )
+    replacement = asyncio.create_task(page_image.put_page_image(
+        _LIBRARY, _DOCUMENT_ID, _PAGE_ID, upload.getvalue()
+    ))
+
+    async def wait_until_replacement_holds_lock() -> None:
+        while not lock.locked():
+            await asyncio.sleep(0)
+
+    await asyncio.wait_for(wait_until_replacement_holds_lock(), timeout=5)
+    assert not replacement.done()
+    assert objects[page_image_key(_LIBRARY, _DOCUMENT_ID, _PAGE_ID)] == _png_bytes()
+    release.set()
+    await asyncio.wait_for(replacement, timeout=5)
+
+    fetched = await get_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID, max_width=256)
+    assert fetched.cache_hit is True
+    with Image.open(io.BytesIO(fetched.content)) as image:
+        red, _, blue = cast(tuple[int, int, int], image.convert("RGB").getpixel((0, 0)))
+        assert blue > red
+    assert objects[page_image_key(_LIBRARY, _DOCUMENT_ID, _PAGE_ID)] == upload.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_replacement_refreshes_derivatives_when_cache_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_cfg = _enable_cache(monkeypatch)
+    objects = _install_fake_cache(monkeypatch)
+    _store_original(objects, _png_bytes())
+    await _get_page_image_and_drain(
+        _LIBRARY, _DOCUMENT_ID, _PAGE_ID, max_width=256
+    )
+    cache_cfg.enabled = False
+    upload = io.BytesIO()
+    Image.new("RGB", (400, 200), "blue").save(upload, format="PNG")
+    await page_image.put_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID, upload.getvalue())
+    cache_cfg.enabled = True
+
+    fetched = await get_page_image(_LIBRARY, _DOCUMENT_ID, _PAGE_ID, max_width=256)
+    assert fetched.cache_hit is True
+    with Image.open(io.BytesIO(fetched.content)) as image:
+        red, _, blue = cast(tuple[int, int, int], image.convert("RGB").getpixel((0, 0)))
+        assert blue > red
