@@ -28,7 +28,7 @@ def upgrade() -> None:
         LANGUAGE sql
         IMMUTABLE
         PARALLEL SAFE
-        AS $$SELECT unaccent('public.unaccent', value)$$"""
+        AS $$SELECT public.unaccent('public.unaccent'::pg_catalog.regdictionary, value)$$"""
     )
     ${upgrades if upgrades else "pass"}
 
