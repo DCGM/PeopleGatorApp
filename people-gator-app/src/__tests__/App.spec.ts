@@ -111,7 +111,7 @@ describe('App', () => {
     expect(wrapper.get('nav').text()).not.toContain('People Gator')
   })
 
-  it('renders document controls inside the contextual top bar area', async () => {
+  it('renders floating document controls inside the viewer', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
     await router.isReady()
 
@@ -120,19 +120,58 @@ describe('App', () => {
     const topBar = wrapper.get('nav')
 
     expect(topBar.text()).not.toContain('People Gator')
-    expect(topBar.find('[aria-label="Previous line"]').exists()).toBe(true)
-    expect(wrapper.get('main').find('[aria-label="Previous line"]').exists()).toBe(false)
+    expect(topBar.find('[aria-label="Previous line"]').exists()).toBe(false)
+    const tools = wrapper.get('.workspace-viewer [aria-label="Scan tools"]')
+    expect(tools.find('[aria-label="Previous line"]').exists()).toBe(true)
+    expect(wrapper.get('.panzoom-layer').find('[aria-label="Scan tools"]').exists()).toBe(false)
 
-    const badgeNamesToggle = topBar.get('[aria-label="Hide overlay badge names"]')
+    const badgeNamesToggle = tools.get('[aria-label="Hide overlay badge names"]')
     expect(badgeNamesToggle.attributes('aria-pressed')).toBe('true')
     expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(true)
 
     await badgeNamesToggle.trigger('click')
 
-    expect(topBar.get('[aria-label="Show overlay badge names"]').attributes('aria-pressed')).toBe(
+    expect(tools.get('[aria-label="Show overlay badge names"]').attributes('aria-pressed')).toBe(
       'false',
     )
     expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(false)
+  })
+
+  it('links breadcrumbs to scoped scan lists and preserves scope when searching', async () => {
+    await router.push('/libraries/library/documents/document/pages/page')
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+
+    const crumbs = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')
+    expect(crumbs.map((crumb) => crumb.text())).toEqual([
+      'PeopleGator',
+      'library',
+      'document',
+      'Page page',
+    ])
+    expect(crumbs[0]!.attributes('href')).toBe('/documents')
+    expect(crumbs[1]!.attributes('href')).toBe('/documents?library=library')
+    expect(crumbs[3]!.attributes('aria-current')).toBe('page')
+    await crumbs[2]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ library: 'library', document: 'document' })
+    expect(wrapper.get('h1').text()).toBe('Document pages')
+    await wrapper
+      .get('input[placeholder="Search a person, page or document…"]')
+      .setValue('archives')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      document: 'document',
+      q: 'archives',
+    })
+    await wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ library: 'library' })
+    expect(
+      wrapper.get('input[placeholder="Search a person, page or document…"]').element,
+    ).toHaveProperty('value', '')
+    wrapper.unmount()
   })
 
   it('uses the full viewer layer as the panzoom coordinate space', async () => {

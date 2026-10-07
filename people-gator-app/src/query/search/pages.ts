@@ -23,6 +23,8 @@ export type PageSearchRecord = PageResponse | FoundPage
 
 export type PageResultsParams = {
   query: string
+  'filter.library'?: string[]
+  'filter.document_id'?: string[]
   'filter.has_entities'?: boolean
   'filter.has_faces'?: boolean
   'filter.has_mentions'?: boolean
@@ -86,6 +88,12 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
       const keyParams = {
+        ...(resolvedParams['filter.library'] && {
+          'filter.library': resolvedParams['filter.library'],
+        }),
+        ...(resolvedParams['filter.document_id'] && {
+          'filter.document_id': resolvedParams['filter.document_id'],
+        }),
         'filter.has_entities': resolvedParams['filter.has_entities'],
         'filter.has_faces': resolvedParams['filter.has_faces'],
         'filter.has_mentions': resolvedParams['filter.has_mentions'],
@@ -102,6 +110,12 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
       const query = resolvedParams.query.trim()
       const pageSize = searchPageSize(resolvedParams.limit)
       const filters = {
+        ...(resolvedParams['filter.library'] && {
+          'filter.library': resolvedParams['filter.library'],
+        }),
+        ...(resolvedParams['filter.document_id'] && {
+          'filter.document_id': resolvedParams['filter.document_id'],
+        }),
         'filter.has_entities': resolvedParams['filter.has_entities'],
         'filter.has_faces': resolvedParams['filter.has_faces'],
         'filter.has_mentions': resolvedParams['filter.has_mentions'],

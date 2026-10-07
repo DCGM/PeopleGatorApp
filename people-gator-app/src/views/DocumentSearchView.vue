@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import DocumentCard from '@/components/custom/DocumentCard.vue'
 import DocumentCardSkeleton from '@/components/custom/DocumentCardSkeleton.vue'
 import DocumentSearchBar from '@/components/custom/DocumentSearchBar.vue'
@@ -12,16 +12,31 @@ import { normalizePageContentFilter } from '@/viewmodels/assignment'
 const route = useRoute()
 const router = useRouter()
 
+const scope = computed(() => ({
+  library: typeof route.query.library === 'string' ? route.query.library : undefined,
+  documentId: typeof route.query.document === 'string' ? route.query.document : undefined,
+}))
+
 const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const assignment = ref(normalizePageContentFilter(route.query.assignment))
 const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
-  useDocumentSearch(searchTerm, assignment, resultsPerPage)
+  useDocumentSearch(searchTerm, assignment, resultsPerPage, scope)
+
+watch(
+  () => route.query,
+  (query) => {
+    searchTerm.value = typeof query.q === 'string' ? query.q : ''
+    assignment.value = normalizePageContentFilter(query.assignment)
+  },
+)
 
 function updateSearch() {
   void router.replace({
     name: 'document-search',
     query: {
+      ...(scope.value.library && { library: scope.value.library }),
+      ...(scope.value.documentId && { document: scope.value.documentId }),
       ...(searchTerm.value && { q: searchTerm.value }),
       ...(assignment.value !== 'all' && { assignment: assignment.value }),
     },
@@ -33,7 +48,16 @@ function updateSearch() {
   <main class="mx-auto w-full max-w-6xl md:px-4 px-2">
     <header class="pt-6 pb-4">
       <small class="font-semibold uppercase text-secondary">Scans index</small>
-      <h1>Browse scans</h1>
+      <h1>
+        {{ scope.documentId ? 'Document pages' : scope.library ? 'Library scans' : 'Browse scans' }}
+      </h1>
+      <p
+        v-if="scope.library"
+        class="mt-1 truncate text-sm text-muted-foreground"
+        :title="[scope.library, scope.documentId].filter(Boolean).join(' / ')"
+      >
+        {{ scope.library }}<span v-if="scope.documentId"> / {{ scope.documentId }}</span>
+      </p>
     </header>
 
     <DocumentSearchBar

@@ -109,6 +109,46 @@ describe('assignment search filters', () => {
     mocks.fetchPageImage.mockResolvedValue(new Blob())
   })
 
+  it('applies breadcrumb scope to browsing and ranked search', async () => {
+    const term = ref('')
+    const scope = ref<{ library?: string; documentId?: string }>({
+      library: 'library',
+      documentId: 'document-1',
+    })
+    const wrapper = mountQuery(() => {
+      useDocumentSearch(term, ref('all'), 12, scope)
+    })
+    await flushPromises()
+    expect(mocks.fetchPages).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        'filter.library': ['library'],
+        'filter.document_id': ['document-1'],
+      }),
+      expect.any(AbortSignal),
+    )
+    term.value = 'Ada'
+    await flushPromises()
+    expect(mocks.searchPages).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({
+          'query.text': ['Ada'],
+          'filter.library': ['library'],
+          'filter.document_id': ['document-1'],
+        }),
+      }),
+    )
+    scope.value = { library: 'other-library' }
+    await flushPromises()
+    const lastRequest = mocks.searchPages.mock.calls[
+      mocks.searchPages.mock.calls.length - 1
+    ]?.[0] as {
+      query: Record<string, unknown>
+    }
+    expect(lastRequest.query['filter.library']).toEqual(['other-library'])
+    expect(lastRequest.query['filter.document_id']).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('normalizes route values and maps UI values to API values', () => {
     expect(normalizeAssignmentFilter('faces')).toBe('faces')
     expect(normalizeAssignmentFilter('mentions')).toBe('mentions')

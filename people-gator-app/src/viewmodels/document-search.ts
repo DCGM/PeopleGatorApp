@@ -43,15 +43,21 @@ export function useDocumentSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<PageContentFilter>,
   pageSize = 12,
+  scope: MaybeRefOrGetter<{ library?: string; documentId?: string }> = {},
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const contentFilter = computed(() => pageContentFilter(toValue(filter)))
   const pageResultsQuery = usePageResultsQuery(
-    computed(() => ({
-      query: normalizedSearch.value,
-      ...contentFilter.value,
-      limit: pageSize,
-    })),
+    computed(() => {
+      const { library, documentId } = toValue(scope)
+      return {
+        query: normalizedSearch.value,
+        ...(library && { 'filter.library': [library] }),
+        ...(documentId && { 'filter.document_id': [documentId] }),
+        ...contentFilter.value,
+        limit: pageSize,
+      }
+    }),
   )
 
   const resultSourceIds = computed(() => {
