@@ -17,7 +17,9 @@ from people_gator_api.settings import (
     EmbeddingServiceSettings,
     settings,
 )
+from logging import getLogger
 
+logger = getLogger(__name__)
 
 class EmbeddingServiceError(RuntimeError):
     pass
@@ -89,9 +91,13 @@ _service: HttpEmbeddingModelService | None = None
 
 async def init_embedding_service() -> None:
     global _session, _service  # noqa: PLW0603
-    timeout = ClientTimeout(total=settings.embedding_service.request_timeout_seconds)
+    embedding_service = settings.embedding_service
+    if embedding_service is None:
+        logger.warning("Embedding service settings are not configured.")
+        return
+    timeout = ClientTimeout(total=embedding_service.request_timeout_seconds)
     _session = ClientSession(timeout=timeout)
-    _service = HttpEmbeddingModelService(settings.embedding_service, _session)
+    _service = HttpEmbeddingModelService(embedding_service, _session)
 
 
 async def close_embedding_service() -> None:
@@ -103,6 +109,11 @@ async def close_embedding_service() -> None:
 
 
 def get_embedding_service() -> HttpEmbeddingModelService:
+    embedding_service = settings.embedding_service
+    if embedding_service is None:
+        raise RuntimeError(
+            "Embedding service settings are not configured."
+        )
     if _service is None:
         raise RuntimeError(
             "Embedding service is not initialised. "

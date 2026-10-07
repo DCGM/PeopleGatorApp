@@ -4,7 +4,6 @@ from typing import Literal, Self
 from pydantic import (
     BaseModel,
     Field,
-    computed_field,
     model_validator,
 )
 from pydantic_settings import (
@@ -13,38 +12,12 @@ from pydantic_settings import (
 )
 from people_gator_api.schemas.enums import Language
 
-
-class OpenTelemetrySettings(BaseModel):
-    """OpenTelemetry configuration settings."""
-
-    enabled: bool = True
-    http_endpoint: str = "http://lgtm:4318"
-    grpc_endpoint: str = "http://lgtm:4317"
-    traces_path: str = "/v1/traces"
-    logs_path: str = "/v1/logs"
-    metrics_path: str = "/v1/metrics"
-    profiles_path: str = "/v1/profiles"
-
-
-class BatchSettings(BaseModel):
-    """Maximum request sizes for batch API operations."""
-
-    max_entity_batch_size: int = Field(default=10_000, gt=0)
-    max_face_batch_size: int = Field(default=10_000, gt=0)
-    max_text_mention_batch_size: int = Field(default=10_000, gt=0)
-    max_media_batch_size: int = Field(default=10_000, gt=0)
-
-
-class CorsSettings(BaseModel):
-    """CORS (Cross-Origin Resource Sharing) configuration settings."""
-
-    allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
-
+# --------------------------------------------------------------------------------------
+# Persistence backend settings
+# --------------------------------------------------------------------------------------
 
 class PersistenceBaseSetting(BaseModel):
     """Shared configuration for a persistence backend."""
-
-    enabled: bool = True
 
 
 class PostgresSettings(PersistenceBaseSetting):
@@ -57,10 +30,48 @@ class PostgresSettings(PersistenceBaseSetting):
     database: str
 
 
+class WeaviateSettings(PersistenceBaseSetting):
+    http_host: str
+    http_port: int = Field(le=65535, ge=1)
+    http_secure: bool
+    grpc_host: str
+    grpc_port: int = Field(le=65535, ge=1)
+    grpc_secure: bool
+    api_key: str | None = None
+    startup_timeout_seconds: float = Field(default=300.0, gt=0)
+    startup_retry_interval_seconds: float = Field(default=2.0, gt=0)
+
+
+class PersistenceSettings(BaseModel):
+    """Configure exactly one enabled persistence backend."""
+
+    postgres: PostgresSettings | None = None
+    weaviate: WeaviateSettings | None = None
+
+    @model_validator(mode="after")
+    def validate_backend(self) -> Self:
+        enabled_count = sum(
+            config is not None for config in (self.postgres, self.weaviate)
+        )
+        if enabled_count != 1:
+            raise ValueError("Exactly one persistence backend must be set")
+        return self
+
+    @property
+    def backend(self) -> Literal["postgres", "weaviate"]:
+        """Backend selected by the validated enabled flags."""
+        return (
+            "postgres"
+            if self.postgres is not None
+            else "weaviate"
+        )
+
+# --------------------------------------------------------------------------------------
+# Filesystem backend settings
+# --------------------------------------------------------------------------------------
+
 class FilesystemBaseSetting(BaseModel):
     """Shared configuration for a filesystem backend."""
-
-    enabled: bool = True
 
 
 class S3Settings(FilesystemBaseSetting):
@@ -76,32 +87,32 @@ class S3Settings(FilesystemBaseSetting):
 
 class LocalStorageSettings(FilesystemBaseSetting):
     """Root directory for local object storage."""
-
-    enabled: bool = False
     root: Path = Path("./storage")
 
 
 class StorageSettings(BaseModel):
     model_config = {"extra": "forbid"}
     s3: S3Settings | None = None
-    local: LocalStorageSettings = Field(default_factory=LocalStorageSettings)
+    local: LocalStorageSettings | None = None
 
     @model_validator(mode="after")
     def validate_backend(self) -> Self:
         enabled_count = sum(
-            config is not None and config.enabled
-            for config in (self.s3, self.local)
+            config is not None for config in (self.s3, self.local)
         )
         if enabled_count != 1:
-            raise ValueError("Exactly one filesystem backend must be enabled")
+            raise ValueError("Exactly one filesystem backend must be set")
         return self
 
 
     @property
     def backend(self) -> Literal["s3", "local"]:
         """Backend selected by the validated enabled flags."""
-        return "local" if self.local.enabled else "s3"
+        return "local" if self.local is not None else "s3"
 
+# --------------------------------------------------------------------------------------
+# Image and page storage settings
+# --------------------------------------------------------------------------------------
 
 class ImageContentSettings(BaseModel):
     """S3 storage settings for original image content."""
@@ -116,7 +127,7 @@ class PageImageSettings(BaseModel):
 
 
 class PageImageCacheSettings(BaseModel):
-    """S3-backed cache for resized page images (JPEG only)."""
+    """Filesystem-backed cache for resized page images (JPEG only)."""
 
     enabled: bool = True
     key_prefix: str = "cache/page-images"
@@ -148,47 +159,17 @@ class AlignedFaceCropSettings(BaseModel):
     cache_enabled: bool = True
     cache_key_prefix: str = "cache/aligned-face-crops"
 
+# --------------------------------------------------------------------------------------
+# JWK and persistence backend settings
+# --------------------------------------------------------------------------------------
 
 class JwkSettings(BaseModel):
     key_path: str = "peoplegator_api/jwks.json"
     cache_ttl_seconds: int = Field(default=3600, gt=0)
 
-
-class WeaviateSettings(PersistenceBaseSetting):
-    enabled: bool = False
-    http_host: str
-    http_port: int = Field(le=65535, ge=1)
-    http_secure: bool
-    grpc_host: str
-    grpc_port: int = Field(le=65535, ge=1)
-    grpc_secure: bool
-    api_key: str | None = None
-    startup_timeout_seconds: float = Field(default=300.0, gt=0)
-    startup_retry_interval_seconds: float = Field(default=2.0, gt=0)
-
-
-class PersistenceSettings(BaseModel):
-    """Configure exactly one enabled persistence backend."""
-
-    postgres: PostgresSettings | None = None
-    weaviate: WeaviateSettings | None = None
-
-    @model_validator(mode="after")
-    def validate_backend(self) -> Self:
-        enabled_count = sum(
-            config is not None and config.enabled
-            for config in (self.postgres, self.weaviate)
-        )
-        if enabled_count != 1:
-            raise ValueError("Exactly one persistence backend must be enabled")
-        return self
-
-    @property
-    def backend(self) -> Literal["postgres", "weaviate"]:
-        """Backend selected by the validated enabled flags."""
-        return "postgres" if self.postgres is not None and self.postgres.enabled else "weaviate"
-
-
+# --------------------------------------------------------------------------------------
+# Inference services settings
+# --------------------------------------------------------------------------------------
 
 class EmbeddingServiceSettings(BaseModel):
     detect_and_embed_image_url: str = "http://localhost:8001/v1/faces/detect"
@@ -200,33 +181,49 @@ class EmbeddingServiceSettings(BaseModel):
 class OpenRouterSettings(BaseModel):
     """Fixed configuration for the OpenRouter-backed translation endpoint."""
 
-    api_key: str
+    api_key: str = "sk-..."
     model: str = "deepseek/deepseek-v4-flash"
     base_url: str = "https://openrouter.ai/api/v1"
     request_timeout_seconds: float = Field(default=30.0, gt=0)
     allowed_languages: list[Language] = Field(default_factory=lambda: list(Language))
 
+# --------------------------------------------------------------------------------------
+# Logging and telemetry settings
+# --------------------------------------------------------------------------------------
 
-class KeycloakSettings(BaseModel):
-    url: str
-    realm: str
-    audience: str
+class OpenTelemetrySettings(BaseModel):
+    """OpenTelemetry configuration settings."""
 
-    @computed_field
-    @property
-    def issuer(self) -> str:
-        return f"{self.url}/realms/{self.realm}"
+    enabled: bool = False
+    http_endpoint: str = "http://lgtm:4318"
+    grpc_endpoint: str = "http://lgtm:4317"
+    traces_path: str = "/v1/traces"
+    logs_path: str = "/v1/logs"
+    metrics_path: str = "/v1/metrics"
+    profiles_path: str = "/v1/profiles"
 
-    @computed_field
-    @property
-    def jwks_uri(self) -> str:
-        return f"{self.url}/realms/{self.realm}/protocol/openid-connect/certs"
 
-    @computed_field
-    @property
-    def openid_configuration(self) -> str:
-        return f"{self.url}/realms/{self.realm}/.well-known/openid-configuration"
+# --------------------------------------------------------------------------------------
+# Batch and CORS settings
+# --------------------------------------------------------------------------------------
 
+class BatchSettings(BaseModel):
+    """Maximum request sizes for batch API operations."""
+
+    max_entity_batch_size: int = Field(default=10_000, gt=0)
+    max_face_batch_size: int = Field(default=10_000, gt=0)
+    max_text_mention_batch_size: int = Field(default=10_000, gt=0)
+    max_media_batch_size: int = Field(default=10_000, gt=0)
+
+
+class CorsSettings(BaseModel):
+    """CORS (Cross-Origin Resource Sharing) configuration settings."""
+
+    allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
+
+# --------------------------------------------------------------------------------------
+# Full application settings
+# --------------------------------------------------------------------------------------
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -243,15 +240,14 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, le=65535, ge=1)
     host: str = "0.0.0.0"
     log_level: str = "INFO"
-    batch: BatchSettings = Field(default_factory=BatchSettings)
+    batch: BatchSettings = BatchSettings()
     cors: CorsSettings = CorsSettings()
     otel: OpenTelemetrySettings = OpenTelemetrySettings()
-    persistence: PersistenceSettings
-    storage: StorageSettings
+    persistence: PersistenceSettings = PersistenceSettings()
+    storage: StorageSettings = StorageSettings()
     jwk: JwkSettings = JwkSettings()
-    keycloak: KeycloakSettings
-    embedding_service: EmbeddingServiceSettings = EmbeddingServiceSettings()
-    openrouter: OpenRouterSettings
+    embedding_service: EmbeddingServiceSettings | None = None
+    openrouter: OpenRouterSettings | None = None
     image_content: ImageContentSettings = ImageContentSettings()
     page_image: PageImageSettings = PageImageSettings()
     page_image_cache: PageImageCacheSettings = PageImageCacheSettings()
@@ -259,4 +255,4 @@ class Settings(BaseSettings):
     aligned_face_crop: AlignedFaceCropSettings = AlignedFaceCropSettings()
 
 
-settings = Settings()  # type: ignore
+settings = Settings()

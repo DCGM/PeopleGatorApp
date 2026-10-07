@@ -1,10 +1,13 @@
 import datetime
 import time
 import json
+import logging
 from typing import Any
+from botocore.exceptions import ClientError
 from fastapi import HTTPException
 from joserfc.errors import ClaimError
 from joserfc.jwk import (
+    ECKey,
     KeySet,
     KeySetSerialization,
 )
@@ -14,6 +17,8 @@ from starlette import status
 from people_gator_api.services.filesystem_service import open_file
 from people_gator_api.settings import settings
 
+
+logger = logging.getLogger(__name__)
 
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
@@ -30,8 +35,22 @@ async def get_key_set() -> KeySet:
         and now - _last_fetch_time < settings.jwk.cache_ttl_seconds
     ):
         return _keyset
-    async with open_file(settings.jwk.key_path, mode="r") as f:
-        jwks_data: KeySetSerialization = json.load(f)
+    try:
+        async with open_file(settings.jwk.key_path, mode="r") as f:
+            jwks_data: KeySetSerialization = json.load(f)
+    except (FileNotFoundError, ClientError) as exc:
+        if isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") not in (
+            "NoSuchKey", "404", "NotFound",
+        ):
+            raise
+        logger.warning("JWK key set is not available at %s.", settings.jwk.key_path)
+        logger.warning("Generating a new ES256 JWK key set at %s.", settings.jwk.key_path)
+        key = ECKey.generate_key(
+            "P-256", parameters={"alg": "ES256", "use": "sig"}, auto_kid=True,
+        )
+        jwks_data = KeySet([key]).as_dict(private=True)
+        async with open_file(settings.jwk.key_path, mode="w") as f:
+            json.dump(jwks_data, f)
     _keyset = KeySet.import_key_set(jwks_data)
     _last_fetch_time = now
     return _keyset

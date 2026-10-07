@@ -31,9 +31,14 @@ async def translate_route(
     user: BrowseUserDependency,
 ) -> TranslationResponse:
     del user
+    openrouter = settings.openrouter
+    if not openrouter:
+        raise_api_error(
+            status.HTTP_502_BAD_GATEWAY, "translation_failed", "OpenRouter settings are not configured"
+        )
     try:
         return await translate_text(
-            payload, settings.openrouter, get_openrouter_service()
+            payload, openrouter, get_openrouter_service()
         )
     except TranslationLanguageError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)

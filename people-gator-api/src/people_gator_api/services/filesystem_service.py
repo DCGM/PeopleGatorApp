@@ -18,14 +18,13 @@ from people_gator_api.settings import settings
 def get_filesystem() -> Filesystem:
     """Return the adapter selected by storage settings, without opening clients."""
     config = settings.storage
-    if config.backend == "local":
+    if config.backend == "local" and config.local is not None:
         from people_gator_api.filesystem.local import LocalFilesystem
-
         return LocalFilesystem(config.local.root)
-
-    from people_gator_api.filesystem.s3 import S3Filesystem
-
-    return S3Filesystem(config.s3)
+    if config.backend == "s3" and config.s3 is not None:
+        from people_gator_api.filesystem.s3 import S3Filesystem
+        return S3Filesystem(config.s3)
+    raise RuntimeError("No valid filesystem configuration found.")
 
 
 type FilesystemDependency = Annotated[Filesystem, Depends(get_filesystem)]

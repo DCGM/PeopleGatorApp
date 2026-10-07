@@ -5,7 +5,9 @@ from aiohttp import ClientSession, ClientTimeout
 
 from people_gator_api.schemas.enums import Language
 from people_gator_api.settings import OpenRouterSettings, settings
+from logging import getLogger
 
+logger = getLogger(__name__)
 
 class OpenRouterError(RuntimeError):
     pass
@@ -70,9 +72,13 @@ _service: HttpOpenRouterService | None = None
 
 async def init_openrouter_service() -> None:
     global _session, _service  # noqa: PLW0603
-    timeout = ClientTimeout(total=settings.openrouter.request_timeout_seconds)
+    openrouter_settings = settings.openrouter
+    if not openrouter_settings:
+        logger.warning("OpenRouter API key is not configured.")
+        return
+    timeout = ClientTimeout(total=openrouter_settings.request_timeout_seconds)
     _session = ClientSession(timeout=timeout)
-    _service = HttpOpenRouterService(settings.openrouter, _session)
+    _service = HttpOpenRouterService(openrouter_settings, _session)
 
 
 async def close_openrouter_service() -> None:
