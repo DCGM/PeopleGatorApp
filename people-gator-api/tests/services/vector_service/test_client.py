@@ -8,6 +8,7 @@ from weaviate.exceptions import UnexpectedStatusCodeError
 from people_gator_api.persistence.weaviate import client
 from people_gator_api.services import database_service
 from people_gator_api.persistence.weaviate import schema as weaviate_schema
+from people_gator_api.settings import PersistenceSettings, settings
 
 
 class _FakeCollections:
@@ -84,6 +85,10 @@ class _LifecycleClient:
 async def test_init_weaviate_rebuilds_client_after_failed_connect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(settings, "persistence", PersistenceSettings(weaviate={
+        "http_host": "localhost", "http_port": 8080, "http_secure": False,
+        "grpc_host": "localhost", "grpc_port": 50051, "grpc_secure": False,
+    }))
     failed_client = _LifecycleClient(ConnectionError("database is starting"))
     connected_client = _LifecycleClient()
     clients = iter((failed_client, connected_client))

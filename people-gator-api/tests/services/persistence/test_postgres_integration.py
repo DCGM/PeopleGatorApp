@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 from pydantic import AnyUrl
+from sqlalchemy.engine import make_url
 
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.schemas.entities import (
@@ -13,7 +14,7 @@ from people_gator_api.schemas.entities import (
     EntityListRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.enums import DEFAULT_FACE_EMBEDDING_MODEL, EntityType
+from people_gator_api.schemas.enums import DEFAULT_FACE_EMBEDDING_MODEL, EntityType, FaceKeypointType
 from people_gator_api.schemas.faces import (
     BoundingBox,
     FaceCreateRequest,
@@ -67,7 +68,7 @@ POSTGRES_TEST_URL = os.getenv("PEOPLE_GATOR_POSTGRES_TEST_URL")
 @pytest.mark.asyncio
 async def test_postgres_contract_round_trip() -> None:
     assert POSTGRES_TEST_URL is not None
-    engine = make_postgres_engine(POSTGRES_TEST_URL)
+    engine = make_postgres_engine(make_url(POSTGRES_TEST_URL))
     await create_postgres_schema(engine)
     sessions = make_postgres_session_factory(engine)
     marker = uuid.uuid4().hex
@@ -171,8 +172,8 @@ async def test_postgres_contract_round_trip() -> None:
                     identifier=marker,
                     bounding_box=BoundingBox(x=1, y=2, width=20, height=30),
                     keypoints=[
-                        Keypoint(type=f"k{i}", x=float(i), y=float(i + 1))
-                        for i in range(5)
+                        Keypoint(type=keypoint_type, x=float(i), y=float(i + 1))
+                        for i, keypoint_type in enumerate(FaceKeypointType)
                     ],
                     confidence=0.9,
                     embeddings=[
@@ -192,8 +193,8 @@ async def test_postgres_contract_round_trip() -> None:
                     identifier=f"other-{marker}",
                     bounding_box=BoundingBox(x=2, y=3, width=20, height=30),
                     keypoints=[
-                        Keypoint(type=f"k{i}", x=float(i + 1), y=float(i + 2))
-                        for i in range(5)
+                        Keypoint(type=keypoint_type, x=float(i + 1), y=float(i + 2))
+                        for i, keypoint_type in enumerate(FaceKeypointType)
                     ],
                     confidence=0.8,
                     embeddings=[

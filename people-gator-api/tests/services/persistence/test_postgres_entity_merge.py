@@ -4,6 +4,7 @@ import os
 import uuid
 
 import pytest
+from sqlalchemy.engine import make_url
 from pydantic import AnyUrl
 
 from people_gator_api.persistence.postgres import postgres_database
@@ -47,7 +48,7 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database_url = os.environ["PEOPLE_GATOR_POSTGRES_TEST_URL"]
-    engine = make_postgres_engine(database_url)
+    engine = make_postgres_engine(make_url(database_url))
     await create_postgres_schema(engine)
     sessions = make_postgres_session_factory(engine)
     marker = uuid.uuid4().hex
