@@ -117,6 +117,9 @@ services:
       PEOPLE_GATOR_API__DEBUG: "true"
       PEOPLE_GATOR_API__RELOAD: "true"
       PEOPLE_GATOR_API__LOG_LEVEL: ${PEOPLE_GATOR_API__LOG_LEVEL:-info}
+      ## Users and JWK paths
+      PEOPLE_GATOR_API__JWK__KEY_PATH: peplegator_api/jwk.json
+      PEOPLE_GATOR_API__JWK__USERS_PATH: peplegator_api/users.json
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:$${PEOPLE_GATOR_API__PORT:-8000}/api/v1/health >/dev/null"]
       interval: 10s
