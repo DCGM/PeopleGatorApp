@@ -27,6 +27,7 @@ services:
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-people_gator}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-people_gator}
@@ -48,6 +49,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file: .env
     environment:
       PEOPLE_GATOR_API__HOST: "0.0.0.0"
       PEOPLE_GATOR_API__PORT: "8000"

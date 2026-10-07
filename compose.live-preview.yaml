@@ -14,7 +14,25 @@ services:
       file: compose.dev.yaml
       service: backend
     restart: always
-    environment:
+    env_file: .env
+    environment: !override
+      PEOPLE_GATOR_API__HOST: "0.0.0.0"
+      PEOPLE_GATOR_API__PORT: "8000"
+      PEOPLE_GATOR_API__DEBUG: "true"
+      PEOPLE_GATOR_API__RELOAD: "true"
+      PEOPLE_GATOR_API__LOG_LEVEL: ${PEOPLE_GATOR_API__LOG_LEVEL:-info}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: db
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: "5432"
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${POSTGRES_USER:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${POSTGRES_PASSWORD:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${POSTGRES_DB:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: bootstrap
+      PEOPLE_GATOR_API__STORAGE__S3__ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      PEOPLE_GATOR_API__STORAGE__S3__SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      PEOPLE_GATOR_API__STORAGE__S3__ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      PEOPLE_GATOR_API__STORAGE__S3__REGION: ${AWS_S3_REGION:-}
+      PEOPLE_GATOR_API__STORAGE__S3__BUCKET_NAME: peoplegator-ingest
+      PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ""
       PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["https://live-preview.peoplegator.dev"]'
       PEOPLE_GATOR_API__JWK__ISSUER: https://live-preview.peoplegator.dev
       PEOPLE_GATOR_API__JWK__AUDIENCE: live-preview.peoplegator.dev
