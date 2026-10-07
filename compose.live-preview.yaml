@@ -15,7 +15,7 @@ services:
       service: backend
     restart: always
     environment:
-      PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: '^https://live-preview\.peoplegator\.dev$$'
+      PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["https://live-preview.peoplegator.dev"]'
       PEOPLE_GATOR_API__JWK__ISSUER: https://live-preview.peoplegator.dev
       PEOPLE_GATOR_API__JWK__AUDIENCE: live-preview.peoplegator.dev
     # Replace localhost routers inherited from the development stack.

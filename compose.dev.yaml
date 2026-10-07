@@ -1,6 +1,8 @@
 name: people-gator-dev
 
 # Start with: docker compose -f compose.dev.yaml up --build --watch
+# HTTP_HOST selects the routed hostname (default: localhost).
+# PUBLIC_ORIGIN optionally overrides the browser-facing URL, e.g. for HTTPS.
 services:
   traefik:
     image: traefik:v3.6
@@ -59,9 +61,10 @@ services:
       PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${POSTGRES_DB:-people_gator}
       PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: bootstrap
       PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /data
-      PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: '^http://localhost:8080$$'
-      PEOPLE_GATOR_API__JWK__ISSUER: http://localhost:8080
-      PEOPLE_GATOR_API__JWK__AUDIENCE: localhost
+      PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ""
+      PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}"]'
+      PEOPLE_GATOR_API__JWK__ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
+      PEOPLE_GATOR_API__JWK__AUDIENCE: ${HTTP_HOST:-localhost}
       # The existing example users file supplies the frontend's test/test login.
       PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
       PEOPLE_GATOR_API__OPENROUTER__API_KEY: ${OPENROUTER_API_KEY:-}
@@ -107,7 +110,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.people-gator-dev-api.entrypoints: web
-      traefik.http.routers.people-gator-dev-api.rule: 'Host(`localhost`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`) )'
+      traefik.http.routers.people-gator-dev-api.rule: 'Host(`${HTTP_HOST:-localhost}`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`) )'
       traefik.http.routers.people-gator-dev-api.priority: "100"
       traefik.http.routers.people-gator-dev-api.service: people-gator-dev-api
       traefik.http.services.people-gator-dev-api.loadbalancer.server.port: "8000"
@@ -123,7 +126,7 @@ services:
     environment:
       NODE_ENV: development
       CHOKIDAR_USEPOLLING: "true"
-      ALLOWED_VITE_HOSTS: "localhost"
+      ALLOWED_VITE_HOSTS: ${HTTP_HOST:-localhost}
       VITE_API_BASE_URL: .
       VITE_API_USERNAME: test
       VITE_API_PASSWORD: test
@@ -158,7 +161,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.people-gator-dev-app.entrypoints: web
-      traefik.http.routers.people-gator-dev-app.rule: 'Host(`localhost`)'
+      traefik.http.routers.people-gator-dev-app.rule: 'Host(`${HTTP_HOST:-localhost}`)'
       traefik.http.routers.people-gator-dev-app.priority: "10"
       traefik.http.routers.people-gator-dev-app.service: people-gator-dev-app
       traefik.http.services.people-gator-dev-app.loadbalancer.server.port: "8080"

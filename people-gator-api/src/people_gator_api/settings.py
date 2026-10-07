@@ -214,6 +214,7 @@ class BatchSettings(BaseModel):
 class CorsSettings(BaseModel):
     """CORS (Cross-Origin Resource Sharing) configuration settings."""
 
+    allow_origins: list[str] = Field(default_factory=list)
     allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
 
 
