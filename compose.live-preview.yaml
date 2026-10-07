@@ -1,0 +1,63 @@
+name: people-gator-live-preview
+
+# Start with: docker compose -f compose.live-preview.yaml up --build --watch
+# Uses the existing Traefik instance on the external web network.
+services:
+  db:
+    extends:
+      file: compose.dev.yaml
+      service: db
+    restart: always
+
+  backend:
+    extends:
+      file: compose.dev.yaml
+      service: backend
+    restart: always
+    environment:
+      PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: '^https://live-preview\.peoplegator\.dev$$'
+      PEOPLE_GATOR_API__JWK__ISSUER: https://live-preview.peoplegator.dev
+      PEOPLE_GATOR_API__JWK__AUDIENCE: live-preview.peoplegator.dev
+    # Replace localhost routers inherited from the development stack.
+    labels: !override
+      traefik.enable: "true"
+      traefik.docker.network: web
+      traefik.http.routers.people-gator-live-preview-api.entrypoints: websecure
+      traefik.http.routers.people-gator-live-preview-api.rule: 'Host(`live-preview.peoplegator.dev`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`) )'
+      traefik.http.routers.people-gator-live-preview-api.priority: "100"
+      traefik.http.routers.people-gator-live-preview-api.service: people-gator-live-preview-api
+      traefik.http.routers.people-gator-live-preview-api.tls: "true"
+      traefik.http.routers.people-gator-live-preview-api.tls.certresolver: tlschallenge
+      traefik.http.services.people-gator-live-preview-api.loadbalancer.server.port: "8000"
+    networks:
+      - default
+      - web
+
+  frontend:
+    extends:
+      file: compose.dev.yaml
+      service: frontend
+    restart: always
+    environment:
+      ALLOWED_VITE_HOSTS: live-preview.peoplegator.dev
+      VITE_API_BASE_URL: https://live-preview.peoplegator.dev
+    labels: !override
+      traefik.enable: "true"
+      traefik.docker.network: web
+      traefik.http.routers.people-gator-live-preview-app.entrypoints: websecure
+      traefik.http.routers.people-gator-live-preview-app.rule: 'Host(`live-preview.peoplegator.dev`)'
+      traefik.http.routers.people-gator-live-preview-app.priority: "10"
+      traefik.http.routers.people-gator-live-preview-app.service: people-gator-live-preview-app
+      traefik.http.routers.people-gator-live-preview-app.tls: "true"
+      traefik.http.routers.people-gator-live-preview-app.tls.certresolver: tlschallenge
+      traefik.http.services.people-gator-live-preview-app.loadbalancer.server.port: "8080"
+    networks:
+      - web
+
+volumes:
+  postgres-data:
+  api-data:
+
+networks:
+  web:
+    external: true
