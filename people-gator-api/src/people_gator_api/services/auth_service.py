@@ -65,7 +65,7 @@ class UserRecord(TypedDict):
 
 
 _refresh_sessions: dict[str, dict[str, RefreshSession]] = {}
-_refresh_sessions_lock = asyncio.Lock()
+_refresh_session_locks: dict[str, asyncio.Lock] = {}
 _users_adapter = TypeAdapter(dict[str, UserRecord])
 
 
@@ -102,29 +102,29 @@ async def get_token(
     username = form_data.username
     password = form_data.password
     scopes = form_data.scopes
-    async with _refresh_sessions_lock:
-        users = await get_users()
-        user_record = users.get(username)
-        valid_password = False
-        if user_record is not None:
-            try:
-                valid_password = argon2.PasswordHasher().verify(user_record["hash"], password)
-            except argon2.exceptions.VerifyMismatchError:
-                pass
-        if user_record is None or not valid_password:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid username or password",
-                headers={"WWW-Authenticate": "Basic"},
-            )
-        _check_scopes(scopes, user_record["scopes"])
-
-        access_token = await issue_access_token(subject=username, scopes=scopes)
-        jti = str(uuid.uuid4())
-        refresh_token = await issue_refresh_token(
-            subject=username, scopes=scopes, jti=jti,
+    users = await get_users()
+    user_record = users.get(username)
+    valid_password = False
+    if user_record is not None:
+        try:
+            valid_password = argon2.PasswordHasher().verify(user_record["hash"], password)
+        except argon2.exceptions.VerifyMismatchError:
+            pass
+    if user_record is None or not valid_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
         )
+    _check_scopes(scopes, user_record["scopes"])
 
+    access_token = await issue_access_token(subject=username, scopes=scopes)
+    jti = str(uuid.uuid4())
+    refresh_token = await issue_refresh_token(
+        subject=username, scopes=scopes, jti=jti,
+    )
+
+    async with _refresh_session_locks.setdefault(username, asyncio.Lock()):
         refresh_sessions = _refresh_sessions.setdefault(username, {})
         refresh_sessions[jti] = {"jti": jti, "scopes": scopes}
         if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
@@ -184,31 +184,38 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
             detail="Invalid refresh token claims",
         )
     
-    async with _refresh_sessions_lock:
-        users = await get_users()
-        user_record = users.get(subject)
-        if user_record is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-            )
+    users = await get_users()
+    user_record = users.get(subject)
+    if user_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
 
+    session = _refresh_sessions.get(subject, {}).get(jti)
+    if session is None or session["jti"] != jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token session expired",
+        )
+
+    scopes = session["scopes"]
+    _check_scopes(scopes, user_record["scopes"])
+
+    access_token = await issue_access_token(subject=subject, scopes=scopes)
+    new_jti = str(uuid.uuid4())
+    new_refresh_token = await issue_refresh_token(
+        subject=subject, scopes=scopes, jti=new_jti,
+    )
+
+    async with _refresh_session_locks.setdefault(subject, asyncio.Lock()):
         refresh_sessions = _refresh_sessions.get(subject, {})
-        session = refresh_sessions.get(jti)
-        if session is None or session["jti"] != jti:
+        # Signing awaits I/O; another request may have rotated or evicted the session.
+        if refresh_sessions.get(jti) is not session:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token session expired",
             )
-
-        scopes = session["scopes"]
-        _check_scopes(scopes, user_record["scopes"])
-
-        access_token = await issue_access_token(subject=subject, scopes=scopes)
-        new_jti = str(uuid.uuid4())
-        new_refresh_token = await issue_refresh_token(
-            subject=subject, scopes=scopes, jti=new_jti,
-        )
         del refresh_sessions[jti]
         refresh_sessions[new_jti] = {"jti": new_jti, "scopes": scopes}
     

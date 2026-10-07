@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import time
 import json
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
+_keyset_lock = asyncio.Lock()
 
 TOKEN_ISSUER = settings.jwk.issuer
 TOKEN_AUDIENCE = settings.jwk.audience
@@ -35,25 +37,34 @@ async def get_key_set() -> KeySet:
         and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
     ):
         return _keyset
-    try:
-        async with open_file(settings.jwk.key_path, mode="r") as f:
-            jwks_data: KeySetSerialization = json.load(f)
-    except (FileNotFoundError, ClientError) as exc:
-        if isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") not in (
-            "NoSuchKey", "404", "NotFound",
+    async with _keyset_lock:
+        now = time.monotonic()
+        # A concurrent caller may have populated the cache while we waited.
+        if (
+            _keyset is not None
+            and _last_fetch_time is not None
+            and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
         ):
-            raise
-        logger.warning("JWK key set is not available at %s.", settings.jwk.key_path)
-        logger.warning("Generating a new ES256 JWK key set at %s.", settings.jwk.key_path)
-        key = ECKey.generate_key(
-            "P-256", parameters={"alg": "ES256", "use": "sig"}, auto_kid=True,
-        )
-        jwks_data = KeySet([key]).as_dict(private=True)
-        async with open_file(settings.jwk.key_path, mode="w") as f:
-            json.dump(jwks_data, f)
-    _keyset = KeySet.import_key_set(jwks_data)
-    _last_fetch_time = now
-    return _keyset
+            return _keyset
+        try:
+            async with open_file(settings.jwk.key_path, mode="r") as f:
+                jwks_data: KeySetSerialization = json.load(f)
+        except (FileNotFoundError, ClientError) as exc:
+            if isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") not in (
+                "NoSuchKey", "404", "NotFound",
+            ):
+                raise
+            logger.warning("JWK key set is not available at %s.", settings.jwk.key_path)
+            logger.warning("Generating a new ES256 JWK key set at %s.", settings.jwk.key_path)
+            key = ECKey.generate_key(
+                "P-256", parameters={"alg": "ES256", "use": "sig"}, auto_kid=True,
+            )
+            jwks_data = KeySet([key]).as_dict(private=True)
+            async with open_file(settings.jwk.key_path, mode="w") as f:
+                json.dump(jwks_data, f)
+        _keyset = KeySet.import_key_set(jwks_data)
+        _last_fetch_time = time.monotonic()
+        return _keyset
 
 def _now_datetime() -> datetime.datetime:
     """Return the current UTC time as a datetime object."""

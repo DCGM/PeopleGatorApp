@@ -27,9 +27,10 @@ def users_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         users_path="auth/custom-users.json", key_path="auth/jwks.json",
     ))
     monkeypatch.setattr(auth_service, "_refresh_sessions", {})
-    monkeypatch.setattr(auth_service, "_refresh_sessions_lock", asyncio.Lock())
+    monkeypatch.setattr(auth_service, "_refresh_session_locks", {})
     monkeypatch.setattr(jwk_service, "_keyset", None)
     monkeypatch.setattr(jwk_service, "_last_fetch_time", None)
+    monkeypatch.setattr(jwk_service, "_keyset_lock", asyncio.Lock())
     path = tmp_path / settings.jwk.users_path
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({
@@ -94,7 +95,7 @@ async def test_refresh_sessions_do_not_survive_restart(
     before = users_file.read_bytes()
     token = await login()
     monkeypatch.setattr(auth_service, "_refresh_sessions", {})
-    monkeypatch.setattr(auth_service, "_refresh_sessions_lock", asyncio.Lock())
+    monkeypatch.setattr(auth_service, "_refresh_session_locks", {})
     with pytest.raises(HTTPException) as expired:
         await auth_service.refresh_access_token(token.refresh_token)
     assert expired.value.status_code == 401
@@ -148,17 +149,113 @@ async def test_session_limit_and_concurrent_logins(users_file: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_refresh_only_succeeds_once(users_file: Path) -> None:
+async def test_concurrent_refresh_only_succeeds_once(
+    users_file: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     token = await login()
-    results = await asyncio.gather(
-        auth_service.refresh_access_token(token.refresh_token),
-        auth_service.refresh_access_token(token.refresh_token),
-        return_exceptions=True,
-    )
+    original_sign = auth_service.issue_refresh_token
+    both_signing = asyncio.Event()
+    signing_count = 0
+
+    async def sign_together(subject: str, scopes: list[str], jti: str) -> str:
+        nonlocal signing_count
+        signing_count += 1
+        if signing_count == 2:
+            both_signing.set()
+        await both_signing.wait()
+        return await original_sign(subject=subject, scopes=scopes, jti=jti)
+
+    monkeypatch.setattr(auth_service, "issue_refresh_token", sign_together)
+    async with asyncio.timeout(5):
+        results = await asyncio.gather(
+            auth_service.refresh_access_token(token.refresh_token),
+            auth_service.refresh_access_token(token.refresh_token),
+            return_exceptions=True,
+        )
     failures = [result for result in results if isinstance(result, HTTPException)]
     assert len(failures) == 1
     assert failures[0].status_code == 401
     assert sum(isinstance(result, TokenResponse) for result in results) == 1
+
+
+@pytest.mark.asyncio
+async def test_login_signs_before_user_lock_and_other_users_proceed(
+    users_file: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    users = json.loads(users_file.read_text())
+    users["bob"] = users["alice"]
+    users_file.write_text(json.dumps(users))
+    locks = {"alice": asyncio.Lock()}
+    monkeypatch.setattr(auth_service, "_refresh_session_locks", locks)
+    alice_signed = asyncio.Event()
+    original_sign = auth_service.issue_refresh_token
+
+    async def record_signing(subject: str, scopes: list[str], jti: str) -> str:
+        token = await original_sign(subject=subject, scopes=scopes, jti=jti)
+        if subject == "alice":
+            alice_signed.set()
+        return token
+
+    monkeypatch.setattr(auth_service, "issue_refresh_token", record_signing)
+    async with asyncio.timeout(5):
+        async with asyncio.TaskGroup() as tasks:
+            async with locks["alice"]:
+                alice_login = tasks.create_task(login())
+                await alice_signed.wait()
+                assert not alice_login.done()
+                bob_token = await login(username="bob")
+                assert (await jwk_service.verify_access_token(bob_token.access_token))["sub"] == "bob"
+    assert (await jwk_service.verify_access_token(alice_login.result().access_token))["sub"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_refresh_does_not_restore_session_evicted_while_signing(
+    users_file: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = await login()
+    for _ in range(3):
+        await login()
+    signing_started = asyncio.Event()
+    resume_signing = asyncio.Event()
+    original_sign = auth_service.issue_refresh_token
+    pause_next_sign = True
+
+    async def pause_signing(subject: str, scopes: list[str], jti: str) -> str:
+        nonlocal pause_next_sign
+        if pause_next_sign:
+            pause_next_sign = False
+            signing_started.set()
+            await resume_signing.wait()
+        return await original_sign(subject=subject, scopes=scopes, jti=jti)
+
+    monkeypatch.setattr(auth_service, "issue_refresh_token", pause_signing)
+
+    async def refresh_result() -> TokenResponse | HTTPException:
+        try:
+            return await auth_service.refresh_access_token(first.refresh_token)
+        except HTTPException as exc:
+            return exc
+
+    async with asyncio.timeout(5):
+        async with asyncio.TaskGroup() as tasks:
+            refreshing = tasks.create_task(refresh_result())
+            await signing_started.wait()
+            latest = await login()
+            resume_signing.set()
+    result = refreshing.result()
+    assert isinstance(result, HTTPException)
+    assert result.status_code == 401
+    assert (await auth_service.refresh_access_token(latest.refresh_token)).access_token
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_logins_share_signing_keys(users_file: Path) -> None:
+    users = json.loads(users_file.read_text())
+    users["bob"] = users["alice"]
+    users_file.write_text(json.dumps(users))
+    alice, bob = await asyncio.gather(login(), login(username="bob"))
+    assert (await jwk_service.verify_access_token(alice.access_token))["sub"] == "alice"
+    assert (await jwk_service.verify_access_token(bob.access_token))["sub"] == "bob"
 
 
 @pytest.mark.asyncio
