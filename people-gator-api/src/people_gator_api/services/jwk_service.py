@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
 
-TOKEN_ISSUER = "https://dev.people-gator.capturemyhand.com"
-TOKEN_AUDIENCE = "dev.people-gator.capturemyhand.com"
+TOKEN_ISSUER = settings.jwk.issuer
+TOKEN_AUDIENCE = settings.jwk.audience
 
 async def get_key_set() -> KeySet:
     global _keyset, _last_fetch_time
@@ -32,7 +32,7 @@ async def get_key_set() -> KeySet:
     if (
         _keyset is not None
         and _last_fetch_time is not None
-        and now - _last_fetch_time < settings.jwk.cache_ttl_seconds
+        and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
     ):
         return _keyset
     try:

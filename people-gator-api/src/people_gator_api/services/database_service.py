@@ -41,7 +41,7 @@ _postgres_engine: AsyncEngine | None = None
 _postgres_sessions: async_sessionmaker[AsyncSession] | None = None
 
 
-def _postgres_url() -> str:
+def postgres_url() -> URL:
     config = settings.persistence.postgres
     if config is None:
         raise ValueError("PostgreSQL requires persistence.postgres configuration")
@@ -52,12 +52,12 @@ def _postgres_url() -> str:
         host=config.host,
         port=config.port,
         database=config.database,
-    ).render_as_string(hide_password=False)
+    )
 
 
-def make_postgres_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
+def make_postgres_engine(database_url: URL, *, echo: bool = False) -> AsyncEngine:
     """Build an asyncpg engine for the isolated demo database."""
-    if not database_url.startswith("postgresql+asyncpg://"):
+    if database_url.drivername != "postgresql+asyncpg":
         raise ValueError("database_url must use the postgresql+asyncpg driver")
 
     engine = create_async_engine(database_url, echo=echo, pool_pre_ping=True)
@@ -87,7 +87,7 @@ async def init_postgres() -> None:
     if _postgres_engine is not None:
         return
     _postgres_engine = make_postgres_engine(
-        _postgres_url(),
+        postgres_url(),
         echo=settings.debug,
     )
     _postgres_sessions = make_postgres_session_factory(_postgres_engine)
@@ -214,7 +214,23 @@ async def init_db() -> None:
         return
     await init_postgres()
     assert _postgres_engine is not None
-    await create_postgres_schema(_postgres_engine)
+    config = settings.persistence.postgres
+    assert config is not None
+    if config.schema_mode == "bootstrap":
+        await create_postgres_schema(_postgres_engine)
+        return
+
+    from people_gator_api.persistence.postgres.schema import (
+        validate_postgres_schema,
+        wait_for_postgres,
+    )
+
+    await wait_for_postgres(
+        _postgres_engine,
+        timeout_seconds=config.startup_timeout_seconds,
+        retry_interval_seconds=config.startup_retry_interval_seconds,
+    )
+    await validate_postgres_schema(_postgres_engine)
 
 
 async def close_db() -> None:

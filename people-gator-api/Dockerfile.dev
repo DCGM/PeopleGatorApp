@@ -13,9 +13,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
 #RUN uv run people-gator-version
 
-ENV PEOPLE_GATOR_API__PORT=8000
-ENV PEOPLE_GATOR_API__HOST="0.0.0.0"
-ENV PEOPLE_GATOR_API__DEBUG=True
-ENV PEOPLE_GATOR_API__RELOAD=True
 EXPOSE 8000
-CMD ["uv", "run", "python", "-Xfrozen_modules=off", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "people_gator_api.cli.server"]
+CMD ["uv", "run", "people-gator-api"]
+

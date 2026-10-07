@@ -28,6 +28,9 @@ class PostgresSettings(PersistenceBaseSetting):
     user: str
     password: str
     database: str
+    schema_mode: Literal["bootstrap", "validate"] = "bootstrap"
+    startup_timeout_seconds: float = Field(default=60.0, gt=0)
+    startup_retry_interval_seconds: float = Field(default=2.0, gt=0)
 
 
 class WeaviateSettings(PersistenceBaseSetting):
@@ -160,14 +163,6 @@ class AlignedFaceCropSettings(BaseModel):
     cache_key_prefix: str = "cache/aligned-face-crops"
 
 # --------------------------------------------------------------------------------------
-# JWK and persistence backend settings
-# --------------------------------------------------------------------------------------
-
-class JwkSettings(BaseModel):
-    key_path: str = "peoplegator_api/jwks.json"
-    cache_ttl_seconds: int = Field(default=3600, gt=0)
-
-# --------------------------------------------------------------------------------------
 # Inference services settings
 # --------------------------------------------------------------------------------------
 
@@ -221,6 +216,14 @@ class CorsSettings(BaseModel):
 
     allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
 
+
+class JwkSettings(BaseModel):
+    key_path: str = "peoplegator_api/jwks.json"
+    key_cache_ttl_seconds: int = Field(default=3600, gt=0)
+    issuer: str = "https://dev.people-gator.capturemyhand.com"
+    audience: str = "dev.people-gator.capturemyhand.com"
+    
+
 # --------------------------------------------------------------------------------------
 # Full application settings
 # --------------------------------------------------------------------------------------
@@ -235,24 +238,24 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "People Gator API"
-    debug: bool = True
-    reload: bool = True
+    debug: bool = False
+    reload: bool = False
     port: int = Field(default=8000, le=65535, ge=1)
     host: str = "0.0.0.0"
     log_level: str = "INFO"
-    batch: BatchSettings = BatchSettings()
-    cors: CorsSettings = CorsSettings()
-    otel: OpenTelemetrySettings = OpenTelemetrySettings()
-    persistence: PersistenceSettings = PersistenceSettings()
-    storage: StorageSettings = StorageSettings()
-    jwk: JwkSettings = JwkSettings()
+    batch: BatchSettings = Field(default_factory=BatchSettings)
+    cors: CorsSettings = Field(default_factory=CorsSettings)
+    otel: OpenTelemetrySettings = Field(default_factory=OpenTelemetrySettings)
+    persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
+    jwk: JwkSettings = Field(default_factory=JwkSettings)
     embedding_service: EmbeddingServiceSettings | None = None
     openrouter: OpenRouterSettings | None = None
-    image_content: ImageContentSettings = ImageContentSettings()
-    page_image: PageImageSettings = PageImageSettings()
-    page_image_cache: PageImageCacheSettings = PageImageCacheSettings()
-    page_layout: PageLayoutSettings = PageLayoutSettings()
-    aligned_face_crop: AlignedFaceCropSettings = AlignedFaceCropSettings()
+    image_content: ImageContentSettings = Field(default_factory=ImageContentSettings)
+    page_image: PageImageSettings = Field(default_factory=PageImageSettings)
+    page_image_cache: PageImageCacheSettings = Field(default_factory=PageImageCacheSettings)
+    page_layout: PageLayoutSettings = Field(default_factory=PageLayoutSettings)
+    aligned_face_crop: AlignedFaceCropSettings = Field(default_factory=AlignedFaceCropSettings)
 
 
 settings = Settings()

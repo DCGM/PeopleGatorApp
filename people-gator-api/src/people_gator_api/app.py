@@ -47,13 +47,15 @@ async def well_known_cors(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_embedding_service()
-    await init_openrouter_service()
-    await init_db()
-    yield
-    await close_embedding_service()
-    await close_openrouter_service()
-    await close_db()
+    try:
+        await init_db()
+        await init_embedding_service()
+        await init_openrouter_service()
+        yield
+    finally:
+        await close_embedding_service()
+        await close_openrouter_service()
+        await close_db()
 
 
 def get_app() -> FastAPI:
