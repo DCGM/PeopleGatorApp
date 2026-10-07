@@ -54,8 +54,8 @@ services:
       # Logs
       PEOPLE_GATOR_API__LOG_LEVEL: ${PEOPLE_GATOR_API__LOG_LEVEL:-info}
       # Loggable users stored here
-      PEOPLE_GATOR_API__JWK__KEY_PATH: peplegator_api/jwk.json
-      PEOPLE_GATOR_API__JWK__USERS_PATH: peplegator_api/users.json
+      PEOPLE_GATOR_API__JWK__KEY_PATH: peoplegator_api/jwk.json
+      PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/v1/health >/dev/null"]
       interval: 10s

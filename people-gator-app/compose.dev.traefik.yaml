@@ -1,0 +1,34 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_API_BASE_URL: "https://preview.peoplegator.dev"
+      ALLOWED_VITE_HOSTS: "preview.peoplegator.dev"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: web
+      traefik.http.routers.people-gator-app-dev.rule: Host(`preview.peoplegator.dev`)
+      traefik.http.routers.people-gator-app-dev.entrypoints: websecure
+      traefik.http.routers.people-gator-app-dev.tls: "true"
+      traefik.http.routers.people-gator-app-dev.tls.certresolver: tlschallenge
+      traefik.http.services.people-gator-app-dev.loadbalancer.server.port: "5173"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true

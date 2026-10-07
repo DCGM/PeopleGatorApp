@@ -4,9 +4,13 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    ports:
+      - "5173:5173"
     environment:
       NODE_ENV: development
       CHOKIDAR_USEPOLLING: "true"
+      VITE_API_BASE_URL: "http://localhost:5173"
+      ALLOWED_VITE_HOSTS: "localhost"
     volumes:
       - .:/app
       - /app/node_modules
@@ -16,17 +20,5 @@ services:
       timeout: 3s
       retries: 12
       start_period: 15s
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: web
-      traefik.http.routers.people-gator-app-dev.rule: Host(`dev.people-gator.capturemyhand.com`)
-      traefik.http.routers.people-gator-app-dev.entrypoints: websecure
-      traefik.http.routers.people-gator-app-dev.tls: "true"
-      traefik.http.routers.people-gator-app-dev.tls.certresolver: tlschallenge
-      traefik.http.services.people-gator-app-dev.loadbalancer.server.port: "5173"
     networks:
       - web
-
-networks:
-  web:
-    external: true
