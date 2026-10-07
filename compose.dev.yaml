@@ -1,0 +1,121 @@
+name: people-gator-dev
+
+# Start with: docker compose up --build
+services:
+  traefik:
+    image: traefik:v3.6
+    restart: unless-stopped
+    command:
+      - --entrypoints.web.address=:80
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - '--providers.docker.constraints=Label(`com.docker.compose.project`, `${COMPOSE_PROJECT_NAME:-people-gator-dev}`)'
+      - --ping=true
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      # Rootless Docker socket; DOCKER_SOCKET can override a custom location.
+      - ${DOCKER_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/1000}/docker.sock}:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-people_gator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-people_gator}
+      POSTGRES_DB: ${POSTGRES_DB:-people_gator}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  backend:
+    build:
+      context: ./people-gator-api
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PEOPLE_GATOR_API__HOST: "0.0.0.0"
+      PEOPLE_GATOR_API__PORT: "8000"
+      PEOPLE_GATOR_API__DEBUG: "true"
+      PEOPLE_GATOR_API__RELOAD: "true"
+      PEOPLE_GATOR_API__LOG_LEVEL: ${PEOPLE_GATOR_API__LOG_LEVEL:-info}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: db
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: "5432"
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${POSTGRES_USER:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${POSTGRES_PASSWORD:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${POSTGRES_DB:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: bootstrap
+      PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /data
+      PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: '^http://localhost:8080$$'
+      PEOPLE_GATOR_API__JWK__ISSUER: http://localhost:8080
+      PEOPLE_GATOR_API__JWK__AUDIENCE: localhost
+      # The existing example users file supplies the frontend's test/test login.
+      PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
+      PEOPLE_GATOR_API__OPENROUTER__API_KEY: ${OPENROUTER_API_KEY:-}
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./people-gator-api/src:/app/src
+      - api-data:/data
+      - ./people-gator-api/example.users.json:/data/peoplegator_api/users.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.people-gator-dev-api.entrypoints: web
+      traefik.http.routers.people-gator-dev-api.rule: 'Host(`localhost`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`) )'
+      traefik.http.routers.people-gator-dev-api.priority: "100"
+      traefik.http.routers.people-gator-dev-api.service: people-gator-dev-api
+      traefik.http.services.people-gator-dev-api.loadbalancer.server.port: "8000"
+
+  frontend:
+    build:
+      context: ./people-gator-app
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      ALLOWED_VITE_HOSTS: "localhost"
+      VITE_API_BASE_URL: .
+      VITE_API_USERNAME: test
+      VITE_API_PASSWORD: test
+    volumes:
+      - ./people-gator-app:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.people-gator-dev-app.entrypoints: web
+      traefik.http.routers.people-gator-dev-app.rule: 'Host(`localhost`)'
+      traefik.http.routers.people-gator-dev-app.priority: "10"
+      traefik.http.routers.people-gator-dev-app.service: people-gator-dev-app
+      traefik.http.services.people-gator-dev-app.loadbalancer.server.port: "8080"
+
+volumes:
+  postgres-data:
+  api-data:
