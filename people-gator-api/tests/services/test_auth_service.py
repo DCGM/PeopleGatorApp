@@ -1,0 +1,249 @@
+import asyncio
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import argon2
+import pytest
+from botocore.exceptions import ClientError
+from fastapi import HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import ValidationError
+
+from people_gator_api.filesystem.local import LocalFilesystem
+from people_gator_api.schemas.auth import TokenResponse
+from people_gator_api.services import auth_service, jwk_service
+from people_gator_api.settings import (
+    JwkSettings, LocalStorageSettings, Settings, StorageSettings, settings,
+)
+
+
+@pytest.fixture
+def users_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(settings, "storage", StorageSettings(
+        local=LocalStorageSettings(root=tmp_path),
+    ))
+    monkeypatch.setattr(settings, "jwk", JwkSettings(
+        users_path="auth/custom-users.json", key_path="auth/jwks.json",
+    ))
+    monkeypatch.setattr(auth_service, "_refresh_sessions", {})
+    monkeypatch.setattr(auth_service, "_refresh_sessions_lock", asyncio.Lock())
+    monkeypatch.setattr(jwk_service, "_keyset", None)
+    monkeypatch.setattr(jwk_service, "_last_fetch_time", None)
+    path = tmp_path / settings.jwk.users_path
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({
+        "alice": {
+            "hash": argon2.PasswordHasher().hash("secret"),
+            "scopes": [auth_service.BROWSE_SCOPE, auth_service.ANNOTATE_SCOPE],
+        },
+        "bob": {"hash": "unused", "scopes": []},
+    }))
+    return path
+
+
+async def login(
+    username: str = "alice", password: str = "secret",
+    scope: str = auth_service.BROWSE_SCOPE,
+) -> TokenResponse:
+    return await auth_service.get_token(OAuth2PasswordRequestForm(
+        username=username, password=password, scope=scope,
+    ))
+
+
+def test_users_path_environment_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PEOPLE_GATOR_API__JWK__USERS_PATH", "custom/users.json")
+    configured = Settings(
+        _env_file=None,  # type: ignore[reportCallIssue]
+        persistence={"postgres": {
+            "host": "localhost", "port": 5432, "user": "test",
+            "password": "test", "database": "test",
+        }},
+        storage={"local": {}},
+    )
+    assert configured.jwk.users_path == "custom/users.json"
+    assert JwkSettings().users_path == "peoplegator_api/users.json"
+    with pytest.raises(ValidationError):
+        JwkSettings(users_path="")
+
+
+@pytest.mark.asyncio
+async def test_login_and_refresh_keep_users_file_unchanged(users_file: Path) -> None:
+    before = users_file.read_bytes()
+    token = await login()
+    claims = await jwk_service.verify_access_token(token.access_token)
+    assert claims["sub"] == "alice"
+    assert claims["scopes"] == [auth_service.BROWSE_SCOPE]
+    original_jti = (await jwk_service.verify_refresh_token(token.refresh_token))["jti"]
+    refreshed = await auth_service.refresh_access_token(token.refresh_token)
+    refreshed_claims = await jwk_service.verify_access_token(refreshed.access_token)
+    assert refreshed_claims["sub"] == "alice"
+    assert refreshed_claims["scopes"] == [auth_service.BROWSE_SCOPE]
+    new_jti = (await jwk_service.verify_refresh_token(refreshed.refresh_token))["jti"]
+    assert original_jti != new_jti
+    with pytest.raises(HTTPException) as expired:
+        await auth_service.refresh_access_token(token.refresh_token)
+    assert expired.value.status_code == 401
+    assert users_file.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_refresh_sessions_do_not_survive_restart(
+    users_file: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = users_file.read_bytes()
+    token = await login()
+    monkeypatch.setattr(auth_service, "_refresh_sessions", {})
+    monkeypatch.setattr(auth_service, "_refresh_sessions_lock", asyncio.Lock())
+    with pytest.raises(HTTPException) as expired:
+        await auth_service.refresh_access_token(token.refresh_token)
+    assert expired.value.status_code == 401
+    assert users_file.read_bytes() == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("username,password,scope,code", [
+    ("alice", "wrong", auth_service.BROWSE_SCOPE, 401),
+    ("unknown", "secret", auth_service.BROWSE_SCOPE, 401),
+    ("alice", "secret", "unknown:scope", 403),
+    ("alice", "secret", auth_service.ADMIN_SCOPE, 403),
+    ("alice", "secret", f"{auth_service.BROWSE_SCOPE} {auth_service.INGEST_SCOPE}", 403),
+])
+async def test_rejected_login_does_not_modify_users(
+    users_file: Path, username: str, password: str, scope: str, code: int,
+) -> None:
+    before = users_file.read_bytes()
+    with pytest.raises(HTTPException) as rejected:
+        await login(username, password, scope)
+    assert rejected.value.status_code == code
+    assert users_file.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_users_can_request_allowed_scopes(users_file: Path) -> None:
+    scopes = [auth_service.BROWSE_SCOPE, auth_service.ANNOTATE_SCOPE]
+    token = await login(scope=" ".join(scopes))
+    assert (await jwk_service.verify_access_token(token.access_token))["scopes"] == scopes
+
+
+@pytest.mark.asyncio
+async def test_login_observes_allowed_scope_changes(users_file: Path) -> None:
+    users = json.loads(users_file.read_text())
+    users["alice"]["scopes"] = sorted(auth_service.KNOWN_SCOPES)
+    users_file.write_text(json.dumps(users))
+    token = await login(scope=auth_service.ADMIN_SCOPE)
+    assert (await jwk_service.verify_access_token(token.access_token))["scopes"] == [auth_service.ADMIN_SCOPE]
+
+
+@pytest.mark.asyncio
+async def test_session_limit_and_concurrent_logins(users_file: Path) -> None:
+    first = await login()
+    tokens = await asyncio.gather(*(login() for _ in range(4)))
+    with pytest.raises(HTTPException) as evicted:
+        await auth_service.refresh_access_token(first.refresh_token)
+    assert evicted.value.status_code == 401
+    for token in tokens:
+        refreshed = await auth_service.refresh_access_token(token.refresh_token)
+        assert (await jwk_service.verify_access_token(refreshed.access_token))["sub"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_refresh_only_succeeds_once(users_file: Path) -> None:
+    token = await login()
+    results = await asyncio.gather(
+        auth_service.refresh_access_token(token.refresh_token),
+        auth_service.refresh_access_token(token.refresh_token),
+        return_exceptions=True,
+    )
+    failures = [result for result in results if isinstance(result, HTTPException)]
+    assert len(failures) == 1
+    assert failures[0].status_code == 401
+    assert sum(isinstance(result, TokenResponse) for result in results) == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_observes_user_removal(users_file: Path) -> None:
+    token = await login()
+    users = json.loads(users_file.read_text())
+    del users["alice"]
+    users_file.write_text(json.dumps(users))
+    before = users_file.read_bytes()
+    with pytest.raises(HTTPException) as rejected:
+        await auth_service.refresh_access_token(token.refresh_token)
+    assert rejected.value.status_code == 401
+    assert users_file.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_login_observes_password_hash_changes(users_file: Path) -> None:
+    users = json.loads(users_file.read_text())
+    users["alice"]["hash"] = argon2.PasswordHasher().hash("new-secret")
+    users_file.write_text(json.dumps(users))
+    with pytest.raises(HTTPException) as rejected:
+        await login()
+    assert rejected.value.status_code == 401
+    assert (await login(password="new-secret")).access_token
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scopes", [[], [auth_service.ANNOTATE_SCOPE]])
+async def test_refresh_rejects_revoked_scopes(users_file: Path, scopes: list[str]) -> None:
+    token = await login()
+    users = json.loads(users_file.read_text())
+    users["alice"]["scopes"] = scopes
+    users_file.write_text(json.dumps(users))
+    before = users_file.read_bytes()
+    with pytest.raises(HTTPException) as rejected:
+        await auth_service.refresh_access_token(token.refresh_token)
+    assert rejected.value.status_code == 403
+    assert users_file.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_refresh_preserves_requested_scopes_when_permissions_expand(users_file: Path) -> None:
+    token = await login()
+    users = json.loads(users_file.read_text())
+    users["alice"]["scopes"] = sorted(auth_service.KNOWN_SCOPES)
+    users_file.write_text(json.dumps(users))
+    refreshed = await auth_service.refresh_access_token(token.refresh_token)
+    assert (await jwk_service.verify_access_token(refreshed.access_token))["scopes"] == [auth_service.BROWSE_SCOPE]
+
+
+@pytest.mark.asyncio
+async def test_missing_file_initializes_without_default_account(users_file: Path) -> None:
+    users_file.unlink()
+    with pytest.raises(HTTPException) as rejected:
+        await login("test")
+    assert rejected.value.status_code == 401
+    assert json.loads(users_file.read_text()) == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("data", [
+    b"invalid json", b'{"alice": {"scopes": []}}',
+    b'{"alice": {"hash": "unused"}}', b'{"alice": {"hash": "unused", "scopes": "all"}}',
+])
+async def test_invalid_file_is_not_overwritten(users_file: Path, data: bytes) -> None:
+    users_file.write_bytes(data)
+    with pytest.raises(ValidationError):
+        await login()
+    assert users_file.read_bytes() == data
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", ["NoSuchKey", "404", "NotFound", "AccessDenied"])
+async def test_s3_missing_file_and_storage_errors(
+    users_file: Path, monkeypatch: pytest.MonkeyPatch, code: str,
+) -> None:
+    filesystem = AsyncMock(spec=LocalFilesystem)
+    filesystem.read_bytes.side_effect = ClientError({"Error": {"Code": code}}, "GetObject")
+    monkeypatch.setattr(auth_service, "get_filesystem", lambda: filesystem)
+    if code == "AccessDenied":
+        with pytest.raises(ClientError):
+            await login()
+        filesystem.write_bytes.assert_not_awaited()
+    else:
+        with pytest.raises(HTTPException) as rejected:
+            await login()
+        assert rejected.value.status_code == 401
+        filesystem.write_bytes.assert_awaited_once_with(settings.jwk.users_path, b"{}")

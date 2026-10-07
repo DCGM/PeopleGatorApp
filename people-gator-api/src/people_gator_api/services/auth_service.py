@@ -1,19 +1,24 @@
+import asyncio
 import logging
 import uuid
+from botocore.exceptions import ClientError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import SecurityScopes
 from typing import Annotated, TypedDict
 import argon2
+from pydantic import TypeAdapter
 from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserCreateRequest, UserResponse
 from people_gator_api.services.database_service import DatabaseDependency
+from people_gator_api.services.filesystem_service import get_filesystem
 from people_gator_api.services.jwk_service import (
     issue_access_token,
     issue_refresh_token,
     verify_access_token,
     verify_refresh_token,
 )
+from people_gator_api.settings import settings
 
 
 logger = logging.getLogger(__name__)
@@ -32,16 +37,6 @@ KNOWN_SCOPES = {
 }
 
 
-class RefreshSession(TypedDict):
-    jti: str
-    scopes: list[str]
-
-
-class UserRecord(TypedDict):
-    hash: str
-    scopes: set[str]
-    refresh_sessions: dict[str, RefreshSession]
-
 security = OAuth2PasswordBearer(
     tokenUrl="/token/login",
     refreshUrl="/token/refresh",
@@ -56,15 +51,47 @@ security = OAuth2PasswordBearer(
 )
 
 
-user_db: dict[str, UserRecord] = {
-    "test": {
-        "hash": "$argon2id$v=19$m=65536,t=3,p=4$iTpODf7wIneTlqalyjALZA$1U6pPAHY87UZFYdK0R6wm6B403c9l42nnTw5K9ThuQc",
-        "scopes": KNOWN_SCOPES,
-        "refresh_sessions": {},  # Session UUID to refresh session (max 4)
-    }
-}
-
 MAX_REFRESH_SESSIONS_PER_USER = 4
+
+
+class RefreshSession(TypedDict):
+    jti: str
+    scopes: list[str]
+
+
+class UserRecord(TypedDict):
+    hash: str
+    scopes: set[str]
+
+
+_refresh_sessions: dict[str, dict[str, RefreshSession]] = {}
+_refresh_sessions_lock = asyncio.Lock()
+_users_adapter = TypeAdapter(dict[str, UserRecord])
+
+
+async def get_users() -> dict[str, UserRecord]:
+    """Load password hashes and allowed scopes from the configured filesystem."""
+    filesystem = get_filesystem()
+    path = settings.jwk.users_path
+    try:
+        data = await filesystem.read_bytes(path)
+    except (FileNotFoundError, ClientError) as exc:
+        if isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") not in (
+            "NoSuchKey", "404", "NotFound",
+        ):
+            raise
+        data = b"{}"
+        await filesystem.write_bytes(path, data)
+    return _users_adapter.validate_json(data)
+
+
+def _check_scopes(scopes: list[str], allowed_scopes: set[str]) -> None:
+    for scope in scopes:
+        if scope not in KNOWN_SCOPES or scope not in allowed_scopes:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Not enough permissions for scope: {scope}",
+            )
 
 
 
@@ -75,42 +102,34 @@ async def get_token(
     username = form_data.username
     password = form_data.password
     scopes = form_data.scopes
-    user_record = user_db.get(username)
-    # Check if the user exists and the password is correct
-    if not user_record or not argon2.PasswordHasher().verify(str(user_record["hash"]), password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    for scope in scopes:
-        if scope not in user_record["scopes"]:
+    async with _refresh_sessions_lock:
+        users = await get_users()
+        user_record = users.get(username)
+        valid_password = False
+        if user_record is not None:
+            try:
+                valid_password = argon2.PasswordHasher().verify(user_record["hash"], password)
+            except argon2.exceptions.VerifyMismatchError:
+                pass
+        if user_record is None or not valid_password:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Not enough permissions for scope: {scope}",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password",
+                headers={"WWW-Authenticate": "Basic"},
             )
-    
-    # Generate access token
-    access_token = await issue_access_token(
-        subject=username,
-        scopes=scopes,
-    )
-    
-    # Generate and persist both identifiers for this refresh session.
-    jti = str(uuid.uuid4())
-    refresh_token = await issue_refresh_token(
-        subject=username,
-        scopes=scopes,
-        jti=jti,
-    )
-    
-    # Store session by UUID (limit to 4 sessions per user).
-    refresh_sessions = user_record["refresh_sessions"]
-    refresh_sessions[jti] = {"jti": jti, "scopes": scopes}
-    if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
-        oldest_session_id = next(iter(refresh_sessions))
-        del refresh_sessions[oldest_session_id]
-    user_record["refresh_sessions"] = refresh_sessions
+        _check_scopes(scopes, user_record["scopes"])
+
+        access_token = await issue_access_token(subject=username, scopes=scopes)
+        jti = str(uuid.uuid4())
+        refresh_token = await issue_refresh_token(
+            subject=username, scopes=scopes, jti=jti,
+        )
+
+        refresh_sessions = _refresh_sessions.setdefault(username, {})
+        refresh_sessions[jti] = {"jti": jti, "scopes": scopes}
+        if len(refresh_sessions) > MAX_REFRESH_SESSIONS_PER_USER:
+            oldest_session_id = next(iter(refresh_sessions))
+            del refresh_sessions[oldest_session_id]
     
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
     
@@ -148,7 +167,6 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
     Validates that the refresh token is valid and that the session exists,
     then generates a new access token with the same scopes.
     """
-    global user_db  # Use the in-memory user database for this example
     try:
         claims = await verify_refresh_token(refresh_token)
     except Exception as e:
@@ -166,41 +184,33 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
             detail="Invalid refresh token claims",
         )
     
-    user_record = user_db.get(subject)
-    if not user_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+    async with _refresh_sessions_lock:
+        users = await get_users()
+        user_record = users.get(subject)
+        if user_record is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+            )
+
+        refresh_sessions = _refresh_sessions.get(subject, {})
+        session = refresh_sessions.get(jti)
+        if session is None or session["jti"] != jti:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token session expired",
+            )
+
+        scopes = session["scopes"]
+        _check_scopes(scopes, user_record["scopes"])
+
+        access_token = await issue_access_token(subject=subject, scopes=scopes)
+        new_jti = str(uuid.uuid4())
+        new_refresh_token = await issue_refresh_token(
+            subject=subject, scopes=scopes, jti=new_jti,
         )
-    
-    # Verify that the session is valid and that its current token is being used.
-    refresh_sessions = user_record["refresh_sessions"]
-    session = refresh_sessions.get(jti)
-    if session is None or session["jti"] != jti:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token session expired",
-        )
-    
-    # Restore scopes from the persisted session because refresh tokens do not
-    # carry access-token claims.
-    scopes = session["scopes"]
-    
-    # Generate new access token with same scopes
-    access_token = await issue_access_token(
-        subject=subject,
-        scopes=scopes,
-    )
-    
-    # Rotate the refresh token identifier while keeping the session active.
-    new_jti = str(uuid.uuid4())
-    new_refresh_token = await issue_refresh_token(
-        subject=subject,
-        scopes=scopes,
-        jti=new_jti,
-    )
-    del refresh_sessions[jti]
-    refresh_sessions[new_jti] = {"jti": new_jti, "scopes": scopes}
+        del refresh_sessions[jti]
+        refresh_sessions[new_jti] = {"jti": new_jti, "scopes": scopes}
     
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 

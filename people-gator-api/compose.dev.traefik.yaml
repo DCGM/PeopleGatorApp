@@ -89,8 +89,36 @@ services:
       - 5679:5678 # debugger
     user: root
     env_file: .env
+    environment:
+      ## PostgreSQL persistence settings
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: people-gator-postgres-dev
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: 5432
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${POSTGRES_USER:?Set POSTGRES_USER in the --env-file}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the --env-file}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${POSTGRES_DB:?Set POSTGRES_DB in the --env-file}
+      ## S3 storage settings
+      PEOPLE_GATOR_API__STORAGE__S3__ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID in the --env-file}
+      PEOPLE_GATOR_API__STORAGE__S3__SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY in the --env-file}
+      PEOPLE_GATOR_API__STORAGE__S3__REGION: ${AWS_S3_REGION:?Set AWS_S3_REGION in the --env-file}
+      PEOPLE_GATOR_API__STORAGE__S3__ENDPOINT_URL: ${AWS_ENDPOINT_URL:?Set AWS_ENDPOINT_URL in the --env-file}
+      PEOPLE_GATOR_API__STORAGE__S3__BUCKET_NAME: peoplegator-ingest
+      ## OpenRouter API settings
+      PEOPLE_GATOR_API__OPENROUTER__API_KEY: ${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in the --env-file}
+      PEOPLE_GATOR_API__OPENROUTER__MODEL: deepseek/deepseek-v4-flash
+      ## Enable OpenTelemetry
+      PEOPLE_GATOR_API__OTEL__ENABLED: "true"
+      PEOPLE_GATOR_API__OTEL__EXPORTER_OTLP__ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://lgtm:4317}
+      PEOPLE_GATOR_API__OTEL__SERVICE_NAME: people-gator-api-dev
+      ## Set key issuer and audience
+      PEOPLE_GATOR_API__JWK__ISSUER: https://preview.peoplegator.dev
+      PEOPLE_GATOR_API__JWK__AUDIENCE: preview.peoplegator.dev
+      ## Api and dev settings
+      PEOPLE_GATOR_API__PORT: ${PEOPLE_GATOR_API__PORT:-8000}
+      PEOPLE_GATOR_API__DEBUG: "true"
+      PEOPLE_GATOR_API__RELOAD: "true"
+      PEOPLE_GATOR_API__LOG_LEVEL: ${PEOPLE_GATOR_API__LOG_LEVEL:-info}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/v1/health >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:$${PEOPLE_GATOR_API__PORT:-8000}/api/v1/health >/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 32
@@ -118,7 +146,7 @@ services:
           path: ./Dockerfile.dev
     labels:
       traefik.enable: true
-      traefik.http.routers.people-gator-api-dev.rule: Host(`dev.people-gator.capturemyhand.com`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`) || PathPrefix(`/.well-known/jwks.json`) || PathPrefix(`/.well-known/openid-configuration`) || PathPrefix(`/token/login`) || PathPrefix(`/token/refresh`))
+      traefik.http.routers.people-gator-api-dev.rule: Host(`preview.peoplegator.dev`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`) || PathPrefix(`/.well-known/jwks.json`) || PathPrefix(`/.well-known/openid-configuration`) || PathPrefix(`/token/login`) || PathPrefix(`/token/refresh`))
       traefik.http.routers.people-gator-api-dev.entrypoints: websecure
       traefik.http.services.people-gator-api-dev.loadbalancer.server.port: 8000
       traefik.http.routers.people-gator-api-dev.tls: true

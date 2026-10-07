@@ -38,6 +38,70 @@ FastAPI routes can inject `FilesystemDependency` from
 `people_gator_api.services.filesystem_service`. See the
 [filesystem documentation](src/people_gator_api/filesystem/README.md) for usage.
 
+## Login users file
+
+Login credentials and allowed scopes are stored in a dedicated JSON file using
+the same configured filesystem as the JWK key set. Configure its relative path:
+
+```dotenv
+PEOPLE_GATOR_API__JWK__USERS_PATH=peoplegator_api/users.json
+```
+
+This is also the default. With local storage, the file is under
+`STORAGE__LOCAL__ROOT`; with S3, the path is an object key in the configured bucket.
+A missing file is created as `{}` on the first login attempt. Add users before
+logging in; the hardcoded `test` account is no longer provided. The format is a
+JSON object keyed by username:
+
+```json
+{
+  "alice": {
+    "hash": "<Argon2 password hash>",
+    "scopes": ["people-gator:browse", "people-gator:annotate"]
+  }
+}
+```
+
+See [example.users.json](example.users.json) for a working example with username
+`alice` and password `change-me`. Copy it to the configured users path in local
+storage or upload it to the configured S3 key. Replace the example password hash
+before using it outside development.
+
+Generate a hash with `uv run python -c 'import argon2, getpass; print(argon2.PasswordHasher().hash(getpass.getpass()))'`.
+Each entry requires `hash` and `scopes`; use an empty scopes list to grant no
+permissions. Available scopes are `people-gator:browse`, `people-gator:annotate`,
+`people-gator:ingest`, and `people-gator:admin`. Login requests can only request
+scopes allowed for that user. Login and refresh reload the file, so credential
+changes, user removal, and scope changes apply without restarting the API.
+Refresh is rejected if a session's scopes are no longer allowed. Already issued
+access tokens remain valid until they expire.
+
+Refresh sessions are kept only in memory, rotate on use, and
+remain limited to four per user. Restarting the API invalidates all refresh
+sessions. With multiple workers, refresh requests must reach the worker that
+issued the token. Login and refresh do not rewrite an existing users file.
+
+## Page asset uploads
+
+Users with the `people-gator:ingest` scope can create or replace assets for an
+existing page Source UUID:
+
+- `PUT /pages/{page_source_id}/image`: multipart form data with a `file` field.
+  Images are validated and stored as JPEG; existing JPEG bytes are preserved.
+  The original and all configured resized copies are replaced.
+- `PUT /pages/{page_source_id}/page-layout`: a JSON `PageLayoutModel` body
+  containing `id`, `page_size`, `regions`, and `reading_order`. Returns the
+  upload receipt.
+
+Both return `200` with a `FileUploadResponse` containing `source_id`,
+`uploaded_at` (the UTC completion time), `size_bytes`, and `media_type`.
+The size is the stored file's byte count after conversion or UTF-8 JSON
+serialization; resized image copies are excluded. Fetch the image or layout
+through the corresponding GET endpoint.
+
+Both endpoints return `404` for an unknown page, `422` for invalid uploads,
+and `502` for storage failures.
+
 ## Authority Import
 
 Authority ingestion CLI now lives in `people-gator-common` as `people-gator-import-authorities`.

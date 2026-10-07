@@ -51,6 +51,8 @@ services:
       PEOPLE_GATOR_API__HOST: "0.0.0.0"
       PEOPLE_GATOR_API__DEBUG: true
       PEOPLE_GATOR_API__RELOAD: true
+      # Logs
+      PEOPLE_GATOR_API__LOG_LEVEL: ${PEOPLE_GATOR_API__LOG_LEVEL:-info}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/v1/health >/dev/null"]
       interval: 10s
