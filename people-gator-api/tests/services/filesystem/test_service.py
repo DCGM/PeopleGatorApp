@@ -1,8 +1,10 @@
 import asyncio
 import io
+import json
 import os
 import uuid
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -20,61 +22,112 @@ from people_gator_api.settings import (
 )
 
 
+S3 = {
+    "access_key_id": "test", "secret_access_key": "test",
+    "bucket_name": "bucket", "region": "eu-central-1",
+}
+POSTGRES = {
+    "host": "localhost", "port": 5432, "user": "test",
+    "password": "test", "database": "test",
+}
+
+
 @pytest.fixture
 def local_storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> LocalFilesystem:
     monkeypatch.setattr(settings, "storage", StorageSettings(
-        local=LocalStorageSettings(enabled=True, root=tmp_path),
+        local=LocalStorageSettings(root=tmp_path),
     ))
     filesystem = get_filesystem()
     assert isinstance(filesystem, LocalFilesystem)
     return filesystem
 
 
-def test_backend_validation_and_default() -> None:
-    config = StorageSettings(s3={
-        "access_key_id": "test", "secret_access_key": "test",
-        "bucket_name": "bucket", "region": "eu-central-1",
-    })
-    assert config.backend == "s3"
-    assert StorageSettings(local={"enabled": True}).s3 is None
-    with pytest.raises(ValidationError, match="Exactly one filesystem backend"):
-        StorageSettings()
-    with pytest.raises(ValidationError):
-        StorageSettings.model_validate({"backend": "invalid"})
+@pytest.mark.parametrize("backend,connection", [("s3", S3), ("local", {})])
+@pytest.mark.parametrize("explicit_null", [False, True], ids=["omitted", "null"])
+def test_non_null_configuration_selects_backend(
+    backend: str, connection: dict[str, Any], explicit_null: bool,
+) -> None:
+    other = "local" if backend == "s3" else "s3"
+    data: dict[str, Any] = {backend: connection}
+    if explicit_null:
+        data[other] = None
+    config = StorageSettings.model_validate(data)
+    assert config.backend == backend
+    assert getattr(config, other) is None
+    selected = getattr(config, backend)
+    assert isinstance(selected, FilesystemBaseSetting)
+    assert "enabled" not in selected.model_dump()
+    if backend == "local":
+        assert selected.root == Path("./storage")
+    assert StorageSettings.model_validate_json(config.model_dump_json()) == config
 
 
-@pytest.mark.parametrize("s3_enabled,local_enabled", [(False, False), (True, True)])
-def test_requires_exactly_one_enabled_backend(s3_enabled: bool, local_enabled: bool) -> None:
-    with pytest.raises(ValidationError, match="Exactly one filesystem backend"):
-        StorageSettings(s3={
-            "enabled": s3_enabled,
-            "access_key_id": "test", "secret_access_key": "test",
-            "bucket_name": "bucket", "region": "eu-central-1",
-        }, local={"enabled": local_enabled})
+@pytest.mark.parametrize("data", [
+    {}, {"s3": None}, {"local": None},
+    {"s3": None, "local": None}, {"s3": S3, "local": {}},
+], ids=["omitted", "s3-null", "local-null", "both-null", "both-set"])
+def test_requires_exactly_one_backend(data: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError, match="Exactly one filesystem backend must be set"):
+        StorageSettings.model_validate(data)
 
 
-def test_local_backend_with_disabled_s3() -> None:
-    config = StorageSettings(s3={
-        "enabled": False,
-        "access_key_id": "test", "secret_access_key": "test",
-        "bucket_name": "bucket", "region": "eu-central-1",
-    }, local={"enabled": True})
-    assert config.backend == "local"
-    assert isinstance(config.local, FilesystemBaseSetting)
-    assert isinstance(config.s3, FilesystemBaseSetting)
+def test_s3_requires_connection_fields() -> None:
+    with pytest.raises(ValidationError) as empty:
+        StorageSettings.model_validate({"s3": {}})
+    assert all(error["type"] == "missing" for error in empty.value.errors())
+    for field in S3:
+        incomplete = {key: value for key, value in S3.items() if key != field}
+        with pytest.raises(ValidationError) as missing:
+            StorageSettings.model_validate({"s3": incomplete})
+        assert missing.value.errors()[0]["loc"] == ("s3", field)
+        assert missing.value.errors()[0]["type"] == "missing"
 
 
-def test_local_environment_settings_without_s3(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_backend_selector_is_not_a_configuration_field() -> None:
+    with pytest.raises(ValidationError) as invalid:
+        StorageSettings.model_validate({"local": {}, "backend": "s3"})
+    assert invalid.value.errors()[0]["type"] == "extra_forbidden"
+    assert invalid.value.errors()[0]["loc"] == ("backend",)
+
+
+@pytest.fixture
+def clean_settings_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in list(os.environ):
-        if name.startswith("PEOPLE_GATOR_API__STORAGE"):
+        if name.startswith("PEOPLE_GATOR_API__"):
             monkeypatch.delenv(name)
-    monkeypatch.setenv("PEOPLE_GATOR_API__STORAGE__LOCAL__ENABLED", "true")
+
+
+@pytest.mark.usefixtures("clean_settings_environment")
+@pytest.mark.parametrize("backend", ["s3", "local"])
+@pytest.mark.parametrize("source", ["nested", "json"])
+def test_environment_selects_non_null_backend(
+    backend: str, source: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    other = "local" if backend == "s3" else "s3"
+    connection = S3 if backend == "s3" else {"root": str(tmp_path)}
+    if source == "json":
+        monkeypatch.setenv("PEOPLE_GATOR_API__STORAGE", json.dumps({backend: connection, other: None}))
+    else:
+        for name, value in connection.items():
+            monkeypatch.setenv(f"PEOPLE_GATOR_API__STORAGE__{backend.upper()}__{name.upper()}", value)
+    configured = Settings(_env_file=None, persistence={"postgres": POSTGRES})
+    assert configured.storage.backend == backend
+    assert getattr(configured.storage, other) is None
+    if backend == "local":
+        assert configured.storage.local.root == tmp_path
+    else:
+        assert configured.storage.s3.model_dump(include=set(S3)) == S3
+
+
+@pytest.mark.usefixtures("clean_settings_environment")
+def test_environment_rejects_two_configured_backends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in S3.items():
+        monkeypatch.setenv(f"PEOPLE_GATOR_API__STORAGE__S3__{name.upper()}", value)
     monkeypatch.setenv("PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT", str(tmp_path))
-    other_settings = settings.model_dump(exclude={"storage"})
-    configured = Settings(_env_file=None, **other_settings)
-    assert configured.storage.backend == "local"
-    assert configured.storage.local.root == tmp_path
-    assert configured.storage.s3 is None
+    with pytest.raises(ValidationError, match="Exactly one filesystem backend must be set"):
+        Settings(_env_file=None, persistence={"postgres": POSTGRES})
 
 
 def test_provider_tracks_backend_changes(local_storage: LocalFilesystem, monkeypatch: pytest.MonkeyPatch) -> None:
