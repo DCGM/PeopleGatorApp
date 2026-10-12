@@ -35,8 +35,8 @@ in the registry or returned by the API.
 
 `GET /api/v1/api-keys` lists registered IDs, identifiers, display names and account
 IDs, including revoked keys for historical filtering. It requires browse access
-and supports cursor pagination. `GET /api/v1/user-filter-options` provides user
-IDs and names without granting access to user administration.
+and supports cursor pagination and case-insensitive `q` searches by name, identifier or ID. `GET /api/v1/user-filter-options` provides user
+IDs and names without granting access to user administration; `q` searches names or IDs across all records.
 
 Run `uv run alembic upgrade head` before starting in schema validation mode. The
 migration extends the complete-schema revision `c82e7f4a901d`.

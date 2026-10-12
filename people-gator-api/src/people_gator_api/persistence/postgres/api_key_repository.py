@@ -1,6 +1,6 @@
 """PostgreSQL registration and browsing of credential-free API-key identities."""
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, String, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from people_gator_api.persistence.contracts import APIKeyRepository
@@ -16,8 +16,8 @@ from people_gator_api.schemas.api_keys import (
     APIKeyCreateRequest,
     APIKeyResponse,
     APIKeyListResponse,
+    APIKeyListRequest,
 )
-from people_gator_api.schemas.common import GenericListRequest
 
 
 def api_key_response(key: APIKey) -> APIKeyResponse:
@@ -53,18 +53,34 @@ class PostgresAPIKeyRepository(APIKeyRepository):
         await commit(self._session, "API key registration failed")
         return api_key_response(key)
 
-    async def list(self, query: GenericListRequest) -> APIKeyListResponse:
+    async def list(self, query: APIKeyListRequest) -> APIKeyListResponse:
+        filters: list[ColumnElement[bool]] = []
+        if query.q:
+            filters.append(
+                or_(
+                    APIKey.display_name.icontains(query.q, autoescape=True),
+                    APIKey.identifier.icontains(query.q, autoescape=True),
+                    cast(APIKey.id, String).icontains(query.q, autoescape=True),
+                )
+            )
         fingerprint = cursor_fingerprint(query)
         cursor_id = decode_cursor(query.cursor, fingerprint)
-        await validate_cursor(self._session, APIKey, cursor_id, [])
+        await validate_cursor(self._session, APIKey, cursor_id, filters)
         total = (
-            (await self._session.scalar(select(func.count(APIKey.id))) or 0)
+            (
+                await self._session.scalar(
+                    select(func.count(APIKey.id)).where(*filters)
+                )
+                or 0
+            )
             if query.return_total_count
             else None
         )
         if query.limit == 0:
             return APIKeyListResponse(items=[], limit=0, total_count=total)
-        statement = select(APIKey).order_by(APIKey.id).limit(query.limit + 1)
+        statement = (
+            select(APIKey).where(*filters).order_by(APIKey.id).limit(query.limit + 1)
+        )
         if cursor_id is not None:
             statement = statement.where(APIKey.id > cursor_id)
         rows = list(await self._session.scalars(statement))

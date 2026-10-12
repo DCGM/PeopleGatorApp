@@ -4,10 +4,11 @@ import uuid
 from pydantic import BaseModel
 from people_gator_api.schemas.common import GenericListResponse
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from people_gator_api.schemas.users import (
     UserListRequest,
+    UserListFilter,
     UserListResponse,
     UserPatchRequest,
     UserResponse,
@@ -37,9 +38,10 @@ class UserFilterOption(BaseModel):
 async def list_user_filter_options_route(
     database: DatabaseDependency, actor: BrowseActorDependency,
     list_request: ListRequestDependency,
+    q: str | None = Query(default=None, max_length=256),
 ) -> GenericListResponse[UserFilterOption]:
     try:
-        result = await database.users.list(UserListRequest(**list_request.model_dump()))
+        result = await database.users.list(UserListRequest(**list_request.model_dump(), filter_=UserListFilter(search=q.strip()) if q and q.strip() else UserListFilter()))
     except ValueError as exc:
         raise_api_error(422, "invalid_query", str(exc))
     return GenericListResponse[UserFilterOption](

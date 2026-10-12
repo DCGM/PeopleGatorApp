@@ -46,6 +46,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 from sqlalchemy import (
     ColumnElement,
+    String,
     cast,
     column,
     exists,
@@ -801,6 +802,12 @@ def user_filters(filter_: UserListFilter | MissingType) -> list[ColumnElement[bo
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
+    search = missing_to_none(filter_values.search)
+    if search:
+        filters.append(or_(
+            User.display_name.icontains(search, autoescape=True),
+            cast(User.id, String).icontains(search, autoescape=True),
+        ))
     display_names = missing_to_none(filter_values.display_name)
     if display_names is not None:
         filters.append(User.display_name.in_(display_names))

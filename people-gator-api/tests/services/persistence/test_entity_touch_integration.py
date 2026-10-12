@@ -12,8 +12,7 @@ from sqlalchemy import select, update
 from sqlalchemy.engine import make_url
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.persistence.postgres.models import APIKey, Entity
-from people_gator_api.schemas.api_keys import APIKeyCreateRequest
-from people_gator_api.schemas.common import GenericActor, GenericListRequest
+from people_gator_api.schemas.api_keys import APIKeyCreateRequest, APIKeyListRequest
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityPatchRequest,
@@ -388,7 +387,67 @@ async def test_key_registration_concurrency_and_historical_listing(records):
         == 1
     )
     listed = await r.db.api_keys.list(
-        GenericListRequest(limit=1000, return_total_count=True)
+        APIKeyListRequest(limit=1000, return_total_count=True)
     )
     assert keys[0].api_key_id in {key.api_key_id for key in listed.items}
     assert "hash" not in listed.model_dump_json()
+
+
+async def test_filter_options_search_all_records_and_escape_wildcards(records):
+    r = records
+    marker = uuid.uuid4().hex
+    for suffix in ("alpha", "beta"):
+        await r.db.api_keys.get_or_create(
+            APIKeyCreateRequest(
+                identifier=f"{marker}-{suffix}",
+                display_name=f"Importer {marker}",
+                user_id=r.user.user_id,
+            )
+        )
+    first = await r.db.api_keys.list(
+        APIKeyListRequest(q=marker.upper(), limit=1, return_total_count=True)
+    )
+    assert first.total_count == 2 and first.cursor
+    second = await r.db.api_keys.list(
+        APIKeyListRequest(
+            q=marker.upper(), limit=1, return_total_count=True, cursor=first.cursor
+        )
+    )
+    assert (
+        len(second.items) == 1
+        and first.items[0].api_key_id != second.items[0].api_key_id
+    )
+    with pytest.raises(ValueError):
+        await r.db.api_keys.list(
+            APIKeyListRequest(
+                q="other", limit=1, return_total_count=True, cursor=first.cursor
+            )
+        )
+    escaped = await r.db.api_keys.list(
+        APIKeyListRequest(q="%", limit=1, return_total_count=True)
+    )
+    assert escaped.total_count == 0
+    from people_gator_api.schemas.users import UserListRequest, UserListFilter
+
+    user = await r.db.users.get_or_create(
+        UserCreateRequest(
+            display_name=f"Searchable {marker}",
+            is_active=True,
+            external_subject=marker,
+            external_issuer="option-tests",
+        )
+    )
+    users = await r.db.users.list(
+        UserListRequest(
+            filter_=UserListFilter(search=marker.upper()),
+            limit=10,
+            return_total_count=True,
+        )
+    )
+    assert users.total_count == 1 and users.items[0].user_id == user.user_id
+    escaped = await r.db.users.list(
+        UserListRequest(
+            filter_=UserListFilter(search="%"), limit=1, return_total_count=True
+        )
+    )
+    assert escaped.total_count == 0

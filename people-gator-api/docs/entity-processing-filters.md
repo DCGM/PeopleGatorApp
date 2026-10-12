@@ -40,10 +40,15 @@ controls use the browser's local timezone. Filter changes select a new query
 cache entry and start from its first page. Individual chips and Clear all filters
 remove filters while preserving the text query.
 
-To regenerate the TypeScript client from a local schema, export OpenAPI using
-`people_gator_api.schemas` before `people_gator_api.app` (the existing schema
-package initializes settings), then run:
+To regenerate the TypeScript client from a local schema, use the application's
+normal environment/settings and run from `people-gator-api`:
 
 ```sh
-npm run openapi-ts -- --input /path/to/openapi.json
+uv run python scripts/export_openapi.py /tmp/people-gator-openapi.json
+```
+
+Then run from `people-gator-app`:
+
+```sh
+npm run openapi-ts -- --input /tmp/people-gator-openapi.json
 ```

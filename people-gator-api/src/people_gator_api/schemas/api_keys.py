@@ -2,7 +2,7 @@
 
 import uuid
 from pydantic import BaseModel, Field
-from people_gator_api.schemas.common import GenericListResponse
+from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
 
 
 class APIKeyCreateRequest(BaseModel):
@@ -13,6 +13,10 @@ class APIKeyCreateRequest(BaseModel):
 
 class APIKeyResponse(APIKeyCreateRequest):
     api_key_id: uuid.UUID
+
+
+class APIKeyListRequest(GenericListRequest):
+    q: str | None = Field(default=None, max_length=256)
 
 
 APIKeyListResponse = GenericListResponse[APIKeyResponse]
