@@ -6,14 +6,14 @@ import logging
 from typing import Any
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
-from joserfc.errors import ClaimError
+from joserfc.errors import ClaimError, InvalidKeyIdError, JoseError
 from joserfc.jwk import (
     ECKey,
     KeySet,
     KeySetSerialization,
 )
 from joserfc.jws import JWSRegistry
-from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, encode, decode
+from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, Token, encode, decode
 from starlette import status
 from people_gator_api.services.filesystem_service import open_file
 from people_gator_api.settings import settings
@@ -23,18 +23,30 @@ logger = logging.getLogger(__name__)
 
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
+_last_key_miss_refresh_time: float | None = None
 _keyset_lock = asyncio.Lock()
+_KEY_MISS_REFRESH_INTERVAL_SECONDS = 5
 
 TOKEN_ISSUER = settings.jwk.issuer
 TOKEN_AUDIENCE = settings.jwk.audience
 
-async def get_key_set() -> KeySet:
-    global _keyset, _last_fetch_time
+def _should_refresh_for_key_miss(refresh_if: KeySet | None, now: float) -> bool:
+    # Unknown key IDs are untrusted; bound how often they can trigger storage I/O.
+    return refresh_if is _keyset and (
+        _last_key_miss_refresh_time is None
+        or now - _last_key_miss_refresh_time >= _KEY_MISS_REFRESH_INTERVAL_SECONDS
+    )
+
+
+async def get_key_set(*, refresh_if: KeySet | None = None) -> KeySet:
+    """Load signing keys, optionally refreshing the caller's cached key set."""
+    global _keyset, _last_fetch_time, _last_key_miss_refresh_time
     now = time.monotonic()
     if (
         _keyset is not None
         and _last_fetch_time is not None
         and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
+        and not _should_refresh_for_key_miss(refresh_if, now)
     ):
         return _keyset
     async with _keyset_lock:
@@ -44,6 +56,7 @@ async def get_key_set() -> KeySet:
             _keyset is not None
             and _last_fetch_time is not None
             and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
+            and not _should_refresh_for_key_miss(refresh_if, now)
         ):
             return _keyset
         try:
@@ -64,6 +77,8 @@ async def get_key_set() -> KeySet:
                 json.dump(jwks_data, f)
         _keyset = KeySet.import_key_set(jwks_data)
         _last_fetch_time = time.monotonic()
+        if refresh_if is not None:
+            _last_key_miss_refresh_time = _last_fetch_time
         return _keyset
 
 def _now_datetime() -> datetime.datetime:
@@ -168,11 +183,28 @@ async def issue_refresh_token(
     return encode(protected, claims, key_set, registry=jws_registry)
 
 
-async def verify_access_token(token: str) -> dict[str, Any]:
-    """Decode and validate an access token."""
+async def _decode_token(token: str, *, refresh: bool = False) -> Token:
+    """Verify a signature, retrying once if cached keys lack the token's kid."""
     key_set = await get_key_set()
     jws_registry = await get_jws_registry()
-    decoded_claims = decode(token, key_set, registry=jws_registry)
+    try:
+        try:
+            return decode(token, key_set, registry=jws_registry)
+        except InvalidKeyIdError:
+            key_set = await get_key_set(refresh_if=key_set)
+            return decode(token, key_set, registry=jws_registry)
+    except JoseError as exc:
+        label = "refresh token" if refresh else "token"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid {label}: {exc}",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
+async def verify_access_token(token: str) -> dict[str, Any]:
+    """Decode and validate an access token."""
+    decoded_claims = await _decode_token(token)
     try:
         claims_registry = await get_access_claims_registry()
         claims_registry.validate(decoded_claims.claims)
@@ -192,9 +224,7 @@ async def verify_access_token(token: str) -> dict[str, Any]:
 
 async def verify_refresh_token(token: str) -> dict[str, Any]:
     """Decode and validate a refresh token."""
-    key_set = await get_key_set()
-    jws_registry = await get_jws_registry()
-    decoded_claims = decode(token, key_set, registry=jws_registry)
+    decoded_claims = await _decode_token(token, refresh=True)
     try:
         claims_registry = await get_refresh_claims_registry()
         claims_registry.validate(decoded_claims.claims)
