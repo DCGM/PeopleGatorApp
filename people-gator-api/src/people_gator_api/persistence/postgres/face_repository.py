@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import numpy as np
 from collections.abc import Sequence
 
 from sqlalchemy import (
@@ -243,8 +244,14 @@ class PostgresFaceRepository(FaceRepository):
             old_entity_id = face.entity_id
             reassigned = not is_missing(command.entity_id) and face.entity_id != command.entity_id
             old_embeddings = {item.model_id: list(item.embedding) for item in face.embeddings}
-            embeddings_changed = any(old_embeddings.get(item.model_identifier) != list(item.vector)
-                                     for item in (missing_to_none(command.embeddings) or []))
+            embeddings_changed = any(
+                item.model_identifier not in old_embeddings
+                or not np.array_equal(
+                    np.asarray(old_embeddings[item.model_identifier], dtype=np.float32),
+                    np.asarray(item.vector, dtype=np.float32),
+                )
+                for item in (missing_to_none(command.embeddings) or [])
+            )
             if not is_missing(command.entity_id):
                 face.entity_id = command.entity_id
             if embeddings_changed:

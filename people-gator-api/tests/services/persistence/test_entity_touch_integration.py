@@ -451,3 +451,34 @@ async def test_filter_options_search_all_records_and_escape_wildcards(records):
         )
     )
     assert escaped.total_count == 0
+
+
+async def test_equivalent_stored_face_embeddings_do_not_touch(records):
+    r = records
+    from people_gator_api.schemas.face_models import FaceModelRegisterRequest
+    from people_gator_api.schemas.faces import FaceEmbedding
+
+    model = "issue2-" + uuid.uuid4().hex
+    await r.db.face_models.register(
+        FaceModelRegisterRequest(model_stub=model, embedding_dim=2)
+    )
+    f = await face(r, r.entities[0].entity_id)
+    patch = FacePatchRequest(
+        embeddings=[FaceEmbedding(model_identifier=model, vector=[0.1, 0.2])]
+    )
+    await r.db.faces.patch(f.detection_id, patch, r.actor)
+    before = await entity(r)
+    await r.db.faces.patch(f.detection_id, patch, r.user)
+    unchanged = await entity(r)
+    assert unchanged.last_touched_at == before.last_touched_at
+    assert unchanged.last_touched_by_api_key_id == r.key.api_key_id
+    await r.db.faces.patch(
+        f.detection_id,
+        FacePatchRequest(
+            embeddings=[FaceEmbedding(model_identifier=model, vector=[0.2, 0.2])]
+        ),
+        r.user,
+    )
+    changed = await entity(r)
+    assert changed.last_touched_at > before.last_touched_at
+    assert changed.last_touched_by_api_key_id is None
