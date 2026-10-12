@@ -94,6 +94,19 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(Text)
 
 
+class APIKey(Base):
+    """Stable, historical key identity; no secret or verification hash."""
+
+    __tablename__ = TABLE_NAME_FORMAT.format("api_keys")
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    identifier: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+
 class Entity(Base):
     """A canonical real-world entity."""
 

@@ -218,9 +218,13 @@ class CorsSettings(BaseModel):
     allow_origin_regex: str = r"^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$"
 
 
+class APIKeySettings(BaseModel):
+    keys_path: str = Field(default="peoplegator_api/api-keys.json", min_length=1)
+
+
 class JwkSettings(BaseModel):
     key_path: str = "peoplegator_api/jwks.json"
-    users_path: str = "peoplegator_api/users.json"
+    users_path: str = Field(default="peoplegator_api/users.json", min_length=1)
     key_cache_ttl_seconds: int = Field(default=3600, gt=0)
     issuer: str = "https://preview.peoplegator.dev"
     audience: str = "preview.peoplegator.dev"
@@ -251,6 +255,7 @@ class Settings(BaseSettings):
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     jwk: JwkSettings = Field(default_factory=JwkSettings)
+    api_keys: APIKeySettings = Field(default_factory=APIKeySettings)
     embedding_service: EmbeddingServiceSettings | None = None
     openrouter: OpenRouterSettings | None = None
     image_content: ImageContentSettings = Field(default_factory=ImageContentSettings)

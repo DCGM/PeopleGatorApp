@@ -21,10 +21,10 @@ from people_gator_api.routes.v1.query_dependencies import (
     ListRequestDependency,
 )
 from people_gator_api.services.auth_service import (
-    AdminUserDependency,
-    AnnotatorUserDependency,
-    BrowseUserDependency,
-    DataIngestUserDependency,
+    AdminActorDependency,
+    AnnotatorActorDependency,
+    BrowseActorDependency,
+    DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import (
     DatabaseDependency,
@@ -38,7 +38,7 @@ router = APIRouter(tags=["annotations"])
 @router.get("/faces", response_model=FaceListResponse)
 async def list_faces_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     filter: FaceListFilterDependency,
     list_request: ListRequestDependency,
 ) -> FaceListResponse:
@@ -60,7 +60,7 @@ async def list_faces_route(
 async def create_face_route(
     payload: FaceCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> FaceResponse:
     try:
         return await database.faces.create(payload, user)
@@ -76,7 +76,7 @@ async def create_face_route(
 async def create_face_batch_route(
     payload: FacesBatchCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> list[FaceResponse]:
     try:
         return await database.faces.create_batch(payload, user)
@@ -88,7 +88,7 @@ async def create_face_batch_route(
 async def patch_face_batch_route(
     payload: FacesBatchPatchRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> list[FaceResponse | None]:
     try:
         return await database.faces.patch_batch(payload, user)
@@ -100,7 +100,7 @@ async def patch_face_batch_route(
 async def delete_face_batch_route(
     detection_id: list[uuid.UUID],
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> int:
     del user
     return await database.faces.delete_batch(detection_id)
@@ -110,7 +110,7 @@ async def delete_face_batch_route(
 async def get_face_aligned_crop_route(
     detection_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     max_width: int | None = Query(default=None, gt=0),
 ) -> Response:
     """Return one ArcFace-aligned face crop, kept at the original image scale."""
@@ -142,7 +142,7 @@ async def get_face_aligned_crop_route(
 async def get_face_route(
     detection_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> FaceResponse:
     del user
     face = await database.faces.get(detection_id)
@@ -156,7 +156,7 @@ async def patch_face_route(
     detection_id: uuid.UUID,
     payload: FacePatchRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> FaceResponse:
     try:
         face = await database.faces.patch(detection_id, payload, user)
@@ -171,7 +171,7 @@ async def patch_face_route(
 async def delete_face_route(
     detection_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
     del user
     if not await database.faces.delete(detection_id):

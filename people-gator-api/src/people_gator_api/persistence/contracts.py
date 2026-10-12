@@ -40,7 +40,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pydantic import AnyUrl
-from people_gator_api.schemas.common import GenericActor
+from people_gator_api.schemas.common import GenericActor, GenericListRequest
+from people_gator_api.schemas.api_keys import APIKeyCreateRequest, APIKeyResponse, APIKeyListResponse
 from people_gator_api.schemas.missing import MISSING, MissingType
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
@@ -1082,6 +1083,16 @@ class UserRepository(ABC):
         """
 
 
+class APIKeyRepository(ABC):
+    @abstractmethod
+    async def get_or_create(self, payload: APIKeyCreateRequest) -> APIKeyResponse:
+        """Register a stable config identifier, returning the same ID under concurrency."""
+
+    @abstractmethod
+    async def list(self, query: GenericListRequest) -> APIKeyListResponse:
+        """List registered identities, including keys removed from configuration."""
+
+
 @dataclass(frozen=True, slots=True)
 class Database:
     """One request-scoped, backend-neutral entry point."""
@@ -1092,3 +1103,4 @@ class Database:
     face_models: FaceModelRepository
     text_mentions: TextMentionRepository
     users: UserRepository
+    api_keys: APIKeyRepository | None = None

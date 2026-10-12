@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from people_gator_api.services.embedding_service.http_service import (
@@ -87,6 +88,20 @@ def get_app() -> FastAPI:
         configure_logging()
     app.include_router(v1_router)
     app.include_router(jwks_router)
+    def openapi():
+        if app.openapi_schema is None:
+            schema = get_openapi(title=app.title, version=app.version,
+                                 description=app.description, routes=app.routes)
+            for path in schema.get("paths", {}).values():
+                for operation in path.values():
+                    if isinstance(operation, dict):
+                        for requirement in operation.get("security", []):
+                            if "PeopleGatorAPIKey" in requirement:
+                                requirement["PeopleGatorAPIKey"] = []
+            app.openapi_schema = schema
+        return app.openapi_schema
+
+    app.openapi = openapi
     return app
 
 

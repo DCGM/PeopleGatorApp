@@ -24,9 +24,9 @@ from people_gator_api.routes.v1.query_dependencies import (
     ListRequestDependency,
 )
 from people_gator_api.services.auth_service import (
-    AdminUserDependency,
-    AnnotatorUserDependency,
-    BrowseUserDependency,
+    AdminActorDependency,
+    AnnotatorActorDependency,
+    BrowseActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
@@ -38,7 +38,7 @@ router = APIRouter(tags=["entities"])
 @router.get("/entities", response_model=EntityListResponse)
 async def list_entities_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     filter: EntityListFilterDependency,
     list_request: ListRequestDependency,
 ) -> EntityListResponse:
@@ -60,7 +60,7 @@ async def list_entities_route(
 async def get_entity_route(
     entity_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> EntityResponse:
     del user
     entity = await database.entities.get(entity_id)
@@ -75,7 +75,7 @@ async def get_entity_route(
 async def create_entity_route(
     payload: EntityCreateRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> EntityResponse:
     try:
         return await database.entities.create(payload, user)
@@ -91,7 +91,7 @@ async def create_entity_route(
 async def create_entity_batch_route(
     payload: EntityBatchCreateRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> list[EntityResponse]:
     try:
         return await database.entities.create_batch(payload, user)
@@ -106,7 +106,7 @@ async def create_entity_batch_route(
 async def patch_entity_batch_route(
     payload: EntityBatchPatchRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> list[EntityResponse | None]:
     try:
         return await database.entities.patch_batch(payload, user)
@@ -119,7 +119,7 @@ async def patch_entity_route(
     entity_id: uuid.UUID,
     payload: EntityPatchRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> EntityResponse:
     try:
         entity = await database.entities.patch(entity_id, payload, user)
@@ -134,7 +134,7 @@ async def patch_entity_route(
 async def delete_entity_route(
     entity_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
     del user
     if not await database.entities.delete(entity_id):
@@ -151,7 +151,7 @@ async def merge_entity_route(
     target_entity_id: uuid.UUID,
     payload: EntityMergeFromRequest,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> EntityMergeResponse:
     del user
     try:
@@ -175,7 +175,7 @@ async def merge_entity_batch_route(
     target_entity_id: uuid.UUID,
     payload: EntityMergeBatchRequest,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> EntityMergeBatchResponse:
     del user
     try:
@@ -197,7 +197,7 @@ async def merge_entity_batch_route(
 async def delete_entities_route(
     payload: EntityDeleteManyRequest,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> EntityDeleteManyResponse:
     del user
     try:

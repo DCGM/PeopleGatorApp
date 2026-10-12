@@ -41,9 +41,9 @@ from people_gator_api.schemas.sources import (
     PageResponse,
 )
 from people_gator_api.services.auth_service import (
-    AdminUserDependency,
-    BrowseUserDependency,
-    DataIngestUserDependency,
+    AdminActorDependency,
+    BrowseActorDependency,
+    DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import (
     DatabaseDependency,
@@ -97,7 +97,7 @@ async def _fetch_text_mention_spans_for_page(
 @router.get("/documents", response_model=DocumentListResponse, tags=["documents"])
 async def list_documents_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     filter: DocumentListFilterDependency,
     list_request: ListRequestDependency,
 ) -> DocumentListResponse:
@@ -121,7 +121,7 @@ async def list_documents_route(
 async def create_document_route(
     payload: DocumentCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> DocumentResponse:
     del user
     document, result = await database.sources.get_or_create_document(payload)
@@ -139,7 +139,7 @@ async def create_document_route(
 async def create_document_batch_route(
     payload: DocumentBatchCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> list[DocumentResponse]:
     del user
     return [
@@ -155,7 +155,7 @@ async def create_document_batch_route(
 )
 async def lookup_document_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     library: str,
     document_id: uuid.UUID,
 ) -> DocumentResponse:
@@ -177,7 +177,7 @@ async def lookup_document_route(
 async def get_document_route(
     document_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> DocumentResponse:
     del user
     document = await database.sources.get_document(document_source_id)
@@ -194,7 +194,7 @@ async def get_document_route(
 async def delete_document_route(
     document_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
     del user
     if await database.sources.get_document(document_source_id) is None:
@@ -210,7 +210,7 @@ async def delete_document_route(
 @router.get("/pages", response_model=PageListResponse, tags=["pages"])
 async def list_pages_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     filter: PageListFilterDependency,
     list_request: ListRequestDependency,
 ) -> PageListResponse:
@@ -234,7 +234,7 @@ async def list_pages_route(
 async def create_page_route(
     payload: PageCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> PageResponse:
     del user
     page, result = await database.sources.get_or_create_page(payload)
@@ -252,7 +252,7 @@ async def create_page_route(
 async def create_page_batch_route(
     payload: PageBatchCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> list[PageResponse]:
     del user
     return [
@@ -264,7 +264,7 @@ async def create_page_batch_route(
 @router.get("/pages/lookup", response_model=PageResponse, tags=["pages"])
 async def lookup_page_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     library: str,
     document_id: uuid.UUID,
     page_id: uuid.UUID,
@@ -287,7 +287,7 @@ async def lookup_page_route(
 async def get_page_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> PageResponse:
     del user
     page = await database.sources.get_page(page_source_id)
@@ -304,7 +304,7 @@ async def get_page_route(
 async def get_page_image_by_id_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
@@ -337,7 +337,7 @@ async def put_page_image_by_id_route(
     page_source_id: uuid.UUID,
     file: UploadFile,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> FileUploadResponse:
     """Create or replace a page scan from a multipart image file upload."""
     del user
@@ -366,7 +366,7 @@ async def put_page_image_by_id_route(
 async def get_page_layout_by_id_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> PageLayoutModel:
     """Fetch the page layout for one page by its Source UUID."""
     del user
@@ -385,7 +385,7 @@ async def put_page_layout_by_id_route(
     page_source_id: uuid.UUID,
     payload: PageLayoutModel,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> FileUploadResponse:
     """Create or replace a page's layout with a validated JSON document."""
     del user
@@ -414,7 +414,7 @@ async def put_page_layout_by_id_route(
 async def get_text_mention_spans_by_id_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> list[TextMentionSpanModel]:
     """Return word-aligned fuzzy text-mention spans for one page Source UUID."""
     del user
@@ -432,7 +432,7 @@ async def get_text_mention_spans_by_id_route(
 async def delete_page_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
     del user
     if await database.sources.get_page(page_source_id) is None:
@@ -448,7 +448,7 @@ async def delete_page_route(
 @router.get("/images", response_model=ImageListResponse, tags=["images"])
 async def list_images_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     filter: ImageListFilterDependency,
     list_request: ListRequestDependency,
 ) -> ImageListResponse:
@@ -472,7 +472,7 @@ async def list_images_route(
 async def create_image_route(
     payload: ImageCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> ImageResponse:
     del user
     image, result = await database.sources.get_or_create_image(payload)
@@ -490,7 +490,7 @@ async def create_image_route(
 async def create_image_batch_route(
     payload: ImageBatchCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> list[ImageResponse]:
     del user
     return [
@@ -502,7 +502,7 @@ async def create_image_batch_route(
 @router.get("/images/lookup", response_model=ImageResponse, tags=["images"])
 async def lookup_image_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     url: AnyUrl,
 ) -> ImageResponse:
     """Fetch one image by its ``url``."""
@@ -517,7 +517,7 @@ async def lookup_image_route(
 async def get_image_route(
     image_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> ImageResponse:
     del user
     image = await database.sources.get_image(image_id)
@@ -530,7 +530,7 @@ async def get_image_route(
 async def get_image_content_by_id_route(
     image_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> Response:
     del user
     image = await database.sources.get_image(image_id)
@@ -551,7 +551,7 @@ async def get_image_content_by_id_route(
 async def delete_image_route(
     image_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
     del user
     if await database.sources.get_image(image_id) is None:

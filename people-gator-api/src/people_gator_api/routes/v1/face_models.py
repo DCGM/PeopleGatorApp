@@ -7,7 +7,7 @@ from people_gator_api.schemas.face_models import (
     FaceModelRegisterRequest,
     FaceModelResponse,
 )
-from people_gator_api.services.auth_service import AdminUserDependency
+from people_gator_api.services.auth_service import AdminActorDependency
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
@@ -23,7 +23,7 @@ router = APIRouter(tags=["face models"])
 async def register_face_model_route(
     payload: FaceModelRegisterRequest,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> FaceModelResponse:
     del user
     try:
@@ -35,7 +35,7 @@ async def register_face_model_route(
 @router.get("/face-models", response_model=FaceModelListResponse)
 async def list_face_models_route(
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> FaceModelListResponse:
     del user
     return await database.face_models.list()

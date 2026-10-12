@@ -16,8 +16,8 @@ from people_gator_api.schemas.sources import (
     SourceResponseBase,
 )
 from people_gator_api.services.auth_service import (
-    AdminUserDependency,
-    DataIngestUserDependency,
+    AdminActorDependency,
+    DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
@@ -29,7 +29,7 @@ router = APIRouter(tags=["sources"])
 @router.get("/sources", response_model=SourceListResponse)
 async def list_sources_route(
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
     filter: SourceListFilterDependency,
     list_request: ListRequestDependency,
 ) -> SourceListResponse:
@@ -51,7 +51,7 @@ async def list_sources_route(
 async def lookup_source_route(
     url: AnyUrl,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> SourceResponseBase:
     """Fetch one source by its globally unique URL."""
     del user
@@ -73,7 +73,7 @@ async def lookup_source_route(
 async def get_source_route(
     source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> SourceResponseBase:
     del user
     source = await database.sources.get_source(source_id)
@@ -86,7 +86,7 @@ async def get_source_route(
 async def delete_source_route(
     source_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
     del user
     if not await database.sources.delete(source_id):
