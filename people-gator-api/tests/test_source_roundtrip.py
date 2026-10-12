@@ -45,7 +45,7 @@ class FakeSources:
     async def get_source(self, source_id: uuid.UUID) -> SourceResponseBase | None:
         return self.objects.get(source_id)
 
-    async def delete(self, source_id: uuid.UUID) -> bool:
+    async def delete(self, source_id: uuid.UUID, *, context: UserResponse) -> bool:
         return self.objects.pop(source_id, None) is not None
 
 

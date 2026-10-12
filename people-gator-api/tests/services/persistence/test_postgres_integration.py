@@ -14,7 +14,11 @@ from people_gator_api.schemas.entities import (
     EntityListRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.enums import DEFAULT_FACE_EMBEDDING_MODEL, EntityType, FaceKeypointType
+from people_gator_api.schemas.enums import (
+    DEFAULT_FACE_EMBEDDING_MODEL,
+    EntityType,
+    FaceKeypointType,
+)
 from people_gator_api.schemas.faces import (
     BoundingBox,
     FaceCreateRequest,
@@ -251,9 +255,7 @@ async def test_postgres_contract_round_trip() -> None:
                     limit=10,
                 )
             )
-            assert [item.source_id for item in annotated_page.items] == [
-                page.source_id
-            ]
+            assert [item.source_id for item in annotated_page.items] == [page.source_id]
             linked_entities_for_page = await database.entities.list(
                 EntityListRequest(
                     filter_=EntityListFilter(source_id=[page.source_id]),
@@ -379,17 +381,17 @@ async def test_postgres_contract_round_trip() -> None:
             assert unassigned_face is not None
             assert unassigned_face.entity_id is None
 
-            assert await database.sources.delete(image.source_id)
+            assert await database.sources.delete(image.source_id, context=user)
             created_source_ids.remove(image.source_id)
             assert await database.faces.get(face.detection_id) is None
             assert await database.faces.get(other_face.detection_id) is None
 
-            assert await database.sources.delete(page.source_id)
+            assert await database.sources.delete(page.source_id, context=user)
             created_source_ids.remove(page.source_id)
             assert await database.text_mentions.get(mention.mention_id) is None
         finally:
             await session.rollback()
-            await database.sources.delete_batch(created_source_ids)
+            await database.sources.delete_batch(created_source_ids, context=user)
             await database.entities.delete_batch(created_entity_ids)
             await database.users.delete(user.user_id)
 

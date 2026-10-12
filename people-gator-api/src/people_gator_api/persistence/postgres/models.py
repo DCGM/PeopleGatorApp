@@ -8,6 +8,7 @@ indexes for each registered face model.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
 import uuid
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy import (
     DDL,
     CheckConstraint,
     Computed,
+    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -130,6 +132,13 @@ class Entity(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), nullable=False, index=True
+    )
+    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True
+    )
+    last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True
     )
     kind: Mapped[str | None] = mapped_column(String(64), index=True)
     name: Mapped[str | None] = mapped_column(Text)

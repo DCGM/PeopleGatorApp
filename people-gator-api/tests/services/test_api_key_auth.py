@@ -19,42 +19,87 @@ from people_gator_api.settings import settings, StorageSettings, LocalStorageSet
 
 @pytest.fixture
 def authenticated_client(tmp_path, monkeypatch):
-    user = UserResponse(user_id=uuid.uuid4(), display_name="Robot", is_active=True,
-                        external_subject="robot", external_issuer=settings.jwk.issuer, email=None)
-    key = APIKeyResponse(api_key_id=uuid.uuid4(), identifier="importer", display_name="Importer", user_id=user.user_id)
-    database = SimpleNamespace(users=SimpleNamespace(get_or_create=AsyncMock(return_value=user)),
-                               api_keys=SimpleNamespace(get_or_create=AsyncMock(return_value=key)))
-    monkeypatch.setattr(settings, "storage", StorageSettings(local=LocalStorageSettings(root=tmp_path)))
+    user = UserResponse(
+        user_id=uuid.uuid4(),
+        display_name="Robot",
+        is_active=True,
+        external_subject="robot",
+        external_issuer=settings.jwk.issuer,
+        email=None,
+    )
+    key = APIKeyResponse(
+        api_key_id=uuid.uuid4(),
+        identifier="importer",
+        display_name="Importer",
+        user_id=user.user_id,
+    )
+    database = SimpleNamespace(
+        users=SimpleNamespace(get_or_create=AsyncMock(return_value=user)),
+        api_keys=SimpleNamespace(get_or_create=AsyncMock(return_value=key)),
+    )
+    monkeypatch.setattr(
+        settings, "storage", StorageSettings(local=LocalStorageSettings(root=tmp_path))
+    )
     path = tmp_path / settings.api_keys.keys_path
     path.parent.mkdir(parents=True)
-    path.write_text(json.dumps({"importer": {"display_name": "Importer", "username": "robot",
-        "hash": argon2.PasswordHasher().hash("test-key"), "scopes": [auth_service.BROWSE_SCOPE]}}))
-    verify = AsyncMock(return_value={"iss": settings.jwk.issuer, "sub": "robot", "scopes": [auth_service.BROWSE_SCOPE]})
+    path.write_text(
+        json.dumps(
+            {
+                "importer": {
+                    "display_name": "Importer",
+                    "username": "robot",
+                    "hash": argon2.PasswordHasher().hash("test-key"),
+                    "scopes": [auth_service.BROWSE_SCOPE],
+                }
+            }
+        )
+    )
+    verify = AsyncMock(
+        return_value={
+            "iss": settings.jwk.issuer,
+            "sub": "robot",
+            "scopes": [auth_service.BROWSE_SCOPE],
+        }
+    )
     monkeypatch.setattr(auth_service, "verify_access_token", verify)
     app = FastAPI()
     app.dependency_overrides[get_database] = lambda: database
 
     @app.get("/browse")
     async def browse(actor: auth_service.BrowseActorDependency):
-        return {"user_id": str(actor.user_id), "api_key_id": str(actor.api_key_id) if actor.api_key_id else None}
+        return {
+            "user_id": str(actor.user_id),
+            "api_key_id": str(actor.api_key_id) if actor.api_key_id else None,
+        }
 
     @app.get("/annotate")
     async def annotate(actor: auth_service.AnnotatorActorDependency):
         return {}
 
+    @app.get("/ingest")
+    async def ingest(actor: auth_service.DataIngestActorDependency):
+        return {}
+
+    @app.get("/admin")
+    async def admin(actor: auth_service.AdminActorDependency):
+        return {}
+
     return TestClient(app), database, path, verify, key
 
 
-@pytest.mark.parametrize("headers,status,challenge", [
-    ({}, 401, "Bearer, APIKey"),
-    ({"Authorization": ""}, 401, "Bearer"),
-    ({"Authorization": "Basic abc"}, 401, "Bearer"),
-    ({"Authorization": "Bearer "}, 401, "Bearer"),
-    ({"X-API-Key": ""}, 401, "APIKey"),
-    ({"X-API-Key": "bad"}, 401, "APIKey"),
-    ({"Authorization": "Bearer good", "X-API-Key": "bad"}, 400, None),
-    ({"Authorization": "", "X-API-Key": ""}, 400, None),
-])
+@pytest.mark.parametrize(
+    "headers,status,challenge",
+    [
+        ({}, 401, "Bearer, APIKey"),
+        ({"Authorization": ""}, 401, "Bearer"),
+        ({"Authorization": "Basic abc"}, 401, "Bearer"),
+        ({"Authorization": "Bearer "}, 401, "Bearer"),
+        ({"X-API-Key": ""}, 401, "APIKey"),
+        ({"X-API-Key": "bad"}, 401, "APIKey"),
+        ({"Authorization": "Bearer good", "X-API-Key": "bad"}, 400, None),
+        ({"Authorization": "", "X-API-Key": ""}, 400, None),
+    ],
+)
 def test_authentication_error_matrix(authenticated_client, headers, status, challenge):
     client, database, _, verify, _ = authenticated_client
     response = client.get("/browse", headers=headers)
@@ -81,7 +126,10 @@ def test_revocation_and_insufficient_scopes(authenticated_client):
     client, database, path, _, _ = authenticated_client
     assert client.get("/annotate", headers={"X-API-Key": "test-key"}).status_code == 403
     database.api_keys.get_or_create.assert_not_awaited()
-    assert client.get("/annotate", headers={"Authorization": "Bearer good"}).status_code == 403
+    assert (
+        client.get("/annotate", headers={"Authorization": "Bearer good"}).status_code
+        == 403
+    )
     assert client.get("/browse", headers={"X-API-Key": "test-key"}).status_code == 200
     path.write_text("{}")
     assert client.get("/browse", headers={"X-API-Key": "test-key"}).status_code == 401
@@ -114,6 +162,39 @@ def test_openapi_has_scoped_or_alternatives_and_cache():
             if {"PeopleGatorAPIKey": []} in security:
                 assert {} not in security
                 assert len(security) == 2
-                oauth = next(entry for entry in security if "PeopleGatorAPIKey" not in entry)
+                oauth = next(
+                    entry for entry in security if "PeopleGatorAPIKey" not in entry
+                )
                 assert len(oauth) == 1
                 assert list(oauth.values())[0]
+
+
+@pytest.mark.parametrize("path", ["/annotate", "/ingest", "/admin"])
+@pytest.mark.parametrize(
+    "headers", [{"Authorization": "Bearer good"}, {"X-API-Key": "test-key"}]
+)
+def test_each_actor_scope_is_enforced(authenticated_client, path, headers):
+    client, _, _, _, _ = authenticated_client
+    assert client.get(path, headers=headers).status_code == 403
+
+
+@pytest.mark.parametrize("method", ["bearer", "api_key"])
+def test_me_preserves_the_public_user_contract(authenticated_client, method):
+    client, database, _, _, key = authenticated_client
+    from people_gator_api.routes.v1.users import router
+
+    app = client.app
+    app.include_router(router)
+    user = database.users.get_or_create.return_value
+    context = auth_service.AuthContext(
+        user_id=user.user_id,
+        user=user,
+        api_key_id=key.api_key_id if method == "api_key" else None,
+        authentication_method=method,
+        scopes={auth_service.ANNOTATE_SCOPE},
+    )
+    app.dependency_overrides[auth_service.get_auth_context] = lambda: context
+    response = client.get("/me")
+    assert response.status_code == 200
+    assert response.json() == user.model_dump(mode="json")
+    assert "api_key_id" not in response.json()

@@ -40,3 +40,16 @@ IDs and names without granting access to user administration.
 
 Run `uv run alembic upgrade head` before starting in schema validation mode. The
 migration extends the complete-schema revision `c82e7f4a901d`.
+
+For the generated TypeScript client, select the method in the authentication
+callback because each operation lists both available schemes:
+
+```ts
+const client = createClient({
+  auth: (scheme) => scheme.name === 'X-API-Key' ? apiKey : undefined,
+})
+```
+
+For JWT clients, return a token only when `scheme.scheme === 'bearer'`. Returning
+a string for every scheme would send both headers and correctly receive 400.
+The browser app keeps its existing JWT login flow.

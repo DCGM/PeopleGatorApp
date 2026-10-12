@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from typing import Any, cast as type_cast
 
 from sqlalchemy import (
     ColumnElement,
@@ -10,7 +9,6 @@ from sqlalchemy import (
     func,
     select,
 )
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -62,17 +60,20 @@ from people_gator_api.persistence.postgres.utils import (
     validate_face_embeddings,
 )
 
+from .touch import touch_entities
+
 class PostgresFaceRepository(FaceRepository):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__()
         self._session = session
 
-    async def _load_many(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Face]:
+    async def _load_many(self, ids: Sequence[uuid.UUID], *, lock: bool = False) -> dict[uuid.UUID, Face]:
         if not ids:
             return {}
-        rows = await self._session.scalars(
-            select(Face).where(Face.id.in_(ids)).options(selectinload(Face.embeddings))
-        )
+        statement = select(Face).where(Face.id.in_(ids)).options(selectinload(Face.embeddings))
+        if lock:
+            statement = statement.order_by(Face.id).with_for_update()
+        rows = await self._session.scalars(statement)
         return {row.id: row for row in rows.unique().all()}
 
     async def get(self, detection_id: uuid.UUID) -> FaceResponse | None:
@@ -125,6 +126,7 @@ class PostgresFaceRepository(FaceRepository):
             keypoints=[[item.x, item.y] for item in payload.keypoints],
             keypoint_types=[item.type for item in payload.keypoints],
         )
+        face.embeddings = []
         if embeddings:
             face.embeddings = [
                 FaceEmbeddingRow(
@@ -170,6 +172,7 @@ class PostgresFaceRepository(FaceRepository):
         )
         faces = [self._new(payload, context) for payload in payloads]
         self._session.add_all(faces)
+        await touch_entities(self._session, entity_ids, context)
         await commit(self._session, "face create violates a persistence constraint")
         return [face_response(face) for face in faces]
 
@@ -231,35 +234,44 @@ class PostgresFaceRepository(FaceRepository):
                 for embedding in (missing_to_none(command.embeddings) or [])
             ),
         )
-        faces = await self._load_many(ids)
+        faces = await self._load_many(ids, lock=True)
+        touched: set[uuid.UUID | None] = set()
         for command in commands:
             face = faces.get(command.detection_id)
             if face is None:
                 continue
+            old_entity_id = face.entity_id
+            reassigned = not is_missing(command.entity_id) and face.entity_id != command.entity_id
+            old_embeddings = {item.model_id: list(item.embedding) for item in face.embeddings}
+            embeddings_changed = any(old_embeddings.get(item.model_identifier) != list(item.vector)
+                                     for item in (missing_to_none(command.embeddings) or []))
             if not is_missing(command.entity_id):
                 face.entity_id = command.entity_id
-            self._apply_embeddings(face, command)
+            if embeddings_changed:
+                self._apply_embeddings(face, command)
+            if reassigned or embeddings_changed:
+                touched.update([old_entity_id, face.entity_id])
+        await touch_entities(self._session, touched, context)
         await commit(self._session, "face patch violates a persistence constraint")
         return [
             face_response(face) if (face := faces.get(item_id)) else None
             for item_id in ids
         ]
 
-    async def delete(self, detection_id: uuid.UUID) -> bool:
-        return bool(await self.delete_batch([detection_id]))
+    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
+        return bool(await self.delete_batch([detection_id], context=context))
 
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         unique = list(dict.fromkeys(detection_ids))
         if not unique:
             return 0
-        result = type_cast(
-            CursorResult[Any],
-            await self._session.execute(
-                delete(ImageOccurrence).where(ImageOccurrence.id.in_(unique))
-            ),
-        )
+        removed = list(await self._session.scalars(
+            delete(ImageOccurrence).where(ImageOccurrence.id.in_(unique), ImageOccurrence.occurrence_type == "face")
+            .returning(ImageOccurrence.entity_id)
+        ))
+        await touch_entities(self._session, removed, context)
         await commit(self._session, "face delete failed")
-        return int(result.rowcount or 0)
+        return len(removed)
 
     async def _text_scores(
         self, query: SearchFacesRequest, filters: Sequence[ColumnElement[bool]]

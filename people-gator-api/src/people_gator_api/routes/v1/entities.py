@@ -153,10 +153,9 @@ async def merge_entity_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> EntityMergeResponse:
-    del user
     try:
         result = await database.entities.merge(
-            target_entity_id, payload.source_entity_id, target_patch=payload
+            target_entity_id, payload.source_entity_id, target_patch=payload, context=user
         )
     except ValueError as exc:
         raise_api_error(409, "invalid_merge", str(exc))
@@ -177,10 +176,9 @@ async def merge_entity_batch_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> EntityMergeBatchResponse:
-    del user
     try:
         result = await database.entities.merge_batch(
-            target_entity_id, payload.source_entity_ids, target_patch=payload
+            target_entity_id, payload.source_entity_ids, target_patch=payload, context=user
         )
     except ValueError as exc:
         raise_api_error(409, "invalid_merge", str(exc))

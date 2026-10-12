@@ -88,6 +88,5 @@ async def delete_source_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
-    if not await database.sources.delete(source_id):
+    if not await database.sources.delete(source_id, context=user):
         raise_api_error(404, "not_found", "Source not found")

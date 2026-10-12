@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Self
+from datetime import timezone
 
 from pydantic import (
     BaseModel,
+    AwareDatetime,
+    model_validator,
     Field,
     field_validator,
 )
@@ -133,6 +136,11 @@ class EntityResponse(BaseModel):
     )
 
 
+    last_touched_at: AwareDatetime | None = None
+    last_touched_by_user_id: uuid.UUID | None = None
+    last_touched_by_api_key_id: uuid.UUID | None = None
+
+
 EntityListResponse = GenericListResponse[EntityResponse]
 
 
@@ -174,6 +182,35 @@ class EntityListFilter(ListFilterBase):
     has_detections: bool | MissingType = Field(
         default=MISSING, description="Whether the entity has detections."
     )
+
+
+    last_touched_from: AwareDatetime | MissingType = Field(
+        default=MISSING, description="Inclusive UTC lower bound of the last touch."
+    )
+    last_touched_to: AwareDatetime | MissingType = Field(
+        default=MISSING, description="Inclusive UTC upper bound of the last touch."
+    )
+    document_source_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="Internal document source IDs; match faces or mentions on any page."
+    )
+    last_touched_by_user_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="Users responsible for the last touch, independent of entity ownership."
+    )
+    last_touched_by_api_key_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="Registered API keys used for the last touch."
+    )
+
+    @model_validator(mode="after")
+    def validate_touch_range(self) -> Self:
+        from people_gator_api.schemas.missing import is_missing
+        for name in ("last_touched_from", "last_touched_to"):
+            value = getattr(self, name)
+            if not is_missing(value):
+                setattr(self, name, value.astimezone(timezone.utc))
+        if (not is_missing(self.last_touched_from) and not is_missing(self.last_touched_to)
+                and self.last_touched_from > self.last_touched_to):
+            raise ValueError("last_touched_from must be before or equal to last_touched_to")
+        return self
 
 
 class EntityListRequest(GenericListRequest):

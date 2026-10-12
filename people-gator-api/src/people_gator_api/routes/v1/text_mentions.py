@@ -104,8 +104,7 @@ async def delete_text_mention_batch_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> int:
-    del user
-    return await database.text_mentions.delete_batch(mention_id)
+    return await database.text_mentions.delete_batch(mention_id, context=user)
 
 
 @router.get(
@@ -152,6 +151,5 @@ async def delete_text_mention_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
-    if not await database.text_mentions.delete(mention_id):
+    if not await database.text_mentions.delete(mention_id, context=user):
         raise_api_error(404, "not_found", "Text mention not found")

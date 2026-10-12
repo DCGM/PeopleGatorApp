@@ -196,10 +196,9 @@ async def delete_document_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
     if await database.sources.get_document(document_source_id) is None:
         raise_api_error(404, "not_found", "Document not found")
-    await database.sources.delete(document_source_id)
+    await database.sources.delete(document_source_id, context=user)
 
 
 # -----------------------------------------------------------------------------
@@ -434,10 +433,9 @@ async def delete_page_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
     if await database.sources.get_page(page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
-    await database.sources.delete(page_source_id)
+    await database.sources.delete(page_source_id, context=user)
 
 
 # -----------------------------------------------------------------------------
@@ -553,7 +551,6 @@ async def delete_image_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
     if await database.sources.get_image(image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
-    await database.sources.delete(image_id)
+    await database.sources.delete(image_id, context=user)

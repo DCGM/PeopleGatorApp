@@ -34,6 +34,8 @@ LIST_FILTERS = {
         "mention_id",
         "has_mentions",
         "has_detections",
+        "last_touched_from", "last_touched_to", "document_source_id",
+        "last_touched_by_user_id", "last_touched_by_api_key_id",
     },
     "/faces": {"entity_id", "source_id", "detection_id"},
     "/text-mentions": {"entity_id", "source_id"},

@@ -24,7 +24,8 @@ async def verify_api_key(secret: str) -> tuple[str, APIKeyRecord]:
     # malformed, or unreadable configuration is an operational error, not a 401.
     data = await get_filesystem().read_bytes(settings.api_keys.keys_path)
     records = _keys_adapter.validate_json(data)
-    from people_gator_api.services.auth_service import KNOWN_SCOPES
+    from people_gator_api.services.auth_scopes import KNOWN_SCOPES
+
     for identifier, record in records.items():
         if not identifier or not record.scopes.issubset(KNOWN_SCOPES):
             raise ValueError("Invalid API key identifier or scopes in configuration")

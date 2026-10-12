@@ -132,12 +132,16 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                             description="Replacement description",
                             short_description=None,
                         ),
+                        context=user,
                     )
 
             assert await database.entities.get(source_id) is not None
             unchanged_target = await database.entities.get(target_id)
             assert unchanged_target is not None
-            assert set(unchanged_target.aliases or []) == {"Shared alias", "Target alias"}
+            assert set(unchanged_target.aliases or []) == {
+                "Shared alias",
+                "Target alias",
+            }
             assert unchanged_target.description == "Original description"
             assert unchanged_target.short_description == "Original short description"
             stored_face = await database.faces.get(face.detection_id)
@@ -152,6 +156,7 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                     description="Replacement description",
                     short_description=None,
                 ),
+                context=user,
             )
             assert result is not None
             assert result.faces_reassigned == 1
@@ -161,7 +166,9 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert result.merged_entity.description == "Replacement description"
             assert result.merged_entity.short_description is None
             assert set(result.merged_entity.aliases or []) == {
-                "Shared alias", "Source alias", "Target alias"
+                "Shared alias",
+                "Source alias",
+                "Target alias",
             }
             assert await database.entities.get(source_id) is None
             stored_face = await database.faces.get(face.detection_id)
@@ -169,9 +176,12 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert stored_face is not None and stored_face.entity_id == target_id
             assert stored_mention is not None and stored_mention.entity_id == target_id
 
-            assert await database.entities.merge(target_id, source_id) is None
+            assert (
+                await database.entities.merge(target_id, source_id, context=user)
+                is None
+            )
             with pytest.raises(ValueError, match="must differ"):
-                await database.entities.merge(target_id, target_id)
+                await database.entities.merge(target_id, target_id, context=user)
 
             more_sources = await database.entities.create_batch(
                 [
@@ -200,21 +210,32 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 user,
             )
 
-            assert await database.entities.merge_batch(
-                target_id,
-                [more_source_ids[0], uuid.uuid4()],
-                target_patch=EntityMergeTargetPatch(description="Must not persist"),
-            ) is None
+            assert (
+                await database.entities.merge_batch(
+                    target_id,
+                    [more_source_ids[0], uuid.uuid4()],
+                    target_patch=EntityMergeTargetPatch(description="Must not persist"),
+                    context=user,
+                )
+                is None
+            )
             unchanged_target = await database.entities.get(target_id)
             assert unchanged_target is not None
             assert set(unchanged_target.aliases or []) == {
-                "Shared alias", "Source alias", "Target alias"
+                "Shared alias",
+                "Source alias",
+                "Target alias",
             }
             assert unchanged_target.description == "Replacement description"
             stored_face = await database.faces.get(face.detection_id)
             stored_mention = await database.text_mentions.get(mention.mention_id)
-            assert stored_face is not None and stored_face.entity_id == more_source_ids[0]
-            assert stored_mention is not None and stored_mention.entity_id == more_source_ids[1]
+            assert (
+                stored_face is not None and stored_face.entity_id == more_source_ids[0]
+            )
+            assert (
+                stored_mention is not None
+                and stored_mention.entity_id == more_source_ids[1]
+            )
 
             batch_result = await database.entities.merge_batch(
                 target_id,
@@ -222,6 +243,7 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 target_patch=EntityMergeTargetPatch(
                     short_description="Batch short description"
                 ),
+                context=user,
             )
             assert batch_result is not None
             assert batch_result.source_entity_ids == more_source_ids
@@ -229,10 +251,17 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert batch_result.text_mentions_reassigned == 1
             assert batch_result.merged_entity.entity_id == target_id
             assert batch_result.merged_entity.description == "Replacement description"
-            assert batch_result.merged_entity.short_description == "Batch short description"
+            assert (
+                batch_result.merged_entity.short_description
+                == "Batch short description"
+            )
             assert set(batch_result.merged_entity.aliases or []) == {
-                "Shared alias", "Source alias", "Target alias",
-                "Batch shared", "Batch A", "Batch B",
+                "Shared alias",
+                "Source alias",
+                "Target alias",
+                "Batch shared",
+                "Batch A",
+                "Batch B",
             }
             assert len(batch_result.merged_entity.aliases or []) == 6
             for merged_source_id in more_source_ids:
@@ -243,22 +272,27 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert stored_mention is not None and stored_mention.entity_id == target_id
 
             with pytest.raises(ValueError, match="unique"):
-                await database.entities.merge_batch(target_id, [target_id, target_id])
+                await database.entities.merge_batch(
+                    target_id, [target_id, target_id], context=user
+                )
 
             final_source = await database.entities.create(
-                EntityCreateRequest(entity_type=EntityType.person, name=f"Final {marker}"),
+                EntityCreateRequest(
+                    entity_type=EntityType.person, name=f"Final {marker}"
+                ),
                 user,
             )
             cleared = await database.entities.merge(
                 target_id,
                 final_source.entity_id,
                 target_patch=EntityMergeTargetPatch(description=None),
+                context=user,
             )
             assert cleared is not None
             assert cleared.merged_entity.description is None
             assert cleared.merged_entity.short_description == "Batch short description"
 
-            await database.sources.delete(source.source_id)
+            await database.sources.delete(source.source_id, context=user)
             await database.entities.delete(target_id)
             await database.users.delete(user.user_id)
     finally:

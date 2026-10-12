@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from typing import Any, cast as type_cast
 
 from sqlalchemy import (
     delete,
     func,
     select,
 )
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from people_gator_api.persistence.contracts import (
@@ -42,19 +40,22 @@ from people_gator_api.persistence.postgres.utils import (
     mention_filters,
 )
 
+from .touch import touch_entities
+
 class PostgresTextMentionRepository(TextMentionRepository):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__()
         self._session = session
 
     async def _load_many(
-        self, ids: Sequence[uuid.UUID]
+        self, ids: Sequence[uuid.UUID], *, lock: bool = False
     ) -> dict[uuid.UUID, TextMention]:
         if not ids:
             return {}
-        rows = await self._session.scalars(
-            select(TextMention).where(TextMention.id.in_(ids))
-        )
+        statement = select(TextMention).where(TextMention.id.in_(ids))
+        if lock:
+            statement = statement.order_by(TextMention.id).with_for_update()
+        rows = await self._session.scalars(statement)
         return {row.id: row for row in rows.all()}
 
     async def get(self, mention_id: uuid.UUID) -> TextMentionResponse | None:
@@ -119,7 +120,6 @@ class PostgresTextMentionRepository(TextMentionRepository):
         payloads: Sequence[TextMentionCreateRequest],
         context: GenericActor,
     ) -> list[TextMentionResponse]:
-        del context
         if not payloads:
             return []
         await ensure_ids(
@@ -136,6 +136,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         )
         mentions = [self._new(payload) for payload in payloads]
         self._session.add_all(mentions)
+        await touch_entities(self._session, [item.entity_id for item in payloads], context)
         await commit(self._session, "mention create violates a persistence constraint")
         return [mention_response(mention) for mention in mentions]
 
@@ -161,7 +162,6 @@ class PostgresTextMentionRepository(TextMentionRepository):
         commands: Sequence[TextMentionPatchBatchItem],
         context: GenericActor,
     ) -> list[TextMentionResponse | None]:
-        del context
         ids = [command.mention_id for command in commands]
         if len(ids) != len(set(ids)):
             raise ValueError("text mention patch batch requires unique object IDs")
@@ -177,29 +177,30 @@ class PostgresTextMentionRepository(TextMentionRepository):
             ],
             "mention entity",
         )
-        mentions = await self._load_many(ids)
+        mentions = await self._load_many(ids, lock=True)
+        touched: set[uuid.UUID | None] = set()
         for command in commands:
             mention = mentions.get(command.mention_id)
-            if mention is not None:
+            if mention is not None and mention.entity_id != command.entity_id:
+                touched.update([mention.entity_id, command.entity_id])
                 mention.entity_id = command.entity_id
+        await touch_entities(self._session, touched, context)
         await commit(self._session, "mention patch violates a persistence constraint")
         return [
             mention_response(mention) if (mention := mentions.get(item_id)) else None
             for item_id in ids
         ]
 
-    async def delete(self, mention_id: uuid.UUID) -> bool:
-        return bool(await self.delete_batch([mention_id]))
+    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
+        return bool(await self.delete_batch([mention_id], context=context))
 
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         unique = list(dict.fromkeys(mention_ids))
         if not unique:
             return 0
-        result = type_cast(
-            CursorResult[Any],
-            await self._session.execute(
-                delete(TextMention).where(TextMention.id.in_(unique))
-            ),
-        )
+        removed = list(await self._session.scalars(
+            delete(TextMention).where(TextMention.id.in_(unique)).returning(TextMention.entity_id)
+        ))
+        await touch_entities(self._session, removed, context)
         await commit(self._session, "mention delete failed")
-        return int(result.rowcount or 0)
+        return len(removed)

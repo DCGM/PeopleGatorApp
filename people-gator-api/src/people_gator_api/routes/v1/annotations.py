@@ -102,8 +102,7 @@ async def delete_face_batch_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> int:
-    del user
-    return await database.faces.delete_batch(detection_id)
+    return await database.faces.delete_batch(detection_id, context=user)
 
 
 @router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
@@ -173,6 +172,5 @@ async def delete_face_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
-    if not await database.faces.delete(detection_id):
+    if not await database.faces.delete(detection_id, context=user):
         raise_api_error(404, "not_found", "Face not found")

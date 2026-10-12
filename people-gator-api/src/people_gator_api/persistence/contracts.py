@@ -241,10 +241,11 @@ class EntityRepository(ABC):
         target_entity_id: uuid.UUID,
         source_entity_id: uuid.UUID,
         target_patch: EntityMergeTargetPatch | None = None,
+        *, context: GenericActor,
     ) -> EntityMergeResponse | None:
         """Merge one source into the target using the batch operation."""
         result = await self.merge_batch(
-            target_entity_id, [source_entity_id], target_patch=target_patch
+            target_entity_id, [source_entity_id], target_patch=target_patch, context=context
         )
         if result is None:
             return None
@@ -262,6 +263,7 @@ class EntityRepository(ABC):
         target_entity_id: uuid.UUID,
         source_entity_ids: Sequence[uuid.UUID],
         target_patch: EntityMergeTargetPatch | None = None,
+        *, context: GenericActor,
     ) -> EntityMergeBatchResponse | None:
         """Atomically merge all sources into the target and delete the sources.
 
@@ -707,11 +709,11 @@ class SourceRepository(ABC):
         )
 
     @abstractmethod
-    async def delete(self, source_id: uuid.UUID) -> bool:
+    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
         """Delete a source and cascade its dependent faces and mentions."""
 
     @abstractmethod
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         """Delete unique source IDs with the same cascade as delete().
 
         Duplicate IDs count once. Empty input returns zero.
@@ -854,7 +856,7 @@ class FaceRepository(ABC):
         """Patch faces and preserve command order, using None for missing IDs."""
 
     @abstractmethod
-    async def delete(self, detection_id: uuid.UUID) -> bool:
+    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
         """
         Delete an existing face entry based on the given detection ID.
 
@@ -866,7 +868,7 @@ class FaceRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         """
         Delete multiple existing face entries based on the given detection IDs.
 
@@ -987,7 +989,7 @@ class TextMentionRepository(ABC):
         """
 
     @abstractmethod
-    async def delete(self, mention_id: uuid.UUID) -> bool:
+    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
         """
         Delete an existing text mention entry by its ID.
 
@@ -999,7 +1001,7 @@ class TextMentionRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         """
         Delete a batch of existing text mention entries by their IDs.
 

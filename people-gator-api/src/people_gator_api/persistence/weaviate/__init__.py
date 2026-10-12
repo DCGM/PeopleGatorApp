@@ -463,6 +463,7 @@ class WeaviateEntityRepository(EntityRepository):
         target_entity_id: uuid.UUID,
         source_entity_ids: Sequence[uuid.UUID],
         target_patch: EntityMergeTargetPatch | None = None,
+        *, context: GenericActor,
     ) -> EntityMergeBatchResponse | None:
         raise NotImplementedError("atomic entity merge requires PostgreSQL persistence")
 
@@ -605,7 +606,7 @@ class WeaviateSourceRepository(SourceRepository):
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
         return [await self.get_or_create(x) for x in specs]
 
-    async def delete(self, source_id: uuid.UUID) -> bool:
+    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
         if not await _exists(self._client, SOURCE_COLLECTION, source_id):
             return False
         for n in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
@@ -618,8 +619,8 @@ class WeaviateSourceRepository(SourceRepository):
         )
         return True
 
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID]) -> int:
-        return sum([await self.delete(x) for x in dict.fromkeys(source_ids)])
+    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+        return sum([await self.delete(x, context=context) for x in dict.fromkeys(source_ids)])
 
     async def search_documents(
         self, query: SearchDocumentsRequest
@@ -841,7 +842,7 @@ class WeaviateFaceRepository(FaceRepository):
             for x in commands
         ]
 
-    async def delete(self, detection_id: uuid.UUID) -> bool:
+    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
         if not await _exists(self._client, FACE_COLLECTION, detection_id):
             return False
         await self._client.collections.get(FACE_COLLECTION).data.delete_by_id(
@@ -849,7 +850,7 @@ class WeaviateFaceRepository(FaceRepository):
         )
         return True
 
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         return await _delete_many(self._client, FACE_COLLECTION, detection_ids)
 
     async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
@@ -954,7 +955,7 @@ class WeaviateTextMentionRepository(TextMentionRepository):
             for x in commands
         ]
 
-    async def delete(self, mention_id: uuid.UUID) -> bool:
+    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
         if not await _exists(self._client, TEXT_MENTION_COLLECTION, mention_id):
             return False
         await self._client.collections.get(TEXT_MENTION_COLLECTION).data.delete_by_id(
@@ -962,7 +963,7 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         )
         return True
 
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         return await _delete_many(self._client, TEXT_MENTION_COLLECTION, mention_ids)
 
 

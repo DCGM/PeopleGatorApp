@@ -77,6 +77,9 @@ from people_gator_api.persistence.postgres.utils import (
 SOURCE_TEXT_CANDIDATE_LIMIT = 200
 
 
+from .touch import touch_entities
+from people_gator_api.schemas.common import GenericActor
+
 class PostgresSourceRepository(SourceRepository):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__()
@@ -218,13 +221,17 @@ class PostgresSourceRepository(SourceRepository):
             results.append(await self.get_or_create(spec))
         return results
 
-    async def delete(self, source_id: uuid.UUID) -> bool:
-        return bool(await self.delete_batch([source_id]))
+    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
+        return bool(await self.delete_batch([source_id], context=context))
 
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID]) -> int:
+    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
         unique = list(dict.fromkeys(source_ids))
         if not unique:
             return 0
+        touched: set[uuid.UUID | None] = set()
+        for evidence in (ImageOccurrence, TextMention):
+            touched.update(await self._session.scalars(select(evidence.entity_id).where(evidence.source_id.in_(unique))))
+        await touch_entities(self._session, touched, context)
         result = type_cast(
             CursorResult[Any],
             await self._session.execute(delete(Source).where(Source.id.in_(unique))),

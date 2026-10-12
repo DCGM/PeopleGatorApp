@@ -29,17 +29,10 @@ from people_gator_api.settings import settings
 logger = logging.getLogger(__name__)
 
 
-BROWSE_SCOPE = "people-gator:browse"
-ANNOTATE_SCOPE = "people-gator:annotate"
-INGEST_SCOPE = "people-gator:ingest"
-ADMIN_SCOPE = "people-gator:admin"
-
-KNOWN_SCOPES = {
-    BROWSE_SCOPE,
-    ANNOTATE_SCOPE,
-    INGEST_SCOPE,
-    ADMIN_SCOPE,
-}
+from people_gator_api.services.auth_scopes import (
+    BROWSE_SCOPE as BROWSE_SCOPE, ANNOTATE_SCOPE as ANNOTATE_SCOPE,
+    INGEST_SCOPE as INGEST_SCOPE, ADMIN_SCOPE as ADMIN_SCOPE, KNOWN_SCOPES as KNOWN_SCOPES,
+)
 
 
 security = OAuth2PasswordBearer(
