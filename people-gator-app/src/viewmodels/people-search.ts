@@ -1,3 +1,9 @@
+import {
+  emptyPeopleFilters,
+  peopleFiltersQuery,
+  processingFilterError,
+  type PeopleProcessingFilters,
+} from '@/viewmodels/people-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -22,15 +28,19 @@ export function usePeopleSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
+  processingFilters: MaybeRefOrGetter<PeopleProcessingFilters> = emptyPeopleFilters(),
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentEntityFilter(toValue(filter)))
+  const filterError = computed(() => processingFilterError(toValue(processingFilters)))
   const peopleQuery = useEntityResultsQuery(
     computed(() => ({
       query: normalizedSearch.value,
       ...assignment.value,
+      processingFilters: peopleFiltersQuery(toValue(processingFilters)),
       limit: pageSize,
     })),
+    computed(() => !filterError.value),
   )
 
   const pageRecords = computed<EntitySearchRecord[]>(() => {
@@ -98,13 +108,13 @@ export function usePeopleSearch(
 
   return {
     error: peopleQuery.error,
+    filterError,
     hasNextPage: peopleQuery.hasNextPage,
     isFetchingNextPage: peopleQuery.isFetchingNextPage,
-    isLoading: peopleQuery.isPending,
+    isLoading: computed(() => peopleQuery.isPending.value && !filterError.value),
     loadMore: peopleQuery.fetchNextPage,
     people,
     resultCount: computed(() => {
-      if (normalizedSearch.value) return pageRecords.value.length
       return peopleQuery.data.value?.pages[0]?.totalCount ?? 0
     }),
   }

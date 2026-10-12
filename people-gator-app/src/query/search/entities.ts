@@ -1,5 +1,10 @@
-import { useInfiniteQuery, type InfiniteData, type QueryKey } from '@tanstack/vue-query'
-import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryKey,
+} from '@tanstack/vue-query'
+import { computed, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
 import {
   searchEntitiesGetApiV1SearchEntitiesGet,
@@ -7,6 +12,7 @@ import {
   type FoundEntity,
   type SearchEntitiesGetApiV1SearchEntitiesGetData,
 } from '@/client'
+import type { ProcessingQueryParams } from '@/viewmodels/people-filters'
 import { responseData } from '@/query/api'
 import { fetchEntities } from '@/query/entities'
 import { queryKeys } from '@/query/keys'
@@ -26,6 +32,7 @@ export type EntityResultsParams = {
   cursor?: string | null
   hasDetections?: boolean
   hasMentions?: boolean
+  processingFilters?: ProcessingQueryParams
   limit?: number
 }
 
@@ -80,7 +87,44 @@ export function useEntitySearchQuery(
  * Infinite people results for the search screen. A blank query browses the
  * entity collection, while a text query uses the ranked search endpoint.
  */
-export function useEntityResultsQuery(params: MaybeRefOrGetter<EntityResultsParams>) {
+export function useEntityResultsQuery(
+  params: MaybeRefOrGetter<EntityResultsParams>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  const queryClient = useQueryClient()
+  const queryKey = computed(() => {
+    const resolvedParams = toValue(params)
+    const query = resolvedParams.query.trim()
+    const keyParams = {
+      ...resolvedParams.processingFilters,
+      'filter.has_detections': resolvedParams.hasDetections,
+      'filter.has_mentions': resolvedParams.hasMentions,
+      limit: searchPageSize(resolvedParams.limit),
+      return_total_count: true,
+      cursor: resolvedParams.cursor,
+    }
+    return query
+      ? queryKeys.search.infiniteEntities({ ...keyParams, 'query.text': [query] })
+      : queryKeys.entities.infinite(keyParams)
+  })
+  watch(
+    () => JSON.stringify(queryKey.value),
+    () => {
+      // Returning to a previously used filter must start at its first page too.
+      // Retain that page's cache while dropping cursors/pages loaded for the old visit.
+      queryClient.setQueryData<InfiniteData<EntityResultsPage, string | null>>(
+        queryKey.value,
+        (cached) =>
+          cached && {
+            ...cached,
+            pages: cached.pages.slice(0, 1),
+            pageParams: cached.pageParams.slice(0, 1),
+          },
+        { updatedAt: queryClient.getQueryState(queryKey.value)?.dataUpdatedAt },
+      )
+    },
+    { flush: 'sync' },
+  )
   return useInfiniteQuery<
     EntityResultsPage,
     Error,
@@ -88,20 +132,7 @@ export function useEntityResultsQuery(params: MaybeRefOrGetter<EntityResultsPara
     QueryKey,
     string | null
   >({
-    queryKey: computed(() => {
-      const resolvedParams = toValue(params)
-      const query = resolvedParams.query.trim()
-      const keyParams = {
-        'filter.has_detections': resolvedParams.hasDetections,
-        'filter.has_mentions': resolvedParams.hasMentions,
-        limit: searchPageSize(resolvedParams.limit),
-        return_total_count: true,
-        cursor: resolvedParams.cursor,
-      }
-      return query
-        ? queryKeys.search.infiniteEntities({ ...keyParams, 'query.text': [query] })
-        : queryKeys.entities.infinite(keyParams)
-    }),
+    queryKey,
     queryFn: async ({ pageParam, signal }) => {
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
@@ -111,6 +142,7 @@ export function useEntityResultsQuery(params: MaybeRefOrGetter<EntityResultsPara
         return fetchEntitySearchPage(
           {
             'query.text': [query],
+            ...resolvedParams.processingFilters,
             'filter.has_detections': resolvedParams.hasDetections,
             'filter.has_mentions': resolvedParams.hasMentions,
             limit: pageSize,
@@ -124,6 +156,7 @@ export function useEntityResultsQuery(params: MaybeRefOrGetter<EntityResultsPara
 
       const response = await fetchEntities(
         {
+          ...resolvedParams.processingFilters,
           'filter.has_detections': resolvedParams.hasDetections,
           'filter.has_mentions': resolvedParams.hasMentions,
           limit: pageSize,
@@ -137,6 +170,7 @@ export function useEntityResultsQuery(params: MaybeRefOrGetter<EntityResultsPara
     initialPageParam: computed(() => toValue(params).cursor ?? null),
     getNextPageParam: (lastPage, _pages, lastPageParam) =>
       lastPage.nextPage === lastPageParam ? null : lastPage.nextPage,
+    enabled: computed(() => toValue(enabled)),
     staleTime: SEARCH_CACHE_TIME,
     gcTime: SEARCH_GC_TIME,
     refetchOnWindowFocus: false,

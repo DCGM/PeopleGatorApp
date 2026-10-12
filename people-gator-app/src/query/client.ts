@@ -1,8 +1,4 @@
-import {
-  getTokenTokenLoginPost,
-  refreshTokenTokenRefreshPost,
-  type TokenResponse,
-} from '@/client'
+import { getTokenTokenLoginPost, refreshTokenTokenRefreshPost, type TokenResponse } from '@/client'
 import { client } from '@/client/client.gen'
 
 const accessTokenKey = 'people-gator.access-token'
@@ -78,7 +74,7 @@ export async function getAccessToken() {
 
 client.setConfig({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://dev.people-gator.capturemyhand.com',
-  auth: getAccessToken,
+  auth: (scheme) => (scheme.scheme === 'bearer' ? getAccessToken() : undefined),
   throwOnError: true,
 })
 
