@@ -1,0 +1,66 @@
+name: PR preview lifecycle
+
+on:
+  workflow_run:
+    workflows: [PR CI]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  packages: read
+
+# Serialize deployment, closure and reconciliation, without cancelling cleanup.
+concurrency:
+  group: people-gator-preview-host
+  cancel-in-progress: false
+
+jobs:
+  lifecycle:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: [self-hosted, linux, x64, people-gator-preview]
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PREVIEW_CONFIG: /opt/people-gator-preview/config.json
+      EVENT_NAME: ${{ github.event_name }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      # Never check out PR code on this persistent host. The controller and Compose
+      # files are installed by an operator from the trusted default branch.
+      - name: Use temporary registry credentials
+        if: github.event_name == 'workflow_run'
+        run: echo "DOCKER_CONFIG=$RUNNER_TEMP/people-gator-preview-docker" >> "$GITHUB_ENV"
+      - name: Log into image registry
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+      - name: Apply preview lifecycle
+        run: |
+          case "$EVENT_NAME" in
+            workflow_run)
+              python3 /opt/people-gator-preview/preview.py deploy --run-id "$RUN_ID"
+              ;;
+            pull_request_target)
+              python3 /opt/people-gator-preview/preview.py cleanup --pr "$PR_NUMBER"
+              ;;
+            schedule|workflow_dispatch)
+              python3 /opt/people-gator-preview/preview.py reconcile
+              ;;
+            *) exit 2 ;;
+          esac
+      - name: Remove temporary registry credentials
+        if: always() && github.event_name == 'workflow_run'
+        run: DOCKER_CONFIG="$RUNNER_TEMP/people-gator-preview-docker" docker logout ghcr.io

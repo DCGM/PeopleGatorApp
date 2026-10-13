@@ -1,0 +1,137 @@
+name: PR CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: [self-hosted, linux, x64, people-gator-ci]
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: people-gator-app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: people-gator-app/package-lock.json
+      - run: npm ci
+      - run: npm run type-check
+      - run: npm run test:unit -- --run
+
+  backend:
+    runs-on: [self-hosted, linux, x64, people-gator-ci]
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: localhost
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: '5432'
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ci
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ci
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ci
+      PEOPLE_GATOR_POSTGRES_TEST_URL: postgresql+asyncpg://ci:ci@localhost:5432/ci
+      PEOPLE_GATOR_SCHEMA_TEST_URL: postgresql+asyncpg://ci:ci@localhost:5432/ci_schema
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: people-gator-api/uv.lock
+      - run: uv sync --locked --python 3.14
+        working-directory: people-gator-api
+      - name: Create disposable schema database on the same CI server
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema'
+      - run: uv run --locked pytest tests
+        working-directory: people-gator-api
+      # Older PR heads may not contain the controller suite added with this workflow.
+      # Keep application checks/builds pinned to the PR head and fetch this suite
+      # from the exact workflow commit into a separate checkout.
+      - name: Check out preview controller tests from workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .preview-controller-ci
+          sparse-checkout: deploy/preview
+          persist-credentials: false
+      - name: Test preview controller
+        working-directory: .preview-controller-ci
+        env:
+          PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          python3 deploy/preview/tests/test_preview.py -v
+          python3 deploy/preview/tests/test_observability.py -v
+
+  images:
+    needs: [frontend, backend]
+    # Forks get tests, but cannot publish images or access the preview host.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, people-gator-ci]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            context: people-gator-app
+          - component: backend
+            context: people-gator-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMPONENT: ${{ matrix.component }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}-${COMPONENT}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.image.outputs.name }}:run-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}
+          # Same-origin requests allow the built frontend to work on any PR hostname.
+          build-args: VITE_API_BASE_URL=/
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
