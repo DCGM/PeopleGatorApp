@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
@@ -18,6 +19,15 @@ class _FakeCollections:
         self.operation_log: list[tuple[str, str]] = []
         self.created_collections: list[str] = []
         self.exists_attempts = 0
+
+    def get(self, collection_name: str):
+        properties = weaviate_schema.ALL_COLLECTION_SPECS[collection_name][0]
+        return SimpleNamespace(
+            query=SimpleNamespace(fetch_objects=AsyncMock(return_value=SimpleNamespace(objects=[]))),
+            config=SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(properties=properties)), add_property=AsyncMock()),
+        )
+
+    use = get
 
     async def exists(self, collection_name: str) -> bool:
         self.operation_log.append(("exists", collection_name))

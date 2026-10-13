@@ -267,7 +267,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     if face.person
                     else actors["importer"],
                 )
-            if face.state == "verified" and detection.entity_link_state == EntityLinkState.automatic:
+            if face.state == "verified" and detection.entity_id == active_entities.get(face.person) and detection.entity_link_state == EntityLinkState.automatic:
                 detection = await database.faces.patch(detection.detection_id, FacePatchRequest(entity_link_state=EntityLinkState.verified), actors["reviewer"])
             manifest.faces[face.key] = detection.detection_id
             active_faces[face.key] = detection.detection_id
@@ -309,7 +309,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     ),
                     actors[person.actor],
                 )
-            if record.entity_link_state == EntityLinkState.automatic:
+            if record.entity_id == active_entities.get(person.key) and record.entity_link_state == EntityLinkState.automatic:
                 if mention.state == "verified":
                     record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actors["reviewer"])
                 elif mention.state is None:

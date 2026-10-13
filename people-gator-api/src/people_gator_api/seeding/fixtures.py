@@ -23,6 +23,20 @@ class Person:
 
 PEOPLE = (
     Person(
+        "link-ada",
+        "Ada Review",
+        ("A. Review",),
+        "Synthetic link review subject with automatic and verified evidence.",
+        "importer",
+    ),
+    Person(
+        "link-emil",
+        "Emil Review",
+        (),
+        "Synthetic link review subject with manually assigned evidence.",
+        "reviewer",
+    ),
+    Person(
         "ada",
         "Ada Novak",
         ("A. Novak",),
@@ -87,10 +101,14 @@ DOCUMENTS = (
     Document("notes", "preview-nlk", "Research notes"),
     Document("letters", "preview-mzk", "Correspondence"),
     Document("grouped-album", "preview-mzk", "Named preview album"),
-    Document("grouped-mirror", "preview-nlk", "Album in another library", "grouped-album"),
+    Document(
+        "grouped-mirror", "preview-nlk", "Album in another library", "grouped-album"
+    ),
     Document("empty-document", "preview-mzk", "Document awaiting scans"),
     Document("legacy-document", "preview-mzk", "Legacy unnamed document", named=False),
-    Document("scan-only", "preview-mzk", "Unregistered scan collection", registered=False),
+    Document(
+        "scan-only", "preview-mzk", "Unregistered scan collection", registered=False
+    ),
 )
 
 
@@ -125,14 +143,49 @@ class Page:
 
 
 PAGES = (
-    Page("links-1", "link-states", 1,
-        (Face("links-auto", "ada", 0, 0), Face("links-manual", "emil", 1, 1, "manual")),
-        (Mention("links-auto-mention", "ada", "Ada Novak supplied the catalogue."),
-         Mention("links-manual-mention", "emil", "Emil Dvorak arranged the portraits.", "manual"))),
-    Page("links-2", "link-states", 2,
-        (Face("links-verified", "ada", 0, 0, "verified"), Face("links-unassigned", None, 1, 3)),
-        (Mention("links-verified-mention", "ada", "Ada\nNovak checked the catalogue.", "verified"),
-         Mention("links-unassigned-mention", "emil", "Emil Dvorak awaits identification.", None))),
+    Page(
+        "links-1",
+        "link-states",
+        1,
+        (
+            Face("links-auto", "link-ada", 0, 2),
+            Face("links-manual", "link-emil", 1, 3, "manual"),
+        ),
+        (
+            Mention(
+                "links-auto-mention", "link-ada", "Ada Review supplied the catalogue."
+            ),
+            Mention(
+                "links-manual-mention",
+                "link-emil",
+                "Emil Review arranged the portraits.",
+                "manual",
+            ),
+        ),
+    ),
+    Page(
+        "links-2",
+        "link-states",
+        2,
+        (
+            Face("links-verified", "link-ada", 0, 2, "verified"),
+            Face("links-unassigned", None, 1, 3),
+        ),
+        (
+            Mention(
+                "links-verified-mention",
+                "link-ada",
+                "Ada\nReview checked the catalogue.",
+                "verified",
+            ),
+            Mention(
+                "links-unassigned-mention",
+                "link-emil",
+                "Emil Review awaits identification.",
+                None,
+            ),
+        ),
+    ),
     Page(
         "album-1",
         "album",

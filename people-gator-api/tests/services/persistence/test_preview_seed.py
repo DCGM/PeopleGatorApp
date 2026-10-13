@@ -31,8 +31,11 @@ from people_gator_api.schemas.entities import (
 from people_gator_api.schemas.faces import FaceListRequest, FacePatchRequest
 from people_gator_api.schemas.mentions import TextMentionListRequest
 from people_gator_api.schemas.sources import (
-    DocumentListRequest, DocumentLookupRequest, GenericSourceLookupRequest,
-    PageListFilter, PageListRequest,
+    DocumentListRequest,
+    DocumentLookupRequest,
+    GenericSourceLookupRequest,
+    PageListFilter,
+    PageListRequest,
 )
 from people_gator_api.schemas.search import (
     QueryBase,
@@ -117,7 +120,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (6, 12, 10)
+    assert await counts(database) == (8, 12, 10)
     assert len(result.documents) == 8 and len(result.pages) == 13
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
@@ -155,7 +158,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     for filters, expected in (
         (
             EntityListFilter(has_detections=True, has_mentions=False),
-            {"ada-candidate"},
+            {"emil", "ada-candidate"},
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora"}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
@@ -220,7 +223,9 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             page_id=page.page_id,
         )
         assert {span.mention_id for span in spans} == {
-            result.mentions[item.key] for item in page.mentions if item.state is not None
+            result.mentions[item.key]
+            for item in page.mentions
+            if item.state is not None
         }
         for spec in page.faces:
             face = await database.faces.get(result.faces[spec.key])
@@ -253,7 +258,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (6, 12, 10)
+    assert await counts(database) == (8, 12, 10)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -275,7 +280,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (7, 12, 10)
+    assert await counts(database) == (9, 12, 10)
 
 
 @pytest.mark.asyncio
@@ -299,8 +304,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 6 and len(result.faces) == 12
-    assert await counts(database) == (6, 12, 10)
+    assert len(result.entities) == 8 and len(result.faces) == 12
+    assert await counts(database) == (8, 12, 10)
 
 
 @pytest.mark.asyncio
@@ -320,7 +325,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (5, 11, 9)
+    assert await counts(database) == (7, 11, 9)
 
 
 @pytest.mark.asyncio
@@ -331,31 +336,61 @@ async def test_document_groups_names_and_scan_only_media(seed_target):
     assert second == first
     listed = await database.sources.list_documents(DocumentListRequest(limit=100))
     assert {item.source_id for item in listed.items} == set(first.documents.values())
-    for key, expected_pages in (("grouped-album", 2), ("grouped-mirror", 1), ("empty-document", 0), ("legacy-document", 1)):
+    for key, expected_pages in (
+        ("grouped-album", 2),
+        ("grouped-mirror", 1),
+        ("empty-document", 0),
+        ("legacy-document", 1),
+    ):
         spec = next(item for item in DOCUMENTS if item.key == key)
-        document = await database.sources.lookup_document(DocumentLookupRequest(
-            library=spec.library, document_id=spec.document_id,
-        ))
+        document = await database.sources.lookup_document(
+            DocumentLookupRequest(
+                library=spec.library,
+                document_id=spec.document_id,
+            )
+        )
         assert document.name == (spec.title if spec.named else None)
-        assert (await database.sources.get_document(document.source_id)).name == document.name
-        pages = await database.sources.list_pages(PageListRequest(
-            limit=1, return_total_count=True,
-            filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id]),
-        ))
+        assert (
+            await database.sources.get_document(document.source_id)
+        ).name == document.name
+        pages = await database.sources.list_pages(
+            PageListRequest(
+                limit=1,
+                return_total_count=True,
+                filter_=PageListFilter(
+                    library=[spec.library], document_id=[spec.document_id]
+                ),
+            )
+        )
         assert pages.total_count == expected_pages
         all_pages = list(pages.items)
         if pages.cursor:
-            more = await database.sources.list_pages(PageListRequest(
-                limit=1, cursor=pages.cursor, return_total_count=True,
-                filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id]),
-            ))
+            more = await database.sources.list_pages(
+                PageListRequest(
+                    limit=1,
+                    cursor=pages.cursor,
+                    return_total_count=True,
+                    filter_=PageListFilter(
+                        library=[spec.library], document_id=[spec.document_id]
+                    ),
+                )
+            )
             all_pages.extend(more.items)
         assert len({item.source_id for item in all_pages}) == expected_pages
-        assert all(item.library == spec.library and item.document_id == spec.document_id for item in all_pages)
+        assert all(
+            item.library == spec.library and item.document_id == spec.document_id
+            for item in all_pages
+        )
     orphan = next(item for item in DOCUMENTS if item.key == "scan-only")
-    assert await database.sources.lookup_document(DocumentLookupRequest(
-        library=orphan.library, document_id=orphan.document_id,
-    )) is None
+    assert (
+        await database.sources.lookup_document(
+            DocumentLookupRequest(
+                library=orphan.library,
+                document_id=orphan.document_id,
+            )
+        )
+        is None
+    )
     page = next(item for item in PAGES if item.document == orphan.key)
     content = await get_page_image(orphan.library, orphan.document_id, page.page_id)
     assert content.content
@@ -365,33 +400,67 @@ async def test_document_groups_names_and_scan_only_media(seed_target):
 async def test_document_registration_api_names_and_legacy_requests(seed_target):
     from fastapi import HTTPException
     from people_gator_api.routes.v1.media import (
-        create_document_route, create_document_batch_route, get_document_route,
-        lookup_document_route, list_documents_route,
+        create_document_route,
+        create_document_batch_route,
+        get_document_route,
+        lookup_document_route,
+        list_documents_route,
     )
     from people_gator_api.schemas.common import GenericListRequest
-    from people_gator_api.schemas.sources import DocumentCreateRequest, DocumentListFilter
+    from people_gator_api.schemas.sources import (
+        DocumentCreateRequest,
+        DocumentListFilter,
+    )
 
     database, _, _ = seed_target
-    request = DocumentCreateRequest(library="names-test", document_id=uuid.uuid4(), name="  Named album  ")
+    request = DocumentCreateRequest(
+        library="names-test", document_id=uuid.uuid4(), name="  Named album  "
+    )
     created = await create_document_route(payload=request, database=database, user=None)
     assert created.name == "Named album"
-    assert (await get_document_route(document_source_id=created.source_id, database=database, user=None)).name == created.name
-    assert (await lookup_document_route(database=database, user=None, library=request.library, document_id=request.document_id)).name == created.name
+    assert (
+        await get_document_route(
+            document_source_id=created.source_id, database=database, user=None
+        )
+    ).name == created.name
+    assert (
+        await lookup_document_route(
+            database=database,
+            user=None,
+            library=request.library,
+            document_id=request.document_id,
+        )
+    ).name == created.name
     legacy = DocumentCreateRequest(library="names-test", document_id=uuid.uuid4())
-    batch = await create_document_batch_route(payload=[request.model_copy(update={"name": "Replacement"}), legacy], database=database, user=None)
+    batch = await create_document_batch_route(
+        payload=[request.model_copy(update={"name": "Replacement"}), legacy],
+        database=database,
+        user=None,
+    )
     assert [item.name for item in batch] == ["Named album", None]
     with pytest.raises(HTTPException) as conflict:
         await create_document_route(payload=request, database=database, user=None)
     assert conflict.value.status_code == 409
-    listed = await list_documents_route(database=database, user=None, filter=DocumentListFilter(library=["names-test"]), list_request=GenericListRequest(limit=100))
-    assert {item.source_id: item.name for item in listed.items} == {created.source_id: "Named album", batch[1].source_id: None}
+    listed = await list_documents_route(
+        database=database,
+        user=None,
+        filter=DocumentListFilter(library=["names-test"]),
+        list_request=GenericListRequest(limit=100),
+    )
+    assert {item.source_id: item.name for item in listed.items} == {
+        created.source_id: "Named album",
+        batch[1].source_id: None,
+    }
 
 
 @pytest.mark.asyncio
 async def test_document_name_migration_preserves_existing_sources(seed_target):
     database, _, engine = seed_target
-    document_source, page_source, document_id, page_id = (uuid.uuid4() for _ in range(4))
+    document_source, page_source, document_id, page_id = (
+        uuid.uuid4() for _ in range(4)
+    )
     async with engine.begin() as connection:
+
         def migrate_to(sync, revision, downgrade=False):
             config = migration_config()
             config.attributes["connection"] = sync
@@ -399,12 +468,35 @@ async def test_document_name_migration_preserves_existing_sources(seed_target):
 
         await connection.run_sync(lambda sync: migrate_to(sync, "d34a021b0002", True))
         for source_id, kind, url in (
-            (document_source, "document", f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document_id}"),
-            (page_source, "page", f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document_id}?page=uuid:{page_id}"),
+            (
+                document_source,
+                "document",
+                f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document_id}",
+            ),
+            (
+                page_source,
+                "page",
+                f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document_id}?page=uuid:{page_id}",
+            ),
         ):
-            await connection.execute(text("INSERT INTO pg_demo_sources (id, source_type, url) VALUES (:id, :kind, :url)"), {"id": source_id, "kind": kind, "url": url})
-        await connection.execute(text("INSERT INTO pg_demo_documents (id, library, document_id) VALUES (:id, 'legacy', :document)"), {"id": document_source, "document": document_id})
-        await connection.execute(text("INSERT INTO pg_demo_pages (id, library, document_id, page_id) VALUES (:id, 'legacy', :document, :page)"), {"id": page_source, "document": document_id, "page": page_id})
+            await connection.execute(
+                text(
+                    "INSERT INTO pg_demo_sources (id, source_type, url) VALUES (:id, :kind, :url)"
+                ),
+                {"id": source_id, "kind": kind, "url": url},
+            )
+        await connection.execute(
+            text(
+                "INSERT INTO pg_demo_documents (id, library, document_id) VALUES (:id, 'legacy', :document)"
+            ),
+            {"id": document_source, "document": document_id},
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO pg_demo_pages (id, library, document_id, page_id) VALUES (:id, 'legacy', :document, :page)"
+            ),
+            {"id": page_source, "document": document_id, "page": page_id},
+        )
         await connection.run_sync(lambda sync: migrate_to(sync, "head"))
     await validate_postgres_schema(engine)
     document = await database.sources.get_document(document_source)
@@ -417,17 +509,30 @@ async def test_document_name_migration_preserves_existing_sources(seed_target):
 async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
     from people_gator_api.schemas.enums import EntityLinkState as State
     from people_gator_api.schemas.faces import FaceListFilter
-    from people_gator_api.schemas.mentions import TextMentionPatchRequest, TextMentionListFilter
+    from people_gator_api.schemas.mentions import (
+        TextMentionPatchRequest,
+        TextMentionListFilter,
+    )
     from people_gator_api.schemas.sources import DocumentListFilter
     from people_gator_api.schemas.common import GenericActor
 
     db, fs, engine = seed_target
     seed = await preview.seed_preview(db, fs)
     reviewer = GenericActor(user_id=seed.users["reviewer"])
-    importer = GenericActor(user_id=seed.users["importer"], api_key_id=seed.api_keys["importer"])
-    for kind, repo, ids in (("faces", db.faces, seed.faces), ("mentions", db.text_mentions, seed.mentions)):
+    importer = GenericActor(
+        user_id=seed.users["importer"], api_key_id=seed.api_keys["importer"]
+    )
+    for kind, repo, ids in (
+        ("faces", db.faces, seed.faces),
+        ("mentions", db.text_mentions, seed.mentions),
+    ):
         suffix = "-mention" if kind == "mentions" else ""
-        for key, state in (("auto", State.automatic), ("manual", State.manual), ("verified", State.verified), ("unassigned", None)):
+        for key, state in (
+            ("auto", State.automatic),
+            ("manual", State.manual),
+            ("verified", State.verified),
+            ("unassigned", None),
+        ):
             record = await repo.get(ids["links-" + key + suffix])
             assert record.entity_link_state == state
             if state == State.verified:
@@ -436,54 +541,158 @@ async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
         assert (await repo.get(ids["links-unassigned" + suffix])).entity_id is None
     doc = await db.sources.get_document(seed.documents["link-states"])
     for counts in (doc.entity_link_stats.faces, doc.entity_link_stats.mentions):
-        assert counts.model_dump() == dict(automatic=1, manual=1, verified=1, unassigned=1, total=4)
+        assert counts.model_dump() == dict(
+            automatic=1, manual=1, verified=1, unassigned=1, total=4
+        )
     empty = await db.sources.get_document(seed.documents["empty-document"])
-    assert empty.entity_link_stats.faces.total == empty.entity_link_stats.mentions.total == 0
+    assert (
+        empty.entity_link_stats.faces.total
+        == empty.entity_link_stats.mentions.total
+        == 0
+    )
     page = await db.sources.get_page(seed.pages["links-1"])
     assert page.entity_link_stats.faces.verified == 0
     assert page.entity_link_stats.faces.total == 2
     for states, expected in (([State.automatic, State.manual], 2), (list(State), 3)):
-        faces = await db.faces.list(FaceListRequest(filter_=FaceListFilter(source_id=list(seed.pages[k] for k in ("links-1", "links-2")), entity_link_state=states), return_total_count=True, limit=1))
+        faces = await db.faces.list(
+            FaceListRequest(
+                filter_=FaceListFilter(
+                    source_id=list(seed.pages[k] for k in ("links-1", "links-2")),
+                    entity_link_state=states,
+                ),
+                return_total_count=True,
+                limit=1,
+            )
+        )
         assert faces.total_count == expected and len(faces.items) == 1
     # State from another page or another entity cannot satisfy the same witness.
-    entities = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(source_id=[seed.pages["links-1"]], entity_link_state=[State.verified])))
+    entities = await db.entities.list(
+        EntityListRequest(
+            limit=100,
+            filter_=EntityListFilter(
+                source_id=[seed.pages["links-1"]], entity_link_state=[State.verified]
+            ),
+        )
+    )
     assert entities.items == []
-    pages = await db.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(entity_id=[seed.entities["emil"]], entity_link_state=[State.verified])))
+    pages = await db.sources.list_pages(
+        PageListRequest(
+            limit=100,
+            filter_=PageListFilter(
+                entity_id=[seed.entities["link-emil"]],
+                entity_link_state=[State.verified],
+            ),
+        )
+    )
     assert pages.items == []
-    docs = await db.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(entity_id=[seed.entities["ada"]], entity_link_state=[State.verified])))
+    docs = await db.sources.list_documents(
+        DocumentListRequest(
+            limit=100,
+            filter_=DocumentListFilter(
+                entity_id=[seed.entities["link-ada"]],
+                entity_link_state=[State.verified],
+            ),
+        )
+    )
     assert seed.documents["link-states"] in {item.source_id for item in docs.items}
-    spans = await get_text_mention_spans(db, seed.pages["links-2"], library=doc.library, document_id=doc.document_id, page_id=next(p.page_id for p in PAGES if p.key == "links-2"), entity_link_state=[State.verified])
+    spans = await get_text_mention_spans(
+        db,
+        seed.pages["links-2"],
+        library=doc.library,
+        document_id=doc.document_id,
+        page_id=next(p.page_id for p in PAGES if p.key == "links-2"),
+        entity_link_state=[State.verified],
+    )
     assert len(spans) == 1 and spans[0].start_line_id != spans[0].end_line_id
     assert spans[0].mention_id == seed.mentions["links-verified-mention"]
     # Both annotation kinds follow exactly the same transition table.
-    for repo, record_id, patch in ((db.faces, seed.faces["links-auto"], FacePatchRequest), (db.text_mentions, seed.mentions["links-auto-mention"], TextMentionPatchRequest)):
+    for repo, record_id, patch in (
+        (db.faces, seed.faces["links-auto"], FacePatchRequest),
+        (
+            db.text_mentions,
+            seed.mentions["links-auto-mention"],
+            TextMentionPatchRequest,
+        ),
+    ):
         before = await repo.get(record_id)
-        verified = await repo.patch(record_id, patch(entity_link_state=State.verified), importer)
+        verified = await repo.patch(
+            record_id, patch(entity_link_state=State.verified), importer
+        )
         assert verified.entity_link_verified_by_user_id == importer.user_id
         assert verified.entity_link_verified_at is not None
         touched = (await db.entities.get(before.entity_id)).last_touched_at
-        repeat = await repo.patch(record_id, patch(entity_id=before.entity_id, entity_link_state=State.verified), reviewer)
+        repeat = await repo.patch(
+            record_id,
+            patch(entity_id=before.entity_id, entity_link_state=State.verified),
+            reviewer,
+        )
         assert repeat.entity_link_verified_at == verified.entity_link_verified_at
         assert repeat.entity_link_verified_by_user_id == importer.user_id
         assert (await db.entities.get(before.entity_id)).last_touched_at == touched
-        assert (await repo.patch(record_id, patch(), reviewer)).entity_link_verified_at == verified.entity_link_verified_at
-        for invalid in (patch(entity_link_state=None), patch(entity_id=seed.entities["emil"], entity_link_state=State.verified), patch(entity_id=None, entity_link_state=State.manual), patch(entity_id=uuid.uuid4())):
+        assert (
+            await repo.patch(record_id, patch(), reviewer)
+        ).entity_link_verified_at == verified.entity_link_verified_at
+        if repo is db.faces:
+            embedded = await repo.patch(
+                record_id,
+                patch(
+                    embeddings=[
+                        preview.FaceEmbedding(
+                            model_identifier=MODEL, vector=[1.0] + [0.0] * 7
+                        )
+                    ]
+                ),
+                reviewer,
+            )
+            assert embedded.entity_link_verified_at == verified.entity_link_verified_at
+            assert embedded.entity_link_verified_by_user_id == importer.user_id
+        for invalid in (
+            patch(entity_link_state=None),
+            patch(
+                entity_id=seed.entities["link-emil"], entity_link_state=State.verified
+            ),
+            patch(entity_id=None, entity_link_state=State.manual),
+            patch(entity_id=uuid.uuid4()),
+        ):
             with pytest.raises(ValueError):
                 await repo.patch(record_id, invalid, reviewer)
             assert (await repo.get(record_id)).entity_id == before.entity_id
-        moved = await repo.patch(record_id, patch(entity_id=seed.entities["emil"]), reviewer)
-        assert moved.entity_link_state == State.manual and moved.entity_link_verified_at is None
+        moved = await repo.patch(
+            record_id, patch(entity_id=seed.entities["link-emil"]), reviewer
+        )
+        assert (
+            moved.entity_link_state == State.manual
+            and moved.entity_link_verified_at is None
+        )
         if hasattr(before, "mention_id"):
-            assert (moved.mention_id, moved.name, moved.context, moved.source_id) == (before.mention_id, before.name, before.context, before.source_id)
+            assert (moved.mention_id, moved.name, moved.context, moved.source_id) == (
+                before.mention_id,
+                before.name,
+                before.context,
+                before.source_id,
+            )
         cleared = await repo.patch(record_id, patch(entity_id=None), reviewer)
-        assert cleared.entity_id is cleared.entity_link_state is cleared.entity_link_verified_at is None
+        assert (
+            cleared.entity_id
+            is cleared.entity_link_state
+            is cleared.entity_link_verified_at
+            is None
+        )
         with pytest.raises(ValueError):
-            await repo.patch(record_id, patch(entity_link_state=State.verified), reviewer)
-        restored = await repo.patch(record_id, patch(entity_id=before.entity_id, entity_link_state=State.automatic), reviewer)
+            await repo.patch(
+                record_id, patch(entity_link_state=State.verified), reviewer
+            )
+        restored = await repo.patch(
+            record_id,
+            patch(entity_id=before.entity_id, entity_link_state=State.automatic),
+            reviewer,
+        )
         assert restored.entity_link_state == State.automatic
     # Reruns preserve review changes and the verification actor/time.
     face_id = seed.faces["links-verified"]
-    edited = await db.faces.patch(face_id, FacePatchRequest(entity_link_state=State.manual), reviewer)
+    edited = await db.faces.patch(
+        face_id, FacePatchRequest(entity_link_state=State.manual), reviewer
+    )
     await preview.seed_preview(db, fs)
     assert (await db.faces.get(face_id)) == edited
     await validate_postgres_schema(engine)
@@ -494,44 +703,295 @@ async def test_link_database_constraints_delete_merge_and_migration(seed_target)
     from sqlalchemy.exc import IntegrityError
     from people_gator_api.schemas.enums import EntityLinkState as State
     from people_gator_api.schemas.mentions import TextMentionPatchRequest
+
     db, fs, engine = seed_target
     seed = await preview.seed_preview(db, fs)
     actor = GenericActor(user_id=seed.users["reviewer"])
-    await db.faces._session.commit()  # Release seed reads before DDL on a second connection.
+    await (
+        db.faces._session.commit()
+    )  # Release seed reads before DDL on a second connection.
     # Downgrade and upgrade are round-trippable and backfill existing assigned rows.
     async with engine.begin() as connection:
+
         def migrate(sync, down):
             config = migration_config()
             config.attributes["connection"] = sync
-            (command.downgrade(config, "d34a021b0003") if down else command.upgrade(config, "head"))
+            (
+                command.downgrade(config, "d34a021b0003")
+                if down
+                else command.upgrade(config, "head")
+            )
+
         await connection.run_sync(lambda sync: migrate(sync, True))
         await connection.run_sync(lambda sync: migrate(sync, False))
-    for repo, record_id in ((db.faces, seed.faces["links-verified"]), (db.text_mentions, seed.mentions["links-verified-mention"])):
+    for repo, record_id in (
+        (db.faces, seed.faces["links-verified"]),
+        (db.text_mentions, seed.mentions["links-verified-mention"]),
+    ):
         record = await repo.get(record_id)
         assert record.entity_link_state == State.automatic
         assert record.entity_link_verified_at is None
     # CHECK constraints reject UNKNOWN-prone invalid combinations outside the API.
-    for table, record_id in (("image_occurrences", seed.faces["links-auto"]), ("text_mentions", seed.mentions["links-auto-mention"])):
-        for update in ("entity_link_state = NULL", "entity_link_state = 'verified'", "entity_link_verified_at = now()", f"entity_link_verified_by_user_id = '{actor.user_id}'"):
+    for table, record_id in (
+        ("image_occurrences", seed.faces["links-auto"]),
+        ("text_mentions", seed.mentions["links-auto-mention"]),
+    ):
+        for update in (
+            "entity_link_state = NULL",
+            "entity_link_state = 'verified'",
+            "entity_link_verified_at = now()",
+            f"entity_link_verified_by_user_id = '{actor.user_id}'",
+        ):
             async with engine.connect() as connection:
                 transaction = await connection.begin()
                 with pytest.raises(IntegrityError):
-                    await connection.execute(text(f"UPDATE pg_demo_{table} SET {update} WHERE id = :id"), {"id": record_id})
+                    await connection.execute(
+                        text(f"UPDATE pg_demo_{table} SET {update} WHERE id = :id"),
+                        {"id": record_id},
+                    )
                 await transaction.rollback()
     # A manual merge resets only the transferred links; target links keep verification.
-    verified_target = await db.faces.patch(seed.faces["links-auto"], FacePatchRequest(entity_link_state=State.verified), actor)
-    await db.text_mentions.patch(seed.mentions["links-manual-mention"], TextMentionPatchRequest(entity_link_state=State.verified), actor)
-    merged = await db.entities.merge(seed.entities["ada"], seed.entities["emil"], context=actor)
-    assert merged.merged_entity.entity_link_stats.faces.manual == merged.faces_reassigned == 3
+    verified_target = await db.faces.patch(
+        seed.faces["links-auto"],
+        FacePatchRequest(entity_link_state=State.verified),
+        actor,
+    )
+    await db.text_mentions.patch(
+        seed.mentions["links-manual-mention"],
+        TextMentionPatchRequest(entity_link_state=State.verified),
+        actor,
+    )
+    merged = await db.entities.merge(
+        seed.entities["link-ada"], seed.entities["link-emil"], context=actor
+    )
+    assert (
+        merged.merged_entity.entity_link_stats.faces.manual
+        == merged.faces_reassigned
+        == 1
+    )
     moved = await db.text_mentions.get(seed.mentions["links-manual-mention"])
-    assert moved.entity_link_state == State.manual and moved.entity_link_verified_at is None
-    assert (await db.faces.get(verified_target.detection_id)).entity_link_verified_at == verified_target.entity_link_verified_at
+    assert (
+        moved.entity_link_state == State.manual
+        and moved.entity_link_verified_at is None
+    )
+    assert (
+        await db.faces.get(verified_target.detection_id)
+    ).entity_link_verified_at == verified_target.entity_link_verified_at
     # The FK's SET NULL action must also clear verification through the trigger.
     async with engine.begin() as connection:
-        await connection.execute(text("DELETE FROM pg_demo_entities WHERE id = :id"), {"id": seed.entities["ada"]})
-    for repo, record_id in ((db.faces, seed.faces["links-auto"]), (db.text_mentions, seed.mentions["links-manual-mention"])):
+        await connection.execute(
+            text("DELETE FROM pg_demo_entities WHERE id = :id"),
+            {"id": seed.entities["link-ada"]},
+        )
+    for repo, record_id in (
+        (db.faces, seed.faces["links-auto"]),
+        (db.text_mentions, seed.mentions["links-manual-mention"]),
+    ):
         record = await repo.get(record_id)
-        assert record.entity_id is record.entity_link_state is record.entity_link_verified_at is record.entity_link_verified_by_user_id is None
+        assert (
+            record.entity_id
+            is record.entity_link_state
+            is record.entity_link_verified_at
+            is record.entity_link_verified_by_user_id
+            is None
+        )
     doc = await db.sources.get_document(seed.documents["link-states"])
-    assert doc.entity_link_stats.faces.unassigned == doc.entity_link_stats.faces.total == 4
-    assert doc.entity_link_stats.mentions.unassigned == doc.entity_link_stats.mentions.total == 4
+    assert (
+        doc.entity_link_stats.faces.unassigned == doc.entity_link_stats.faces.total == 4
+    )
+    assert (
+        doc.entity_link_stats.mentions.unassigned
+        == doc.entity_link_stats.mentions.total
+        == 4
+    )
+
+
+@pytest.mark.asyncio
+async def test_entity_link_http_contract_and_batch_validation(seed_target):
+    import httpx
+    from fastapi import FastAPI
+    from people_gator_api.routes.v1 import router
+    from people_gator_api.services import database_service, auth_service
+    from people_gator_api.services.auth_service import AuthContext
+
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    actor = AuthContext(
+        user_id=seed.users["ocr"],
+        user=await db.users.get(seed.users["ocr"]),
+        scopes={"people-gator:annotate", "people-gator:browse"},
+        authentication_method="api_key",
+        api_key_id=seed.api_keys["ocr"],
+    )
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[database_service.get_database] = lambda: db
+    app.dependency_overrides[auth_service.get_auth_context] = lambda: actor
+    schema = app.openapi()
+    assert schema["components"]["schemas"]["EntityLinkState"]["enum"] == [
+        "automatic",
+        "manual",
+        "verified",
+    ]
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        for path in ("faces", "text-mentions", "entities", "pages", "documents"):
+            assert (
+                await client.get(f"/api/v1/{path}?filter.entity_link_state=invalid")
+            ).status_code == 422
+            assert (
+                await client.get(f"/api/v1/{path}?filter.entity_link_state=")
+            ).status_code == 422
+        for path, key, id_field in (
+            ("faces", "links-auto", "detection_id"),
+            ("text-mentions", "links-auto-mention", "mention_id"),
+        ):
+            ids = seed.faces if path == "faces" else seed.mentions
+            record_id = str(ids[key])
+            url = f"/api/v1/{path}/{record_id}"
+            response = await client.patch(url, json={"entity_link_state": "verified"})
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["entity_link_verified_by_user_id"] == str(actor.user_id)
+            assert body["entity_link_verified_at"] is not None
+            for invalid in (
+                {"entity_link_state": "other"},
+                {"entity_link_state": None},
+                {"entity_link_verified_by_user_id": str(actor.user_id)},
+                {"entity_id": str(uuid.uuid4())},
+                {
+                    "entity_id": str(seed.entities["link-emil"]),
+                    "entity_link_state": "verified",
+                },
+            ):
+                assert (await client.patch(url, json=invalid)).status_code == 422
+                assert (await client.get(url)).json()["entity_id"] == str(
+                    seed.entities["link-ada"]
+                )
+            assert (
+                await client.patch(f"/api/v1/{path}/{uuid.uuid4()}", json={})
+            ).status_code == 404
+            # Complete semantic preflight prevents a valid first item from changing.
+            invalid_batch = [
+                {id_field: record_id, "entity_id": str(seed.entities["link-emil"])},
+                {
+                    id_field: str(
+                        ids[
+                            "links-unassigned"
+                            if path == "faces"
+                            else "links-unassigned-mention"
+                        ]
+                    ),
+                    "entity_link_state": "verified",
+                },
+            ]
+            assert (
+                await client.patch(f"/api/v1/{path}:batch", json=invalid_batch)
+            ).status_code == 422
+            assert (await client.get(url)).json()["entity_link_state"] == "verified"
+            batch = await client.patch(
+                f"/api/v1/{path}:batch",
+                json=[
+                    {id_field: record_id, "entity_id": None},
+                    {id_field: str(uuid.uuid4()), "entity_link_state": "manual"},
+                ],
+            )
+            assert batch.status_code == 200 and batch.json()[1] is None
+            assert batch.json()[0]["entity_link_state"] is None
+
+
+@pytest.mark.asyncio
+async def test_document_scope_and_indexed_aggregates_with_larger_fixture(seed_target):
+    from people_gator_api.schemas.sources import DocumentCreateRequest
+    from people_gator_api.schemas.mentions import (
+        TextMentionCreateRequest,
+        TextMentionPatchRequest,
+    )
+    from people_gator_api.schemas.faces import FaceCreateRequest
+    from people_gator_api.persistence.postgres.entity_link_queries import (
+        load_link_stats,
+    )
+
+    db, fs, engine = seed_target
+    seed = await preview.seed_preview(db, fs)
+    actor = GenericActor(user_id=seed.users["reviewer"])
+    doc = await db.sources.get_document(seed.documents["link-states"])
+    mirror, _ = await db.sources.get_or_create_document(
+        DocumentCreateRequest(library="other-link-library", document_id=doc.document_id)
+    )
+    direct = await db.text_mentions.create(
+        TextMentionCreateRequest(
+            name="Emil",
+            source_id=mirror.source_id,
+            entity_id=seed.entities["link-emil"],
+        ),
+        actor,
+    )
+    await db.text_mentions.patch(
+        direct.mention_id, TextMentionPatchRequest(entity_link_state="verified"), actor
+    )
+    original = await db.sources.get_document(doc.source_id)
+    assert original.entity_link_stats.mentions.total == 4
+    assert (
+        await db.sources.get_document(mirror.source_id)
+    ).entity_link_stats.mentions.verified == 1
+    unrelated = await db.entities.list(
+        EntityListRequest(
+            limit=100,
+            filter_=EntityListFilter(
+                entity_id=[seed.entities["link-emil"]],
+                document_source_id=[doc.source_id],
+                entity_link_state=["verified"],
+            ),
+        )
+    )
+    assert unrelated.items == []
+    direct_match = await db.entities.list(
+        EntityListRequest(
+            limit=100,
+            filter_=EntityListFilter(
+                document_source_id=[mirror.source_id], entity_link_state=["verified"]
+            ),
+        )
+    )
+    assert [item.entity_id for item in direct_match.items] == [
+        seed.entities["link-emil"]
+    ]
+    base = await db.faces.get(seed.faces["links-auto"])
+    face = FaceCreateRequest(
+        source_id=seed.pages["letters-2"],
+        entity_id=seed.entities["link-ada"],
+        bounding_box=base.bounding_box,
+        keypoints=base.keypoints,
+        confidence=0.9,
+    )
+    # Large unrelated annotation sets make a selective page/state lookup useful.
+    await db.faces.create_batch([face] * 2500, actor)
+    await db.text_mentions.create_batch(
+        [
+            TextMentionCreateRequest(
+                name="Ada",
+                source_id=seed.pages["letters-2"],
+                entity_id=seed.entities["link-ada"],
+            )
+        ]
+        * 2500,
+        actor,
+    )
+    await db.faces._session.commit()
+    async with engine.begin() as connection:
+        for table in ("image_occurrences", "text_mentions"):
+            await connection.execute(text(f"ANALYZE pg_demo_{table}"))
+            plan = await connection.scalar(
+                text(
+                    f"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT source_id, entity_link_state, count(*) FROM pg_demo_{table} WHERE source_id = :id AND entity_link_state = 'verified' GROUP BY source_id, entity_link_state"
+                ),
+                {"id": seed.pages["links-2"]},
+            )
+            import json
+
+            assert f"ix_pg_demo_{table}_source_state" in json.dumps(plan)
+    assert (
+        await db.sources.get_document(doc.source_id)
+    ).entity_link_stats == original.entity_link_stats

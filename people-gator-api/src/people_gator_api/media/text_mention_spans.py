@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import re
 import unicodedata
 import uuid
@@ -35,6 +36,8 @@ class _TextMentionText:
     entity_type: EntityType | None
     name: str
     entity_link_state: EntityLinkState | None = None
+    entity_link_verified_by_user_id: uuid.UUID | None = None
+    entity_link_verified_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +115,8 @@ async def _fetch_text_mentions(
                 entity_type=entity_types.get(entity_id),
                 name=item.name,
                 entity_link_state=item.entity_link_state,
+                entity_link_verified_by_user_id=item.entity_link_verified_by_user_id,
+                entity_link_verified_at=item.entity_link_verified_at,
             )
             for item, entity_id in assigned
         )
@@ -144,6 +149,8 @@ def _match_text_mention_spans(
                     TextMentionSpanModel(
                         mention_id=mention.mention_id,
                         entity_link_state=mention.entity_link_state,
+                        entity_link_verified_by_user_id=mention.entity_link_verified_by_user_id,
+                        entity_link_verified_at=mention.entity_link_verified_at,
                         entity_id=mention.entity_id,
                         entity_type=mention.entity_type,
                         start_line_id=first_word.line_id,

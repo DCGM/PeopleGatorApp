@@ -1,4 +1,5 @@
 """Shared annotation link schemas. Omission and null have distinct meanings."""
+
 from datetime import datetime
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -32,7 +33,8 @@ class EntityLinkResponse(BaseModel):
 
 class EntityLinkFilter(BaseModel):
     entity_link_state: list[EntityLinkState] | MissingType = Field(
-        default=MISSING, description="Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations."
+        default=MISSING,
+        description="Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.",
     )
 
     @field_validator("entity_link_state")
