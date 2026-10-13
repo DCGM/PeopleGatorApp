@@ -1,0 +1,50 @@
+receivers:
+  fluent_forward:
+    endpoint: 0.0.0.0:24224
+
+extensions:
+  file_storage:
+    directory: /var/lib/otelcol
+    create_directory: true
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  groupbyattrs/containers:
+    keys: [container_id, container_name, com.docker.compose.service, people-gator.preview.pr, people-gator.preview.sha]
+  transform/preview:
+    error_mode: propagate
+    log_statements:
+      - context: resource
+        statements:
+          - set(resource.attributes["service.name"], Concat(["people-gator-preview", resource.attributes["com.docker.compose.service"]], "."))
+          - set(resource.attributes["service.instance.id"], resource.attributes["container_id"])
+          - set(resource.attributes["container.id"], resource.attributes["container_id"])
+          - set(resource.attributes["container.name"], resource.attributes["container_name"])
+          - set(resource.attributes["deployment.environment.name"], "preview")
+          - set(resource.attributes["vcs.ref.head.revision"], resource.attributes["people-gator.preview.sha"])
+      - context: log
+        statements:
+          - set(attributes["log.iostream"], attributes["source"])
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+
+exporters:
+  otlp_http:
+    endpoint: ${env:OTEL_EXPORTER_OTLP_ENDPOINT}
+    sending_queue:
+      storage: file_storage
+      queue_size: 1000
+    retry_on_failure:
+      max_elapsed_time: 0s
+
+service:
+  extensions: [file_storage]
+  pipelines:
+    logs:
+      receivers: [fluent_forward]
+      processors: [memory_limiter, groupbyattrs/containers, transform/preview, batch]
+      exporters: [otlp_http]

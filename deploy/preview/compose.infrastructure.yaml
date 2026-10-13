@@ -1,0 +1,92 @@
+name: people-gator-preview-infra
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: preview_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?required}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      database:
+        aliases: [preview-postgres]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U preview_admin -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    # PostgreSQL has no published host port and never joins Traefik's network.
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    restart: unless-stopped
+    user: '0:0'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    command: [--config=/etc/otelcol/preview.yaml]
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://lgtm:4318}
+    ports:
+      # Only the host's Docker daemon needs access to the Fluent Forward receiver.
+      - '127.0.0.1:${PREVIEW_LOG_PORT:-24224}:24224'
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/preview.yaml:ro
+      - otel-data:/var/lib/otelcol
+    networks: [logging]
+
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@peoplegator.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?required}
+      PGADMIN_DISABLE_POSTFIX: '1'
+      PGADMIN_LISTEN_PORT: '5050'
+      PGADMIN_CONFIG_PROXY_X_PROTO_COUNT: '1'
+      PGADMIN_CONFIG_PROXY_X_HOST_COUNT: '1'
+      PGADMIN_CONFIG_SESSION_COOKIE_SECURE: 'True'
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./pgadmin-servers.json:/pgadmin4/servers.json:ro
+    networks: [database, web]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /venv/bin/python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/misc/ping', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-preview-pgadmin.entrypoints=websecure
+      - 'traefik.http.routers.pg-preview-pgadmin.rule=Host(`${PGADMIN_HOST:-pgadmin-preview.peoplegator.dev}`)'
+      - traefik.http.routers.pg-preview-pgadmin.service=pg-preview-pgadmin
+      - traefik.http.routers.pg-preview-pgadmin.tls=true
+      - traefik.http.routers.pg-preview-pgadmin.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-preview-pgadmin.loadbalancer.server.port=5050
+
+volumes:
+  otel-data:
+  pgadmin-data:
+  postgres-data:
+
+networks:
+  database:
+    name: ${DATABASE_NETWORK:-people-gator-preview-db}
+    internal: true
+  web:
+    external: true
+    name: ${WEB_NETWORK:-web}
+  logging:
+    external: true
+    name: ${OTEL_NETWORK:-logging}

@@ -1,0 +1,14 @@
+{
+  "repository": "DCGM/people_gator",
+  "state_dir": "/var/lib/people-gator-preview",
+  "domain": "preview.peoplegator.dev",
+  "web_network": "web",
+  "certificate_resolver": "tlschallenge",
+  "database_network": "people-gator-preview-db",
+  "users_file": "/opt/people-gator-preview/users.json",
+  "otel_network": "logging",
+  "otel_http_endpoint": "http://lgtm:4318",
+  "preview_log_port": 24224,
+  "pgadmin_host": "pgadmin-preview.peoplegator.dev",
+  "pgadmin_email": "admin@peoplegator.dev"
+}
