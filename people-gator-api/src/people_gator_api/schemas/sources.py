@@ -9,6 +9,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StringConstraints,
     model_validator,
 )
 from people_gator_api.settings import settings
@@ -19,6 +20,9 @@ from people_gator_api.schemas.common import (
 )
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
+
+
+type DocumentName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +82,7 @@ class GenericSourceCreateRequest(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+    name: DocumentName | None = None
     library: str | MissingType = Field(
         default=MISSING,
         description="The library identifier."
@@ -99,6 +104,8 @@ class GenericSourceCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_type_specific_fields(self) -> Self:
+        if self.name is not None and self.source_type != SourceKind.document:
+            raise ValueError("name belongs only to document sources")
         has_library = self.library is not MISSING
         has_document = self.document_id is not MISSING
         has_page = self.page_id is not MISSING
@@ -170,12 +177,14 @@ class DocumentCreateRequest(SourceCreateRequestBase):
     model_config = ConfigDict(extra="forbid")
     library: str = Field(min_length=1)
     document_id: uuid.UUID
+    name: DocumentName | None = None
 
     def to_generic(self) -> GenericSourceCreateRequest:
         return GenericSourceCreateRequest(
             library=self.library,
             document_id=self.document_id,
             source_type=SourceKind.document,
+            name=self.name,
             url=AnyUrl(document_url(self.library, self.document_id)),
         )
 
@@ -366,6 +375,7 @@ class GenericSourceResponse(SourceResponseBase):
     """
 
     model_config = ConfigDict(extra="forbid")
+    name: str | None = None
     library: str | None = Field(
         default=None,
         description="The library to which the source belongs.",
@@ -444,6 +454,7 @@ class DocumentResponse(SourceResponseBase):
 
     library: str = Field(min_length=1)
     document_id: uuid.UUID
+    name: str | None = None
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> DocumentResponse:
@@ -459,6 +470,7 @@ class DocumentResponse(SourceResponseBase):
             url=generic.url,
             library=generic.library,
             document_id=generic.document_id,
+            name=generic.name,
         )
 
 

@@ -30,7 +30,10 @@ from people_gator_api.schemas.entities import (
 )
 from people_gator_api.schemas.faces import FaceListRequest, FacePatchRequest
 from people_gator_api.schemas.mentions import TextMentionListRequest
-from people_gator_api.schemas.sources import GenericSourceLookupRequest
+from people_gator_api.schemas.sources import (
+    DocumentListRequest, DocumentLookupRequest, GenericSourceLookupRequest,
+    PageListFilter, PageListRequest,
+)
 from people_gator_api.schemas.search import (
     QueryBase,
     SearchFacesRequest,
@@ -115,7 +118,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (6, 8, 6)
-    assert len(result.documents) == 3 and len(result.pages) == 6
+    assert len(result.documents) == 6 and len(result.pages) == 10
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -318,3 +321,93 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
     assert await counts(database) == (5, 7, 5)
+
+
+@pytest.mark.asyncio
+async def test_document_groups_names_and_scan_only_media(seed_target):
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    second = await preview.seed_preview(database, filesystem)
+    assert second == first
+    listed = await database.sources.list_documents(DocumentListRequest(limit=100))
+    assert {item.source_id for item in listed.items} == set(first.documents.values())
+    for key, expected_pages in (("grouped-album", 2), ("grouped-mirror", 1), ("empty-document", 0)):
+        spec = next(item for item in DOCUMENTS if item.key == key)
+        document = await database.sources.lookup_document(DocumentLookupRequest(
+            library=spec.library, document_id=spec.document_id,
+        ))
+        assert document.name == spec.title
+        assert (await database.sources.get_document(document.source_id)).name == spec.title
+        pages = await database.sources.list_pages(PageListRequest(
+            limit=1, return_total_count=True,
+            filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id]),
+        ))
+        assert pages.total_count == expected_pages
+        all_pages = list(pages.items)
+        if pages.cursor:
+            more = await database.sources.list_pages(PageListRequest(
+                limit=1, cursor=pages.cursor, return_total_count=True,
+                filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id]),
+            ))
+            all_pages.extend(more.items)
+        assert len({item.source_id for item in all_pages}) == expected_pages
+        assert all(item.library == spec.library and item.document_id == spec.document_id for item in all_pages)
+    orphan = next(item for item in DOCUMENTS if item.key == "scan-only")
+    assert await database.sources.lookup_document(DocumentLookupRequest(
+        library=orphan.library, document_id=orphan.document_id,
+    )) is None
+    page = next(item for item in PAGES if item.document == orphan.key)
+    content = await get_page_image(orphan.library, orphan.document_id, page.page_id)
+    assert content.content
+
+
+@pytest.mark.asyncio
+async def test_document_registration_api_names_and_legacy_requests(seed_target):
+    from fastapi import HTTPException
+    from people_gator_api.routes.v1.media import (
+        create_document_route, create_document_batch_route, get_document_route,
+        lookup_document_route, list_documents_route,
+    )
+    from people_gator_api.schemas.common import GenericListRequest
+    from people_gator_api.schemas.sources import DocumentCreateRequest, DocumentListFilter
+
+    database, _, _ = seed_target
+    request = DocumentCreateRequest(library="names-test", document_id=uuid.uuid4(), name="  Named album  ")
+    created = await create_document_route(payload=request, database=database, user=None)
+    assert created.name == "Named album"
+    assert (await get_document_route(document_source_id=created.source_id, database=database, user=None)).name == created.name
+    assert (await lookup_document_route(database=database, user=None, library=request.library, document_id=request.document_id)).name == created.name
+    legacy = DocumentCreateRequest(library="names-test", document_id=uuid.uuid4())
+    batch = await create_document_batch_route(payload=[request.model_copy(update={"name": "Replacement"}), legacy], database=database, user=None)
+    assert [item.name for item in batch] == ["Named album", None]
+    with pytest.raises(HTTPException) as conflict:
+        await create_document_route(payload=request, database=database, user=None)
+    assert conflict.value.status_code == 409
+    listed = await list_documents_route(database=database, user=None, filter=DocumentListFilter(library=["names-test"]), list_request=GenericListRequest(limit=100))
+    assert {item.source_id: item.name for item in listed.items} == {created.source_id: "Named album", batch[1].source_id: None}
+
+
+@pytest.mark.asyncio
+async def test_document_name_migration_preserves_existing_sources(seed_target):
+    database, _, engine = seed_target
+    document_source, page_source, document_id, page_id = (uuid.uuid4() for _ in range(4))
+    async with engine.begin() as connection:
+        def migrate_to(sync, revision, downgrade=False):
+            config = migration_config()
+            config.attributes["connection"] = sync
+            (command.downgrade if downgrade else command.upgrade)(config, revision)
+
+        await connection.run_sync(lambda sync: migrate_to(sync, "d34a021b0002", True))
+        for source_id, kind, url in (
+            (document_source, "document", f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document_id}"),
+            (page_source, "page", f"https://www.digitalniknihovna.cz/legacy/view/uuid:{document_id}?page=uuid:{page_id}"),
+        ):
+            await connection.execute(text("INSERT INTO pg_demo_sources (id, source_type, url) VALUES (:id, :kind, :url)"), {"id": source_id, "kind": kind, "url": url})
+        await connection.execute(text("INSERT INTO pg_demo_documents (id, library, document_id) VALUES (:id, 'legacy', :document)"), {"id": document_source, "document": document_id})
+        await connection.execute(text("INSERT INTO pg_demo_pages (id, library, document_id, page_id) VALUES (:id, 'legacy', :document, :page)"), {"id": page_source, "document": document_id, "page": page_id})
+        await connection.run_sync(lambda sync: migrate_to(sync, "head"))
+    await validate_postgres_schema(engine)
+    document = await database.sources.get_document(document_source)
+    page = await database.sources.get_page(page_source)
+    assert document.name is None and document.document_id == document_id
+    assert page.document_id == document_id and page.page_id == page_id

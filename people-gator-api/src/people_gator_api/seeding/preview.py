@@ -189,10 +189,13 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     documents: dict[str, UUID] = {}
     pages: dict[str, UUID] = {}
     for document in DOCUMENTS:
+        if not document.registered:
+            continue
         source, _ = await database.sources.get_or_create_document(
             DocumentCreateRequest(
                 library=document.library,
                 document_id=document.document_id,
+                name=document.title,
             )
         )
         documents[document.key] = source.source_id
@@ -313,6 +316,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "grouped-documents": "/documents?library=preview-mzk",
+            "unregistered-scan": "/scans?"
+            + urlencode({"library": "preview-mzk", "document": next(
+                item.document_id for item in DOCUMENTS if item.key == "scan-only"
+            )}),
             "mobile-filters": "/people?"
             + urlencode(
                 {

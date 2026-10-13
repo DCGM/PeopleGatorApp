@@ -72,16 +72,22 @@ class Document:
     key: str
     library: str
     title: str
+    identity_key: str | None = None
+    registered: bool = True
 
     @property
     def document_id(self) -> UUID:
-        return fixture_id("document/" + self.key)
+        return fixture_id("document/" + (self.identity_key or self.key))
 
 
 DOCUMENTS = (
     Document("album", "preview-mzk", "Portrait album"),
     Document("notes", "preview-nlk", "Research notes"),
     Document("letters", "preview-mzk", "Correspondence"),
+    Document("grouped-album", "preview-mzk", "Named preview album"),
+    Document("grouped-mirror", "preview-nlk", "Album in another library", "grouped-album"),
+    Document("empty-document", "preview-mzk", "Document awaiting scans"),
+    Document("scan-only", "preview-mzk", "Unregistered scan collection", registered=False),
 )
 
 
@@ -184,4 +190,8 @@ PAGES = (
         ),
     ),
     Page("letters-2", "letters", 2),
+    Page("grouped-album-1", "grouped-album", 1),
+    Page("grouped-album-2", "grouped-album", 2),
+    Page("grouped-mirror-1", "grouped-mirror", 1),
+    Page("scan-only-1", "scan-only", 1),
 )

@@ -110,3 +110,19 @@ used to resume; the seed is not one atomic database/filesystem transaction.
 Updating the installed preview host's controller and Compose template is an
 operator step after review/merge; see [preview deployment](../../deploy/preview/README.md).
 No workflow checks out and executes PR deployment scripts directly on that host.
+
+## Grouped documents and scans
+
+Open `/documents?library=preview-mzk` to explore **Named preview album** with two
+scans and **Document awaiting scans** with no pages. **Album in another library**
+in `preview-nlk` deliberately shares the album's document UUID; its single page
+must stay in its own group. `/scans` also includes **Unregistered scan collection**,
+which has local media but no registered document and is absent from Documents.
+The seed CLI prints `grouped-documents` and `unregistered-scan` links.
+
+Existing document identities are retained. New registrations receive their fixture
+titles; documents already seeded without names keep their nullable name and use the
+UI's `Document <document_id>` fallback. Reregistration never overwrites a name.
+The added scenario keys demonstrate names even in retained preview databases.
+Integration coverage checks names, empty groups, library isolation, page cursors,
+scan-only media, repeat registration and legacy requests without a name.

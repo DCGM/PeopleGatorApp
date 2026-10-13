@@ -248,6 +248,7 @@ class Document(Source):
     )
     library: Mapped[str] = mapped_column(String(255), nullable=False)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    name: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __mapper_args__ = {"polymorphic_identity": "document"}  # noqa: RUF012
 

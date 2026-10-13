@@ -9,6 +9,7 @@ from sqlalchemy import (
     Float,
     column,
     delete,
+    exists,
     func,
     or_,
     select,
@@ -121,7 +122,12 @@ class PostgresSourceRepository(SourceRepository):
         filters = source_filters(query.filter_)
         fingerprint = cursor_fingerprint(query)
         cursor_id = decode_cursor(query.cursor, fingerprint)
-        await validate_cursor(self._session, Source, cursor_id, filters)
+        if cursor_id is not None:
+            valid = await self._session.scalar(select(exists().select_from(self._source).where(
+                Source.id == cursor_id, *filters,
+            )))
+            if not valid:
+                raise ValueError("cursor is not valid for this query")
         total = None
         if query.return_total_count:
             total = (
@@ -173,6 +179,7 @@ class PostgresSourceRepository(SourceRepository):
                 **common,
                 library=spec.library,
                 document_id=spec.document_id,
+                name=spec.name,
             )
         return Image(**common)
 
