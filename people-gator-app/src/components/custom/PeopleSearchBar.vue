@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
-import { ChevronDown, Search, X } from '@lucide/vue'
+import { Search, SlidersHorizontal, X } from '@lucide/vue'
 import FilterMultiSelect from '@/components/custom/FilterMultiSelect.vue'
 import { Button } from '@/components/ui/button'
 import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { emptyPeopleFilters, type PeopleProcessingFilters } from '@/viewmodels/people-filters'
 
-import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Card, CardContent } from '@/components/ui/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
@@ -42,6 +41,10 @@ const advancedFilterCount = computed(
     Number(filters.value.userIds.length > 0) +
     Number(filters.value.apiKeyIds.length > 0),
 )
+const filterToggleLabel = computed(() => {
+  const label = expanded.value ? 'Hide additional filters' : 'More filters'
+  return advancedFilterCount.value ? `${label} (${advancedFilterCount.value} active)` : label
+})
 watch(
   () => props.filterError,
   (error) => {
@@ -115,7 +118,7 @@ function clearFilters() {
       </InputGroup>
       <Collapsible v-model:open="expanded">
         <div
-          class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+          class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2"
           aria-label="People filters"
         >
           <div class="min-w-0 space-y-1 text-sm">
@@ -156,18 +159,14 @@ function clearFilters() {
           <CollapsibleTrigger as-child>
             <Button
               type="button"
-              variant="outline"
-              class="col-span-2 bg-muted/50 font-normal hover:bg-muted sm:col-span-1"
+              variant="ghost"
+              size="icon"
+              class="bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground dark:hover:bg-transparent"
+              :aria-label="filterToggleLabel"
+              :title="filterToggleLabel"
             >
-              {{ expanded ? 'Fewer filters' : 'More filters' }}
-              <Badge v-if="advancedFilterCount" variant="outline" class="tabular-nums"
-                >{{ advancedFilterCount }} active</Badge
-              >
-              <ChevronDown
-                class="size-4 transition-transform"
-                :class="expanded && 'rotate-180'"
-                aria-hidden="true"
-              />
+              <X v-if="expanded" class="size-4" aria-hidden="true" />
+              <SlidersHorizontal v-else class="size-4" aria-hidden="true" />
             </Button>
           </CollapsibleTrigger>
         </div>

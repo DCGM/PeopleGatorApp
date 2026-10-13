@@ -89,7 +89,9 @@ describe('people filter controls and URL restoration', () => {
       api_key: 'api-key-1',
     })
     expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(0)
-    expect(wrapper.get('[data-slot="collapsible-trigger"]').text()).toContain('3 active')
+    expect(wrapper.get('[data-slot="collapsible-trigger"]').attributes('aria-label')).toContain(
+      '3 active',
+    )
     expect(wrapper.text()).toContain('Document: document One')
     expect(wrapper.text()).toContain('User: user One')
     expect(wrapper.text()).toContain('API key: api-key One')
@@ -220,11 +222,15 @@ describe('people filter controls and URL restoration', () => {
     expect(wrapper.find('button[aria-label="API keys"]').exists()).toBe(false)
     const toggle = wrapper.get('[data-slot="collapsible-trigger"]')
     expect(toggle.attributes('aria-expanded')).toBe('false')
-    expect(toggle.text()).toContain('2 active')
+    expect(toggle.attributes('aria-label')).toContain('2 active')
+    expect(toggle.text()).toBe('')
+    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     const originalQuery = { ...router.currentRoute.value.query }
     await toggle.trigger('click')
     await flushPromises()
     expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(true)
+    expect(toggle.find('svg.lucide-x').exists()).toBe(true)
+    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(false)
     expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     await toggle.trigger('click')
     await flushPromises()
@@ -236,7 +242,8 @@ describe('people filter controls and URL restoration', () => {
     await wrapper.get('button[aria-label="Remove User: user One"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()
-    expect(toggle.text()).toContain('1 active')
+    expect(toggle.attributes('aria-label')).toContain('1 active')
+    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     expect(router.currentRoute.value.query.assignment).toBe('faces')
     wrapper.unmount()
   })
