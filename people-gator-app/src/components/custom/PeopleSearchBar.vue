@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Search, X } from '@lucide/vue'
 import FilterMultiSelect from '@/components/custom/FilterMultiSelect.vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { emptyPeopleFilters, type PeopleProcessingFilters } from '@/viewmodels/people-filters'
 
@@ -110,26 +110,16 @@ function clearFilters() {
           </SelectContent>
         </Select>
         <div class="col-span-2 grid gap-3 border-t pt-3 sm:grid-cols-2 lg:grid-cols-5">
-          <label class="space-y-1 text-sm">
-            <span>Last processed from</span>
-            <Input
-              v-model="filters.touchedFrom"
-              type="datetime-local"
-              step="0.001"
-              class="rounded-none"
-              :aria-invalid="!!filterError"
-            />
-          </label>
-          <label class="space-y-1 text-sm">
-            <span>Last processed to</span>
-            <Input
-              v-model="filters.touchedTo"
-              type="datetime-local"
-              step="0.001"
-              class="rounded-none"
-              :aria-invalid="!!filterError"
-            />
-          </label>
+          <FilterDateTimePicker
+            v-model="filters.touchedFrom"
+            label="Last processed from"
+            :invalid="!!filterError"
+          />
+          <FilterDateTimePicker
+            v-model="filters.touchedTo"
+            label="Last processed to"
+            :invalid="!!filterError"
+          />
           <div class="space-y-1 text-sm">
             <span>Document</span>
             <FilterMultiSelect

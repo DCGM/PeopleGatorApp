@@ -1,8 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { computed, ref, type Ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { describe, expect, it, vi } from 'vitest'
-import { processingFilterError, type PeopleProcessingFilters } from '@/viewmodels/people-filters'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import {
+  processingFilterError,
+  utcToLocalTime,
+  type PeopleProcessingFilters,
+} from '@/viewmodels/people-filters'
 
 vi.mock('@/query/people-filter-options', () => ({
   usePeopleFilterOptions: (kind: string) => ({
@@ -37,6 +41,27 @@ vi.mock('@/viewmodels/people-search', () => ({
   }),
 }))
 import PeopleSearchView from '@/views/PeopleSearchView.vue'
+import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
+
+const body = () => new DOMWrapper(document.body)
+beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+    setTimeout(() => callback(0), 0),
+  )
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+})
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+afterAll(() => vi.unstubAllGlobals())
 
 async function mountedView(query: Record<string, string | string[]> = {}) {
   const router = createRouter({
@@ -45,7 +70,10 @@ async function mountedView(query: Record<string, string | string[]> = {}) {
   })
   await router.push({ name: 'people-search', query })
   await router.isReady()
-  const wrapper = mount(PeopleSearchView, { global: { plugins: [router] } })
+  const wrapper = mount(PeopleSearchView, {
+    attachTo: document.body,
+    global: { plugins: [router] },
+  })
   await flushPromises()
   return { wrapper, router }
 }
@@ -60,8 +88,8 @@ describe('people filter controls and URL restoration', () => {
       touched_by: 'user-1',
       api_key: 'api-key-1',
     })
-    expect(wrapper.find<HTMLInputElement>('input[type="datetime-local"]').element.value).not.toBe(
-      '',
+    expect(wrapper.findAllComponents(FilterDateTimePicker)[0]!.get('button').text()).not.toContain(
+      'Pick date and time',
     )
     expect(wrapper.text()).toContain('Document: document One')
     expect(wrapper.text()).toContain('User: user One')
@@ -88,9 +116,10 @@ describe('people filter controls and URL restoration', () => {
       .findAll('button')
       .find((button) => button.text() === 'Documents')!
       .trigger('click')
-    const choices = wrapper.findAll('input[type="checkbox"]')
-    await choices[0]!.setValue(true)
-    await choices[1]!.setValue(true)
+    await flushPromises()
+    const choices = body().findAll('[role="option"]')
+    await choices[0]!.trigger('click')
+    await choices[1]!.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.document).toEqual(['document-1', 'document-2'])
     await router.push({
@@ -99,30 +128,78 @@ describe('people filter controls and URL restoration', () => {
     })
     await flushPromises()
     expect(wrapper.text()).toContain('User: user Two')
+    expect(wrapper.findAllComponents(FilterDateTimePicker)[1]!.get('button').text()).not.toContain(
+      'Pick date and time',
+    )
     expect(
-      wrapper.findAll<HTMLInputElement>('input[type="datetime-local"]')[1]!.element.value,
-    ).not.toBe('')
-    expect(
-      wrapper
-        .findAll('input[type="checkbox"]')
-        .every((input) => !(input.element as HTMLInputElement).checked),
+      body()
+        .findAll('[role="option"]')
+        .every((option) => option.attributes('aria-selected') === 'false'),
     ).toBe(true)
     router.back()
     await flushPromises()
     expect(wrapper.text()).toContain('Document: document One')
     wrapper.unmount()
   })
-  it('persists local date/time changes as UTC and shows invalid ranges', async () => {
-    const { wrapper, router } = await mountedView()
-    const times = wrapper.findAll<HTMLInputElement>('input[type="datetime-local"]')
-    await times[0]!.setValue('2026-01-02T13:45')
+  it('persists calendar and time changes as UTC and shows invalid ranges', async () => {
+    const { wrapper, router } = await mountedView({
+      touched_from: '2026-01-02T12:00:00.123Z',
+      touched_to: '2026-01-04T12:00:00Z',
+    })
+    const pickers = wrapper.findAllComponents(FilterDateTimePicker)
+    await pickers[0]!.get('button').trigger('click')
+    await flushPromises()
+    expect(body().find('[data-value="2026-01-03"]').exists()).toBe(true)
+    await body().get('[data-value="2026-01-03"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_from).toBe(
-      new Date('2026-01-02T13:45').toISOString(),
+      new Date(
+        `2026-01-03T${utcToLocalTime('2026-01-02T12:00:00.123Z').split('T')[1]}`,
+      ).toISOString(),
     )
-    await times[1]!.setValue('2026-01-01T13:45')
+    await body().get<HTMLInputElement>('input[type="time"]').setValue('13:45:12.345')
+    await flushPromises()
+    expect(router.currentRoute.value.query.touched_from).toBe(
+      new Date('2026-01-03T13:45:12.345').toISOString(),
+    )
+    await body()
+      .findAll('button')
+      .find((button) => button.text() === 'Done')!
+      .trigger('click')
+    await pickers[1]!.get('button').trigger('click')
+    await flushPromises()
+    await body().get('[data-value="2026-01-01"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="alert"]').text()).toContain('before or equal')
+    await body()
+      .findAll('button')
+      .find((button) => button.text() === 'Clear')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.touched_to).toBeUndefined()
+    expect(router.currentRoute.value.query.touched_from).toBeDefined()
+    wrapper.unmount()
+  })
+  it('keeps server search results selectable by keyboard and supports removing selections', async () => {
+    const { wrapper, router } = await mountedView()
+    const trigger = wrapper.get('button[aria-label="Users"]')
+    await trigger.trigger('click')
+    await flushPromises()
+    const search = body().get<HTMLInputElement>('input[role="combobox"]')
+    await search.setValue('server-side query')
+    await flushPromises()
+    expect(body().findAll('[role="option"]')).toHaveLength(2)
+    await search.trigger('keydown', { key: 'ArrowDown' })
+    await search.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(router.currentRoute.value.query.touched_by).toHaveLength(1)
+    const selected = body().get('[role="option"][aria-selected="true"]')
+    await selected.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.touched_by).toBeUndefined()
+    await search.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
     wrapper.unmount()
   })
 })
