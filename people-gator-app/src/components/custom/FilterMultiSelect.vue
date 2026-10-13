@@ -48,7 +48,11 @@ function updateSelection(value: unknown) {
   >
     <ComboboxAnchor class="w-full" as-child>
       <ComboboxTrigger as-child :aria-label="label">
-        <Button type="button" variant="outline" class="w-full justify-between rounded-none">
+        <Button
+          type="button"
+          variant="outline"
+          class="w-full justify-between bg-muted/50 font-normal hover:bg-muted"
+        >
           <span
             >{{ label }}<template v-if="selected.length"> ({{ selected.length }})</template></span
           >
@@ -59,7 +63,7 @@ function updateSelection(value: unknown) {
     <ComboboxList
       align="start"
       :collision-padding="12"
-      class="w-(--reka-combobox-trigger-width) min-w-64 max-w-(--reka-combobox-content-available-width) rounded-none"
+      class="w-(--reka-combobox-trigger-width) min-w-64 max-w-(--reka-combobox-content-available-width)"
       :aria-label="label"
     >
       <ComboboxInput

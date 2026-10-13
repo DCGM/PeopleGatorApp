@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Search, X } from '@lucide/vue'
+import { computed, ref, useId, watch } from 'vue'
+import { ChevronDown, Search, X } from '@lucide/vue'
 import FilterMultiSelect from '@/components/custom/FilterMultiSelect.vue'
 import { Button } from '@/components/ui/button'
 import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { emptyPeopleFilters, type PeopleProcessingFilters } from '@/viewmodels/people-filters'
 
+import { Badge } from '@/components/ui/badge'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Card, CardContent } from '@/components/ui/card'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import {
@@ -20,7 +22,7 @@ import {
 } from '@/components/ui/select'
 import type { AssignmentFilter } from '@/viewmodels/assignment'
 
-defineProps<{
+const props = defineProps<{
   resultCount: number
   hasMoreResults?: boolean
   filterError?: string
@@ -31,6 +33,22 @@ const assignment = defineModel<AssignmentFilter>('assignment', { required: true 
 const filters = defineModel<PeopleProcessingFilters>('processingFilters', {
   default: emptyPeopleFilters,
 })
+const expanded = ref(false)
+const assignmentId = useId()
+const advancedFilterCount = computed(
+  () =>
+    Number(Boolean(filters.value.touchedFrom)) +
+    Number(Boolean(filters.value.touchedTo)) +
+    Number(filters.value.userIds.length > 0) +
+    Number(filters.value.apiKeyIds.length > 0),
+)
+watch(
+  () => props.filterError,
+  (error) => {
+    if (error) expanded.value = true
+  },
+  { immediate: true },
+)
 const documentSearch = ref('')
 const userSearch = ref('')
 const apiKeySearch = ref('')
@@ -82,46 +100,46 @@ function clearFilters() {
 </script>
 
 <template>
-  <div class="sticky top-13 z-20">
-    <Card class="gap-3 rounded-none py-3">
-      <CardContent
-        class="grid w-full grid-cols-2 gap-2 px-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,9rem)]"
-      >
-        <InputGroup class="col-span-2 w-full rounded-none lg:col-span-1">
-          <InputGroupInput v-model="searchTerm" placeholder="Search a person or alias…" />
-          <InputGroupAddon>
-            <Search />
-          </InputGroupAddon>
-          <InputGroupAddon align="inline-end" class="min-w-20 justify-end tabular-nums">
-            {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
-          </InputGroupAddon>
-        </InputGroup>
-        <Select v-model="assignment">
-          <SelectTrigger class="w-full rounded-none">
-            <SelectValue placeholder="Assignment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Assignment</SelectLabel>
-              <SelectItem value="all">All people</SelectItem>
-              <SelectItem value="faces">Assigned faces</SelectItem>
-              <SelectItem value="mentions">Assigned mentions</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <div class="col-span-2 grid gap-3 border-t pt-3 sm:grid-cols-2 lg:grid-cols-5">
-          <FilterDateTimePicker
-            v-model="filters.touchedFrom"
-            label="Last processed from"
-            :invalid="!!filterError"
-          />
-          <FilterDateTimePicker
-            v-model="filters.touchedTo"
-            label="Last processed to"
-            :invalid="!!filterError"
-          />
-          <div class="space-y-1 text-sm">
-            <span>Document</span>
+  <Card class="sticky top-13 z-20 gap-3 bg-background py-3">
+    <CardContent class="space-y-3 px-3">
+      <InputGroup class="bg-muted/50">
+        <InputGroupInput
+          v-model="searchTerm"
+          aria-label="Search people"
+          placeholder="Search a person or alias…"
+        />
+        <InputGroupAddon><Search /></InputGroupAddon>
+        <InputGroupAddon align="inline-end" class="min-w-20 justify-end tabular-nums">
+          {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
+        </InputGroupAddon>
+      </InputGroup>
+      <Collapsible v-model:open="expanded">
+        <div
+          class="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+          aria-label="People filters"
+        >
+          <div class="min-w-0 space-y-1 text-sm">
+            <label :for="assignmentId" class="font-medium">Assignment</label>
+            <Select v-model="assignment">
+              <SelectTrigger
+                :id="assignmentId"
+                aria-label="Assignment"
+                class="w-full bg-muted/50 font-normal hover:bg-muted"
+              >
+                <SelectValue placeholder="Assignment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Assignment</SelectLabel>
+                  <SelectItem value="all">All people</SelectItem>
+                  <SelectItem value="faces">Assigned faces</SelectItem>
+                  <SelectItem value="mentions">Assigned mentions</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="min-w-0 space-y-1 text-sm">
+            <span class="font-medium">Document</span>
             <FilterMultiSelect
               v-model="filters.documentIds"
               v-model:search="documentSearch"
@@ -135,66 +153,98 @@ function clearFilters() {
               @retry="documents.retry()"
             />
           </div>
-          <div class="space-y-1 text-sm">
-            <span>Last processed by</span>
-            <FilterMultiSelect
-              v-model="filters.userIds"
-              v-model:search="userSearch"
-              label="Users"
-              :options="users.options.value"
-              :is-loading="users.isLoading.value"
-              :error="users.error.value"
-              :has-more="users.hasMore.value"
-              :is-loading-more="users.isLoadingMore.value"
-              @load-more="users.loadMore()"
-              @retry="users.retry()"
-            />
-          </div>
-          <div class="space-y-1 text-sm">
-            <span>API key used</span>
-            <FilterMultiSelect
-              v-model="filters.apiKeyIds"
-              v-model:search="apiKeySearch"
-              label="API keys"
-              :options="apiKeys.options.value"
-              :is-loading="apiKeys.isLoading.value"
-              :error="apiKeys.error.value"
-              :has-more="apiKeys.hasMore.value"
-              :is-loading-more="apiKeys.isLoadingMore.value"
-              @load-more="apiKeys.loadMore()"
-              @retry="apiKeys.retry()"
-            />
-          </div>
+          <CollapsibleTrigger as-child>
+            <Button
+              type="button"
+              variant="outline"
+              class="col-span-2 bg-muted/50 font-normal hover:bg-muted sm:col-span-1"
+            >
+              {{ expanded ? 'Fewer filters' : 'More filters' }}
+              <Badge v-if="advancedFilterCount" variant="outline" class="tabular-nums"
+                >{{ advancedFilterCount }} active</Badge
+              >
+              <ChevronDown
+                class="size-4 transition-transform"
+                :class="expanded && 'rotate-180'"
+                aria-hidden="true"
+              />
+            </Button>
+          </CollapsibleTrigger>
         </div>
-        <p class="col-span-2 text-xs text-muted-foreground">
-          Times use your local timezone. Documents match faces and text mentions on any page; user
-          and API key refer to the last change.
-        </p>
-        <p v-if="filterError" class="col-span-2 text-sm text-destructive" role="alert">
-          {{ filterError }}
-        </p>
-        <div
-          v-if="active.length"
-          class="col-span-2 flex flex-wrap items-center gap-2"
-          aria-label="Active filters"
+        <CollapsibleContent
+          class="mt-3 space-y-3 border-t pt-3"
+          aria-label="Additional people filters"
         >
-          <Button
-            v-for="chip in active"
-            :key="`${chip.key}:${chip.value}`"
-            type="button"
-            variant="secondary"
-            size="sm"
-            class="h-auto max-w-full whitespace-normal break-all rounded-none py-1 text-left"
-            :aria-label="`Remove ${chip.label}`"
-            @click="removeFilter(chip.key, chip.value)"
-          >
-            {{ chip.label }} <X class="size-3 shrink-0" aria-hidden="true" />
-          </Button>
-          <Button type="button" variant="ghost" size="sm" @click="clearFilters()"
-            >Clear all filters</Button
-          >
-        </div>
-      </CardContent>
-    </Card>
-  </div>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <FilterDateTimePicker
+              v-model="filters.touchedFrom"
+              label="Last processed from"
+              :invalid="!!filterError"
+            />
+            <FilterDateTimePicker
+              v-model="filters.touchedTo"
+              label="Last processed to"
+              :invalid="!!filterError"
+            />
+            <div class="min-w-0 space-y-1 text-sm">
+              <span class="font-medium">Last processed by</span>
+              <FilterMultiSelect
+                v-model="filters.userIds"
+                v-model:search="userSearch"
+                label="Users"
+                :options="users.options.value"
+                :is-loading="users.isLoading.value"
+                :error="users.error.value"
+                :has-more="users.hasMore.value"
+                :is-loading-more="users.isLoadingMore.value"
+                @load-more="users.loadMore()"
+                @retry="users.retry()"
+              />
+            </div>
+            <div class="min-w-0 space-y-1 text-sm">
+              <span class="font-medium">API key used</span>
+              <FilterMultiSelect
+                v-model="filters.apiKeyIds"
+                v-model:search="apiKeySearch"
+                label="API keys"
+                :options="apiKeys.options.value"
+                :is-loading="apiKeys.isLoading.value"
+                :error="apiKeys.error.value"
+                :has-more="apiKeys.hasMore.value"
+                :is-loading-more="apiKeys.isLoadingMore.value"
+                @load-more="apiKeys.loadMore()"
+                @retry="apiKeys.retry()"
+              />
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Times use your local timezone. Documents match faces and text mentions on any page; user
+            and API key refer to the last change.
+          </p>
+        </CollapsibleContent>
+      </Collapsible>
+      <p v-if="filterError" class="text-sm text-destructive" role="alert">{{ filterError }}</p>
+      <div
+        v-if="active.length"
+        class="flex flex-wrap items-center gap-2"
+        aria-label="Active filters"
+      >
+        <Button
+          v-for="chip in active"
+          :key="`${chip.key}:${chip.value}`"
+          type="button"
+          variant="secondary"
+          size="sm"
+          class="h-auto max-w-full whitespace-normal break-all py-1 text-left"
+          :aria-label="`Remove ${chip.label}`"
+          @click="removeFilter(chip.key, chip.value)"
+        >
+          {{ chip.label }} <X class="size-3 shrink-0" aria-hidden="true" />
+        </Button>
+        <Button type="button" variant="ghost" size="sm" @click="clearFilters()"
+          >Clear all filters</Button
+        >
+      </div>
+    </CardContent>
+  </Card>
 </template>

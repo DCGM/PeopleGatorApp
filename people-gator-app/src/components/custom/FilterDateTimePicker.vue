@@ -44,13 +44,13 @@ function clear() {
 
 <template>
   <div class="min-w-0 space-y-1 text-sm">
-    <span :id="labelId">{{ label }}</span>
+    <span :id="labelId" class="font-medium">{{ label }}</span>
     <Popover v-model:open="open">
       <PopoverTrigger as-child>
         <Button
           type="button"
           variant="outline"
-          class="w-full justify-start rounded-none font-normal"
+          class="w-full justify-start bg-muted/50 font-normal hover:bg-muted"
           :class="!value && 'text-muted-foreground'"
           :aria-labelledby="labelId"
           :aria-invalid="!!invalid"
@@ -60,12 +60,7 @@ function clear() {
           <span class="truncate">{{ displayValue }}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        :collision-padding="12"
-        class="w-auto rounded-none p-0"
-        :aria-label="label"
-      >
+      <PopoverContent align="start" :collision-padding="12" class="w-auto p-0" :aria-label="label">
         <Calendar
           :model-value="date"
           :default-placeholder="date"
@@ -83,7 +78,7 @@ function clear() {
             step="0.001"
             :disabled="!date"
             :aria-label="`${props.label} time`"
-            class="rounded-none"
+            class="bg-muted/50"
             @update:model-value="updateTime"
           />
           <div class="flex justify-between">
