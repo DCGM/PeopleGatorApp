@@ -104,7 +104,10 @@ export type DocumentCreateRequest = {
      * Document Id
      */
     document_id: string;
+    name?: DocumentName | null;
 };
+
+export type DocumentName = string;
 
 /**
  * DocumentResponse
@@ -129,6 +132,10 @@ export type DocumentResponse = {
      * Document Id
      */
     document_id: string;
+    /**
+     * Name
+     */
+    name?: string | null;
 };
 
 /**
@@ -864,6 +871,10 @@ export type FoundDocument = {
      * Document Id
      */
     document_id: string;
+    /**
+     * Name
+     */
+    name?: string | null;
 };
 
 /**
