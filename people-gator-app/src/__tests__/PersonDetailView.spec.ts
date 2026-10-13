@@ -7,6 +7,7 @@ import PersonDetailView from '@/views/PersonDetailView.vue'
 
 vi.mock('@/viewmodels/person-detail', () => ({
   usePersonDetail: () => ({
+    entity: ref({ entity_id: 'person-ada' }),
     error: ref(null),
     faceCount: ref(0),
     faceEmbeddingModel: ref(null),
@@ -36,14 +37,23 @@ vi.mock('@/viewmodels/person-detail', () => ({
       article: '',
       aliases: [],
     }),
-    updateIdentifiers: vi.fn(),
-    updateProfile: vi.fn(),
+    processing: ref({
+      touchedAt: null,
+      userId: null,
+      userLabel: null,
+      apiKeyId: null,
+      apiKeyLabel: null,
+    }),
+    processingRefreshing: ref(false),
+    refreshProcessing: vi.fn<() => void>(),
+    updateIdentifiers: vi.fn<() => void>(),
+    updateProfile: vi.fn<() => void>(),
   }),
 }))
 
 vi.mock('@/viewmodels/person-discovery', () => ({
   usePersonDiscovery: () => ({
-    assignFaces: vi.fn(),
+    assignFaces: vi.fn<() => void>(),
     assignmentStatus: ref('idle'),
     error: ref(null),
     isLoadingFaces: ref(false),
@@ -72,13 +82,12 @@ describe('PersonDetailView', () => {
     const wrapper = mount(PersonDetailView, {
       global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
     })
-    const mentionLink = wrapper
-      .findAllComponents(RouterLinkStub)
-      .find((link) => {
-        const target = link.props('to')
-        return typeof target !== 'string' && target?.name === 'document-page'
-      })
+    const mentionLink = wrapper.findAllComponents(RouterLinkStub).find((link) => {
+      const target = link.props('to')
+      return typeof target !== 'string' && target?.name === 'document-page'
+    })
 
+    expect(wrapper.text()).toContain('No processing recorded')
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },

@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
+import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails.vue'
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
 import PersonFaceCard from '@/components/custom/PersonFaceCard.vue'
 import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
@@ -19,6 +20,7 @@ const router = useRouter()
 const personId = computed(() => String(route.params.personId))
 
 const {
+  entity,
   error,
   faceEmbeddingModel,
   faceCount,
@@ -32,6 +34,9 @@ const {
   portrait,
   portraitLoading,
   profile,
+  processing,
+  processingRefreshing,
+  refreshProcessing,
   updateIdentifiers,
   updateProfile,
 } = usePersonDetail(personId)
@@ -110,6 +115,13 @@ function selectTab(tab: string | number) {
         :national-library-authority-id="identifiers.nationalLibraryAuthorityId"
         @update:model-value="updateProfile"
         @update:identifiers="updateIdentifiers"
+      />
+
+      <PersonProcessingDetails
+        v-if="entity"
+        :processing="processing"
+        :refreshing="processingRefreshing"
+        @refresh="refreshProcessing"
       />
 
       <Tabs :model-value="activeTab" class="mt-8" @update:model-value="selectTab">

@@ -40,6 +40,14 @@ controls use the browser's local timezone. Filter changes select a new query
 cache entry and start from its first page. Individual chips and Clear all filters
 remove filters while preserving the text query.
 
+Person details show a Last processed card with the timestamp in the browser's
+local timezone (including seconds and timezone), the last user's display name,
+and the API-key name/identifier when present. Hovering the timestamp shows its
+original UTC value; actor labels expose their IDs on hover and fall back to IDs
+when lookup data is unavailable. Historical records show No processing recorded.
+Saving a changed profile field updates the card immediately; its refresh button
+reloads metadata after external processing without changing the record itself.
+
 To regenerate the TypeScript client from a local schema, use the application's
 normal environment/settings and run from `people-gator-api`:
 

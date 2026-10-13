@@ -7,12 +7,14 @@ import type {
   PersonFace,
   PersonMention,
   PersonProfile,
+  PersonProcessingInfo,
 } from '@/viewmodels/person-detail.types'
 import { useEntityQuery, usePatchEntityMutation } from '@/query/entities'
 import { fetchFaceAlignedCrop, useFaceListQuery } from '@/query/faces'
 import { fetchPage, fetchPageImage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
+import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { useTextMentionListQuery } from '@/query/text-mentions'
 
 function percentage(value: number) {
@@ -24,6 +26,22 @@ const PERSON_DETAIL_GC_TIME = 60 * 60_000
 export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const entityQuery = useEntityQuery(personId)
   const patchEntity = usePatchEntityMutation()
+  const touchedUserId = computed(() => entityQuery.data.value?.last_touched_by_user_id ?? '')
+  const touchedApiKeyId = computed(() => entityQuery.data.value?.last_touched_by_api_key_id ?? '')
+  const processingUsers = usePeopleFilterOptions('user', touchedUserId, () =>
+    Boolean(touchedUserId.value),
+  )
+  const processingApiKeys = usePeopleFilterOptions('api-key', touchedApiKeyId, () =>
+    Boolean(touchedApiKeyId.value),
+  )
+  const processing = computed<PersonProcessingInfo>(() => ({
+    touchedAt: entityQuery.data.value?.last_touched_at ?? null,
+    userId: touchedUserId.value || null,
+    userLabel: processingUsers.labels.value[touchedUserId.value] || touchedUserId.value || null,
+    apiKeyId: touchedApiKeyId.value || null,
+    apiKeyLabel:
+      processingApiKeys.labels.value[touchedApiKeyId.value] || touchedApiKeyId.value || null,
+  }))
 
   const hasPerson = computed(() => Boolean(toValue(personId)))
   const faceQuery = useFaceListQuery(
@@ -227,6 +245,9 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
     portrait: computed(() => faces.value[0]?.portrait ?? ''),
     portraitLoading: computed(() => faces.value[0]?.portraitLoading ?? false),
     profile,
+    processing,
+    processingRefreshing: entityQuery.isFetching,
+    refreshProcessing: () => entityQuery.refetch(),
     updateProfile,
     updateIdentifiers,
     updateStatus: patchEntity.status,

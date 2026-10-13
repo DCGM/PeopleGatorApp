@@ -11,7 +11,11 @@ import { fetchDocumentSearch } from '@/query/search/documents'
 export type FilterOption = { id: string; label: string }
 export type FilterOptionKind = 'document' | 'user' | 'api-key'
 
-export function usePeopleFilterOptions(kind: FilterOptionKind, search: MaybeRefOrGetter<string>) {
+export function usePeopleFilterOptions(
+  kind: FilterOptionKind,
+  search: MaybeRefOrGetter<string>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
   const normalizedSearch = computed(() => toValue(search).trim())
   const query = useInfiniteQuery({
     queryKey: computed(() => ['people-filter-options', kind, normalizedSearch.value]),
@@ -61,6 +65,7 @@ export function usePeopleFilterOptions(kind: FilterOptionKind, search: MaybeRefO
     },
     getNextPageParam: (page) => page.cursor ?? undefined,
     staleTime: 60_000,
+    enabled: computed(() => toValue(enabled)),
   })
   // Retain labels for selected options after changing a document search.
   const labels = ref<Record<string, string>>({})
