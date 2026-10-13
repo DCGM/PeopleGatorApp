@@ -12,7 +12,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from asyncpg.exceptions import CannotConnectNowError, PostgresConnectionError
-from sqlalchemy import Connection, Index, text
+from sqlalchemy import Connection, Index, MetaData, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.schema import SchemaItem
@@ -63,7 +63,9 @@ def _include_name(
     )
 
 
-def validate_schema(connection: Connection, *, check_revision: bool = True) -> None:
+def validate_schema(
+    connection: Connection, *, check_revision: bool = True, metadata: MetaData | None = None,
+) -> None:
     """Reject incompatible migration history and structural drift without DDL.
 
     Alembic detects table/column/type/nullability, foreign key, unique constraint
@@ -104,7 +106,7 @@ def validate_schema(connection: Connection, *, check_revision: bool = True) -> N
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
         try:
-            differences = compare_metadata(context, Base.metadata)
+            differences = compare_metadata(context, Base.metadata if metadata is None else metadata)
         except UserWarning as exc:
             raise SchemaValidationError(f"Schema comparison failed: {exc}") from exc
     if differences:
