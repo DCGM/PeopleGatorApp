@@ -32,19 +32,17 @@ def face_keypoints(face: Face) -> list[FaceKeypoint]:
 
 def page_layout(page: Page) -> PageLayoutModel:
     lines: list[TextLineModel] = []
-    for index, mention in enumerate(page.mentions):
-        y = 540 + index * 70
-        lines.append(
-            TextLineModel(
-                id=mention.key,
+    for mention in page.mentions:
+        for fragment, transcription in enumerate(mention.text.split("\n")):
+            index = len(lines)
+            y = 540 + index * 55
+            lines.append(TextLineModel(
+                id=mention.key + (f"-{fragment}" if "\n" in mention.text else ""),
                 baseline=[[50, y + 25], [750, y + 25]],
                 polygon=[[50, y], [750, y], [750, y + 35], [50, y + 35]],
-                heights=[25, 10],
-                transcription=mention.text,
-                index=index,
+                heights=[25, 10], transcription=transcription, index=index,
                 transcription_confidence=0.99,
-            )
-        )
+            ))
     return PageLayoutModel(
         id=str(page.page_id),
         page_size=(PAGE_SIZE[1], PAGE_SIZE[0]),
@@ -99,8 +97,8 @@ def page_image(page: Page, document: Document) -> bytes:
             fill="#303030",
             font=font,
         )
-    for index, mention in enumerate(page.mentions):
-        draw.text((50, 540 + index * 70), mention.text, fill="#303030", font=font)
+    for line in page_layout(page).regions[0].lines:
+        draw.text((50, line.polygon[0][1]), line.transcription, fill="#303030", font=font)
     if not page.faces and not page.mentions:
         draw.text(
             (50, 220),

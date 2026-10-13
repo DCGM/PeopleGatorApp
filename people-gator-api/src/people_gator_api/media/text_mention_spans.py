@@ -11,7 +11,8 @@ from difflib import SequenceMatcher
 
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.schemas.entities import EntityListFilter, EntityListRequest
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import EntityType, EntityLinkState
+from people_gator_api.schemas.missing import MISSING, MissingType
 from people_gator_api.schemas.mentions import (
     TextMentionListFilter,
     TextMentionListRequest,
@@ -33,6 +34,7 @@ class _TextMentionText:
     entity_id: uuid.UUID
     entity_type: EntityType | None
     name: str
+    entity_link_state: EntityLinkState | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +61,7 @@ async def get_text_mention_spans(
     library: str,
     document_id: uuid.UUID,
     page_id: uuid.UUID,
+    entity_link_state: list[EntityLinkState] | MissingType = MISSING,
 ) -> list[TextMentionSpanModel]:
     """Return fuzzy, word-aligned spans for a page's stored text mentions."""
     layout = await get_page_layout(
@@ -66,13 +69,14 @@ async def get_text_mention_spans(
         document_id,
         page_id,
     )
-    mentions = await _fetch_text_mentions(database, page_source_id)
+    mentions = await _fetch_text_mentions(database, page_source_id, entity_link_state)
     return _match_text_mention_spans(layout, mentions)
 
 
 async def _fetch_text_mentions(
     database: Database,
     page_source_id: uuid.UUID,
+    entity_link_state: list[EntityLinkState] | MissingType = MISSING,
 ) -> list[_TextMentionText]:
     """Fetch every text mention linked to the requested page source."""
     mentions: list[_TextMentionText] = []
@@ -80,7 +84,7 @@ async def _fetch_text_mentions(
     while True:
         response = await database.text_mentions.list(
             TextMentionListRequest(
-                filter_=TextMentionListFilter(source_id=[page_source_id]),
+                filter_=TextMentionListFilter(source_id=[page_source_id], entity_link_state=entity_link_state),
                 limit=_TEXT_MENTION_PAGE_SIZE,
                 cursor=cursor,
             )
@@ -107,6 +111,7 @@ async def _fetch_text_mentions(
                 entity_id=entity_id,
                 entity_type=entity_types.get(entity_id),
                 name=item.name,
+                entity_link_state=item.entity_link_state,
             )
             for item, entity_id in assigned
         )
@@ -138,6 +143,7 @@ def _match_text_mention_spans(
                     match.start_word,
                     TextMentionSpanModel(
                         mention_id=mention.mention_id,
+                        entity_link_state=mention.entity_link_state,
                         entity_id=mention.entity_id,
                         entity_type=mention.entity_type,
                         start_line_id=first_word.line_id,

@@ -117,8 +117,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (6, 8, 6)
-    assert len(result.documents) == 7 and len(result.pages) == 11
+    assert await counts(database) == (6, 12, 10)
+    assert len(result.documents) == 8 and len(result.pages) == 13
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -155,7 +155,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     for filters, expected in (
         (
             EntityListFilter(has_detections=True, has_mentions=False),
-            {"emil", "ada-candidate"},
+            {"ada-candidate"},
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora"}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
@@ -186,7 +186,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             )
         )
         assert result.faces["unassigned-ada"] in {
-            item.detection_id for item in hits.items[:3]
+            item.detection_id for item in hits.items[:5]
         }
         entities = await database.entities.search(
             SearchEntitiesRequest(
@@ -220,7 +220,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             page_id=page.page_id,
         )
         assert {span.mention_id for span in spans} == {
-            result.mentions[item.key] for item in page.mentions
+            result.mentions[item.key] for item in page.mentions if item.state is not None
         }
         for spec in page.faces:
             face = await database.faces.get(result.faces[spec.key])
@@ -253,7 +253,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (6, 8, 6)
+    assert await counts(database) == (6, 12, 10)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -275,7 +275,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (7, 8, 6)
+    assert await counts(database) == (7, 12, 10)
 
 
 @pytest.mark.asyncio
@@ -299,8 +299,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 6 and len(result.faces) == 8
-    assert await counts(database) == (6, 8, 6)
+    assert len(result.entities) == 6 and len(result.faces) == 12
+    assert await counts(database) == (6, 12, 10)
 
 
 @pytest.mark.asyncio
@@ -320,7 +320,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (5, 7, 5)
+    assert await counts(database) == (5, 11, 9)
 
 
 @pytest.mark.asyncio
@@ -411,3 +411,127 @@ async def test_document_name_migration_preserves_existing_sources(seed_target):
     page = await database.sources.get_page(page_source)
     assert document.name is None and document.document_id == document_id
     assert page.document_id == document_id and page.page_id == page_id
+
+
+@pytest.mark.asyncio
+async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
+    from people_gator_api.schemas.enums import EntityLinkState as State
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.schemas.mentions import TextMentionPatchRequest, TextMentionListFilter
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.common import GenericActor
+
+    db, fs, engine = seed_target
+    seed = await preview.seed_preview(db, fs)
+    reviewer = GenericActor(user_id=seed.users["reviewer"])
+    importer = GenericActor(user_id=seed.users["importer"], api_key_id=seed.api_keys["importer"])
+    for kind, repo, ids in (("faces", db.faces, seed.faces), ("mentions", db.text_mentions, seed.mentions)):
+        suffix = "-mention" if kind == "mentions" else ""
+        for key, state in (("auto", State.automatic), ("manual", State.manual), ("verified", State.verified), ("unassigned", None)):
+            record = await repo.get(ids["links-" + key + suffix])
+            assert record.entity_link_state == state
+            if state == State.verified:
+                assert record.entity_link_verified_by_user_id == reviewer.user_id
+                assert record.entity_link_verified_at.utcoffset().total_seconds() == 0
+        assert (await repo.get(ids["links-unassigned" + suffix])).entity_id is None
+    doc = await db.sources.get_document(seed.documents["link-states"])
+    for counts in (doc.entity_link_stats.faces, doc.entity_link_stats.mentions):
+        assert counts.model_dump() == dict(automatic=1, manual=1, verified=1, unassigned=1, total=4)
+    empty = await db.sources.get_document(seed.documents["empty-document"])
+    assert empty.entity_link_stats.faces.total == empty.entity_link_stats.mentions.total == 0
+    page = await db.sources.get_page(seed.pages["links-1"])
+    assert page.entity_link_stats.faces.verified == 0
+    assert page.entity_link_stats.faces.total == 2
+    for states, expected in (([State.automatic, State.manual], 2), (list(State), 3)):
+        faces = await db.faces.list(FaceListRequest(filter_=FaceListFilter(source_id=list(seed.pages[k] for k in ("links-1", "links-2")), entity_link_state=states), return_total_count=True, limit=1))
+        assert faces.total_count == expected and len(faces.items) == 1
+    # State from another page or another entity cannot satisfy the same witness.
+    entities = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(source_id=[seed.pages["links-1"]], entity_link_state=[State.verified])))
+    assert entities.items == []
+    pages = await db.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(entity_id=[seed.entities["emil"]], entity_link_state=[State.verified])))
+    assert pages.items == []
+    docs = await db.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(entity_id=[seed.entities["ada"]], entity_link_state=[State.verified])))
+    assert seed.documents["link-states"] in {item.source_id for item in docs.items}
+    spans = await get_text_mention_spans(db, seed.pages["links-2"], library=doc.library, document_id=doc.document_id, page_id=next(p.page_id for p in PAGES if p.key == "links-2"), entity_link_state=[State.verified])
+    assert len(spans) == 1 and spans[0].start_line_id != spans[0].end_line_id
+    assert spans[0].mention_id == seed.mentions["links-verified-mention"]
+    # Both annotation kinds follow exactly the same transition table.
+    for repo, record_id, patch in ((db.faces, seed.faces["links-auto"], FacePatchRequest), (db.text_mentions, seed.mentions["links-auto-mention"], TextMentionPatchRequest)):
+        before = await repo.get(record_id)
+        verified = await repo.patch(record_id, patch(entity_link_state=State.verified), importer)
+        assert verified.entity_link_verified_by_user_id == importer.user_id
+        assert verified.entity_link_verified_at is not None
+        touched = (await db.entities.get(before.entity_id)).last_touched_at
+        repeat = await repo.patch(record_id, patch(entity_id=before.entity_id, entity_link_state=State.verified), reviewer)
+        assert repeat.entity_link_verified_at == verified.entity_link_verified_at
+        assert repeat.entity_link_verified_by_user_id == importer.user_id
+        assert (await db.entities.get(before.entity_id)).last_touched_at == touched
+        assert (await repo.patch(record_id, patch(), reviewer)).entity_link_verified_at == verified.entity_link_verified_at
+        for invalid in (patch(entity_link_state=None), patch(entity_id=seed.entities["emil"], entity_link_state=State.verified), patch(entity_id=None, entity_link_state=State.manual), patch(entity_id=uuid.uuid4())):
+            with pytest.raises(ValueError):
+                await repo.patch(record_id, invalid, reviewer)
+            assert (await repo.get(record_id)).entity_id == before.entity_id
+        moved = await repo.patch(record_id, patch(entity_id=seed.entities["emil"]), reviewer)
+        assert moved.entity_link_state == State.manual and moved.entity_link_verified_at is None
+        if hasattr(before, "mention_id"):
+            assert (moved.mention_id, moved.name, moved.context, moved.source_id) == (before.mention_id, before.name, before.context, before.source_id)
+        cleared = await repo.patch(record_id, patch(entity_id=None), reviewer)
+        assert cleared.entity_id is cleared.entity_link_state is cleared.entity_link_verified_at is None
+        with pytest.raises(ValueError):
+            await repo.patch(record_id, patch(entity_link_state=State.verified), reviewer)
+        restored = await repo.patch(record_id, patch(entity_id=before.entity_id, entity_link_state=State.automatic), reviewer)
+        assert restored.entity_link_state == State.automatic
+    # Reruns preserve review changes and the verification actor/time.
+    face_id = seed.faces["links-verified"]
+    edited = await db.faces.patch(face_id, FacePatchRequest(entity_link_state=State.manual), reviewer)
+    await preview.seed_preview(db, fs)
+    assert (await db.faces.get(face_id)) == edited
+    await validate_postgres_schema(engine)
+
+
+@pytest.mark.asyncio
+async def test_link_database_constraints_delete_merge_and_migration(seed_target):
+    from sqlalchemy.exc import IntegrityError
+    from people_gator_api.schemas.enums import EntityLinkState as State
+    from people_gator_api.schemas.mentions import TextMentionPatchRequest
+    db, fs, engine = seed_target
+    seed = await preview.seed_preview(db, fs)
+    actor = GenericActor(user_id=seed.users["reviewer"])
+    await db.faces._session.commit()  # Release seed reads before DDL on a second connection.
+    # Downgrade and upgrade are round-trippable and backfill existing assigned rows.
+    async with engine.begin() as connection:
+        def migrate(sync, down):
+            config = migration_config()
+            config.attributes["connection"] = sync
+            (command.downgrade(config, "d34a021b0003") if down else command.upgrade(config, "head"))
+        await connection.run_sync(lambda sync: migrate(sync, True))
+        await connection.run_sync(lambda sync: migrate(sync, False))
+    for repo, record_id in ((db.faces, seed.faces["links-verified"]), (db.text_mentions, seed.mentions["links-verified-mention"])):
+        record = await repo.get(record_id)
+        assert record.entity_link_state == State.automatic
+        assert record.entity_link_verified_at is None
+    # CHECK constraints reject UNKNOWN-prone invalid combinations outside the API.
+    for table, record_id in (("image_occurrences", seed.faces["links-auto"]), ("text_mentions", seed.mentions["links-auto-mention"])):
+        for update in ("entity_link_state = NULL", "entity_link_state = 'verified'", "entity_link_verified_at = now()", f"entity_link_verified_by_user_id = '{actor.user_id}'"):
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                with pytest.raises(IntegrityError):
+                    await connection.execute(text(f"UPDATE pg_demo_{table} SET {update} WHERE id = :id"), {"id": record_id})
+                await transaction.rollback()
+    # A manual merge resets only the transferred links; target links keep verification.
+    verified_target = await db.faces.patch(seed.faces["links-auto"], FacePatchRequest(entity_link_state=State.verified), actor)
+    await db.text_mentions.patch(seed.mentions["links-manual-mention"], TextMentionPatchRequest(entity_link_state=State.verified), actor)
+    merged = await db.entities.merge(seed.entities["ada"], seed.entities["emil"], context=actor)
+    assert merged.merged_entity.entity_link_stats.faces.manual == merged.faces_reassigned == 3
+    moved = await db.text_mentions.get(seed.mentions["links-manual-mention"])
+    assert moved.entity_link_state == State.manual and moved.entity_link_verified_at is None
+    assert (await db.faces.get(verified_target.detection_id)).entity_link_verified_at == verified_target.entity_link_verified_at
+    # The FK's SET NULL action must also clear verification through the trigger.
+    async with engine.begin() as connection:
+        await connection.execute(text("DELETE FROM pg_demo_entities WHERE id = :id"), {"id": seed.entities["ada"]})
+    for repo, record_id in ((db.faces, seed.faces["links-auto"]), (db.text_mentions, seed.mentions["links-manual-mention"])):
+        record = await repo.get(record_id)
+        assert record.entity_id is record.entity_link_state is record.entity_link_verified_at is record.entity_link_verified_by_user_id is None
+    doc = await db.sources.get_document(seed.documents["link-states"])
+    assert doc.entity_link_stats.faces.unassigned == doc.entity_link_stats.faces.total == 4
+    assert doc.entity_link_stats.mentions.unassigned == doc.entity_link_stats.mentions.total == 4

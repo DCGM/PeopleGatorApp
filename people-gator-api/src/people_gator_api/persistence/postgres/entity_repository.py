@@ -56,6 +56,7 @@ from people_gator_api.persistence.postgres.utils import (
     entity_text_candidates,
     entity_filters,
     entity_response,
+    load_link_stats,
     aggregate_scores,
     ensure_ids,
     commit,
@@ -77,7 +78,9 @@ class PostgresEntityRepository(EntityRepository):
         if lock:
             statement = statement.order_by(Entity.id).with_for_update()
         rows = await self._session.scalars(statement)
-        return {row.id: row for row in rows.unique().all()}
+        result = {row.id: row for row in rows.unique().all()}
+        await load_link_stats(self._session, result.values(), entities=True)
+        return result
 
     async def get(self, entity_id: uuid.UUID) -> EntityResponse | None:
         entity = (await self._load_many([entity_id])).get(entity_id)
@@ -115,6 +118,7 @@ class PostgresEntityRepository(EntityRepository):
             .all()
         )
         page, cursor = next_cursor(rows, query.limit, Entity.id, fingerprint)
+        await load_link_stats(self._session, page, entities=True)
         return EntityListResponse(
             items=[entity_response(row) for row in page],
             limit=query.limit,
@@ -262,7 +266,7 @@ class PostgresEntityRepository(EntityRepository):
                         ImageOccurrence.entity_id.in_(source_entity_ids),
                         ImageOccurrence.occurrence_type == "face",
                     )
-                    .values(entity_id=target_entity_id)
+                    .values(entity_id=target_entity_id, entity_link_state="manual", entity_link_verified_by_user_id=None, entity_link_verified_at=None)
                 ),
             )
             mention_result = type_cast(
@@ -270,12 +274,13 @@ class PostgresEntityRepository(EntityRepository):
                 await self._session.execute(
                     update(TextMention)
                     .where(TextMention.entity_id.in_(source_entity_ids))
-                    .values(entity_id=target_entity_id)
+                    .values(entity_id=target_entity_id, entity_link_state="manual", entity_link_verified_by_user_id=None, entity_link_verified_at=None)
                 ),
             )
             await self._session.execute(
                 delete(Entity).where(Entity.id.in_(source_entity_ids))
             )
+            await load_link_stats(self._session, [target], entities=True)
             response = EntityMergeBatchResponse(
                 source_entity_ids=list(source_entity_ids),
                 target_entity_id=target_entity_id,
@@ -299,12 +304,12 @@ class PostgresEntityRepository(EntityRepository):
         await self._session.execute(
             update(ImageOccurrence)
             .where(ImageOccurrence.entity_id.in_(unique))
-            .values(entity_id=None)
+            .values(entity_id=None, entity_link_state=None, entity_link_verified_by_user_id=None, entity_link_verified_at=None)
         )
         await self._session.execute(
             update(TextMention)
             .where(TextMention.entity_id.in_(unique))
-            .values(entity_id=None)
+            .values(entity_id=None, entity_link_state=None, entity_link_verified_by_user_id=None, entity_link_verified_at=None)
         )
         result = type_cast(
             CursorResult[Any],

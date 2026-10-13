@@ -20,6 +20,7 @@ from people_gator_api.schemas.entities import EntityListFilter
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
     EntityType,
+    EntityLinkState,
     ScoreAggregation,
     ScoreFusion,
     SourceKind,
@@ -165,6 +166,7 @@ def search_query_dependency(
 
 
 def entity_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(EntityListFilter, "entity_link_state", "filter")] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(EntityListFilter, "entity_id", "filter"),
@@ -209,6 +211,7 @@ def entity_list_filter_dependency(
 ) -> EntityListFilter:
     return _filter(
         EntityListFilter,
+        entity_link_state=entity_link_state,
         entity_id=entity_id,
         entity_type=entity_type,
         last_touched_from=last_touched_from,
@@ -228,6 +231,7 @@ def entity_list_filter_dependency(
 
 
 def face_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(FaceListFilter, "entity_link_state", "filter")] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(FaceListFilter, "entity_id", "filter"),
@@ -243,6 +247,7 @@ def face_list_filter_dependency(
 ) -> FaceListFilter:
     return _filter(
         FaceListFilter,
+        entity_link_state=entity_link_state,
         entity_id=entity_id,
         source_id=source_id,
         detection_id=detection_id,
@@ -250,6 +255,7 @@ def face_list_filter_dependency(
 
 
 def text_mention_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(TextMentionListFilter, "entity_link_state", "filter")] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(TextMentionListFilter, "entity_id", "filter"),
@@ -261,6 +267,7 @@ def text_mention_list_filter_dependency(
 ) -> TextMentionListFilter:
     return _filter(
         TextMentionListFilter,
+        entity_link_state=entity_link_state,
         entity_id=entity_id,
         source_id=source_id,
     )
@@ -299,6 +306,7 @@ def user_list_filter_dependency(
 
 
 def source_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(SourceListFilter, "entity_link_state", "filter")] = None,
     source_type: Annotated[
         list[SourceKind] | None,
         _model_parameter(SourceListFilter, "source_type", "filter"),
@@ -326,6 +334,7 @@ def source_list_filter_dependency(
 ) -> SourceListFilter:
     return _filter(
         SourceListFilter,
+        entity_link_state=entity_link_state,
         source_type=source_type,
         url=url,
         source_id=source_id,
@@ -336,6 +345,7 @@ def source_list_filter_dependency(
 
 
 def page_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(PageListFilter, "entity_link_state", "filter")] = None,
     url: Annotated[
         list[AnyUrl] | None,
         _model_parameter(PageListFilter, "url", "filter"),
@@ -383,6 +393,7 @@ def page_list_filter_dependency(
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
+        entity_link_state=entity_link_state,
         url=url,
         library=library,
         document_id=document_id,
@@ -398,6 +409,7 @@ def page_list_filter_dependency(
 
 
 def document_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(DocumentListFilter, "entity_link_state", "filter")] = None,
     url: Annotated[
         list[AnyUrl] | None,
         _model_parameter(DocumentListFilter, "url", "filter"),
@@ -429,6 +441,7 @@ def document_list_filter_dependency(
 ) -> DocumentListFilter:
     return _filter(
         DocumentListFilter,
+        entity_link_state=entity_link_state,
         url=url,
         library=library,
         document_id=document_id,
@@ -440,6 +453,7 @@ def document_list_filter_dependency(
 
 
 def image_list_filter_dependency(
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(ImageListFilter, "entity_link_state", "filter")] = None,
     url: Annotated[
         list[AnyUrl] | None,
         _model_parameter(ImageListFilter, "url", "filter"),
@@ -463,6 +477,7 @@ def image_list_filter_dependency(
 ) -> ImageListFilter:
     return _filter(
         ImageListFilter,
+        entity_link_state=entity_link_state,
         url=url,
         source_id=source_id,
         entity_id=entity_id,

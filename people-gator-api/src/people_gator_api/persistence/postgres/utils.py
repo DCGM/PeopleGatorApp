@@ -587,6 +587,8 @@ def search_page(
     )
 
 
+from .entity_link_queries import evidence_predicate, load_link_stats
+
 def entity_response(entity: Entity) -> EntityResponse:
     if entity.kind is None or entity.name is None:
         raise ValueError(
@@ -594,6 +596,7 @@ def entity_response(entity: Entity) -> EntityResponse:
         )
     return EntityResponse(
         entity_id=entity.id,
+        entity_link_stats=getattr(entity, "_entity_link_stats", None) or {},
         user_id=entity.user_id,
         last_touched_at=entity.last_touched_at,
         last_touched_by_user_id=entity.last_touched_by_user_id,
@@ -610,6 +613,7 @@ def entity_response(entity: Entity) -> EntityResponse:
 
 def source_response(source: Source) -> GenericSourceResponse:
     common: dict[str, Any] = {
+        "entity_link_stats": getattr(source, "_entity_link_stats", None) or {},
         "source_id": source.id,
         "source_type": SourceKind(source.source_type),
         "url": source.url,
@@ -632,6 +636,9 @@ def face_response(face: Face) -> FaceResponse:
         identifier=face.identifier,
         source_id=face.source_id,
         entity_id=face.entity_id,
+        entity_link_state=face.entity_link_state,
+        entity_link_verified_by_user_id=face.entity_link_verified_by_user_id,
+        entity_link_verified_at=face.entity_link_verified_at,
         user_id=face.user_id,
         confidence=face.confidence,
         bounding_box=BoundingBox(
@@ -654,6 +661,9 @@ def mention_response(mention: TextMention) -> TextMentionResponse:
         name=mention.mention,
         context=mention.context,
         entity_id=mention.entity_id,
+        entity_link_state=mention.entity_link_state,
+        entity_link_verified_by_user_id=mention.entity_link_verified_by_user_id,
+        entity_link_verified_at=mention.entity_link_verified_at,
         source_id=mention.source_id,
     )
 
@@ -686,23 +696,6 @@ def entity_filters(
         ids = missing_to_none(getattr(filter_values, name))
         if ids is not None:
             filters.append(getattr(Entity, name).in_(ids))
-    document_ids = missing_to_none(filter_values.document_source_id)
-    if document_ids is not None:
-        # Use table aliases to avoid joined-inheritance Source alias collisions.
-        document = Document.__table__.alias("selected_document")
-        page = Page.__table__.alias("document_page")
-        page_ids = select(page.c.id).join(document,
-            (page.c.library == document.c.library) & (page.c.document_id == document.c.document_id)
-        ).where(document.c.id.in_(document_ids))
-        linked_ids = union_all(
-            select(ImageOccurrence.entity_id).where(
-                ImageOccurrence.source_id.in_(page_ids),
-                ImageOccurrence.occurrence_type == "face",
-                ImageOccurrence.entity_id.is_not(None)),
-            select(TextMention.entity_id).where(
-                TextMention.source_id.in_(page_ids), TextMention.entity_id.is_not(None)),
-        )
-        filters.append(Entity.id.in_(linked_ids))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Entity.id.in_(entity_ids))
@@ -715,42 +708,9 @@ def entity_filters(
     authority_ids = missing_to_none(filter_values.nlcr_authority_id)
     if authority_ids is not None:
         filters.append(Entity.nlcr_authority_id.in_(authority_ids))
-    source_ids = missing_to_none(filter_values.source_id)
-    if source_ids is not None:
-        # Resolve the usually small set of linked entity IDs from the source
-        # indexes first.  Expressing this as two OR-ed correlated EXISTS
-        # predicates makes PostgreSQL scan entities in UUID order to satisfy
-        # list pagination; a source with no linked entities consequently scans
-        # the entire entity table before it can return an empty page.
-        linked_entity_ids = union_all(
-            select(ImageOccurrence.entity_id).where(
-                ImageOccurrence.source_id.in_(source_ids),
-                ImageOccurrence.entity_id.is_not(None),
-                ImageOccurrence.entity_id == Entity.id,
-            ),
-            select(TextMention.entity_id).where(
-                TextMention.source_id.in_(source_ids),
-                TextMention.entity_id.is_not(None),
-                TextMention.entity_id == Entity.id,
-            ),
-        )
-        filters.append(Entity.id.in_(linked_entity_ids))
-    detection_ids = missing_to_none(filter_values.detection_id)
-    if detection_ids is not None:
-        filters.append(
-            exists().where(
-                ImageOccurrence.entity_id == Entity.id,
-                ImageOccurrence.id.in_(detection_ids),
-            )
-        )
-    mention_ids = missing_to_none(filter_values.mention_id)
-    if mention_ids is not None:
-        filters.append(
-            exists().where(
-                TextMention.entity_id == Entity.id,
-                TextMention.id.in_(mention_ids),
-            )
-        )
+    if any(missing_to_none(getattr(filter_values, field)) is not None for field in
+           ("entity_link_state", "source_id", "document_source_id", "detection_id", "mention_id")):
+        filters.append(evidence_predicate(filter_values, entity=True))
     has_mentions = missing_to_none(filter_values.has_mentions)
     if has_mentions is not None:
         predicate = exists().where(TextMention.entity_id == Entity.id)
@@ -769,6 +729,9 @@ def face_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
+    states = missing_to_none(filter_values.entity_link_state)
+    if states is not None:
+        filters.append(Face.entity_link_state.in_(states))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Face.entity_id.in_(entity_ids))
@@ -788,6 +751,9 @@ def mention_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
+    states = missing_to_none(filter_values.entity_link_state)
+    if states is not None:
+        filters.append(TextMention.entity_link_state.in_(states))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(TextMention.entity_id.in_(entity_ids))
@@ -858,36 +824,9 @@ def source_filters(
     page_ids = missing_to_none(filter_values.page_id)
     if page_ids is not None:
         filters.append(Page.page_id.in_(page_ids))
-    entity_ids = missing_to_none(filter_values.entity_id)
-    if entity_ids is not None:
-        filters.append(
-            or_(
-                exists().where(
-                    ImageOccurrence.source_id == Source.id,
-                    ImageOccurrence.entity_id.in_(entity_ids),
-                ),
-                exists().where(
-                    TextMention.source_id == Source.id,
-                    TextMention.entity_id.in_(entity_ids),
-                ),
-            )
-        )
-    detection_ids = missing_to_none(filter_values.detection_id)
-    if detection_ids is not None:
-        filters.append(
-            exists().where(
-                ImageOccurrence.source_id == Source.id,
-                ImageOccurrence.id.in_(detection_ids),
-            )
-        )
-    mention_ids = missing_to_none(filter_values.mention_id)
-    if mention_ids is not None:
-        filters.append(
-            exists().where(
-                TextMention.source_id == Source.id,
-                TextMention.id.in_(mention_ids),
-            )
-        )
+    if any(missing_to_none(getattr(filter_values, field)) is not None for field in
+           ("entity_link_state", "entity_id", "detection_id", "mention_id")):
+        filters.append(evidence_predicate(filter_values))
     has_mentions = missing_to_none(filter_values.has_mentions)
     if has_mentions is not None:
         predicate = exists().where(TextMention.source_id == Source.id)

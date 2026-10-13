@@ -20,6 +20,7 @@ from sqlalchemy import (
     Computed,
     DateTime,
     Float,
+    Enum,
     ForeignKey,
     Index,
     String,
@@ -30,6 +31,19 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+from people_gator_api.schemas.enums import EntityLinkState
+
+ENTITY_LINK_ENUM = Enum(EntityLinkState, name="pg_demo_entity_link_state", values_callable=lambda enum: [item.value for item in enum])
+
+def link_constraints(table):
+    return (
+        CheckConstraint("(entity_id IS NULL) = (entity_link_state IS NULL)", name=f"ck_pg_demo_{table}_link"),
+        CheckConstraint("(entity_link_state IS NOT DISTINCT FROM 'verified' AND entity_link_verified_by_user_id IS NOT NULL AND entity_link_verified_at IS NOT NULL) OR (entity_link_state IS DISTINCT FROM 'verified' AND entity_link_verified_by_user_id IS NULL AND entity_link_verified_at IS NULL)", name=f"ck_pg_demo_{table}_verification"),
+        Index(f"ix_pg_demo_{table}_source_state", "source_id", "entity_link_state"),
+        Index(f"ix_pg_demo_{table}_entity_state", "entity_id", "entity_link_state"),
+    )
 
 
 class Base(DeclarativeBase):
@@ -297,7 +311,7 @@ class TextMention(Base):
     """A textual occurrence with mandatory provenance and optional resolution."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("text_mentions")
-    __table_args__ = (
+    __table_args__ = (*link_constraints("text_mentions"),
         Index(
             INDEX_NAME_FORMAT.format("text_mentions_mention_trgm"),
             "mention_normalized",
@@ -315,6 +329,11 @@ class TextMention(Base):
     entity_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("entities.id"), ondelete="SET NULL"), index=True
     )
+    entity_link_state: Mapped[EntityLinkState | None] = mapped_column(ENTITY_LINK_ENUM)
+    entity_link_verified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT")
+    )
+    entity_link_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     mention: Mapped[str] = mapped_column(Text, nullable=False)
     mention_normalized: Mapped[str] = mapped_column(
         Text,
@@ -330,6 +349,7 @@ class ImageOccurrence(Base):
     """An image-region occurrence and polymorphic root for face detections."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("image_occurrences")
+    __table_args__ = link_constraints("image_occurrences")
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -340,6 +360,11 @@ class ImageOccurrence(Base):
     entity_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("entities.id"), ondelete="SET NULL"), index=True
     )
+    entity_link_state: Mapped[EntityLinkState | None] = mapped_column(ENTITY_LINK_ENUM)
+    entity_link_verified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT")
+    )
+    entity_link_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     occurrence_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     roi: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
@@ -446,3 +471,20 @@ def face_embedding_hnsw_index(model_stub: str, embedding_dim: int) -> Index:
         postgresql_with={"m": 16, "ef_construction": 64},
     )
     return index
+
+# FK SET NULL also runs this trigger, keeping raw SQL deletes consistent.
+CLEAR_LINK_FUNCTION = """CREATE OR REPLACE FUNCTION pg_demo_clear_entity_link() RETURNS trigger
+LANGUAGE plpgsql AS $$ BEGIN
+IF NEW.entity_id IS NULL THEN
+    NEW.entity_link_state := NULL;
+    NEW.entity_link_verified_by_user_id := NULL;
+    NEW.entity_link_verified_at := NULL;
+END IF;
+RETURN NEW;
+END $$"""
+event.listen(Base.metadata, "after_create", DDL(CLEAR_LINK_FUNCTION))
+for table in (TextMention.__table__, ImageOccurrence.__table__):
+    event.listen(Base.metadata, "after_create", DDL(
+        f"CREATE OR REPLACE TRIGGER clear_entity_link BEFORE UPDATE OF entity_id ON {table.name} "
+        "FOR EACH ROW EXECUTE FUNCTION pg_demo_clear_entity_link()"
+    ))

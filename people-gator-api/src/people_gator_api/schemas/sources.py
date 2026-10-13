@@ -12,6 +12,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+from people_gator_api.schemas.entity_links import EntityLinkFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
     GenericListRequest,
@@ -375,6 +376,7 @@ class GenericSourceResponse(SourceResponseBase):
     """
 
     model_config = ConfigDict(extra="forbid")
+    entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     name: str | None = None
     library: str | None = Field(
         default=None,
@@ -426,6 +428,7 @@ class GenericSourceResponse(SourceResponseBase):
 class PageResponse(SourceResponseBase):
     """A page with its archive identity."""
 
+    entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     library: str = Field(min_length=1)
     document_id: uuid.UUID
     page_id: uuid.UUID
@@ -440,6 +443,7 @@ class PageResponse(SourceResponseBase):
         ):
             raise ValueError("Missing required fields in generic source response.")
         return cls(
+            entity_link_stats=generic.entity_link_stats,
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
@@ -452,6 +456,7 @@ class PageResponse(SourceResponseBase):
 class DocumentResponse(SourceResponseBase):
     """A document with its archive identity."""
 
+    entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     library: str = Field(min_length=1)
     document_id: uuid.UUID
     name: str | None = None
@@ -465,6 +470,7 @@ class DocumentResponse(SourceResponseBase):
         ):
             raise ValueError("Missing required fields in generic source response.")
         return cls(
+            entity_link_stats=generic.entity_link_stats,
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
@@ -533,7 +539,7 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
 # ---------------------------------------------------------------------------
 
 
-class GenericSourceListFilter(ListFilterBase):
+class GenericSourceListFilter(ListFilterBase, EntityLinkFilter):
     """Filter for listing generic sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -589,7 +595,7 @@ class GenericSourceListFilter(ListFilterBase):
     )
 
 
-class SourceListFilter(ListFilterBase):
+class SourceListFilter(ListFilterBase, EntityLinkFilter):
     """Filter for listing all sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -622,6 +628,7 @@ class SourceListFilter(ListFilterBase):
             source_type=self.source_type,
             url=self.url,
             source_id=self.source_id,
+            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
@@ -631,7 +638,7 @@ class SourceListFilter(ListFilterBase):
         )
 
 
-class PageListFilter(ListFilterBase):
+class PageListFilter(ListFilterBase, EntityLinkFilter):
     """Filter for listing pages."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -690,6 +697,7 @@ class PageListFilter(ListFilterBase):
             document_id=self.document_id,
             page_id=self.page_id,
             source_id=self.source_id,
+            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
@@ -699,7 +707,7 @@ class PageListFilter(ListFilterBase):
         )
 
 
-class DocumentListFilter(ListFilterBase):
+class DocumentListFilter(ListFilterBase, EntityLinkFilter):
     """Filter for listing documents."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -738,13 +746,14 @@ class DocumentListFilter(ListFilterBase):
             library=self.library,
             document_id=self.document_id,
             source_id=self.source_id,
+            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
         )
 
 
-class ImageListFilter(ListFilterBase):
+class ImageListFilter(ListFilterBase, EntityLinkFilter):
     """Filter for listing images."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -773,6 +782,7 @@ class ImageListFilter(ListFilterBase):
             source_type=[SourceKind.image],
             url=self.url,
             source_id=self.source_id,
+            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,

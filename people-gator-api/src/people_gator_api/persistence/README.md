@@ -147,3 +147,15 @@ The Weaviate package passes the repository's strict Pyright configuration:
 All repository methods use their contract parameter names and request/response
 types. Client results are validated at the schema boundary; named vector specs
 are declarative and built through the public Weaviate configuration API.
+
+Entity links on faces and mentions use the shared `EntityLinkState` enum.
+Create defaults an assigned annotation to `automatic`; manual callers explicitly
+send `manual`. PATCH distinguishes omission from null and defaults a changed
+entity to `manual`. Verification applies only to an existing link, records the
+actor's user ID and server UTC time, and is idempotent. Reassignment, unlinking,
+and manual merges clear prior verification. PostgreSQL validates transitions
+under row locks and enforces the state/verification invariants with CHECKs;
+a trigger clears link metadata when an entity FK is set null, including raw SQL
+deletes. Link statistics are two batched grouped queries, independent of filters
+and pagination. Document filters and statistics share the direct-source plus
+registered-pages scope, identified by both library and archive document ID.

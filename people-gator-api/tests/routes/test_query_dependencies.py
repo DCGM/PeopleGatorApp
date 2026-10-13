@@ -114,6 +114,7 @@ def test_list_endpoints_expose_namespaced_filters(
 ) -> None:
     assert _parameter_names(openapi, path) == {
         *(f"filter.{field}" for field in fields),
+        *({"filter.entity_link_state"} if path != "/users" else set()),
         *PAGINATION_PARAMETERS,
     }
 
@@ -127,6 +128,7 @@ def test_search_endpoints_expose_query_filter_and_pagination_groups(
     assert _parameter_names(openapi, path) == {
         *QUERY_PARAMETERS,
         *(f"filter.{field}" for field in fields),
+        *({"filter.entity_link_state"} if path != "/users" else set()),
         *PAGINATION_PARAMETERS,
     }
 

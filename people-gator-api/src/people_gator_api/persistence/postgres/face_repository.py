@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from people_gator_api.persistence.entity_links import create_link_state, link_transition, apply_link
+from people_gator_api.schemas.missing import is_missing
 import numpy as np
 from collections.abc import Sequence
 
@@ -74,7 +76,7 @@ class PostgresFaceRepository(FaceRepository):
         statement = select(Face).where(Face.id.in_(ids)).options(selectinload(Face.embeddings))
         if lock:
             statement = statement.order_by(Face.id).with_for_update()
-        rows = await self._session.scalars(statement)
+        rows = await self._session.scalars(statement.execution_options(populate_existing=True))
         return {row.id: row for row in rows.unique().all()}
 
     async def get(self, detection_id: uuid.UUID) -> FaceResponse | None:
@@ -120,6 +122,7 @@ class PostgresFaceRepository(FaceRepository):
         face = Face(
             source_id=payload.source_id,
             entity_id=missing_to_none(payload.entity_id),
+            entity_link_state=create_link_state(payload),
             user_id=context.user_id,
             identifier=missing_to_none(payload.identifier),
             confidence=payload.confidence,
@@ -236,13 +239,15 @@ class PostgresFaceRepository(FaceRepository):
             ),
         )
         faces = await self._load_many(ids, lock=True)
+        transitions = {c.detection_id: link_transition(faces[c.detection_id], c, context) for c in commands if c.detection_id in faces}
         touched: set[uuid.UUID | None] = set()
         for command in commands:
             face = faces.get(command.detection_id)
             if face is None:
                 continue
             old_entity_id = face.entity_id
-            reassigned = not is_missing(command.entity_id) and face.entity_id != command.entity_id
+            values = transitions[command.detection_id]
+            link_changed = values != (face.entity_id, face.entity_link_state, face.entity_link_verified_by_user_id, face.entity_link_verified_at)
             old_embeddings = {item.model_id: list(item.embedding) for item in face.embeddings}
             embeddings_changed = any(
                 item.model_identifier not in old_embeddings
@@ -252,11 +257,10 @@ class PostgresFaceRepository(FaceRepository):
                 )
                 for item in (missing_to_none(command.embeddings) or [])
             )
-            if not is_missing(command.entity_id):
-                face.entity_id = command.entity_id
+            apply_link(face, values)
             if embeddings_changed:
                 self._apply_embeddings(face, command)
-            if reassigned or embeddings_changed:
+            if link_changed or embeddings_changed:
                 touched.update([old_entity_id, face.entity_id])
         await touch_entities(self._session, touched, context)
         await commit(self._session, "face patch violates a persistence constraint")

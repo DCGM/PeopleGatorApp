@@ -20,16 +20,18 @@ from people_gator_api.schemas.entities import (
     EntityListRequest,
     EntityResponse,
 )
-from people_gator_api.schemas.enums import EntityType
+from people_gator_api.schemas.enums import EntityType, EntityLinkState
 from people_gator_api.schemas.face_models import FaceModelRegisterRequest
 from people_gator_api.schemas.faces import (
     FaceCreateRequest,
+    FacePatchRequest,
     FaceEmbedding,
     FaceListFilter,
     FaceListRequest,
 )
 from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
+    TextMentionPatchRequest,
     TextMentionListFilter,
     TextMentionListRequest,
 )
@@ -243,7 +245,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             )
             if detection is None:
                 fields = (
-                    {"entity_id": manifest.entities[face.person]} if face.person else {}
+                    {"entity_id": manifest.entities[face.person], "entity_link_state": EntityLinkState.manual if face.state == "manual" else EntityLinkState.automatic} if face.person else {}
                 )
                 detection = await database.faces.create(
                     FaceCreateRequest(
@@ -265,6 +267,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     if face.person
                     else actors["importer"],
                 )
+            if face.state == "verified" and detection.entity_link_state == EntityLinkState.automatic:
+                detection = await database.faces.patch(detection.detection_id, FacePatchRequest(entity_link_state=EntityLinkState.verified), actors["reviewer"])
             manifest.faces[face.key] = detection.detection_id
             active_faces[face.key] = detection.detection_id
             await checkpoint()
@@ -298,12 +302,18 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 record = await database.text_mentions.create(
                     TextMentionCreateRequest(
                         name=person.name,
+                        entity_link_state=EntityLinkState.manual if mention.state == "manual" else EntityLinkState.automatic,
                         context=mention.text,
                         entity_id=manifest.entities[person.key],
                         source_id=source.source_id,
                     ),
                     actors[person.actor],
                 )
+            if record.entity_link_state == EntityLinkState.automatic:
+                if mention.state == "verified":
+                    record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actors["reviewer"])
+                elif mention.state is None:
+                    record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(entity_id=None), actors["reviewer"])
             manifest.mentions[mention.key] = record.mention_id
             active_mentions[mention.key] = record.mention_id
             await checkpoint()

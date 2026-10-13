@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from people_gator_api.persistence.entity_links import create_link_state, link_transition, apply_link
+from people_gator_api.schemas.missing import is_missing
 from collections.abc import Sequence
 
 from sqlalchemy import (
@@ -55,7 +57,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         statement = select(TextMention).where(TextMention.id.in_(ids))
         if lock:
             statement = statement.order_by(TextMention.id).with_for_update()
-        rows = await self._session.scalars(statement)
+        rows = await self._session.scalars(statement.execution_options(populate_existing=True))
         return {row.id: row for row in rows.all()}
 
     async def get(self, mention_id: uuid.UUID) -> TextMentionResponse | None:
@@ -107,6 +109,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             mention=payload.name,
             context=payload.context,
             entity_id=payload.entity_id,
+            entity_link_state=create_link_state(payload),
             source_id=payload.source_id,
         )
 
@@ -173,17 +176,20 @@ class PostgresTextMentionRepository(TextMentionRepository):
             [
                 command.entity_id
                 for command in commands
-                if command.entity_id is not None
+                if not is_missing(command.entity_id) and command.entity_id is not None
             ],
             "mention entity",
         )
         mentions = await self._load_many(ids, lock=True)
+        transitions = {c.mention_id: link_transition(mentions[c.mention_id], c, context) for c in commands if c.mention_id in mentions}
         touched: set[uuid.UUID | None] = set()
         for command in commands:
             mention = mentions.get(command.mention_id)
-            if mention is not None and mention.entity_id != command.entity_id:
-                touched.update([mention.entity_id, command.entity_id])
-                mention.entity_id = command.entity_id
+            if mention is not None:
+                values = transitions[command.mention_id]
+                if values != (mention.entity_id, mention.entity_link_state, mention.entity_link_verified_by_user_id, mention.entity_link_verified_at):
+                    touched.update([mention.entity_id, values[0]])
+                    apply_link(mention, values)
         await touch_entities(self._session, touched, context)
         await commit(self._session, "mention patch violates a persistence constraint")
         return [

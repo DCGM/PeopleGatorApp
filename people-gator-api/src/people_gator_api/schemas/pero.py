@@ -34,7 +34,9 @@ class PageLayoutModel(BaseModel):
     reading_order: dict[str, int]
 
 
-class TextMentionSpanModel(BaseModel):
+from .entity_links import EntityLinkResponse
+
+class TextMentionSpanModel(EntityLinkResponse):
     """A text mention located in one or more OCR text lines.
 
     Character offsets are zero-based within their respective lines and

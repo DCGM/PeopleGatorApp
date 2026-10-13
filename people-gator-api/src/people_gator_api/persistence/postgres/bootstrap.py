@@ -116,6 +116,9 @@ def _validate_constraints(connection: Connection, metadata: MetaData) -> None:
 def matching_bootstrap_revision(connection: Connection, config: Config) -> str | None:
     """Read-only match against known snapshots without changing migration history."""
     current = MigrationContext.configure(connection).get_current_heads()
+    if current == tuple(ScriptDirectory.from_config(config).get_heads()):
+        validate_schema(connection)
+        return current[0]
     if len(current) > 1 or any(
         revision not in (*LEGACY_REVISIONS, *SNAPSHOT_REVISIONS) for revision in current
     ):

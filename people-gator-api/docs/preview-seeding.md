@@ -133,3 +133,22 @@ UI's `Document <document_id>` fallback. Reregistration never overwrites a name.
 The added scenario keys demonstrate names even in retained preview databases.
 Integration coverage checks names, empty groups, library isolation, page cursors,
 scan-only media, repeat registration and legacy requests without a name.
+
+### Entity link review (#6)
+
+The **Link state review** document in `preview-mzk` adds two synthetic scans.
+Each annotation kind has exactly one automatic, manual, verified and unassigned
+record (four faces and four mentions across the document). Page 1 links Ada
+automatically and Emil manually; page 2 verifies Ada and leaves one face and
+one mention unassigned. Ada's verified mention spans two OCR lines and counts
+once. Verification is a PATCH attributed to the Preview reviewer, with a UTC
+server timestamp. Existing fixtures and checkpoints are retained; reruns leave
+review edits and verification metadata intact.
+
+Open the document from Documents, try the scan's Link state controls and its
+This page / Whole document statistics, then follow Ada to the shared Faces /
+Mentions filter. All includes unassigned annotations; selecting all three states
+includes only assigned annotations. Filter Documents or People by Verified to
+find the example even before loading its second scan. The existing Document
+awaiting scans demonstrates zero statistics. Seed deployment order remains
+storage initialization → migrations → seed → application startup.

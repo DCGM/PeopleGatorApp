@@ -72,6 +72,7 @@ from people_gator_api.persistence.postgres.utils import (
     entity_text_candidates,
     search_page,
     source_response,
+    load_link_stats,
     source_filters,
 )
 
@@ -116,6 +117,7 @@ class PostgresSourceRepository(SourceRepository):
         else:
             raise ValueError("invalid source lookup")
         source = await self._session.scalar(statement.limit(1))
+        await load_link_stats(self._session, [source] if source is not None else [])
         return source_response(source) if source is not None else None
 
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
@@ -152,6 +154,7 @@ class PostgresSourceRepository(SourceRepository):
             )
         )
         page, cursor = next_cursor(rows, query.limit, Source.id, fingerprint)
+        await load_link_stats(self._session, page)
         return GenericSourceListResponse(
             items=[source_response(row) for row in page],
             limit=query.limit,
@@ -451,6 +454,7 @@ class PostgresSourceRepository(SourceRepository):
             select(Page).where(Page.id.in_([x[0] for x in page]))
         )
         by_id = {row.id: row for row in rows.all()}
+        await load_link_stats(self._session, by_id.values())
         items = [
             FoundPage(
                 **PageResponse.from_generic(
@@ -481,6 +485,7 @@ class PostgresSourceRepository(SourceRepository):
             select(Document).where(Document.id.in_([x[0] for x in page]))
         )
         by_id = {row.id: row for row in rows.all()}
+        await load_link_stats(self._session, by_id.values())
         items = [
             FoundDocument(
                 **DocumentResponse.from_generic(

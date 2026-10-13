@@ -1,3 +1,4 @@
+from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, EntityLinkFilter
 """Pydantic schemas for text mention endpoints."""
 
 import uuid
@@ -21,7 +22,7 @@ from people_gator_api.schemas.missing import MISSING, MissingType
 MAX_TEXT_MENTION_BATCH_SIZE = settings.batch.max_text_mention_batch_size
 
 
-class TextMentionCreateRequest(BaseModel):
+class TextMentionCreateRequest(EntityLinkCreate):
     """Request body for recording an entity name found in a source."""
 
     name: str = Field(
@@ -45,10 +46,10 @@ type TextMentionsBatchCreateRequest = Annotated[
 ]
 
 
-class TextMentionPatchRequest(BaseModel):
+class TextMentionPatchRequest(EntityLinkPatch):
     """Assign a mention to an entity, or unassign it with null."""
 
-    entity_id: uuid.UUID | None
+    entity_id: uuid.UUID | None | MissingType = MISSING
 
 
 class TextMentionPatchBatchItem(TextMentionPatchRequest):
@@ -61,7 +62,7 @@ type TextMentionsBatchPatchRequest = Annotated[
 ]
 
 
-class TextMentionResponse(BaseModel):
+class TextMentionResponse(EntityLinkResponse):
     """A single mention of an entity name in a text source."""
 
     mention_id: uuid.UUID
@@ -71,7 +72,7 @@ class TextMentionResponse(BaseModel):
     source_id: uuid.UUID
 
 
-class TextMentionListFilter(ListFilterBase):
+class TextMentionListFilter(ListFilterBase, EntityLinkFilter):
     """Filter criteria for listing text mentions.
     Every field is optional and can be used to narrow down the results.
     Filter fields are combined using logical AND.

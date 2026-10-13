@@ -13,6 +13,7 @@ from pydantic import (
     Field,
     field_validator,
 )
+from people_gator_api.schemas.entity_links import EntityLinkFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
     GenericListRequest,
@@ -136,6 +137,7 @@ class EntityResponse(BaseModel):
     )
 
 
+    entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     last_touched_at: AwareDatetime | None = None
     last_touched_by_user_id: uuid.UUID | None = None
     last_touched_by_api_key_id: uuid.UUID | None = None
@@ -144,7 +146,7 @@ class EntityResponse(BaseModel):
 EntityListResponse = GenericListResponse[EntityResponse]
 
 
-class EntityListFilter(ListFilterBase):
+class EntityListFilter(ListFilterBase, EntityLinkFilter):
     """\
     Filter criteria for listing entities.
     Every field is optional and can be used to narrow down the results.

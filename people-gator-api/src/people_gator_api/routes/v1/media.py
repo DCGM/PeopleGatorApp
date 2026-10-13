@@ -17,6 +17,7 @@ from people_gator_api.routes.v1.query_dependencies import (
     ImageListFilterDependency,
     ListRequestDependency,
     PageListFilterDependency,
+    TextMentionListFilterDependency,
 )
 from people_gator_api.schemas.common import FileUploadResponse
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
@@ -50,6 +51,11 @@ from people_gator_api.services.database_service import (
 )
 from people_gator_api.utils.http_errors import raise_api_error
 
+from people_gator_api.schemas.mentions import TextMentionListFilter
+from people_gator_api.schemas.missing import MISSING, MissingType
+from people_gator_api.schemas.enums import EntityLinkState
+from people_gator_api.routes.v1.query_dependencies import text_mention_list_filter_dependency
+
 router = APIRouter()
 
 
@@ -75,6 +81,7 @@ async def _fetch_layout_for_page(
 async def _fetch_text_mention_spans_for_page(
     database: DatabaseDependency,
     page: PageResponse,
+    entity_link_state: list[EntityLinkState] | MissingType = MISSING,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
     try:
@@ -84,6 +91,7 @@ async def _fetch_text_mention_spans_for_page(
             library=page.library,
             document_id=page.document_id,
             page_id=page.page_id,
+            entity_link_state=entity_link_state,
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
@@ -414,13 +422,14 @@ async def get_text_mention_spans_by_id_route(
     page_source_id: uuid.UUID,
     database: DatabaseDependency,
     user: BrowseActorDependency,
+    filter_: TextMentionListFilterDependency,
 ) -> list[TextMentionSpanModel]:
     """Return word-aligned fuzzy text-mention spans for one page Source UUID."""
     del user
     page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_text_mention_spans_for_page(database, page)
+    return await _fetch_text_mention_spans_for_page(database, page, filter_.entity_link_state)
 
 
 @router.delete(

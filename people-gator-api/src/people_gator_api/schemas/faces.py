@@ -1,4 +1,5 @@
 from __future__ import annotations
+from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, EntityLinkFilter
 from typing import Annotated
 import uuid
 from pydantic import BaseModel, Field, field_validator
@@ -27,7 +28,7 @@ FaceEmbedding = ModelEmbedding[FaceModelStub]
 FaceKeypoint = Keypoint[FaceKeypointType]
 
 
-class FaceCreateRequest(BaseModel):
+class FaceCreateRequest(EntityLinkCreate):
     """Request body for ingesting a face detection."""
 
     identifier: str | MissingType = Field(
@@ -69,7 +70,7 @@ type FacesBatchCreateRequest = Annotated[
 ]
 
 
-class FacePatchRequest(BaseModel):
+class FacePatchRequest(EntityLinkPatch):
     """Patch body for assigning a face, or unassigning it with a null entity ID."""
 
     entity_id: uuid.UUID | None | MissingType = Field(
@@ -104,7 +105,7 @@ type FacesBatchPatchRequest = Annotated[
 ]
 
 
-class FaceResponse(BaseModel):
+class FaceResponse(EntityLinkResponse):
     """A single face detection record."""
 
     detection_id: uuid.UUID = Field(
@@ -141,7 +142,7 @@ class FaceResponse(BaseModel):
 FaceListResponse = GenericListResponse[FaceResponse]
 
 
-class FaceListFilter(ListFilterBase):
+class FaceListFilter(ListFilterBase, EntityLinkFilter):
     """Filter criteria for listing faces.
     Every field is optional and can be used to narrow down the results.
     Filter fields are combined using logical AND.

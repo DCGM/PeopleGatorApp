@@ -1,6 +1,12 @@
 from enum import StrEnum
 
 
+class EntityLinkState(StrEnum):
+    automatic = "automatic"
+    manual = "manual"
+    verified = "verified"
+
+
 class Language(StrEnum):
     """Languages supported by the translation endpoint."""
 
@@ -60,6 +66,7 @@ class FaceKeypointType(StrEnum):
 
 
 __all__ = [
+    "EntityLinkState",
     "EntityType",
     "SourceKind",
     "FaceEmbeddingModel",
