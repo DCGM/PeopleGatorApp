@@ -46,13 +46,7 @@ const { cards, totalCount, error, isLoading, hasNextPage, isFetchingNextPage, lo
   />
   <div v-if="error" class="w-full basis-full py-4" role="alert">
     <p class="text-sm text-destructive">Could not load pages for this document.</p>
-    <Button
-      type="button"
-      variant="outline"
-      class="mt-2"
-      @click="cards.length ? loadMore() : retry()"
-      >Retry pages</Button
-    >
+    <Button type="button" variant="outline" class="mt-2" @click="retry()">Retry pages</Button>
   </div>
   <p
     v-else-if="!isLoading && cards.length === 0"

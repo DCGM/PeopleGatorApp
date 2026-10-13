@@ -184,6 +184,32 @@ describe('grouped documents', () => {
     expect(wrapper.text()).toContain('No pages have been registered for this document yet.')
   })
 
+  it('retains loaded pages when the next batch fails and retries its cursor', async () => {
+    let fail = true
+    api.documents.mockResolvedValue(response([doc('a')]))
+    api.pages.mockImplementation(({ query }) => {
+      if (!query.cursor) return Promise.resolve(response([page('a', 'a-1')], 2, 'a-next'))
+      if (fail) return Promise.reject(new Error('Next page unavailable'))
+      return Promise.resolve(response([page('a', 'a-2')], 2))
+    })
+    const { wrapper } = await render()
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('h2')).toHaveLength(1)
+    expect(wrapper.findAll('a.scan-card')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Could not load pages for this document.')
+    fail = false
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('a.scan-card')).toHaveLength(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(api.pages.mock.calls.map(([arg]) => arg.query.cursor)).toEqual([
+      null,
+      'a-next',
+      'a-next',
+    ])
+  })
+
   it('filters registered documents by route library and shows an empty list', async () => {
     const { wrapper, router } = await render()
     api.documents.mockResolvedValue(response([]))

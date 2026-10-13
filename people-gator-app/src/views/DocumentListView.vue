@@ -41,13 +41,7 @@ const { documents, error, isLoading, hasNextPage, isFetchingNextPage, loadMore, 
     </p>
     <div v-if="error" class="py-6 text-center" role="alert">
       <p class="text-sm text-destructive">Could not load documents.</p>
-      <Button
-        type="button"
-        variant="outline"
-        class="mt-2"
-        @click="documents.length ? loadMore() : retry()"
-        >Retry documents</Button
-      >
+      <Button type="button" variant="outline" class="mt-2" @click="retry()">Retry documents</Button>
     </div>
     <p
       v-else-if="!isLoading && documents.length === 0"

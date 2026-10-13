@@ -28,7 +28,7 @@ export function useDocumentList(library: MaybeRefOrGetter<string | undefined>, p
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     loadMore: query.fetchNextPage,
-    retry: query.refetch,
+    retry: () => (query.isFetchNextPageError.value ? query.fetchNextPage() : query.refetch()),
   }
 }
 
@@ -50,6 +50,6 @@ export function useDocumentGroup(document: MaybeRefOrGetter<DocumentResponse>, p
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     loadMore: query.fetchNextPage,
-    retry: query.refetch,
+    retry: () => (query.isFetchNextPageError.value ? query.fetchNextPage() : query.refetch()),
   }
 }
