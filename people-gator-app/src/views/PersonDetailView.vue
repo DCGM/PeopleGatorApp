@@ -115,14 +115,17 @@ function selectTab(tab: string | number) {
         :national-library-authority-id="identifiers.nationalLibraryAuthorityId"
         @update:model-value="updateProfile"
         @update:identifiers="updateIdentifiers"
-      />
-
-      <PersonProcessingDetails
-        v-if="entity"
-        :processing="processing"
-        :refreshing="processingRefreshing"
-        @refresh="refreshProcessing"
-      />
+      >
+        <template #statistics>
+          <PersonProcessingDetails
+            v-if="entity"
+            :key="personId"
+            :processing="processing"
+            :refreshing="processingRefreshing"
+            @refresh="refreshProcessing"
+          />
+        </template>
+      </PersonEditableDetails>
 
       <Tabs :model-value="activeTab" class="mt-8" @update:model-value="selectTab">
         <h2>Evidence and identity discovery</h2>
