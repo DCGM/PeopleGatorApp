@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { ChevronRight } from '@lucide/vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -32,6 +33,7 @@ const props = defineProps<{
         <span class="font-bold text-secondary">{{ props.face.library }} · </span>
         {{ props.face.pageLabel }}
       </small>
+      <EntityLinkStateBadge v-bind="face" class="mt-2" />
     </CardContent>
     <CardFooter class="gap-1 px-0">
       <small class="flex-1 truncate font-heading">{{ props.face.id }}</small>

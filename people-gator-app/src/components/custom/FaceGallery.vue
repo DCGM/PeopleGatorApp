@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Link, UserRoundX } from '@lucide/vue'
+import UiTooltip from './UiTooltip.vue'
+import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import { linkTooltip } from '@/lib/entity-links'
 import type { AcceptableValue } from 'reka-ui'
-import { computed, nextTick, ref, watch, type Component } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import type { Face, FaceStatus } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
@@ -16,6 +17,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'reset-filters': []
   select: [faceId: string]
 }>()
 
@@ -28,10 +30,6 @@ const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
   { value: 'assigned', label: 'Annotated' },
   { value: 'unassigned', label: 'Not annotated' },
 ]
-const faceStatusIcons = {
-  assigned: Link,
-  unassigned: UserRoundX,
-} satisfies Record<FaceStatus, Component>
 const faceStatusCounts = computed<Record<FaceStatus, number>>(() => {
   const counts: Record<FaceStatus, number> = { assigned: 0, unassigned: 0 }
   for (const face of props.faces) counts[face.status] += 1
@@ -101,8 +99,8 @@ watch([() => props.selectedFaceId, faceFilter], scrollSelectedThumbnailIntoView,
 
       <ScrollArea type="always" orientation="horizontal" class="mt-4 w-full">
         <div ref="thumbnailList" class="flex min-h-22 w-max items-start gap-3 px-1 pb-5 pt-1">
+          <UiTooltip v-for="(face, index) in visibleFaces" :key="face.id" :text="linkTooltip(face)">
           <button
-            v-for="(face, index) in visibleFaces"
             :key="face.id"
             type="button"
             class="group relative size-16 shrink-0 rounded-md border-2 bg-muted outline-none transition-[border-color,box-shadow] hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:size-18"
@@ -111,7 +109,7 @@ watch([() => props.selectedFaceId, faceFilter], scrollSelectedThumbnailIntoView,
                 ? 'border-secondary ring-2 ring-secondary ring-offset-2'
                 : 'border-border'
             "
-            :aria-label="`Select face ${index + 1}: ${face.status === 'assigned' ? `${face.name}, annotated` : 'not annotated'}`"
+            :aria-label="`Select face ${index + 1}: ${face.status === 'assigned' ? `${face.name}, annotated` : 'not annotated'}, ${linkTooltip(face)}`"
             :aria-pressed="face.id === props.selectedFaceId"
             :aria-current="face.id === props.selectedFaceId ? 'true' : undefined"
             @click="emit('select', face.id)"
@@ -123,26 +121,16 @@ watch([() => props.selectedFaceId, faceFilter], scrollSelectedThumbnailIntoView,
               class="size-full rounded-[calc(var(--radius-md)-2px)]"
               image-class="size-full object-cover grayscale transition-transform duration-200 group-hover:scale-105"
             />
-            <Badge
-              data-face-status-badge
-              class="pointer-events-none absolute -left-1.5 -top-1.5 size-5 rounded-full border-0 p-0 shadow-sm"
-              :class="
-                face.status === 'assigned'
-                  ? 'bg-emerald-700 text-white'
-                  : 'bg-muted-foreground text-background'
-              "
-              :title="face.status === 'assigned' ? 'Annotated' : 'Not annotated'"
-              aria-hidden="true"
-            >
-              <component :is="faceStatusIcons[face.status]" class="size-3" />
-            </Badge>
+            <EntityLinkStateBadge v-bind="face" :focusable="false" compact class="absolute -right-1.5 -bottom-1.5 shadow-sm" />
           </button>
+          </UiTooltip>
           <p
             v-if="!props.loading && visibleFaces.length === 0"
             class="flex h-16 items-center pr-4 text-sm text-muted-foreground sm:h-18"
             role="status"
           >
             {{ emptyFilterLabel(faceFilter) }}
+            <button class="ml-2 underline" @click="faceFilter = 'all'; emit('reset-filters')">Reset filters</button>
           </p>
           <div
             v-if="props.loading"

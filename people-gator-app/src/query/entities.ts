@@ -69,6 +69,11 @@ export function useCreateEntityMutation() {
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }
@@ -84,6 +89,11 @@ export function useCreateEntitiesMutation() {
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }
@@ -103,6 +113,11 @@ export function usePatchEntityMutation() {
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }
@@ -147,6 +162,9 @@ export function useMergeEntitiesMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.faces.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.documents.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.sources.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
       ])
     },
   })
@@ -166,6 +184,11 @@ export function useDeleteEntityMutation() {
       queryClient.removeQueries({ queryKey: queryKeys.entities.detail(entityId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }
@@ -180,6 +203,11 @@ export function useDeleteEntitiesMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }

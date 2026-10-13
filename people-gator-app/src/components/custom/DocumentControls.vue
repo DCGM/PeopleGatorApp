@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
+import type { EntityLinkState } from '@/client'
+const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import {
   ChevronDown,
   ChevronLeft,
@@ -101,6 +104,8 @@ defineEmits<{
         Names
       </Button>
     </ButtonGroup>
+
+    <EntityLinkStateFilter v-model="linkStates" toolbar />
 
     <ButtonGroup class="shrink-0 drop-shadow-md" aria-label="Translation">
       <Button v-for="option in translationOptions" :key="option" variant="outline" size="sm"

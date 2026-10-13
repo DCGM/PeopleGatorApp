@@ -57,13 +57,18 @@ export function useCreateTextMentionMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: TextMentionCreateRequest) =>
-      responseData(createTextMentionRouteApiV1TextMentionsPost({ body, throwOnError: true })),
+      responseData(createTextMentionRouteApiV1TextMentionsPost({ body: { ...body, entity_link_state: 'manual' }, throwOnError: true })),
     onSuccess: (mention) => {
       queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }
@@ -73,7 +78,7 @@ export function useCreateTextMentionsMutation() {
   return useMutation({
     mutationFn: (body: TextMentionCreateRequest[]) =>
       responseData(
-        createTextMentionBatchRouteApiV1TextMentionsBatchPost({ body, throwOnError: true }),
+        createTextMentionBatchRouteApiV1TextMentionsBatchPost({ body: body.map(item => ({ ...item, entity_link_state: 'manual' })), throwOnError: true }),
       ),
     onSuccess: (mentions) => {
       for (const mention of mentions) {
@@ -83,6 +88,11 @@ export function useCreateTextMentionsMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }
@@ -90,11 +100,11 @@ export function useCreateTextMentionsMutation() {
 export function useReassignTextMentionMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ mentionId, entityId }: { mentionId: string; entityId: string }) =>
+    mutationFn: ({ mentionId, entityId }: { mentionId: string; entityId: string | null }) =>
       responseData(
         patchTextMentionRouteApiV1TextMentionsMentionIdPatch({
           path: { mention_id: mentionId },
-          body: { entity_id: entityId },
+          body: { entity_id: entityId, entity_link_state: entityId ? 'manual' : null },
           throwOnError: true,
         }),
       ),
@@ -104,6 +114,11 @@ export function useReassignTextMentionMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })
 }

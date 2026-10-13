@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
+import type { EntityLinkState } from '@/client'
+const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import { Search } from '@lucide/vue'
 
 import { Card, CardContent } from '@/components/ui/card'
@@ -37,6 +40,7 @@ const assignment = defineModel<PageContentFilter>('assignment', { required: true
           {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
         </InputGroupAddon>
       </InputGroup>
+      <EntityLinkStateFilter v-model="linkStates" />
       <Select v-model="assignment">
         <SelectTrigger class="w-full rounded-none">
           <SelectValue placeholder="Page content" />

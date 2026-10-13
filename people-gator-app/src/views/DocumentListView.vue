@@ -1,16 +1,19 @@
 <script setup lang="ts">
+import { useLinkStateFilter } from '@/composables/link-state-filter'
+import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
 
+const linkStates = useLinkStateFilter()
 const route = useRoute()
 const library = computed(() =>
   typeof route.query.library === 'string' ? route.query.library : undefined,
 )
 const { documents, error, isLoading, hasNextPage, isFetchingNextPage, loadMore, retry } =
-  useDocumentList(library)
+  useDocumentList(library, 12, linkStates)
 </script>
 
 <template>
@@ -20,6 +23,7 @@ const { documents, error, isLoading, hasNextPage, isFetchingNextPage, loadMore, 
       <h1>{{ library ? 'Library documents' : 'Browse documents' }}</h1>
       <p v-if="library" class="mt-1 break-all text-sm text-muted-foreground">{{ library }}</p>
       <p class="mt-2 text-sm text-muted-foreground">Registered documents and their page scans.</p>
+      <EntityLinkStateFilter v-model="linkStates" class="mt-3" />
     </header>
     <section
       class="document-pages flex flex-wrap gap-4"

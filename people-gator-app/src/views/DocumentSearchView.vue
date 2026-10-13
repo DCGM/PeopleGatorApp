@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLinkStateFilter } from '@/composables/link-state-filter'
+import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch } from 'vue'
 import DocumentCard from '@/components/custom/DocumentCard.vue'
@@ -9,6 +11,7 @@ import Separator from '@/components/ui/separator/Separator.vue'
 import { useDocumentSearch } from '@/viewmodels/document-search'
 import { normalizePageContentFilter } from '@/viewmodels/assignment'
 
+const linkStates = useLinkStateFilter()
 const route = useRoute()
 const router = useRouter()
 
@@ -21,7 +24,7 @@ const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const assignment = ref(normalizePageContentFilter(route.query.assignment))
 const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
-  useDocumentSearch(searchTerm, assignment, resultsPerPage, scope)
+  useDocumentSearch(searchTerm, assignment, resultsPerPage, scope, linkStates)
 
 watch(
   () => route.query,
@@ -35,6 +38,7 @@ function updateSearch() {
   void router.replace({
     name: 'document-search',
     query: {
+      ...(linkStates.value.length && { link_state: linkStates.value }),
       ...(scope.value.library && { library: scope.value.library }),
       ...(scope.value.documentId && { document: scope.value.documentId }),
       ...(searchTerm.value && { q: searchTerm.value }),
@@ -60,7 +64,7 @@ function updateSearch() {
       </p>
     </header>
 
-    <DocumentSearchBar
+    <DocumentSearchBar v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       :result-count="resultCount"
@@ -78,6 +82,7 @@ function updateSearch() {
           class="group"
           :to="{
             name: 'document-page',
+            query: { link_state: linkStates.length ? linkStates : undefined },
             params: {
               libraryId: result.library,
               documentId: result.documentId,

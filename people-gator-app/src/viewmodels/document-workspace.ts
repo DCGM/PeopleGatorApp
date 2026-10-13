@@ -1,7 +1,9 @@
 import { useQueries } from '@tanstack/vue-query'
-import { computed, toValue, type MaybeRefOrGetter } from 'vue'
+import { watch, computed, toValue, type MaybeRefOrGetter } from 'vue'
 
+import { linkMetadata } from '@/lib/entity-links'
 import {
+  type EntityLinkState,
   type BoundingBox,
   type EntityType,
   type PageLayoutModel,
@@ -72,6 +74,9 @@ function spanFragments(
     if (!text) return []
     return [
       {
+        ...linkMetadata(span),
+        mention_id: span.mention_id,
+        firstFragment: offset === 0,
         entity_id: span.entity_id,
         label: span.entity_type as EntityType,
         text,
@@ -123,14 +128,15 @@ export function useDocumentWorkspace(
   selectedFaceId: MaybeRefOrGetter<string | null>,
   candidateTerm: MaybeRefOrGetter<string>,
   candidateBrowseMode: MaybeRefOrGetter<CandidateBrowseMode> = 'page',
+  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
   const hasPage = computed(() => Boolean(sourceId.value))
   const layoutQuery = usePageLayoutQuery(sourceId)
-  const spanQuery = usePageMentionSpansQuery(sourceId)
+  const spanQuery = usePageMentionSpansQuery(sourceId, linkStates)
   const faceQuery = useFaceListQuery(
-    computed(() => ({ 'filter.source_id': [sourceId.value], limit: 100 })),
+    computed(() => ({ 'filter.source_id': [sourceId.value], 'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined, limit: 100 })),
     hasPage,
   )
   const faceRecords = computed(() =>
@@ -138,7 +144,7 @@ export function useDocumentWorkspace(
   )
   const onPageEntityQuery = useEntityListQuery(
     computed(() => ({
-      'filter.source_id': [sourceId.value],
+      'filter.source_id': [sourceId.value], 'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
     })),
     hasPage,
@@ -147,12 +153,17 @@ export function useDocumentWorkspace(
     (onPageEntityQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
   const mentionQuery = useTextMentionListQuery(
-    computed(() => ({ 'filter.source_id': [sourceId.value], limit: 100 })),
+    computed(() => ({ 'filter.source_id': [sourceId.value], 'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined, limit: 100 })),
     hasPage,
   )
   const mentions = computed(() =>
     (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
+  for (const query of [faceQuery, mentionQuery, onPageEntityQuery]) {
+    watch(() => [query.data.value, query.hasNextPage.value, query.isFetchingNextPage.value], () => {
+      if (query.hasNextPage.value && !query.isFetchingNextPage.value && !query.isError.value) void query.fetchNextPage()
+    })
+  }
   const pageImageQuery = usePageImageQuery(sourceId, 1024)
   const pageImageUrl = useObjectUrl(computed(() => pageImageQuery.data.value))
 
@@ -189,6 +200,7 @@ export function useDocumentWorkspace(
         ? onPageEntityRecords.value.find((entity) => entity.entity_id === face.entity_id)
         : undefined
       return {
+        ...linkMetadata(face),
         id: face.detection_id,
         embeddingModel: face.embeddings?.[0],
         personId: face.entity_id ?? null,
@@ -363,6 +375,7 @@ export function useDocumentWorkspace(
     ),
     loadMore,
     page: pageQuery.data,
+    annotationsLoading: computed(() => faceQuery.isPending.value || spanQuery.isPending.value || faceQuery.hasNextPage.value),
     pageDimensions: computed(() => ({
       height: layoutQuery.data.value?.page_size[0] ?? 297,
       width: layoutQuery.data.value?.page_size[1] ?? 210,

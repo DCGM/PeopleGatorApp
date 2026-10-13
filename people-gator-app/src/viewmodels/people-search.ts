@@ -1,3 +1,4 @@
+import type { EntityLinkState } from '@/client'
 import {
   emptyPeopleFilters,
   peopleFiltersQuery,
@@ -29,6 +30,7 @@ export function usePeopleSearch(
   filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
   processingFilters: MaybeRefOrGetter<PeopleProcessingFilters> = emptyPeopleFilters(),
+  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentEntityFilter(toValue(filter)))
@@ -37,7 +39,7 @@ export function usePeopleSearch(
     computed(() => ({
       query: normalizedSearch.value,
       ...assignment.value,
-      processingFilters: peopleFiltersQuery(toValue(processingFilters)),
+      processingFilters: { ...peopleFiltersQuery(toValue(processingFilters)), ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }) },
       limit: pageSize,
     })),
     computed(() => !filterError.value),
@@ -68,6 +70,7 @@ export function usePeopleSearch(
             },
             signal,
           ),
+        enabled: !person.entity_link_stats,
         staleTime: PEOPLE_CACHE_TIME,
         gcTime: PEOPLE_GC_TIME,
       })),
@@ -90,6 +93,7 @@ export function usePeopleSearch(
             },
             signal,
           ),
+        enabled: !person.entity_link_stats,
         staleTime: PEOPLE_CACHE_TIME,
         gcTime: PEOPLE_GC_TIME,
       })),
@@ -101,8 +105,8 @@ export function usePeopleSearch(
       id: person.entity_id,
       name: person.name || 'Unnamed person',
       aliases: person.aliases ?? [],
-      faces: faceCountQueries.value[index]?.data?.total_count ?? 0,
-      names: mentionCountQueries.value[index]?.data?.total_count ?? 0,
+      faces: person.entity_link_stats?.faces?.total ?? faceCountQueries.value[index]?.data?.total_count ?? 0,
+      names: person.entity_link_stats?.mentions?.total ?? mentionCountQueries.value[index]?.data?.total_count ?? 0,
     })),
   )
 

@@ -62,7 +62,7 @@ export const queryKeys = {
       ['pages', 'lookup', library, documentId, pageId] as const,
     image: (sourceId: string, width?: number) => ['pages', 'image', sourceId, width] as const,
     layout: (sourceId: string) => ['pages', 'layout', sourceId] as const,
-    mentionSpans: (sourceId: string) => ['pages', 'mention-spans', sourceId] as const,
+    mentionSpans: (sourceId: string, states: string[] = []) => ['pages', 'mention-spans', sourceId, states] as const,
   },
   images: {
     all: ['images'] as const,

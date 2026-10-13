@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { Link, UserRoundX } from '@lucide/vue'
-import type { Component, CSSProperties } from 'vue'
+import UiTooltip from './UiTooltip.vue'
+import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import { linkTooltip } from '@/lib/entity-links'
+import type { CSSProperties } from 'vue'
 
 import type {
   Face,
-  FaceStatus,
   PageViewportBounds,
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
-import { Badge } from '@/components/ui/badge'
 
 const props = withDefaults(
   defineProps<{
@@ -29,15 +29,7 @@ const emit = defineEmits<{
   selectFace: [faceId: string]
 }>()
 
-const faceStatusIcons = {
-  assigned: Link,
-  unassigned: UserRoundX,
-} satisfies Record<FaceStatus, Component>
 
-const faceStatusBadgeClasses = {
-  assigned: 'bg-emerald-700 text-white',
-  unassigned: 'bg-muted-foreground text-background',
-} satisfies Record<FaceStatus, string>
 
 const faceSelectionClasses = {
   selected: 'z-10 border-secondary bg-secondary/25 ring-2 ring-secondary/70',
@@ -91,31 +83,21 @@ function regionStyle(position: Face['position']): CSSProperties {
       @click.stop="emit('selectLine', index)"
     />
 
+    <UiTooltip v-for="face in faces" :key="face.id" :text="linkTooltip(face)">
     <button
-      v-for="face in faces"
       :key="face.id"
       type="button"
       data-region-type="face"
       class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       :class="faceSelectionClasses[faceSelectionState(face)]"
       :style="regionStyle(face.position)"
-      :aria-label="`Select ${face.name}`"
+      :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
       :aria-pressed="face.id === selectedFaceId"
       @click.stop="emit('selectFace', face.id)"
     >
-      <Badge
-        data-face-status-badge
-        class="absolute -left-1 -top-7 h-6 rounded-full border-0 py-0 text-xs font-light shadow-xs"
-        :class="[
-          faceStatusBadgeClasses[face.status],
-          showBadgeNames ? 'max-w-40 gap-1.5 px-2' : 'size-6 justify-center p-0',
-        ]"
-        :title="face.status === 'assigned' ? 'Assigned' : 'Unassigned'"
-        aria-hidden="true"
-      >
-        <component :is="faceStatusIcons[face.status]" class="size-3.5 shrink-0" />
-        <span v-if="showBadgeNames" class="min-w-0 truncate">{{ face.name }}</span>
-      </Badge>
+      <EntityLinkStateBadge v-bind="face" :focusable="false" :compact="!showBadgeNames" :label="face.name"
+        class="absolute -left-1 -top-7 h-6 rounded-full shadow-xs" :class="showBadgeNames ? 'max-w-40' : 'size-6'" />
     </button>
+    </UiTooltip>
   </div>
 </template>

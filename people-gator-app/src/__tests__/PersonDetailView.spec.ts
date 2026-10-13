@@ -80,7 +80,8 @@ describe('PersonDetailView', () => {
     await router.isReady()
 
     const wrapper = mount(PersonDetailView, {
-      global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+      global: {
+        plugins: [router], stubs: { RouterLink: RouterLinkStub, VerifyEntityLink: true } },
     })
     const mentionLink = wrapper.findAllComponents(RouterLinkStub).find((link) => {
       const target = link.props('to')

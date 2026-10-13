@@ -46,17 +46,17 @@ describe('FaceGallery', () => {
     expect(
       wrapper
         .get(
-          '[aria-label="Select face 1: A person with a deliberately long display name, annotated"]',
+          '[aria-label="Select face 1: A person with a deliberately long display name, annotated, Unassigned"]',
         )
         .attributes('aria-pressed'),
     ).toBe('true')
     expect(wrapper.findAll('[data-face-status-badge]')).toHaveLength(2)
     expect(wrapper.get('[data-face-status-badge]').text()).toBe('')
-    expect(wrapper.get('[data-face-status-badge]').attributes('title')).toBe('Annotated')
+    expect(wrapper.get('[data-face-status-badge]').attributes('title')).toBe('Unassigned')
     expect(wrapper.find('[data-face-status-badge] svg').exists()).toBe(true)
     expect(wrapper.get('[data-face-status-badge]').classes()).toContain('border-0')
 
-    await wrapper.get('[aria-label="Select face 2: not annotated"]').trigger('click')
+    await wrapper.get('[aria-label="Select face 2: not annotated, Unassigned"]').trigger('click')
     expect(wrapper.emitted('select')).toContainEqual(['face-2'])
   })
 
@@ -70,7 +70,7 @@ describe('FaceGallery', () => {
     expect(wrapper.findAll('[aria-label^="Select face "]')).toHaveLength(1)
     expect(wrapper.find('[aria-label*="deliberately long display name"]').exists()).toBe(false)
     expect(
-      wrapper.get('[aria-label="Select face 1: not annotated"]').attributes('aria-pressed'),
+      wrapper.get('[aria-label="Select face 1: not annotated, Unassigned"]').attributes('aria-pressed'),
     ).toBe('false')
     expect(wrapper.emitted('select')).toBeUndefined()
   })
@@ -80,6 +80,6 @@ describe('FaceGallery', () => {
       props: { faces: [], selectedFaceId: null },
     })
 
-    expect(wrapper.get('[role="status"]').text()).toBe('No faces found')
+    expect(wrapper.get('[role="status"]').text()).toContain('No faces found')
   })
 })

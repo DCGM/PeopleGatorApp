@@ -46,7 +46,7 @@ describe('DocumentPageOverlay', () => {
     expect(badge.attributes('data-slot')).toBe('badge')
     expect(badge.classes()).toContain('border-0')
     expect(badge.classes()).toContain('rounded-full')
-    expect(badge.classes()).toContain('font-light')
+    expect(badge.classes()).toContain('font-normal')
     expect(badge.classes()).toContain('shadow-xs')
     expect(badge.text()).toBe('Ada')
     expect(badge.get('span').classes()).toContain('truncate')

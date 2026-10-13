@@ -1,8 +1,9 @@
+import type { LinkMetadata } from '@/lib/entity-links'
 import type { EntityType } from '@/client/types.gen'
 
 export type FaceStatus = 'assigned' | 'unassigned'
 
-export type Face = {
+export type Face = LinkMetadata & {
   id: string
   embeddingModel?: string
   personId: string | null
@@ -24,7 +25,9 @@ export type PageViewportBounds = {
   height: number
 }
 
-export type TranscriptionEntitySpan = {
+export type TranscriptionEntitySpan = LinkMetadata & {
+  mention_id?: string
+  firstFragment?: boolean
   entity_id?: string
   label: EntityType
   text: string
@@ -34,7 +37,7 @@ export type TranscriptionEntitySpan = {
 }
 
 export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
-  return entity.entity_id ?? `${entity.line_id}:${entity.start_index}:${entity.end_index}`
+  return entity.mention_id ?? entity.entity_id ?? `${entity.line_id}:${entity.start_index}:${entity.end_index}`
 }
 
 export type TranscriptionLine = {

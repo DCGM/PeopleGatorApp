@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
+import type { EntityLinkState } from '@/client'
+import { linkStateVisuals } from '@/lib/entity-links'
+const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import { computed, ref, useId, watch } from 'vue'
 import { Search, SlidersHorizontal, X } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
@@ -73,7 +77,7 @@ const documents = usePeopleFilterOptions('document', documentSearch)
 const users = usePeopleFilterOptions('user', userSearch)
 const apiKeys = usePeopleFilterOptions('api-key', apiKeySearch)
 const active = computed(() => {
-  const chips: { key: keyof PeopleProcessingFilters; value: string; label: string }[] = []
+  const chips: { key: keyof PeopleProcessingFilters | 'linkState'; value: string; label: string }[] = []
   if (assignment.value !== 'all')
     chips.push({
       key: 'documentIds',
@@ -100,9 +104,11 @@ const active = computed(() => {
     for (const id of filters.value[key])
       chips.push({ key, value: id, label: `${prefix}: ${labels[id] ?? id}` })
   }
+  for (const state of linkStates.value) chips.push({ key: 'linkState', value: state, label: `Link state: ${linkStateVisuals[state].label}` })
   return chips
 })
-function removeFilter(key: keyof PeopleProcessingFilters, value: string) {
+function removeFilter(key: keyof PeopleProcessingFilters | 'linkState', value: string) {
+  if (key === 'linkState') { linkStates.value = linkStates.value.filter(state => state !== value); return }
   if (value === '__assignment') {
     assignment.value = 'all'
     return
@@ -111,6 +117,7 @@ function removeFilter(key: keyof PeopleProcessingFilters, value: string) {
   else filters.value = { ...filters.value, [key]: filters.value[key].filter((id) => id !== value) }
 }
 function clearFilters() {
+  linkStates.value = []
   assignment.value = 'all'
   filters.value = emptyPeopleFilters()
 }
@@ -164,7 +171,8 @@ function clearFilters() {
             >
               <div class="min-w-0 space-y-1 text-sm">
                 <label :for="assignmentId" class="font-medium">Assignment</label>
-                <Select v-model="assignment">
+                <EntityLinkStateFilter v-model="linkStates" />
+      <Select v-model="assignment">
                   <SelectTrigger
                     :id="assignmentId"
                     aria-label="Assignment"

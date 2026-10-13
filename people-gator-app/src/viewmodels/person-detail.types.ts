@@ -1,3 +1,4 @@
+import type { LinkMetadata } from '@/lib/entity-links'
 import type { BoundingBox } from '@/client'
 
 export type PersonProfile = {
@@ -20,7 +21,7 @@ export type PersonIdentifiers = {
   nationalLibraryAuthorityId: string
 }
 
-export type PersonFace = {
+export type PersonFace = LinkMetadata & {
   id: string
   portrait: string
   portraitLoading: boolean
@@ -32,7 +33,7 @@ export type PersonFace = {
   position: BoundingBox
 }
 
-export type PersonMention = {
+export type PersonMention = LinkMetadata & {
   id: string
   excerpt: string
   matchedText: string

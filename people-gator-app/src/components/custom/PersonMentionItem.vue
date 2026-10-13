@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { ChevronRight } from '@lucide/vue'
 
 import type { PersonMention } from '@/viewmodels/person-detail.types'
@@ -22,6 +23,7 @@ const props = defineProps<{
       “{{ props.mention.excerpt }}”
       <footer class="mt-1 font-sans text-xs font-semibold text-accent">
         Matched “{{ props.mention.matchedText }}”
+        <EntityLinkStateBadge v-bind="mention" class="ml-2" />
       </footer>
     </blockquote>
     <span

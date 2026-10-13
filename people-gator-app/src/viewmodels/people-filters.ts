@@ -11,6 +11,7 @@ export type PeopleProcessingFilters = {
 
 export type ProcessingQueryParams = Pick<
   EntityListParams,
+  | 'filter.entity_link_state'
   | 'filter.last_touched_from'
   | 'filter.last_touched_to'
   | 'filter.document_source_id'

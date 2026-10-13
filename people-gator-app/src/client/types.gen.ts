@@ -124,6 +124,7 @@ export type DocumentResponse = {
      * Url
      */
     url: string;
+    entity_link_stats?: EntityLinkStats;
     /**
      * Library
      */
@@ -219,6 +220,45 @@ export type EntityDeleteManyResponse = {
 };
 
 /**
+ * EntityLinkState
+ */
+export type EntityLinkState = 'automatic' | 'manual' | 'verified';
+
+/**
+ * EntityLinkStateCounts
+ */
+export type EntityLinkStateCounts = {
+    /**
+     * Automatic
+     */
+    automatic?: number;
+    /**
+     * Manual
+     */
+    manual?: number;
+    /**
+     * Verified
+     */
+    verified?: number;
+    /**
+     * Unassigned
+     */
+    unassigned?: number;
+    /**
+     * Total
+     */
+    total?: number;
+};
+
+/**
+ * EntityLinkStats
+ */
+export type EntityLinkStats = {
+    faces?: EntityLinkStateCounts;
+    mentions?: EntityLinkStateCounts;
+};
+
+/**
  * EntityListFilter
  *
  * Filter criteria for listing entities.
@@ -227,6 +267,12 @@ export type EntityDeleteManyResponse = {
  * Lists of criteria in each field are combined using logical OR.
  */
 export type EntityListFilter = {
+    /**
+     * Entity Link State
+     *
+     * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+     */
+    entity_link_state?: Array<EntityLinkState>;
     /**
      * Entity Id
      *
@@ -563,6 +609,7 @@ export type EntityResponse = {
      * The unique identifier of the user who created or owns the entity.
      */
     user_id: string;
+    entity_link_stats?: EntityLinkStats;
     /**
      * Last Touched At
      */
@@ -590,6 +637,10 @@ export type EntityType = 'person';
  * Request body for ingesting a face detection.
  */
 export type FaceCreateRequest = {
+    /**
+     * Entity Link State
+     */
+    entity_link_state?: EntityLinkState;
     /**
      * Identifier
      *
@@ -693,6 +744,10 @@ export type FaceModelStub = string;
  */
 export type FacePatchBatchItem = {
     /**
+     * Entity Link State
+     */
+    entity_link_state?: EntityLinkState | null;
+    /**
      * Entity Id
      *
      * The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified.
@@ -719,6 +774,10 @@ export type FacePatchBatchItem = {
  */
 export type FacePatchRequest = {
     /**
+     * Entity Link State
+     */
+    entity_link_state?: EntityLinkState | null;
+    /**
      * Entity Id
      *
      * The unique identifier of the entity associated with the face detection. If null, the face will be unassigned from any entity. If MISSING, the entity association will not be modified.
@@ -738,6 +797,15 @@ export type FacePatchRequest = {
  * A single face detection record.
  */
 export type FaceResponse = {
+    entity_link_state?: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
     /**
      * Detection Id
      *
@@ -863,6 +931,7 @@ export type FoundDocument = {
      * Url
      */
     url: string;
+    entity_link_stats?: EntityLinkStats;
     /**
      * Library
      */
@@ -953,6 +1022,7 @@ export type FoundEntity = {
      * The unique identifier of the user who created or owns the entity.
      */
     user_id: string;
+    entity_link_stats?: EntityLinkStats;
     /**
      * Last Touched At
      */
@@ -991,6 +1061,15 @@ export type FoundFace = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
+    entity_link_state?: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
     /**
      * Detection Id
      *
@@ -1084,6 +1163,7 @@ export type FoundPage = {
      * Url
      */
     url: string;
+    entity_link_stats?: EntityLinkStats;
     /**
      * Library
      */
@@ -1700,6 +1780,7 @@ export type PageResponse = {
      * Url
      */
     url: string;
+    entity_link_stats?: EntityLinkStats;
     /**
      * Library
      */
@@ -1849,6 +1930,10 @@ export type TextLineModel = {
  */
 export type TextMentionCreateRequest = {
     /**
+     * Entity Link State
+     */
+    entity_link_state?: EntityLinkState;
+    /**
      * Name
      *
      * The name of the entity being mentioned.
@@ -1911,9 +1996,13 @@ export type TextMentionListResponse = {
  */
 export type TextMentionPatchBatchItem = {
     /**
+     * Entity Link State
+     */
+    entity_link_state?: EntityLinkState | null;
+    /**
      * Entity Id
      */
-    entity_id: string | null;
+    entity_id?: string | null;
     /**
      * Mention Id
      */
@@ -1927,9 +2016,13 @@ export type TextMentionPatchBatchItem = {
  */
 export type TextMentionPatchRequest = {
     /**
+     * Entity Link State
+     */
+    entity_link_state?: EntityLinkState | null;
+    /**
      * Entity Id
      */
-    entity_id: string | null;
+    entity_id?: string | null;
 };
 
 /**
@@ -1938,6 +2031,15 @@ export type TextMentionPatchRequest = {
  * A single mention of an entity name in a text source.
  */
 export type TextMentionResponse = {
+    entity_link_state?: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
     /**
      * Mention Id
      */
@@ -1969,6 +2071,15 @@ export type TextMentionResponse = {
  * ``end_character`` is exclusive.
  */
 export type TextMentionSpanModel = {
+    entity_link_state?: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
     /**
      * Mention Id
      */
@@ -2221,6 +2332,12 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
          * Filter.Entity Id
          *
          * The unique identifiers of the entities.
@@ -2381,6 +2498,12 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -2474,6 +2597,12 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          * How independently ranked modality result lists are fused.
          */
         'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
         /**
          * Filter.Url
          *
@@ -2617,6 +2746,12 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
          * Filter.Url
          *
          * Filter by URL.
@@ -2727,6 +2862,12 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
         /**
          * Filter.Entity Id
          *
@@ -3091,6 +3232,12 @@ export type ListFacesRouteApiV1FacesGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -3432,6 +3579,12 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -3693,6 +3846,12 @@ export type ListSourcesRouteApiV1SourcesGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
          * Filter.Source Type
          *
          * Filter by source type.
@@ -3862,6 +4021,12 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
         /**
          * Filter.Url
          *
@@ -4097,6 +4262,12 @@ export type ListPagesRouteApiV1PagesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
         /**
          * Filter.Url
          *
@@ -4487,7 +4658,26 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
          */
         page_source_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity IDs.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source IDs.
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
     url: '/api/v1/pages/{page_source_id}/text-mentions-spans';
 };
 
@@ -4515,6 +4705,12 @@ export type ListImagesRouteApiV1ImagesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
         /**
          * Filter.Url
          *

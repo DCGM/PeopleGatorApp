@@ -1,5 +1,5 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import type { PageResponse } from '@/client'
+import type { EntityLinkState, PageResponse } from '@/client'
 
 import { pageContentFilter, type PageContentFilter } from '@/viewmodels/assignment'
 import { usePageResultsQuery } from '@/query/search'
@@ -12,6 +12,7 @@ export function useDocumentSearch(
   filter: MaybeRefOrGetter<PageContentFilter>,
   pageSize = 12,
   scope: MaybeRefOrGetter<{ library?: string; documentId?: string }> = {},
+  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const contentFilter = computed(() => pageContentFilter(toValue(filter)))
@@ -20,6 +21,7 @@ export function useDocumentSearch(
       const { library, documentId } = toValue(scope)
       return {
         query: normalizedSearch.value,
+        ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
         ...(library && { 'filter.library': [library] }),
         ...(documentId && { 'filter.document_id': [documentId] }),
         ...contentFilter.value,

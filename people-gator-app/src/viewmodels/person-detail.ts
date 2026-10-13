@@ -1,7 +1,8 @@
 import { useQueries } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 
-import type { PageResponse } from '@/client'
+import { linkMetadata } from '@/lib/entity-links'
+import type { EntityLinkState, PageResponse } from '@/client'
 import type {
   PersonIdentifiers,
   PersonFace,
@@ -23,7 +24,7 @@ function percentage(value: number) {
 
 const PERSON_DETAIL_GC_TIME = 60 * 60_000
 
-export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
+export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: MaybeRefOrGetter<EntityLinkState[]> = []) {
   const entityQuery = useEntityQuery(personId)
   const patchEntity = usePatchEntityMutation()
   const touchedUserId = computed(() => entityQuery.data.value?.last_touched_by_user_id ?? '')
@@ -47,6 +48,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const faceQuery = useFaceListQuery(
     computed(() => ({
       'filter.entity_id': [toValue(personId)],
+      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
       return_total_count: true,
     })),
@@ -55,6 +57,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const mentionQuery = useTextMentionListQuery(
     computed(() => ({
       'filter.entity_id': [toValue(personId)],
+      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
       return_total_count: true,
     })),
@@ -64,13 +67,15 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
   const faceRecords = computed(() =>
     (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
+  const discoveryFaces = useFaceListQuery(computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })), hasPerson)
+  const discoveryFaceRecords = computed(() => (discoveryFaces.data.value?.pages ?? []).flatMap(page => page.items))
   const faceEmbeddingModel = computed(
-    () => faceRecords.value.find((face) => face.embeddings?.length)?.embeddings?.[0] ?? null,
+    () => discoveryFaceRecords.value.find((face) => face.embeddings?.length)?.embeddings?.[0] ?? null,
   )
   const similarityFaceIds = computed(() => {
     const model = faceEmbeddingModel.value
     if (!model) return []
-    return faceRecords.value
+    return discoveryFaceRecords.value
       .filter((face) => face.embeddings?.includes(model))
       .map((face) => face.detection_id)
   })
@@ -169,6 +174,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
       const pageImageIndex = imageSourceIds.value.indexOf(face.source_id)
       return [
         {
+          ...linkMetadata(face),
           id: face.detection_id,
           portrait,
           portraitLoading:
@@ -192,6 +198,7 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
       if (!page) return []
       return [
         {
+          ...linkMetadata(mention),
           id: mention.mention_id,
           excerpt: mention.context || mention.name,
           matchedText: mention.name,
@@ -229,6 +236,18 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>) {
 
   return {
     entity: entityQuery.data,
+    faceError: faceQuery.error,
+    mentionError: mentionQuery.error,
+    faceLoading: faceQuery.isPending,
+    mentionLoading: mentionQuery.isPending,
+    retryFaces: () => faceQuery.refetch(),
+    retryMentions: () => mentionQuery.refetch(),
+    hasMoreFaces: faceQuery.hasNextPage,
+    hasMoreMentions: mentionQuery.hasNextPage,
+    loadingMoreFaces: faceQuery.isFetchingNextPage,
+    loadingMoreMentions: mentionQuery.isFetchingNextPage,
+    loadMoreFaces: () => faceQuery.fetchNextPage(),
+    loadMoreMentions: () => mentionQuery.fetchNextPage(),
     error: entityQuery.error,
     faceEmbeddingModel,
     faceCount: computed(() => faceQuery.data.value?.pages[0]?.total_count ?? 0),

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import {
   Check,
   ChevronRight,
@@ -121,6 +122,7 @@ watch(() => props.face.id, cancelCreating)
         </h4>
       </ItemTitle>
 
+      <EntityLinkStateBadge v-bind="face" />
       <p class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
         :title="face.shortDescription">
         {{

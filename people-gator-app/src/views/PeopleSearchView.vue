@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLinkStateFilter } from '@/composables/link-state-filter'
+import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { UserRound } from '@lucide/vue'
@@ -12,6 +14,7 @@ import { usePeopleSearch } from '@/viewmodels/people-search'
 import { readPeopleFilters, peopleFiltersUrl } from '@/viewmodels/people-filters'
 import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
 
+const linkStates = useLinkStateFilter()
 const route = useRoute()
 const router = useRouter()
 
@@ -30,12 +33,13 @@ const {
   loadMore,
   people,
   resultCount,
-} = usePeopleSearch(searchTerm, assignment, resultsPerPage, processingFilters)
+} = usePeopleSearch(searchTerm, assignment, resultsPerPage, processingFilters, linkStates)
 
 function updateSearch() {
   void router.replace({
     name: 'people-search',
     query: {
+      ...(linkStates.value.length && { link_state: linkStates.value }),
       ...peopleFiltersUrl(processingFilters.value),
       ...(searchTerm.value && { q: searchTerm.value }),
       ...(assignment.value !== 'all' && { assignment: assignment.value }),
@@ -62,7 +66,7 @@ watch(
       <h1>Browse people</h1>
     </header>
 
-    <PeopleSearchBar
+    <PeopleSearchBar v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       v-model:processing-filters="processingFilters"

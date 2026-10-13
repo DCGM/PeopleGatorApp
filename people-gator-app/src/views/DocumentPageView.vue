@@ -4,6 +4,10 @@ import { useDebounce } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { useLinkStateFilter } from '@/composables/link-state-filter'
+import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
+import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
+import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
@@ -31,6 +35,8 @@ const route = useRoute()
 const router = useRouter()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
+const linkStates = useLinkStateFilter()
+const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
   typeof route.query.person === 'string' ? route.query.person : null,
@@ -43,6 +49,8 @@ const candidateBrowseMode = ref<CandidateBrowseMode>('page')
 const candidateSearchResetKey = ref(0)
 const debouncedCandidateTerm = useDebounce(candidateTerm, 250)
 const {
+  page,
+  annotationsLoading,
   assignFace,
   assignmentStatus,
   createAndAssign,
@@ -66,6 +74,7 @@ const {
   selectedFaceId,
   debouncedCandidateTerm,
   candidateBrowseMode,
+  linkStates,
 )
 
 const selectedLineIndex = ref(0)
@@ -114,6 +123,7 @@ function syncRoute() {
   const line = transcription.value[selectedLineIndex.value]
   void router.replace({
     query: {
+      ...route.query,
       person: selectedFaceId.value ?? undefined,
       selectedPerson: selectedPersonId.value ?? undefined,
       line: line?.id,
@@ -287,6 +297,22 @@ watch(
   },
 )
 
+watch([faces, transcription, annotationsLoading], () => {
+  if (annotationsLoading.value) return
+  let changed = false
+  if (selectedFaceId.value && !faces.value.some(face => face.id === selectedFaceId.value)) {
+    selectedFaceId.value = null
+    selectedPersonId.value = null
+    changed = true
+  }
+  if (selectedEntityKey.value && !transcription.value.some(line => line.entities?.some(span => transcriptionEntityKey(span) === selectedEntityKey.value))) {
+    selectedEntityKey.value = null
+    selectedPersonId.value = null
+    changed = true
+  }
+  if (changed) syncRoute()
+})
+
 onMounted(async () => {
   window.addEventListener('keydown', handleNavigationKeydown)
   await nextTick()
@@ -337,7 +363,7 @@ onBeforeUnmount(() => {
       aria-label="Pan and zoom document page">
       <div class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)] p-2" role="toolbar"
         aria-label="Scan tools" @pointerdown.stop @wheel.stop @keydown.stop>
-        <DocumentControls :selected-line-index="selectedLineIndex" :line-count="transcription.length"
+        <DocumentControls v-model:link-states="linkStates" :selected-line-index="selectedLineIndex" :line-count="transcription.length"
           :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
           :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
           :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
@@ -346,6 +372,15 @@ onBeforeUnmount(() => {
           @reset-view="resetView" @select-translation="selectTranslation"
           @toggle-badge-names="showBadgeNames = !showBadgeNames" />
       </div>
+      <details class="absolute bottom-3 left-3 z-20 max-w-[calc(100%-1.5rem)] rounded-md border bg-background/95 p-2 text-xs" @pointerdown.stop @wheel.stop>
+        <summary class="cursor-pointer font-semibold">Link statistics</summary>
+        <p class="mt-2 break-all text-muted-foreground">{{ page?.library }} · {{ page?.page_id }}</p>
+        <p class="my-2 font-semibold">This page</p><EntityLinkStatistics v-if="page" :stats="page.entity_link_stats" unassigned />
+        <p class="my-2 font-semibold">Whole document</p>
+        <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
+        <p v-else-if="documentQuery.error.value" role="alert">Could not load document statistics. <button class="underline" @click="documentQuery.refetch()">Retry</button></p>
+        <EntityLinkStatistics v-else-if="documentQuery.data.value" :stats="documentQuery.data.value.entity_link_stats" unassigned />
+      </details>
       <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
         <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
           :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
@@ -366,11 +401,13 @@ onBeforeUnmount(() => {
     </section>
 
     <FaceGallery class="workspace-galery" :faces="faces" :selected-face-id="selectedFace?.id ?? null"
-      :loading="isLoading" @select="selectFace" />
+      :loading="isLoading" @reset-filters="linkStates = []" @select="selectFace" />
 
     <CurrentFacePanel class="workspace-current border-t bg-background p-5" :face="selectedFace ?? null"
       :assignment-pending="assignmentStatus === 'pending'" @find-profile="focusSimilarPeopleSearch"
-      @create="createSimilarPerson" @unassign="unassignSelectedFace" />
+      @create="createSimilarPerson" @unassign="unassignSelectedFace">
+      <VerifyEntityLink v-if="selectedFace" v-bind="selectedFace" :id="selectedFace.id" kind="face" />
+    </CurrentFacePanel>
     <SimilarPeopleSearch :key="candidateSearchResetKey" ref="similarPeopleSearch" v-model="candidateTerm"
       v-model:result-mode="candidateBrowseMode" class="workspace-search bg-background px-5 pb-5"
       :selected-face="selectedFace ?? null" />
