@@ -10,10 +10,13 @@ import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { useFaceListQuery } from '@/query/faces'
+import { usePageResultsQuery } from '@/query/search/pages'
 import { usePersonDetail } from '@/viewmodels/person-detail'
 import type { EntityLinkState } from '@/client'
 
 const api = vi.hoisted(() => ({
+  pagesList: vi.fn(),
+  pagesSearch: vi.fn(),
   faces: vi.fn(),
   mentions: vi.fn(),
   entity: vi.fn(),
@@ -23,6 +26,8 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('@/client', () => ({
   listFacesRouteApiV1FacesGet: api.faces,
+  listPagesRouteApiV1PagesGet: api.pagesList,
+  searchPagesGetApiV1SearchPagesGet: api.pagesSearch,
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
   getEntityRouteApiV1EntitiesEntityIdGet: api.entity,
   patchFaceRouteApiV1FacesDetectionIdPatch: api.patchFace,
@@ -207,6 +212,42 @@ describe('entity link review', () => {
     resolveOld({ data: { items: [{ detection_id: 'old-face' }], limit: 1, cursor: 'old-next' } })
     await flushPromises()
     expect(query!.data.value?.pages[0]?.items[0]?.detection_id).toBe('verified-face')
+  })
+
+  it('forwards link states through scan browsing/search and restarts their cursor chains', async () => {
+    const states = ref<EntityLinkState[]>(['verified'])
+    const term = ref('')
+    api.pagesList.mockResolvedValue({
+      data: { items: [{ source_id: 'p1' }], limit: 1, total_count: 2, cursor: 'next' },
+    })
+    api.pagesSearch.mockResolvedValue({
+      data: { items: [], limit: 1, total_count: 0, cursor: null },
+    })
+    let query: ReturnType<typeof usePageResultsQuery>
+    renderQuery(() => {
+      query = usePageResultsQuery(
+        computed(() => ({ query: term.value, 'filter.entity_link_state': states.value, limit: 1 })),
+      )
+      return () => h('div')
+    })
+    await flushPromises()
+    expect(api.pagesList.mock.calls[0]![0].query['filter.entity_link_state']).toEqual(['verified'])
+    await query!.fetchNextPage()
+    await flushPromises()
+    expect(api.pagesList.mock.calls[1]![0].query.cursor).toBe('next')
+    states.value = ['manual']
+    await flushPromises()
+    const browse = api.pagesList.mock.calls[api.pagesList.mock.calls.length - 1]![0].query
+    expect(browse['filter.entity_link_state']).toEqual(['manual'])
+    expect(browse.cursor).toBeNull()
+    term.value = 'Ada'
+    await flushPromises()
+    expect(api.pagesSearch.mock.calls[0]![0].query['filter.entity_link_state']).toEqual(['manual'])
+    states.value = ['automatic', 'verified']
+    await flushPromises()
+    const ranked = api.pagesSearch.mock.calls[api.pagesSearch.mock.calls.length - 1]![0].query
+    expect(ranked['filter.entity_link_state']).toEqual(['automatic', 'verified'])
+    expect(ranked.cursor).toBeNull()
   })
 
   it('renders one icon per multiline mention and keeps different mentions to the same entity separate', () => {

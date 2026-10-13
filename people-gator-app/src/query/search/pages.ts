@@ -3,6 +3,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
   searchPagesGetApiV1SearchPagesGet,
+  type EntityLinkState,
   type FoundPage,
   type PageResponse,
   type SearchPagesGetApiV1SearchPagesGetData,
@@ -23,6 +24,7 @@ export type PageSearchRecord = PageResponse | FoundPage
 
 export type PageResultsParams = {
   query: string
+  'filter.entity_link_state'?: EntityLinkState[]
   'filter.library'?: string[]
   'filter.document_id'?: string[]
   'filter.has_entities'?: boolean
@@ -94,6 +96,9 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
         ...(resolvedParams['filter.document_id'] && {
           'filter.document_id': resolvedParams['filter.document_id'],
         }),
+        ...(resolvedParams['filter.entity_link_state'] && {
+          'filter.entity_link_state': resolvedParams['filter.entity_link_state'],
+        }),
         'filter.has_entities': resolvedParams['filter.has_entities'],
         'filter.has_faces': resolvedParams['filter.has_faces'],
         'filter.has_mentions': resolvedParams['filter.has_mentions'],
@@ -115,6 +120,9 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
         }),
         ...(resolvedParams['filter.document_id'] && {
           'filter.document_id': resolvedParams['filter.document_id'],
+        }),
+        ...(resolvedParams['filter.entity_link_state'] && {
+          'filter.entity_link_state': resolvedParams['filter.entity_link_state'],
         }),
         'filter.has_entities': resolvedParams['filter.has_entities'],
         'filter.has_faces': resolvedParams['filter.has_faces'],
