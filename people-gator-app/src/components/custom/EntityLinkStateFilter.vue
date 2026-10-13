@@ -62,7 +62,7 @@ function update(value: unknown) {
         size="sm"
         class="h-8"
         :aria-pressed="selected.length === 0"
-        @click="selected = []"
+        @click="selected = []; open = false"
         >All</Button
       >
     </UiTooltip>
@@ -81,7 +81,7 @@ function update(value: unknown) {
           {{ selected.length ? `Link state (${selected.length})` : 'All link states'
           }}<ChevronsUpDown class="size-3" aria-hidden="true" /> </Button></ComboboxTrigger
     ></ComboboxAnchor>
-    <ComboboxList align="start" class="min-w-48" aria-label="Link state"
+    <ComboboxList @escape-key-down="open = false" align="start" class="min-w-48" aria-label="Link state"
       ><ComboboxViewport
         ><ComboboxGroup>
           <ComboboxItem
@@ -97,7 +97,7 @@ function update(value: unknown) {
               ><Check class="size-4" aria-hidden="true"
             /></ComboboxItemIndicator>
           </ComboboxItem> </ComboboxGroup></ComboboxViewport
-      ><Button variant="ghost" size="sm" class="w-full" @click="selected = []"
+      ><Button variant="ghost" size="sm" class="w-full" @click="selected = []; open = false"
         >All link states</Button
       ></ComboboxList
     >
