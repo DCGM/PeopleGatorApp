@@ -101,11 +101,39 @@ class LifecycleTests(unittest.TestCase):
         state = json.loads((directory / "state.json").read_text())
         self.assertEqual(state["password"], "c" * 64)
         self.assertEqual(state["version"], [100, 1])
+        self.assertEqual(state["seeded_version"], [100, 1])
         self.assertEqual((directory / "compose.env").stat().st_mode & 0o777, 0o600)
         self.assertIn(f"COMMIT_SHA='{SHA}'", (directory / "compose.env").read_text())
         self.controller.command.reset_mock()
         self.controller.deploy_pr(123, {**RUN, "id": 99}, IMAGES)
         self.controller.command.assert_not_called()
+
+    def test_same_run_from_old_controller_is_seeded_once_after_upgrade(self):
+        directory = self.seed_preview()
+        state_file = directory / "state.json"
+        state = json.loads(state_file.read_text())
+        state.update(version=[100, 1], sha=SHA, images=IMAGES)
+        state_file.write_text(json.dumps(state))
+        self.controller.deploy_pr(123, RUN, IMAGES)
+        commands = [call.args[0] for call in self.controller.command.call_args_list]
+        self.assertEqual([command[-1] for command in commands[:3]], ["storage-init", "migrate", "seed"])
+        self.assertEqual(json.loads(state_file.read_text())["seeded_version"], [100, 1])
+        self.controller.command.reset_mock()
+        self.controller.deploy_pr(123, RUN, IMAGES)
+        self.controller.command.assert_not_called()
+
+    def test_failed_seed_of_existing_run_does_not_mark_it_seeded(self):
+        directory = self.seed_preview()
+        state_file = directory / "state.json"
+        state = json.loads(state_file.read_text())
+        state.update(version=[100, 1], sha=SHA, images=IMAGES)
+        state_file.write_text(json.dumps(state))
+        self.controller.command.side_effect = ["", "", RuntimeError("seed failed")]
+        with self.assertRaisesRegex(RuntimeError, "seed failed"):
+            self.controller.deploy_pr(123, RUN, IMAGES)
+        self.assertEqual(json.loads(state_file.read_text()), state)
+        self.assertEqual((directory / "compose.env").read_text(), "placeholder")
+        self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
 
     def test_seeding_runs_after_migrations_and_before_application_startup(self):
         self.controller.deploy_pr(123, RUN, IMAGES)

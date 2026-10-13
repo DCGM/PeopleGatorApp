@@ -30,6 +30,7 @@ class PreviewCredentials(TypedDict):
 
 class PreviewState(PreviewCredentials, total=False):
     version: list[int]
+    seeded_version: list[int]
     sha: str
     images: dict[str, str]
 
@@ -264,7 +265,10 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             "password": secrets.token_hex(32),
         }
         version = (positive_int(run["id"]), positive_int(run["run_attempt"]))
-        if tuple(state.get("version", [0, 0])) >= version:
+        deployed_version = tuple(state.get("version", [0, 0]))
+        if deployed_version > version or (
+            deployed_version == version and tuple(state.get("seeded_version", [])) == version
+        ):
             print(f"PR #{number} already has this run or a newer deployment")
             return
         if not self.current_pr(number, run["head_sha"]):
@@ -276,7 +280,9 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         self.provision_database(number, state["password"])
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "storage-init"))
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "migrate"))
+        print(f"PR #{number}: seeding candidate data before application startup", flush=True)
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "seed"))
+        print(f"PR #{number}: candidate seeding completed", flush=True)
         # A PR can close or receive a new commit while migrations/seeding are running.
         if not self.current_pr(number, run["head_sha"]):
             if self.api(f"pulls/{number}")["state"] == "closed":
@@ -288,7 +294,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             "backend", "frontend",
         ))
         candidate.replace(directory / "compose.env")
-        state.update(version=list(version), sha=run["head_sha"], images=images)
+        state.update(version=list(version), seeded_version=list(version), sha=run["head_sha"], images=images)
         write_private(state_file, json.dumps(state))
         url = f"https://pr-{number}.{self.domain}"
         print(f"Deployed PR #{number}: {url}")
