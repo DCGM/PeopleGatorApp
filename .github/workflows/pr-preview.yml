@@ -37,8 +37,19 @@ jobs:
       RUN_ID: ${{ github.event.workflow_run.id }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      # Never check out PR code on this persistent host. The controller and Compose
-      # files are installed by an operator from the trusted default branch.
+      # Only the reviewed workflow revision is read here, never the PR head.
+      # The controller and Compose files still require an operator installation.
+      - name: Read trusted preview deployment requirements
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .preview-workflow
+          sparse-checkout: deploy/preview
+          persist-credentials: false
+      - name: Require installed preview seeding before deployment
+        if: github.event_name == 'workflow_run'
+        run: python3 .preview-workflow/deploy/preview/check_installation.py
       - name: Use temporary registry credentials
         id: registry-config
         if: github.event_name == 'workflow_run'

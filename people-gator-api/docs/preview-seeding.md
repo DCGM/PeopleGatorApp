@@ -110,6 +110,11 @@ used to resume; the seed is not one atomic database/filesystem transaction.
 Updating the installed preview host's controller and Compose template is an
 operator step after review/merge; see [preview deployment](../../deploy/preview/README.md).
 No workflow checks out and executes PR deployment scripts directly on that host.
+The lifecycle workflow compares the installed controller and Compose template with
+its exact reviewed workflow revision before deployment, failing if either is stale.
+A green CI seed smoke test therefore cannot hide an installed host that skips seeding.
+Successful preview state includes a `seeded_version` marker; after a host upgrade,
+rerunning the same deployment can seed previews created by older controllers.
 
 ## Grouped documents and scans
 

@@ -149,6 +149,15 @@ context and makes Docker fall back to `/var/run/docker.sock`. See
    no SSH deployment key or PostgreSQL secret is stored in GitHub. Make the
    `frontend` and `backend` PR CI jobs required in branch protection if desired.
 
+Before deploying images, the lifecycle workflow checks out only `deploy/preview`
+from its exact trusted `github.workflow_sha` and runs `check_installation.py`.
+This compares the installed controller and PR Compose template with that reviewed
+revision. A missing or outdated file fails deployment with an installation command,
+before pulling images or changing preview state. CI seeding alone cannot establish
+that the persistent host runs the seed step. Cleanup/reconciliation remain available
+while an installation upgrade is pending. The check never installs PR code or
+replaces host files automatically.
+
 The deployer always runs `/opt/people-gator-preview/preview.py`; updating its
 trusted installed copy, Compose templates, collector config and pgAdmin server
 definition is an explicit operator action.
@@ -169,6 +178,24 @@ step rather than starting an empty preview. The fixture code itself ships inside
 each candidate backend image and needs no separate host installation. PR CI also
 smoke-tests migrations and two seed runs in a dedicated `ci_seed` database, apart
 from contract and schema tests.
+
+After upgrading, rerun the successful lifecycle deployment job. State now records
+`seeded_version` only after seeding and application startup both succeed. A preview
+marked successful by an older controller without that marker can rerun the same CI
+run to add its missing examples; an older CI run still cannot replace a newer
+deployment. Failed seeds retain the previous running configuration and marker.
+Workflow logs explicitly announce seed start and completion before application
+startup.
+
+For an existing empty preview needing immediate recovery while an operator upgrade
+is pending, run the already deployed image's additive seeder as its normal user:
+
+```sh
+docker exec --user 10001:10001 people-gator-pr-5-backend-1 python -m people_gator_api.cli.seed
+```
+
+Use the actual PR number in the container name. This preserves existing database
+records and media; it does not substitute for installing the reviewed host files.
 
 ## pgAdmin access
 

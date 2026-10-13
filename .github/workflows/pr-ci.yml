@@ -101,6 +101,7 @@ jobs:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           python3 deploy/preview/tests/test_preview.py -v
+          python3 deploy/preview/tests/test_installation.py -v
           python3 deploy/preview/tests/test_observability.py -v
 
   images:
