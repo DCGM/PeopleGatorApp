@@ -11,6 +11,18 @@ Application tests and image builds use the PR's exact head commit. The preview
 controller suite is checked out separately from the workflow's commit, so PR
 branches created before `deploy/preview` was added can still run those checks.
 
+CI keeps npm's package cache under the runner's tool-cache directory at
+`people-gator/npm`, outside the checkout. Installs prefer cached packages and
+download only missing data instead of restoring a GitHub Actions cache archive.
+Image builds also use local BuildKit state, with a stable builder name for each
+repository, runner, and component. The builder container is removed after the
+job while its cache volume is retained for the next build. The frontend Docker
+build keeps downloaded npm packages in a BuildKit cache mount across lockfile
+changes. No image build cache is uploaded to or downloaded from GitHub Actions.
+The first build on each runner is cold; cache reuse requires retaining that
+runner's tool-cache directory and Docker volumes. Builds on other runners or
+fresh disposable machines start with their own caches.
+
 The preview host runs an installed controller through a self-hosted Actions
 runner. A successful `PR CI` run triggers deployment at
 `https://pr-123.preview.peoplegator.dev`. The controller queries GitHub to verify
@@ -49,6 +61,15 @@ Traefik instance on Docker network `web`, with entrypoint `websecure` and resolv
 `tlschallenge`, plus an OTLP HTTP backend on Docker network `logging` (both names
 are configurable). Builds currently target `linux/amd64`. For rootless Docker, use
 the same user/socket for the runner, controller and Traefik.
+
+Configure the deployment runner account's Docker context before starting the
+runner service (`docker context use rootless` for rootless Docker), or set
+`DOCKER_HOST=unix:///run/user/<uid>/docker.sock` in the service environment. Check
+`docker info` as that account. The deployment workflow preserves the selected
+context when creating its temporary registry configuration; that directory is
+removed after the job. An empty `DOCKER_CONFIG` otherwise hides the rootless
+context and makes Docker fall back to `/var/run/docker.sock`. See
+[Docker's rootless client configuration](https://docs.docker.com/engine/security/rootless/tips/#client).
 
 1. Point wildcard DNS `*.preview.peoplegator.dev` to the Traefik host. The existing
    `tlschallenge` resolver can issue certificates for individual PR hosts. If

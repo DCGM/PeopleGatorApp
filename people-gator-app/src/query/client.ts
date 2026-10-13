@@ -76,8 +76,11 @@ export async function getAccessToken() {
   return pendingToken
 }
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://dev.people-gator.capturemyhand.com'
+
 client.setConfig({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://dev.people-gator.capturemyhand.com',
+  // SDK endpoint paths start with '/'; a root base must be empty to avoid '//host' URLs.
+  baseURL: apiBaseUrl.replace(/\/+$/, ''),
   auth: getAccessToken,
   throwOnError: true,
 })
