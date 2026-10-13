@@ -36,6 +36,7 @@ add login accounts or usable API-key secrets.
 
 | Scenario | Example |
 | --- | --- |
+| Mobile filtering | Open the printed mobile-filters link on a narrow viewport; only search and the sliders toggle show until expanded |
 | Identity editing and aliases | Ada Novak, alias A. Novak; six people in total |
 | Faces and mentions together | Ada Novak across Portrait album and Research notes |
 | Faces only | Emil Dvorak and the A. Novak duplicate candidate |
@@ -51,7 +52,12 @@ add login accounts or usable API-key secrets.
 | Processing filters and details | Reviewer activity without an API key, face-importer and OCR-linker attribution with different registered keys |
 
 Open the people search page and try the assignment, document, user and API-key
-filters. In a person's detail view, expand Last processed in the stats sidebar.
+filters. The CLI also prints a `mobile-filters` URL combining a Novak search with
+assignment, document, user and API-key filters. On screens narrower than 640px,
+all filter controls and chips are collapsed by default behind the search row's
+sliders button. Opening it reveals every filter; X collapses it without clearing
+the query. Desktop keeps Assignment and Document visible, with additional filters
+expandable separately. In a person's detail view, expand Last processed in the stats sidebar.
 Edit a profile or assign a face to see processing attribution change. The two
 synthetic API-key registry entries demonstrate historical filtering and attribution;
 they cannot authenticate requests because no secret configuration is installed.

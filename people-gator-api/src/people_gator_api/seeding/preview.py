@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import math
 from uuid import UUID
+from urllib.parse import urlencode
 
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, ConfigDict, Field
@@ -57,6 +58,7 @@ class SeedResult(BaseModel):
     mentions: dict[str, UUID]
     users: dict[str, UUID]
     api_keys: dict[str, UUID]
+    filter_examples: dict[str, str]
 
 
 def example_vector(group: int, key: str, dimension: int) -> list[float]:
@@ -310,4 +312,16 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         mentions=active_mentions,
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
+        filter_examples={
+            "mobile-filters": "/people?"
+            + urlencode(
+                {
+                    "q": "Novak",
+                    "assignment": "faces",
+                    "document": documents["album"],
+                    "touched_by": actors["importer"].user_id,
+                    "api_key": registered_keys["importer"],
+                }
+            ),
+        },
     )

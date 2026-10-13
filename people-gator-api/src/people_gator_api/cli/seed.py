@@ -21,6 +21,8 @@ async def seed_database() -> None:
             base_url = settings.jwk.issuer.rstrip("/")
             for key, entity_id in result.entities.items():
                 print(f"{key}: {base_url}/people/{entity_id}")
+            for key, relative_url in result.filter_examples.items():
+                print(f"{key}: {base_url}{relative_url}")
             for page in PAGES:
                 document = next(item for item in DOCUMENTS if item.key == page.document)
                 print(

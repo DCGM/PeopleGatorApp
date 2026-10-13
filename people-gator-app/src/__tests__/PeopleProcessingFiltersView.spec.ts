@@ -1,12 +1,22 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { computed, ref, type Ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   processingFilterError,
+  readPeopleFilters,
   utcToLocalTime,
   type PeopleProcessingFilters,
 } from '@/viewmodels/people-filters'
+
+const desktopViewport = ref(true)
+vi.mock('@vueuse/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@vueuse/core')>()),
+  useMediaQuery: () => desktopViewport,
+}))
+beforeEach(() => {
+  desktopViewport.value = true
+})
 
 vi.mock('@/query/people-filter-options', () => ({
   usePeopleFilterOptions: (kind: string) => ({
@@ -19,8 +29,8 @@ vi.mock('@/query/people-filter-options', () => ({
     error: ref(null),
     hasMore: ref(false),
     isLoadingMore: ref(false),
-    loadMore: vi.fn(),
-    retry: vi.fn(),
+    loadMore: vi.fn<() => void>(),
+    retry: vi.fn<() => void>(),
   }),
 }))
 vi.mock('@/viewmodels/people-search', () => ({
@@ -35,7 +45,7 @@ vi.mock('@/viewmodels/people-search', () => ({
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
     isLoading: ref(false),
-    loadMore: vi.fn(),
+    loadMore: vi.fn<() => void>(),
     people: ref([]),
     resultCount: ref(0),
   }),
@@ -56,7 +66,7 @@ beforeAll(() => {
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
     setTimeout(() => callback(0), 0),
   )
-  HTMLElement.prototype.scrollIntoView = vi.fn()
+  HTMLElement.prototype.scrollIntoView = vi.fn<() => void>()
 })
 afterEach(() => {
   document.body.innerHTML = ''
@@ -79,6 +89,55 @@ async function mountedView(query: Record<string, string | string[]> = {}) {
 }
 
 describe('people filter controls and URL restoration', () => {
+  it('shows only search on mobile and preserves filters when opening, closing and resizing', async () => {
+    desktopViewport.value = false
+    const { wrapper, router } = await mountedView({
+      q: 'Novak',
+      assignment: 'faces',
+      document: 'document-1',
+      touched_by: 'user-1',
+      api_key: 'api-key-1',
+    })
+    const search = wrapper.get<HTMLInputElement>('input[aria-label="Search people"]')
+    const originalQuery = { ...router.currentRoute.value.query }
+    expect(search.element.value).toBe('Novak')
+    expect(wrapper.find('[aria-label="People filters"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
+    const toggle = wrapper.get('button[aria-label="Show filters (4 active)"]')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
+    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="API keys"]').exists()).toBe(true)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
+    expect(toggle.find('svg.lucide-x').exists()).toBe(true)
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[aria-label="People filters"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
+    expect(router.currentRoute.value.query).toEqual(originalQuery)
+    await search.setValue('Ada')
+    await flushPromises()
+    expect(router.currentRoute.value.query.q).toBe('Ada')
+    expect(router.currentRoute.value.query.assignment).toBe(originalQuery.assignment)
+    expect(readPeopleFilters(router.currentRoute.value.query)).toEqual(
+      readPeopleFilters(originalQuery),
+    )
+    desktopViewport.value = true
+    await flushPromises()
+    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(false)
+    desktopViewport.value = false
+    await flushPromises()
+    expect(wrapper.find('[aria-label="People filters"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('restores every filter, supports individual removal and clearing all filters', async () => {
     const { wrapper, router } = await mountedView({
       q: 'Ada',

@@ -3,6 +3,7 @@
 import io
 import os
 import uuid
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import pytest_asyncio
@@ -117,6 +118,26 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     assert len(result.documents) == 3 and len(result.pages) == 6
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
+    demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
+    assert demo["document"] == [str(result.documents["album"])]
+    assert demo["touched_by"] == [str(result.users["importer"])]
+    assert demo["api_key"] == [str(result.api_keys["importer"])]
+    matching = await database.entities.search(
+        SearchEntitiesRequest(
+            limit=100,
+            query=QueryBase(text=demo["q"]),
+            filter_=EntityListFilter(
+                has_detections=True,
+                document_source_id=[result.documents["album"]],
+                last_touched_by_user_id=[result.users["importer"]],
+                last_touched_by_api_key_id=[result.api_keys["importer"]],
+            ),
+        )
+    )
+    assert {item.entity_id for item in matching.items} == {
+        result.entities["ada"],
+        result.entities["ada-candidate"],
+    }
 
     ada = await database.entities.get(result.entities["ada"])
     nora = await database.entities.get(result.entities["nora"])
