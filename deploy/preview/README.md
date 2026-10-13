@@ -7,6 +7,10 @@ production Dockerfiles and push frontend/backend images to GHCR. Images have a
 tag unique to the workflow run and attempt, plus the tested commit's revision
 label.
 
+Application tests and image builds use the PR's exact head commit. The preview
+controller suite is checked out separately from the workflow's commit, so PR
+branches created before `deploy/preview` was added can still run those checks.
+
 The preview host runs an installed controller through a self-hosted Actions
 runner. A successful `PR CI` run triggers deployment at
 `https://pr-123.preview.peoplegator.dev`. The controller queries GitHub to verify
@@ -214,6 +218,11 @@ state. It leaves cached Docker images and GHCR packages available for debugging;
 configure GHCR retention and periodically remove unused host images as needed.
 
 ## Validation
+
+After changing CI, trigger a new PR run with the updated workflow. Re-running
+an older run keeps its original commit and workflow; it does not pick up changes
+pushed to `main`. Update the PR branch from `main` when it needs the new workflow.
+See [GitHub's rerun documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).
 
 ```sh
 python3 deploy/preview/tests/test_preview.py -v

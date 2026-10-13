@@ -72,7 +72,18 @@ jobs:
         run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema'
       - run: uv run --locked pytest tests
         working-directory: people-gator-api
+      # Older PR heads may not contain the controller suite added with this workflow.
+      # Keep application checks/builds pinned to the PR head and fetch this suite
+      # from the exact workflow commit into a separate checkout.
+      - name: Check out preview controller tests from workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .preview-controller-ci
+          sparse-checkout: deploy/preview
+          persist-credentials: false
       - name: Test preview controller
+        working-directory: .preview-controller-ci
         env:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
