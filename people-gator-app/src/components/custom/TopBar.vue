@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileText, User } from '@lucide/vue'
+import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
 
@@ -25,6 +25,13 @@ const breadcrumbs = computed(() => {
       to: { name: 'document-search' } as RouteLocationRaw,
     },
   ]
+  if (route.name === 'document-list') {
+    items.push({ label: 'Documents', to: { name: 'document-list' } })
+    if (typeof library === 'string') {
+      items.push({ label: library, to: { name: 'document-list', query: { library } } })
+    }
+    return items
+  }
   if (typeof library === 'string') {
     items.push({ label: library, to: { name: 'document-search', query: { library } } })
     if (typeof document === 'string') {
@@ -48,9 +55,21 @@ const breadcrumbs = computed(() => {
   return items
 })
 
-const isDocumentRoute = computed(
+const isScanRoute = computed(
   () => route.name === 'document-search' || route.name === 'document-page',
 )
+const scansLink = computed(() => ({
+  name: 'document-search',
+  query: {
+    ...Object.fromEntries(
+      ['library', 'document', 'q', 'assignment'].flatMap((key) =>
+        typeof route.query[key] === 'string' ? [[key, route.query[key]]] : [],
+      ),
+    ),
+    ...(typeof route.params.libraryId === 'string' && { library: route.params.libraryId }),
+    ...(typeof route.params.documentId === 'string' && { document: route.params.documentId }),
+  },
+}))
 const isPeopleRoute = computed(
   () => route.name === 'people-search' || route.name === 'person-detail',
 )
@@ -105,11 +124,32 @@ const isPeopleRoute = computed(
     <div class="flex shrink-0 items-center gap-3 sm:gap-6">
       <slot name="navigation">
         <RouterLink
-          :to="{ name: 'document-search' }"
-          aria-label="Documents"
+          :to="scansLink"
+          aria-label="Scans"
+          :aria-current="isScanRoute ? 'page' : undefined"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
           :class="
-            isDocumentRoute
+            isScanRoute
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          "
+        >
+          <span class="flex items-center gap-2">
+            <Scan class="size-[1em]" />
+            <span class="hidden 2xl:inline">Scans</span>
+          </span>
+        </RouterLink>
+
+        <RouterLink
+          :to="{
+            name: 'document-list',
+            query: typeof route.query.library === 'string' ? { library: route.query.library } : {},
+          }"
+          aria-label="Documents"
+          :aria-current="route.name === 'document-list' ? 'page' : undefined"
+          class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
+          :class="
+            route.name === 'document-list'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
           "

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import DocumentPageView from '@/views/DocumentPageView.vue'
 import DocumentSearchView from '@/views/DocumentSearchView.vue'
+import DocumentListView from '@/views/DocumentListView.vue'
 import PeopleSearchView from '@/views/PeopleSearchView.vue'
 import PersonDetailView from '@/views/PersonDetailView.vue'
 
@@ -10,10 +11,16 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: { name: 'document-search' } },
     {
-      path: '/documents',
+      path: '/scans',
       name: 'document-search',
       component: DocumentSearchView,
-      meta: { title: 'Document search' },
+      meta: { title: 'Scan search' },
+    },
+    {
+      path: '/documents',
+      name: 'document-list',
+      component: DocumentListView,
+      meta: { title: 'Documents' },
     },
     {
       path: '/people',

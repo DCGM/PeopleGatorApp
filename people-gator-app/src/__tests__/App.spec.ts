@@ -149,8 +149,8 @@ describe('App', () => {
       'document',
       'Page page',
     ])
-    expect(crumbs[0]!.attributes('href')).toBe('/documents')
-    expect(crumbs[1]!.attributes('href')).toBe('/documents?library=library')
+    expect(crumbs[0]!.attributes('href')).toBe('/scans')
+    expect(crumbs[1]!.attributes('href')).toBe('/scans?library=library')
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
     await flushPromises()
@@ -358,7 +358,7 @@ describe('App', () => {
   })
 
   it('removes page-number navigation from document search', async () => {
-    await router.push('/documents?q=history&page=2')
+    await router.push('/scans?q=history&page=2')
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
 
     expect(wrapper.find('[data-slot="pagination"]').exists()).toBe(false)
@@ -371,7 +371,8 @@ describe('App', () => {
   })
 
   it('defines all application pages', () => {
-    expect(router.resolve({ name: 'document-search' }).path).toBe('/documents')
+    expect(router.resolve({ name: 'document-search' }).path).toBe('/scans')
+    expect(router.resolve({ name: 'document-list' }).path).toBe('/documents')
     expect(router.resolve({ name: 'people-search' }).path).toBe('/people')
     expect(
       router.resolve({
@@ -382,5 +383,39 @@ describe('App', () => {
     expect(router.resolve({ name: 'person-detail', params: { personId: 'person' } }).path).toBe(
       '/people/person',
     )
+  })
+})
+
+describe('Scans and Documents navigation', () => {
+  it('activates independent tabs and keeps scan query filters', async () => {
+    await router.push('/scans?library=mzk&document=album&q=Ada&assignment=faces')
+    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBeUndefined()
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('assignment=faces')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('q=Ada')
+    await router.push('/documents?library=mzk')
+    expect(document.title).toBe('Documents | People Gator')
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBeUndefined()
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans?library=mzk')
+    expect(
+      wrapper
+        .get('[aria-label="Breadcrumb"]')
+        .findAll('a')
+        .map((node) => node.text()),
+    ).toEqual(['PeopleGator', 'Documents', 'mzk'])
+    await router.push('/libraries/mzk/documents/album/pages/scan')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
+      '/scans?library=mzk&document=album',
+    )
+    wrapper.unmount()
+  })
+
+  it('keeps the default landing route on Scans', async () => {
+    await router.push('/')
+    expect(router.currentRoute.value.path).toBe('/scans')
+    expect(document.title).toBe('Scan search | People Gator')
   })
 })
