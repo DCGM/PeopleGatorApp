@@ -561,11 +561,12 @@ async def _delete_annotations(client, name, ids, context):
 
 async def _document_scope(client, documents):
     """Internal source IDs, including direct document annotations."""
-    ids = set(documents)
+    ids = set()
     for document_id in documents:
         stored = await _get(client, SOURCE_COLLECTION, document_id)
         if stored is None or stored.properties.get("source_type") != "document":
             continue
+        ids.add(document_id)
         p = stored.properties
         filters = Filter.all_of(
             [

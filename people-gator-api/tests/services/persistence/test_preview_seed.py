@@ -947,6 +947,16 @@ async def test_document_scope_and_indexed_aggregates_with_larger_fixture(seed_ta
         )
     )
     assert unrelated.items == []
+    page_is_not_document = await db.entities.list(
+        EntityListRequest(
+            limit=100,
+            filter_=EntityListFilter(
+                document_source_id=[seed.pages["links-2"]],
+                entity_link_state=["verified"],
+            ),
+        )
+    )
+    assert page_is_not_document.items == []
     direct_match = await db.entities.list(
         EntityListRequest(
             limit=100,

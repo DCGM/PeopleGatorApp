@@ -24,7 +24,10 @@ def source_scope():
 
 def document_sources(ids):
     scope = source_scope()
-    return select(scope.c.source_id).where(scope.c.owner_id.in_(ids))
+    document = Document.__table__
+    return select(scope.c.source_id).where(
+        scope.c.owner_id.in_(select(document.c.id).where(document.c.id.in_(ids)))
+    )
 
 
 def evidence_predicate(filter_values, *, entity=False):
