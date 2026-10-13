@@ -30,6 +30,7 @@ from people_gator_api.schemas.users import (
 )
 from people_gator_api.persistence.postgres.models import (
     Entity,
+    APIKey,
     Face,
     User,
 )
@@ -136,6 +137,8 @@ class PostgresUserRepository(UserRepository):
             select(
                 or_(
                     exists().where(Entity.user_id.in_(unique)),
+                    exists().where(Entity.last_touched_by_user_id.in_(unique)),
+                    exists().where(APIKey.user_id.in_(unique)),
                     exists().where(Face.user_id.in_(unique)),
                 )
             )

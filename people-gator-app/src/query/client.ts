@@ -1,8 +1,4 @@
-import {
-  getTokenTokenLoginPost,
-  refreshTokenTokenRefreshPost,
-  type TokenResponse,
-} from '@/client'
+import { getTokenTokenLoginPost, refreshTokenTokenRefreshPost, type TokenResponse } from '@/client'
 import { client } from '@/client/client.gen'
 
 const accessTokenKey = 'people-gator.access-token'
@@ -81,7 +77,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://dev.people-gato
 client.setConfig({
   // SDK endpoint paths start with '/'; a root base must be empty to avoid '//host' URLs.
   baseURL: apiBaseUrl.replace(/\/+$/, ''),
-  auth: getAccessToken,
+  auth: (scheme) => (scheme.scheme === 'bearer' ? getAccessToken() : undefined),
   throwOnError: true,
 })
 

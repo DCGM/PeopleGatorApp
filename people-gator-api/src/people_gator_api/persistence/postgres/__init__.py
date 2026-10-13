@@ -7,6 +7,7 @@ from .face_repository import PostgresFaceRepository
 from .face_model_repository import PostgresFaceModelRepository
 from .text_mention_repository import PostgresTextMentionRepository
 from .user_repository import PostgresUserRepository
+from .api_key_repository import PostgresAPIKeyRepository
 
 def postgres_database(session: AsyncSession) -> Database:
     """Bind all repositories to one request-scoped SQLAlchemy session."""
@@ -17,6 +18,7 @@ def postgres_database(session: AsyncSession) -> Database:
         face_models=PostgresFaceModelRepository(session),
         text_mentions=PostgresTextMentionRepository(session),
         users=PostgresUserRepository(session),
+        api_keys=PostgresAPIKeyRepository(session),
     )
 
 

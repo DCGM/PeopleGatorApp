@@ -6,6 +6,7 @@ convention: search inputs use ``query.<field>``, filters use
 """
 
 import uuid
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import Depends, Query
@@ -53,9 +54,12 @@ def _filter[T: ListFilterBase](
     **values: object,
 ) -> T:
     """Build a filter without turning absent query parameters into nulls."""
-    return model.model_validate(
-        {name: value for name, value in values.items() if value is not None}
-    )
+    try:
+        return model.model_validate(
+            {name: value for name, value in values.items() if value is not None}
+        )
+    except ValueError as exc:
+        raise_api_error(422, "invalid_filter", str(exc))
 
 
 def list_request_dependency(
@@ -197,11 +201,22 @@ def entity_list_filter_dependency(
         bool | None,
         _model_parameter(EntityListFilter, "has_detections", "filter"),
     ] = None,
+    last_touched_from: Annotated[datetime | None, _model_parameter(EntityListFilter, "last_touched_from", "filter")] = None,
+    last_touched_to: Annotated[datetime | None, _model_parameter(EntityListFilter, "last_touched_to", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "document_source_id", "filter")] = None,
+    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "last_touched_by_user_id", "filter")] = None,
+    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> EntityListFilter:
     return _filter(
         EntityListFilter,
         entity_id=entity_id,
         entity_type=entity_type,
+        last_touched_from=last_touched_from,
+        last_touched_to=last_touched_to,
+        document_source_id=document_source_id,
+        last_touched_by_user_id=last_touched_by_user_id,
+        last_touched_by_api_key_id=last_touched_by_api_key_id,
+
         wikidata_id=wikidata_id,
         nlcr_authority_id=nlcr_authority_id,
         source_id=source_id,

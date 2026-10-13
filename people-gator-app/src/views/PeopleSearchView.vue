@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { UserRound } from '@lucide/vue'
 
@@ -9,6 +9,7 @@ import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/viewmodels/people-search'
+import { readPeopleFilters, peopleFiltersUrl } from '@/viewmodels/people-filters'
 import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
 
 const route = useRoute()
@@ -18,18 +19,40 @@ const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const assignment = ref(normalizeAssignmentFilter(route.query.assignment ?? route.query.filters))
 
-const { error, hasNextPage, isFetchingNextPage, isLoading, loadMore, people, resultCount } =
-  usePeopleSearch(searchTerm, assignment, resultsPerPage)
+const processingFilters = ref(readPeopleFilters(route.query))
+
+const {
+  error,
+  filterError,
+  hasNextPage,
+  isFetchingNextPage,
+  isLoading,
+  loadMore,
+  people,
+  resultCount,
+} = usePeopleSearch(searchTerm, assignment, resultsPerPage, processingFilters)
 
 function updateSearch() {
   void router.replace({
     name: 'people-search',
     query: {
+      ...peopleFiltersUrl(processingFilters.value),
       ...(searchTerm.value && { q: searchTerm.value }),
       ...(assignment.value !== 'all' && { assignment: assignment.value }),
     },
   })
 }
+watch([searchTerm, assignment, processingFilters], updateSearch, { deep: true })
+watch(
+  () => route.query,
+  (query) => {
+    searchTerm.value = typeof query.q === 'string' ? query.q : ''
+    assignment.value = normalizeAssignmentFilter(query.assignment ?? query.filters)
+    const restored = readPeopleFilters(query)
+    if (JSON.stringify(restored) !== JSON.stringify(processingFilters.value))
+      processingFilters.value = restored
+  },
+)
 </script>
 
 <template>
@@ -42,10 +65,9 @@ function updateSearch() {
     <PeopleSearchBar
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
+      v-model:processing-filters="processingFilters"
+      :filter-error="filterError"
       :result-count="resultCount"
-      :has-more-results="hasNextPage"
-      @update:search-term="updateSearch()"
-      @update:assignment="updateSearch()"
     />
 
     <section class="stable-search-results pt-6" aria-live="polite">

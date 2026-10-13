@@ -35,17 +35,22 @@ All previews share **one PostgreSQL 16/pgvector container**. PR 123 receives
 database `preview_pr_123` and login `preview_pr_123`, with a random password and
 no cluster administration privileges. Other PR roles cannot connect to its database.
 Extensions are installed by the controller; Alembic migrations run from the
-backend image using the PR login before the API starts in validation mode.
+backend image using the PR login. The controller then runs the same image's
+`seed` command before the API starts in validation mode. A seed failure blocks
+candidate startup. The repeatable seed uses persistence interfaces to add
+synthetic identities, linked face vectors, documents/pages, OCR mentions and local
+media; see [preview seeding](../../people-gator-api/docs/preview-seeding.md).
 Updating a preview retains its database, password, media storage and JWT keys.
 GitHub CI uses one separate, temporary pgvector service per backend test run,
-with two databases on that service for contract and migration tests.
+with separate databases on that service for contract tests, migration tests and
+seed CLI smoke checks.
 
-All PR containers (`frontend`, `backend`, `migrate`, and `storage-init`) send
+All PR containers (`frontend`, `backend`, `migrate`, `seed`, and `storage-init`) send
 stdout/stderr through Docker's Fluentd driver to a shared OpenTelemetry Collector.
 The collector exports OTLP HTTP logs to the existing LGTM backend, with PR number,
 commit SHA, service name, container ID, and stdout/stderr metadata. This also
-captures frontend access/error logs and migration output without application SDK
-changes. The collector and a persistent pgAdmin instance belong to the shared
+captures frontend access/error logs, migration output and seed output without
+application SDK changes. The collector and a persistent pgAdmin instance belong to the shared
 infrastructure project, so closing a PR leaves them running.
 
 Closing or merging a PR removes its Compose project and storage volume, forcibly
@@ -99,8 +104,8 @@ context and makes Docker fall back to `/var/run/docker.sock`. See
    `24224`; change it if another host collector already uses that port.
    Config/controller/Compose files should be owned by the
    operator; state belongs to the runner. The supplied users file provides the
-   frontend's current `test` / `test` demo login. Preview databases start empty;
-   no production data is copied. The frontend currently automatically logs into
+   frontend's current `test` / `test` demo login. Preview databases start with
+   synthetic seed examples; no production data is copied. The frontend currently automatically logs into
    this demo account, so the public preview is writable demo data.
 3. As the runner account, initialize the shared infrastructure:
 
@@ -156,6 +161,14 @@ above to the existing `config.json`, and rerun `init`. Keep the existing config
 and state files. New preview deployments receive logging automatically; existing
 containers pick up the new logging driver when recreated by the next successful
 PR CI run. Reconciliation only handles cleanup and does not recreate open previews.
+
+For the seeding rollout, install both the updated `preview.py` and `compose.pr.yaml`
+from a reviewed default-branch checkout. Deploy backend images that include the
+`seed` entrypoint command; older images without that command will fail the seed
+step rather than starting an empty preview. The fixture code itself ships inside
+each candidate backend image and needs no separate host installation. PR CI also
+smoke-tests migrations and two seed runs in a dedicated `ci_seed` database, apart
+from contract and schema tests.
 
 ## pgAdmin access
 

@@ -60,6 +60,8 @@ class UserResponse(GenericActor):
 class UserListFilter(ListFilterBase):
     """Filter schema for listing users."""
 
+    search: str | MissingType = Field(default=MISSING, description="Case-insensitive display name or user ID substring.")
+
     display_name: list[str] | MissingType = Field(
         default=MISSING,
         description="Filter by the display name of the user."

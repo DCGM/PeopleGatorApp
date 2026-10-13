@@ -18,10 +18,10 @@ from people_gator_api.routes.v1.query_dependencies import (
     TextMentionListFilterDependency,
 )
 from people_gator_api.services.auth_service import (
-    AdminUserDependency,
-    AnnotatorUserDependency,
-    BrowseUserDependency,
-    DataIngestUserDependency,
+    AdminActorDependency,
+    AnnotatorActorDependency,
+    BrowseActorDependency,
+    DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
@@ -33,7 +33,7 @@ router = APIRouter(tags=["text mentions"])
 @router.get("/text-mentions", response_model=TextMentionListResponse)
 async def list_text_mentions_route(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     filter: TextMentionListFilterDependency,
     list_request: ListRequestDependency,
 ) -> TextMentionListResponse:
@@ -59,7 +59,7 @@ async def list_text_mentions_route(
 async def create_text_mention_route(
     payload: TextMentionCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> TextMentionResponse:
     try:
         return await database.text_mentions.create(payload, user)
@@ -75,7 +75,7 @@ async def create_text_mention_route(
 async def create_text_mention_batch_route(
     payload: TextMentionsBatchCreateRequest,
     database: DatabaseDependency,
-    user: DataIngestUserDependency,
+    user: DataIngestActorDependency,
 ) -> list[TextMentionResponse]:
     try:
         return await database.text_mentions.create_batch(payload, user)
@@ -90,7 +90,7 @@ async def create_text_mention_batch_route(
 async def patch_text_mention_batch_route(
     payload: TextMentionsBatchPatchRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> list[TextMentionResponse | None]:
     try:
         return await database.text_mentions.patch_batch(payload, user)
@@ -102,10 +102,9 @@ async def patch_text_mention_batch_route(
 async def delete_text_mention_batch_route(
     mention_id: list[uuid.UUID],
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> int:
-    del user
-    return await database.text_mentions.delete_batch(mention_id)
+    return await database.text_mentions.delete_batch(mention_id, context=user)
 
 
 @router.get(
@@ -115,7 +114,7 @@ async def delete_text_mention_batch_route(
 async def get_text_mention_route(
     mention_id: uuid.UUID,
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> TextMentionResponse:
     del user
     mention = await database.text_mentions.get(mention_id)
@@ -132,7 +131,7 @@ async def patch_text_mention_route(
     mention_id: uuid.UUID,
     payload: TextMentionPatchRequest,
     database: DatabaseDependency,
-    user: AnnotatorUserDependency,
+    user: AnnotatorActorDependency,
 ) -> TextMentionResponse:
     try:
         mention = await database.text_mentions.patch(mention_id, payload, user)
@@ -150,8 +149,7 @@ async def patch_text_mention_route(
 async def delete_text_mention_route(
     mention_id: uuid.UUID,
     database: DatabaseDependency,
-    user: AdminUserDependency,
+    user: AdminActorDependency,
 ) -> None:
-    del user
-    if not await database.text_mentions.delete(mention_id):
+    if not await database.text_mentions.delete(mention_id, context=user):
         raise_api_error(404, "not_found", "Text mention not found")

@@ -46,6 +46,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 from sqlalchemy import (
     ColumnElement,
+    String,
     cast,
     column,
     exists,
@@ -594,6 +595,9 @@ def entity_response(entity: Entity) -> EntityResponse:
     return EntityResponse(
         entity_id=entity.id,
         user_id=entity.user_id,
+        last_touched_at=entity.last_touched_at,
+        last_touched_by_user_id=entity.last_touched_by_user_id,
+        last_touched_by_api_key_id=entity.last_touched_by_api_key_id,
         entity_type=EntityType(entity.kind),
         name=entity.name,
         description=entity.description,
@@ -672,6 +676,33 @@ def entity_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
+    touched_from = missing_to_none(filter_values.last_touched_from)
+    touched_to = missing_to_none(filter_values.last_touched_to)
+    if touched_from is not None:
+        filters.append(Entity.last_touched_at >= touched_from)
+    if touched_to is not None:
+        filters.append(Entity.last_touched_at <= touched_to)
+    for name in ("last_touched_by_user_id", "last_touched_by_api_key_id"):
+        ids = missing_to_none(getattr(filter_values, name))
+        if ids is not None:
+            filters.append(getattr(Entity, name).in_(ids))
+    document_ids = missing_to_none(filter_values.document_source_id)
+    if document_ids is not None:
+        # Use table aliases to avoid joined-inheritance Source alias collisions.
+        document = Document.__table__.alias("selected_document")
+        page = Page.__table__.alias("document_page")
+        page_ids = select(page.c.id).join(document,
+            (page.c.library == document.c.library) & (page.c.document_id == document.c.document_id)
+        ).where(document.c.id.in_(document_ids))
+        linked_ids = union_all(
+            select(ImageOccurrence.entity_id).where(
+                ImageOccurrence.source_id.in_(page_ids),
+                ImageOccurrence.occurrence_type == "face",
+                ImageOccurrence.entity_id.is_not(None)),
+            select(TextMention.entity_id).where(
+                TextMention.source_id.in_(page_ids), TextMention.entity_id.is_not(None)),
+        )
+        filters.append(Entity.id.in_(linked_ids))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Entity.id.in_(entity_ids))
@@ -771,6 +802,12 @@ def user_filters(filter_: UserListFilter | MissingType) -> list[ColumnElement[bo
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
+    search = missing_to_none(filter_values.search)
+    if search:
+        filters.append(or_(
+            User.display_name.icontains(search, autoescape=True),
+            cast(User.id, String).icontains(search, autoescape=True),
+        ))
     display_names = missing_to_none(filter_values.display_name)
     if display_names is not None:
         filters.append(User.display_name.in_(display_names))

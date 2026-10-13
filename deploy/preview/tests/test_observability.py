@@ -49,7 +49,7 @@ HTTPServer(('0.0.0.0', 4318), Sink).serve_forever()
                         "otel/opentelemetry-collector-contrib:0.162.0", "--config=/etc/otelcol/preview.yaml")
             inspected = json.loads(self.docker("inspect", collector))[0]
             port = inspected["NetworkSettings"]["Ports"]["24224/tcp"][0]["HostPort"]
-            for service in ("frontend", "backend", "migrate", "storage-init"):
+            for service in ("frontend", "backend", "migrate", "seed", "storage-init"):
                 self.docker("run", "--rm", "--network", "none",
                             "--label", "people-gator.preview.pr=123",
                             "--label", "people-gator.preview.sha=" + "a" * 40,
@@ -66,10 +66,10 @@ HTTPServer(('0.0.0.0', 4318), Sink).serve_forever()
             while time.monotonic() < deadline:
                 payload = b"".join(base64.b64decode(line) for line in self.docker("logs", sink).splitlines())
                 if all(f"preview-stderr-{name}".encode() in payload
-                       for name in ("frontend", "backend", "migrate", "storage-init")):
+                       for name in ("frontend", "backend", "migrate", "seed", "storage-init")):
                     break
                 time.sleep(0.25)
-            for service in ("frontend", "backend", "migrate", "storage-init"):
+            for service in ("frontend", "backend", "migrate", "seed", "storage-init"):
                 self.assertIn(f"preview-smoke-{service}".encode(), payload,
                               self.docker("logs", collector))
                 self.assertIn(f"preview-stderr-{service}".encode(), payload)

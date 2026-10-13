@@ -22,6 +22,8 @@ router.include_router(text_mentions_router)
 router.include_router(sources_router)
 router.include_router(media_router)
 router.include_router(users_router)
+from people_gator_api.routes.v1.api_keys import router as api_keys_router
+router.include_router(api_keys_router)
 router.include_router(translation_router)
 router.include_router(root_router)
 

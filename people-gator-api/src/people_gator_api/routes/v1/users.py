@@ -1,11 +1,14 @@
 """Routes for the current user and contract-backed user administration."""
 
 import uuid
+from pydantic import BaseModel
+from people_gator_api.schemas.common import GenericListResponse
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from people_gator_api.schemas.users import (
     UserListRequest,
+    UserListFilter,
     UserListResponse,
     UserPatchRequest,
     UserResponse,
@@ -15,8 +18,9 @@ from people_gator_api.routes.v1.query_dependencies import (
     UserListFilterDependency,
 )
 from people_gator_api.services.auth_service import (
-    AdminUserDependency,
-    AnnotatorUserDependency,
+    AdminActorDependency,
+    BrowseActorDependency,
+    AnnotatorActorDependency,
 )
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
@@ -25,15 +29,36 @@ from people_gator_api.utils.http_errors import raise_api_error
 router = APIRouter(tags=["users"])
 
 
+class UserFilterOption(BaseModel):
+    user_id: uuid.UUID
+    display_name: str
+
+
+@router.get("/user-filter-options", response_model=GenericListResponse[UserFilterOption])
+async def list_user_filter_options_route(
+    database: DatabaseDependency, actor: BrowseActorDependency,
+    list_request: ListRequestDependency,
+    q: str | None = Query(default=None, max_length=256),
+) -> GenericListResponse[UserFilterOption]:
+    try:
+        result = await database.users.list(UserListRequest(**list_request.model_dump(), filter_=UserListFilter(search=q.strip()) if q and q.strip() else UserListFilter()))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
+    return GenericListResponse[UserFilterOption](
+        items=[UserFilterOption(user_id=user.user_id, display_name=user.display_name) for user in result.items],
+        limit=result.limit, total_count=result.total_count, cursor=result.cursor,
+    )
+
+
 @router.get("/me", response_model=UserResponse)
-async def get_me_route(current_user: AnnotatorUserDependency) -> UserResponse:
-    return current_user
+async def get_me_route(current_user: AnnotatorActorDependency) -> UserResponse:
+    return current_user.user
 
 
 @router.get("/users", response_model=UserListResponse)
 async def list_users_route(
     database: DatabaseDependency,
-    current_user: AdminUserDependency,
+    current_user: AdminActorDependency,
     filter: UserListFilterDependency,
     list_request: ListRequestDependency,
 ) -> UserListResponse:
@@ -55,7 +80,7 @@ async def list_users_route(
 async def delete_user_batch_route(
     user_id: list[uuid.UUID],
     database: DatabaseDependency,
-    current_user: AdminUserDependency,
+    current_user: AdminActorDependency,
 ) -> int:
     del current_user
     try:
@@ -68,7 +93,7 @@ async def delete_user_batch_route(
 async def get_user_route(
     user_id: uuid.UUID,
     database: DatabaseDependency,
-    current_user: AdminUserDependency,
+    current_user: AdminActorDependency,
 ) -> UserResponse:
     del current_user
     found_user = await database.users.get(user_id)
@@ -82,7 +107,7 @@ async def patch_user_route(
     user_id: uuid.UUID,
     payload: UserPatchRequest,
     database: DatabaseDependency,
-    current_user: AdminUserDependency,
+    current_user: AdminActorDependency,
 ) -> UserResponse:
     del current_user
     try:
@@ -98,7 +123,7 @@ async def patch_user_route(
 async def delete_user_route(
     user_id: uuid.UUID,
     database: DatabaseDependency,
-    current_user: AdminUserDependency,
+    current_user: AdminActorDependency,
 ) -> None:
     del current_user
     try:

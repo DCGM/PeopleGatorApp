@@ -67,10 +67,22 @@ jobs:
           cache-dependency-glob: people-gator-api/uv.lock
       - run: uv sync --locked --python 3.14
         working-directory: people-gator-api
-      - name: Create disposable schema database on the same CI server
+      - name: Create disposable schema and seed databases on the same CI server
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-        run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema'
+        run: docker exec "$POSTGRES_CONTAINER" psql -U ci -d ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ci_schema' -c 'CREATE DATABASE ci_seed'
+      - name: Smoke-test preview migrations and repeatable seeding
+        working-directory: people-gator-api
+        env:
+          PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ci_seed
+        run: |
+          seed_storage="$(mktemp -d "$RUNNER_TEMP/people-gator-preview-seed.XXXXXX")"
+          trap 'rm -rf -- "$seed_storage"' EXIT
+          export PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT="$seed_storage"
+          uv run --locked python -m people_gator_api.cli.database migrate
+          uv run --locked python -m people_gator_api.cli.seed
+          uv run --locked python -m people_gator_api.cli.seed
+          uv run --locked python -m people_gator_api.cli.database check
       - run: uv run --locked pytest tests
         working-directory: people-gator-api
       # Older PR heads may not contain the controller suite added with this workflow.

@@ -6,7 +6,7 @@ from people_gator_api.schemas.translation import (
     TranslationRequest,
     TranslationResponse,
 )
-from people_gator_api.services.auth_service import BrowseUserDependency
+from people_gator_api.services.auth_service import BrowseActorDependency
 from people_gator_api.utils.http_errors import raise_api_error
 from people_gator_api.services.openrouter_service import (
     OpenRouterError,
@@ -28,7 +28,7 @@ router = APIRouter(tags=["translation"])
 )
 async def translate_route(
     payload: TranslationRequest,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
 ) -> TranslationResponse:
     del user
     openrouter = settings.openrouter

@@ -8,6 +8,7 @@ indexes for each registered face model.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
 import uuid
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy import (
     DDL,
     CheckConstraint,
     Computed,
+    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -94,6 +96,19 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(Text)
 
 
+class APIKey(Base):
+    """Stable, historical key identity; no secret or verification hash."""
+
+    __tablename__ = TABLE_NAME_FORMAT.format("api_keys")
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    identifier: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), nullable=False, index=True
+    )
+
+
 class Entity(Base):
     """A canonical real-world entity."""
 
@@ -117,6 +132,13 @@ class Entity(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), nullable=False, index=True
+    )
+    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True
+    )
+    last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True
     )
     kind: Mapped[str | None] = mapped_column(String(64), index=True)
     name: Mapped[str | None] = mapped_column(Text)

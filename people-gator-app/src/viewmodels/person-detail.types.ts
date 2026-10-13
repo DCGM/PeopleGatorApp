@@ -7,6 +7,14 @@ export type PersonProfile = {
   aliases: string[]
 }
 
+export type PersonProcessingInfo = {
+  touchedAt: string | null
+  userId: string | null
+  userLabel: string | null
+  apiKeyId: string | null
+  apiKeyLabel: string | null
+}
+
 export type PersonIdentifiers = {
   wikidataId: string
   nationalLibraryAuthorityId: string

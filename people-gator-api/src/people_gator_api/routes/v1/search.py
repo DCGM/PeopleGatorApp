@@ -20,7 +20,7 @@ from people_gator_api.schemas.search import (
     SearchPagesRequest,
     SearchPagesResultListResponse,
 )
-from people_gator_api.services.auth_service import BrowseUserDependency
+from people_gator_api.services.auth_service import BrowseActorDependency
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
@@ -31,7 +31,7 @@ router = APIRouter(tags=["search"])
 @router.get("/search-entities", response_model=SearchEntitiesResultListResponse)
 async def search_entities_get(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     query: SearchQueryDependency,
     filter: EntityListFilterDependency,
     list_request: SearchListRequestDependency,
@@ -53,7 +53,7 @@ async def search_entities_get(
 @router.get("/search-faces", response_model=SearchFacesResultListResponse)
 async def search_faces_get(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     query: SearchQueryDependency,
     filter: FaceListFilterDependency,
     list_request: SearchListRequestDependency,
@@ -75,7 +75,7 @@ async def search_faces_get(
 @router.get("/search-pages", response_model=SearchPagesResultListResponse)
 async def search_pages_get(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     query: SearchQueryDependency,
     filter: PageListFilterDependency,
     list_request: SearchListRequestDependency,
@@ -97,7 +97,7 @@ async def search_pages_get(
 @router.get("/search-documents", response_model=SearchDocumentsResultListResponse)
 async def search_documents_get(
     database: DatabaseDependency,
-    user: BrowseUserDependency,
+    user: BrowseActorDependency,
     query: SearchQueryDependency,
     filter: DocumentListFilterDependency,
     list_request: SearchListRequestDependency,

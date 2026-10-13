@@ -311,19 +311,22 @@ watch(
         :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'"
       />
     </div>
-    <dl class="grid content-start gap-3 border-l-0 text-sm md:border-l md:pl-5">
-      <div>
-        <dt class="text-muted-foreground">Face detections</dt>
-        <dd class="font-mono text-lg">{{ props.faceCount }}</dd>
-      </div>
-      <div>
-        <dt class="text-muted-foreground">Document mentions</dt>
-        <dd class="font-mono text-lg">{{ props.mentionCount }}</dd>
-      </div>
-      <div>
-        <dt class="text-muted-foreground">Libraries</dt>
-        <dd class="font-mono text-lg">{{ props.libraryCount }}</dd>
-      </div>
-    </dl>
+    <aside aria-label="Person statistics" class="min-w-0 border-l-0 text-sm md:border-l md:pl-5">
+      <dl class="grid content-start gap-3">
+        <div>
+          <dt class="text-muted-foreground">Face detections</dt>
+          <dd class="font-mono text-lg">{{ props.faceCount }}</dd>
+        </div>
+        <div>
+          <dt class="text-muted-foreground">Document mentions</dt>
+          <dd class="font-mono text-lg">{{ props.mentionCount }}</dd>
+        </div>
+        <div>
+          <dt class="text-muted-foreground">Libraries</dt>
+          <dd class="font-mono text-lg">{{ props.libraryCount }}</dd>
+        </div>
+      </dl>
+      <slot name="statistics" />
+    </aside>
   </section>
 </template>

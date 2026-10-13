@@ -63,19 +63,20 @@ from people_gator_api.persistence.postgres.utils import (
     fuse_scores,
 )
 
+from .touch import touch_values
+
 class PostgresEntityRepository(EntityRepository):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__()
         self._session = session
 
-    async def _load_many(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+    async def _load_many(self, ids: Sequence[uuid.UUID], *, lock: bool = False) -> dict[uuid.UUID, Entity]:
         if not ids:
             return {}
-        rows = await self._session.scalars(
-            select(Entity)
-            .where(Entity.id.in_(ids))
-            .options(selectinload(Entity.aliases))
-        )
+        statement = select(Entity).where(Entity.id.in_(ids)).options(selectinload(Entity.aliases))
+        if lock:
+            statement = statement.order_by(Entity.id).with_for_update()
+        rows = await self._session.scalars(statement)
         return {row.id: row for row in rows.unique().all()}
 
     async def get(self, entity_id: uuid.UUID) -> EntityResponse | None:
@@ -122,9 +123,10 @@ class PostgresEntityRepository(EntityRepository):
         )
 
     @staticmethod
-    def _new(payload: EntityCreateRequest, user_id: uuid.UUID) -> Entity:
+    def _new(payload: EntityCreateRequest, context: GenericActor) -> Entity:
         entity = Entity(
-            user_id=user_id,
+            user_id=context.user_id,
+            **touch_values(context),
             kind=payload.entity_type.value,
             name=payload.name,
             description=missing_to_none(payload.description),
@@ -148,25 +150,25 @@ class PostgresEntityRepository(EntityRepository):
         if not payloads:
             return []
         await ensure_ids(self._session, User, [context.user_id], "actor user")
-        entities = [self._new(payload, context.user_id) for payload in payloads]
+        entities = [self._new(payload, context) for payload in payloads]
         self._session.add_all(entities)
         await commit(self._session, "entity create violates a persistence constraint")
         return [entity_response(entity) for entity in entities]
 
     @staticmethod
-    def _apply(entity: Entity, payload: EntityPatchRequest) -> None:
-        if not is_missing(payload.name):
-            entity.name = payload.name
-        if not is_missing(payload.description):
-            entity.description = payload.description
-        if not is_missing(payload.short_description):
-            entity.short_description = payload.short_description
-        if not is_missing(payload.wikidata_id):
-            entity.wikidata_id = payload.wikidata_id
-        if not is_missing(payload.nlcr_authority_id):
-            entity.nlcr_authority_id = payload.nlcr_authority_id
+    def _apply(entity: Entity, payload: EntityPatchRequest) -> bool:
+        changed = False
+        for name in ("name", "description", "short_description", "wikidata_id", "nlcr_authority_id"):
+            value = getattr(payload, name)
+            if not is_missing(value) and getattr(entity, name) != value:
+                setattr(entity, name, value)
+                changed = True
         if not is_missing(payload.aliases):
-            entity.aliases = [Alias(name=value) for value in payload.aliases]
+            existing = {alias.name: alias for alias in entity.aliases}
+            if set(existing) != set(payload.aliases):
+                entity.aliases = [existing[name] if name in existing else Alias(name=name) for name in payload.aliases]
+                changed = True
+        return changed
 
     async def patch(
         self,
@@ -188,11 +190,13 @@ class PostgresEntityRepository(EntityRepository):
         if not commands:
             return []
         await ensure_ids(self._session, User, [context.user_id], "actor user")
-        entities = await self._load_many(ids)
+        entities = await self._load_many(ids, lock=True)
         for command in commands:
             entity = entities.get(command.entity_id)
             if entity is not None:
-                self._apply(entity, command)
+                if self._apply(entity, command):
+                    for name, value in touch_values(context).items():
+                        setattr(entity, name, value)
         await commit(self._session, "entity patch violates a persistence constraint")
         return [
             entity_response(entity) if (entity := entities.get(item_id)) else None
@@ -208,6 +212,7 @@ class PostgresEntityRepository(EntityRepository):
         target_entity_id: uuid.UUID,
         source_entity_ids: Sequence[uuid.UUID],
         target_patch: EntityMergeTargetPatch | None = None,
+        *, context: GenericActor,
     ) -> EntityMergeBatchResponse | None:
         if not source_entity_ids:
             raise ValueError("source_entity_ids must not be empty")
@@ -235,6 +240,8 @@ class PostgresEntityRepository(EntityRepository):
                 return None
 
             target = entities[target_entity_id]
+            for name, value in touch_values(context).items():
+                setattr(target, name, value)
             if target_patch is not None:
                 if not is_missing(target_patch.description):
                     target.description = target_patch.description
