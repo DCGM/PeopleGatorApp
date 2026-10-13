@@ -40,8 +40,24 @@ jobs:
       # Never check out PR code on this persistent host. The controller and Compose
       # files are installed by an operator from the trusted default branch.
       - name: Use temporary registry credentials
+        id: registry-config
         if: github.event_name == 'workflow_run'
-        run: echo "DOCKER_CONFIG=$RUNNER_TEMP/people-gator-preview-docker" >> "$GITHUB_ENV"
+        run: |
+          preview_context="$(docker context show)"
+          registry_config="$(mktemp -d "$RUNNER_TEMP/people-gator-preview-docker.XXXXXX")"
+          echo "path=$registry_config" >> "$GITHUB_OUTPUT"
+          # Registry credentials and daemon contexts both live under DOCKER_CONFIG.
+          # Preserve only the selected context, without copying existing logins.
+          if [ "$preview_context" != default ]; then
+            docker context export "$preview_context" "$registry_config/context.dockercontext"
+            DOCKER_CONFIG="$registry_config" docker context import "$preview_context" "$registry_config/context.dockercontext"
+            rm -- "$registry_config/context.dockercontext"
+          fi
+          DOCKER_CONFIG="$registry_config" docker context use "$preview_context"
+          echo "DOCKER_CONFIG=$registry_config" >> "$GITHUB_ENV"
+      - name: Check deployment Docker daemon
+        run: |
+          docker info --format 'Docker daemon: {{.Name}}'
       - name: Log into image registry
         if: github.event_name == 'workflow_run'
         env:
@@ -62,5 +78,7 @@ jobs:
             *) exit 2 ;;
           esac
       - name: Remove temporary registry credentials
-        if: always() && github.event_name == 'workflow_run'
-        run: DOCKER_CONFIG="$RUNNER_TEMP/people-gator-preview-docker" docker logout ghcr.io
+        if: always() && steps.registry-config.outputs.path != ''
+        env:
+          PREVIEW_DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}
+        run: rm -rf -- "$PREVIEW_DOCKER_CONFIG"
