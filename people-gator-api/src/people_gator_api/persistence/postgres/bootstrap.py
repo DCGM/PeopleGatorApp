@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # These known revisions contain declarative schema operations only. Future data
 # migrations must run normally; do not automatically adopt arbitrary revisions.
-SNAPSHOT_REVISIONS = ("c82e7f4a901d", "d34a021b0001", "d34a021b0002")
+SNAPSHOT_REVISIONS = ("c82e7f4a901d", "d34a021b0001", "d34a021b0002", "d34a021b0003")
 LEGACY_REVISIONS = ("9897af156aa1", "65c4e6cdfa7f")
 
 

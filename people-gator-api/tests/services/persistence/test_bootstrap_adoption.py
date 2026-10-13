@@ -28,12 +28,15 @@ def test_frozen_snapshots_preserve_their_original_fields():
         "c82e7f4a901d",
         "d34a021b0001",
         "d34a021b0002",
+        "d34a021b0003",
     ]
-    baseline, keys, touch = [metadata for _, metadata in snapshots]
+    baseline, keys, touch, names = [metadata for _, metadata in snapshots]
     assert "pg_demo_api_keys" not in baseline.tables
     assert "pg_demo_api_keys" in keys.tables
     assert "last_touched_at" not in keys.tables["pg_demo_entities"].c
     assert "last_touched_at" in touch.tables["pg_demo_entities"].c
+    assert "name" not in touch.tables["pg_demo_documents"].c
+    assert names.tables["pg_demo_documents"].c.name.nullable
 
 
 @pytest_asyncio.fixture
@@ -91,7 +94,7 @@ async def seed_bootstrap(engine, snapshot=1):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("snapshot", [0, 1, 2])
+@pytest.mark.parametrize("snapshot", [0, 1, 2, 3])
 async def test_adopt_bootstrap_preserves_data_and_applies_only_missing_migrations(
     bootstrap_database, snapshot
 ):

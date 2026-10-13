@@ -38,8 +38,11 @@ docker compose -f compose.live-preview.yaml exec backend uv run python -m people
 Adoption compares the existing schema against frozen migration definitions,
 including columns, types, nullability, indexes, foreign keys, unique constraints,
 primary keys and checks. It recognizes the core baseline (`c82e7f4a901d`), the
-baseline plus API-key registry (`d34a021b0001`), and the schema including entity
-touch fields (`d34a021b0002`). Per-model HNSW indexes remain owned by model
+baseline plus API-key registry (`d34a021b0001`), the schema including entity
+touch fields (`d34a021b0002`), and optional document names (`d34a021b0003`).
+The document-name migration adds a nullable text column without changing source
+identities; existing names remain NULL until explicitly supplied on a new registration.
+Per-model HNSW indexes remain owned by model
 registration and are excluded from comparison.
 
 Only a complete matching snapshot can advance the Alembic marker. Missing
