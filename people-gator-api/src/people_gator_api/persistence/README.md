@@ -159,3 +159,19 @@ a trigger clears link metadata when an entity FK is set null, including raw SQL
 deletes. Link statistics are two batched grouped queries, independent of filters
 and pagination. Document filters and statistics share the direct-source plus
 registered-pages scope, identified by both library and archive document ID.
+
+The optional Weaviate adapter stores the same link fields, backfills missing
+legacy states and aggregation keys additively, and uses grouped server aggregates
+for response-page statistics. An annotation replacement writes the current entity,
+state, verifier and time together, retaining geometry, provenance and named vectors.
+PATCH batches preflight semantic validation before writing, preserve input order,
+and return null for missing annotations. Manual merge clears verification only on
+transferred links; entity deletion clears annotations before removing the entity.
+
+Weaviate has no relational transactions or cross-process row locks: in-process
+annotation locks serialize read/replace transitions, while separate workers use
+whole-object last-writer-wins updates. Multi-object operations can be partially
+applied by a network failure. PostgreSQL provides transactional batch/merge
+behavior and database CHECK/FK protection. The optional live adapter test accepts
+`PEOPLE_GATOR_WEAVIATE_TEST_HTTP_PORT` and `PEOPLE_GATOR_WEAVIATE_TEST_GRPC_PORT`
+for a disposable local Weaviate instance.

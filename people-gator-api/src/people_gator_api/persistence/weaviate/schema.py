@@ -257,7 +257,26 @@ ENTITY_PROPERTIES: list[Property] = [
     _text_property("nlcr_authority_id", "Entity-level aggregated NLCR authority ID."),
 ]
 
+ENTITY_LINK_PROPERTIES: list[Property] = [
+    _text_property("entity_link_state", "Current link state.", searchable=False),
+    _uuid_property("entity_link_verified_by_user_id", "Authenticated verifier."),
+    Property(name="entity_link_verified_at", data_type=DataType.DATE),
+    _uuid_property(
+        "linked_entity_id", "Current entity reference, for grouped aggregates."
+    ),
+    _uuid_property("annotation_source_id", "Source reference, for grouped aggregates."),
+]
+ENTITY_PROPERTIES.extend(
+    [
+        Property(name="last_touched_at", data_type=DataType.DATE),
+        _uuid_property("last_touched_by_user_id", "Annotation actor."),
+        _uuid_property("last_touched_by_api_key_id", "Annotation API key attribution."),
+    ]
+)
+SOURCE_PROPERTIES.append(_text_property("name", "Optional document title."))
+
 FACE_PROPERTIES: list[Property] = [
+    *ENTITY_LINK_PROPERTIES,
     _text_property(
         "identifier",
         "Optional caller-provided face identifier.",
@@ -277,6 +296,7 @@ FACE_PROPERTIES: list[Property] = [
 ]
 
 TEXT_MENTION_PROPERTIES: list[Property] = [
+    *ENTITY_LINK_PROPERTIES,
     _text_property("name", "Entity name as it appears in the source."),
     _text_property("context", "Optional surrounding text for the mention."),
 ]
@@ -366,5 +386,13 @@ ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 # change. Keep additive, idempotent migrations explicit so startup can safely
 # bring persisted deployments forward without recreating collections or data.
 ADDITIVE_PROPERTY_MIGRATIONS: dict[str, list[Property]] = {
-    FACE_COLLECTION: [FACE_PROPERTIES[0]],
+    FACE_COLLECTION: [
+        *ENTITY_LINK_PROPERTIES,
+        next(p for p in FACE_PROPERTIES if p.name == "identifier"),
+    ],
+    TEXT_MENTION_COLLECTION: ENTITY_LINK_PROPERTIES,
+    ENTITY_COLLECTION: [
+        p for p in ENTITY_PROPERTIES if p.name.startswith("last_touched")
+    ],
+    SOURCE_COLLECTION: [p for p in SOURCE_PROPERTIES if p.name == "name"],
 }

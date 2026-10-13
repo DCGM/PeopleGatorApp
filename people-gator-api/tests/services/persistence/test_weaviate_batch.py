@@ -18,7 +18,8 @@ async def test_entity_delete_batch_uses_one_delete_many_call() -> None:
             calls.append(where)
             return SimpleNamespace(successful=2)
 
-    collection = SimpleNamespace(data=_Data())
+    from unittest.mock import AsyncMock
+    collection = SimpleNamespace(data=_Data(), query=SimpleNamespace(fetch_objects=AsyncMock(return_value=SimpleNamespace(objects=[]))))
 
     def get_collection(_name: str) -> SimpleNamespace:
         return collection

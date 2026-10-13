@@ -110,6 +110,26 @@ async def ensure_collections(
         if not exists_by_collection.get(collection_name, False):
             continue
         await _add_missing_properties(client, collection_name, properties)
+    from . import _scan, _ref
+    from .schema import FACE_COLLECTION, TEXT_MENTION_COLLECTION
+
+    for name in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
+        async for objects in _scan(client, name):
+            for obj in objects:
+                props = obj.properties
+                fields = {}
+                entity = _ref(obj, "entity")
+                source = _ref(obj, "source")
+                if props.get("entity_link_state") is None and entity is not None:
+                    fields["entity_link_state"] = "automatic" if entity else None
+                if props.get("linked_entity_id") is None and entity is not None:
+                    fields["linked_entity_id"] = str(entity) if entity else None
+                if props.get("annotation_source_id") is None and source is not None:
+                    fields["annotation_source_id"] = str(source) if source else None
+                if fields:
+                    await client.collections.get(name).data.update(
+                        uuid=obj.uuid, properties=fields
+                    )
 
 
 async def _add_missing_properties(

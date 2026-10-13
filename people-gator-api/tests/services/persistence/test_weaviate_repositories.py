@@ -60,12 +60,12 @@ def _stored(properties: dict[str, object], **references: uuid.UUID) -> SimpleNam
 
 def _collection() -> Mock:
     return Mock(
-        data=Mock(exists=AsyncMock(return_value=True), insert=AsyncMock()),
+        data=Mock(exists=AsyncMock(return_value=True), insert=AsyncMock(), update=AsyncMock(), replace=AsyncMock()),
         query=Mock(
             fetch_object_by_id=AsyncMock(return_value=None),
             fetch_objects=AsyncMock(return_value=SimpleNamespace(objects=[])),
         ),
-        aggregate=Mock(over_all=AsyncMock(return_value=SimpleNamespace(total_count=0))),
+        aggregate=Mock(over_all=AsyncMock(return_value=SimpleNamespace(total_count=0, groups=[]))),
     )
 
 
@@ -107,7 +107,7 @@ async def test_list_sorts_and_resumes_with_opaque_cursor() -> None:
     ]
     objects.sort(key=lambda item: item.uuid)
     collection.query.fetch_objects.return_value = SimpleNamespace(objects=objects[::-1])
-    collection.aggregate.over_all.return_value = SimpleNamespace(total_count=9)
+    collection.aggregate.over_all.return_value = SimpleNamespace(total_count=9, groups=[])
     repository = WeaviateEntityRepository(_client(collection))
     result = await repository.list(
         query=EntityListRequest(limit=2, return_total_count=True)
@@ -134,7 +134,7 @@ async def test_list_sorts_and_resumes_with_opaque_cursor() -> None:
 @pytest.mark.asyncio
 async def test_count_only_list_skips_object_query() -> None:
     collection = _collection()
-    collection.aggregate.over_all.return_value = SimpleNamespace(total_count=9)
+    collection.aggregate.over_all.return_value = SimpleNamespace(total_count=9, groups=[])
     response = await WeaviateEntityRepository(_client(collection)).list(
         query=EntityListRequest(limit=0, return_total_count=True),
     )
@@ -296,3 +296,38 @@ async def test_face_model_reregistration_checks_stored_dimension() -> None:
             payload=FaceModelRegisterRequest(model_stub="test-model", embedding_dim=128)
         )
     collection.data.insert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_state_only_mention_patch_is_atomic_preserves_identity_and_verification():
+    from people_gator_api.schemas.mentions import TextMentionPatchRequest
+    from people_gator_api.schemas.enums import EntityLinkState
+    collection = _collection()
+    actor = GenericActor(user_id=uuid.uuid4())
+    entity_id, source_id = uuid.uuid4(), uuid.uuid4()
+    stored = _stored({"name": "Ada", "context": "A caption", "entity_link_state": "automatic"}, entity=entity_id, source=source_id)
+    collection.query.fetch_object_by_id.return_value = stored
+    repo = WeaviateTextMentionRepository(_client(collection))
+    verified = await repo.patch(stored.uuid, TextMentionPatchRequest(entity_link_state="verified"), actor)
+    assert verified.entity_id == entity_id and verified.mention_id == stored.uuid
+    assert verified.entity_link_verified_by_user_id == actor.user_id
+    replaced = collection.data.replace.await_args.kwargs
+    assert replaced["references"] == {"entity": entity_id, "source": source_id}
+    assert replaced["properties"]["name"] == "Ada"
+    assert replaced["properties"]["entity_link_verified_at"] is not None
+    # Simulate persisted data; repeated verification must do no writes/touches.
+    stored.properties = replaced["properties"]
+    collection.data.replace.reset_mock()
+    collection.data.update.reset_mock()
+    repeated = await repo.patch(stored.uuid, TextMentionPatchRequest(entity_link_state="verified"), GenericActor(user_id=uuid.uuid4()))
+    assert repeated.entity_link_verified_at == verified.entity_link_verified_at
+    assert repeated.entity_link_verified_by_user_id == actor.user_id
+    collection.data.replace.assert_not_awaited()
+    collection.data.update.assert_not_awaited()
+    with pytest.raises(ValueError):
+        await repo.patch(stored.uuid, TextMentionPatchRequest(entity_link_state=None), actor)
+    collection.data.replace.assert_not_awaited()
+    reassigned = await repo.patch(stored.uuid, TextMentionPatchRequest(entity_id=uuid.uuid4()), actor)
+    assert reassigned.entity_link_state == EntityLinkState.manual
+    assert reassigned.entity_link_verified_at is None
+    assert reassigned.name == verified.name and reassigned.source_id == source_id

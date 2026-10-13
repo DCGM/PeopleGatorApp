@@ -25,9 +25,7 @@ def test_face_schema_has_optional_external_identifier_property() -> None:
 
     assert "identifier" in properties
     assert properties["identifier"].dataType == weaviate_schema.DataType.TEXT
-    assert weaviate_schema.ADDITIVE_PROPERTY_MIGRATIONS[weaviate_schema.FACE_COLLECTION] == [
-        properties["identifier"]
-    ]
+    assert weaviate_schema.ADDITIVE_PROPERTY_MIGRATIONS[weaviate_schema.FACE_COLLECTION] == [*weaviate_schema.ENTITY_LINK_PROPERTIES, properties["identifier"]]
 
 
 def test_text_mention_schema_links_to_entity_and_source() -> None:
@@ -39,7 +37,7 @@ def test_text_mention_schema_links_to_entity_and_source() -> None:
         for reference in weaviate_schema.TEXT_MENTION_REFERENCES
     }
 
-    assert property_names == {"name", "context"}
+    assert property_names == {"name", "context", *(p.name for p in weaviate_schema.ENTITY_LINK_PROPERTIES)}
     assert references["entity"].target_collection == weaviate_schema.ENTITY_COLLECTION
     assert references["source"].target_collection == weaviate_schema.SOURCE_COLLECTION
     assert weaviate_schema.TEXT_MENTION_COLLECTION in weaviate_schema.ALL_COLLECTION_SPECS
