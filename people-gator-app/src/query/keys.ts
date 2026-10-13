@@ -56,6 +56,7 @@ export const queryKeys = {
     lists: () => ['pages', 'list'] as const,
     list: (params?: QueryParams) => ['pages', 'list', params ?? {}] as const,
     infinite: (params?: QueryParams) => ['pages', 'list', 'infinite', params ?? {}] as const,
+    results: (params?: QueryParams) => ['pages', 'results', 'infinite', params ?? {}] as const,
     detail: (sourceId: string) => ['pages', 'detail', sourceId] as const,
     lookup: (library: string, documentId: string, pageId: string) =>
       ['pages', 'lookup', library, documentId, pageId] as const,

@@ -103,7 +103,7 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
       }
       return query
         ? queryKeys.search.infinitePages({ ...keyParams, 'query.text': [query] })
-        : queryKeys.pages.infinite(keyParams)
+        : queryKeys.pages.results(keyParams)
     }),
     queryFn: async ({ pageParam, signal }) => {
       const resolvedParams = toValue(params)
