@@ -24,12 +24,16 @@ case "$1" in
         shift
         exec python -m people_gator_api.cli.database migrate "$@"
         ;;
+    seed)
+        shift
+        exec python -m people_gator_api.cli.seed "$@"
+        ;;
     check)
         shift
         exec python -m people_gator_api.cli.database check "$@"
         ;;
     *)
-        echo "Usage: container-entrypoint.sh [api|migrate|check [--schema-only]]" >&2
+        echo "Usage: container-entrypoint.sh [api|migrate|seed|check [--schema-only]]" >&2
         exit 2
         ;;
 esac
