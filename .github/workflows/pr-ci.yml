@@ -75,7 +75,9 @@ jobs:
       - name: Test preview controller
         env:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-        run: python3 -m unittest discover -s deploy/preview/tests -v
+        run: |
+          python3 deploy/preview/tests/test_preview.py -v
+          python3 deploy/preview/tests/test_observability.py -v
 
   images:
     needs: [frontend, backend]

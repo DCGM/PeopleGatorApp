@@ -216,7 +216,8 @@ configure GHCR retention and periodically remove unused host images as needed.
 ## Validation
 
 ```sh
-python3 -m unittest discover -s deploy/preview/tests -v
+python3 deploy/preview/tests/test_preview.py -v
+python3 deploy/preview/tests/test_observability.py -v
 ```
 
 The optional end-to-end log test starts a private network, collector, OTLP sink,
@@ -225,7 +226,7 @@ delivery and PR/service/commit metadata without contacting the shared database o
 LGTM. Pull `python:3.12` and `otel/opentelemetry-collector-contrib:0.162.0`, then run:
 
 ```sh
-PREVIEW_TEST_OTEL=1 python3 -m unittest discover -s deploy/preview/tests -p test_observability.py -v
+PREVIEW_TEST_OTEL=1 python3 deploy/preview/tests/test_observability.py -v
 ```
 
 Database isolation tests run when `PREVIEW_TEST_POSTGRES_CONTAINER` names a
