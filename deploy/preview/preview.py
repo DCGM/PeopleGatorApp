@@ -276,7 +276,8 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         self.provision_database(number, state["password"])
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "storage-init"))
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "migrate"))
-        # A PR can close or receive a new commit while pulls/migrations are running.
+        self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "seed"))
+        # A PR can close or receive a new commit while migrations/seeding are running.
         if not self.current_pr(number, run["head_sha"]):
             if self.api(f"pulls/{number}")["state"] == "closed":
                 self.remove(number)

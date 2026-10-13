@@ -3,7 +3,7 @@ x-preview-labels: &preview-labels
   people-gator.preview.pr: ${PR_NUMBER:?required}
   people-gator.preview.sha: ${COMMIT_SHA:-unknown}
 
-# Docker sends stdout/stderr, including one-off migration logs, to the host collector.
+# Docker sends stdout/stderr, including one-off migration and seed logs, to the host collector.
 # The driver connects from the Docker daemon, not from the container's network.
 x-preview-logging: &preview-logging
   driver: fluentd
@@ -72,6 +72,11 @@ services:
     <<: *backend
     profiles: [tools]
     command: [migrate]
+
+  seed:
+    <<: *backend
+    profiles: [tools]
+    command: [seed]
 
   backend:
     <<: *backend

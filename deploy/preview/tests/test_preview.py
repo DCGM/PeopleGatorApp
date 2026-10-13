@@ -107,6 +107,21 @@ class LifecycleTests(unittest.TestCase):
         self.controller.deploy_pr(123, {**RUN, "id": 99}, IMAGES)
         self.controller.command.assert_not_called()
 
+    def test_seeding_runs_after_migrations_and_before_application_startup(self):
+        self.controller.deploy_pr(123, RUN, IMAGES)
+        commands = [call.args[0] for call in self.controller.command.call_args_list]
+        self.assertEqual([command[-1] for command in commands[:3]], ["storage-init", "migrate", "seed"])
+        self.assertIn("up", commands[3])
+
+    def test_seed_failure_preserves_running_configuration_for_retry(self):
+        directory = self.seed_preview()
+        self.controller.command.side_effect = ["", "", RuntimeError("seed failed")]
+        with self.assertRaisesRegex(RuntimeError, "seed failed"):
+            self.controller.deploy_pr(123, RUN, IMAGES)
+        self.assertEqual((directory / "compose.env").read_text(), "placeholder")
+        self.assertNotIn("version", json.loads((directory / "state.json").read_text()))
+        self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
+
     def test_infrastructure_upgrade_and_reruns_preserve_credentials(self):
         env_file = self.root / "infrastructure.env"
         env_file.write_text("POSTGRES_ADMIN_PASSWORD=" + "c" * 64 + "\nDATABASE_NETWORK=people-gator-preview-db\n")
@@ -205,8 +220,11 @@ class LifecycleTests(unittest.TestCase):
         self.assertTrue(config["networks"]["database"]["external"])
         self.assertFalse(config["services"]["backend"].get("ports"))
         self.assertEqual(config["services"]["migrate"]["command"], ["migrate"])
+        self.assertEqual(config["services"]["seed"]["command"], ["seed"])
+        self.assertEqual(config["services"]["seed"]["user"], "10001:10001")
+        self.assertEqual(set(config["services"]["seed"]["networks"]), {"database"})
         self.assertTrue(all(mount.startswith("/") for mount in config["services"]["backend"]["tmpfs"]))
-        for name in ("frontend", "backend", "migrate", "storage-init"):
+        for name in ("frontend", "backend", "migrate", "seed", "storage-init"):
             service = config["services"][name]
             self.assertEqual(service["logging"]["driver"], "fluentd")
             self.assertEqual(service["logging"]["options"]["fluentd-async"], "true")
