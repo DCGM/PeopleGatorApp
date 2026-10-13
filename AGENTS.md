@@ -1,3 +1,28 @@
+# Implementation workflow
+
+All future implementation jobs must follow this GitHub workflow:
+
+**GitHub issue → issue branch → commits for functional units → pull request.**
+
+1. Start from a GitHub issue. Read its full description and acceptance criteria
+   before implementing. Reuse the relevant existing issue; if none exists, create
+   one describing the problem, intended behavior and scope, then work against it.
+2. Create or reuse a dedicated branch for that issue, with the issue number in
+   its name (for example, `issue2` or `issue/2-description`). Base new branches on
+   the intended PR target. Keep implementation work off the default branch and
+   preserve unrelated user changes in the worktree.
+3. Commit as each coherent functional unit is complete and appropriately
+   verified. Make partial implementation commits reviewable and working; do not
+   wait until the entire issue is finished to commit everything together. Scope
+   each commit to its functionality and use a clear message explaining the change.
+4. Push the issue branch and create or update its pull request. Link the GitHub
+   issue, describe the resulting behavior, and record relevant validation and
+   material limitations. Keep the PR description current as the implementation
+   changes. Use a draft PR when work is still incomplete.
+5. Address review and CI findings with further focused commits on the same issue
+   branch. Finish through the pull request workflow; merge only when the user has
+   authorized merging. Do not include unrelated work in the commits or PR.
+
 # Keeping pull-request previews representative
 
 The preview seed is part of the application's maintained interface. Whenever you
