@@ -74,6 +74,7 @@ class Document:
     title: str
     identity_key: str | None = None
     registered: bool = True
+    named: bool = True
 
     @property
     def document_id(self) -> UUID:
@@ -87,6 +88,7 @@ DOCUMENTS = (
     Document("grouped-album", "preview-mzk", "Named preview album"),
     Document("grouped-mirror", "preview-nlk", "Album in another library", "grouped-album"),
     Document("empty-document", "preview-mzk", "Document awaiting scans"),
+    Document("legacy-document", "preview-mzk", "Legacy unnamed document", named=False),
     Document("scan-only", "preview-mzk", "Unregistered scan collection", registered=False),
 )
 
@@ -193,5 +195,6 @@ PAGES = (
     Page("grouped-album-1", "grouped-album", 1),
     Page("grouped-album-2", "grouped-album", 2),
     Page("grouped-mirror-1", "grouped-mirror", 1),
+    Page("legacy-document-1", "legacy-document", 1),
     Page("scan-only-1", "scan-only", 1),
 )

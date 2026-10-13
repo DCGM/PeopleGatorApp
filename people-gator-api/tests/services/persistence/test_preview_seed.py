@@ -118,7 +118,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (6, 8, 6)
-    assert len(result.documents) == 6 and len(result.pages) == 10
+    assert len(result.documents) == 7 and len(result.pages) == 11
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -331,13 +331,13 @@ async def test_document_groups_names_and_scan_only_media(seed_target):
     assert second == first
     listed = await database.sources.list_documents(DocumentListRequest(limit=100))
     assert {item.source_id for item in listed.items} == set(first.documents.values())
-    for key, expected_pages in (("grouped-album", 2), ("grouped-mirror", 1), ("empty-document", 0)):
+    for key, expected_pages in (("grouped-album", 2), ("grouped-mirror", 1), ("empty-document", 0), ("legacy-document", 1)):
         spec = next(item for item in DOCUMENTS if item.key == key)
         document = await database.sources.lookup_document(DocumentLookupRequest(
             library=spec.library, document_id=spec.document_id,
         ))
-        assert document.name == spec.title
-        assert (await database.sources.get_document(document.source_id)).name == spec.title
+        assert document.name == (spec.title if spec.named else None)
+        assert (await database.sources.get_document(document.source_id)).name == document.name
         pages = await database.sources.list_pages(PageListRequest(
             limit=1, return_total_count=True,
             filter_=PageListFilter(library=[spec.library], document_id=[spec.document_id]),

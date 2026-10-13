@@ -44,7 +44,7 @@ add login accounts or usable API-key secrets.
 | No evidence | Lenka Vesela, ready for manual linking |
 | Identity discovery and merging | Open Ada Novak's Discover tab; A. Novak has nearby vectors |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
-| Document/page/library filters | Three documents, two pages each, across preview-mzk and preview-nlk |
+| Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
 | Face geometry | Eight faces with pixel bounding boxes and all five alignment keypoints |
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
@@ -116,7 +116,9 @@ No workflow checks out and executes PR deployment scripts directly on that host.
 Open `/documents?library=preview-mzk` to explore **Named preview album** with two
 scans and **Document awaiting scans** with no pages. **Album in another library**
 in `preview-nlk` deliberately shares the album's document UUID; its single page
-must stay in its own group. `/scans` also includes **Unregistered scan collection**,
+must stay in its own group. **Legacy unnamed document** has one scan and no stored
+name, demonstrating the `Document <document_id>` heading fallback on fresh previews.
+`/scans` also includes **Unregistered scan collection**,
 which has local media but no registered document and is absent from Documents.
 The seed CLI prints `grouped-documents` and `unregistered-scan` links.
 

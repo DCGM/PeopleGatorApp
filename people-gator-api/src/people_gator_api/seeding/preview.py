@@ -195,7 +195,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             DocumentCreateRequest(
                 library=document.library,
                 document_id=document.document_id,
-                name=document.title,
+                name=document.title if document.named else None,
             )
         )
         documents[document.key] = source.source_id
