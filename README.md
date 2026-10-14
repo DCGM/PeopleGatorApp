@@ -7,19 +7,14 @@ the API stores those relationships with their provenance and processing actor.
 
 ## Capabilities
 
-- Search people, faces, pages and documents using text and existing face vectors.
-  Combine modalities with reciprocal-rank fusion and filter results by evidence,
-  assignment state, document, library and processing metadata.
-- Browse registered documents and scans, view page images and OCR overlays, and
-  inspect a person's linked faces and mentions.
-- Edit identities and aliases; assign, reassign and verify evidence links; merge
-  identities with the required administrator scope.
-- Ingest sources, faces, model-specific vectors, OCR mentions and page assets
-  through typed APIs, including batch operations.
-- Attribute changes to JWT users or registered API keys. Optionally connect an
-  embedding service or OpenRouter translation service.
-- Develop and review with deterministic synthetic data, repeatable migrations,
-  automated tests and isolated pull-request previews.
+| Capability | Description |
+| --- | --- |
+| Search and filtering | Search people, faces, pages and documents through the API and browser app using text and existing face vectors. Combine modalities with reciprocal-rank fusion and filter results by evidence, assignment state, document, library and processing metadata. |
+| Browsing and evidence review | Browse registered documents and scans in the browser app, view page images and OCR overlays, and inspect a person's linked faces and mentions. |
+| Identity annotation | Edit identities and aliases; assign, reassign and verify evidence links through the API and browser app; merge identities with the required administrator scope. |
+| Data ingestion | Ingest sources, faces, model-specific vectors, OCR mentions and page assets through typed APIs, including batch operations. |
+| Authentication and integrations | Attribute changes to JWT users or registered API keys. Optionally connect an embedding service or OpenRouter translation service through the API. |
+| Development and previews | Develop and review with deterministic synthetic data, repeatable migrations, automated tests and isolated pull-request previews. |
 
 ## Technology stack
 
@@ -37,14 +32,43 @@ CI and preview path and provides the transactional behavior described here.
 ## Repository structure
 
 ```text
-people-gator-app/       Browser app, generated SDK and frontend tests
-people-gator-api/       API package, migrations, backend tests and focused docs
-docs/                  Project and operator guides
-deploy/preview/        Trusted preview controller, Compose templates and tests
-.github/workflows/     PR validation, image publication and preview lifecycle
-compose.dev.yaml       Development stack with Compose Watch
+people-gator-app/           Browser app, generated SDK and frontend tests
+└── src/
+    ├── App.vue            Application shell
+    ├── main.ts            Browser entry point
+    ├── client/            OpenAPI-generated TypeScript SDK
+    ├── components/
+    │   ├── custom/        Application components
+    │   └── ui/            shadcn-vue UI primitives
+    ├── composables/       Shared reactive helpers and media object URLs
+    ├── lib/               Shared utilities and evidence-link helpers
+    ├── query/             API transport, authentication, queries and mutations
+    ├── router/            Routes and navigation
+    ├── viewmodels/        Screen state, filters and annotation logic
+    ├── views/             Screens and page workspaces
+    └── __tests__/         Frontend contract and component tests
+people-gator-api/           API package, migrations, backend tests and focused docs
+└── src/people_gator_api/
+    ├── app.py             FastAPI entry point and application lifecycle
+    ├── settings.py        Runtime configuration
+    ├── cli/               Database, schema and seed commands
+    ├── filesystem/        Storage contract and local/S3 adapters
+    ├── media/             Page layouts, images, OCR spans and face crops
+    ├── persistence/       Database contract and repositories
+    │   ├── postgres/      PostgreSQL models, queries and transactions
+    │   └── weaviate/      Optional Weaviate adapter
+    ├── routes/
+    │   └── v1/            Versioned resource endpoints and dependencies
+    ├── schemas/           Validated request, response and filter types
+    ├── seeding/           Deterministic synthetic preview fixtures
+    ├── services/          Authentication, shared clients and external services
+    └── utils/             Logging, telemetry, hashing and other helpers
+docs/                      Project and operator guides
+deploy/preview/            Trusted preview controller, Compose templates and tests
+.github/workflows/         PR validation, image publication and preview lifecycle
+compose.dev.yaml           Development stack with Compose Watch
 compose.live-preview.yaml  Existing shared live-preview deployment
-AGENTS.md              Required implementation workflow and feature conventions
+AGENTS.md                  Required implementation workflow and feature conventions
 ```
 
 ## Architecture overview
