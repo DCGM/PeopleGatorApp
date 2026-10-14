@@ -102,6 +102,19 @@ afterEach(() => {
 
 describe('document search and bounded groups', () => {
   it('renders separate document rows, isolated previews, totals and both kinds of links', async () => {
+    const counts = { total: 2, automatic: 1, manual: 0, verified: 1, unassigned: 0 }
+    api.documents.mockResolvedValue(
+      response([
+        {
+          ...doc('a'),
+          last_touched_at: '2026-10-14T12:00:00Z',
+          last_touched_by_user_id: 'review-user',
+          last_touched_by_api_key_id: 'review-key',
+          entity_link_stats: { faces: counts, mentions: counts },
+        },
+        doc('b', 'shared', null),
+      ]),
+    )
     const { wrapper } = await render()
     expect(wrapper.findAll('h2').map((node) => node.text())).toEqual(['Album', 'Document shared'])
     expect(
@@ -122,6 +135,14 @@ describe('document search and bounded groups', () => {
     expect(wrapper.get('.document-link .text-secondary').classes()).toContain('font-bold')
     expect(wrapper.text()).toContain('Ada, Grace')
     expect(wrapper.text()).toContain('Processing not recorded')
+    const information = wrapper.get('.document-heading')
+    const lines = information.findAll('p').map((node) => node.text())
+    expect(lines[1]).toBe('1 registered page')
+    expect(lines[2]).toMatch(/^Last processed:/)
+    expect(lines[3]).toBe('User: review-user')
+    expect(lines[4]).toBe('API key: review-key')
+    expect(information.element.lastElementChild?.getAttribute('aria-label')).toBe('Link statistics')
+    expect(wrapper.get('[data-slot="input-group"] [role="status"]').text()).toBe('2 results')
     expect(api.detail).not.toHaveBeenCalled()
     for (const library of ['a', 'b'])
       expect(api.pages).toHaveBeenCalledWith(
@@ -161,7 +182,9 @@ describe('document search and bounded groups', () => {
     const { wrapper } = await render()
     expect(wrapper.findAll('.scan-card')).toHaveLength(8)
     expect(wrapper.text()).toContain('20 registered pages')
-    expect(wrapper.text()).toContain('Showing 4 of 20')
+    expect(wrapper.findAll('.more-pages').map((node) => node.text())).toEqual(['+16', '+16'])
+    expect(wrapper.get('.more-pages').attributes('href')).toBe('/scans?library=a&document=shared')
+    expect(wrapper.text()).not.toContain('Showing 4 of')
     expect(wrapper.find('button[aria-label^="Load more pages"]').exists()).toBe(false)
     await wrapper
       .findAll('button')

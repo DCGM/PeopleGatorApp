@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowUpRight } from '@lucide/vue'
+import { ArrowUpRight, ChevronRight } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
 import EntityLinkStatistics from './EntityLinkStatistics.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
@@ -19,6 +19,17 @@ const { cards, totalCount, filteredCount, error, isLoading, retry } = useDocumen
 )
 const widePreviews = useMediaQuery('(min-width: 640px)')
 const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 : 2))
+const remainingCount = computed(() =>
+  Math.max(0, (filteredCount.value ?? 0) - visibleCards.value.length),
+)
+const documentLocation = computed(() => ({
+  name: 'document-search',
+  query: {
+    library: props.document.library,
+    document: props.document.document_id,
+    ...(linkStates.value.length && { link_state: linkStates.value }),
+  },
+}))
 </script>
 
 <template>
@@ -30,14 +41,7 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
       <RouterLink
         class="document-link group block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
         :aria-label="`View document ${documentTitle(document)} in ${document.library}`"
-        :to="{
-          name: 'document-search',
-          query: {
-            library: document.library,
-            document: document.document_id,
-            ...(linkStates.length && { link_state: linkStates }),
-          },
-        }"
+        :to="documentLocation"
       >
         <div class="flex items-start gap-1">
           <h2
@@ -57,7 +61,6 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
         <template v-if="linkStates.length">{{ filteredCount }} matching of </template
         >{{ totalCount }} registered {{ totalCount === 1 ? 'page' : 'pages' }}
       </p>
-      <EntityLinkStatistics :stats="document.entity_link_stats" unassigned class="mt-2" />
       <p class="mt-2 text-sm text-muted-foreground">
         {{
           document.last_touched_at
@@ -66,38 +69,58 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
         }}
       </p>
       <p v-if="document.last_touched_at" class="mt-1 break-all text-sm text-muted-foreground">
-        User: {{ document.last_touched_by_user_id }} · API key:
-        {{ document.last_touched_by_api_key_id ?? 'None' }}
+        User: {{ document.last_touched_by_user_id }}
       </p>
+      <p v-if="document.last_touched_at" class="mt-1 break-all text-sm text-muted-foreground">
+        API key: {{ document.last_touched_by_api_key_id ?? 'None' }}
+      </p>
+      <EntityLinkStatistics :stats="document.entity_link_stats" unassigned class="mt-2" />
     </header>
     <div
       class="document-previews flex min-w-0 flex-1 flex-row flex-wrap content-start items-start gap-2"
     >
-      <RouterLink
-        v-for="card in visibleCards"
-        :key="card.sourceId"
-        class="scan-card group min-w-0"
-        :to="{
-          name: 'document-page',
-          query: { link_state: linkStates },
-          params: { libraryId: card.library, documentId: card.documentId, pageId: card.pageId },
-        }"
-      >
-        <DocumentCard
-          :library="card.library"
-          :show-library="false"
-          :document-uuid="card.documentId"
-          :page-uuid="card.pageId"
-          :names="card.names"
-          :thumbnail-url="card.thumbnailUrl"
-          :thumbnail-loading="card.thumbnailLoading"
+      <div class="document-preview-pages flex min-w-0 flex-1 flex-row flex-wrap items-start gap-2">
+        <RouterLink
+          v-for="card in visibleCards"
+          :key="card.sourceId"
+          class="scan-card group min-w-0"
+          :to="{
+            name: 'document-page',
+            query: { link_state: linkStates },
+            params: { libraryId: card.library, documentId: card.documentId, pageId: card.pageId },
+          }"
+        >
+          <DocumentCard
+            :library="card.library"
+            :show-library="false"
+            :document-uuid="card.documentId"
+            :page-uuid="card.pageId"
+            :names="card.names"
+            :thumbnail-url="card.thumbnailUrl"
+            :thumbnail-loading="card.thumbnailLoading"
+          />
+        </RouterLink>
+        <DocumentCardSkeleton
+          v-for="index in isLoading ? (widePreviews ? 4 : 2) : 0"
+          :key="`loading-${index}`"
+          class="scan-card min-w-0"
         />
-      </RouterLink>
-      <DocumentCardSkeleton
-        v-for="index in isLoading ? (widePreviews ? 4 : 2) : 0"
-        :key="`loading-${index}`"
-        class="scan-card min-w-0"
-      />
+      </div>
+      <Button
+        v-if="remainingCount > 0 && visibleCards.length"
+        as-child
+        variant="ghost"
+        size="sm"
+        class="self-center"
+      >
+        <RouterLink
+          class="more-pages"
+          :to="documentLocation"
+          :aria-label="`View ${remainingCount} more ${linkStates.length ? 'matching' : 'registered'} pages of ${documentTitle(document)}`"
+        >
+          +{{ remainingCount }}<ChevronRight aria-hidden="true" />
+        </RouterLink>
+      </Button>
       <div v-if="error" class="w-full basis-full py-4" role="alert">
         <p class="text-sm text-destructive">Could not load pages for this document.</p>
         <Button type="button" variant="outline" class="mt-2" @click="retry()">Retry pages</Button>
@@ -112,24 +135,16 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
             : 'No pages have been registered for this document yet.'
         }}
       </p>
-      <p
-        v-if="filteredCount !== null && filteredCount > visibleCards.length"
-        class="w-full text-sm text-muted-foreground"
-      >
-        Showing {{ visibleCards.length }} of {{ filteredCount }}
-        {{ linkStates.length ? 'matching' : 'registered' }} pages. Open the document to see all
-        pages.
-      </p>
     </div>
   </article>
 </template>
 
 <style scoped>
-.document-previews > .scan-card {
+.document-preview-pages > .scan-card {
   flex: 0 0 calc((100% - 0.5rem) / 2);
 }
 @media (min-width: 640px) {
-  .document-previews > .scan-card {
+  .document-preview-pages > .scan-card {
     flex-basis: calc((100% - 1.5rem) / 4);
   }
 }

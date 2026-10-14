@@ -205,8 +205,14 @@ one link to its scans; each preview links to its exact page without repeating
 library information. The `outline-filter-badges` link searches by archive UUID
 with two libraries and link states selected: check that active filters use
 standard outline badges with small labels, and that the link-state combobox
-matches the height of the Libraries combobox. Remove a badge with its X button
-to update both the URL and results.
+matches the height of the Libraries and Unassigned faces comboboxes. The
+printed `mobile-filters` link also demonstrates the Assigned faces combobox
+alongside link state and document filters on People. The result counter appears
+at the right end of the search input group, after the clear-search button. Remove a badge with its X button
+to update both the URL and results. In the document information, registered
+page count precedes processing time, user and API key (each on its own line),
+followed by face and mention statistics. A `+N` link with a right chevron follows
+the last preview and opens the remaining scans in the same document scope.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
 (inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,

@@ -7,15 +7,7 @@ import SearchFilterPanel from './SearchFilterPanel.vue'
 import ActiveFilters from './ActiveFilters.vue'
 import { linkStateVisuals } from '@/lib/entity-links'
 
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 import type { PageContentFilter } from '@/viewmodels/assignment'
 
 const props = defineProps<{
@@ -66,30 +58,16 @@ function clear() {
     :has-more-results="hasMoreResults"
   >
     <EntityLinkStateFilter v-model="linkStates" />
-    <div class="min-w-0 flex-none max-w-full">
-      <Select v-model="assignment"
-        ><SelectTrigger aria-label="Page content"
-          ><SelectValue
-            >Page content:
-            {{
-              {
-                all: 'All pages',
-                entities: 'Contains assigned entities',
-                faces: 'Contains faces',
-                mentions: 'Contains mentions',
-              }[assignment]
-            }}</SelectValue
-          ></SelectTrigger
-        ><SelectContent
-          ><SelectGroup
-            ><SelectLabel>Page content</SelectLabel><SelectItem value="all">All pages</SelectItem
-            ><SelectItem value="entities">Contains assigned entities</SelectItem
-            ><SelectItem value="faces">Contains faces</SelectItem
-            ><SelectItem value="mentions">Contains mentions</SelectItem></SelectGroup
-          ></SelectContent
-        ></Select
-      >
-    </div>
+    <FilterSingleSelect
+      v-model="assignment"
+      label="Page content"
+      :options="[
+        { value: 'all', label: 'All pages' },
+        { value: 'entities', label: 'Contains assigned entities' },
+        { value: 'faces', label: 'Contains faces' },
+        { value: 'mentions', label: 'Contains mentions' },
+      ]"
+    />
   </SearchFilterPanel>
   <ActiveFilters :filters="active" @remove="remove" @clear="clear" />
 </template>

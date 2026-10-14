@@ -406,6 +406,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             + urlencode(
                 {
                     "q": "Novak",
+                    "link_state": "automatic",
                     "assignment": "faces",
                     "document": documents["album"],
                     "touched_by": actors["importer"].user_id,

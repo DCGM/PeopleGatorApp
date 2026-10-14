@@ -3,7 +3,7 @@ import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 import type { EntityLinkState } from '@/client'
 import { linkStateVisuals } from '@/lib/entity-links'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
-import { computed, ref, useId } from 'vue'
+import { computed, ref } from 'vue'
 import FilterMultiSelect from '@/components/custom/FilterMultiSelect.vue'
 import FilterDateTimePicker from '@/components/custom/FilterDateTimePicker.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
@@ -11,15 +11,7 @@ import { emptyPeopleFilters, type PeopleProcessingFilters } from '@/viewmodels/p
 
 import SearchFilterPanel from './SearchFilterPanel.vue'
 import ActiveFilters from './ActiveFilters.vue'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 import type { AssignmentFilter } from '@/viewmodels/assignment'
 
 defineProps<{
@@ -34,7 +26,6 @@ const assignment = defineModel<AssignmentFilter>('assignment', { required: true 
 const filters = defineModel<PeopleProcessingFilters>('processingFilters', {
   default: emptyPeopleFilters,
 })
-const assignmentId = useId()
 const documentSearch = ref('')
 const userSearch = ref('')
 const apiKeySearch = ref('')
@@ -106,27 +97,15 @@ function clearFilters() {
     :result-count="resultCount"
     :has-more-results="hasMoreResults"
   >
-    <div class="min-w-0 flex-none max-w-full">
-      <Select v-model="assignment">
-        <SelectTrigger :id="assignmentId" aria-label="Assignment"
-          ><SelectValue placeholder="Assignment"
-            >Assignment:
-            {{
-              { all: 'All people', faces: 'Assigned faces', mentions: 'Assigned mentions' }[
-                assignment
-              ]
-            }}</SelectValue
-          ></SelectTrigger
-        >
-        <SelectContent
-          ><SelectGroup
-            ><SelectLabel>Assignment</SelectLabel><SelectItem value="all">All people</SelectItem
-            ><SelectItem value="faces">Assigned faces</SelectItem
-            ><SelectItem value="mentions">Assigned mentions</SelectItem></SelectGroup
-          ></SelectContent
-        >
-      </Select>
-    </div>
+    <FilterSingleSelect
+      v-model="assignment"
+      label="Assignment"
+      :options="[
+        { value: 'all', label: 'All people' },
+        { value: 'faces', label: 'Assigned faces' },
+        { value: 'mentions', label: 'Assigned mentions' },
+      ]"
+    />
     <EntityLinkStateFilter v-model="linkStates" />
     <FilterMultiSelect
       v-model="filters.documentIds"

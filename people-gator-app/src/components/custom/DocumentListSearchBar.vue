@@ -5,13 +5,7 @@ import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import FilterDateTimePicker from './FilterDateTimePicker.vue'
 import FilterMultiSelect from './FilterMultiSelect.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { emptyDocumentFilters, type DocumentFilters } from '@/viewmodels/document-filters'
 import { linkStateVisuals } from '@/lib/entity-links'
@@ -105,24 +99,15 @@ function remove(chip: ActiveFilter) {
       @retry="libraryOptions.retry()"
     />
     <EntityLinkStateFilter v-model="linkStates" />
-    <div class="min-w-0 flex-none max-w-full">
-      <Select v-model="unassigned"
-        ><SelectTrigger aria-label="Unassigned faces"
-          ><SelectValue
-            >Unassigned faces:
-            {{
-              { all: 'All documents', yes: 'Has unassigned faces', no: 'No unassigned faces' }[
-                unassigned
-              ]
-            }}</SelectValue
-          ></SelectTrigger
-        ><SelectContent
-          ><SelectItem value="all">All documents</SelectItem
-          ><SelectItem value="yes">Has unassigned faces</SelectItem
-          ><SelectItem value="no">No unassigned faces</SelectItem></SelectContent
-        ></Select
-      >
-    </div>
+    <FilterSingleSelect
+      v-model="unassigned"
+      label="Unassigned faces"
+      :options="[
+        { value: 'all', label: 'All documents' },
+        { value: 'yes', label: 'Has unassigned faces' },
+        { value: 'no', label: 'No unassigned faces' },
+      ]"
+    />
     <FilterDateTimePicker
       v-model="touchedFrom"
       label="Last processed from"

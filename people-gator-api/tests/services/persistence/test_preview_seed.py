@@ -135,6 +135,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             query=QueryBase(text=demo["q"]),
             filter_=EntityListFilter(
                 has_detections=True,
+                entity_link_state=demo["link_state"],
                 document_source_id=[result.documents["album"]],
                 last_touched_by_user_id=[result.users["importer"]],
                 last_touched_by_api_key_id=[result.api_keys["importer"]],

@@ -66,6 +66,9 @@ const open = computed({
             @click="searchTerm = ''"
             ><X aria-hidden="true"
           /></InputGroupButton>
+          <small v-if="resultCount !== undefined" class="whitespace-nowrap" role="status">
+            {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
+          </small>
         </InputGroupAddon>
       </InputGroup>
       <CollapsibleTrigger v-if="hasFilters && !desktop" as-child>
@@ -95,7 +98,4 @@ const open = computed({
       <slot />
     </CollapsibleContent>
   </Collapsible>
-  <p v-if="resultCount !== undefined" class="mt-2" role="status">
-    {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
-  </p>
 </template>

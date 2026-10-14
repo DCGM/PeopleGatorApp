@@ -96,7 +96,9 @@ screen's filter semantics.
 - Use standard shadcn-vue setting controls: Input/InputGroup, Select,
   Popover/Command or Combobox for multi-select, Calendar, Button and Collapsible.
   Use standard variants and sizes; panel combobox triggers share the default
-  control height. Only layout changes are allowed: width,
+  control height. Use comboboxes for assignment and unassigned-face choices too.
+  Show the result count as the last element in the search InputGroup, after the
+  clear-search button. Only layout changes are allowed: width,
   flex basis/grow/shrink, wrapping, spacing, alignment and responsive placement.
   Do not override colors, backgrounds, borders, rounding, shadows, typography,
   or hover/focus/disabled states, or modify `src/components/ui/` for these panels.
