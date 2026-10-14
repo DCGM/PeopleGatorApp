@@ -1082,6 +1082,8 @@ async def test_issue8_generic_source_processing_and_rerun(seed_target):
     assert image.last_touched_by_api_key_id == seeded.api_keys['importer']
     content, media_type = await get_image_content(ISSUE8_IMAGE_URL)
     assert media_type == 'image/png' and Image.open(io.BytesIO(content)).size == (800, 1100)
+    assert Image.open(io.BytesIO(content)).format == 'PNG'
+    assert content.startswith(b'\x89PNG\r\n\x1a\n')
     await preview.seed_preview(database, filesystem)
     assert (await database.sources.get_document(document.source_id)).last_touched_at == document.last_touched_at
     assert (await database.sources.get_page(orphan.source_id)).last_touched_at == orphan.last_touched_at
@@ -1316,3 +1318,28 @@ async def test_issue8_migration_preserves_sources_without_fabricating_history(se
             with pytest.raises(SchemaValidationError, match='consistency'):
                 await connection.run_sync(validate_schema)
             await connection.rollback()
+
+
+@pytest.mark.asyncio
+async def test_issue8_png_upgrade_preserves_source_history_and_reviewed_media(seed_target):
+    from people_gator_api.seeding.fixtures import ISSUE8_IMAGE_URL
+    from people_gator_api.seeding.media import page_image
+    from people_gator_api.schemas.sources import ImageLookupRequest
+    from people_gator_api.media.image_content import image_content_key
+    database, filesystem, _ = seed_target
+    await preview.seed_preview(database, filesystem)
+    image = await database.sources.lookup_image(ImageLookupRequest(url=ISSUE8_IMAGE_URL))
+    key = image_content_key(ISSUE8_IMAGE_URL)
+    legacy = page_image(PAGES[0], next(item for item in DOCUMENTS if item.key == 'issue8-search'))
+    await filesystem.write_bytes(key, legacy)
+    await preview.seed_preview(database, filesystem)
+    repaired = await filesystem.read_bytes(key)
+    assert Image.open(io.BytesIO(repaired)).format == 'PNG'
+    assert repaired != legacy
+    assert (await database.sources.get_image(image.source_id)).last_touched_at == image.last_touched_at
+    edited = io.BytesIO()
+    Image.new('RGB', (800,1100), '#bb88cc').save(edited, 'PNG')
+    await filesystem.write_bytes(key, edited.getvalue())
+    await preview.seed_preview(database, filesystem)
+    assert await filesystem.read_bytes(key) == edited.getvalue()
+    assert (await database.sources.get_image(image.source_id)).last_touched_at == image.last_touched_at

@@ -109,3 +109,11 @@ def page_image(page: Page, document: Document) -> bytes:
     buffer = BytesIO()
     image.save(buffer, "JPEG", quality=90)
     return buffer.getvalue()
+
+
+def png_image(page: Page, document: Document) -> bytes:
+    """An actual PNG for arbitrary image sources with a PNG URL identity."""
+    buffer = BytesIO()
+    with Image.open(BytesIO(page_image(page, document))) as image:
+        image.save(buffer, "PNG")
+    return buffer.getvalue()

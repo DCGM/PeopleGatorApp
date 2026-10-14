@@ -40,8 +40,8 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAGE_URL, Face
-from .media import face_box, face_keypoints, page_image, page_layout
+from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
 
@@ -321,8 +321,13 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     # Standalone image uses the same generic source touch as document pages.
     image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url=ISSUE8_IMAGE_URL))
     image_key = image_content_key(ISSUE8_IMAGE_URL)
-    if await _read_optional(filesystem, image_key) is None:
-        await filesystem.write_bytes(image_key, page_image(PAGES[0], DOCUMENTS[0]))
+    stored_image = await _read_optional(filesystem, image_key)
+    image_document = next(item for item in DOCUMENTS if item.key == ISSUE8_IMAGE_PAGE.document)
+    # Narrow upgrade for the exact JPEG bytes written by the initial issue #8
+    # fixture. Preserve any reviewed/replaced media and all source identities.
+    legacy_images = {page_image(PAGES[0], item) for item in DOCUMENTS if item.key in {"issue8-search", "issue8-direct"}}
+    if stored_image is None or stored_image in legacy_images:
+        await filesystem.write_bytes(image_key, png_image(ISSUE8_IMAGE_PAGE, image_document))
     key = "issue8-image-face"
     if key not in manifest.faces:
         existing_faces = (await database.faces.list(FaceListRequest(

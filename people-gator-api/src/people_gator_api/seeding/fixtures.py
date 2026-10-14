@@ -284,3 +284,5 @@ PAGES = (
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
+
+ISSUE8_IMAGE_PAGE = Page("issue8-image", "issue8-direct", 1, (Face("issue8-image-face", None, 0, 2, embedded=False),), has_layout=False)

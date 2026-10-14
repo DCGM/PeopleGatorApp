@@ -209,3 +209,8 @@ To regenerate the frontend contract locally, run the API's
 `npm run openapi-ts` from `people-gator-app`. `PEOPLE_GATOR_OPENAPI` can override
 that local input path. The exported JSON is ignored; generated SDK files are
 committed.
+
+The standalone portrait is an actual PNG with a visible synthetic face. An exact
+match to the original issue #8 JPEG fixture at that PNG key receives a narrowly
+scoped format upgrade. Reviewed or replaced image bytes remain untouched; the
+upgrade does not change source identities, annotations or processing timestamps.
