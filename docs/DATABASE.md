@@ -90,7 +90,7 @@ fields. Use validated schemas instead of ORM shortcuts for ingestion.
 The synthetic seeder follows these same contracts, adds missing fixtures and
 preserves review edits/checkpoints. It needs migrated PostgreSQL and local
 storage, but no inference services. See
-[preview seeding](../people-gator-api/docs/preview-seeding.md).
+[preview seeding](../people-gator-api/docs/PREVIEW-SEEDING.md).
 
 ## Schema lifecycle
 
@@ -104,6 +104,6 @@ uv run --locked python -m people_gator_api.cli.database check
 Use `schema_mode=validate` for migration-managed stores. `bootstrap` creates
 missing objects for development but does not upgrade existing columns. Existing
 bootstrap stores require the reviewed `migrate --adopt-bootstrap` procedure in
-[Database migrations](../people-gator-api/docs/database-migrations.md).
+[Database migrations](../people-gator-api/docs/DATABASE-MIGRATIONS.md).
 Never stamp `head` to suppress schema drift. Test migration changes in a separate
 disposable store before applying them to retained data.

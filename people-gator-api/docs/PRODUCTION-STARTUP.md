@@ -91,7 +91,7 @@ docker run --rm --network production --env-file runtime.env people-gator-api:rel
 ```
 
 Resolve rejected drift with a reviewed repair instead of manually stamping the
-current head. See [Database migrations](database-migrations.md) for recognized
+current head. See [Database migrations](DATABASE-MIGRATIONS.md) for recognized
 snapshots, constraints and recovery details. Never stamp an empty database.
 
 ## Verification

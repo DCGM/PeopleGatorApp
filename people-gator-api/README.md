@@ -47,12 +47,12 @@ Never use a retained development or project store for destructive schema tests.
   [Search filters](../docs/SEARCH_FILTERS.md) describe current implementation.
 - [Persistence contracts](src/people_gator_api/persistence/README.md) and
   [Filesystem](src/people_gator_api/filesystem/README.md) describe adapter boundaries.
-- [Database migrations](docs/database-migrations.md) cover bootstrap adoption;
-  [production startup](docs/production-startup.md) covers validation and roles.
-- [Preview seeding](docs/preview-seeding.md) describes repeatable synthetic data
+- [Database migrations](docs/DATABASE-MIGRATIONS.md) cover bootstrap adoption;
+  [production startup](docs/PRODUCTION-STARTUP.md) covers validation and roles.
+- [Preview seeding](docs/PREVIEW-SEEDING.md) describes repeatable synthetic data
   and feature maintenance.
-- [API-key authentication](docs/api-keys.md) and
-  [processing filters](docs/entity-processing-filters.md) provide focused references.
+- [API-key authentication](docs/API-KEYS.md) and
+  [processing filters](docs/ENTITY-PROCESSING-FILTERS.md) provide focused references.
 - [Deployment](../docs/DEPLOYMENT.md), [Observability](../docs/OBSERVABILITY.md) and
   [Data maintenance](../docs/DATA_MAINTENANCE.md) cover operations.
 

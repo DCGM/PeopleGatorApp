@@ -59,7 +59,7 @@ relationships, vectors, media formats, authentication attribution, or filters:
    or media services, not just record counts. Retain rerun/edit-preservation and
    interrupted-checkpoint recovery coverage. Run the seed twice against an
    isolated, migrated PostgreSQL database and disposable local storage.
-6. Update `people-gator-api/docs/preview-seeding.md` with the coverage and a way
+6. Update `people-gator-api/docs/PREVIEW-SEEDING.md` with the coverage and a way
    to explore it. Preserve PR deployment order: storage initialization, schema
    migration, seed, then backend/frontend startup. Seed failure must prevent the
    candidate deployment from being marked successful.

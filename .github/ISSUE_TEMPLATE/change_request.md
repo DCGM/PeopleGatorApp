@@ -41,7 +41,7 @@ Distinguish requested functionality from future ideas. -->
 
 ## Validation plan
 
-Use the [testing strategy](https://github.com/DCGM/PeopleGatorApp/blob/main/docs/test.md)
+Use the [testing strategy](https://github.com/DCGM/PeopleGatorApp/blob/main/docs/TEST.md)
 to select test levels, fixtures and relevant checks.
 
 <!-- List checks appropriate to the change and required local services.

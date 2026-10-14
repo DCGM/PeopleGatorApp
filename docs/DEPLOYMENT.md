@@ -14,7 +14,7 @@ There is no general production Compose/release workflow supplied here.
 `compose.live-preview.yaml` uses development images/reload and a fixed hostname;
 it is not a production release template. It needs the existing `web` network,
 Traefik/TLS and S3 settings. Its startup migrates/adopts before API validation;
-see [Database migrations](../people-gator-api/docs/database-migrations.md).
+see [Database migrations](../people-gator-api/docs/DATABASE-MIGRATIONS.md).
 
 ## Production-format images
 
@@ -56,7 +56,7 @@ the real routed origin. Migration jobs must not run concurrently per replica.
 Face-model registration creates indexes and needs DDL privileges: provision models
 before runtime use with a restricted role. Seed only intentionally synthetic
 demo/preview stores, not a real release database. Follow the
-[production startup guide](../people-gator-api/docs/production-startup.md) for
+[production startup guide](../people-gator-api/docs/PRODUCTION-STARTUP.md) for
 privileges and exact validation limits and [Data maintenance](DATA_MAINTENANCE.md)
 for backup/restore review.
 
@@ -103,7 +103,7 @@ are read through the selected filesystem. Preserve their keys and JWK material
 across deployments. A missing users file is initialized empty, not with a built-in
 account. The shipped example supplies demo `test` / `test`. Refresh sessions live
 in memory and do not survive API restarts. See
-[API-key authentication](../people-gator-api/docs/api-keys.md).
+[API-key authentication](../people-gator-api/docs/API-KEYS.md).
 
 Frontend `VITE_API_BASE_URL`, `VITE_API_USERNAME` and `VITE_API_PASSWORD` are
 browser-visible build-time variables. `ALLOWED_VITE_HOSTS` affects the development

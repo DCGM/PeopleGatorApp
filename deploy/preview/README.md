@@ -39,7 +39,7 @@ backend image using the PR login. The controller then runs the same image's
 `seed` command before the API starts in validation mode. A seed failure blocks
 candidate startup. The repeatable seed uses persistence interfaces to add
 synthetic identities, linked face vectors, documents/pages, OCR mentions and local
-media; see [preview seeding](../../people-gator-api/docs/preview-seeding.md).
+media; see [preview seeding](../../people-gator-api/docs/PREVIEW-SEEDING.md).
 Updating a preview retains its database, password, media storage and JWT keys.
 GitHub CI uses one separate, temporary pgvector service per backend test run,
 with separate databases on that service for contract tests, migration tests and

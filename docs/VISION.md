@@ -27,7 +27,7 @@ identities and sources. Search combines text and face rankings with RRF.
 
 Synthetic previews demonstrate face-only, mention-only and mixed identities,
 unassigned evidence, link review states and document filtering. The
-[seed guide](../people-gator-api/docs/preview-seeding.md) describes the scenarios.
+[seed guide](../people-gator-api/docs/PREVIEW-SEEDING.md) describes the scenarios.
 The seed is also a maintained feature contract, not just empty-database filler.
 
 The API consumes prepared OCR and face artifacts. This repository does not ship

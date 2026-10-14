@@ -48,7 +48,7 @@ Scopes are explicit; do not assume admin automatically grants every other scope.
 Consult each route's dependency for the precise requirement. Mutation actors
 carry the database user ID and optional registered API-key ID. API-key hashes and
 secrets stay in the credential file, never in the SQL registry; see
-[API-key authentication](../people-gator-api/docs/api-keys.md).
+[API-key authentication](../people-gator-api/docs/API-KEYS.md).
 
 The browser requests all four scopes and automatically uses `test` / `test`
 unless build-time variables override them. Tokens live in `sessionStorage`.

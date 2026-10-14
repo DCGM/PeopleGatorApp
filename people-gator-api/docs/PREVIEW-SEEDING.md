@@ -18,7 +18,7 @@ uv run python -m people_gator_api.cli.seed
 ```
 
 If an older database was created in bootstrap mode, first follow the
-[bootstrap adoption instructions](database-migrations.md). Seeding validates the
+[bootstrap adoption instructions](DATABASE-MIGRATIONS.md). Seeding validates the
 migration head and schema before writing data. It does not create or migrate
 schema itself. In a production-format backend container, use its `seed` command:
 

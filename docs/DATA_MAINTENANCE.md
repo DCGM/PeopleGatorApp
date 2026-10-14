@@ -91,12 +91,12 @@ the repository. Extend regression coverage and relevant synthetic fixtures.
 
 The seed is additive and preserves review edits and checkpoints. It is not a
 reset or cleanup tool; do not delete checkpoints to force arbitrary rewrites.
-Follow [preview seeding](../people-gator-api/docs/preview-seeding.md) for supported
+Follow [preview seeding](../people-gator-api/docs/PREVIEW-SEEDING.md) for supported
 upgrades. Closing a preview deliberately deletes that PR's data; never use preview
 cleanup as a retained-data repair mechanism.
 
 For bootstrap adoption, back up first and use the checked
-[`migrate --adopt-bootstrap` procedure](../people-gator-api/docs/database-migrations.md).
+[`migrate --adopt-bootstrap` procedure](../people-gator-api/docs/DATABASE-MIGRATIONS.md).
 Unknown or partially matching schemas must be investigated before retrying.
 A failed deployment can retain a previous running API while migrations have
 changed its store; there is no automatic schema rollback. Preserve logs and the

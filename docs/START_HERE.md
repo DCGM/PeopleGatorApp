@@ -18,7 +18,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
 4. On disposable data, change an identity field or assignment and inspect its
    last-processing metadata. Try link-state filters and the mobile filter toggle.
    Review fixture details in the
-   [seed guide](../people-gator-api/docs/preview-seeding.md).
+   [seed guide](../people-gator-api/docs/PREVIEW-SEEDING.md).
 
 ## Check the API without printing credentials
 

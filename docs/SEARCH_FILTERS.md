@@ -64,7 +64,7 @@ Entities and source projections accept inclusive `last_touched_from` and
 inverted ranges return 422. Historical null touch metadata is retained, but does
 not satisfy a touch criterion. Entity `document_source_id` takes the registered
 document's **internal source UUID**, not its archive `document_id`. See
-[processing filters](../people-gator-api/docs/entity-processing-filters.md).
+[processing filters](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md).
 
 With `$TOKEN` supplied securely, a text/assignment search looks like:
 
