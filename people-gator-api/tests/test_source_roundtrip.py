@@ -67,7 +67,7 @@ def test_sources_contract_is_read_only_and_has_no_polymorphic_metadata() -> None
     source_properties = openapi["components"]["schemas"]["SourceResponseBase"][
         "properties"
     ]
-    assert set(source_properties) == {"source_id", "source_type", "url"}
+    assert set(source_properties) == {"source_id", "source_type", "url", "last_touched_at", "last_touched_by_user_id", "last_touched_by_api_key_id"}
 
 
 @pytest.mark.asyncio

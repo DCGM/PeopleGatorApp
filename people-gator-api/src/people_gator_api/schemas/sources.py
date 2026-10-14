@@ -1,11 +1,13 @@
 """Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
 
 from abc import abstractmethod
+from datetime import timezone
 import uuid
 from typing import Annotated, Self
 
 from pydantic import (
     AnyUrl,
+    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -358,6 +360,9 @@ class SourceResponseBase(BaseModel):
     source_id: uuid.UUID
     source_type: SourceKind
     url: AnyUrl
+    last_touched_at: AwareDatetime | None = None
+    last_touched_by_user_id: uuid.UUID | None = None
+    last_touched_by_api_key_id: uuid.UUID | None = None
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> Self:
@@ -365,6 +370,9 @@ class SourceResponseBase(BaseModel):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            last_touched_at=generic.last_touched_at,
+            last_touched_by_user_id=generic.last_touched_by_user_id,
+            last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
         )
 
 
@@ -447,6 +455,9 @@ class PageResponse(SourceResponseBase):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            last_touched_at=generic.last_touched_at,
+            last_touched_by_user_id=generic.last_touched_by_user_id,
+            last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
             library=generic.library,
             document_id=generic.document_id,
             page_id=generic.page_id,
@@ -474,6 +485,9 @@ class DocumentResponse(SourceResponseBase):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            last_touched_at=generic.last_touched_at,
+            last_touched_by_user_id=generic.last_touched_by_user_id,
+            last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
             library=generic.library,
             document_id=generic.document_id,
             name=generic.name,
@@ -491,6 +505,9 @@ class ImageResponse(SourceResponseBase):
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
+            last_touched_at=generic.last_touched_at,
+            last_touched_by_user_id=generic.last_touched_by_user_id,
+            last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
         )
 
 
@@ -539,13 +556,40 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
 # ---------------------------------------------------------------------------
 
 
-class GenericSourceListFilter(ListFilterBase, EntityLinkFilter):
+class SourceProcessingFilter(BaseModel):
+    """Last actual annotation change on this source, independent of entities."""
+
+    last_touched_from: AwareDatetime | MissingType = Field(default=MISSING, description="Inclusive lower bound of the last annotation change.")
+    last_touched_to: AwareDatetime | MissingType = Field(default=MISSING, description="Inclusive upper bound of the last annotation change.")
+    last_touched_by_user_id: list[uuid.UUID] | MissingType = Field(default=MISSING, description="Users responsible for the last annotation change.")
+    last_touched_by_api_key_id: list[uuid.UUID] | MissingType = Field(default=MISSING, description="Registered API keys used for the last annotation change.")
+
+    @model_validator(mode="after")
+    def validate_processing(self) -> Self:
+        for name in ("last_touched_from", "last_touched_to"):
+            value = getattr(self, name)
+            if not is_missing(value):
+                setattr(self, name, value.astimezone(timezone.utc))
+        for name in ("last_touched_by_user_id", "last_touched_by_api_key_id"):
+            value = getattr(self, name)
+            if not is_missing(value):
+                setattr(self, name, list(dict.fromkeys(value)))
+        if not is_missing(self.last_touched_from) and not is_missing(self.last_touched_to) and self.last_touched_from > self.last_touched_to:
+            raise ValueError("last_touched_from must be before or equal to last_touched_to")
+        return self
+
+    def processing_values(self) -> dict:
+        return {name: getattr(self, name) for name in SourceProcessingFilter.model_fields}
+
+
+class GenericSourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     """Filter for listing generic sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
         default=MISSING,
         description="Filter by source type."
     )
+    has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
@@ -595,7 +639,7 @@ class GenericSourceListFilter(ListFilterBase, EntityLinkFilter):
     )
 
 
-class SourceListFilter(ListFilterBase, EntityLinkFilter):
+class SourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     """Filter for listing all sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -625,6 +669,7 @@ class SourceListFilter(ListFilterBase, EntityLinkFilter):
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
+            **self.processing_values(),
             source_type=self.source_type,
             url=self.url,
             source_id=self.source_id,
@@ -638,7 +683,7 @@ class SourceListFilter(ListFilterBase, EntityLinkFilter):
         )
 
 
-class PageListFilter(ListFilterBase, EntityLinkFilter):
+class PageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     """Filter for listing pages."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -691,6 +736,7 @@ class PageListFilter(ListFilterBase, EntityLinkFilter):
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
+            **self.processing_values(),
             source_type=[SourceKind.page],
             url=self.url,
             library=self.library,
@@ -707,9 +753,10 @@ class PageListFilter(ListFilterBase, EntityLinkFilter):
         )
 
 
-class DocumentListFilter(ListFilterBase, EntityLinkFilter):
+class DocumentListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     """Filter for listing documents."""
 
+    has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
@@ -741,6 +788,8 @@ class DocumentListFilter(ListFilterBase, EntityLinkFilter):
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
+            **self.processing_values(),
+            has_unassigned_faces=self.has_unassigned_faces,
             source_type=[SourceKind.document],
             url=self.url,
             library=self.library,
@@ -753,7 +802,7 @@ class DocumentListFilter(ListFilterBase, EntityLinkFilter):
         )
 
 
-class ImageListFilter(ListFilterBase, EntityLinkFilter):
+class ImageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     """Filter for listing images."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -779,6 +828,7 @@ class ImageListFilter(ListFilterBase, EntityLinkFilter):
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
+            **self.processing_values(),
             source_type=[SourceKind.image],
             url=self.url,
             source_id=self.source_id,
@@ -927,3 +977,14 @@ __all__ = [
     "SourceListRequest",
     "to_generic_list_request",
 ]
+
+
+class DocumentLibraryOption(BaseModel):
+    library: str
+
+
+class DocumentLibraryOptionsRequest(GenericListRequest):
+    q: str | None = Field(default=None, max_length=256)
+
+
+DocumentLibraryOptionsResponse = GenericListResponse[DocumentLibraryOption]

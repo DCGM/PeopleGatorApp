@@ -1,3 +1,4 @@
+from people_gator_api.schemas.common import GenericActor
 # pyright: reportPrivateUsage=false
 
 import uuid
@@ -132,11 +133,11 @@ def test_text_mention_can_represent_entity_unlinking() -> None:
 @pytest.mark.asyncio
 async def test_empty_entity_delete_batch_is_a_noop() -> None:
     class Repository:
-        async def delete_many(self, selector: object) -> object:
+        async def delete_many(self, selector: object, *, context: object) -> object:
             raise AssertionError("delete_many must not be called")
 
     response = await EntityRepository.delete_batch(
-        type_cast(EntityRepository, Repository()), []
+        type_cast(EntityRepository, Repository()), [], context=GenericActor(user_id=uuid.uuid4())
     )
     assert response.deleted_count == 0
 

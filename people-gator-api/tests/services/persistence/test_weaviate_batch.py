@@ -1,4 +1,5 @@
 import uuid
+from people_gator_api.schemas.common import GenericActor
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -27,7 +28,7 @@ async def test_entity_delete_batch_uses_one_delete_many_call() -> None:
     client = SimpleNamespace(collections=SimpleNamespace(get=get_collection))
     repository = WeaviateEntityRepository(cast(Any, client))
 
-    deleted = await repository.delete_batch([uuid.uuid4(), uuid.uuid4(), uuid.uuid4()])
+    deleted = await repository.delete_batch([uuid.uuid4(), uuid.uuid4(), uuid.uuid4()], context=GenericActor(user_id=uuid.uuid4()))
 
     assert deleted.deleted_count == 2
     assert len(calls) == 1
@@ -38,4 +39,4 @@ async def test_empty_entity_delete_batch_skips_weaviate() -> None:
     client = SimpleNamespace(collections=SimpleNamespace())
     repository = WeaviateEntityRepository(cast(Any, client))
 
-    assert (await repository.delete_batch([])).deleted_count == 0
+    assert (await repository.delete_batch([], context=GenericActor(user_id=uuid.uuid4()))).deleted_count == 0

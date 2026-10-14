@@ -64,7 +64,7 @@ from people_gator_api.persistence.postgres.utils import (
     fuse_scores,
 )
 
-from .touch import touch_values
+from .touch import touch_values, touch_sources, lock_annotation_graph
 
 class PostgresEntityRepository(EntityRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -207,8 +207,8 @@ class PostgresEntityRepository(EntityRepository):
             for item_id in ids
         ]
 
-    async def delete(self, entity_id: uuid.UUID) -> bool:
-        result = await self.delete_batch([entity_id])
+    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
+        result = await self.delete_batch([entity_id], context=context)
         return result.deleted_count == 1
 
     async def merge_batch(
@@ -225,6 +225,7 @@ class PostgresEntityRepository(EntityRepository):
         if target_entity_id in source_entity_ids:
             raise ValueError("source and target entity must differ")
 
+        await lock_annotation_graph(self._session)
         try:
             # A stable lock order avoids deadlocks between simultaneous merges.
             entities = {
@@ -243,6 +244,7 @@ class PostgresEntityRepository(EntityRepository):
                 await self._session.rollback()
                 return None
 
+            affected_sources = await self._annotation_sources(source_entity_ids)
             target = entities[target_entity_id]
             for name, value in touch_values(context).items():
                 setattr(target, name, value)
@@ -280,6 +282,7 @@ class PostgresEntityRepository(EntityRepository):
             await self._session.execute(
                 delete(Entity).where(Entity.id.in_(source_entity_ids))
             )
+            await touch_sources(self._session, affected_sources, context)
             await load_link_stats(self._session, [target], entities=True)
             response = EntityMergeBatchResponse(
                 source_entity_ids=list(source_entity_ids),
@@ -295,12 +298,20 @@ class PostgresEntityRepository(EntityRepository):
 
         return response
 
+    async def _annotation_sources(self, entity_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+        sources: set[uuid.UUID] = set()
+        for evidence in (ImageOccurrence, TextMention):
+            sources.update(await self._session.scalars(select(evidence.source_id).where(evidence.entity_id.in_(entity_ids))))
+        return sources
+
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID]
+        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
     ) -> EntityDeleteManyResponse:
         unique = list(dict.fromkeys(entity_ids))
         if not unique:
             return EntityDeleteManyResponse(deleted_count=0)
+        await lock_annotation_graph(self._session)
+        affected_sources = await self._annotation_sources(unique)
         await self._session.execute(
             update(ImageOccurrence)
             .where(ImageOccurrence.entity_id.in_(unique))
@@ -315,11 +326,12 @@ class PostgresEntityRepository(EntityRepository):
             CursorResult[Any],
             await self._session.execute(delete(Entity).where(Entity.id.in_(unique))),
         )
+        await touch_sources(self._session, affected_sources, context)
         await commit(self._session, "entity delete failed")
         return EntityDeleteManyResponse(deleted_count=int(result.rowcount or 0))
 
     async def delete_many(
-        self, selector: EntityDeleteManyRequest
+        self, selector: EntityDeleteManyRequest, *, context: GenericActor
     ) -> EntityDeleteManyResponse:
         filters = entity_filters(selector.filter)
         ids = list(
@@ -330,7 +342,7 @@ class PostgresEntityRepository(EntityRepository):
                 .limit(selector.limit)
             )
         )
-        return await self.delete_batch(ids)
+        return await self.delete_batch(ids, context=context)
 
     async def _text_scores(
         self, query: SearchEntitiesRequest, filters: Sequence[ColumnElement[bool]]

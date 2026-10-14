@@ -30,6 +30,7 @@ from people_gator_api.schemas.users import (
 )
 from people_gator_api.persistence.postgres.models import (
     Entity,
+    Source,
     APIKey,
     Face,
     User,
@@ -138,13 +139,14 @@ class PostgresUserRepository(UserRepository):
                 or_(
                     exists().where(Entity.user_id.in_(unique)),
                     exists().where(Entity.last_touched_by_user_id.in_(unique)),
+                    exists().where(Source.last_touched_by_user_id.in_(unique)),
                     exists().where(APIKey.user_id.in_(unique)),
                     exists().where(Face.user_id.in_(unique)),
                 )
             )
         )
         if referenced:
-            raise ValueError("cannot delete a user referenced by an entity or face")
+            raise ValueError("cannot delete a user referenced by an entity, face or source")
         result = type_cast(
             CursorResult[Any],
             await self._session.execute(delete(User).where(User.id.in_(unique))),

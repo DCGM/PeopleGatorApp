@@ -121,8 +121,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (8, 14, 10)
-    assert len(result.documents) == 9 and len(result.pages) == 14
+    assert await counts(database) == (8, 21, 11)
+    assert len(result.documents) == 11 and len(result.pages) == 22
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -269,7 +269,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (8, 14, 10)
+    assert await counts(database) == (8, 21, 11)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -291,7 +291,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (9, 14, 10)
+    assert await counts(database) == (9, 21, 11)
 
 
 @pytest.mark.asyncio
@@ -315,8 +315,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 8 and len(result.faces) == 14
-    assert await counts(database) == (8, 14, 10)
+    assert len(result.entities) == 8 and len(result.faces) == 21
+    assert await counts(database) == (8, 21, 11)
 
 
 @pytest.mark.asyncio
@@ -336,7 +336,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (7, 13, 9)
+    assert await counts(database) == (7, 20, 10)
 
 
 @pytest.mark.asyncio
@@ -1057,3 +1057,156 @@ async def test_document_scope_and_indexed_aggregates_with_larger_fixture(seed_ta
     assert (
         await db.sources.get_document(doc.source_id)
     ).entity_link_stats == original.entity_link_stats
+
+
+@pytest.mark.asyncio
+async def test_issue8_generic_source_processing_and_rerun(seed_target):
+    from people_gator_api.schemas.sources import ImageLookupRequest
+    from people_gator_api.seeding.fixtures import ISSUE8_IMAGE_URL
+    from people_gator_api.media.image_content import get_image_content
+
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    document = await database.sources.get_document(seeded.documents['issue8-search'])
+    page = await database.sources.get_page(seeded.pages['issue8-search-6'])
+    sibling = await database.sources.get_page(seeded.pages['issue8-untouched'])
+    mirror = await database.sources.get_document(seeded.documents['issue8-mirror'])
+    orphan = await database.sources.get_page(seeded.pages['issue8-orphan-1'])
+    image = await database.sources.lookup_image(ImageLookupRequest(url=ISSUE8_IMAGE_URL))
+    assert document.last_touched_at == page.last_touched_at
+    assert document.last_touched_by_user_id == seeded.users['reviewer']
+    assert document.last_touched_by_api_key_id is None
+    assert sibling.last_touched_at is None
+    assert mirror.last_touched_at is None
+    assert orphan.last_touched_by_api_key_id == seeded.api_keys['importer']
+    assert image.last_touched_by_api_key_id == seeded.api_keys['importer']
+    content, media_type = await get_image_content(ISSUE8_IMAGE_URL)
+    assert media_type == 'image/png' and Image.open(io.BytesIO(content)).size == (800, 1100)
+    await preview.seed_preview(database, filesystem)
+    assert (await database.sources.get_document(document.source_id)).last_touched_at == document.last_touched_at
+    assert (await database.sources.get_page(orphan.source_id)).last_touched_at == orphan.last_touched_at
+    assert (await database.sources.get_image(image.source_id)).last_touched_at == image.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_issue8_document_search_processing_filters_and_options(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter, SourceListRequest, SourceListFilter, ImageListRequest, ImageListFilter, DocumentLibraryOptionsRequest
+    from people_gator_api.schemas.search import SearchDocumentsRequest, SearchPagesRequest
+    from people_gator_api.schemas.enums import EntityLinkState
+    from datetime import timedelta
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    target = seeded.documents['issue8-search']
+    document = await database.sources.get_document(target)
+    for term in ('pribehy', 'PŘÍBĚHY', str(document.document_id), str(document.url), 'A. Novak'):
+        result = await database.sources.search_documents(SearchDocumentsRequest(query=QueryBase(text=[term]), limit=100, return_total_count=True))
+        assert target in {item.source_id for item in result.items}
+        assert result.total_count == len(result.items)
+        assert len(result.items) == len({item.source_id for item in result.items})
+    empty = seeded.documents['empty-document']
+    found = await database.sources.search_documents(SearchDocumentsRequest(query=QueryBase(text=['awaiting scans']), limit=100))
+    assert empty in {item.source_id for item in found.items}
+    filters = DocumentListFilter(last_touched_from=document.last_touched_at, last_touched_to=document.last_touched_at,
+        last_touched_by_user_id=[seeded.users['reviewer']], library=['preview-mzk', 'preview-nlk'],
+        entity_link_state=[EntityLinkState.verified], has_unassigned_faces=False)
+    result = await database.sources.list_documents(DocumentListRequest(filter_=filters, limit=1, return_total_count=True))
+    assert result.total_count == 1 and result.items[0].source_id == target
+    assert result.items[0].last_touched_at == document.last_touched_at
+    found = await database.sources.search_documents(SearchDocumentsRequest(limit=100, query=QueryBase(text=['pribehy']), filter_=filters, return_total_count=True))
+    assert found.total_count == 1 and found.items[0].last_touched_at == document.last_touched_at
+    for field, value in [('last_touched_from', document.last_touched_at + timedelta(microseconds=1)), ('last_touched_to', document.last_touched_at - timedelta(microseconds=1)), ('last_touched_by_api_key_id', [seeded.api_keys['importer']])]:
+        result = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(source_id=[target], **{field:value}), return_total_count=True))
+        assert result.total_count == 0
+    combined = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(entity_link_state=[EntityLinkState.verified], has_unassigned_faces=True)))
+    assert seeded.documents['link-states'] in {item.source_id for item in combined.items}
+    negative = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(has_unassigned_faces=False)))
+    assert empty in {item.source_id for item in negative.items}
+    previews = await database.sources.list_pages(PageListRequest(filter_=PageListFilter(library=[document.library], document_id=[document.document_id]), limit=4))
+    remainder = await database.sources.list_pages(PageListRequest(filter_=PageListFilter(library=[document.library], document_id=[document.document_id]), limit=4, cursor=previews.cursor))
+    assert any(item.entity_link_stats.faces.total for item in remainder.items)
+    # Source and page filters use their own stored history, including orphan pages.
+    own = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(last_touched_by_api_key_id=[seeded.api_keys['importer']])))
+    assert seeded.pages['issue8-orphan-1'] in {item.source_id for item in own.items}
+    assert seeded.pages['issue8-untouched'] not in {item.source_id for item in own.items}
+    pages = await database.sources.search_pages(SearchPagesRequest(limit=100, query=QueryBase(text=['A. Novak']), filter_=PageListFilter(last_touched_by_user_id=[seeded.users['reviewer']])))
+    assert seeded.pages['issue8-search-6'] in {item.source_id for item in pages.items}
+    images = await database.sources.list_images(ImageListRequest(limit=100, filter_=ImageListFilter(last_touched_by_api_key_id=[seeded.api_keys['importer']])))
+    assert len(images.items) == 1 and images.items[0].last_touched_at
+    sources = await database.sources.list_sources(SourceListRequest(filter_=SourceListFilter(last_touched_by_api_key_id=[seeded.api_keys['importer']]), limit=100))
+    assert {item.source_id for item in images.items} <= {item.source_id for item in sources.items}
+    first = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, return_total_count=True))
+    second = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, return_total_count=True))
+    assert first.total_count == 2
+    assert [first.items[0].library, second.items[0].library] == ['preview-mzk', 'preview-nlk']
+    with pytest.raises(ValueError, match='cursor'):
+        await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, q='mzk'))
+
+
+@pytest.mark.asyncio
+async def test_issue8_annotation_noops_delete_merge_rollback_and_concurrency(seed_target, monkeypatch):
+    import asyncio
+    from people_gator_api.schemas.sources import ImageLookupRequest
+    from people_gator_api.schemas.mentions import TextMentionPatchRequest
+    from people_gator_api.schemas.faces import FacePatchBatchItem
+    from people_gator_api.seeding.fixtures import ISSUE8_IMAGE_URL
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from people_gator_api.persistence.postgres import face_repository
+
+    database, filesystem, engine = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    actor = GenericActor(user_id=seeded.users['reviewer'])
+    image = await database.sources.lookup_image(ImageLookupRequest(url=ISSUE8_IMAGE_URL))
+    face_id = seeded.faces['issue8-image-face']
+    await database.faces.patch(face_id, FacePatchRequest(), actor)
+    assert (await database.sources.get_image(image.source_id)).last_touched_at == image.last_touched_at
+    await database.faces.patch(face_id, FacePatchRequest(entity_id=seeded.entities['lenka']), actor)
+    changed = await database.sources.get_image(image.source_id)
+    assert changed.last_touched_at > image.last_touched_at and changed.last_touched_by_api_key_id is None
+    # Failed commit rolls back the annotation and both kinds of metadata.
+    original_commit = face_repository.commit
+    async def fail(session, message):
+        await session.rollback()
+        raise RuntimeError('forced rollback')
+    monkeypatch.setattr(face_repository, 'commit', fail)
+    with pytest.raises(RuntimeError, match='rollback'):
+        await database.faces.patch(face_id, FacePatchRequest(entity_id=seeded.entities['ada']), actor)
+    monkeypatch.setattr(face_repository, 'commit', original_commit)
+    assert (await database.faces.get(face_id)).entity_id == seeded.entities['lenka']
+    assert (await database.sources.get_image(image.source_id)).last_touched_at == changed.last_touched_at
+    # A batch assigns the exact same timestamp to all source targets and parents.
+    await database.faces.patch_batch([
+        FacePatchBatchItem(detection_id=face_id, entity_id=None),
+        FacePatchBatchItem(detection_id=seeded.faces['issue8-orphan-face'], entity_id=seeded.entities['lenka']),
+        FacePatchBatchItem(detection_id=seeded.faces['issue8-face-2'], entity_id=seeded.entities['lenka']),
+    ], actor)
+    image = await database.sources.get_image(image.source_id)
+    orphan = await database.sources.get_page(seeded.pages['issue8-orphan-1'])
+    page = await database.sources.get_page(seeded.pages['issue8-search-2'])
+    document = await database.sources.get_document(seeded.documents['issue8-search'])
+    assert image.last_touched_at == orphan.last_touched_at == page.last_touched_at == document.last_touched_at
+    assert (await database.sources.get_page(seeded.pages['issue8-untouched'])).last_touched_at is None
+    await database.text_mentions.patch(seeded.mentions['issue8-mention-5'], TextMentionPatchRequest(entity_id=None), actor)
+    mention_page = await database.sources.get_page(seeded.pages['issue8-search-5'])
+    assert mention_page.last_touched_at == (await database.sources.get_document(document.source_id)).last_touched_at
+    assert await database.text_mentions.delete(seeded.mentions['issue8-mention-5'], context=actor)
+    assert (await database.sources.get_page(mention_page.source_id)).last_touched_at > mention_page.last_touched_at
+    await database.entities.merge(seeded.entities['ada'], seeded.entities['lenka'], context=actor)
+    assert (await database.sources.get_page(orphan.source_id)).last_touched_at > orphan.last_touched_at
+    await database.entities.delete(seeded.entities['ada'], context=actor)
+    assert (await database.faces.get(seeded.faces['issue8-face-2'])).entity_id is None
+    before = await database.sources.get_document(document.source_id)
+    assert await database.sources.delete(page.source_id, context=actor)
+    assert (await database.sources.get_document(document.source_id)).last_touched_at > before.last_touched_at
+    assert await database.sources.get_page(page.source_id) is None
+    # Concurrent independent edits of siblings serialize parent processing.
+    async def edit(face_id, entity_id):
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            db = postgres_database(session)
+            await db.faces.patch(face_id, FacePatchRequest(entity_id=entity_id), actor)
+            return await db.sources.get_document(document.source_id)
+    a, b = await asyncio.wait_for(asyncio.gather(
+        edit(seeded.faces['issue8-face-3'], seeded.entities['nora']),
+        edit(seeded.faces['issue8-face-4'], seeded.entities['emil']),
+    ), timeout=10)
+    assert a.last_touched_at != b.last_touched_at
+    assert (await database.sources.get_document(document.source_id)).last_touched_at == max(a.last_touched_at, b.last_touched_at)

@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from people_gator_api.filesystem.contracts import Filesystem
 from people_gator_api.media.page_image import page_image_key
 from people_gator_api.media.page_layout import page_layout_key
+from people_gator_api.media.image_content import image_content_key
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.schemas.entities import (
@@ -35,11 +36,11 @@ from people_gator_api.schemas.mentions import (
     TextMentionListFilter,
     TextMentionListRequest,
 )
-from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest
+from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest, ImageCreateRequest
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL
+from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAGE_URL, Face
 from .media import face_box, face_keypoints, page_image, page_layout
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -259,7 +260,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                                 model_identifier=model,
                                 vector=example_vector(face.group, face.key, dim),
                             )
-                            for model, dim in ((MODEL, 8), (SECOND_MODEL, 4))
+                            for model, dim in ((MODEL, 8), (SECOND_MODEL, 4)) if face.embedded
                         ],
                         **fields,
                     ),
@@ -317,6 +318,27 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             manifest.mentions[mention.key] = record.mention_id
             active_mentions[mention.key] = record.mention_id
             await checkpoint()
+    # Standalone image uses the same generic source touch as document pages.
+    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url=ISSUE8_IMAGE_URL))
+    image_key = image_content_key(ISSUE8_IMAGE_URL)
+    if await _read_optional(filesystem, image_key) is None:
+        await filesystem.write_bytes(image_key, page_image(PAGES[0], DOCUMENTS[0]))
+    key = "issue8-image-face"
+    if key not in manifest.faces:
+        existing_faces = (await database.faces.list(FaceListRequest(
+            limit=100, filter_=FaceListFilter(source_id=[image.source_id]),
+        ))).items
+        detection = next((face for face in existing_faces if face.identifier == "preview-seed/" + key), None)
+        if detection is None:
+            face = Face(key, None, 0, 2)
+            detection = await database.faces.create(FaceCreateRequest(
+                identifier="preview-seed/" + key, source_id=image.source_id,
+                bounding_box=face_box(face), keypoints=face_keypoints(face), confidence=0.97,
+            ), actors["importer"])
+        manifest.faces[key] = detection.detection_id
+        await checkpoint()
+    if await database.faces.get(manifest.faces[key]) is not None:
+        active_faces[key] = manifest.faces[key]
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
@@ -340,6 +362,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}#link-statistics"
             ),
+            "document-search": "/documents?q=pribehy",
+            "document-source-touch": "/documents?library=preview-mzk&touched_by=" + str(actors["reviewer"].user_id),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"
             + urlencode({"library": "preview-mzk", "document": next(

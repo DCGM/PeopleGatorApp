@@ -87,6 +87,7 @@ from people_gator_api.schemas.sources import (
     DocumentListResponse,
     DocumentLookupRequest,
     DocumentResponse,
+    DocumentLibraryOptionsRequest, DocumentLibraryOptionsResponse,
     GenericSourceCreateRequest,
     GenericSourceListRequest,
     GenericSourceListResponse,
@@ -230,7 +231,7 @@ class EntityRepository(ABC):
         """
 
     @abstractmethod
-    async def delete(self, entity_id: uuid.UUID) -> bool:
+    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
         """Delete an entity and unassign its faces and text mentions.
 
         Return False when the entity does not exist.
@@ -275,7 +276,7 @@ class EntityRepository(ABC):
         """
 
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID]
+        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
     ) -> EntityDeleteManyResponse:
         unique_ids = list(dict.fromkeys(entity_ids))
         if not unique_ids:
@@ -284,11 +285,11 @@ class EntityRepository(ABC):
             filter=EntityListFilter(entity_id=unique_ids),
             limit=len(unique_ids),
         )
-        return await self.delete_many(request)
+        return await self.delete_many(request, context=context)
 
     @abstractmethod
     async def delete_many(
-        self, selector: EntityDeleteManyRequest
+        self, selector: EntityDeleteManyRequest, *, context: GenericActor
     ) -> EntityDeleteManyResponse:
         """
         Delete multiple entities based on the given selector.
@@ -334,6 +335,9 @@ class SourceRepository(ABC):
     (library, document_id), and image identity is its normalized URL. A conflicting
     URL or identity is an error; changes are delete-and-reinsert operations.
     """
+
+    async def document_library_filter_options(self, query: "DocumentLibraryOptionsRequest") -> "DocumentLibraryOptionsResponse":
+        raise NotImplementedError("Document library filter options require PostgreSQL")
 
     @abstractmethod
     async def lookup(

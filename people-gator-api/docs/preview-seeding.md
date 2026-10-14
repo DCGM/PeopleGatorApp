@@ -170,3 +170,19 @@ remain unchanged on seed reruns. Integration coverage checks the missing layout,
 face statistics, local page image, and aligned face crops through media services
 and repositories. The dataset now has nine registered documents, fourteen pages,
 fourteen faces, and ten mentions.
+
+## Document processing (issue #8)
+
+The additive `issue8-*` fixtures register **Příběhy archivářů** in `preview-mzk`
+and a separate mirror with the same archive UUID in `preview-nlk`. Six pages
+include automatic and verified faces; the linked Ada Novak / A. Novak identity
+occurs on five pages, including pages beyond a four-page preview. The first page
+and the mirror stay untouched. OCR linking uses the registered synthetic OCR
+key; verification uses the reviewer without a key. No historical timestamps are
+invented for old records.
+
+`issue8-orphan-1` demonstrates processing a page without a registered document.
+The image `https://preview.invalid/issue8/portrait.png` has a local PNG stored
+under `image_content_key` and an unassigned face, demonstrating the same generic
+source processing on images. The URL is a synthetic identity; no network download
+is needed. Repeating the seed preserves processing times, assignments and edits.

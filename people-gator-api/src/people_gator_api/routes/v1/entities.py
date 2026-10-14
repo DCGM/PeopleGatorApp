@@ -136,8 +136,7 @@ async def delete_entity_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    del user
-    if not await database.entities.delete(entity_id):
+    if not await database.entities.delete(entity_id, context=user):
         raise_api_error(404, "not_found", "Entity not found")
 
 
@@ -197,8 +196,7 @@ async def delete_entities_route(
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> EntityDeleteManyResponse:
-    del user
     try:
-        return await database.entities.delete_many(payload)
+        return await database.entities.delete_many(payload, context=user)
     except ValueError as exc:
         raise_api_error(422, "invalid_selector", str(exc))

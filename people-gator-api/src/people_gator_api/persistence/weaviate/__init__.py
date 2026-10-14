@@ -869,7 +869,7 @@ class WeaviateEntityRepository(EntityRepository):
             for x in commands
         ]
 
-    async def delete(self, entity_id: uuid.UUID) -> bool:
+    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
         if not await _exists(self._client, ENTITY_COLLECTION, entity_id):
             return False
         for name in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
@@ -939,7 +939,7 @@ class WeaviateEntityRepository(EntityRepository):
             target_entity_id, EntityPatchRequest(aliases=aliases, **fields), context
         )
         for item_id in source_entity_ids:
-            await self.delete(item_id)
+            await self.delete(item_id, context=context)
         return EntityMergeBatchResponse(
             source_entity_ids=list(source_entity_ids),
             target_entity_id=target_entity_id,
@@ -949,7 +949,7 @@ class WeaviateEntityRepository(EntityRepository):
         )
 
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID]
+        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
     ) -> EntityDeleteManyResponse:
         unique = list(dict.fromkeys(entity_ids))
         if not unique:
@@ -970,12 +970,12 @@ class WeaviateEntityRepository(EntityRepository):
         )
 
     async def delete_many(
-        self, selector: EntityDeleteManyRequest
+        self, selector: EntityDeleteManyRequest, *, context: GenericActor
     ) -> EntityDeleteManyResponse:
         r = await self.list(
             EntityListRequest(filter_=selector.filter, limit=selector.limit)
         )
-        return await self.delete_batch([x.entity_id for x in r.items])
+        return await self.delete_batch([x.entity_id for x in r.items], context=context)
 
     async def search(
         self, query: SearchEntitiesRequest
@@ -1058,6 +1058,10 @@ class WeaviateSourceRepository(SourceRepository):
         return result
 
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
+        if not is_missing(query.filter_) and any(not is_missing(getattr(query.filter_, name)) for name in (
+            "last_touched_from", "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id", "has_unassigned_faces",
+        )):
+            raise NotImplementedError("Source processing filters require PostgreSQL")
         fs = _direct(
             query.filter_,
             {

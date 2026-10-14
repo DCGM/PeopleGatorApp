@@ -48,6 +48,7 @@ from people_gator_api.schemas.sources import (
     GenericSourceLookupRequest,
     GenericSourceResponse,
     PageResponse,
+    DocumentLibraryOptionsRequest, DocumentLibraryOptionsResponse, DocumentLibraryOption,
 )
 from people_gator_api.persistence.postgres.models import (
     Alias,
@@ -79,7 +80,7 @@ from people_gator_api.persistence.postgres.utils import (
 SOURCE_TEXT_CANDIDATE_LIMIT = 200
 
 
-from .touch import touch_entities
+from .touch import touch_entities, touch_sources, source_touch_ids, lock_annotation_graph
 from people_gator_api.schemas.common import GenericActor
 
 class PostgresSourceRepository(SourceRepository):
@@ -87,6 +88,33 @@ class PostgresSourceRepository(SourceRepository):
         super().__init__()
         self._session = session
         self._source = with_polymorphic(Source, [Document, Page, Image])
+
+    async def document_library_filter_options(self, query: DocumentLibraryOptionsRequest) -> DocumentLibraryOptionsResponse:
+        import base64
+        import json
+        fingerprint = cursor_fingerprint(query)
+        cursor_library = None
+        if query.cursor:
+            try:
+                saved, cursor_library = json.loads(base64.urlsafe_b64decode(query.cursor.encode()))
+                if saved != fingerprint or not isinstance(cursor_library, str):
+                    raise ValueError("cursor does not match the library options query")
+            except Exception as exc:
+                raise ValueError("invalid library options cursor") from exc
+        filters = [Document.library.icontains(query.q, autoescape=True)] if query.q else []
+        choices = select(Document.library).where(*filters).distinct().subquery()
+        total = await self._session.scalar(select(func.count()).select_from(choices)) if query.return_total_count else None
+        if query.limit == 0:
+            return DocumentLibraryOptionsResponse(items=[], limit=0, total_count=total)
+        statement = select(choices.c.library).order_by(choices.c.library).limit(query.limit + 1)
+        if cursor_library is not None:
+            if not await self._session.scalar(select(exists(select(1).select_from(choices).where(choices.c.library == cursor_library)))):
+                raise ValueError("library options cursor no longer exists")
+            statement = statement.where(choices.c.library > cursor_library)
+        rows = list(await self._session.scalars(statement))
+        page = rows[:query.limit]
+        cursor = base64.urlsafe_b64encode(json.dumps([fingerprint, page[-1]]).encode()).decode() if len(rows) > query.limit else None
+        return DocumentLibraryOptionsResponse(items=[DocumentLibraryOption(library=value) for value in page], limit=query.limit, total_count=total, cursor=cursor)
 
     async def lookup(
         self, lookup: GenericSourceLookupRequest
@@ -238,6 +266,8 @@ class PostgresSourceRepository(SourceRepository):
         unique = list(dict.fromkeys(source_ids))
         if not unique:
             return 0
+        await lock_annotation_graph(self._session)
+        survivors = set(await source_touch_ids(self._session, unique)) - set(unique)
         touched: set[uuid.UUID | None] = set()
         for evidence in (ImageOccurrence, TextMention):
             touched.update(await self._session.scalars(select(evidence.entity_id).where(evidence.source_id.in_(unique))))
@@ -246,6 +276,7 @@ class PostgresSourceRepository(SourceRepository):
             CursorResult[Any],
             await self._session.execute(delete(Source).where(Source.id.in_(unique))),
         )
+        await touch_sources(self._session, survivors, context)
         await commit(self._session, "source delete failed")
         return int(result.rowcount or 0)
 
@@ -263,15 +294,31 @@ class PostgresSourceRepository(SourceRepository):
             # Exact archive identifiers remain useful alongside entity names.
             # These predicates use the URL and library btree indexes instead of
             # calculating trigram similarity for every source in the library.
+            identities = [Source.url == term, model.library == term]
+            if model is Document:
+                try:
+                    identities.append(Document.document_id == uuid.UUID(term))
+                except ValueError:
+                    pass
             direct = await self._session.scalars(
                 select(model.id)
-                .where(*filters, or_(Source.url == term, model.library == term))
+                .where(*filters, or_(*identities))
                 .order_by(model.id)
                 .limit(SOURCE_TEXT_CANDIDATE_LIMIT)
             )
             term_scores = {source_id: 1.0 for source_id in direct.all()}
 
             normalized_term = func.lower(func.unaccent(term))
+            if model is Document:
+                # Stored normalization and a trigram GIN index make substring
+                # matching case/accent insensitive without scanning every name.
+                escaped = func.replace(func.replace(func.replace(normalized_term, "\\", "\\\\"), "%", "\\%"), "_", "\\_")
+                name_score = func.word_similarity(normalized_term, Document.name_normalized)
+                names = await self._session.execute(select(Document.id, name_score.label("score")).where(
+                    *filters, Document.name_normalized.like("%" + escaped + "%", escape="\\"),
+                ).order_by(name_score.desc(), Document.id).limit(SOURCE_TEXT_CANDIDATE_LIMIT))
+                for source_id, score in names:
+                    term_scores[source_id] = max(term_scores.get(source_id, 0.0), float(score))
             candidate_ids = entity_text_candidates(normalized_term, [])
             entity_score = func.greatest(
                 func.word_similarity(

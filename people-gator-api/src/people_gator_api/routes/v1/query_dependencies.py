@@ -331,9 +331,18 @@ def source_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(SourceListFilter, "mention_id", "filter"),
     ] = None,
+    last_touched_from: Annotated[datetime | None, _model_parameter(SourceListFilter, "last_touched_from", "filter")] = None,
+    last_touched_to: Annotated[datetime | None, _model_parameter(SourceListFilter, "last_touched_to", "filter")] = None,
+    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "last_touched_by_user_id", "filter")] = None,
+    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> SourceListFilter:
     return _filter(
         SourceListFilter,
+        last_touched_from=last_touched_from,
+        last_touched_to=last_touched_to,
+        last_touched_by_user_id=last_touched_by_user_id,
+        last_touched_by_api_key_id=last_touched_by_api_key_id,
+
         entity_link_state=entity_link_state,
         source_type=source_type,
         url=url,
@@ -390,9 +399,18 @@ def page_list_filter_dependency(
         bool | None,
         _model_parameter(PageListFilter, "has_entities", "filter"),
     ] = None,
+    last_touched_from: Annotated[datetime | None, _model_parameter(PageListFilter, "last_touched_from", "filter")] = None,
+    last_touched_to: Annotated[datetime | None, _model_parameter(PageListFilter, "last_touched_to", "filter")] = None,
+    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "last_touched_by_user_id", "filter")] = None,
+    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
+        last_touched_from=last_touched_from,
+        last_touched_to=last_touched_to,
+        last_touched_by_user_id=last_touched_by_user_id,
+        last_touched_by_api_key_id=last_touched_by_api_key_id,
+
         entity_link_state=entity_link_state,
         url=url,
         library=library,
@@ -438,9 +456,20 @@ def document_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(DocumentListFilter, "mention_id", "filter"),
     ] = None,
+    last_touched_from: Annotated[datetime | None, _model_parameter(DocumentListFilter, "last_touched_from", "filter")] = None,
+    last_touched_to: Annotated[datetime | None, _model_parameter(DocumentListFilter, "last_touched_to", "filter")] = None,
+    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "last_touched_by_user_id", "filter")] = None,
+    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "last_touched_by_api_key_id", "filter")] = None,
+    has_unassigned_faces: Annotated[bool | None, _model_parameter(DocumentListFilter, "has_unassigned_faces", "filter")] = None,
 ) -> DocumentListFilter:
     return _filter(
         DocumentListFilter,
+        last_touched_from=last_touched_from,
+        last_touched_to=last_touched_to,
+        last_touched_by_user_id=last_touched_by_user_id,
+        last_touched_by_api_key_id=last_touched_by_api_key_id,
+        has_unassigned_faces=has_unassigned_faces,
+
         entity_link_state=entity_link_state,
         url=url,
         library=library,
@@ -474,9 +503,18 @@ def image_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(ImageListFilter, "mention_id", "filter"),
     ] = None,
+    last_touched_from: Annotated[datetime | None, _model_parameter(ImageListFilter, "last_touched_from", "filter")] = None,
+    last_touched_to: Annotated[datetime | None, _model_parameter(ImageListFilter, "last_touched_to", "filter")] = None,
+    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "last_touched_by_user_id", "filter")] = None,
+    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> ImageListFilter:
     return _filter(
         ImageListFilter,
+        last_touched_from=last_touched_from,
+        last_touched_to=last_touched_to,
+        last_touched_by_user_id=last_touched_by_user_id,
+        last_touched_by_api_key_id=last_touched_by_api_key_id,
+
         entity_link_state=entity_link_state,
         url=url,
         source_id=source_id,

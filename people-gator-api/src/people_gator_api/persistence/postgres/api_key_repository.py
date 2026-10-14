@@ -1,10 +1,10 @@
 """PostgreSQL registration and browsing of credential-free API-key identities."""
 
-from sqlalchemy import ColumnElement, String, cast, func, or_, select
+from sqlalchemy import ColumnElement, String, cast, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from people_gator_api.persistence.contracts import APIKeyRepository
-from people_gator_api.persistence.postgres.models import APIKey
+from people_gator_api.persistence.postgres.models import APIKey, Source, Entity
 from people_gator_api.persistence.postgres.utils import (
     commit,
     cursor_fingerprint,
@@ -44,12 +44,17 @@ class PostgresAPIKeyRepository(APIKeyRepository):
                 "display_name": statement.excluded.display_name,
                 "user_id": statement.excluded.user_id,
             },
+            where=or_(APIKey.user_id == statement.excluded.user_id,
+                ~exists(select(1).where(Source.last_touched_by_api_key_id == APIKey.id))
+                & ~exists(select(1).where(Entity.last_touched_by_api_key_id == APIKey.id))),
         ).returning(APIKey)
         key = (
             await self._session.scalars(
                 statement, execution_options={"populate_existing": True}
             )
-        ).one()
+        ).one_or_none()
+        if key is None:
+            raise ValueError("cannot change the owner of a referenced API key")
         await commit(self._session, "API key registration failed")
         return api_key_response(key)
 

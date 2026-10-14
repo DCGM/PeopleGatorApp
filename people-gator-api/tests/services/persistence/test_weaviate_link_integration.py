@@ -190,7 +190,7 @@ async def test_weaviate_link_contract_and_additive_upgrade():
         assert (
             await db.faces.get(legacy_id)
         ).entity_link_state == EntityLinkState.automatic
-        await db.entities.delete_batch([ada.entity_id])
+        await db.entities.delete_batch([ada.entity_id], context=actor)
         for repo, record_id in (
             (db.faces, face.detection_id),
             (db.text_mentions, mention.mention_id),

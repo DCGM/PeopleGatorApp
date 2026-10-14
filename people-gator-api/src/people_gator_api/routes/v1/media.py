@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Response, UploadFile, status
+from fastapi import APIRouter, Query, Response, UploadFile, status
 from pydantic import AnyUrl
 
 from people_gator_api.media.errors import SourceResolutionError
@@ -22,6 +22,7 @@ from people_gator_api.routes.v1.query_dependencies import (
 from people_gator_api.schemas.common import FileUploadResponse
 from people_gator_api.schemas.pero import PageLayoutModel, TextMentionSpanModel
 from people_gator_api.schemas.sources import (
+    DocumentLibraryOptionsRequest, DocumentLibraryOptionsResponse,
     DocumentBatchCreateRequest,
     DocumentCreateRequest,
     DocumentListRequest,
@@ -563,3 +564,13 @@ async def delete_image_route(
     if await database.sources.get_image(image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
     await database.sources.delete(image_id, context=user)
+
+
+@router.get("/document-library-filter-options", response_model=DocumentLibraryOptionsResponse, tags=["documents"])
+async def document_library_filter_options_route(
+    database: DatabaseDependency,
+    user: BrowseActorDependency,
+    list_request: ListRequestDependency,
+    q: str | None = Query(default=None, max_length=256),
+) -> DocumentLibraryOptionsResponse:
+    return await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(**list_request.model_dump(), q=q))

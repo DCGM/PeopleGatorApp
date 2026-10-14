@@ -42,7 +42,7 @@ from people_gator_api.persistence.postgres.utils import (
     mention_filters,
 )
 
-from .touch import touch_entities
+from .touch import touch_entities, touch_sources, lock_annotation_graph
 
 class PostgresTextMentionRepository(TextMentionRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -125,6 +125,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
     ) -> list[TextMentionResponse]:
         if not payloads:
             return []
+        await lock_annotation_graph(self._session)
         await ensure_ids(
             self._session,
             Source,
@@ -140,6 +141,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         mentions = [self._new(payload) for payload in payloads]
         self._session.add_all(mentions)
         await touch_entities(self._session, [item.entity_id for item in payloads], context)
+        await touch_sources(self._session, [item.source_id for item in payloads], context)
         await commit(self._session, "mention create violates a persistence constraint")
         return [mention_response(mention) for mention in mentions]
 
@@ -170,6 +172,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             raise ValueError("text mention patch batch requires unique object IDs")
         if not commands:
             return []
+        await lock_annotation_graph(self._session)
         await ensure_ids(
             self._session,
             Entity,
@@ -183,14 +186,17 @@ class PostgresTextMentionRepository(TextMentionRepository):
         mentions = await self._load_many(ids, lock=True)
         transitions = {c.mention_id: link_transition(mentions[c.mention_id], c, context) for c in commands if c.mention_id in mentions}
         touched: set[uuid.UUID | None] = set()
+        sources: set[uuid.UUID] = set()
         for command in commands:
             mention = mentions.get(command.mention_id)
             if mention is not None:
                 values = transitions[command.mention_id]
                 if values != (mention.entity_id, mention.entity_link_state, mention.entity_link_verified_by_user_id, mention.entity_link_verified_at):
                     touched.update([mention.entity_id, values[0]])
+                    sources.add(mention.source_id)
                     apply_link(mention, values)
         await touch_entities(self._session, touched, context)
+        await touch_sources(self._session, sources, context)
         await commit(self._session, "mention patch violates a persistence constraint")
         return [
             mention_response(mention) if (mention := mentions.get(item_id)) else None
@@ -204,9 +210,11 @@ class PostgresTextMentionRepository(TextMentionRepository):
         unique = list(dict.fromkeys(mention_ids))
         if not unique:
             return 0
-        removed = list(await self._session.scalars(
-            delete(TextMention).where(TextMention.id.in_(unique)).returning(TextMention.entity_id)
+        await lock_annotation_graph(self._session)
+        removed = list(await self._session.execute(
+            delete(TextMention).where(TextMention.id.in_(unique)).returning(TextMention.entity_id, TextMention.source_id)
         ))
-        await touch_entities(self._session, removed, context)
+        await touch_entities(self._session, [row.entity_id for row in removed], context)
+        await touch_sources(self._session, [row.source_id for row in removed], context)
         await commit(self._session, "mention delete failed")
         return len(removed)

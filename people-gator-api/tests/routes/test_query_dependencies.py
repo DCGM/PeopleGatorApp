@@ -84,6 +84,10 @@ LIST_FILTERS = {
         "mention_id",
     },
 }
+for path in ("/sources", "/documents", "/pages", "/images"):
+    LIST_FILTERS[path].update({"last_touched_from", "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id"})
+LIST_FILTERS["/documents"].add("has_unassigned_faces")
+
 SEARCH_FILTERS = {
     "/search-entities": LIST_FILTERS["/entities"],
     "/search-faces": LIST_FILTERS["/faces"],

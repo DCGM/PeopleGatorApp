@@ -63,7 +63,7 @@ from people_gator_api.persistence.postgres.utils import (
     validate_face_embeddings,
 )
 
-from .touch import touch_entities
+from .touch import touch_entities, touch_sources, lock_annotation_graph
 
 class PostgresFaceRepository(FaceRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -151,6 +151,7 @@ class PostgresFaceRepository(FaceRepository):
     ) -> list[FaceResponse]:
         if not payloads:
             return []
+        await lock_annotation_graph(self._session)
         await ensure_ids(self._session, User, [context.user_id], "actor user")
         await ensure_ids(
             self._session, Source, [item.source_id for item in payloads], "face source"
@@ -177,6 +178,7 @@ class PostgresFaceRepository(FaceRepository):
         faces = [self._new(payload, context) for payload in payloads]
         self._session.add_all(faces)
         await touch_entities(self._session, entity_ids, context)
+        await touch_sources(self._session, [item.source_id for item in payloads], context)
         await commit(self._session, "face create violates a persistence constraint")
         return [face_response(face) for face in faces]
 
@@ -217,6 +219,7 @@ class PostgresFaceRepository(FaceRepository):
             raise ValueError("face patch batch requires unique object IDs")
         if not commands:
             return []
+        await lock_annotation_graph(self._session)
         await ensure_ids(self._session, User, [context.user_id], "actor user")
         entity_ids = [
             entity_id
@@ -241,6 +244,7 @@ class PostgresFaceRepository(FaceRepository):
         faces = await self._load_many(ids, lock=True)
         transitions = {c.detection_id: link_transition(faces[c.detection_id], c, context) for c in commands if c.detection_id in faces}
         touched: set[uuid.UUID | None] = set()
+        sources: set[uuid.UUID] = set()
         for command in commands:
             face = faces.get(command.detection_id)
             if face is None:
@@ -262,7 +266,9 @@ class PostgresFaceRepository(FaceRepository):
                 self._apply_embeddings(face, command)
             if link_changed or embeddings_changed:
                 touched.update([old_entity_id, face.entity_id])
+                sources.add(face.source_id)
         await touch_entities(self._session, touched, context)
+        await touch_sources(self._session, sources, context)
         await commit(self._session, "face patch violates a persistence constraint")
         return [
             face_response(face) if (face := faces.get(item_id)) else None
@@ -276,11 +282,13 @@ class PostgresFaceRepository(FaceRepository):
         unique = list(dict.fromkeys(detection_ids))
         if not unique:
             return 0
-        removed = list(await self._session.scalars(
+        await lock_annotation_graph(self._session)
+        removed = list(await self._session.execute(
             delete(ImageOccurrence).where(ImageOccurrence.id.in_(unique), ImageOccurrence.occurrence_type == "face")
-            .returning(ImageOccurrence.entity_id)
+            .returning(ImageOccurrence.entity_id, ImageOccurrence.source_id)
         ))
-        await touch_entities(self._session, removed, context)
+        await touch_entities(self._session, [row.entity_id for row in removed], context)
+        await touch_sources(self._session, [row.source_id for row in removed], context)
         await commit(self._session, "face delete failed")
         return len(removed)
 
