@@ -4,6 +4,23 @@ Read [AGENTS.md](AGENTS.md) for mandatory workflow, seed maintenance and UI rule
 Use [Start here](docs/START_HERE.md) for code navigation and
 [Development](docs/DEVELOPMENT.md) for local stores and validation.
 
+## Writing an issue
+
+Before implementation, search for a relevant existing issue and reuse it. Adapt
+its description to the [change-request template](.github/ISSUE_TEMPLATE/change_request.md)
+while preserving its requirements and discussion; do not open a duplicate.
+
+For new bugs, features, documentation or maintenance work, select **Change request**
+in GitHub's new-issue chooser. Until the template is merged to `main`, copy its
+contents from the issue branch and omit the YAML front matter.
+
+Complete the summary, problem/current behavior, intended behavior, scope and
+verifiable acceptance criteria. Include reproduction steps and environment
+details for bugs. Add a validation plan, preview/contract/documentation impact
+and related work; explain conditional details with `Not applicable` where
+appropriate. Put planned checks in the issue and actual results, skips and
+limitations in the PR.
+
 ## Issue → main-based branch → commits → pull request
 
 1. Read the relevant GitHub issue's full description and acceptance criteria.
