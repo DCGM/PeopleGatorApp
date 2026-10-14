@@ -1,14 +1,13 @@
 <script setup lang="ts">
+import SearchFilterPanel from './SearchFilterPanel.vue'
 import {
   Check,
   ChevronRight,
   CircleUserRound,
   Images,
   Link as LinkIcon,
-  Search,
   UserRoundX,
   UserRoundSearch,
-  X,
 } from '@lucide/vue'
 import type { AcceptableValue } from 'reka-ui'
 import { computed, ref, watch } from 'vue'
@@ -21,12 +20,6 @@ import type {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from '@/components/ui/input-group'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
@@ -444,7 +437,7 @@ function initials(name: string) {
     </section>
 
     <section class="border-t pt-8" aria-labelledby="similar-people-heading">
-      <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(18rem,28rem)] md:items-end">
+      <div class="flex w-full flex-row flex-wrap gap-4">
         <div>
           <small class="font-semibold uppercase text-secondary">Identity similarity</small>
           <h3 id="similar-people-heading">Other similar people</h3>
@@ -453,28 +446,11 @@ function initials(name: string) {
             records.
           </p>
         </div>
-        <InputGroup>
-          <InputGroupAddon align="inline-start">
-            <Search aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            v-model="searchTerm"
-            class="font-mono"
-            placeholder="Search by name or alias"
-            aria-label="Name or alias signal"
-          />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              v-if="searchTerm"
-              type="button"
-              size="icon-sm"
-              aria-label="Clear name signal"
-              @click="searchTerm = ''"
-            >
-              <X aria-hidden="true" />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
+        <SearchFilterPanel
+          v-model="searchTerm"
+          label="Name or alias signal"
+          placeholder="Search by name or alias"
+        />
       </div>
 
       <div

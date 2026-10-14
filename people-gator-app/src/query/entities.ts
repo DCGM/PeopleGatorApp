@@ -71,6 +71,7 @@ export function useCreateEntityMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
@@ -91,6 +92,7 @@ export function useCreateEntitiesMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
@@ -115,6 +117,7 @@ export function usePatchEntityMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
@@ -164,6 +167,7 @@ export function useMergeEntitiesMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.documents.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.sources.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.images.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
       ])
     },
@@ -186,6 +190,7 @@ export function useDeleteEntityMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
@@ -205,6 +210,7 @@ export function useDeleteEntitiesMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })

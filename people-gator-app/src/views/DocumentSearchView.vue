@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch } from 'vue'
 import DocumentCard from '@/components/custom/DocumentCard.vue'
@@ -64,7 +63,8 @@ function updateSearch() {
       </p>
     </header>
 
-    <DocumentSearchBar v-model:link-states="linkStates"
+    <DocumentSearchBar
+      v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       :result-count="resultCount"

@@ -57,7 +57,12 @@ export function useCreateTextMentionMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: TextMentionCreateRequest) =>
-      responseData(createTextMentionRouteApiV1TextMentionsPost({ body: { ...body, entity_link_state: 'manual' }, throwOnError: true })),
+      responseData(
+        createTextMentionRouteApiV1TextMentionsPost({
+          body: { ...body, entity_link_state: 'manual' },
+          throwOnError: true,
+        }),
+      ),
     onSuccess: (mention) => {
       queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
@@ -66,6 +71,7 @@ export function useCreateTextMentionMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
@@ -78,7 +84,10 @@ export function useCreateTextMentionsMutation() {
   return useMutation({
     mutationFn: (body: TextMentionCreateRequest[]) =>
       responseData(
-        createTextMentionBatchRouteApiV1TextMentionsBatchPost({ body: body.map(item => ({ ...item, entity_link_state: 'manual' })), throwOnError: true }),
+        createTextMentionBatchRouteApiV1TextMentionsBatchPost({
+          body: body.map((item) => ({ ...item, entity_link_state: 'manual' })),
+          throwOnError: true,
+        }),
       ),
     onSuccess: (mentions) => {
       for (const mention of mentions) {
@@ -90,6 +99,7 @@ export function useCreateTextMentionsMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
@@ -116,6 +126,7 @@ export function useReassignTextMentionMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })

@@ -48,15 +48,11 @@ function updateSelection(value: unknown) {
   >
     <ComboboxAnchor class="w-full" as-child>
       <ComboboxTrigger as-child :aria-label="label">
-        <Button
-          type="button"
-          variant="outline"
-          class="w-full justify-between bg-muted/50 font-normal hover:bg-muted"
-        >
+        <Button type="button" variant="outline" class="w-full justify-between">
           <span
             >{{ label }}<template v-if="selected.length"> ({{ selected.length }})</template></span
           >
-          <ChevronsUpDown class="size-4 shrink-0 opacity-50" aria-hidden="true" />
+          <ChevronsUpDown class="size-4 shrink-0" aria-hidden="true" />
         </Button>
       </ComboboxTrigger>
     </ComboboxAnchor>
@@ -96,7 +92,7 @@ function updateSelection(value: unknown) {
           </ComboboxGroup>
         </template>
       </ComboboxViewport>
-      <div class="flex justify-between border-t p-1">
+      <div class="flex justify-between p-1">
         <Button
           v-if="hasMore"
           type="button"

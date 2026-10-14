@@ -43,15 +43,14 @@ function clear() {
 </script>
 
 <template>
-  <div class="min-w-0 space-y-1 text-sm">
-    <span :id="labelId" class="font-medium">{{ label }}</span>
+  <div class="min-w-0 space-y-1">
+    <span :id="labelId">{{ label }}</span>
     <Popover v-model:open="open">
       <PopoverTrigger as-child>
         <Button
           type="button"
           variant="outline"
-          class="w-full justify-start bg-muted/50 font-normal hover:bg-muted"
-          :class="!value && 'text-muted-foreground'"
+          class="w-full justify-start"
           :aria-labelledby="labelId"
           :aria-invalid="!!invalid"
           :title="displayValue"
@@ -69,7 +68,7 @@ function clear() {
           prevent-deselect
           @update:model-value="selectDate"
         />
-        <div class="space-y-2 border-t p-3">
+        <div class="space-y-2 p-3">
           <label :for="timeId">Time (local)</label>
           <Input
             :id="timeId"
@@ -78,7 +77,6 @@ function clear() {
             step="0.001"
             :disabled="!date"
             :aria-label="`${props.label} time`"
-            class="bg-muted/50"
             @update:model-value="updateTime"
           />
           <div class="flex justify-between">

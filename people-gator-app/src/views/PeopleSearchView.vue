@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { UserRound } from '@lucide/vue'
@@ -66,7 +65,8 @@ watch(
       <h1>Browse people</h1>
     </header>
 
-    <PeopleSearchBar v-model:link-states="linkStates"
+    <PeopleSearchBar
+      v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       v-model:processing-filters="processingFilters"

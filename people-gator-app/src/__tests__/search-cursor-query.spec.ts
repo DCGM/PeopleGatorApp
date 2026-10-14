@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   searchPages: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
 
+vi.mock('@/query/media', () => ({ fetchDocuments: vi.fn() }))
+
 vi.mock('@/client', () => ({
   searchDocumentsGetApiV1SearchDocumentsGet: mocks.searchDocuments,
   searchEntitiesGetApiV1SearchEntitiesGet: mocks.searchEntities,
@@ -117,4 +119,64 @@ describe('search queries', () => {
       wrapper.unmount()
     },
   )
+})
+
+describe('document result cursors', () => {
+  it('uses list/search filters, resets revisited cursors and ignores obsolete responses', async () => {
+    const { useDocumentResultsQuery } = await import('@/query/search/documents')
+    const { fetchDocuments } = await import('@/query/media')
+    const term = ref('')
+    const filters = ref({ 'filter.library': ['a'] })
+    let result!: ReturnType<typeof useDocumentResultsQuery>
+    let release!: (value: unknown) => void
+    const list = vi.mocked(fetchDocuments)
+    list.mockResolvedValue({ items: [], total_count: 2, limit: 5, cursor: 'a-next' })
+    mocks.searchDocuments.mockImplementation((...args: unknown[]) =>
+      (
+        (args[0] as { query: Record<string, unknown> }).query['query.text'] as string[] | undefined
+      )?.[0] === 'old'
+        ? new Promise((resolve) => {
+            release = resolve
+          })
+        : Promise.resolve({ data: { items: [], total_count: 1, limit: 5, cursor: null } }),
+    )
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          result = useDocumentResultsQuery(() => ({
+            query: term.value,
+            filters: filters.value,
+            limit: 5,
+          }))
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    )
+    await flushPromises()
+    await result.fetchNextPage()
+    expect(list.mock.lastCall?.[0]).toMatchObject({ 'filter.library': ['a'], cursor: 'a-next' })
+    filters.value = { 'filter.library': ['b'] }
+    await flushPromises()
+    expect(list.mock.lastCall?.[0]).toMatchObject({ 'filter.library': ['b'], cursor: null })
+    filters.value = { 'filter.library': ['a'] }
+    await flushPromises()
+    expect(result.data.value?.pages).toHaveLength(1)
+    term.value = 'old'
+    await flushPromises()
+    term.value = 'new'
+    await flushPromises()
+    expect(mocks.searchDocuments.mock.lastCall?.[0]).toMatchObject({
+      query: { 'query.text': ['new'], 'filter.library': ['a'], cursor: null },
+    })
+    release({ data: { items: [], total_count: 999, limit: 5, cursor: null } })
+    await flushPromises()
+    expect(result.data.value?.pages[0]?.totalCount).toBe(1)
+    term.value = '  '
+    await flushPromises()
+    expect(result.data.value?.pages).toHaveLength(1)
+    wrapper.unmount()
+    queryClient.clear()
+  })
 })

@@ -33,6 +33,7 @@ export function useVerifyLinkMutation() {
           queryKeys.pages.all,
           queryKeys.documents.all,
           queryKeys.sources.all,
+          queryKeys.images.all,
           queryKeys.search.all,
         ].map((queryKey) => client.invalidateQueries({ queryKey })),
       )

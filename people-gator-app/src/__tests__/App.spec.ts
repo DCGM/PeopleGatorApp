@@ -340,6 +340,8 @@ describe('App', () => {
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
 
+    if (wrapper.find('button[aria-label="Show filters"]').exists())
+      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
     await wrapper.get('[aria-label="Show people with similar faces"]').trigger('click')
     await wrapper.get('[aria-label="Search people"]').setValue('Grace')
     await wrapper.vm.$nextTick()
@@ -349,6 +351,8 @@ describe('App', () => {
     expect(router.currentRoute.value.query.selectedPerson).toBe('person-ada')
     expect(router.currentRoute.value.query.line).toBe('line-ada')
     expect(wrapper.get('[aria-label="Search people"]').element).toHaveProperty('value', '')
+    if (wrapper.find('button[aria-label="Show filters"]').exists())
+      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
     expect(wrapper.get('[aria-label="Show people on this page"]').attributes('data-state')).toBe(
       'on',
     )

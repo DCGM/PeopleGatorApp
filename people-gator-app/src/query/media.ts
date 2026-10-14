@@ -301,6 +301,8 @@ export function useSourceLookupQuery(url: MaybeRefOrGetter<string>) {
 function useMediaInvalidation() {
   const queryClient = useQueryClient()
   return () => {
+    void queryClient.invalidateQueries({ queryKey: ['people-filter-options', 'library'] })
+    void queryClient.invalidateQueries({ queryKey: ['people-filter-options', 'document'] })
     void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
     void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
     void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })

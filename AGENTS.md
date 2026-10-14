@@ -64,3 +64,44 @@ The PR CI workflow smoke-tests the real migration/seed CLI twice in a separate
 `deploy/preview/tests/`. Host controller/Compose changes must be installed from a
 reviewed default-branch checkout as described in `deploy/preview/README.md`; PR
 code must not replace the trusted host controller directly.
+
+# Search and filter panels throughout the application
+
+These rules apply everywhere in the application that provides search or filters,
+including documents, scans, entities and annotation/discovery controls. Apply
+these rules to new panels and changes to existing panels while retaining each
+screen's filter semantics.
+
+- Use 100% of the parent element's available width. Arrange controls in natural
+  DOM order, left to right, using `display: flex`, `flex-direction: row` and
+  `flex-wrap: wrap`. Use flexbox, not CSS floats, and include gaps in width
+  calculations to avoid horizontal overflow.
+- Search is always the first control, before filters and actions. A filters-only
+  panel must not invent a nonfunctional search field.
+- At `lg` (1024px and wider), search occupies the first half of the panel and
+  filters begin at half its width, using the remaining half. At `sm` through
+  below `lg` (640–1023px), search occupies the first two thirds and filters begin
+  at two thirds, using the remaining third. These positions refer to the parent
+  panel's width, not the viewport. Filters are visible and wrap left to right
+  within their area at both sizes.
+- Below 640px, keep search available beside a sliders icon button. Filters are
+  collapsed by default and expand below that row across the full panel width.
+  Use the standard shadcn-vue `Collapsible`; the toggle needs an accessible name,
+  `aria-expanded`, and keyboard operation. Collapsing preserves search and all
+  selected values.
+- Use standard shadcn-vue setting controls: Input/InputGroup, Select,
+  Popover/Command or Combobox for multi-select, Calendar, Button and Collapsible.
+  Use standard variants and sizes. Only layout changes are allowed: width,
+  flex basis/grow/shrink, wrapping, spacing, alignment and responsive placement.
+  Do not override colors, backgrounds, borders, rounding, shadows, typography,
+  or hover/focus/disabled states, or modify `src/components/ui/` for these panels.
+  Shared filter controls must follow these same restrictions.
+- Display active filters as standard Badge tags in a separate wrapping area
+  below the panel, outside its container/card and before results. Each tag names
+  its filter type and value and has an accessible X removal button, including
+  removal of individual multi-select values. Removal updates the setting
+  control, URL and results immediately. A standard clear-all button preserves
+  search text; clearing search is a separate action. Tags stay accessible when
+  mobile settings are collapsed and never overflow the parent. Hide the entire
+  area when no filters are active.
+- Keep keyboard navigation, standard focus states, and light/dark themes usable.

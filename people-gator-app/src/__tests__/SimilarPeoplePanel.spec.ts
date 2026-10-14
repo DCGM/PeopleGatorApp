@@ -131,13 +131,15 @@ describe('SimilarPeoplePanel', () => {
       global: { stubs: { RouterLink: RouterLinkStub } },
     })
 
+    if (wrapper.find('button[aria-label="Show filters"]').exists())
+      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
     expect(wrapper.get('[aria-label="Show people on this page"]').attributes('data-state')).toBe(
       'on',
     )
     await wrapper.get('[aria-label="Show people with similar faces"]').trigger('click')
-    expect(wrapper.get('[aria-label="Show people with similar faces"]').attributes('data-state')).toBe(
-      'on',
-    )
+    expect(
+      wrapper.get('[aria-label="Show people with similar faces"]').attributes('data-state'),
+    ).toBe('on')
 
     await wrapper.get('[aria-label="Search people"]').setValue('an alias')
     expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(2)
