@@ -56,6 +56,12 @@ watch(
       processingFilters.value = restored
   },
 )
+function clearFilters() {
+  void router.push({
+    name: 'people-search',
+    query: searchTerm.value ? { q: searchTerm.value } : {},
+  })
+}
 </script>
 
 <template>
@@ -70,6 +76,7 @@ watch(
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       v-model:processing-filters="processingFilters"
+      @clear-filters="clearFilters"
       :filter-error="filterError"
       :result-count="resultCount"
     />

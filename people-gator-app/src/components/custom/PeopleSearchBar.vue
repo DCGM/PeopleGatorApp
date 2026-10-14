@@ -28,6 +28,7 @@ defineProps<{
   filterError?: string
 }>()
 
+const emit = defineEmits<{ clearFilters: [] }>()
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
 const filters = defineModel<PeopleProcessingFilters>('processingFilters', {
@@ -93,9 +94,7 @@ function removeFilter(key: keyof PeopleProcessingFilters | 'linkState', value: s
   else filters.value = { ...filters.value, [key]: filters.value[key].filter((id) => id !== value) }
 }
 function clearFilters() {
-  linkStates.value = []
-  assignment.value = 'all'
-  filters.value = emptyPeopleFilters()
+  emit('clearFilters')
 }
 </script>
 

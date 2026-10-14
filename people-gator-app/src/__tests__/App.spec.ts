@@ -417,6 +417,39 @@ describe('Scans and Documents navigation', () => {
     wrapper.unmount()
   })
 
+  it('removes scoped scan badges and clears filters atomically while preserving text', async () => {
+    await router.push('/scans?q=Ada&library=a&document=shared&assignment=faces&link_state=verified')
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+    await wrapper.get('button[aria-label="Remove Document: shared"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.library).toBe('a')
+    expect(router.currentRoute.value.query.document).toBeUndefined()
+    expect(router.currentRoute.value.query.link_state).toBe('verified')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Clear all filters')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('preserves multiple libraries in Documents navigation without treating them as a scan scope', async () => {
+    await router.push('/documents?library=a&library=b')
+    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
+      '/documents?library=a&library=b',
+    )
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
+    expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
+      'PeopleGator',
+      'Documents',
+    ])
+    wrapper.unmount()
+  })
+
   it('keeps the default landing route on Scans', async () => {
     await router.push('/')
     expect(router.currentRoute.value.path).toBe('/scans')

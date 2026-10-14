@@ -45,6 +45,15 @@ function updateSearch() {
     },
   })
 }
+function removeScope(key: 'library' | 'document') {
+  void router.push({ query: { ...route.query, [key]: undefined } })
+}
+function clearFilters() {
+  void router.push({
+    name: 'document-search',
+    query: searchTerm.value ? { q: searchTerm.value } : {},
+  })
+}
 </script>
 
 <template>
@@ -67,6 +76,10 @@ function updateSearch() {
       v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
+      :library="scope.library"
+      :document-id="scope.documentId"
+      @remove-scope="removeScope"
+      @clear-filters="clearFilters"
       :result-count="resultCount"
       :has-more-results="hasNextPage"
       @update:search-term="updateSearch()"

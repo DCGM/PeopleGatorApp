@@ -143,7 +143,7 @@ const isPeopleRoute = computed(
         <RouterLink
           :to="{
             name: 'document-list',
-            query: typeof route.query.library === 'string' ? { library: route.query.library } : {},
+            query: route.query.library ? { library: route.query.library } : {},
           }"
           aria-label="Documents"
           :aria-current="route.name === 'document-list' ? 'page' : undefined"

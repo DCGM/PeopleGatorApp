@@ -18,14 +18,23 @@ import {
 } from '@/components/ui/select'
 import type { PageContentFilter } from '@/viewmodels/assignment'
 
-defineProps<{
+const props = defineProps<{
+  library?: string
+  documentId?: string
   resultCount: number
   hasMoreResults?: boolean
 }>()
 
+const emit = defineEmits<{ removeScope: [key: 'library' | 'document']; clearFilters: [] }>()
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<PageContentFilter>('assignment', { required: true })
 const active = computed(() => [
+  ...(props.library
+    ? [{ key: 'library', value: props.library, label: `Library: ${props.library}` }]
+    : []),
+  ...(props.documentId
+    ? [{ key: 'document', value: props.documentId, label: `Document: ${props.documentId}` }]
+    : []),
   ...(assignment.value === 'all'
     ? []
     : [{ key: 'assignment', value: assignment.value, label: `Page content: ${assignment.value}` }]),
@@ -36,12 +45,15 @@ const active = computed(() => [
   })),
 ])
 function remove(chip: { key: string; value: string }) {
+  if (chip.key === 'library' || chip.key === 'document') {
+    emit('removeScope', chip.key)
+    return
+  }
   if (chip.key === 'assignment') assignment.value = 'all'
   else linkStates.value = linkStates.value.filter((state) => state !== chip.value)
 }
 function clear() {
-  assignment.value = 'all'
-  linkStates.value = []
+  emit('clearFilters')
 }
 </script>
 

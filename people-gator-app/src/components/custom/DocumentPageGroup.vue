@@ -26,7 +26,9 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
     :aria-label="documentTitle(document)"
   >
     <header class="document-heading w-full min-w-0 lg:w-1/3 lg:shrink-0">
-      <h2 class="break-all">{{ documentTitle(document) }}</h2>
+      <h2 class="line-clamp-3 break-all" :title="documentTitle(document)">
+        {{ documentTitle(document) }}
+      </h2>
       <p class="mt-1 break-all text-sm text-muted-foreground">
         {{ document.library }} · {{ document.document_id }}
       </p>
@@ -60,7 +62,9 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
         ></Button
       >
     </header>
-    <div class="document-previews flex min-w-0 flex-1 flex-row flex-wrap gap-2">
+    <div
+      class="document-previews flex min-w-0 flex-1 flex-row flex-wrap content-start items-start gap-2"
+    >
       <RouterLink
         v-for="card in visibleCards"
         :key="card.sourceId"

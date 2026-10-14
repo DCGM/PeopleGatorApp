@@ -142,6 +142,7 @@ describe('people filter controls and URL restoration', () => {
     const { wrapper, router } = await mountedView({
       q: 'Ada',
       assignment: 'mentions',
+      link_state: ['verified'],
       touched_from: '2026-01-02T12:00:00Z',
       document: ['document-1', 'document-2'],
       touched_by: 'user-1',
