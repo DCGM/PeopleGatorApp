@@ -1134,8 +1134,13 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     assert seeded.documents['link-states'] in {item.source_id for item in combined.items}
     negative = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(has_unassigned_faces=False)))
     assert empty in {item.source_id for item in negative.items}
-    previews = await database.sources.list_pages(PageListRequest(filter_=PageListFilter(library=[document.library], document_id=[document.document_id]), limit=4))
-    remainder = await database.sources.list_pages(PageListRequest(filter_=PageListFilter(library=[document.library], document_id=[document.document_id]), limit=4, cursor=previews.cursor))
+    remainder_demo = parse_qs(urlsplit(seeded.filter_examples['document-preview-remainder']).query)
+    remainder_documents = await database.sources.search_documents(SearchDocumentsRequest(
+        query=QueryBase(text=remainder_demo['q']), filter_=DocumentListFilter(library=remainder_demo['library']), limit=100))
+    assert [item.source_id for item in remainder_documents.items] == [target]
+    previews = await database.sources.list_pages(PageListRequest(filter_=PageListFilter(library=[document.library], document_id=[document.document_id]), limit=4, return_total_count=True))
+    assert previews.total_count == 6 and len(previews.items) == 4
+    remainder = await database.sources.list_pages(PageListRequest(filter_=PageListFilter(library=[document.library], document_id=[document.document_id]), limit=4, cursor=previews.cursor, return_total_count=True))
     assert any(item.entity_link_stats.faces.total for item in remainder.items)
     # Source and page filters use their own stored history, including orphan pages.
     own = await database.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(last_touched_by_api_key_id=[seeded.api_keys['importer']])))

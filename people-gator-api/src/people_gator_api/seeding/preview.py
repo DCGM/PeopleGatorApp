@@ -386,6 +386,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}#link-statistics"
             ),
             "document-search": "/documents?q=pribehy",
+            "document-preview-remainder": "/documents?q=pribehy&library=preview-mzk",
             "compact-document-filters": "/documents?" + urlencode({
                 "q": "pribehy", "library": ["preview-mzk", "preview-nlk"],
                 "link_state": ["automatic", "verified"], "unassigned": "no",

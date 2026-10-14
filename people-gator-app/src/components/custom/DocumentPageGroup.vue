@@ -109,16 +109,20 @@ const documentLocation = computed(() => ({
       <Button
         v-if="remainingCount > 0 && visibleCards.length"
         as-child
-        variant="ghost"
+        variant="link"
         size="sm"
-        class="self-center"
+        class="group self-center"
       >
         <RouterLink
           class="more-pages"
           :to="documentLocation"
           :aria-label="`View ${remainingCount} more ${linkStates.length ? 'matching' : 'registered'} pages of ${documentTitle(document)}`"
         >
-          +{{ remainingCount }}<ChevronRight aria-hidden="true" />
+          <span class="text-secondary">+{{ remainingCount }}</span
+          ><ChevronRight
+            class="text-foreground transition-transform group-hover:translate-x-0.5 group-focus-visible:translate-x-0.5"
+            aria-hidden="true"
+          />
         </RouterLink>
       </Button>
       <div v-if="error" class="w-full basis-full py-4" role="alert">

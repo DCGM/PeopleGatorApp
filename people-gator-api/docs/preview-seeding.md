@@ -213,6 +213,11 @@ to update both the URL and results. In the document information, registered
 page count precedes processing time, user and API key (each on its own line),
 followed by face and mention statistics. A `+N` link with a right chevron follows
 the last preview and opens the remaining scans in the same document scope.
+The `document-preview-remainder` link shows six registered pages with four
+previews and `+2` (two previews and `+4` on mobile). Hover the `+N` link to see
+its underline and small rightward chevron movement, without a background
+change. `+N` is orange and the chevron uses the standard text color. Page labels show standard UUIDs with an ellipsis when needed; hover
+the label to read the full UUID.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
 (inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,

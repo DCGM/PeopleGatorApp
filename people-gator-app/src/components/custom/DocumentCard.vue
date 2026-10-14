@@ -17,16 +17,6 @@ const props = withDefaults(
   }>(),
   { showLibrary: true },
 )
-
-function compactUuid(uuid: string) {
-  const hex = uuid.replace(/-/g, '')
-  const bytes = hex.match(/.{2}/g)
-
-  if (!bytes || bytes.length !== 16) return uuid
-
-  const binary = String.fromCharCode(...bytes.map((byte: string) => Number.parseInt(byte, 16)))
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
 </script>
 
 <template>
@@ -51,11 +41,11 @@ function compactUuid(uuid: string) {
       </AspectRatio>
     </CardHeader>
     <CardContent class="px-0">
-      <small class="truncate" :title="props.pageUuid">
+      <small class="block truncate" :title="props.pageUuid">
         <span v-if="props.showLibrary" class="font-bold text-secondary"
           >{{ props.library }} ·
         </span>
-        {{ compactUuid(props.pageUuid) }}
+        {{ props.pageUuid }}
       </small>
     </CardContent>
     <CardFooter class="gap-1 px-0">
