@@ -340,6 +340,8 @@ describe('App', () => {
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
 
+    if (wrapper.find('button[aria-label="Show filters"]').exists())
+      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
     await wrapper.get('[aria-label="Show people with similar faces"]').trigger('click')
     await wrapper.get('[aria-label="Search people"]').setValue('Grace')
     await wrapper.vm.$nextTick()
@@ -349,6 +351,8 @@ describe('App', () => {
     expect(router.currentRoute.value.query.selectedPerson).toBe('person-ada')
     expect(router.currentRoute.value.query.line).toBe('line-ada')
     expect(wrapper.get('[aria-label="Search people"]').element).toHaveProperty('value', '')
+    if (wrapper.find('button[aria-label="Show filters"]').exists())
+      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
     expect(wrapper.get('[aria-label="Show people on this page"]').attributes('data-state')).toBe(
       'on',
     )
@@ -410,6 +414,39 @@ describe('Scans and Documents navigation', () => {
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
       '/scans?library=mzk&document=album',
     )
+    wrapper.unmount()
+  })
+
+  it('removes scoped scan badges and clears filters atomically while preserving text', async () => {
+    await router.push('/scans?q=Ada&library=a&document=shared&assignment=faces&link_state=verified')
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+    await wrapper.get('button[aria-label="Remove Document: shared"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.library).toBe('a')
+    expect(router.currentRoute.value.query.document).toBeUndefined()
+    expect(router.currentRoute.value.query.link_state).toBe('verified')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Clear all filters')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('preserves multiple libraries in Documents navigation without treating them as a scan scope', async () => {
+    await router.push('/documents?library=a&library=b')
+    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
+      '/documents?library=a&library=b',
+    )
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
+    expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
+      'PeopleGator',
+      'Documents',
+    ])
     wrapper.unmount()
   })
 

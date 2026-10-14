@@ -22,11 +22,15 @@ const selected = defineModel<EntityLinkState[]>({ default: () => [] })
 function update(value: unknown) {
   selected.value = parseLinkStates(value)
 }
+function reset() {
+  selected.value = []
+  open.value = false
+}
 </script>
 <template>
   <div
     v-if="toolbar"
-    class="flex items-center font-mono text-sm drop-shadow-md"
+    class="flex w-full flex-row flex-wrap items-center gap-2"
     aria-label="Link state"
   >
     <ToggleGroup
@@ -42,11 +46,7 @@ function update(value: unknown) {
         :key="state"
         :text="linkStateVisuals[state].accessible"
       >
-        <ToggleGroupItem
-          :value="state"
-          :aria-label="linkStateVisuals[state].label"
-          class="h-8 gap-1 border bg-white/90 text-muted-foreground backdrop-blur-[50px] data-[state=on]:bg-muted data-[state=on]:hover:bg-muted data-[state=on]:hover:text-foreground data-[state=on]:font-semibold data-[state=on]:text-foreground dark:bg-background/90"
-        >
+        <ToggleGroupItem :value="state" :aria-label="linkStateVisuals[state].label" class="gap-1">
           <component :is="linkStateVisuals[state].icon" class="size-3.5" aria-hidden="true" /><span
             class="hidden xl:inline"
             >{{ linkStateVisuals[state].label }}</span
@@ -57,12 +57,7 @@ function update(value: unknown) {
     <UiTooltip
       text="All includes unassigned annotations. Selecting all three states includes assigned annotations only."
     >
-      <Button
-        variant="outline"
-        size="sm"
-        class="h-8"
-        :aria-pressed="selected.length === 0"
-        @click="selected = []; open = false"
+      <Button variant="outline" size="sm" :aria-pressed="selected.length === 0" @click="reset"
         >All</Button
       >
     </UiTooltip>
@@ -75,13 +70,17 @@ function update(value: unknown) {
     ignore-filter
     @update:model-value="update"
   >
-    <ComboboxAnchor as-child
+    <ComboboxAnchor class="w-auto max-w-full" as-child
       ><ComboboxTrigger as-child
-        ><Button variant="outline" size="sm" aria-label="Link state" class="gap-2">
+        ><Button variant="outline" aria-label="Link state" class="gap-2">
           {{ selected.length ? `Link state (${selected.length})` : 'All link states'
-          }}<ChevronsUpDown class="size-3" aria-hidden="true" /> </Button></ComboboxTrigger
+          }}<ChevronsUpDown class="size-4 shrink-0" aria-hidden="true" /> </Button></ComboboxTrigger
     ></ComboboxAnchor>
-    <ComboboxList @escape-key-down="open = false" align="start" class="min-w-48" aria-label="Link state"
+    <ComboboxList
+      @escape-key-down="open = false"
+      align="start"
+      class="min-w-48"
+      aria-label="Link state"
       ><ComboboxViewport
         ><ComboboxGroup>
           <ComboboxItem
@@ -97,7 +96,7 @@ function update(value: unknown) {
               ><Check class="size-4" aria-hidden="true"
             /></ComboboxItemIndicator>
           </ComboboxItem> </ComboboxGroup></ComboboxViewport
-      ><Button variant="ghost" size="sm" class="w-full" @click="selected = []; open = false"
+      ><Button variant="ghost" size="sm" class="w-full" @click="reset"
         >All link states</Button
       ></ComboboxList
     >

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch } from 'vue'
 import DocumentCard from '@/components/custom/DocumentCard.vue'
@@ -46,6 +45,15 @@ function updateSearch() {
     },
   })
 }
+function removeScope(key: 'library' | 'document') {
+  void router.push({ query: { ...route.query, [key]: undefined } })
+}
+function clearFilters() {
+  void router.push({
+    name: 'document-search',
+    query: searchTerm.value ? { q: searchTerm.value } : {},
+  })
+}
 </script>
 
 <template>
@@ -64,9 +72,14 @@ function updateSearch() {
       </p>
     </header>
 
-    <DocumentSearchBar v-model:link-states="linkStates"
+    <DocumentSearchBar
+      v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
+      :library="scope.library"
+      :document-id="scope.documentId"
+      @remove-scope="removeScope"
+      @clear-filters="clearFilters"
       :result-count="resultCount"
       :has-more-results="hasNextPage"
       @update:search-term="updateSearch()"

@@ -12,7 +12,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from asyncpg.exceptions import CannotConnectNowError, PostgresConnectionError
-from sqlalchemy import Connection, Index, MetaData, text
+from sqlalchemy import Connection, Index, MetaData, text, inspect
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.schema import SchemaItem
@@ -100,6 +100,17 @@ def validate_schema(
         "SELECT demo_unaccent('Příliš')"
     )).scalar_one() != "Prilis":
         raise SchemaValidationError("demo_unaccent(text) returned an unexpected result")
+
+    expected_metadata = Base.metadata if metadata is None else metadata
+    if "last_touched_at" in expected_metadata.tables["pg_demo_sources"].c:
+        # Alembic does not compare CHECK constraints. Verify source metadata remains
+        # an all-null history or a complete time/user pair with an optional key.
+        constraint = next((item for item in inspect(connection).get_check_constraints("pg_demo_sources") if item["name"] == "ck_pg_demo_sources_touch"), None)
+        expected = "(last_touched_at IS NULL AND last_touched_by_user_id IS NULL AND last_touched_by_api_key_id IS NULL) OR (last_touched_at IS NOT NULL AND last_touched_by_user_id IS NOT NULL)"
+        def normalized(value: str) -> str:
+            return "".join(value.lower().split()).replace("(", "").replace(")", "")
+        if constraint is None or normalized(constraint["sqltext"]) != normalized(expected):
+            raise SchemaValidationError("Missing or incompatible source touch consistency constraint")
 
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.

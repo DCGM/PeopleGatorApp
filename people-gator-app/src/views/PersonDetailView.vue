@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
+import LinkStatePanel from '@/components/custom/LinkStatePanel.vue'
 import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import { Button } from '@/components/ui/button'
@@ -27,15 +27,24 @@ const personId = computed(() => String(route.params.personId))
 
 const {
   entity,
-  faceError, mentionError, faceLoading, mentionLoading, retryFaces, retryMentions,
-  hasMoreFaces, hasMoreMentions, loadingMoreFaces, loadingMoreMentions, loadMoreFaces, loadMoreMentions,
+  faceError,
+  mentionError,
+  faceLoading,
+  mentionLoading,
+  retryFaces,
+  retryMentions,
+  hasMoreFaces,
+  hasMoreMentions,
+  loadingMoreFaces,
+  loadingMoreMentions,
+  loadMoreFaces,
+  loadMoreMentions,
   error,
   faceEmbeddingModel,
   faceCount,
   faceIds,
   faces,
   identifiers,
-  isLoading,
   libraryCount,
   mentionCount,
   mentions,
@@ -151,58 +160,96 @@ function selectTab(tab: string | number) {
             <UserRoundSearch class="size-4" aria-hidden="true" /> Discover
           </TabsTrigger>
         </TabsList>
-        <div class="mt-3"><EntityLinkStateFilter v-if="activeTab !== 'discover'" v-model="linkStates" /></div>
+        <div class="mt-3">
+          <LinkStatePanel v-if="activeTab !== 'discover'" v-model="linkStates" />
+        </div>
 
         <TabsContent
           value="faces"
           class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         >
           <div v-for="face in faces" :key="face.id">
-          <RouterLink
-            :to="{
-              name: 'document-page',
-              params: { libraryId: face.library, documentId: face.documentId, pageId: face.pageId },
-              query: { person: face.id, ...(linkStates.length && { link_state: linkStates }) },
-            }"
-            class="group"
-          >
-            <PersonFaceCard :face="face" :person-name="profile.name" />
-          </RouterLink>
-          <VerifyEntityLink v-bind="face" :id="face.id" kind="face" />
+            <RouterLink
+              :to="{
+                name: 'document-page',
+                params: {
+                  libraryId: face.library,
+                  documentId: face.documentId,
+                  pageId: face.pageId,
+                },
+                query: { person: face.id, ...(linkStates.length && { link_state: linkStates }) },
+              }"
+              class="group"
+            >
+              <PersonFaceCard :face="face" :person-name="profile.name" />
+            </RouterLink>
+            <VerifyEntityLink v-bind="face" :id="face.id" kind="face" />
           </div>
           <PersonFaceCardSkeleton v-if="faceLoading" />
           <div class="col-span-full text-sm">
-            <p v-if="faceError" role="alert">Could not load faces. <Button variant="link" @click="retryFaces()">Retry</Button></p>
-            <p v-else-if="!faceLoading">Showing {{ faceCount }} of {{ entity?.entity_link_stats?.faces?.total ?? faceCount }} faces</p>
-            <p v-if="!faceError && !faceLoading && !faces.length">No faces match the selected link states <Button variant="link" @click="linkStates = []">Reset</Button></p>
-            <Button v-if="hasMoreFaces" variant="outline" :disabled="loadingMoreFaces" @click="loadMoreFaces()">Load more faces</Button>
+            <p v-if="faceError" role="alert">
+              Could not load faces. <Button variant="link" @click="retryFaces()">Retry</Button>
+            </p>
+            <p v-else-if="!faceLoading">
+              Showing {{ faceCount }} of
+              {{ entity?.entity_link_stats?.faces?.total ?? faceCount }} faces
+            </p>
+            <p v-if="!faceError && !faceLoading && !faces.length">
+              No faces match the selected link states
+              <Button variant="link" @click="linkStates = []">Reset</Button>
+            </p>
+            <Button
+              v-if="hasMoreFaces"
+              variant="outline"
+              :disabled="loadingMoreFaces"
+              @click="loadMoreFaces()"
+              >Load more faces</Button
+            >
           </div>
         </TabsContent>
 
         <TabsContent value="mentions" class="divide-y">
           <div v-for="mention in mentions" :key="mention.id">
-          <RouterLink
-            :to="{
-              name: 'document-page',
-              params: {
-                libraryId: mention.library,
-                documentId: mention.documentId,
-                pageId: mention.pageId,
-              },
-              query: { selectedPerson: personId, ...(linkStates.length && { link_state: linkStates }) },
-            }"
-            class="group block py-6 outline-none"
-          >
-            <PersonMentionItem :mention="mention" />
-          </RouterLink>
-          <VerifyEntityLink v-bind="mention" :id="mention.id" kind="mention" />
+            <RouterLink
+              :to="{
+                name: 'document-page',
+                params: {
+                  libraryId: mention.library,
+                  documentId: mention.documentId,
+                  pageId: mention.pageId,
+                },
+                query: {
+                  selectedPerson: personId,
+                  ...(linkStates.length && { link_state: linkStates }),
+                },
+              }"
+              class="group block py-6 outline-none"
+            >
+              <PersonMentionItem :mention="mention" />
+            </RouterLink>
+            <VerifyEntityLink v-bind="mention" :id="mention.id" kind="mention" />
           </div>
           <PersonMentionItemSkeleton v-if="mentionLoading" />
           <div class="py-3 text-sm">
-            <p v-if="mentionError" role="alert">Could not load mentions. <Button variant="link" @click="retryMentions()">Retry</Button></p>
-            <p v-else-if="!mentionLoading">Showing {{ mentionCount }} of {{ entity?.entity_link_stats?.mentions?.total ?? mentionCount }} mentions</p>
-            <p v-if="!mentionError && !mentionLoading && !mentions.length">No mentions match the selected link states <Button variant="link" @click="linkStates = []">Reset</Button></p>
-            <Button v-if="hasMoreMentions" variant="outline" :disabled="loadingMoreMentions" @click="loadMoreMentions()">Load more mentions</Button>
+            <p v-if="mentionError" role="alert">
+              Could not load mentions.
+              <Button variant="link" @click="retryMentions()">Retry</Button>
+            </p>
+            <p v-else-if="!mentionLoading">
+              Showing {{ mentionCount }} of
+              {{ entity?.entity_link_stats?.mentions?.total ?? mentionCount }} mentions
+            </p>
+            <p v-if="!mentionError && !mentionLoading && !mentions.length">
+              No mentions match the selected link states
+              <Button variant="link" @click="linkStates = []">Reset</Button>
+            </p>
+            <Button
+              v-if="hasMoreMentions"
+              variant="outline"
+              :disabled="loadingMoreMentions"
+              @click="loadMoreMentions()"
+              >Load more mentions</Button
+            >
           </div>
         </TabsContent>
 

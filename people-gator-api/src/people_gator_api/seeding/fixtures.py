@@ -96,6 +96,10 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("issue8-direct", "preview-nlk", "Direct annotation ledger"),
+    Document("issue8-search", "preview-mzk", "Příběhy archivářů"),
+    Document("issue8-mirror", "preview-nlk", "Search isolation mirror", "issue8-search"),
+    Document("issue8-orphan", "preview-mzk", "Orphan source touch", registered=False),
     Document("faces-no-ocr", "preview-mzk", "Faces without OCR"),
     Document("link-states", "preview-mzk", "Link state review"),
     Document("album", "preview-mzk", "Portrait album"),
@@ -120,6 +124,7 @@ class Face:
     slot: int
     group: int
     state: str = "automatic"
+    embedded: bool = True
 
 
 @dataclass(frozen=True)
@@ -145,6 +150,14 @@ class Page:
 
 
 PAGES = (
+    Page("issue8-untouched", "issue8-search", 1),
+    *(Page(f"issue8-search-{i}", "issue8-search", i,
+        (Face(f"issue8-face-{i}", "ada", 0, 0, "verified" if i == 6 else "automatic", embedded=False),),
+        (Mention(f"issue8-mention-{i}", "nora", "Nora Svoboda indexed these archivist stories."),)
+        if i == 5 else ()) for i in range(2, 7)),
+    Page("issue8-mirror-1", "issue8-mirror", 1),
+    Page("issue8-orphan-1", "issue8-orphan", 1,
+        (Face("issue8-orphan-face", None, 0, 2, embedded=False),)),
     Page(
         "faces-no-ocr-1", "faces-no-ocr", 1,
         (Face("no-ocr-left", None, 0, 2), Face("no-ocr-right", None, 1, 3)),
@@ -269,3 +282,7 @@ PAGES = (
     Page("legacy-document-1", "legacy-document", 1),
     Page("scan-only-1", "scan-only", 1),
 )
+
+ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
+
+ISSUE8_IMAGE_PAGE = Page("issue8-image", "issue8-direct", 1, (Face("issue8-image-face", None, 0, 2, embedded=False),), has_layout=False)

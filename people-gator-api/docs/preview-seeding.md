@@ -54,10 +54,10 @@ add login accounts or usable API-key secrets.
 Open the people search page and try the assignment, document, user and API-key
 filters. The CLI also prints a `mobile-filters` URL combining a Novak search with
 assignment, document, user and API-key filters. On screens narrower than 640px,
-all filter controls and chips are collapsed by default behind the search row's
-sliders button. Opening it reveals every filter; X collapses it without clearing
-the query. Desktop keeps Assignment and Document visible, with additional filters
-expandable separately. In a person's detail view, expand Last processed in the stats sidebar.
+filter controls are collapsed by default behind the search row's sliders
+button, while active badges remain visible below. Opening it reveals every
+filter; the sliders button collapses it without clearing the query. Desktop
+shows all selectors in one wrapping flex panel. In a person's detail view, expand Last processed in the stats sidebar.
 Edit a profile or assign a face to see processing attribution change. The two
 synthetic API-key registry entries demonstrate historical filtering and attribution;
 they cannot authenticate requests because no secret configuration is installed.
@@ -170,3 +170,74 @@ remain unchanged on seed reruns. Integration coverage checks the missing layout,
 face statistics, local page image, and aligned face crops through media services
 and repositories. The dataset now has nine registered documents, fourteen pages,
 fourteen faces, and ten mentions.
+
+## Document processing (issue #8)
+
+The additive `issue8-*` fixtures register **Příběhy archivářů** in `preview-mzk`
+and a separate mirror with the same archive UUID in `preview-nlk`. Six pages
+include automatic and verified faces; the linked Ada Novak / A. Novak identity
+occurs on five pages, including pages beyond a four-page preview. The first page
+and the mirror stay untouched. OCR linking uses the registered synthetic OCR
+key; verification uses the reviewer without a key. No historical timestamps are
+invented for old records.
+
+`issue8-orphan-1` demonstrates processing a page without a registered document.
+The image `https://preview.invalid/issue8/portrait.png` has a local PNG stored
+under `image_content_key` and an unassigned face, demonstrating the same generic
+source processing on images. The URL is a synthetic identity; no network download
+is needed. Repeating the seed preserves processing times, assignments and edits.
+
+Explore `/documents?q=pribehy`, or open **Direct annotation ledger** in
+`preview-nlk`: its manual mention of Emil Review demonstrates a document match
+without any matching scan. Select Libraries independently of loaded results;
+options come from registered documents across the database. Try the verified link
+state with no unassigned faces to find Příběhy archivářů, or verified with
+unassigned faces to find Link state review. **Document awaiting scans** and the
+unnamed legacy document remain usable without processing history.
+
+The seed output's `compact-document-filters` link selects both libraries,
+automatic/verified states, no unassigned faces and the reviewer while preserving
+the title search. Use it to check content-sized selectors in a single wrapping
+flex panel: search occupies two thirds of the first line from 640px, and later
+filter rows span the full panel. On mobile, expand filters with the sliders
+button. The underlined document title, bold orange library and archive ID form
+one link to its scans; each preview links to its exact page without repeating
+library information. The `outline-filter-badges` link searches by archive UUID
+with two libraries and link states selected: check that active filters use
+standard outline badges with small labels, and that the link-state combobox
+matches the height of the Libraries and Unassigned faces comboboxes. The
+printed `mobile-filters` link also demonstrates the Assigned faces combobox
+alongside link state and document filters on People. The result counter appears
+at the right end of the search input group, after the clear-search button. Remove a badge with its X button
+to update both the URL and results. The `rounded-filter-removal` link demonstrates
+circular X buttons for library, link-state and unassigned-face badges. Hover or
+keyboard-focus one, then remove its filter while preserving the search text.
+In the document information, registered
+page count precedes processing time, user and API key (each on its own line),
+followed by face and mention statistics. A `+N` link with a right chevron follows
+the last preview and opens the remaining scans in the same document scope.
+The `document-preview-remainder` link shows six registered pages with four
+previews and `+2` (two previews and `+4` on mobile). Hover the `+N` link to see
+its underline and small rightward chevron movement, without a background
+change. `+N` is orange and the chevron uses the standard text color. Page labels show standard UUIDs with an ellipsis when needed; hover
+the label to read the full UUID.
+
+The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
+(inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,
+`filter.last_touched_by_api_key_id`, `filter.library` and
+`filter.entity_link_state`, plus `filter.has_unassigned_faces=true|false`.
+The same processing fields are available on source/page/image lists and existing
+page/document search. A page's filters use that page's own stored history.
+Search totals describe bounded candidates (200 per direct identity/name/entity
+candidate path), while list totals count all matching registered documents.
+
+To regenerate the frontend contract locally, run the API's
+`scripts/export_openapi.py openapi.json` with local settings, then
+`npm run openapi-ts` from `people-gator-app`. `PEOPLE_GATOR_OPENAPI` can override
+that local input path. The exported JSON is ignored; generated SDK files are
+committed.
+
+The standalone portrait is an actual PNG with a visible synthetic face. An exact
+match to the original issue #8 JPEG fixture at that PNG key receives a narrowly
+scoped format upgrade. Reviewed or replaced image bytes remain untouched; the
+upgrade does not change source identities, annotations or processing timestamps.

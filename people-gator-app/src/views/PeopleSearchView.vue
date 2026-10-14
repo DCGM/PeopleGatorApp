@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import EntityLinkStateFilter from '@/components/custom/EntityLinkStateFilter.vue'
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { UserRound } from '@lucide/vue'
@@ -57,6 +56,12 @@ watch(
       processingFilters.value = restored
   },
 )
+function clearFilters() {
+  void router.push({
+    name: 'people-search',
+    query: searchTerm.value ? { q: searchTerm.value } : {},
+  })
+}
 </script>
 
 <template>
@@ -66,10 +71,12 @@ watch(
       <h1>Browse people</h1>
     </header>
 
-    <PeopleSearchBar v-model:link-states="linkStates"
+    <PeopleSearchBar
+      v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       v-model:processing-filters="processingFilters"
+      @clear-filters="clearFilters"
       :filter-error="filterError"
       :result-count="resultCount"
     />

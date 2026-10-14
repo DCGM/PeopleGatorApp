@@ -91,3 +91,9 @@ not a historical baseline adoption check.
 For deployments managed by migrations, configure PostgreSQL `schema_mode` as
 `validate` and run the migration command before starting the backend. This makes
 schema changes explicit instead of relying on bootstrap to create missing tables.
+
+After the frozen bootstrap snapshots, an existing known Alembic revision remains
+unchanged by `--adopt-bootstrap`; normal migrations advance it to the new head.
+This includes upgrading revision `d34a021b0004` to the source processing and
+document search migrations. The resulting schema is validated before the same
+transaction commits. Unknown or conflicting revision histories still fail.

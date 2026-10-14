@@ -101,9 +101,9 @@ describe('people filter controls and URL restoration', () => {
     const search = wrapper.get<HTMLInputElement>('input[aria-label="Search people"]')
     const originalQuery = { ...router.currentRoute.value.query }
     expect(search.element.value).toBe('Novak')
-    expect(wrapper.find('[aria-label="People filters"]').exists()).toBe(false)
-    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
-    const toggle = wrapper.get('button[aria-label="Show filters (4 active)"]')
+    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
+    const toggle = wrapper.get('button[aria-label="Show filters"]')
     expect(toggle.attributes('aria-expanded')).toBe('false')
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
@@ -114,11 +114,11 @@ describe('people filter controls and URL restoration', () => {
     expect(wrapper.find('button[aria-label="API keys"]').exists()).toBe(true)
     expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
-    expect(toggle.find('svg.lucide-x').exists()).toBe(true)
+    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
     await flushPromises()
-    expect(wrapper.find('[aria-label="People filters"]').exists()).toBe(false)
-    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(router.currentRoute.value.query).toEqual(originalQuery)
     await search.setValue('Ada')
     await flushPromises()
@@ -131,10 +131,10 @@ describe('people filter controls and URL restoration', () => {
     await flushPromises()
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(true)
     desktopViewport.value = false
     await flushPromises()
-    expect(wrapper.find('[aria-label="People filters"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -142,15 +142,13 @@ describe('people filter controls and URL restoration', () => {
     const { wrapper, router } = await mountedView({
       q: 'Ada',
       assignment: 'mentions',
+      link_state: ['verified'],
       touched_from: '2026-01-02T12:00:00Z',
       document: ['document-1', 'document-2'],
       touched_by: 'user-1',
       api_key: 'api-key-1',
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(0)
-    expect(wrapper.get('[data-slot="collapsible-trigger"]').attributes('aria-label')).toContain(
-      '3 active',
-    )
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     expect(wrapper.text()).toContain('Document: document One')
     expect(wrapper.text()).toContain('User: user One')
     expect(wrapper.text()).toContain('API key: api-key One')
@@ -188,8 +186,6 @@ describe('people filter controls and URL restoration', () => {
     })
     await flushPromises()
     expect(wrapper.text()).toContain('User: user Two')
-    await wrapper.get('[data-slot="collapsible-trigger"]').trigger('click')
-    await flushPromises()
     expect(wrapper.findAllComponents(FilterDateTimePicker)[1]!.get('button').text()).not.toContain(
       'Pick date and time',
     )
@@ -208,8 +204,6 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-02T12:00:00.123Z',
       touched_to: '2026-01-04T12:00:00Z',
     })
-    await wrapper.get('[data-slot="collapsible-trigger"]').trigger('click')
-    await flushPromises()
     const pickers = wrapper.findAllComponents(FilterDateTimePicker)
     await pickers[0]!.get('button').trigger('click')
     await flushPromises()
@@ -246,8 +240,6 @@ describe('people filter controls and URL restoration', () => {
   })
   it('keeps server search results selectable by keyboard and supports removing selections', async () => {
     const { wrapper, router } = await mountedView()
-    await wrapper.get('[data-slot="collapsible-trigger"]').trigger('click')
-    await flushPromises()
     const trigger = wrapper.get('button[aria-label="Users"]')
     await trigger.trigger('click')
     await flushPromises()
@@ -268,41 +260,21 @@ describe('people filter controls and URL restoration', () => {
     expect(trigger.attributes('aria-expanded')).toBe('false')
     wrapper.unmount()
   })
-  it('keeps assignment and documents visible and preserves active filters when collapsing', async () => {
+  it('keeps all desktop controls and badges visible with no collapse action', async () => {
     const { wrapper, router } = await mountedView({
       assignment: 'faces',
       touched_by: 'user-1',
       api_key: 'api-key-1',
     })
-    const primary = wrapper.get('[aria-label="People filters"]')
-    expect(primary.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
-    expect(primary.find('button[aria-label="Documents"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(false)
-    expect(wrapper.find('button[aria-label="API keys"]').exists()).toBe(false)
-    const toggle = wrapper.get('[data-slot="collapsible-trigger"]')
-    expect(toggle.attributes('aria-expanded')).toBe('false')
-    expect(toggle.attributes('aria-label')).toContain('2 active')
-    expect(toggle.text()).toBe('')
-    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
-    const originalQuery = { ...router.currentRoute.value.query }
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(true)
-    expect(toggle.find('svg.lucide-x').exists()).toBe(true)
-    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(false)
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(toggle.attributes('aria-expanded')).toBe('false')
-    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(false)
-    expect(router.currentRoute.value.query).toEqual(originalQuery)
+    const controls = wrapper.get('[aria-label="Search people filter controls"]')
+    expect(controls.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
+    for (const label of ['Documents', 'Users', 'API keys'])
+      expect(controls.find(`button[aria-label="${label}"]`).exists()).toBe(true)
+    expect(wrapper.find('[data-slot="collapsible-trigger"]').exists()).toBe(false)
     expect(wrapper.get('[aria-label="Active filters"]').text()).toContain('Assigned faces')
-    expect(wrapper.get('[aria-label="Active filters"]').text()).toContain('User: user One')
     await wrapper.get('button[aria-label="Remove User: user One"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()
-    expect(toggle.attributes('aria-label')).toContain('1 active')
-    expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     expect(router.currentRoute.value.query.assignment).toBe('faces')
     wrapper.unmount()
   })
@@ -312,9 +284,6 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-03T12:00:00Z',
       touched_to: '2026-01-01T12:00:00Z',
     })
-    expect(wrapper.get('[data-slot="collapsible-trigger"]').attributes('aria-expanded')).toBe(
-      'true',
-    )
     expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
     wrapper.unmount()

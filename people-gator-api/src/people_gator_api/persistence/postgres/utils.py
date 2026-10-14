@@ -615,6 +615,9 @@ def source_response(source: Source) -> GenericSourceResponse:
     common: dict[str, Any] = {
         "entity_link_stats": getattr(source, "_entity_link_stats", None) or {},
         "source_id": source.id,
+        "last_touched_at": source.last_touched_at,
+        "last_touched_by_user_id": source.last_touched_by_user_id,
+        "last_touched_by_api_key_id": source.last_touched_by_api_key_id,
         "source_type": SourceKind(source.source_type),
         "url": source.url,
     }
@@ -799,6 +802,22 @@ def source_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
+    for name, operator in (("last_touched_from", Source.last_touched_at.__ge__), ("last_touched_to", Source.last_touched_at.__le__)):
+        value = missing_to_none(getattr(filter_values, name))
+        if value is not None:
+            filters.append(operator(value))
+    for name in ("last_touched_by_user_id", "last_touched_by_api_key_id"):
+        value = missing_to_none(getattr(filter_values, name))
+        if value is not None:
+            filters.append(getattr(Source, name).in_(value))
+    unassigned = missing_to_none(filter_values.has_unassigned_faces)
+    if unassigned is not None:
+        from .entity_link_queries import source_scope
+        scope = source_scope()
+        predicate = exists(select(1).select_from(ImageOccurrence).join(scope, scope.c.source_id == ImageOccurrence.source_id).where(
+            scope.c.owner_id == Source.id, ImageOccurrence.occurrence_type == "face", ImageOccurrence.entity_id.is_(None),
+        ).correlate(Source))
+        filters.append(predicate if unassigned else ~predicate)
     source_types = missing_to_none(filter_values.source_type)
     if source_types is not None:
         filters.append(Source.source_type.in_([item.value for item in source_types]))

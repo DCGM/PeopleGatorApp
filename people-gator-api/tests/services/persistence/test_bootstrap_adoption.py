@@ -52,6 +52,7 @@ async def bootstrap_database(monkeypatch):
                 text(f"CREATE EXTENSION IF NOT EXISTS {extension} WITH SCHEMA public")
             )
         await connection.execute(text(f"CREATE SCHEMA {schema}"))
+        await connection.execute(text(f"CREATE TABLE {schema}.alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
     engine = create_async_engine(
         make_url(url),
         connect_args={"server_settings": {"search_path": schema + ",public"}},
@@ -71,7 +72,7 @@ async def seed_bootstrap(engine, snapshot=1):
         config = migration_config()
         config.attributes["connection"] = connection
         command.upgrade(config, "65c4e6cdfa7f")
-        frozen_schemas(config)[snapshot][1].create_all(connection)
+        frozen_schemas(config)[snapshot][1].create_all(connection, checkfirst=False)
         connection.execute(
             text(
                 "INSERT INTO pg_demo_users(id, display_name, is_active, external_subject, external_issuer) VALUES ('11111111-1111-1111-1111-111111111111', 'Historical user', true, 'historical', 'bootstrap-test')"
@@ -236,7 +237,7 @@ async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
     await validate_postgres_schema(engine)
     async with engine.connect() as connection:
         assert await connection.scalar(text("SELECT name FROM pg_demo_entities")) == "Historical identity"
-        assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == "d34a021b0004"
+        assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == "d34a021b0006"
     await database_cli.migrate_database(adopt_bootstrap=True)
 
 

@@ -2,6 +2,7 @@ import { useInfiniteQuery } from '@tanstack/vue-query'
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import {
   listApiKeysRouteApiV1ApiKeysGet,
+  documentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGet,
   listUserFilterOptionsRouteApiV1UserFilterOptionsGet,
 } from '@/client'
 import { responseData } from '@/query/api'
@@ -9,7 +10,7 @@ import { fetchDocuments } from '@/query/media'
 import { fetchDocumentSearch } from '@/query/search/documents'
 
 export type FilterOption = { id: string; label: string }
-export type FilterOptionKind = 'document' | 'user' | 'api-key'
+export type FilterOptionKind = 'document' | 'user' | 'api-key' | 'library'
 
 export function usePeopleFilterOptions(
   kind: FilterOptionKind,
@@ -22,6 +23,19 @@ export function usePeopleFilterOptions(
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
       const pagination = { limit: 50, cursor: pageParam }
+      if (kind === 'library') {
+        const response = await responseData(
+          documentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGet({
+            query: { ...pagination, q: normalizedSearch.value || undefined },
+            signal,
+            throwOnError: true,
+          }),
+        )
+        return {
+          items: response.items.map((item) => ({ id: item.library, label: item.library })),
+          cursor: response.cursor,
+        }
+      }
       if (kind === 'document') {
         const term = normalizedSearch.value
         const response = term

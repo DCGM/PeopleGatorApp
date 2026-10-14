@@ -2,59 +2,72 @@
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 import type { EntityLinkState } from '@/client'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
-import { Search } from '@lucide/vue'
+import { computed } from 'vue'
+import SearchFilterPanel from './SearchFilterPanel.vue'
+import ActiveFilters from './ActiveFilters.vue'
+import { linkStateVisuals } from '@/lib/entity-links'
 
-import { Card, CardContent } from '@/components/ui/card'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 import type { PageContentFilter } from '@/viewmodels/assignment'
 
-defineProps<{
+const props = defineProps<{
+  library?: string
+  documentId?: string
   resultCount: number
   hasMoreResults?: boolean
 }>()
 
+const emit = defineEmits<{ removeScope: [key: 'library' | 'document']; clearFilters: [] }>()
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<PageContentFilter>('assignment', { required: true })
+const active = computed(() => [
+  ...(props.library
+    ? [{ key: 'library', value: props.library, label: `Library: ${props.library}` }]
+    : []),
+  ...(props.documentId
+    ? [{ key: 'document', value: props.documentId, label: `Document: ${props.documentId}` }]
+    : []),
+  ...(assignment.value === 'all'
+    ? []
+    : [{ key: 'assignment', value: assignment.value, label: `Page content: ${assignment.value}` }]),
+  ...linkStates.value.map((value) => ({
+    key: 'state',
+    value,
+    label: `Link state: ${linkStateVisuals[value].label}`,
+  })),
+])
+function remove(chip: { key: string; value: string }) {
+  if (chip.key === 'library' || chip.key === 'document') {
+    emit('removeScope', chip.key)
+    return
+  }
+  if (chip.key === 'assignment') assignment.value = 'all'
+  else linkStates.value = linkStates.value.filter((state) => state !== chip.value)
+}
+function clear() {
+  emit('clearFilters')
+}
 </script>
 
 <template>
-  <Card class="sticky top-13 z-20 gap-3 rounded-none py-3">
-    <CardContent
-      class="grid w-full grid-cols-2 gap-2 px-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,11rem)]"
-    >
-      <InputGroup class="col-span-2 w-full rounded-none lg:col-span-1">
-        <InputGroupInput v-model="searchTerm" placeholder="Search a person, page or document…" />
-        <InputGroupAddon>
-          <Search />
-        </InputGroupAddon>
-        <InputGroupAddon align="inline-end" class="min-w-20 justify-end tabular-nums">
-          {{ resultCount }}{{ hasMoreResults ? '+' : '' }} results
-        </InputGroupAddon>
-      </InputGroup>
-      <EntityLinkStateFilter v-model="linkStates" />
-      <Select v-model="assignment">
-        <SelectTrigger class="w-full rounded-none">
-          <SelectValue placeholder="Page content" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectLabel>Page content</SelectLabel>
-            <SelectItem value="all">All pages</SelectItem>
-            <SelectItem value="entities">Contains assigned entities</SelectItem>
-            <SelectItem value="faces">Contains faces</SelectItem>
-            <SelectItem value="mentions">Contains mentions</SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </CardContent>
-  </Card>
+  <SearchFilterPanel
+    v-model="searchTerm"
+    label="Search scans"
+    placeholder="Search a person, page or document…"
+    :result-count="resultCount"
+    :has-more-results="hasMoreResults"
+  >
+    <EntityLinkStateFilter v-model="linkStates" />
+    <FilterSingleSelect
+      v-model="assignment"
+      label="Page content"
+      :options="[
+        { value: 'all', label: 'All pages' },
+        { value: 'entities', label: 'Contains assigned entities' },
+        { value: 'faces', label: 'Contains faces' },
+        { value: 'mentions', label: 'Contains mentions' },
+      ]"
+    />
+  </SearchFilterPanel>
+  <ActiveFilters :filters="active" @remove="remove" @clear="clear" />
 </template>

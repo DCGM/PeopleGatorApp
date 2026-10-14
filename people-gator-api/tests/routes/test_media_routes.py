@@ -43,6 +43,8 @@ def test_source_list_exposes_contract_filters_and_opaque_cursor() -> None:
 
     parameters = app.openapi()["paths"]["/sources"]["get"]["parameters"]
     assert {parameter["name"] for parameter in parameters} == {
+        "filter.last_touched_from", "filter.last_touched_to",
+        "filter.last_touched_by_user_id", "filter.last_touched_by_api_key_id",
         "filter.source_type",
         "filter.entity_link_state",
         "filter.url",

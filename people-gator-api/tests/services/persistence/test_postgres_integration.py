@@ -375,7 +375,7 @@ async def test_postgres_contract_round_trip() -> None:
             with pytest.raises(ValueError, match="referenced"):
                 await database.users.delete(user.user_id)
 
-            assert await database.entities.delete(entities[0].entity_id)
+            assert await database.entities.delete(entities[0].entity_id, context=user)
             created_entity_ids.remove(entities[0].entity_id)
             unassigned_face = await database.faces.get(face.detection_id)
             assert unassigned_face is not None
@@ -392,7 +392,7 @@ async def test_postgres_contract_round_trip() -> None:
         finally:
             await session.rollback()
             await database.sources.delete_batch(created_source_ids, context=user)
-            await database.entities.delete_batch(created_entity_ids)
+            await database.entities.delete_batch(created_entity_ids, context=user)
             await database.users.delete(user.user_id)
 
     await engine.dispose()

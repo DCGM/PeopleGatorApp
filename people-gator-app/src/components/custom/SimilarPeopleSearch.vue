@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import { Search, X } from '@lucide/vue'
 import type { AcceptableValue } from 'reka-ui'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import SearchFilterPanel from './SearchFilterPanel.vue'
+import ActiveFilters from './ActiveFilters.vue'
 
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from '@/components/ui/input-group'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const props = defineProps<{
@@ -19,16 +14,14 @@ const props = defineProps<{
 
 const query = defineModel<string>({ default: '' })
 const resultMode = defineModel<CandidateBrowseMode>('resultMode', { default: 'page' })
-const inputElement = ref<InstanceType<typeof InputGroupInput> | null>(null)
+const inputElement = ref<InstanceType<typeof SearchFilterPanel> | null>(null)
 
 function updateResultMode(value: AcceptableValue | AcceptableValue[]) {
   if (value === 'page' || value === 'face') resultMode.value = value
 }
 
 function focus() {
-  const input = inputElement.value?.$el as HTMLInputElement | undefined
-  input?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
-  input?.focus()
+  inputElement.value?.focus()
 }
 
 function clear() {
@@ -36,43 +29,60 @@ function clear() {
 }
 
 defineExpose({ clear, focus })
+const active = computed(() =>
+  !query.value.trim() && resultMode.value === 'face'
+    ? [{ key: 'source', value: 'face', label: 'Candidate source: Similar faces' }]
+    : [],
+)
 </script>
 
 <template>
   <section aria-labelledby="similar-people-search-title">
-    <p id="similar-people-search-title" class="font-mono text-xs font-semibold uppercase text-secondary">
+    <p
+      id="similar-people-search-title"
+      class="font-mono text-xs font-semibold uppercase text-secondary"
+    >
       {{ props.selectedFace?.personId ? 'Reassign to similar' : 'Assign to similar' }}
     </p>
-    <ToggleGroup v-if="!query.trim()" type="single" variant="outline" size="sm"
-      class="mt-2 grid w-full grid-cols-2 bg-card" :model-value="resultMode" aria-label="Choose candidate source"
-      @update:model-value="updateResultMode">
-      <ToggleGroupItem value="page" aria-label="Show people on this page">
-        On this page
-      </ToggleGroupItem>
-      <ToggleGroupItem value="face" aria-label="Show people with similar faces"
-        :disabled="!props.selectedFace?.embeddingModel">
-        Similar faces
-      </ToggleGroupItem>
-    </ToggleGroup>
-    <InputGroup class="mt-2 w-full bg-card">
-      <InputGroupAddon align="inline-start">
-        <Search aria-hidden="true" />
-      </InputGroupAddon>
-      <InputGroupInput ref="inputElement" v-model="query" placeholder="Search by name or alias"
-        aria-label="Search people" :disabled="!props.selectedFace" />
-      <InputGroupAddon align="inline-end">
-        <InputGroupButton v-if="query" type="button" size="icon-sm" aria-label="Clear people search"
-          @click="query = ''">
-          <X aria-hidden="true" />
-        </InputGroupButton>
-      </InputGroupAddon>
-    </InputGroup>
-    <p v-if="
-      props.selectedFace &&
-      !props.selectedFace.embeddingModel &&
-      !query.trim() &&
-      resultMode === 'page'
-    " class="mt-2 text-xs text-muted-foreground">
+    <SearchFilterPanel
+      ref="inputElement"
+      v-model="query"
+      class="mt-2"
+      label="Search people"
+      placeholder="Search by name or alias"
+      :hide-filters="!!query.trim()"
+      :disabled="!props.selectedFace"
+    >
+      <ToggleGroup
+        v-if="!query.trim()"
+        type="single"
+        variant="outline"
+        size="sm"
+        :model-value="resultMode"
+        aria-label="Choose candidate source"
+        @update:model-value="updateResultMode"
+      >
+        <ToggleGroupItem value="page" aria-label="Show people on this page"
+          >On this page</ToggleGroupItem
+        >
+        <ToggleGroupItem
+          value="face"
+          aria-label="Show people with similar faces"
+          :disabled="!props.selectedFace?.embeddingModel"
+          >Similar faces</ToggleGroupItem
+        >
+      </ToggleGroup>
+    </SearchFilterPanel>
+    <ActiveFilters :filters="active" @remove="resultMode = 'page'" @clear="resultMode = 'page'" />
+    <p
+      v-if="
+        props.selectedFace &&
+        !props.selectedFace.embeddingModel &&
+        !query.trim() &&
+        resultMode === 'page'
+      "
+      class="mt-2 text-xs text-muted-foreground"
+    >
       Face similarity is unavailable for this detection. People on this page are shown instead.
     </p>
     <p v-else-if="query.trim()" class="mt-2 text-xs text-muted-foreground">

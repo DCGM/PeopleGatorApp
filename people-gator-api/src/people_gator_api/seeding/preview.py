@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from people_gator_api.filesystem.contracts import Filesystem
 from people_gator_api.media.page_image import page_image_key
 from people_gator_api.media.page_layout import page_layout_key
+from people_gator_api.media.image_content import image_content_key
 from people_gator_api.persistence.contracts import Database
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.schemas.entities import (
@@ -35,12 +36,12 @@ from people_gator_api.schemas.mentions import (
     TextMentionListFilter,
     TextMentionListRequest,
 )
-from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest
+from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest, ImageCreateRequest
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL
-from .media import face_box, face_keypoints, page_image, page_layout
+from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
 
@@ -259,7 +260,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                                 model_identifier=model,
                                 vector=example_vector(face.group, face.key, dim),
                             )
-                            for model, dim in ((MODEL, 8), (SECOND_MODEL, 4))
+                            for model, dim in ((MODEL, 8), (SECOND_MODEL, 4)) if face.embedded
                         ],
                         **fields,
                     ),
@@ -317,6 +318,50 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             manifest.mentions[mention.key] = record.mention_id
             active_mentions[mention.key] = record.mention_id
             await checkpoint()
+    # Standalone image uses the same generic source touch as document pages.
+    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url=ISSUE8_IMAGE_URL))
+    image_key = image_content_key(ISSUE8_IMAGE_URL)
+    stored_image = await _read_optional(filesystem, image_key)
+    image_document = next(item for item in DOCUMENTS if item.key == ISSUE8_IMAGE_PAGE.document)
+    # Narrow upgrade for the exact JPEG bytes written by the initial issue #8
+    # fixture. Preserve any reviewed/replaced media and all source identities.
+    legacy_images = {page_image(PAGES[0], item) for item in DOCUMENTS if item.key in {"issue8-search", "issue8-direct"}}
+    if stored_image is None or stored_image in legacy_images:
+        await filesystem.write_bytes(image_key, png_image(ISSUE8_IMAGE_PAGE, image_document))
+    key = "issue8-image-face"
+    if key not in manifest.faces:
+        existing_faces = (await database.faces.list(FaceListRequest(
+            limit=100, filter_=FaceListFilter(source_id=[image.source_id]),
+        ))).items
+        detection = next((face for face in existing_faces if face.identifier == "preview-seed/" + key), None)
+        if detection is None:
+            face = Face(key, None, 0, 2)
+            detection = await database.faces.create(FaceCreateRequest(
+                identifier="preview-seed/" + key, source_id=image.source_id,
+                bounding_box=face_box(face), keypoints=face_keypoints(face), confidence=0.97,
+            ), actors["importer"])
+        manifest.faces[key] = detection.detection_id
+        await checkpoint()
+    if await database.faces.get(manifest.faces[key]) is not None:
+        active_faces[key] = manifest.faces[key]
+    # Direct document evidence is searchable even without a matching page.
+    key = "issue8-direct-mention"
+    if key not in manifest.mentions and "link-emil" in active_entities:
+        source_id = documents["issue8-direct"]
+        records = (await database.text_mentions.list(TextMentionListRequest(
+            limit=100, filter_=TextMentionListFilter(source_id=[source_id]),
+        ))).items
+        context = "Emil Review catalogued the direct annotation ledger."
+        record = next((item for item in records if item.context == context), None)
+        if record is None:
+            record = await database.text_mentions.create(TextMentionCreateRequest(
+                name="Emil Review", context=context, entity_id=active_entities["link-emil"],
+                entity_link_state=EntityLinkState.manual, source_id=source_id,
+            ), actors["reviewer"])
+        manifest.mentions[key] = record.mention_id
+        await checkpoint()
+    if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
+        active_mentions[key] = manifest.mentions[key]
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
@@ -340,6 +385,23 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}#link-statistics"
             ),
+            "document-search": "/documents?q=pribehy",
+            "document-preview-remainder": "/documents?q=pribehy&library=preview-mzk",
+            "compact-document-filters": "/documents?" + urlencode({
+                "q": "pribehy", "library": ["preview-mzk", "preview-nlk"],
+                "link_state": ["automatic", "verified"], "unassigned": "no",
+                "touched_by": actors["reviewer"].user_id,
+            }, doseq=True),
+            "outline-filter-badges": "/documents?" + urlencode({
+                "q": next(str(item.document_id) for item in DOCUMENTS if item.key == "issue8-search"),
+                "library": ["preview-mzk", "preview-nlk"],
+                "link_state": ["automatic", "verified"], "unassigned": "no",
+            }, doseq=True),
+            "rounded-filter-removal": "/documents?" + urlencode({
+                "q": "pribehy", "library": "preview-mzk",
+                "link_state": ["automatic", "verified"], "unassigned": "no",
+            }, doseq=True),
+            "document-source-touch": "/documents?library=preview-mzk&touched_by=" + str(actors["reviewer"].user_id),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"
             + urlencode({"library": "preview-mzk", "document": next(
@@ -349,6 +411,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             + urlencode(
                 {
                     "q": "Novak",
+                    "link_state": "automatic",
                     "assignment": "faces",
                     "document": documents["album"],
                     "touched_by": actors["importer"].user_id,

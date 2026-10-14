@@ -43,6 +43,8 @@ async def list_sources_route(
                 cursor=list_request.cursor,
             )
         )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_query", str(exc))
 

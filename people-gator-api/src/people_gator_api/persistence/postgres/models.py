@@ -231,9 +231,20 @@ class Source(Base):
     """URL-addressable evidence source and polymorphic source root."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("sources")
+    __table_args__ = (CheckConstraint(
+        "(last_touched_at IS NULL AND last_touched_by_user_id IS NULL AND last_touched_by_api_key_id IS NULL) OR (last_touched_at IS NOT NULL AND last_touched_by_user_id IS NOT NULL)",
+        name="ck_pg_demo_sources_touch",
+    ),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True
+    )
+    last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True
     )
     url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -255,6 +266,9 @@ class Document(Source):
     __tablename__ = TABLE_NAME_FORMAT.format("documents")
     __table_args__ = (
         UniqueConstraint("library", "document_id", name="uq_pg_demo_document_identity"),
+        Index("ix_pg_demo_documents_name_trgm", "name_normalized", postgresql_using="gin", postgresql_ops={"name_normalized": "gin_trgm_ops"}),
+        Index("ix_pg_demo_documents_library", "library"),
+        Index("ix_pg_demo_documents_document_id", "document_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -263,6 +277,7 @@ class Document(Source):
     library: Mapped[str] = mapped_column(String(255), nullable=False)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    name_normalized: Mapped[str | None] = mapped_column(Text, Computed("lower(demo_unaccent(name))", persisted=True))
 
     __mapper_args__ = {"polymorphic_identity": "document"}  # noqa: RUF012
 

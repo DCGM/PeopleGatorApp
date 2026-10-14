@@ -67,7 +67,7 @@ def test_sources_contract_is_read_only_and_has_no_polymorphic_metadata() -> None
     source_properties = openapi["components"]["schemas"]["SourceResponseBase"][
         "properties"
     ]
-    assert set(source_properties) == {"source_id", "source_type", "url"}
+    assert set(source_properties) == {"source_id", "source_type", "url", "last_touched_at", "last_touched_by_user_id", "last_touched_by_api_key_id"}
 
 
 @pytest.mark.asyncio
@@ -105,3 +105,28 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
         )
 
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.parametrize('kind', list(SourceKind))
+def test_processing_survives_all_source_response_conversions(kind):
+    from datetime import datetime, timezone
+    from people_gator_api.schemas.sources import GenericSourceResponse, PageResponse, DocumentResponse, ImageResponse, document_url, page_url
+    identity, page = uuid.uuid4(), uuid.uuid4()
+    timestamp, actor, key = datetime.now(timezone.utc), uuid.uuid4(), uuid.uuid4()
+    archive = {'library':'test','document_id':identity} if kind != SourceKind.image else {}
+    if kind == SourceKind.page: archive['page_id'] = page
+    url = page_url('test',identity,page) if kind == SourceKind.page else document_url('test',identity) if kind == SourceKind.document else 'https://preview.invalid/source.png'
+    generic = GenericSourceResponse(source_id=uuid.uuid4(),source_type=kind,url=url,last_touched_at=timestamp,last_touched_by_user_id=actor,last_touched_by_api_key_id=key,**archive)
+    cls = {SourceKind.page:PageResponse,SourceKind.document:DocumentResponse,SourceKind.image:ImageResponse}[kind]
+    for response in [SourceResponseBase.from_generic(generic),cls.from_generic(generic)]:
+        assert (response.last_touched_at,response.last_touched_by_user_id,response.last_touched_by_api_key_id) == (timestamp,actor,key)
+
+
+def test_document_filter_duplicates_are_normalized_before_cursor_fingerprinting():
+    from people_gator_api.schemas.sources import DocumentListFilter, DocumentListRequest, to_generic_list_request
+    from people_gator_api.persistence.postgres.utils import cursor_fingerprint
+    user, key = uuid.uuid4(), uuid.uuid4()
+    a = DocumentListRequest(limit=10, filter_=DocumentListFilter(library=['a','a'], last_touched_by_user_id=[user,user], last_touched_by_api_key_id=[key,key]))
+    b = DocumentListRequest(limit=10, filter_=DocumentListFilter(library=['a'], last_touched_by_user_id=[user], last_touched_by_api_key_id=[key]))
+    assert cursor_fingerprint(a) == cursor_fingerprint(b)
+    assert to_generic_list_request(a).filter_.library == ['a']

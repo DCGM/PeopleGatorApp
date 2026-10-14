@@ -1,11 +1,13 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({
   documents: vi.fn(),
+  search: vi.fn(),
+  libraries: vi.fn(),
   pages: vi.fn(),
   image: vi.fn(),
   entities: vi.fn(),
@@ -13,10 +15,21 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('@/client', () => ({
   listDocumentsRouteApiV1DocumentsGet: api.documents,
+  searchDocumentsGetApiV1SearchDocumentsGet: api.search,
+  documentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGet: api.libraries,
+  listUserFilterOptionsRouteApiV1UserFilterOptionsGet: vi
+    .fn()
+    .mockResolvedValue({ data: { items: [] } }),
+  listApiKeysRouteApiV1ApiKeysGet: vi.fn().mockResolvedValue({ data: { items: [] } }),
   listPagesRouteApiV1PagesGet: api.pages,
   getPageImageByIdRouteApiV1PagesPageSourceIdImageGet: api.image,
   listEntitiesRouteApiV1EntitiesGet: api.entities,
   getPageRouteApiV1PagesPageSourceIdGet: api.detail,
+}))
+const desktop = ref(true)
+vi.mock('@vueuse/core', async (original) => ({
+  ...(await original<typeof import('@vueuse/core')>()),
+  useMediaQuery: () => desktop,
 }))
 import DocumentListView from '@/views/DocumentListView.vue'
 import { documentTitle } from '@/viewmodels/document-list'
@@ -43,11 +56,12 @@ const response = (items: unknown[], total_count = items.length, cursor: string |
 })
 const cleanups: Array<() => void> = []
 
-async function render() {
+async function render(url = '/documents') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/documents', component: DocumentListView },
+      { path: '/documents', name: 'document-list', component: DocumentListView },
+      { path: '/scans', name: 'document-search', component: defineComponent(() => () => h('div')) },
       {
         path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
         name: 'document-page',
@@ -55,7 +69,7 @@ async function render() {
       },
     ],
   })
-  await router.push('/documents')
+  await router.push(url)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   const wrapper = mount(DocumentListView, {
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
@@ -70,6 +84,9 @@ async function render() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  desktop.value = true
+  api.libraries.mockResolvedValue(response([{ library: 'a' }, { library: 'b' }]))
+  api.search.mockResolvedValue(response([doc('a')]))
   api.documents.mockResolvedValue(response([doc('a'), doc('b', 'shared', null)]))
   api.pages.mockImplementation(({ query }) =>
     Promise.resolve(
@@ -83,18 +100,49 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup()
 })
 
-describe('grouped documents', () => {
-  it('renders flat headings and cards with separate library filters, names, and detail links', async () => {
+describe('document search and bounded groups', () => {
+  it('renders separate document rows, isolated previews, totals and both kinds of links', async () => {
+    const counts = { total: 2, automatic: 1, manual: 0, verified: 1, unassigned: 0 }
+    api.documents.mockResolvedValue(
+      response([
+        {
+          ...doc('a'),
+          last_touched_at: '2026-10-14T12:00:00Z',
+          last_touched_by_user_id: 'review-user',
+          last_touched_by_api_key_id: 'review-key',
+          entity_link_stats: { faces: counts, mentions: counts },
+        },
+        doc('b', 'shared', null),
+      ]),
+    )
     const { wrapper } = await render()
     expect(wrapper.findAll('h2').map((node) => node.text())).toEqual(['Album', 'Document shared'])
-    const children = [...wrapper.get('.document-pages').element.children]
-    expect(children.map((node) => node.tagName)).toEqual(['HEADER', 'A', 'HEADER', 'A'])
+    expect(
+      [...wrapper.get('.document-pages').element.children].map((node) => node.tagName),
+    ).toEqual(['ARTICLE', 'ARTICLE'])
     expect(wrapper.findAll('.scan-card').map((node) => node.attributes('href'))).toEqual([
       '/libraries/a/documents/shared/pages/a-1',
       '/libraries/b/documents/shared/pages/b-1',
     ])
+    for (const [index, library] of ['a', 'b'].entries()) {
+      const link = wrapper.findAll('.document-link')[index]!
+      expect(link.attributes('href')).toBe(`/scans?library=${library}&document=shared`)
+      expect(link.get('p').text()).toBe(`${library} · shared`)
+      expect(link.attributes('aria-label')).toContain(`in ${library}`)
+    }
+    for (const card of wrapper.findAll('.scan-card'))
+      expect(card.find('.font-bold.text-secondary').exists()).toBe(false)
+    expect(wrapper.get('.document-link .text-secondary').classes()).toContain('font-bold')
     expect(wrapper.text()).toContain('Ada, Grace')
-    expect(wrapper.findAll('svg.lucide-file-text')).toHaveLength(2)
+    expect(wrapper.text()).toContain('Processing not recorded')
+    const information = wrapper.get('.document-heading')
+    const lines = information.findAll('p').map((node) => node.text())
+    expect(lines[1]).toBe('1 registered page')
+    expect(lines[2]).toMatch(/^Last processed:/)
+    expect(lines[3]).toBe('User: review-user')
+    expect(lines[4]).toBe('API key: review-key')
+    expect(information.element.lastElementChild?.getAttribute('aria-label')).toBe('Link statistics')
+    expect(wrapper.get('[data-slot="input-group"] [role="status"]').text()).toBe('2 results')
     expect(api.detail).not.toHaveBeenCalled()
     for (const library of ['a', 'b'])
       expect(api.pages).toHaveBeenCalledWith(
@@ -102,7 +150,7 @@ describe('grouped documents', () => {
           query: {
             'filter.library': [library],
             'filter.document_id': ['shared'],
-            limit: 12,
+            limit: 4,
             return_total_count: true,
             cursor: null,
           },
@@ -110,8 +158,7 @@ describe('grouped documents', () => {
       )
     expect(documentTitle({ document_id: 'legacy', name: ' ' })).toBe('Document legacy')
   })
-
-  it('paginates each group and the registered document list independently without duplicates', async () => {
+  it('loads at most four previews and paginates document results without following page cursors', async () => {
     api.documents.mockImplementation(({ query }) =>
       Promise.resolve(
         query.cursor
@@ -119,45 +166,37 @@ describe('grouped documents', () => {
           : response([doc('a'), doc('b')], 3, 'documents-next'),
       ),
     )
-    api.pages.mockImplementation(({ query }) => {
-      const library = query['filter.library'][0]
-      if (library === 'c') return Promise.resolve(response([]))
-      return Promise.resolve(
-        library === 'a'
-          ? query.cursor
-            ? response([page('a', 'a-1'), page('a', 'a-2')], 20)
-            : response([page('a', 'a-1')], 20, 'a-next')
-          : response([page('b', 'b-1')]),
-      )
-    })
+    api.pages.mockImplementation(({ query }) =>
+      Promise.resolve(
+        query['filter.library'][0] === 'c'
+          ? response([])
+          : response(
+              Array.from({ length: 4 }, (_, i) =>
+                page(query['filter.library'][0], `${query['filter.library'][0]}-${i}`),
+              ),
+              20,
+              'unused-next',
+            ),
+      ),
+    )
     const { wrapper } = await render()
+    expect(wrapper.findAll('.scan-card')).toHaveLength(8)
     expect(wrapper.text()).toContain('20 registered pages')
-    const groupButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Load more pages')!
-    await groupButton.trigger('click')
-    await flushPromises()
-    expect(wrapper.findAll('.scan-card').map((node) => node.attributes('href'))).toEqual([
-      '/libraries/a/documents/shared/pages/a-1',
-      '/libraries/a/documents/shared/pages/a-2',
-      '/libraries/b/documents/shared/pages/b-1',
-    ])
-    expect(
-      api.pages.mock.calls.filter(([arg]) => arg.query['filter.library'][0] === 'b'),
-    ).toHaveLength(1)
+    expect(wrapper.findAll('.more-pages').map((node) => node.text())).toEqual(['+16', '+16'])
+    expect(wrapper.get('.more-pages').attributes('href')).toBe('/scans?library=a&document=shared')
+    expect(wrapper.text()).not.toContain('Showing 4 of')
+    expect(wrapper.find('button[aria-label^="Load more pages"]').exists()).toBe(false)
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Load more documents')!
       .trigger('click')
     await flushPromises()
-    expect(wrapper.findAll('h2')).toHaveLength(3)
-    expect(wrapper.text()).toContain('0 registered pages')
+    expect(wrapper.findAll('article')).toHaveLength(3)
     expect(wrapper.text()).toContain('No pages have been registered for this document yet.')
+    expect(api.pages.mock.calls.every(([arg]) => !arg.query.cursor)).toBe(true)
     expect(api.documents.mock.calls[1]![0].query.cursor).toBe('documents-next')
-    expect(api.pages.mock.calls.find(([arg]) => arg.query.cursor)?.[0].query.cursor).toBe('a-next')
   })
-
-  it('keeps headings during loading and errors, and retries one group without blocking another', async () => {
+  it('retries a failed group without hiding the other document', async () => {
     let resolvePages: (value: unknown) => void = () => {}
     api.pages.mockImplementation(({ query }) =>
       query['filter.library'][0] === 'a'
@@ -168,7 +207,6 @@ describe('grouped documents', () => {
     )
     const { wrapper } = await render()
     expect(wrapper.findAll('h2')).toHaveLength(2)
-    expect(wrapper.findAll('.scan-card')).toHaveLength(4)
     expect(wrapper.text()).toContain('Could not load pages for this document.')
     resolvePages(response([page('a', 'a-1')]))
     await flushPromises()
@@ -181,49 +219,118 @@ describe('grouped documents', () => {
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(wrapper.findAll('h2')).toHaveLength(2)
-    expect(wrapper.text()).toContain('No pages have been registered for this document yet.')
   })
-
-  it('retains loaded pages when the next batch fails and retries its cursor', async () => {
+  it('retains document results after a next-page error and retries that cursor', async () => {
     let fail = true
-    api.documents.mockResolvedValue(response([doc('a')]))
-    api.pages.mockImplementation(({ query }) => {
-      if (!query.cursor) return Promise.resolve(response([page('a', 'a-1')], 2, 'a-next'))
-      if (fail) return Promise.reject(new Error('Next page unavailable'))
-      return Promise.resolve(response([page('a', 'a-2')], 2))
-    })
+    api.documents.mockImplementation(({ query }) =>
+      !query.cursor
+        ? Promise.resolve(response([doc('a')], 2, 'docs-next'))
+        : fail
+          ? Promise.reject(new Error('Next document unavailable'))
+          : Promise.resolve(response([doc('b')], 2)),
+    )
     const { wrapper } = await render()
-    await wrapper.get('button[aria-label^="Load more pages"]').trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Load more documents')!
+      .trigger('click')
     await flushPromises()
-    expect(wrapper.findAll('h2')).toHaveLength(1)
-    expect(wrapper.findAll('a.scan-card')).toHaveLength(1)
-    expect(wrapper.text()).toContain('Could not load pages for this document.')
+    expect(wrapper.findAll('article')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Could not load documents.')
     fail = false
-    await wrapper.findAll('button').find(button => button.text() === 'Retry pages')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Retry documents')!
+      .trigger('click')
     await flushPromises()
-    expect(wrapper.findAll('a.scan-card')).toHaveLength(2)
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(api.pages.mock.calls.map(([arg]) => arg.query.cursor)).toEqual([
+    expect(wrapper.findAll('article')).toHaveLength(2)
+    expect(api.documents.mock.calls.map(([arg]) => arg.query.cursor)).toEqual([
       null,
-      'a-next',
-      'a-next',
+      'docs-next',
+      'docs-next',
     ])
   })
-
-  it('filters registered documents by route library and shows an empty list', async () => {
-    const { wrapper, router } = await render()
-    api.documents.mockResolvedValue(response([]))
-    await router.push('/documents?library=missing')
-    await flushPromises()
-    expect(api.documents).toHaveBeenLastCalledWith(
+  it('restores all URL filters, combines them in list/search, and keeps them separate from previews', async () => {
+    const { wrapper, router } = await render(
+      '/documents?q=Ada&library=a&library=b&link_state=verified&unassigned=no&touched_from=2026-01-01T00:00:00Z&touched_by=user-1&api_key=key-1',
+    )
+    expect(api.documents).not.toHaveBeenCalled()
+    expect(api.search).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        query: { 'filter.library': ['missing'], limit: 12, cursor: null },
+        query: expect.objectContaining({
+          'query.text': ['Ada'],
+          'filter.library': ['a', 'b'],
+          'filter.entity_link_state': ['verified'],
+          'filter.has_unassigned_faces': false,
+          'filter.last_touched_by_user_id': ['user-1'],
+          'filter.last_touched_by_api_key_id': ['key-1'],
+          'filter.last_touched_from': '2026-01-01T00:00:00.000Z',
+          cursor: null,
+          return_total_count: true,
+        }),
       }),
     )
-    expect(wrapper.findAll('h2')).toHaveLength(0)
-    expect(wrapper.text()).toContain('No documents have been registered in this library yet.')
+    expect(api.pages.mock.calls[0]![0].query).toEqual({
+      'filter.library': ['a'],
+      'filter.document_id': ['shared'],
+      'filter.entity_link_state': ['verified'],
+      limit: 4,
+      return_total_count: true,
+      cursor: null,
+    })
+    expect(api.libraries).toHaveBeenCalled()
+    await wrapper.get('button[aria-label="Remove Library: a"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.library).toEqual(['b'])
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Clear all filters')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    await wrapper.get('input[aria-label="Search documents"]').setValue('  ')
+    await flushPromises()
+    expect(api.documents).toHaveBeenCalled()
+    router.back()
+    await flushPromises()
+    expect(
+      wrapper.get<HTMLInputElement>('input[aria-label="Search documents"]').element.value,
+    ).toBe('Ada')
   })
-
+  it('shows no matches and suppresses invalid date queries', async () => {
+    api.documents.mockResolvedValue(response([]))
+    const { wrapper, router } = await render('/documents?library=missing')
+    expect(wrapper.text()).toContain('No documents match your search and filters.')
+    const calls = api.documents.mock.calls.length
+    await router.push(
+      '/documents?touched_from=2026-02-01T00:00:00Z&touched_to=2026-01-01T00:00:00Z',
+    )
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
+    expect(api.documents.mock.calls.length).toBe(calls)
+  })
+  it('keeps active badges outside the panel and accessible while mobile filters are collapsed', async () => {
+    desktop.value = false
+    const { wrapper, router } = await render('/documents?q=Ada&library=a')
+    expect(wrapper.get('button[aria-label="Show filters"]').attributes('aria-expanded')).toBe(
+      'false',
+    )
+    expect(wrapper.find('button[aria-label="Libraries"]').exists()).toBe(false)
+    const panel = wrapper.get('.search-filter-panel')
+    const active = wrapper.get('.active-filters')
+    expect(panel.element.contains(active.element)).toBe(false)
+    expect(active.find('[data-slot="badge"]').exists()).toBe(true)
+    await wrapper.get('button[aria-label="Show filters"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('button[aria-label="Libraries"]').exists()).toBe(true)
+    await wrapper.get('button[aria-label="Hide filters"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.active-filters').exists()).toBe(true)
+    await active.get('button[aria-label="Remove Library: a"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    expect(wrapper.find('.active-filters').exists()).toBe(false)
+  })
   it('keeps scan result envelopes separate from raw page list cache entries', async () => {
     const { queryClient, wrapper } = await render()
     let search: ReturnType<typeof useDocumentSearch> | undefined

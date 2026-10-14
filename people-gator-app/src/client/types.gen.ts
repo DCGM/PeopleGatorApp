@@ -107,6 +107,16 @@ export type DocumentCreateRequest = {
     name?: DocumentName | null;
 };
 
+/**
+ * DocumentLibraryOption
+ */
+export type DocumentLibraryOption = {
+    /**
+     * Library
+     */
+    library: string;
+};
+
 export type DocumentName = string;
 
 /**
@@ -124,6 +134,18 @@ export type DocumentResponse = {
      * Url
      */
     url: string;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -931,6 +953,18 @@ export type FoundDocument = {
      * Url
      */
     url: string;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -1163,6 +1197,18 @@ export type FoundPage = {
      * Url
      */
     url: string;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -1186,6 +1232,34 @@ export type GenericListResponseApiKeyResponse = {
      * Items
      */
     items: Array<ApiKeyResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[DocumentLibraryOption]
+ */
+export type GenericListResponseDocumentLibraryOption = {
+    /**
+     * Items
+     */
+    items: Array<DocumentLibraryOption>;
     /**
      * Limit
      *
@@ -1589,6 +1663,18 @@ export type ImageResponse = {
      * Url
      */
     url: string;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
 };
 
 /**
@@ -1780,6 +1866,18 @@ export type PageResponse = {
      * Url
      */
     url: string;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -1887,6 +1985,18 @@ export type SourceResponseBase = {
      * Url
      */
     url: string;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
 };
 
 /**
@@ -2670,6 +2780,30 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          */
         'filter.has_entities'?: boolean | null;
         /**
+         * Filter.Last Touched From
+         *
+         * Inclusive lower bound of the last annotation change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive upper bound of the last annotation change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users responsible for the last annotation change.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the last annotation change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -2793,6 +2927,36 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          * Filter by linked mention ID.
          */
         'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive lower bound of the last annotation change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive upper bound of the last annotation change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users responsible for the last annotation change.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the last annotation change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Has Unassigned Faces
+         *
+         * Whether any face in the document scope is unassigned; false includes documents without faces.
+         */
+        'filter.has_unassigned_faces'?: boolean | null;
         /**
          * Limit
          *
@@ -3888,6 +4052,30 @@ export type ListSourcesRouteApiV1SourcesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Last Touched From
+         *
+         * Inclusive lower bound of the last annotation change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive upper bound of the last annotation change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users responsible for the last annotation change.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the last annotation change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -4069,6 +4257,36 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          * Filter by linked mention ID.
          */
         'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive lower bound of the last annotation change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive upper bound of the last annotation change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users responsible for the last annotation change.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the last annotation change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Has Unassigned Faces
+         *
+         * Whether any face in the document scope is unassigned; false includes documents without faces.
+         */
+        'filter.has_unassigned_faces'?: boolean | null;
         /**
          * Limit
          *
@@ -4334,6 +4552,30 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Filter by whether the page has at least one entity assigned to a text mention or face detection.
          */
         'filter.has_entities'?: boolean | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive lower bound of the last annotation change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive upper bound of the last annotation change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users responsible for the last annotation change.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the last annotation change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -4742,6 +4984,30 @@ export type ListImagesRouteApiV1ImagesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Last Touched From
+         *
+         * Inclusive lower bound of the last annotation change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive upper bound of the last annotation change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users responsible for the last annotation change.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the last annotation change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -4953,6 +5219,54 @@ export type GetImageContentByIdRouteApiV1ImagesImageIdContentGetResponses = {
      */
     200: unknown;
 };
+
+export type DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
+         */
+        limit?: number;
+        /**
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
+         */
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
+    };
+    url: '/api/v1/document-library-filter-options';
+};
+
+export type DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetError = DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetErrors[keyof DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetErrors];
+
+export type DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseDocumentLibraryOption;
+};
+
+export type DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetResponse = DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetResponses[keyof DocumentLibraryFilterOptionsRouteApiV1DocumentLibraryFilterOptionsGetResponses];
 
 export type ListUserFilterOptionsRouteApiV1UserFilterOptionsGetData = {
     body?: never;

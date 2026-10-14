@@ -64,3 +64,52 @@ The PR CI workflow smoke-tests the real migration/seed CLI twice in a separate
 `deploy/preview/tests/`. Host controller/Compose changes must be installed from a
 reviewed default-branch checkout as described in `deploy/preview/README.md`; PR
 code must not replace the trusted host controller directly.
+
+# Search and filter panels throughout the application
+
+These rules apply everywhere in the application that provides search or filters,
+including documents, scans, entities and annotation/discovery controls. Apply
+these rules to new panels and changes to existing panels while retaining each
+screen's filter semantics.
+
+- Use 100% of the parent element's available width. Arrange controls in natural
+  DOM order, left to right, using `display: flex`, `flex-direction: row` and
+  `flex-wrap: wrap`. Use flexbox, not CSS floats, and include gaps in width
+  calculations to avoid horizontal overflow.
+- Search is always the first control, before filters and actions. A filters-only
+  panel must not invent a nonfunctional search field.
+- Search and every filter participate in one wrapping flex container. At `sm`
+  (640px and wider, including `lg`), the search item reserves the first two thirds
+  of the first line. Include the following gap in that reserved width. These
+  proportions refer to the parent panel, not the viewport, and apply only to
+  the search item on the first line. Subsequent filter rows use the full panel
+  width; never confine filters to a separate narrow column or wrapping region.
+- Filter boxes fit their content, with no fixed minimum widths, growing flex
+  items or equal-width columns. Cap them at the available parent width to avoid
+  overflow. Use no external labels on panel selectors: every selector identifies
+  its filter inside the control, including dates, and retains an accessible name.
+- Below 640px, keep search available beside a sliders icon button. Filters are
+  collapsed by default and expand below that row across the full panel width.
+  Use the standard shadcn-vue `Collapsible`; the toggle needs an accessible name,
+  `aria-expanded`, and keyboard operation. Collapsing preserves search and all
+  selected values.
+- Use standard shadcn-vue setting controls: Input/InputGroup, Select,
+  Popover/Command or Combobox for multi-select, Calendar, Button and Collapsible.
+  Use standard variants and sizes; panel combobox triggers share the default
+  control height. Use comboboxes for assignment and unassigned-face choices too.
+  Show the result count as the last element in the search InputGroup, after the
+  clear-search button. Only layout changes are allowed: width,
+  flex basis/grow/shrink, wrapping, spacing, alignment and responsive placement.
+  Do not override colors, backgrounds, borders, rounding, shadows, typography,
+  or hover/focus/disabled states, or modify `src/components/ui/` for these panels.
+  Shared filter controls must follow these same restrictions.
+- Display active filters as standard outline Badge tags rendered as `<small>`
+  in a separate wrapping area below the panel, outside its container/card and before results. Each tag names
+  its filter type and value and has an accessible circular X removal button
+  (`rounded-full` on the standard ghost icon button), including
+  removal of individual multi-select values. Removal updates the setting
+  control, URL and results immediately. A standard clear-all button preserves
+  search text; clearing search is a separate action. Tags stay accessible when
+  mobile settings are collapsed and never overflow the parent. Hide the entire
+  area when no filters are active.
+- Keep keyboard navigation, standard focus states, and light/dark themes usable.
