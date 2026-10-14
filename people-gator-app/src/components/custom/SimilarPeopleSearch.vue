@@ -50,6 +50,7 @@ const active = computed(() =>
       class="mt-2"
       label="Search people"
       placeholder="Search by name or alias"
+      :hide-filters="!!query.trim()"
       :disabled="!props.selectedFace"
     >
       <ToggleGroup

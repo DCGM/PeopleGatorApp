@@ -144,6 +144,7 @@ describe('SimilarPeoplePanel', () => {
     await wrapper.get('[aria-label="Search people"]').setValue('an alias')
     expect(wrapper.findAll('[aria-label^="Preview "]')).toHaveLength(2)
     expect(wrapper.find('[aria-label="Choose candidate source"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Show filters"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Showing database name and alias matches.')
   })
 

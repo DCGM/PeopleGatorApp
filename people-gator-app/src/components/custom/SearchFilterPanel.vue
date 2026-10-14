@@ -11,7 +11,7 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     label: string
     placeholder?: string
@@ -19,12 +19,13 @@ withDefaults(
     hasMoreResults?: boolean
     filtersOnly?: boolean
     disabled?: boolean
+    hideFilters?: boolean
   }>(),
   { placeholder: 'Search…' },
 )
 const searchTerm = defineModel<string>({ default: '' })
 const slots = useSlots()
-const hasFilters = computed(() => !!slots.default)
+const hasFilters = computed(() => !!slots.default && !props.hideFilters)
 const input = ref<InstanceType<typeof InputGroupInput>>()
 defineExpose({ focus: () => (input.value?.$el as HTMLInputElement)?.focus() })
 const desktop = useMediaQuery('(min-width: 640px)')
