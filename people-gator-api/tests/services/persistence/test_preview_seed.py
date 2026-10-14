@@ -121,8 +121,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (8, 21, 11)
-    assert len(result.documents) == 11 and len(result.pages) == 22
+    assert await counts(database) == (8, 21, 12)
+    assert len(result.documents) == 12 and len(result.pages) == 22
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -269,7 +269,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (8, 21, 11)
+    assert await counts(database) == (8, 21, 12)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -291,7 +291,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (9, 21, 11)
+    assert await counts(database) == (9, 21, 12)
 
 
 @pytest.mark.asyncio
@@ -316,7 +316,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
     assert len(result.entities) == 8 and len(result.faces) == 21
-    assert await counts(database) == (8, 21, 11)
+    assert await counts(database) == (8, 21, 12)
 
 
 @pytest.mark.asyncio
@@ -336,7 +336,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (7, 20, 10)
+    assert await counts(database) == (7, 20, 11)
 
 
 @pytest.mark.asyncio
@@ -1210,3 +1210,103 @@ async def test_issue8_annotation_noops_delete_merge_rollback_and_concurrency(see
     ), timeout=10)
     assert a.last_touched_at != b.last_touched_at
     assert (await database.sources.get_document(document.source_id)).last_touched_at == max(a.last_touched_at, b.last_touched_at)
+
+
+@pytest.mark.asyncio
+async def test_issue8_direct_annotations_touch_only_document_and_preserve_recovery(seed_target, monkeypatch):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.search import SearchDocumentsRequest
+    from people_gator_api.schemas.enums import EntityLinkState
+    from people_gator_api.schemas.mentions import TextMentionPatchRequest
+    database, filesystem, _ = seed_target
+    original_write = filesystem.write_bytes
+    processed = None
+    async def interrupted(key, content):
+        nonlocal processed
+        if key == preview.MANIFEST_KEY and b'issue8-direct-mention' in content and processed is None:
+            document = next(item for item in DOCUMENTS if item.key == 'issue8-direct')
+            processed = await database.sources.lookup_document(DocumentLookupRequest(library=document.library, document_id=document.document_id))
+            raise OSError('direct checkpoint interrupted')
+        await original_write(key, content)
+    monkeypatch.setattr(filesystem, 'write_bytes', interrupted)
+    with pytest.raises(OSError, match='checkpoint'):
+        await preview.seed_preview(database, filesystem)
+    result = await preview.seed_preview(database, filesystem)
+    assert (await database.sources.get_document(processed.source_id)).last_touched_at == processed.last_touched_at
+    filters = DocumentListFilter(source_id=[processed.source_id], entity_link_state=[EntityLinkState.manual])
+    found = await database.sources.search_documents(SearchDocumentsRequest(query=QueryBase(text=['Emil Review']), filter_=filters, limit=10, return_total_count=True))
+    assert found.total_count == 1 and found.items[0].entity_link_stats.mentions.manual == 1
+    pages = await database.sources.list_pages(PageListRequest(limit=4, filter_=PageListFilter(library=[processed.library], document_id=[processed.document_id]), return_total_count=True))
+    assert pages.total_count == 0
+    # Verification changes source history; repeating verification preserves it.
+    actor = GenericActor(user_id=result.users['reviewer'])
+    await database.text_mentions.patch(result.mentions['issue8-direct-mention'], TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actor)
+    verified = await database.sources.get_document(processed.source_id)
+    await database.text_mentions.patch(result.mentions['issue8-direct-mention'], TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actor)
+    assert (await database.sources.get_document(processed.source_id)).last_touched_at == verified.last_touched_at
+    await preview.seed_preview(database, filesystem)
+    assert (await database.sources.get_document(processed.source_id)).last_touched_at == verified.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_issue8_source_only_actor_and_key_references(seed_target):
+    from people_gator_api.schemas.users import UserCreateRequest
+    from people_gator_api.schemas.api_keys import APIKeyCreateRequest
+    from people_gator_api.schemas.sources import ImageCreateRequest
+    from people_gator_api.schemas.faces import FaceCreateRequest
+    from people_gator_api.seeding.fixtures import Face
+    from people_gator_api.seeding.media import face_box, face_keypoints
+    from people_gator_api.services.auth_service import AuthContext
+    database, _, _ = seed_target
+    user = await database.users.get_or_create(UserCreateRequest(display_name='Source only actor', external_subject='source-only-actor', external_issuer='issue8-test', is_active=True))
+    other = await database.users.get_or_create(UserCreateRequest(display_name='Other actor', external_subject='other-actor', external_issuer='issue8-test', is_active=True))
+    image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url='https://preview.invalid/source-only.png'))
+    actor = GenericActor(user_id=user.user_id)
+    face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), actor)
+    await database.faces.delete(face.detection_id, context=actor)
+    # No owned face, entity or key remains; source processing alone protects U.
+    with pytest.raises(ValueError, match='referenced'):
+        await database.users.delete(user.user_id)
+    key = await database.api_keys.get_or_create(APIKeyCreateRequest(identifier='source-only-key', display_name='Historical source key', user_id=user.user_id))
+    key_actor = AuthContext(user_id=user.user_id, user=user, api_key_id=key.api_key_id, authentication_method='api_key', scopes=set())
+    face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), key_actor)
+    await database.faces.delete(face.detection_id, context=key_actor)
+    with pytest.raises(ValueError, match='referenced API key'):
+        await database.api_keys.get_or_create(APIKeyCreateRequest(identifier='source-only-key', display_name='Renamed key', user_id=other.user_id))
+    assert (await database.sources.get_image(image.source_id)).last_touched_by_api_key_id == key.api_key_id
+
+
+@pytest.mark.asyncio
+async def test_issue8_migration_preserves_sources_without_fabricating_history(seed_target):
+    from sqlalchemy import inspect
+    from people_gator_api.schemas.sources import document_url, page_url
+    from people_gator_api.persistence.postgres.schema import validate_schema, SchemaValidationError
+    _, _, engine = seed_target
+    document_id, page_id = uuid.uuid4(), uuid.uuid4()
+    ids = [uuid.uuid4() for _ in range(3)]
+    def old_schema(connection):
+        config = migration_config(); config.attributes['connection'] = connection
+        command.downgrade(config, 'd34a021b0004')
+        for source_id, kind, url in zip(ids, ['document','page','image'], [document_url('historical', document_id), page_url('historical',document_id,page_id), 'https://preview.invalid/historical.png']):
+            connection.execute(text('INSERT INTO pg_demo_sources(id, source_type, url) VALUES (:id,:kind,:url)'), {'id':source_id,'kind':kind,'url':url})
+        connection.execute(text('INSERT INTO pg_demo_documents(id,library,document_id,name) VALUES (:id, :library, :document_id, :name)'), {'id':ids[0], 'library':'historical', 'document_id':document_id, 'name':'Příběhy history'})
+        connection.execute(text('INSERT INTO pg_demo_pages(id,library,document_id,page_id) VALUES (:id, :library, :document_id, :page_id)'), {'id':ids[1], 'library':'historical', 'document_id':document_id, 'page_id':page_id})
+        connection.execute(text('INSERT INTO pg_demo_images(id) VALUES (:id)'), {'id':ids[2]})
+        command.upgrade(config, 'head')
+        validate_schema(connection)
+        inspector = inspect(connection)
+        fields = {item['name'] for item in inspector.get_columns('pg_demo_sources')}
+        assert {'last_touched_at','last_touched_by_user_id','last_touched_by_api_key_id'} <= fields
+        for table in ['pg_demo_documents','pg_demo_pages','pg_demo_images']:
+            assert not any(item['name'].startswith('last_touched') for item in inspector.get_columns(table))
+        assert connection.execute(text('SELECT last_touched_at,last_touched_by_user_id,last_touched_by_api_key_id FROM pg_demo_sources')).all() == [(None,None,None)]*3
+        assert connection.scalar(text('SELECT name FROM pg_demo_documents')) == 'Příběhy history'
+        assert connection.scalar(text('SELECT name_normalized FROM pg_demo_documents')) == 'pribehy history'
+    async with engine.begin() as connection:
+        await connection.run_sync(old_schema)
+    async with engine.connect() as connection:
+        async with connection.begin():
+            await connection.execute(text('ALTER TABLE pg_demo_sources DROP CONSTRAINT ck_pg_demo_sources_touch'))
+            with pytest.raises(SchemaValidationError, match='consistency'):
+                await connection.run_sync(validate_schema)
+            await connection.rollback()

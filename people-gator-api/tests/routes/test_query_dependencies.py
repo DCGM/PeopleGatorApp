@@ -216,3 +216,24 @@ def test_search_query_dependency_keeps_cross_field_validation() -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_search"
+
+
+@pytest.mark.parametrize('path', ['/sources', '/documents', '/pages', '/images', '/search-documents', '/search-pages'])
+@pytest.mark.parametrize('parameters', [
+    {'filter.last_touched_from': '2026-01-01T00:00:00'},
+    {'filter.last_touched_from': 'not-a-date'},
+    {'filter.last_touched_from': '2026-02-01T00:00:00Z', 'filter.last_touched_to': '2026-01-01T00:00:00Z'},
+    {'filter.last_touched_by_user_id': 'not-a-uuid'},
+    {'filter.last_touched_by_api_key_id': 'not-a-uuid'},
+    {'filter.entity_link_state': 'unassigned'},
+])
+def test_source_processing_query_validation_before_repository_access(path, parameters):
+    from people_gator_api.routes.v1.query_dependencies import source_list_filter_dependency, document_list_filter_dependency, image_list_filter_dependency, page_list_filter_dependency
+    from fastapi import Depends
+    dependencies = {'/sources': source_list_filter_dependency, '/documents': document_list_filter_dependency, '/images': image_list_filter_dependency}
+    dependency = dependencies.get(path, document_list_filter_dependency if path == '/search-documents' else page_list_filter_dependency)
+    app = FastAPI()
+    @app.get(path)
+    def endpoint(filter=Depends(dependency)):
+        return {'valid': True}
+    assert TestClient(app).get(path, params=parameters).status_code == 422

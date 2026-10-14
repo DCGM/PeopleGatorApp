@@ -105,3 +105,18 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
         )
 
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.parametrize('kind', list(SourceKind))
+def test_processing_survives_all_source_response_conversions(kind):
+    from datetime import datetime, timezone
+    from people_gator_api.schemas.sources import GenericSourceResponse, PageResponse, DocumentResponse, ImageResponse, document_url, page_url
+    identity, page = uuid.uuid4(), uuid.uuid4()
+    timestamp, actor, key = datetime.now(timezone.utc), uuid.uuid4(), uuid.uuid4()
+    archive = {'library':'test','document_id':identity} if kind != SourceKind.image else {}
+    if kind == SourceKind.page: archive['page_id'] = page
+    url = page_url('test',identity,page) if kind == SourceKind.page else document_url('test',identity) if kind == SourceKind.document else 'https://preview.invalid/source.png'
+    generic = GenericSourceResponse(source_id=uuid.uuid4(),source_type=kind,url=url,last_touched_at=timestamp,last_touched_by_user_id=actor,last_touched_by_api_key_id=key,**archive)
+    cls = {SourceKind.page:PageResponse,SourceKind.document:DocumentResponse,SourceKind.image:ImageResponse}[kind]
+    for response in [SourceResponseBase.from_generic(generic),cls.from_generic(generic)]:
+        assert (response.last_touched_at,response.last_touched_by_user_id,response.last_touched_by_api_key_id) == (timestamp,actor,key)

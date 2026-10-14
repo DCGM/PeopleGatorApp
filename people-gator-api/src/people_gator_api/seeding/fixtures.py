@@ -96,6 +96,7 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("issue8-direct", "preview-nlk", "Direct annotation ledger"),
     Document("issue8-search", "preview-mzk", "Příběhy archivářů"),
     Document("issue8-mirror", "preview-nlk", "Search isolation mirror", "issue8-search"),
     Document("issue8-orphan", "preview-mzk", "Orphan source touch", registered=False),

@@ -186,3 +186,26 @@ The image `https://preview.invalid/issue8/portrait.png` has a local PNG stored
 under `image_content_key` and an unassigned face, demonstrating the same generic
 source processing on images. The URL is a synthetic identity; no network download
 is needed. Repeating the seed preserves processing times, assignments and edits.
+
+Explore `/documents?q=pribehy`, or open **Direct annotation ledger** in
+`preview-nlk`: its manual mention of Emil Review demonstrates a document match
+without any matching scan. Select Libraries independently of loaded results;
+options come from registered documents across the database. Try the verified link
+state with no unassigned faces to find Příběhy archivářů, or verified with
+unassigned faces to find Link state review. **Document awaiting scans** and the
+unnamed legacy document remain usable without processing history.
+
+The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
+(inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,
+`filter.last_touched_by_api_key_id`, `filter.library` and
+`filter.entity_link_state`, plus `filter.has_unassigned_faces=true|false`.
+The same processing fields are available on source/page/image lists and existing
+page/document search. A page's filters use that page's own stored history.
+Search totals describe bounded candidates (200 per direct identity/name/entity
+candidate path), while list totals count all matching registered documents.
+
+To regenerate the frontend contract locally, run the API's
+`scripts/export_openapi.py openapi.json` with local settings, then
+`npm run openapi-ts` from `people-gator-app`. `PEOPLE_GATOR_OPENAPI` can override
+that local input path. The exported JSON is ignored; generated SDK files are
+committed.

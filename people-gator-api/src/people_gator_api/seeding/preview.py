@@ -339,6 +339,24 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         await checkpoint()
     if await database.faces.get(manifest.faces[key]) is not None:
         active_faces[key] = manifest.faces[key]
+    # Direct document evidence is searchable even without a matching page.
+    key = "issue8-direct-mention"
+    if key not in manifest.mentions and "link-emil" in active_entities:
+        source_id = documents["issue8-direct"]
+        records = (await database.text_mentions.list(TextMentionListRequest(
+            limit=100, filter_=TextMentionListFilter(source_id=[source_id]),
+        ))).items
+        context = "Emil Review catalogued the direct annotation ledger."
+        record = next((item for item in records if item.context == context), None)
+        if record is None:
+            record = await database.text_mentions.create(TextMentionCreateRequest(
+                name="Emil Review", context=context, entity_id=active_entities["link-emil"],
+                entity_link_state=EntityLinkState.manual, source_id=source_id,
+            ), actors["reviewer"])
+        manifest.mentions[key] = record.mention_id
+        await checkpoint()
+    if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
+        active_mentions[key] = manifest.mentions[key]
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
