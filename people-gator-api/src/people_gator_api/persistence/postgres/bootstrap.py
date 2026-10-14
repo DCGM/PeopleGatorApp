@@ -119,6 +119,15 @@ def matching_bootstrap_revision(connection: Connection, config: Config) -> str |
     if current == tuple(ScriptDirectory.from_config(config).get_heads()):
         validate_schema(connection)
         return current[0]
+    # Revisions after the frozen bootstrap snapshots already have authoritative
+    # Alembic history. Keep their revision and let normal migrations run; the
+    # caller validates the resulting schema in the same transaction. In
+    # particular, --adopt-bootstrap must remain safe for existing live previews
+    # when a new application revision moves the head beyond link-state v4.
+    if len(current) == 1 and current[0] not in (*LEGACY_REVISIONS, *SNAPSHOT_REVISIONS):
+        known = {revision.revision for revision in ScriptDirectory.from_config(config).walk_revisions()}
+        if current[0] in known:
+            return current[0]
     if len(current) > 1 or any(
         revision not in (*LEGACY_REVISIONS, *SNAPSHOT_REVISIONS) for revision in current
     ):

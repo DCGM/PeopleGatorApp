@@ -1287,6 +1287,7 @@ async def test_issue8_source_only_actor_and_key_references(seed_target):
 @pytest.mark.asyncio
 async def test_issue8_migration_preserves_sources_without_fabricating_history(seed_target):
     from sqlalchemy import inspect
+    from people_gator_api.persistence.postgres.bootstrap import adopt_bootstrap_schema
     from people_gator_api.schemas.sources import document_url, page_url
     from people_gator_api.persistence.postgres.schema import validate_schema, SchemaValidationError
     _, _, engine = seed_target
@@ -1300,6 +1301,7 @@ async def test_issue8_migration_preserves_sources_without_fabricating_history(se
         connection.execute(text('INSERT INTO pg_demo_documents(id,library,document_id,name) VALUES (:id, :library, :document_id, :name)'), {'id':ids[0], 'library':'historical', 'document_id':document_id, 'name':'Příběhy history'})
         connection.execute(text('INSERT INTO pg_demo_pages(id,library,document_id,page_id) VALUES (:id, :library, :document_id, :page_id)'), {'id':ids[1], 'library':'historical', 'document_id':document_id, 'page_id':page_id})
         connection.execute(text('INSERT INTO pg_demo_images(id) VALUES (:id)'), {'id':ids[2]})
+        assert adopt_bootstrap_schema(connection, config) == 'd34a021b0004'
         command.upgrade(config, 'head')
         validate_schema(connection)
         inspector = inspect(connection)
