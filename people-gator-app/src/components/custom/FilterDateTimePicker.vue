@@ -11,7 +11,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 const props = defineProps<{ label: string; invalid?: boolean }>()
 const value = defineModel<string>({ required: true })
 const open = ref(false)
-const labelId = useId()
 const timeId = useId()
 
 const date = computed<DateValue | undefined>(() => {
@@ -43,20 +42,19 @@ function clear() {
 </script>
 
 <template>
-  <div class="min-w-0 space-y-1">
-    <span :id="labelId">{{ label }}</span>
+  <div class="min-w-0 max-w-full flex-none">
     <Popover v-model:open="open">
       <PopoverTrigger as-child>
         <Button
           type="button"
           variant="outline"
           class="w-full justify-start"
-          :aria-labelledby="labelId"
+          :aria-label="label"
           :aria-invalid="!!invalid"
-          :title="displayValue"
+          :title="`${label}: ${displayValue}`"
         >
           <CalendarIcon class="size-4 shrink-0" aria-hidden="true" />
-          <span class="truncate">{{ displayValue }}</span>
+          <span class="truncate">{{ label }}: {{ displayValue }}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" :collision-padding="12" class="w-auto p-0" :aria-label="label">

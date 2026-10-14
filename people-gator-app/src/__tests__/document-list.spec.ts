@@ -111,12 +111,15 @@ describe('document search and bounded groups', () => {
       '/libraries/a/documents/shared/pages/a-1',
       '/libraries/b/documents/shared/pages/b-1',
     ])
-    expect(
-      wrapper
-        .findAll('a')
-        .filter((node) => node.text() === 'View document')
-        .map((node) => node.attributes('href')),
-    ).toEqual(['/scans?library=a&document=shared', '/scans?library=b&document=shared'])
+    for (const [index, library] of ['a', 'b'].entries()) {
+      const link = wrapper.findAll('.document-link')[index]!
+      expect(link.attributes('href')).toBe(`/scans?library=${library}&document=shared`)
+      expect(link.get('p').text()).toBe(`${library} · shared`)
+      expect(link.attributes('aria-label')).toContain(`in ${library}`)
+    }
+    for (const card of wrapper.findAll('.scan-card'))
+      expect(card.find('.font-bold.text-secondary').exists()).toBe(false)
+    expect(wrapper.get('.document-link .text-secondary').classes()).toContain('font-bold')
     expect(wrapper.text()).toContain('Ada, Grace')
     expect(wrapper.text()).toContain('Processing not recorded')
     expect(api.detail).not.toHaveBeenCalled()

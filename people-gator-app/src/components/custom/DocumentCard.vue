@@ -5,14 +5,18 @@ import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 
-const props = defineProps<{
-  library: string
-  documentUuid: string
-  pageUuid: string
-  names: readonly string[]
-  thumbnailUrl?: string
-  thumbnailLoading?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    library: string
+    documentUuid: string
+    pageUuid: string
+    names: readonly string[]
+    thumbnailUrl?: string
+    thumbnailLoading?: boolean
+    showLibrary?: boolean
+  }>(),
+  { showLibrary: true },
+)
 
 function compactUuid(uuid: string) {
   const hex = uuid.replace(/-/g, '')
@@ -48,7 +52,9 @@ function compactUuid(uuid: string) {
     </CardHeader>
     <CardContent class="px-0">
       <small class="truncate" :title="props.pageUuid">
-        <span class="font-bold text-secondary">{{ props.library }} · </span>
+        <span v-if="props.showLibrary" class="font-bold text-secondary"
+          >{{ props.library }} ·
+        </span>
         {{ compactUuid(props.pageUuid) }}
       </small>
     </CardContent>

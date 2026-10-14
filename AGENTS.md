@@ -78,12 +78,16 @@ screen's filter semantics.
   calculations to avoid horizontal overflow.
 - Search is always the first control, before filters and actions. A filters-only
   panel must not invent a nonfunctional search field.
-- At `lg` (1024px and wider), search occupies the first half of the panel and
-  filters begin at half its width, using the remaining half. At `sm` through
-  below `lg` (640–1023px), search occupies the first two thirds and filters begin
-  at two thirds, using the remaining third. These positions refer to the parent
-  panel's width, not the viewport. Filters are visible and wrap left to right
-  within their area at both sizes.
+- Search and every filter participate in one wrapping flex container. At `sm`
+  (640px and wider, including `lg`), the search item reserves the first two thirds
+  of the first line. Include the following gap in that reserved width. These
+  proportions refer to the parent panel, not the viewport, and apply only to
+  the search item on the first line. Subsequent filter rows use the full panel
+  width; never confine filters to a separate narrow column or wrapping region.
+- Filter boxes fit their content, with no fixed minimum widths, growing flex
+  items or equal-width columns. Cap them at the available parent width to avoid
+  overflow. Use no external labels on panel selectors: every selector identifies
+  its filter inside the control, including dates, and retains an accessible name.
 - Below 640px, keep search available beside a sliders icon button. Filters are
   collapsed by default and expand below that row across the full panel width.
   Use the standard shadcn-vue `Collapsible`; the toggle needs an accessible name,

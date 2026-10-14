@@ -41,13 +41,13 @@ const open = computed({
 <template>
   <Collapsible
     v-model:open="open"
-    class="search-filter-panel flex w-full min-w-0 flex-row flex-wrap items-start gap-y-2"
+    class="search-filter-panel flex w-full min-w-0 flex-row flex-wrap items-center gap-2"
     :aria-label="`${label} panel`"
   >
     <div
       v-if="!filtersOnly"
       class="search-controls flex min-w-0 basis-full items-center gap-2"
-      :class="hasFilters ? 'sm:basis-2/3 sm:pr-2 lg:basis-1/2' : 'sm:basis-full'"
+      :class="hasFilters ? 'sm:basis-[calc(66.6666667%-0.5rem)]' : 'sm:basis-full'"
     >
       <InputGroup class="min-w-0 flex-1">
         <InputGroupInput
@@ -89,8 +89,7 @@ const open = computed({
     </CollapsibleTrigger>
     <CollapsibleContent
       v-if="hasFilters"
-      class="filter-controls flex min-w-0 basis-full flex-row flex-wrap items-start gap-2 sm:basis-1/3 lg:basis-1/2"
-      :class="filtersOnly && 'sm:basis-full lg:basis-full'"
+      class="filter-controls contents"
       :aria-label="`${label} filter controls`"
     >
       <slot />

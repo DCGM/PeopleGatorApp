@@ -106,11 +106,18 @@ function clearFilters() {
     :result-count="resultCount"
     :has-more-results="hasMoreResults"
   >
-    <div class="min-w-0 flex-1 basis-40">
+    <div class="min-w-0 flex-none max-w-full">
       <Select v-model="assignment">
-        <SelectTrigger :id="assignmentId" aria-label="Assignment" class="w-full"
+        <SelectTrigger :id="assignmentId" aria-label="Assignment"
           ><SelectValue placeholder="Assignment"
-        /></SelectTrigger>
+            >Assignment:
+            {{
+              { all: 'All people', faces: 'Assigned faces', mentions: 'Assigned mentions' }[
+                assignment
+              ]
+            }}</SelectValue
+          ></SelectTrigger
+        >
         <SelectContent
           ><SelectGroup
             ><SelectLabel>Assignment</SelectLabel><SelectItem value="all">All people</SelectItem
@@ -130,7 +137,7 @@ function clearFilters() {
       :error="documents.error.value"
       :has-more="documents.hasMore.value"
       :is-loading-more="documents.isLoadingMore.value"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
       @load-more="documents.loadMore()"
       @retry="documents.retry()"
     />
@@ -138,13 +145,13 @@ function clearFilters() {
       v-model="filters.touchedFrom"
       label="Last processed from"
       :invalid="!!filterError"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
     />
     <FilterDateTimePicker
       v-model="filters.touchedTo"
       label="Last processed to"
       :invalid="!!filterError"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
     />
     <FilterMultiSelect
       v-model="filters.userIds"
@@ -155,7 +162,7 @@ function clearFilters() {
       :error="users.error.value"
       :has-more="users.hasMore.value"
       :is-loading-more="users.isLoadingMore.value"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
       @load-more="users.loadMore()"
       @retry="users.retry()"
     />
@@ -168,7 +175,7 @@ function clearFilters() {
       :error="apiKeys.error.value"
       :has-more="apiKeys.hasMore.value"
       :is-loading-more="apiKeys.isLoadingMore.value"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
       @load-more="apiKeys.loadMore()"
       @retry="apiKeys.retry()"
     />

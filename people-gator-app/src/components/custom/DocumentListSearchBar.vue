@@ -100,14 +100,22 @@ function remove(chip: ActiveFilter) {
       :error="libraryOptions.error.value"
       :has-more="libraryOptions.hasMore.value"
       :is-loading-more="libraryOptions.isLoadingMore.value"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
       @load-more="libraryOptions.loadMore()"
       @retry="libraryOptions.retry()"
     />
     <EntityLinkStateFilter v-model="linkStates" />
-    <div class="min-w-0 flex-1 basis-40">
+    <div class="min-w-0 flex-none max-w-full">
       <Select v-model="unassigned"
-        ><SelectTrigger class="w-full" aria-label="Unassigned faces"><SelectValue /></SelectTrigger
+        ><SelectTrigger aria-label="Unassigned faces"
+          ><SelectValue
+            >Unassigned faces:
+            {{
+              { all: 'All documents', yes: 'Has unassigned faces', no: 'No unassigned faces' }[
+                unassigned
+              ]
+            }}</SelectValue
+          ></SelectTrigger
         ><SelectContent
           ><SelectItem value="all">All documents</SelectItem
           ><SelectItem value="yes">Has unassigned faces</SelectItem
@@ -119,13 +127,13 @@ function remove(chip: ActiveFilter) {
       v-model="touchedFrom"
       label="Last processed from"
       :invalid="!!filterError"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
     />
     <FilterDateTimePicker
       v-model="touchedTo"
       label="Last processed to"
       :invalid="!!filterError"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
     />
     <FilterMultiSelect
       v-model="userIds"
@@ -136,7 +144,7 @@ function remove(chip: ActiveFilter) {
       :error="users.error.value"
       :has-more="users.hasMore.value"
       :is-loading-more="users.isLoadingMore.value"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
       @load-more="users.loadMore()"
       @retry="users.retry()"
     />
@@ -149,7 +157,7 @@ function remove(chip: ActiveFilter) {
       :error="apiKeys.error.value"
       :has-more="apiKeys.hasMore.value"
       :is-loading-more="apiKeys.isLoadingMore.value"
-      class="flex-1 basis-40"
+      class="flex-none max-w-full"
       @load-more="apiKeys.loadMore()"
       @retry="apiKeys.retry()"
     />

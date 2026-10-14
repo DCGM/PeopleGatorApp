@@ -66,10 +66,20 @@ function clear() {
     :has-more-results="hasMoreResults"
   >
     <EntityLinkStateFilter v-model="linkStates" />
-    <div class="min-w-0 flex-1 basis-40">
+    <div class="min-w-0 flex-none max-w-full">
       <Select v-model="assignment"
-        ><SelectTrigger class="w-full" aria-label="Page content"
-          ><SelectValue placeholder="Page content" /></SelectTrigger
+        ><SelectTrigger aria-label="Page content"
+          ><SelectValue
+            >Page content:
+            {{
+              {
+                all: 'All pages',
+                entities: 'Contains assigned entities',
+                faces: 'Contains faces',
+                mentions: 'Contains mentions',
+              }[assignment]
+            }}</SelectValue
+          ></SelectTrigger
         ><SelectContent
           ><SelectGroup
             ><SelectLabel>Page content</SelectLabel><SelectItem value="all">All pages</SelectItem

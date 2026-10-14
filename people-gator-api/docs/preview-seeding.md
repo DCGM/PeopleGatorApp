@@ -54,10 +54,10 @@ add login accounts or usable API-key secrets.
 Open the people search page and try the assignment, document, user and API-key
 filters. The CLI also prints a `mobile-filters` URL combining a Novak search with
 assignment, document, user and API-key filters. On screens narrower than 640px,
-all filter controls and chips are collapsed by default behind the search row's
-sliders button. Opening it reveals every filter; X collapses it without clearing
-the query. Desktop keeps Assignment and Document visible, with additional filters
-expandable separately. In a person's detail view, expand Last processed in the stats sidebar.
+filter controls are collapsed by default behind the search row's sliders
+button, while active badges remain visible below. Opening it reveals every
+filter; the sliders button collapses it without clearing the query. Desktop
+shows all selectors in one wrapping flex panel. In a person's detail view, expand Last processed in the stats sidebar.
 Edit a profile or assign a face to see processing attribution change. The two
 synthetic API-key registry entries demonstrate historical filtering and attribution;
 they cannot authenticate requests because no secret configuration is installed.
@@ -194,6 +194,15 @@ options come from registered documents across the database. Try the verified lin
 state with no unassigned faces to find Příběhy archivářů, or verified with
 unassigned faces to find Link state review. **Document awaiting scans** and the
 unnamed legacy document remain usable without processing history.
+
+The seed output's `compact-document-filters` link selects both libraries,
+automatic/verified states, no unassigned faces and the reviewer while preserving
+the title search. Use it to check content-sized selectors in a single wrapping
+flex panel: search occupies two thirds of the first line from 640px, and later
+filter rows span the full panel. On mobile, expand filters with the sliders
+button. The underlined document title, bold orange library and archive ID form
+one link to its scans; each preview links to its exact page without repeating
+library information.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
 (inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,

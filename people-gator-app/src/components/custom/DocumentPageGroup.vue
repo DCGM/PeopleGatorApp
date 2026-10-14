@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ArrowUpRight } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
 import EntityLinkStatistics from './EntityLinkStatistics.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
@@ -26,12 +27,32 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
     :aria-label="documentTitle(document)"
   >
     <header class="document-heading w-full min-w-0 lg:w-1/3 lg:shrink-0">
-      <h2 class="line-clamp-3 break-all" :title="documentTitle(document)">
-        {{ documentTitle(document) }}
-      </h2>
-      <p class="mt-1 break-all text-sm text-muted-foreground">
-        {{ document.library }} · {{ document.document_id }}
-      </p>
+      <RouterLink
+        class="document-link group block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        :aria-label="`View document ${documentTitle(document)} in ${document.library}`"
+        :to="{
+          name: 'document-search',
+          query: {
+            library: document.library,
+            document: document.document_id,
+            ...(linkStates.length && { link_state: linkStates }),
+          },
+        }"
+      >
+        <div class="flex items-start gap-1">
+          <h2
+            class="line-clamp-3 break-all underline underline-offset-4"
+            :title="documentTitle(document)"
+          >
+            {{ documentTitle(document) }}
+          </h2>
+          <ArrowUpRight class="mt-1 size-4 shrink-0" aria-hidden="true" />
+        </div>
+        <p class="mt-1 break-all text-sm text-muted-foreground">
+          <span class="font-bold text-secondary">{{ document.library }} · </span
+          >{{ document.document_id }}
+        </p>
+      </RouterLink>
       <p v-if="totalCount !== null" class="mt-1 text-sm text-muted-foreground">
         <template v-if="linkStates.length">{{ filteredCount }} matching of </template
         >{{ totalCount }} registered {{ totalCount === 1 ? 'page' : 'pages' }}
@@ -48,19 +69,6 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
         User: {{ document.last_touched_by_user_id }} · API key:
         {{ document.last_touched_by_api_key_id ?? 'None' }}
       </p>
-      <Button as-child variant="outline" class="mt-3"
-        ><RouterLink
-          :to="{
-            name: 'document-search',
-            query: {
-              library: document.library,
-              document: document.document_id,
-              ...(linkStates.length && { link_state: linkStates }),
-            },
-          }"
-          >View document</RouterLink
-        ></Button
-      >
     </header>
     <div
       class="document-previews flex min-w-0 flex-1 flex-row flex-wrap content-start items-start gap-2"
@@ -77,6 +85,7 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
       >
         <DocumentCard
           :library="card.library"
+          :show-library="false"
           :document-uuid="card.documentId"
           :page-uuid="card.pageId"
           :names="card.names"

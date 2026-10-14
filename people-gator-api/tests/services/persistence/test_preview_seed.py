@@ -1100,6 +1100,13 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     seeded = await preview.seed_preview(database, filesystem)
     target = seeded.documents['issue8-search']
     document = await database.sources.get_document(target)
+    demo = parse_qs(urlsplit(seeded.filter_examples['compact-document-filters']).query)
+    demo_results = await database.sources.search_documents(SearchDocumentsRequest(
+        query=QueryBase(text=demo['q']), limit=100,
+        filter_=DocumentListFilter(library=demo['library'], entity_link_state=demo['link_state'],
+            has_unassigned_faces=demo['unassigned'][0] == 'yes',
+            last_touched_by_user_id=demo['touched_by']), return_total_count=True))
+    assert demo_results.total_count == 1 and demo_results.items[0].source_id == target
     for term in ('pribehy', 'PŘÍBĚHY', str(document.document_id), str(document.url), 'A. Novak'):
         result = await database.sources.search_documents(SearchDocumentsRequest(query=QueryBase(text=[term]), limit=100, return_total_count=True))
         assert target in {item.source_id for item in result.items}

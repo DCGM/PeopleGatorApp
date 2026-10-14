@@ -70,7 +70,7 @@ function reset() {
     ignore-filter
     @update:model-value="update"
   >
-    <ComboboxAnchor as-child
+    <ComboboxAnchor class="w-auto max-w-full" as-child
       ><ComboboxTrigger as-child
         ><Button variant="outline" size="sm" aria-label="Link state" class="gap-2">
           {{ selected.length ? `Link state (${selected.length})` : 'All link states'
