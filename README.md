@@ -116,6 +116,7 @@ workflow. There is no automatic production release workflow in this repository.
 | [Search filters](docs/SEARCH_FILTERS.md) | API filters, ranking and UI state |
 | [Start here](docs/START_HERE.md) | First steps and code navigation without project data |
 | [Development](docs/DEVELOPMENT.md) | Local environment and disposable test stores |
+| [Testing strategy](docs/test.md) | Current coverage, test selection, execution and future priorities |
 | [Data maintenance](docs/DATA_MAINTENANCE.md) | Reviewed audits, repairs and recovery |
 | [Deployment](docs/DEPLOYMENT.md) | Docker, CI/CD and configuration reference |
 | [Observability](docs/OBSERVABILITY.md) | Logs, traces, metrics and dashboard queries |

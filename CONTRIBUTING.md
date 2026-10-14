@@ -39,6 +39,10 @@ limitations in the PR.
 
 ## Checks and contracts
 
+Use the [testing strategy](docs/test.md) to choose test levels, understand current
+coverage and plan future checks. Record planned validation in the issue and
+executed results, skips and limitations in the PR.
+
 | Change | Relevant validation |
 | --- | --- |
 | Frontend | `npm run type-check`, `npm run test:unit -- --run`; `npm run build` when compilation changes |

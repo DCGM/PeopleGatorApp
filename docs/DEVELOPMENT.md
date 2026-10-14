@@ -119,6 +119,10 @@ Codex onboarding supports local HTTP validation, not user-facing localhost links
 
 ## Test stores and validation
 
+The [testing strategy](test.md) explains current coverage, when to write each kind
+of test and priorities for future coverage. This section covers local execution
+and disposable-store setup.
+
 Frontend checks from `people-gator-app`:
 
 ```sh
