@@ -1,5 +1,11 @@
 # Implementation workflow
 
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the `main`-based contribution workflow,
+[docs/START_HERE.md](docs/START_HERE.md) for code navigation and
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development and test stores.
+Use the existing checkout in isolated cloud tasks; do not create an additional
+Git worktree unless the user requests one.
+
 All future implementation jobs must follow this GitHub workflow:
 
 **GitHub issue → issue branch → commits for functional units → pull request.**
