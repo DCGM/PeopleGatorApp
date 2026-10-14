@@ -147,7 +147,11 @@ server timestamp. Existing fixtures and checkpoints are retained; reruns leave
 review edits and verification metadata intact.
 
 Open the document from Documents, try the scan's Link state controls and its
-This page / Whole document statistics, then follow Ada Review to the shared Faces /
+collapsed **Link statistics** section below the face gallery in the right panel
+(below the gallery on mobile). It shows **This page** and **Whole document** counts
+without covering the scan. The CLI prints a `link-statistics` link to page 2,
+where the page's verified/unassigned counts can be compared with all four states
+across the document. Then follow Ada Review to the shared Faces /
 Mentions filter. All includes unassigned annotations; selecting all three states
 includes only assigned annotations. Filter Documents or People by Verified to
 find the example even before loading its second scan. The existing Document

@@ -540,6 +540,16 @@ async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
                 assert record.entity_link_verified_at.utcoffset().total_seconds() == 0
         assert (await repo.get(ids["links-unassigned" + suffix])).entity_id is None
     doc = await db.sources.get_document(seed.documents["link-states"])
+    statistics_link = urlsplit(seed.filter_examples["link-statistics"])
+    statistics_page = await db.sources.get_page(seed.pages["links-2"])
+    assert statistics_link.fragment == "link-statistics"
+    assert statistics_link.path == (
+        f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+        f"/pages/{statistics_page.page_id}"
+    )
+    assert statistics_page.entity_link_stats.faces.verified == 1
+    assert statistics_page.entity_link_stats.mentions.unassigned == 1
+    assert statistics_page.document_id == doc.document_id
     for counts in (doc.entity_link_stats.faces, doc.entity_link_stats.mentions):
         assert counts.model_dump() == dict(
             automatic=1, manual=1, verified=1, unassigned=1, total=4

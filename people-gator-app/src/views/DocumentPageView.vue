@@ -372,15 +372,6 @@ onBeforeUnmount(() => {
           @reset-view="resetView" @select-translation="selectTranslation"
           @toggle-badge-names="showBadgeNames = !showBadgeNames" />
       </div>
-      <details class="absolute bottom-3 left-3 z-20 max-w-[calc(100%-1.5rem)] rounded-md border bg-background/95 p-2 text-xs" @pointerdown.stop @wheel.stop>
-        <summary class="cursor-pointer font-semibold">Link statistics</summary>
-        <p class="mt-2 break-all text-muted-foreground">{{ page?.library }} · {{ page?.page_id }}</p>
-        <p class="my-2 font-semibold">This page</p><EntityLinkStatistics v-if="page" :stats="page.entity_link_stats" unassigned />
-        <p class="my-2 font-semibold">Whole document</p>
-        <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
-        <p v-else-if="documentQuery.error.value" role="alert">Could not load document statistics. <button class="underline" @click="documentQuery.refetch()">Retry</button></p>
-        <EntityLinkStatistics v-else-if="documentQuery.data.value" :stats="documentQuery.data.value.entity_link_stats" unassigned />
-      </details>
       <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
         <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
           :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
@@ -403,11 +394,29 @@ onBeforeUnmount(() => {
     <FaceGallery class="workspace-galery" :faces="faces" :selected-face-id="selectedFace?.id ?? null"
       :loading="isLoading" @reset-filters="linkStates = []" @select="selectFace" />
 
-    <CurrentFacePanel class="workspace-current border-t bg-background p-5" :face="selectedFace ?? null"
-      :assignment-pending="assignmentStatus === 'pending'" @find-profile="focusSimilarPeopleSearch"
-      @create="createSimilarPerson" @unassign="unassignSelectedFace">
-      <VerifyEntityLink v-if="selectedFace" v-bind="selectedFace" :id="selectedFace.id" kind="face" />
-    </CurrentFacePanel>
+    <div class="workspace-current min-w-0 border-t bg-background">
+      <details id="link-statistics" class="border-b text-xs" @keydown.stop>
+        <summary class="cursor-pointer px-5 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+          Link statistics
+        </summary>
+        <div class="max-h-52 overflow-y-auto px-5 pb-4">
+          <p class="break-all text-muted-foreground">{{ page?.library }} · {{ page?.page_id }}</p>
+          <p class="my-2 font-semibold">This page</p>
+          <EntityLinkStatistics v-if="page" :stats="page.entity_link_stats" unassigned />
+          <p class="my-2 font-semibold">Whole document</p>
+          <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
+          <p v-else-if="documentQuery.error.value" role="alert">
+            Could not load document statistics. <button class="underline" @click="documentQuery.refetch()">Retry</button>
+          </p>
+          <EntityLinkStatistics v-else-if="documentQuery.data.value" :stats="documentQuery.data.value.entity_link_stats" unassigned />
+        </div>
+      </details>
+      <CurrentFacePanel class="p-5" :face="selectedFace ?? null"
+        :assignment-pending="assignmentStatus === 'pending'" @find-profile="focusSimilarPeopleSearch"
+        @create="createSimilarPerson" @unassign="unassignSelectedFace">
+        <VerifyEntityLink v-if="selectedFace" v-bind="selectedFace" :id="selectedFace.id" kind="face" />
+      </CurrentFacePanel>
+    </div>
     <SimilarPeopleSearch :key="candidateSearchResetKey" ref="similarPeopleSearch" v-model="candidateTerm"
       v-model:result-mode="candidateBrowseMode" class="workspace-search bg-background px-5 pb-5"
       :selected-face="selectedFace ?? null" />

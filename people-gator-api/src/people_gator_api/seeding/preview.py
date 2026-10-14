@@ -317,6 +317,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             manifest.mentions[mention.key] = record.mention_id
             active_mentions[mention.key] = record.mention_id
             await checkpoint()
+    statistics_page = await database.sources.get_page(pages["links-2"])
+    if statistics_page is None:
+        raise ValueError("Link statistics preview page is missing")
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -326,6 +329,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "link-statistics": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}#link-statistics"
+            ),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"
             + urlencode({"library": "preview-mzk", "document": next(
