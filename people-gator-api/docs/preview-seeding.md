@@ -157,3 +157,16 @@ includes only assigned annotations. Filter Documents or People by Verified to
 find the example even before loading its second scan. The existing Document
 awaiting scans demonstrates zero statistics. Seed deployment order remains
 storage initialization → migrations → seed → application startup.
+
+### Faces without OCR
+
+The **Faces without OCR** document adds a synthetic scan with two unassigned
+faces, a local JPEG, and deliberately no OCR layout. Open the CLI's
+`faces-without-ocr` link. Both face boxes must appear over the scan and support
+selection, zoom, and pan even though no transcription is available. The viewer
+uses the original image's pixel dimensions for these boxes; a resized image's
+dimensions would put them in the wrong place. Original fixtures and review edits
+remain unchanged on seed reruns. Integration coverage checks the missing layout,
+face statistics, local page image, and aligned face crops through media services
+and repositories. The dataset now has nine registered documents, fourteen pages,
+fourteen faces, and ten mentions.

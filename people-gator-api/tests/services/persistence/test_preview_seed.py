@@ -16,6 +16,7 @@ from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.media.aligned_face_crop import get_aligned_face_crop
 from people_gator_api.media.page_image import get_page_image
 from people_gator_api.media.page_layout import get_page_layout
+from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.text_mention_spans import get_text_mention_spans
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.persistence.postgres.schema import (
@@ -120,8 +121,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (8, 12, 10)
-    assert len(result.documents) == 8 and len(result.pages) == 13
+    assert await counts(database) == (8, 14, 10)
+    assert len(result.documents) == 9 and len(result.pages) == 14
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -211,22 +212,32 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
         )
         with Image.open(io.BytesIO(content.content)) as image:
             assert image.size == (800, 1100)
-        layout = await get_page_layout(
-            document.library, document.document_id, page.page_id
-        )
-        assert layout.page_size == (1100, 800)
-        spans = await get_text_mention_spans(
-            database,
-            result.pages[page.key],
-            library=document.library,
-            document_id=document.document_id,
-            page_id=page.page_id,
-        )
-        assert {span.mention_id for span in spans} == {
-            result.mentions[item.key]
-            for item in page.mentions
-            if item.state is not None
-        }
+        if page.has_layout:
+            layout = await get_page_layout(
+                document.library, document.document_id, page.page_id
+            )
+            assert layout.page_size == (1100, 800)
+            spans = await get_text_mention_spans(
+                database,
+                result.pages[page.key],
+                library=document.library,
+                document_id=document.document_id,
+                page_id=page.page_id,
+            )
+            assert {span.mention_id for span in spans} == {
+                result.mentions[item.key]
+                for item in page.mentions
+                if item.state is not None
+            }
+        else:
+            with pytest.raises(SourceResolutionError) as missing_layout:
+                await get_page_layout(document.library, document.document_id, page.page_id)
+            assert missing_layout.value.status_code == 404
+            stored = await database.sources.get_page(result.pages[page.key])
+            assert stored.entity_link_stats.faces.unassigned == 2
+            assert stored.entity_link_stats.mentions.total == 0
+            link = urlsplit(result.filter_examples["faces-without-ocr"])
+            assert link.path.endswith(f"/pages/{stored.page_id}")
         for spec in page.faces:
             face = await database.faces.get(result.faces[spec.key])
             assert face.bounding_box.x + face.bounding_box.width <= 800
@@ -258,7 +269,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (8, 12, 10)
+    assert await counts(database) == (8, 14, 10)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -280,7 +291,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (9, 12, 10)
+    assert await counts(database) == (9, 14, 10)
 
 
 @pytest.mark.asyncio
@@ -304,8 +315,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 8 and len(result.faces) == 12
-    assert await counts(database) == (8, 12, 10)
+    assert len(result.entities) == 8 and len(result.faces) == 14
+    assert await counts(database) == (8, 14, 10)
 
 
 @pytest.mark.asyncio
@@ -325,7 +336,38 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (7, 11, 9)
+    assert await counts(database) == (7, 13, 9)
+
+
+@pytest.mark.asyncio
+async def test_no_ocr_scan_preserves_face_review_and_media_on_rerun(seed_target):
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    actor = GenericActor(user_id=first.users["reviewer"])
+    face = await database.faces.patch(
+        first.faces["no-ocr-left"],
+        FacePatchRequest(entity_id=first.entities["lenka"], entity_link_state="manual"),
+        actor,
+    )
+    source = await database.sources.get_page(first.pages["faces-no-ocr-1"])
+    before = await get_page_image(source.library, source.document_id, source.page_id)
+    second = await preview.seed_preview(database, filesystem)
+    assert second.pages["faces-no-ocr-1"] == source.source_id
+    assert second.faces["no-ocr-left"] == face.detection_id
+    retained = await database.faces.get(face.detection_id)
+    assert retained.entity_id == first.entities["lenka"]
+    assert retained.entity_link_state == "manual"
+    reviewed = await database.entities.get(first.entities["lenka"])
+    timestamp = reviewed.last_touched_at
+    await preview.seed_preview(database, filesystem)
+    assert (await database.entities.get(first.entities["lenka"])).last_touched_at == timestamp
+    after = await get_page_image(source.library, source.document_id, source.page_id)
+    assert after.content == before.content
+    with pytest.raises(SourceResolutionError) as missing_layout:
+        await get_page_layout(source.library, source.document_id, source.page_id)
+    assert missing_layout.value.status_code == 404
+    statistics = (await database.sources.get_page(source.source_id)).entity_link_stats
+    assert statistics.faces.manual == 1 and statistics.faces.unassigned == 1
 
 
 @pytest.mark.asyncio

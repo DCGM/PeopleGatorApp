@@ -62,6 +62,7 @@ const {
   loadMore,
   pageDimensions,
   pageImageLoading,
+  pageImageLoaded,
   pageImageUrl,
   similarPeople,
   similarPeopleLoading,
@@ -376,7 +377,7 @@ onBeforeUnmount(() => {
         <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
           :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
           <LoadableImage :src="pageImageUrl" :loading="pageImageLoading" :alt="`Scan ${pageId}`"
-            class="absolute inset-0 size-full" image-class="object-contain">
+            class="absolute inset-0 size-full" image-class="object-contain" @load="pageImageLoaded">
             <template #fallback>
               <div class="flex size-full items-center justify-center text-muted-foreground">
                 <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>

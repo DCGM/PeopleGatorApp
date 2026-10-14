@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/vue-query'
+import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -9,14 +10,19 @@ import type { EntityLinkState } from '@/client'
 import { responseData } from '@/query/api'
 import { queryKeys } from '@/query/keys'
 
-export function fetchPageLayout(sourceId: string, signal?: AbortSignal) {
-  return responseData(
-    getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet({
-      path: { page_source_id: sourceId },
-      signal,
-      throwOnError: true,
-    }),
-  )
+export async function fetchPageLayout(sourceId: string, signal?: AbortSignal) {
+  try {
+    return await responseData(
+      getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet({
+        path: { page_source_id: sourceId },
+        signal,
+        throwOnError: true,
+      }),
+    )
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) return null
+    throw error
+  }
 }
 
 export function usePageLayoutQuery(sourceId: MaybeRefOrGetter<string>) {
@@ -27,15 +33,20 @@ export function usePageLayoutQuery(sourceId: MaybeRefOrGetter<string>) {
   })
 }
 
-export function fetchPageMentionSpans(sourceId: string, signal?: AbortSignal, states: EntityLinkState[] = []) {
-  return responseData(
-    getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet({
-      query: { 'filter.entity_link_state': states.length ? states : undefined },
-      path: { page_source_id: sourceId },
-      signal,
-      throwOnError: true,
-    }),
-  )
+export async function fetchPageMentionSpans(sourceId: string, signal?: AbortSignal, states: EntityLinkState[] = []) {
+  try {
+    return await responseData(
+      getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet({
+        query: { 'filter.entity_link_state': states.length ? states : undefined },
+        path: { page_source_id: sourceId },
+        signal,
+        throwOnError: true,
+      }),
+    )
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) return []
+    throw error
+  }
 }
 
 export function usePageMentionSpansQuery(sourceId: MaybeRefOrGetter<string>, states: MaybeRefOrGetter<EntityLinkState[]> = []) {

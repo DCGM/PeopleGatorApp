@@ -85,6 +85,7 @@ function regionStyle(position: Face['position']): CSSProperties {
 
     <UiTooltip v-for="face in faces" :key="face.id" :text="linkTooltip(face)">
     <button
+      v-if="face.position.width > 0 && face.position.height > 0"
       :key="face.id"
       type="button"
       data-region-type="face"

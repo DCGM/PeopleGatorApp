@@ -218,7 +218,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         layout_key = page_layout_key(
             document.library, document.document_id, page.page_id
         )
-        if await _read_optional(filesystem, layout_key) is None:
+        if page.has_layout and await _read_optional(filesystem, layout_key) is None:
             await filesystem.write_bytes(
                 layout_key, page_layout(page).model_dump_json().encode()
             )
@@ -320,6 +320,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
+    no_ocr_page = await database.sources.get_page(pages["faces-no-ocr-1"])
+    if no_ocr_page is None:
+        raise ValueError("Faces without OCR preview page is missing")
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -329,6 +332,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "faces-without-ocr": (
+                f"/libraries/{no_ocr_page.library}/documents/{no_ocr_page.document_id}"
+                f"/pages/{no_ocr_page.page_id}"
+            ),
             "link-statistics": (
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}#link-statistics"

@@ -96,6 +96,7 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("faces-no-ocr", "preview-mzk", "Faces without OCR"),
     Document("link-states", "preview-mzk", "Link state review"),
     Document("album", "preview-mzk", "Portrait album"),
     Document("notes", "preview-nlk", "Research notes"),
@@ -136,6 +137,7 @@ class Page:
     number: int
     faces: tuple[Face, ...] = ()
     mentions: tuple[Mention, ...] = ()
+    has_layout: bool = True
 
     @property
     def page_id(self) -> UUID:
@@ -143,6 +145,11 @@ class Page:
 
 
 PAGES = (
+    Page(
+        "faces-no-ocr-1", "faces-no-ocr", 1,
+        (Face("no-ocr-left", None, 0, 2), Face("no-ocr-right", None, 1, 3)),
+        has_layout=False,
+    ),
     Page(
         "links-1",
         "link-states",

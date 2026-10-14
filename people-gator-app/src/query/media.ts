@@ -177,11 +177,12 @@ export function usePageLookupQuery(
 export function usePageImageQuery(
   sourceId: MaybeRefOrGetter<string>,
   width?: MaybeRefOrGetter<number | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
 ) {
   return useQuery({
     queryKey: computed(() => queryKeys.pages.image(toValue(sourceId), toValue(width))),
     queryFn: ({ signal }) => fetchPageImage(toValue(sourceId), toValue(width), signal),
-    enabled: computed(() => Boolean(toValue(sourceId))),
+    enabled: computed(() => Boolean(toValue(sourceId)) && toValue(enabled)),
     staleTime: Number.POSITIVE_INFINITY,
   })
 }

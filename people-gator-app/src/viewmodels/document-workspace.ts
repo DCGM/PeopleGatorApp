@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/vue-query'
-import { watch, computed, toValue, type MaybeRefOrGetter } from 'vue'
+import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
 import { linkMetadata } from '@/lib/entity-links'
 import {
@@ -46,9 +46,10 @@ function bounds(points: number[][]) {
   }
 }
 
-function toPercentBox(box: BoundingBox, layout?: PageLayoutModel) {
-  const pageHeight = layout?.page_size[0] || 1
-  const pageWidth = layout?.page_size[1] || 1
+function toPercentBox(box: BoundingBox, dimensions: { width: number; height: number } | null) {
+  if (!dimensions) return { left: 0, top: 0, width: 0, height: 0 }
+  const pageHeight = dimensions.height
+  const pageWidth = dimensions.width
   return {
     left: (box.x / pageWidth) * 100,
     top: (box.y / pageHeight) * 100,
@@ -164,8 +165,26 @@ export function useDocumentWorkspace(
       if (query.hasNextPage.value && !query.isFetchingNextPage.value && !query.isError.value) void query.fetchNextPage()
     })
   }
-  const pageImageQuery = usePageImageQuery(sourceId, 1024)
+  const layoutDimensions = computed(() => {
+    const size = layoutQuery.data.value?.page_size
+    return size && size[0] > 0 && size[1] > 0 ? { height: size[0], width: size[1] } : null
+  })
+  // Face boxes use original pixels. A resized derivative cannot supply those
+  // dimensions when OCR is absent, so request the original in that case.
+  const pageImageQuery = usePageImageQuery(
+    sourceId,
+    computed(() => layoutDimensions.value ? 1024 : undefined),
+    computed(() => !layoutQuery.isPending.value),
+  )
   const pageImageUrl = useObjectUrl(computed(() => pageImageQuery.data.value))
+  const imageDimensions = ref<{ width: number; height: number } | null>(null)
+  watch([sourceId, () => pageImageQuery.data.value], () => { imageDimensions.value = null }, { flush: 'sync' })
+  function pageImageLoaded(event: Event) {
+    const image = event.target as HTMLImageElement
+    if (image.src !== pageImageUrl.value || image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+    imageDimensions.value = { width: image.naturalWidth, height: image.naturalHeight }
+  }
+  const annotationDimensions = computed(() => layoutDimensions.value ?? imageDimensions.value)
 
   // Aligned face crops (ArcFace-aligned, 1:1) are fetched per detection and
   // used as the face portraits instead of the full page image.
@@ -211,13 +230,13 @@ export function useDocumentWorkspace(
         confidence: percentage(face.confidence),
         status: face.entity_id ? 'assigned' : 'unassigned',
         portraitLoading: alignedCropQueries.value[index]?.isPending ?? false,
-        position: toPercentBox(face.bounding_box, layoutQuery.data.value),
+        position: toPercentBox(face.bounding_box, annotationDimensions.value),
         portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
       }
     }),
   )
   const transcription = computed(() =>
-    makeTranscription(layoutQuery.data.value, spanQuery.data.value),
+    makeTranscription(layoutQuery.data.value ?? undefined, spanQuery.data.value),
   )
 
   const textTerm = computed(() => toValue(candidateTerm).trim())
@@ -376,10 +395,8 @@ export function useDocumentWorkspace(
     loadMore,
     page: pageQuery.data,
     annotationsLoading: computed(() => faceQuery.isPending.value || spanQuery.isPending.value || faceQuery.hasNextPage.value),
-    pageDimensions: computed(() => ({
-      height: layoutQuery.data.value?.page_size[0] ?? 297,
-      width: layoutQuery.data.value?.page_size[1] ?? 210,
-    })),
+    pageDimensions: computed(() => annotationDimensions.value ?? { height: 297, width: 210 }),
+    pageImageLoaded,
     pageImageLoading: pageImageQuery.isPending,
     pageImageUrl,
     similarPeopleLoading: computed(
