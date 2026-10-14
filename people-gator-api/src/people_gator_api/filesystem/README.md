@@ -44,23 +44,17 @@ matching full keys using `fnmatch` (so `*` can match `/`, as it does on S3).
 
 ## Configuration and dependency
 
-S3 remains the default backend and requires the existing `storage.s3` credentials.
-To use local storage, set:
+Exactly one `storage.local` or `storage.s3` object must be non-null. Neither
+backend is selected without configuration. To use local storage, set:
 
 ```dotenv
-PEOPLE_GATOR_API__STORAGE__LOCAL__ENABLED=true
-PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/var/lib/people-gator/storage
+PEOPLE_GATOR_API__STORAGE={"local":{"root":"/var/lib/people-gator/storage"},"s3":null}
 ```
 
 The local root defaults to `./storage`, relative to the process working directory.
-Exactly one backend must be enabled. Configured S3 defaults to enabled; local
-storage defaults to disabled. If S3 settings are also supplied, set
-`PEOPLE_GATOR_API__STORAGE__S3__ENABLED=false` when enabling local storage.
-The `STORAGE__BACKEND` selector is replaced by these enabled flags.
-
-Local mode does not require S3 settings. To select S3, set
-`PEOPLE_GATOR_API__STORAGE__S3__ENABLED=true`, disable local storage, and supply
-the existing S3 settings.
+Current settings do not use `ENABLED` or `BACKEND` selectors. Local mode needs no
+S3 credentials. To select S3, omit or null local configuration and supply the S3
+access key ID, secret access key, bucket and region (plus an optional endpoint).
 
 Application media, derivative caches, page layouts, and JWK loading use this
 selection through `people_gator_api.services.filesystem_service`. Services can

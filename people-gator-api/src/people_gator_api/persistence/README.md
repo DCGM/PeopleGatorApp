@@ -86,24 +86,19 @@ Callers must not infer PostgreSQL transaction behavior from this interface.
 
 ## Configuration
 
-Both backend settings inherit `PersistenceBaseSetting` and expose `enabled`.
-Exactly one persistence backend must be enabled. Configured PostgreSQL defaults
-to enabled; Weaviate defaults to disabled. Either configuration can be omitted
-when unused. Supplied configurations require their connection fields even when
-disabled.
-
-To select Weaviate when both connections are configured:
+Exactly one persistence configuration must be non-null. The selected object
+requires its connection fields. Omit or set the unused object to null; current
+settings do not use `ENABLED` flags. For PostgreSQL, for example:
 
 ```dotenv
-PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__ENABLED=false
-PEOPLE_GATOR_API__PERSISTENCE__WEAVIATE__ENABLED=true
+PEOPLE_GATOR_API__PERSISTENCE={"postgres":{"host":"localhost","port":5432,"user":"test","password":"test","database":"test"},"weaviate":null}
 ```
 
-If PostgreSQL configuration is omitted, omit its enabled variable too. To select
-PostgreSQL, enable it and disable or omit Weaviate. Application startup initializes
-the selected backend's schema; `DatabaseDependency` uses its adapter for requests.
-Shutdown releases initialized database resources. Alembic remains specific to
-PostgreSQL and requires its connection configuration.
+To select Weaviate, provide only its complete connection object. PostgreSQL
+startup either bootstraps or validates according to `schema_mode`;
+`DatabaseDependency` uses the selected adapter for requests. Shutdown releases
+initialized resources. Alembic and the preview seed require PostgreSQL. See
+[local setup](../../../../docs/DEVELOPMENT.md) for migrated development stores.
 
 Routes use `DatabaseDependency` for either backend. OCR span rendering is handled
 by `media/text_mention_spans.py` through the persistence contracts.

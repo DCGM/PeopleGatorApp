@@ -1,7 +1,7 @@
 # Production PostgreSQL startup
 
 The production `Dockerfile` uses `scripts/container-entrypoint.sh`. It supports
-`api` (default), `migrate`, and `check`. This flow requires PostgreSQL. Development
+`api` (default), `migrate`, `seed`, and `check`. This flow requires PostgreSQL. Development
 Compose continues to use `Dockerfile.dev` and its automatic schema bootstrap.
 
 The API entrypoint forces debug/reload off and PostgreSQL `schema_mode=validate`.
@@ -75,23 +75,24 @@ checks. Migrations are never generated inside a running container.
 The two earlier revisions only installed extensions and the helper function.
 Revision `c82e7f4a901d` adds the frozen table/index definitions for a fresh database.
 An existing `create_all()` database already has those tables, so do not apply this
-creation revision over it. Back it up and verify its structure first:
-
-```sh
-docker run --rm --network production --env-file runtime.env people-gator-api:release check --schema-only
-```
-
-Only if that check passes and the constraints/functions have been reviewed, an
-operator can record the matching baseline with the deployment role:
+creation revision over it. Back it up and use the explicit checked adoption command
+with the migration role:
 
 ```sh
 docker run --rm --network production --env-file migration.env \
-  --entrypoint alembic people-gator-api:release stamp c82e7f4a901d
+  people-gator-api:release migrate --adopt-bootstrap
+```
+
+It recognizes only complete known baseline snapshots, applies missing migrations
+and validates before committing. Verify afterward with the runtime role:
+
+```sh
 docker run --rm --network production --env-file runtime.env people-gator-api:release check
 ```
 
-Stamping changes only migration history, not structure. Resolve reported drift
-with a reviewed migration before stamping. Never stamp an empty database.
+Resolve rejected drift with a reviewed repair instead of manually stamping the
+current head. See [Database migrations](database-migrations.md) for recognized
+snapshots, constraints and recovery details. Never stamp an empty database.
 
 ## Verification
 
