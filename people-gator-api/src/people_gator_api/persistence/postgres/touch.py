@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 from collections.abc import Iterable
-from sqlalchemy import select, update, func, or_
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from people_gator_api.schemas.common import GenericActor
 from people_gator_api.persistence.postgres.models import Entity, Source, Document, Page

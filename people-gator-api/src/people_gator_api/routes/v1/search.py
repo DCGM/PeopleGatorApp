@@ -90,6 +90,8 @@ async def search_pages_get(
             cursor=list_request.cursor,
         )
         return await database.sources.search_pages(request)
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))
 
@@ -112,5 +114,7 @@ async def search_documents_get(
             cursor=list_request.cursor,
         )
         return await database.sources.search_documents(request)
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))

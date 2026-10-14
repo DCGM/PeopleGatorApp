@@ -110,15 +110,19 @@ async def list_documents_route(
     filter: DocumentListFilterDependency,
     list_request: ListRequestDependency,
 ) -> DocumentListResponse:
-    del user
-    return await database.sources.list_documents(
-        DocumentListRequest(
-            filter_=filter,
-            limit=list_request.limit,
-            return_total_count=list_request.return_total_count,
-            cursor=list_request.cursor,
+    try:
+        return await database.sources.list_documents(
+            DocumentListRequest(
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
+            )
         )
-    )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
 
 
 @router.post(
@@ -222,15 +226,19 @@ async def list_pages_route(
     filter: PageListFilterDependency,
     list_request: ListRequestDependency,
 ) -> PageListResponse:
-    del user
-    return await database.sources.list_pages(
-        PageListRequest(
-            filter_=filter,
-            limit=list_request.limit,
-            return_total_count=list_request.return_total_count,
-            cursor=list_request.cursor,
+    try:
+        return await database.sources.list_pages(
+            PageListRequest(
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
+            )
         )
-    )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
 
 
 @router.post(
@@ -460,15 +468,19 @@ async def list_images_route(
     filter: ImageListFilterDependency,
     list_request: ListRequestDependency,
 ) -> ImageListResponse:
-    del user
-    return await database.sources.list_images(
-        ImageListRequest(
-            filter_=filter,
-            limit=list_request.limit,
-            return_total_count=list_request.return_total_count,
-            cursor=list_request.cursor,
+    try:
+        return await database.sources.list_images(
+            ImageListRequest(
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
+            )
         )
-    )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
 
 
 @router.post(
@@ -573,4 +585,9 @@ async def document_library_filter_options_route(
     list_request: ListRequestDependency,
     q: str | None = Query(default=None, max_length=256),
 ) -> DocumentLibraryOptionsResponse:
-    return await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(**list_request.model_dump(), q=q))
+    try:
+        return await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(**list_request.model_dump(), q=q))
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))

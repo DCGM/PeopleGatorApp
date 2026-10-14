@@ -293,7 +293,7 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert cleared.merged_entity.short_description == "Batch short description"
 
             await database.sources.delete(source.source_id, context=user)
-            await database.entities.delete(target_id)
+            await database.entities.delete(target_id, context=user)
             await database.users.delete(user.user_id)
     finally:
         await engine.dispose()
