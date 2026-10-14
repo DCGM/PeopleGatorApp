@@ -55,8 +55,8 @@ library and archive document UUID. Link statistics describe the full evidence
 scope, independently of pagination/current result filters.
 
 `has_unassigned_faces=true` finds documents with an unassigned face;
-`false` excludes such documents (including documents with no faces). Text-mention
-assignment does not satisfy this face-specific condition.
+`false` excludes documents with unassigned faces and includes documents without
+faces. Text-mention assignment does not satisfy this face-specific condition.
 
 Entities and source projections accept inclusive `last_touched_from` and
 `last_touched_to`, plus repeated `last_touched_by_user_id` and
