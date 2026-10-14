@@ -570,9 +570,9 @@ class SourceProcessingFilter(BaseModel):
             value = getattr(self, name)
             if not is_missing(value):
                 setattr(self, name, value.astimezone(timezone.utc))
-        for name in ("last_touched_by_user_id", "last_touched_by_api_key_id"):
+        for name in type(self).model_fields:
             value = getattr(self, name)
-            if not is_missing(value):
+            if isinstance(value, list):
                 setattr(self, name, list(dict.fromkeys(value)))
         if not is_missing(self.last_touched_from) and not is_missing(self.last_touched_to) and self.last_touched_from > self.last_touched_to:
             raise ValueError("last_touched_from must be before or equal to last_touched_to")

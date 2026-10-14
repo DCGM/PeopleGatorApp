@@ -120,3 +120,13 @@ def test_processing_survives_all_source_response_conversions(kind):
     cls = {SourceKind.page:PageResponse,SourceKind.document:DocumentResponse,SourceKind.image:ImageResponse}[kind]
     for response in [SourceResponseBase.from_generic(generic),cls.from_generic(generic)]:
         assert (response.last_touched_at,response.last_touched_by_user_id,response.last_touched_by_api_key_id) == (timestamp,actor,key)
+
+
+def test_document_filter_duplicates_are_normalized_before_cursor_fingerprinting():
+    from people_gator_api.schemas.sources import DocumentListFilter, DocumentListRequest, to_generic_list_request
+    from people_gator_api.persistence.postgres.utils import cursor_fingerprint
+    user, key = uuid.uuid4(), uuid.uuid4()
+    a = DocumentListRequest(limit=10, filter_=DocumentListFilter(library=['a','a'], last_touched_by_user_id=[user,user], last_touched_by_api_key_id=[key,key]))
+    b = DocumentListRequest(limit=10, filter_=DocumentListFilter(library=['a'], last_touched_by_user_id=[user], last_touched_by_api_key_id=[key]))
+    assert cursor_fingerprint(a) == cursor_fingerprint(b)
+    assert to_generic_list_request(a).filter_.library == ['a']

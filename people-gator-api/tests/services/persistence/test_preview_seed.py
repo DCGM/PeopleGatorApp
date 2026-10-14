@@ -1101,6 +1101,8 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     for term in ('pribehy', 'PŘÍBĚHY', str(document.document_id), str(document.url), 'A. Novak'):
         result = await database.sources.search_documents(SearchDocumentsRequest(query=QueryBase(text=[term]), limit=100, return_total_count=True))
         assert target in {item.source_id for item in result.items}
+        if term in ('pribehy', 'PŘÍBĚHY', 'A. Novak'):
+            assert seeded.documents['issue8-mirror'] not in {item.source_id for item in result.items}
         assert result.total_count == len(result.items)
         assert len(result.items) == len({item.source_id for item in result.items})
     empty = seeded.documents['empty-document']
@@ -1210,6 +1212,10 @@ async def test_issue8_annotation_noops_delete_merge_rollback_and_concurrency(see
     ), timeout=10)
     assert a.last_touched_at != b.last_touched_at
     assert (await database.sources.get_document(document.source_id)).last_touched_at == max(a.last_touched_at, b.last_touched_at)
+    assert await database.sources.delete_batch([document.source_id, seeded.pages['issue8-untouched']], context=actor) == 2
+    assert await database.sources.get_document(document.source_id) is None
+    assert await database.sources.get_page(seeded.pages['issue8-untouched']) is None
+    assert (await database.sources.get_document(seeded.documents['issue8-mirror'])).last_touched_at is None
 
 
 @pytest.mark.asyncio
