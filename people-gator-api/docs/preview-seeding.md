@@ -209,7 +209,10 @@ matches the height of the Libraries and Unassigned faces comboboxes. The
 printed `mobile-filters` link also demonstrates the Assigned faces combobox
 alongside link state and document filters on People. The result counter appears
 at the right end of the search input group, after the clear-search button. Remove a badge with its X button
-to update both the URL and results. In the document information, registered
+to update both the URL and results. The `rounded-filter-removal` link demonstrates
+circular X buttons for library, link-state and unassigned-face badges. Hover or
+keyboard-focus one, then remove its filter while preserving the search text.
+In the document information, registered
 page count precedes processing time, user and API key (each on its own line),
 followed by face and mention statistics. A `+N` link with a right chevron follows
 the last preview and opens the remaining scans in the same document scope.

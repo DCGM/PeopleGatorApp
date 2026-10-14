@@ -105,7 +105,8 @@ screen's filter semantics.
   Shared filter controls must follow these same restrictions.
 - Display active filters as standard outline Badge tags rendered as `<small>`
   in a separate wrapping area below the panel, outside its container/card and before results. Each tag names
-  its filter type and value and has an accessible X removal button, including
+  its filter type and value and has an accessible circular X removal button
+  (`rounded-full` on the standard ghost icon button), including
   removal of individual multi-select values. Removal updates the setting
   control, URL and results immediately. A standard clear-all button preserves
   search text; clearing search is a separate action. Tags stay accessible when

@@ -1101,7 +1101,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     seeded = await preview.seed_preview(database, filesystem)
     target = seeded.documents['issue8-search']
     document = await database.sources.get_document(target)
-    for scenario in ('compact-document-filters', 'outline-filter-badges'):
+    for scenario in ('compact-document-filters', 'outline-filter-badges', 'rounded-filter-removal'):
         demo = parse_qs(urlsplit(seeded.filter_examples[scenario]).query)
         demo_results = await database.sources.search_documents(SearchDocumentsRequest(
             query=QueryBase(text=demo['q']), limit=100,

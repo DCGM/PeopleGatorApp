@@ -24,6 +24,7 @@ const emit = defineEmits<{ remove: [filter: ActiveFilter]; clear: [] }>()
         type="button"
         variant="ghost"
         size="icon-xs"
+        class="rounded-full"
         :aria-label="`Remove ${filter.label}`"
         @click="emit('remove', filter)"
         ><X aria-hidden="true"
