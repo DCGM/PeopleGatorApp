@@ -72,9 +72,9 @@ function reset() {
   >
     <ComboboxAnchor class="w-auto max-w-full" as-child
       ><ComboboxTrigger as-child
-        ><Button variant="outline" size="sm" aria-label="Link state" class="gap-2">
+        ><Button variant="outline" aria-label="Link state" class="gap-2">
           {{ selected.length ? `Link state (${selected.length})` : 'All link states'
-          }}<ChevronsUpDown class="size-3" aria-hidden="true" /> </Button></ComboboxTrigger
+          }}<ChevronsUpDown class="size-4 shrink-0" aria-hidden="true" /> </Button></ComboboxTrigger
     ></ComboboxAnchor>
     <ComboboxList
       @escape-key-down="open = false"

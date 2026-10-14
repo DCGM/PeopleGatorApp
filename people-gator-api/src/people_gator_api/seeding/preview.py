@@ -391,6 +391,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "link_state": ["automatic", "verified"], "unassigned": "no",
                 "touched_by": actors["reviewer"].user_id,
             }, doseq=True),
+            "outline-filter-badges": "/documents?" + urlencode({
+                "q": next(str(item.document_id) for item in DOCUMENTS if item.key == "issue8-search"),
+                "library": ["preview-mzk", "preview-nlk"],
+                "link_state": ["automatic", "verified"], "unassigned": "no",
+            }, doseq=True),
             "document-source-touch": "/documents?library=preview-mzk&touched_by=" + str(actors["reviewer"].user_id),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"

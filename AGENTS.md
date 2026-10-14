@@ -95,13 +95,14 @@ screen's filter semantics.
   selected values.
 - Use standard shadcn-vue setting controls: Input/InputGroup, Select,
   Popover/Command or Combobox for multi-select, Calendar, Button and Collapsible.
-  Use standard variants and sizes. Only layout changes are allowed: width,
+  Use standard variants and sizes; panel combobox triggers share the default
+  control height. Only layout changes are allowed: width,
   flex basis/grow/shrink, wrapping, spacing, alignment and responsive placement.
   Do not override colors, backgrounds, borders, rounding, shadows, typography,
   or hover/focus/disabled states, or modify `src/components/ui/` for these panels.
   Shared filter controls must follow these same restrictions.
-- Display active filters as standard Badge tags in a separate wrapping area
-  below the panel, outside its container/card and before results. Each tag names
+- Display active filters as standard outline Badge tags rendered as `<small>`
+  in a separate wrapping area below the panel, outside its container/card and before results. Each tag names
   its filter type and value and has an accessible X removal button, including
   removal of individual multi-select values. Removal updates the setting
   control, URL and results immediately. A standard clear-all button preserves

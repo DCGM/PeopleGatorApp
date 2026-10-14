@@ -15,14 +15,15 @@ const emit = defineEmits<{ remove: [filter: ActiveFilter]; clear: [] }>()
     <Badge
       v-for="filter in filters"
       :key="`${filter.key}:${filter.value}`"
-      variant="secondary"
+      as="small"
+      variant="outline"
       class="max-w-full gap-2"
     >
       <span class="min-w-0 truncate">{{ filter.label }}</span>
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
+        size="icon-xs"
         :aria-label="`Remove ${filter.label}`"
         @click="emit('remove', filter)"
         ><X aria-hidden="true"

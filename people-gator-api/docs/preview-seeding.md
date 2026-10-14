@@ -202,7 +202,11 @@ flex panel: search occupies two thirds of the first line from 640px, and later
 filter rows span the full panel. On mobile, expand filters with the sliders
 button. The underlined document title, bold orange library and archive ID form
 one link to its scans; each preview links to its exact page without repeating
-library information.
+library information. The `outline-filter-badges` link searches by archive UUID
+with two libraries and link states selected: check that active filters use
+standard outline badges with small labels, and that the link-state combobox
+matches the height of the Libraries combobox. Remove a badge with its X button
+to update both the URL and results.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
 (inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,
