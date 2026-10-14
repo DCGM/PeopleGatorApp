@@ -20,7 +20,21 @@ ENUM = postgresql.ENUM(
 
 
 def upgrade() -> None:
-    ENUM.create(op.get_bind(), checkfirst=False)
+    connection = op.get_bind()
+    # create_all may have installed the type before discovering that the old
+    # annotation tables already exist. Reuse only a matching type in this
+    # schema; a visible type from another search_path schema must not win.
+    existing = connection.execute(sa.text("""
+        SELECT t.typtype::text, array_agg(e.enumlabel::text ORDER BY e.enumsortorder)
+        FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+        LEFT JOIN pg_enum e ON e.enumtypid = t.oid
+        WHERE n.nspname = current_schema() AND t.typname = 'pg_demo_entity_link_state'
+        GROUP BY t.oid, t.typtype
+    """)).first()
+    if existing is None:
+        ENUM.create(connection, checkfirst=False)
+    elif existing[0] != "e" or list(existing[1]) != list(ENUM.enums):
+        raise ValueError("Existing pg_demo_entity_link_state type does not match the migration")
     op.execute("""CREATE OR REPLACE FUNCTION pg_demo_clear_entity_link() RETURNS trigger
     LANGUAGE plpgsql AS $$ BEGIN
     IF NEW.entity_id IS NULL THEN
@@ -71,7 +85,7 @@ def upgrade() -> None:
                 [field + "_id", "entity_link_state"],
             )
         op.execute(
-            f"CREATE TRIGGER clear_entity_link BEFORE UPDATE OF entity_id ON {name} FOR EACH ROW EXECUTE FUNCTION pg_demo_clear_entity_link()"
+            f"CREATE OR REPLACE TRIGGER clear_entity_link BEFORE UPDATE OF entity_id ON {name} FOR EACH ROW EXECUTE FUNCTION pg_demo_clear_entity_link()"
         )
 
 

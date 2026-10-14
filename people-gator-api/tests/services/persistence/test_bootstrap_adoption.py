@@ -211,3 +211,83 @@ async def test_bootstrap_preflight_is_read_only(bootstrap_database):
                 await connection.scalar(text("SELECT version_num FROM alembic_version"))
                 == "65c4e6cdfa7f"
             )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("adopt", [False, True])
+async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
+    bootstrap_database, adopt
+):
+    from people_gator_api.persistence.postgres.models import Base
+
+    engine = bootstrap_database
+    await seed_bootstrap(engine, snapshot=3)
+    async with engine.begin() as connection:
+        if not adopt:
+            await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0003'"))
+        # Reproduce starting the newer ORM in bootstrap mode against old tables.
+        await connection.run_sync(Base.metadata.create_all)
+        assert await connection.scalar(text("SELECT to_regtype('pg_demo_entity_link_state')"))
+        assert await connection.scalar(text("""
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema = current_schema() AND column_name = 'entity_link_state'
+        """)) == 0
+    await database_cli.migrate_database(adopt_bootstrap=adopt)
+    await validate_postgres_schema(engine)
+    async with engine.connect() as connection:
+        assert await connection.scalar(text("SELECT name FROM pg_demo_entities")) == "Historical identity"
+        assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == "d34a021b0004"
+    await database_cli.migrate_database(adopt_bootstrap=True)
+
+
+@pytest.mark.asyncio
+async def test_link_migration_rejects_conflicting_bootstrap_enum(bootstrap_database):
+    engine = bootstrap_database
+    await seed_bootstrap(engine, snapshot=3)
+    async with engine.begin() as connection:
+        await connection.execute(text("CREATE TYPE pg_demo_entity_link_state AS ENUM ('automatic', 'wrong')"))
+    with pytest.raises(ValueError, match="type does not match"):
+        await database_cli.migrate_database(adopt_bootstrap=True)
+    async with engine.connect() as connection:
+        assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == "65c4e6cdfa7f"
+        assert await connection.scalar(text("SELECT name FROM pg_demo_entities")) == "Historical identity"
+        assert await connection.scalar(text("""
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema = current_schema() AND column_name = 'entity_link_state'
+        """)) == 0
+
+
+@pytest.mark.asyncio
+async def test_link_migration_does_not_reuse_another_schemas_visible_enum(bootstrap_database):
+    engine = bootstrap_database
+    await seed_bootstrap(engine, snapshot=3)
+    async with engine.begin() as connection:
+        schema = await connection.scalar(text("SELECT current_schema()"))
+        shadow = "enum_shadow_" + uuid.uuid4().hex
+        await connection.execute(text(f'CREATE SCHEMA "{shadow}"'))
+        await connection.execute(text(
+            f'CREATE TYPE "{shadow}".pg_demo_entity_link_state AS ENUM '
+            "('automatic', 'manual', 'verified')"
+        ))
+        await connection.execute(text(f'SET LOCAL search_path TO "{schema}", "{shadow}", public'))
+        await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0003'"))
+
+        def migrate(sync):
+            config = migration_config()
+            config.attributes["connection"] = sync
+            command.upgrade(config, "head")
+
+        await connection.run_sync(migrate)
+        namespaces = (await connection.execute(text("""
+            SELECT DISTINCT type_namespace.nspname
+            FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_namespace table_namespace ON table_namespace.oid = c.relnamespace
+            JOIN pg_type t ON t.oid = a.atttypid
+            JOIN pg_namespace type_namespace ON type_namespace.oid = t.typnamespace
+            WHERE table_namespace.nspname = current_schema()
+                AND a.attname = 'entity_link_state'
+                AND c.relname IN ('pg_demo_text_mentions', 'pg_demo_image_occurrences')
+        """))).scalars().all()
+        assert namespaces == [schema]
+        await connection.execute(text(f'DROP SCHEMA "{shadow}" CASCADE'))
+    await validate_postgres_schema(engine)

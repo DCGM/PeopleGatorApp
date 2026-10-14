@@ -35,6 +35,30 @@ docker compose -f compose.live-preview.yaml exec backend uv run python -m people
 docker compose -f compose.live-preview.yaml exec backend uv run python -m people_gator_api.cli.database check
 ```
 
+Live-preview now runs `migrate --adopt-bootstrap` before starting the API and
+uses `schema_mode: validate`. A failed migration prevents API startup. This
+preserves the database and applies missing columns and backfills on each backend
+start; bootstrap alone only creates missing tables. For an already running
+preview after updating the Compose configuration, recreate its backend:
+
+```sh
+docker compose -f compose.live-preview.yaml up -d --wait backend
+```
+
+If the backend is stopped or unable to start, run a one-off migration using the
+same image and configuration, then start it again:
+
+```sh
+docker compose -f compose.live-preview.yaml run --rm --no-deps backend uv run python -m people_gator_api.cli.database migrate --adopt-bootstrap
+docker compose -f compose.live-preview.yaml up -d --wait backend
+```
+
+Restart the backend after syncing migration changes with Compose Watch; Python
+worker reloads do not rerun the container's startup command. Validation rejects
+an old schema instead of serving requests against missing columns. Take a
+database backup before upgrading an existing preview; do not reset its volumes
+or stamp the latest revision to bypass migration operations.
+
 Adoption compares the existing schema against frozen migration definitions,
 including columns, types, nullability, indexes, foreign keys, unique constraints,
 primary keys and checks. It recognizes the core baseline (`c82e7f4a901d`), the
@@ -42,6 +66,11 @@ baseline plus API-key registry (`d34a021b0001`), the schema including entity
 touch fields (`d34a021b0002`), and optional document names (`d34a021b0003`).
 The document-name migration adds a nullable text column without changing source
 identities; existing names remain NULL until explicitly supplied on a new registration.
+The link-state migration (`d34a021b0004`) also accepts an enum type left behind
+by bootstrap, provided its values and order match exactly in the current schema,
+and replaces bootstrap's link-cleanup triggers with the migration definitions.
+It still applies the columns, historical automatic backfill, constraints, and
+indexes normally. A conflicting enum is rejected without advancing the revision.
 Per-model HNSW indexes remain owned by model
 registration and are excluded from comparison.
 
