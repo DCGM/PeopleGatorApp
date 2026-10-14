@@ -98,4 +98,3 @@ viewmodel URL parsing and controls together. Test AND/OR combinations, empty or
 invalid inputs, evidence scope and cursor reset. Follow the shared layout rules
 in [AGENTS.md](../AGENTS.md) and extend the preview fixtures. A UI control must
 represent a working server criterion.
-

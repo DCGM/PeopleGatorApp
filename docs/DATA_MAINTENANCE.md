@@ -101,4 +101,3 @@ Unknown or partially matching schemas must be investigated before retrying.
 A failed deployment can retain a previous running API while migrations have
 changed its store; there is no automatic schema rollback. Preserve logs and the
 candidate configuration and choose a compatible forward fix or verified restore.
-

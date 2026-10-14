@@ -85,4 +85,3 @@ CI checks before opening the PR. Add a usable synthetic fixture and preservation
 coverage for changed visible/data behavior, following AGENTS.md. Documentation
 changes need link/command/contract checks; do not change application behavior
 merely to make a documentation example appear to work.
-

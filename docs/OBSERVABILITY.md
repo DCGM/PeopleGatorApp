@@ -124,4 +124,3 @@ PREVIEW_TEST_OTEL=1 python3 deploy/preview/tests/test_observability.py -v
 See the [host guide](../deploy/preview/README.md#validation) for image prerequisites.
 The default run skips that live test. Keep skipped transport checks distinct from
 confirmed delivery and avoid recursive logging of the collector into itself.
-

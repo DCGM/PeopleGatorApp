@@ -96,4 +96,3 @@ workflow. There is no automatic production release workflow in this repository.
 | [Deployment](docs/DEPLOYMENT.md) | Docker, CI/CD and configuration reference |
 | [Observability](docs/OBSERVABILITY.md) | Logs, traces, metrics and dashboard queries |
 | [Contributing](CONTRIBUTING.md), [agent instructions](AGENTS.md) | Issue → branch → commits → PR workflow |
-

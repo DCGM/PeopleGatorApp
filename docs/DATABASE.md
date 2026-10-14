@@ -107,4 +107,3 @@ bootstrap stores require the reviewed `migrate --adopt-bootstrap` procedure in
 [Database migrations](../people-gator-api/docs/database-migrations.md).
 Never stamp `head` to suppress schema drift. Test migration changes in a separate
 disposable store before applying them to retained data.
-

@@ -102,4 +102,3 @@ validate the migrated PostgreSQL schema before accepting traffic. PR previews
 use one database and storage volume per PR, immutable image digests and a
 separately installed trusted controller. See [Deployment](DEPLOYMENT.md) and
 [Observability](OBSERVABILITY.md).
-

@@ -61,4 +61,3 @@ Document current behavior accurately and label proposals. When a command fails,
 diagnose whether the environment or repository contract is wrong before altering
 tests, schema or configuration. Report unresolved access/service prerequisites
 and the exact checks that were not run.
-

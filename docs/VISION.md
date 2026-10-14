@@ -56,4 +56,3 @@ features. Track accepted work in GitHub issues with acceptance criteria.
 Any change should extend the synthetic preview, tests and documentation alongside
 the behavior it adds. Follow [Contributing](../CONTRIBUTING.md) and
 [AGENTS.md](../AGENTS.md) for that workflow.
-

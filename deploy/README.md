@@ -23,4 +23,3 @@ Production-format Dockerfiles are in the two application directories. There is
 no general-purpose production deployment stack or automatic release workflow.
 Keep operator secrets and rendered Compose environments out of Git/public logs,
 and verify backup/restore before migrations on retained data.
-

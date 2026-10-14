@@ -215,4 +215,3 @@ npm run type-check
 Review and commit intended `src/client/` changes with the API contract change.
 Do not hand-edit generated client files or fetch a different deployed server's
 schema to represent your local change.
-
