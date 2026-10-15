@@ -33,12 +33,13 @@ docker compose -f compose.dev.yaml ps
 docker compose -f compose.dev.yaml logs --tail 100 backend frontend db
 ```
 
-On the installed preview host, use the actual PR number:
+On the preview host, use the actual PR number and set `controller_revision` to
+the release SHA shown in the lifecycle job's publication log:
 
 ```sh
 docker compose --project-name people-gator-pr-123 \
   --env-file /var/lib/people-gator-preview/pr-123/compose.env \
-  -f /opt/people-gator-preview/compose.pr.yaml logs --tail 100 backend
+  -f "/var/lib/people-gator-preview-controller/releases/$controller_revision/compose.pr.yaml" logs --tail 100 backend
 ```
 
 Use `candidate.env` when diagnosing a failed candidate. Never dump rendered
