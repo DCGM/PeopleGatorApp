@@ -24,11 +24,14 @@ describe('scan toolbar', () => {
     const harness = defineComponent({
       setup() {
         const states = useLinkStateFilter()
-        return () => h(DocumentControls, {
-          ...props,
-          linkStates: states.value,
-          'onUpdate:linkStates': (value) => { states.value = value },
-        })
+        return () =>
+          h(DocumentControls, {
+            ...props,
+            linkStates: states.value,
+            'onUpdate:linkStates': (value) => {
+              states.value = value
+            },
+          })
       },
     })
     const router = createRouter({
@@ -59,7 +62,11 @@ describe('scan toolbar', () => {
       await state('Manual').trigger('click')
       await flushPromises()
       expectSelection(['Automatic', 'Manual', 'Verified'])
-      expect(router.currentRoute.value.query.link_state).toEqual(['automatic', 'manual', 'verified'])
+      expect(router.currentRoute.value.query.link_state).toEqual([
+        'automatic',
+        'manual',
+        'verified',
+      ])
       await state('Automatic').trigger('click')
       await flushPromises()
       expectSelection(['Manual', 'Verified'])
@@ -78,10 +85,18 @@ describe('scan toolbar', () => {
       const reloaded = mount(harness, { global: { plugins: [router] } })
       try {
         expect(reloaded.get('button[aria-label="Manual"]').attributes('aria-pressed')).toBe('true')
-        expect(reloaded.get('button[aria-label="Verified"]').attributes('aria-pressed')).toBe('true')
-        expect(reloaded.get('button[aria-label="Automatic"]').attributes('aria-pressed')).toBe('false')
-      } finally { reloaded.unmount() }
-    } finally { wrapper.unmount() }
+        expect(reloaded.get('button[aria-label="Verified"]').attributes('aria-pressed')).toBe(
+          'true',
+        )
+        expect(reloaded.get('button[aria-label="Automatic"]').attributes('aria-pressed')).toBe(
+          'false',
+        )
+      } finally {
+        reloaded.unmount()
+      }
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it('retains navigation, zoom, Names and translation actions alongside the toggles', async () => {
@@ -106,6 +121,8 @@ describe('scan toolbar', () => {
       await wrapper.setProps({ selectedLineIndex: 0, selectedFaceIndex: 0, zoomPercent: 55 })
       for (const label of ['Previous line', 'Previous face', 'Zoom out'])
         expect(wrapper.get(`button[aria-label="${label}"]`).attributes('disabled')).toBeDefined()
-    } finally { wrapper.unmount() }
+    } finally {
+      wrapper.unmount()
+    }
   })
 })

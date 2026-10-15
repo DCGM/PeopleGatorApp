@@ -4,6 +4,7 @@ import { Check, ChevronsUpDown } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
 import { linkStates, linkStateVisuals, parseLinkStates } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   Combobox,
@@ -28,13 +29,12 @@ function reset() {
 }
 </script>
 <template>
-  <template v-if="toolbar">
+  <ButtonGroup v-if="toolbar" class="shrink-0" aria-label="Link state controls">
     <ToggleGroup
       type="multiple"
       :model-value="selected"
       variant="outline"
       size="sm"
-      class="shrink-0"
       aria-label="Link state"
       @update:model-value="update"
     >
@@ -58,7 +58,7 @@ function reset() {
         >All</Button
       >
     </UiTooltip>
-  </template>
+  </ButtonGroup>
   <Combobox
     v-else
     v-model:open="open"
