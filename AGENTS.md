@@ -67,9 +67,13 @@ relationships, vectors, media formats, authentication attribution, or filters:
 The PR CI workflow smoke-tests the real migration/seed CLI twice in a separate
 `ci_seed` database and runs the seed integration tests with
 `PEOPLE_GATOR_SCHEMA_TEST_URL`. Preview lifecycle tests live in
-`deploy/preview/tests/`. Host controller/Compose changes must be installed from a
-reviewed default-branch checkout as described in `deploy/preview/README.md`; PR
-code must not replace the trusted host controller directly.
+`deploy/preview/tests/`. An operator provisions the private runner-owned controller
+release directory and separate host configuration once, as described in
+`deploy/preview/README.md`. Lifecycle jobs automatically validate and atomically
+publish complete bundles from their exact reviewed `main` workflow commit, without
+sudo. PR code and non-default-branch workflows must not become the host controller.
+Keep configuration, users, credentials and preview state outside release bundles;
+shared-infrastructure initialization/upgrades remain explicit operator actions.
 
 # Search and filter panels throughout the application
 

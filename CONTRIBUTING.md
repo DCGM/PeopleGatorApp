@@ -73,8 +73,11 @@ accessible tags; do not restyle shared UI primitives for a screen-specific chang
 ## Review and operations
 
 Never commit credentials or private datasets. Keep application changes separate
-from trusted preview-host installation: reviewed controller/Compose changes must
-be installed from `main` by an operator, not copied from candidate PR code.
+from trusted preview-host releases: after one-time operator provisioning, the
+lifecycle workflow automatically publishes validated controller/Compose bundles
+from its exact reviewed `main` revision without sudo. Candidate PR code must not
+become the host controller. Keep operator configuration and preview state outside
+release bundles; infrastructure upgrades remain explicit operator actions.
 Review migrations, backup/restore and retained-data repairs before applying them;
 follow [Data maintenance](docs/DATA_MAINTENANCE.md).
 
