@@ -1,6 +1,6 @@
 # Issue 14: inline scan toolbar evidence
 
-After captures use the running application source at `f01e448`, PostgreSQL 16
+After captures use the running application source at `650c89e`, PostgreSQL 16
 with pgvector, and disposable local storage. Captured on 2026-10-15 in headless
 Chromium 153.0.8010.12 with device scale factor 1, after migration, two successful
 seed CLI runs and schema validation. This refresh reuses the installed frontend
@@ -32,11 +32,10 @@ the scan. Keyboard focus had the standard visible ring. Pressed items retained t
 `data-state=on` styling; native titles avoid tooltip-trigger state collisions.
 The toolbar container has a transparent background in both themes, leaving the
 scan visible between controls. Browser assertions checked its computed background
-color in every captured state. All button backgrounds were also checked to be
-opaque at rest in every capture, including unselected dark-mode controls.
-Navigation and unselected tools use the standard secondary button style; selected
-Names, translation and All use primary, while link-state toggles keep their
-pressed accent. Disabled tools retain standard disabled opacity.
+color in every captured state. All button backgrounds were checked against the neutral theme tokens in
+every capture: background for unselected tools, muted for selected tools, with
+foreground text in both themes. The toolbar uses the standard outline structure
+with local opaque neutral surfaces; shared UI primitives remain unchanged. Disabled tools retain standard disabled opacity.
 Previous/next line and
 face, zoom in/out/reset, Names and translation on/off controls responded.
 Translation generation was not validated because no external service is configured.
