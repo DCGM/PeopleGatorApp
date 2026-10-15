@@ -206,12 +206,12 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     await snapshot.sanitize(connection, filesystem, {}, {})
             finally:
                 await connection.execute("DROP TABLE unclassified_private_data")
-            await connection.execute("CREATE SCHEMA unclassified_auth")
+            await connection.execute("CREATE SCHEMA pgsecrets")
             try:
                 with self.assertRaisesRegex(ValueError, "Unclassified snapshot schema"):
                     await snapshot.sanitize(connection, filesystem, {}, {})
             finally:
-                await connection.execute("DROP SCHEMA unclassified_auth")
+                await connection.execute("DROP SCHEMA pgsecrets")
 
     async def test_credentials_use_private_hashes_and_preserve_operator_edits(self):
         import argon2
