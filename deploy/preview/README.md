@@ -84,7 +84,7 @@ context and makes Docker fall back to `/var/run/docker.sock`. See
    describes that setup.
    Also point `pgadmin-preview.peoplegator.dev` to the Traefik host; this hostname
    is outside the PR wildcard. pgAdmin uses the same HTTPS entrypoint and resolver.
-2. Install these files from a reviewed default-branch checkout, replacing
+2. For a **new installation**, install these files from a reviewed default-branch checkout, replacing
    `preview-runner` with the account running the self-hosted runner:
 
    ```sh
@@ -96,8 +96,11 @@ context and makes Docker fall back to `/var/run/docker.sock`. See
    sudo install -d -m 700 -o preview-runner -g preview-runner /var/lib/people-gator-preview
    ```
 
-   Edit `/opt/people-gator-preview/config.json` for the repository and network
-   names on your host. Set `otel_http_endpoint` to the OTLP HTTP base URL
+   Keep `repository` set to `DCGM/PeopleGatorApp` for this repository; it must
+   match Actions' `GITHUB_REPOSITORY` (case-insensitively). Edit the network
+   names for your host. Existing installations must preserve their config and
+   users files; follow the remediation steps below instead of copying examples
+   over them. Set `otel_http_endpoint` to the OTLP HTTP base URL
    (default `http://lgtm:4318`, without `/v1/logs`), `otel_network` to its existing
    Docker network (default `logging`), and `pgadmin_email` to the administrator's
    login email (default `admin@peoplegator.dev`). `preview_log_port` defaults to
@@ -145,17 +148,25 @@ context and makes Docker fall back to `/var/run/docker.sock`. See
    production migration and validation commands require them. Enable Actions
    and allow the workflow token to publish GHCR packages.
    For existing private packages, grant this repository Actions access to both
-   `people_gator-frontend` and `people_gator-backend`. Builds use `GITHUB_TOKEN`;
+   `peoplegatorapp-frontend` and `peoplegatorapp-backend`. Builds use `GITHUB_TOKEN`;
    no SSH deployment key or PostgreSQL secret is stored in GitHub. Make the
    `frontend` and `backend` PR CI jobs required in branch protection if desired.
 
-Before deploying images, the lifecycle workflow checks out only `deploy/preview`
-from its exact trusted `github.workflow_sha` and runs `check_installation.py`.
+For every lifecycle event, the workflow checks out only `deploy/preview` from its
+exact trusted `github.workflow_sha` and runs its read-only `preview.py check-access`
+against the installed config with the current job token. A repository mismatch
+fails before Docker login, deployment or cleanup, even if the installed controller
+predates this check. The GitHub repository metadata endpoint must return the
+configured identity; an empty reconciliation no longer bypasses API access checks.
+The installed controller also checks access for direct lifecycle invocations.
+
+Before deploying images, the workflow additionally runs `check_installation.py`.
 This compares the installed controller and PR Compose template with that reviewed
 revision. A missing or outdated file fails deployment with an installation command,
 before pulling images or changing preview state. CI seeding alone cannot establish
 that the persistent host runs the seed step. Cleanup/reconciliation remain available
-while an installation upgrade is pending. The check never installs PR code or
+while an installation upgrade is pending, provided repository access succeeds.
+The checks never install PR code or
 replaces host files automatically.
 
 The deployer always runs `/opt/people-gator-preview/preview.py`; updating its
@@ -251,6 +262,8 @@ access before deploying private images:
 
 ```sh
 export GH_TOKEN=... # use your secret manager, not a committed file
+export GITHUB_REPOSITORY=DCGM/PeopleGatorApp
+python3 /opt/people-gator-preview/preview.py check-access
 python3 /opt/people-gator-preview/preview.py deploy --run-id 123456789
 python3 /opt/people-gator-preview/preview.py cleanup --pr 123
 python3 /opt/people-gator-preview/preview.py reconcile
@@ -278,6 +291,84 @@ Cleanup removes PR containers, networks, media volumes, DBs, roles and private
 state. It leaves cached Docker images and GHCR packages available for debugging;
 configure GHCR retention and periodically remove unused host images as needed.
 
+## Repository access failures and existing-host remediation
+
+The old example used `DCGM/people_gator`. On October 15, 2026, the installed
+`/opt/people-gator-preview/config.json` still contained that value while Actions
+ran in `DCGM/PeopleGatorApp`. Deployment's first API request was consequently
+`GET /repos/DCGM/people_gator/actions/runs/38706609562`; cleanup of PR #3 would
+request `GET /repos/DCGM/people_gator/pulls/3`. The former returns 404 with the
+current operator CLI credential, whereas the same run under
+`/repos/DCGM/PeopleGatorApp/` is accessible and successful. The historical job
+token is no longer available; verification with a fresh job token remains part
+of the rollout below. The inspected host had no `pr-*` state, explaining why
+earlier reconciliation could succeed without exercising any API endpoint.
+
+The controller derives API URLs, same-repository validation and GHCR image names
+from this setting. A repository-scoped workflow token cannot fix a wrong target.
+GitHub can return [404 for a private resource without access](https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api#404-not-found-for-an-existing-resource).
+Keep the workflow's `GITHUB_TOKEN` with the existing contents, Actions,
+pull-request and package read permissions. A successful Docker login alone does
+not verify repository API access or permission to pull a particular package.
+
+An operator should perform this narrowly scoped repair after review and merge:
+
+1. From a reviewed default-branch checkout, install only the controller and PR
+   template required by the deployment guard:
+
+   ```sh
+   sudo install -m 644 deploy/preview/preview.py deploy/preview/compose.pr.yaml /opt/people-gator-preview/
+   python3 deploy/preview/check_installation.py
+   sudoedit /opt/people-gator-preview/config.json
+   ```
+
+   Change only `repository` to `DCGM/PeopleGatorApp`. Retain other settings,
+   ownership and permissions, `users.json`, `infrastructure.env`, all `pr-*`
+   directories, passwords, databases and Docker volumes. This repair requires
+   neither `init` nor a database/storage reset. Do not install files from the
+   candidate PR onto the trusted host.
+2. As the runner account, inspect only the repository setting, without dumping
+   the config or private state:
+
+   ```sh
+   python3 - <<'PY'
+   import json
+   from pathlib import Path
+   repository = json.loads(Path('/opt/people-gator-preview/config.json').read_text())['repository']
+   assert repository.lower() == 'dcgm/peoplegatorapp', repository
+   print('Configured repository:', repository)
+   PY
+   ```
+
+3. Start a **new** manual `PR preview lifecycle` run after the workflow update
+   reaches `main`. Its preflight uses the real job token and should print
+   `GitHub repository access verified: DCGM/PeopleGatorApp`. Metadata access
+   alone does not prove Actions, pull-request or package access: also exercise
+   a fresh successful same-repository PR CI deployment. Confirm both image pulls
+   use `ghcr.io/dcgm/peoplegatorapp-{frontend,backend}:run-<id>-<attempt>` and the
+   seed completes before application startup. If a private image is inaccessible,
+   verify that `DCGM/PeopleGatorApp` has Actions read access in **each package's**
+   settings, following [GitHub's registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-in-a-github-actions-workflow),
+   before changing credentials. Registry credentials remain in a temporary
+   per-job directory; preserve the runner's rootless context/socket configuration.
+4. Repeat deployment of the same successful run and verify saved passwords,
+   data and media remain intact. Run manual and scheduled reconciliation with
+   an open preview present and verify it stays running. Close the test PR,
+   verify only its preview is removed, then repeat reconciliation to confirm
+   cleanup is idempotent. Check **Remove temporary registry credentials** runs
+   after success and failures, with no leftover `people-gator-preview-docker.*`
+   directory from that job in `RUNNER_TEMP`.
+
+API failures now report the GET endpoint, status and sanitized GitHub request ID;
+response bodies, token values and raw exception reasons are omitted. Use the
+endpoint to distinguish repository metadata, Actions run/workflow and PR access.
+For 401 check token validity; for 403 check permissions and rate limits; for 404
+check the repository identity and resource access/existence. None establishes
+that a PR is closed. These responses fail immediately and preserve preview state;
+network failures and HTTP 500/502/503/504 receive at most three attempts with
+one- and two-second waits. Rate-limit responses are not automatically retried;
+observe GitHub's retry/reset headers before starting another run.
+
 ## Validation
 
 After changing CI, trigger a new PR run with the updated workflow. Re-running
@@ -287,6 +378,7 @@ See [GitHub's rerun documentation](https://docs.github.com/en/actions/how-tos/ma
 
 ```sh
 python3 deploy/preview/tests/test_preview.py -v
+python3 deploy/preview/tests/test_installation.py -v
 python3 deploy/preview/tests/test_observability.py -v
 ```
 
