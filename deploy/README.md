@@ -15,10 +15,12 @@ Compose Watch or native API/Vite development.
 | [`preview/README.md`](preview/README.md) | Host installation, credentials, upgrades, recovery and checks |
 
 Before installing previews, read the host guide fully and set the example
-configuration's `repository` to `DCGM/PeopleGatorApp`. Install from a reviewed
-`main` checkout, preserve existing state/configuration and run the installation
-check required by the workflow. Application PRs supply candidate images; they
-must not install controller code onto the trusted host.
+configuration's `repository` to `DCGM/PeopleGatorApp`. Provision private runner-owned
+release/state directories and separate operator settings once. Lifecycle jobs
+automatically validate and publish their exact reviewed `main` controller bundle
+without sudo, preserving existing configuration and data. Application PRs supply
+candidate images and must not supply the host controller. Shared-infrastructure
+initialization/upgrades remain explicit operator actions.
 
 Production-format Dockerfiles are in the two application directories. There is
 no general-purpose production deployment stack or automatic release workflow.
