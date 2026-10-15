@@ -129,6 +129,21 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+      - name: Prepare image registry configuration
+        id: registry-config
+        run: |
+          image_context="$(docker context show)"
+          registry_config="$(mktemp -d "$RUNNER_TEMP/people-gator-ci-docker.XXXXXX")"
+          echo "path=$registry_config" >> "$GITHUB_OUTPUT"
+          # Keep builder metadata in its usual location for cache reuse and
+          # post-action cleanup, while isolating registry logins per matrix job.
+          echo "buildx-config=${BUILDX_CONFIG:-${DOCKER_CONFIG:-$HOME/.docker}/buildx}" >> "$GITHUB_OUTPUT"
+          if [ "$image_context" != default ]; then
+            docker context export "$image_context" "$registry_config/context.dockercontext"
+            DOCKER_CONFIG="$registry_config" docker context import "$image_context" "$registry_config/context.dockercontext"
+            rm -- "$registry_config/context.dockercontext"
+          fi
+          DOCKER_CONFIG="$registry_config" docker context use "$image_context"
       - name: Name runner-local builder
         id: builder-name
         env:
@@ -138,6 +153,8 @@ jobs:
           echo "name=people-gator-ci-${builder_key:0:16}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
         id: buildx
+        env:
+          BUILDX_CONFIG: ${{ steps.registry-config.outputs.buildx-config }}
         with:
           name: ${{ steps.builder-name.outputs.name }}
           driver: docker-container
@@ -145,18 +162,27 @@ jobs:
           keep-state: true
           cache-binary: false
           use: false
-      - uses: docker/login-action@v3
+      - name: Log into image registry
+        uses: docker/login-action@v3
+        env:
+          DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          # Deleting this job's private directory replaces post-action logout.
+          logout: false
       - name: Image name
         id: image
         env:
           REPOSITORY: ${{ github.repository }}
           COMPONENT: ${{ matrix.component }}
         run: echo "name=ghcr.io/${REPOSITORY,,}-${COMPONENT}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}
+          BUILDX_CONFIG: ${{ steps.registry-config.outputs.buildx-config }}
         with:
           builder: ${{ steps.buildx.outputs.name }}
           context: ${{ matrix.context }}
@@ -166,3 +192,8 @@ jobs:
           labels: org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}
           # Same-origin requests allow the built frontend to work on any PR hostname.
           build-args: VITE_API_BASE_URL=/
+      - name: Remove image registry credentials
+        if: always() && steps.registry-config.outputs.path != ''
+        env:
+          IMAGE_DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}
+        run: rm -rf -- "$IMAGE_DOCKER_CONFIG"
