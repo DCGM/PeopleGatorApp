@@ -107,12 +107,14 @@ stops startup and leaves the previous deployment configuration/version intact,
 allowing retry. Repository writes may already have committed, so checkpoints are
 used to resume; the seed is not one atomic database/filesystem transaction.
 
-Updating the installed preview host's controller and Compose template is an
-operator step after review/merge; see [preview deployment](../../deploy/preview/README.md).
+After one-time operator provisioning, the lifecycle workflow publishes complete
+controller/Compose releases automatically from its exact reviewed `main` revision,
+without sudo; see [preview deployment](../../deploy/preview/README.md).
 No workflow checks out and executes PR deployment scripts directly on that host.
-The lifecycle workflow compares the installed controller and Compose template with
-its exact reviewed workflow revision before deployment, failing if either is stale.
-A green CI seed smoke test therefore cannot hide an installed host that skips seeding.
+Release publication validates Python and renders both Compose files before atomic
+publication, including the required seed service. The lifecycle runs that exact
+bundle, so a stale fixed installation cannot bypass candidate seeding. PR code
+never supplies the host controller; the candidate image supplies the fixture code.
 Successful preview state includes a `seeded_version` marker; after a host upgrade,
 rerunning the same deployment can seed previews created by older controllers.
 

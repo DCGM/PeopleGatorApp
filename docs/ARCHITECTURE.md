@@ -100,5 +100,7 @@ or use `compose.dev.yaml` with Traefik and Compose Watch. Production-format
 frontend images serve static assets through unprivileged nginx; backend images
 validate the migrated PostgreSQL schema before accepting traffic. PR previews
 use one database and storage volume per PR, immutable image digests and a
-separately installed trusted controller. See [Deployment](DEPLOYMENT.md) and
+trusted controller bundle published from the reviewed `main` workflow revision
+into a runner-owned release directory. Host configuration and state stay separate.
+See [Deployment](DEPLOYMENT.md) and
 [Observability](OBSERVABILITY.md).

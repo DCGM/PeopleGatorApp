@@ -125,9 +125,15 @@ head commit on a self-hosted Linux x64 runner labeled `people-gator-ci`:
    publish run/attempt-specific tags to GHCR. Fork PRs receive tests but no image
    publication/deployment. Images carry the tested revision label.
 
-[`pr-preview.yml`](../.github/workflows/pr-preview.yml) runs the installed trusted
+[`pr-preview.yml`](../.github/workflows/pr-preview.yml) runs a versioned trusted
 controller on the separate `people-gator-preview` runner after successful PR CI.
-It verifies repository/open-PR/current-head identity, checks host installation,
+Every lifecycle job publishes a complete, validated bundle from its exact reviewed
+`main` workflow commit into a private runner-owned directory without sudo, then
+executes that release with separate operator-managed settings. Atomic publication
+and per-revision directories replace the stale installed-file guard. The job and
+publisher reject non-default workflow sources; restrict runner access to the
+trusted deployment workflow/ref and protect/review `main`.
+It verifies repository/open-PR/current-head identity,
 pulls candidate images, verifies their revisions and deploys by immutable digest.
 Deployment order is storage initialization → migration → seed → backend/frontend
 health checks. A failed seed blocks success. Existing database, media and JWT keys
@@ -138,11 +144,13 @@ manual reconciliation retry missed cleanup. Shared PostgreSQL, pgAdmin and loggi
 remain running. A failed migration has no automatic schema rollback, even if the
 previous application continues running.
 
-Install the controller/Compose/collector from a reviewed `main` checkout using
-the [complete host guide](../deploy/preview/README.md). PR code must never replace
-trusted host files. In `config.json`, set `repository` to
-`DCGM/PeopleGatorApp`: the example currently names the older `DCGM/people_gator`.
+Provision host settings and the runner-owned release directory once using
+the [complete host guide](../deploy/preview/README.md). Shared-infrastructure
+initialization/upgrades remain explicit operator actions; routine publication
+does not recreate services or reset credentials/state. PR code must never become
+the host controller. In `config.json`, set `repository` to
+`DCGM/PeopleGatorApp`; older installations may still name `DCGM/people_gator`.
 GHCR image names are derived from the configured repository. Provision the
 documented DNS, Traefik, logging network, runner isolation and token permissions
-before enabling deployment. This documentation change does not deploy or publish
-any application environment.
+before enabling deployment. Retain releases referenced by running infrastructure
+bind mounts; no automatic release pruning or database rollback is performed.
