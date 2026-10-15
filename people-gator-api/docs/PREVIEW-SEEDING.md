@@ -243,3 +243,24 @@ The standalone portrait is an actual PNG with a visible synthetic face. An exact
 match to the original issue #8 JPEG fixture at that PNG key receives a narrowly
 scoped format upgrade. Reviewed or replaced image bytes remain untouched; the
 upgrade does not change source identities, annotations or processing timestamps.
+
+## Media upload sandbox (issue #10)
+
+The additive **Media upload sandbox** document in `preview-mzk` has two
+synthetic pages, each with a local JPEG and valid OCR layout. Both are free of
+faces and mentions so replacing their media cannot invalidate annotation
+geometry. The seed CLI prints a `media-upload` link to the first page. Open the
+document from Documents to inspect both scans; authenticated ingest clients can
+PUT a multipart `file` to `/api/v1/pages/{source_id}/image` or a validated layout
+to `/api/v1/pages/{source_id}/page-layout`. Use the page's source UUID returned
+by `/api/v1/pages/lookup`, rather than its archive page UUID in the browser URL.
+GET the same resource to verify the result and its upload receipt's byte size.
+There is no upload control in the page viewer.
+
+Reruns add missing sandbox records/media, retain stable source identities, and
+preserve replaced scans, layouts and processing metadata. Integration tests
+exercise repositories and real local media services, including image replacement,
+derivative refresh, layout replacement and twice-run preservation. Slow success,
+S3 denial, SDK timeout, pool saturation and same-page synchronization are covered
+by gated regression tests, not by introducing failures into preview data. See
+[media concurrency](MEDIA-UPLOAD-CONCURRENCY.md) for the isolated HTTP diagnostic.

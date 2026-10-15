@@ -1,7 +1,6 @@
 """Exercise the preview dataset against migrated PostgreSQL and real local media."""
 
 import io
-import os
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
@@ -10,7 +9,7 @@ import pytest_asyncio
 from alembic import command
 from PIL import Image
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.media.aligned_face_crop import get_aligned_face_crop
@@ -56,47 +55,12 @@ from people_gator_api.settings import settings
 
 
 @pytest_asyncio.fixture
-async def seed_target(tmp_path, monkeypatch):
-    url = os.getenv("PEOPLE_GATOR_SCHEMA_TEST_URL")
-    if not url:
-        pytest.skip("requires a disposable schema test database")
-    admin = create_async_engine(url)
-    schema = "preview_seed_" + uuid.uuid4().hex
-    async with admin.begin() as connection:
-        for extension in ("vector", "pg_trgm", "unaccent"):
-            await connection.execute(
-                text(f"CREATE EXTENSION IF NOT EXISTS {extension} WITH SCHEMA public")
-            )
-        await connection.execute(text(f"CREATE SCHEMA {schema}"))
-        # Keep Alembic from discovering a public version table through search_path
-        # when the full schema test suite has already migrated the public schema.
-        await connection.execute(
-            text(
-                f"CREATE TABLE {schema}.alembic_version (version_num VARCHAR(32) PRIMARY KEY)"
-            )
-        )
-    engine = create_async_engine(
-        url, connect_args={"server_settings": {"search_path": schema + ",public"}}
-    )
-    try:
-
-        def migrate(connection):
-            config = migration_config()
-            config.attributes["connection"] = connection
-            command.upgrade(config, "head")
-
-        async with engine.begin() as connection:
-            await connection.run_sync(migrate)
-        filesystem = LocalFilesystem(tmp_path)
-        monkeypatch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
-        monkeypatch.setattr(settings.aligned_face_crop, "cache_enabled", False)
-        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-            yield postgres_database(session), filesystem, engine
-    finally:
-        await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f"DROP SCHEMA {schema} CASCADE"))
-        await admin.dispose()
+async def seed_target(tmp_path, monkeypatch, migrated_postgres):
+    filesystem = LocalFilesystem(tmp_path)
+    monkeypatch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
+    monkeypatch.setattr(settings.aligned_face_crop, "cache_enabled", False)
+    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+        yield postgres_database(session), filesystem, migrated_postgres
 
 
 async def counts(database):
@@ -122,7 +86,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (8, 21, 12)
-    assert len(result.documents) == 12 and len(result.pages) == 22
+    assert len(result.documents) == 13 and len(result.pages) == 24
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -1359,3 +1323,52 @@ async def test_issue8_png_upgrade_preserves_source_history_and_reviewed_media(se
     await preview.seed_preview(database, filesystem)
     assert await filesystem.read_bytes(key) == edited.getvalue()
     assert (await database.sources.get_image(image.source_id)).last_touched_at == image.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_media_upload_sandbox_is_usable_and_preserves_replacements(seed_target, monkeypatch):
+    from people_gator_api.media.page_image import put_page_image
+    from people_gator_api.media.page_layout import put_page_layout
+    from people_gator_api.settings import PageImageCacheSettings
+
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    document = await database.sources.get_document(first.documents["issue10-media"])
+    assert document.name == "Media upload sandbox"
+    pages = [await database.sources.get_page(first.pages[f"media-upload-{i}"]) for i in (1, 2)]
+    originals = []
+    for page in pages:
+        assert page.document_id == document.document_id and page.library == document.library
+        assert page.entity_link_stats.faces.total == page.entity_link_stats.mentions.total == 0
+        assert page.last_touched_at is None
+        image = await get_page_image(page.library, page.document_id, page.page_id)
+        layout = await get_page_layout(page.library, page.document_id, page.page_id)
+        with Image.open(io.BytesIO(image.content)) as scan:
+            assert tuple(reversed(scan.size)) == layout.page_size
+        originals.append((image.content, layout))
+    assert urlsplit(first.filter_examples["media-upload"]).path == (
+        f"/libraries/{document.library}/documents/{document.document_id}/pages/{pages[0].page_id}"
+    )
+
+    # Upload real replacements through the same media services used by the routes.
+    monkeypatch.setattr(settings, "page_image_cache", PageImageCacheSettings(widths=[64]))
+    content = io.BytesIO()
+    Image.new("RGB", (800, 1100), "blue").save(content, "JPEG")
+    page = pages[0]
+    size = await put_page_image(page.library, page.document_id, page.page_id, content.getvalue())
+    layout = originals[0][1].model_copy(update={"id": "reviewed-upload"})
+    await put_page_layout(page.library, page.document_id, page.page_id, layout)
+    second = await preview.seed_preview(database, filesystem)
+    assert second == first
+    fetched = await get_page_image(page.library, page.document_id, page.page_id)
+    assert fetched.content == content.getvalue() and len(fetched.content) == size
+    assert await get_page_layout(page.library, page.document_id, page.page_id) == layout
+    derivative = await get_page_image(page.library, page.document_id, page.page_id, max_width=64)
+    with Image.open(io.BytesIO(derivative.content)) as scan:
+        assert scan.width == 64
+        red, _, blue = scan.getpixel((0, 0))
+        assert blue > red
+    other = pages[1]
+    assert (await get_page_image(other.library, other.document_id, other.page_id)).content == originals[1][0]
+    assert await get_page_layout(other.library, other.document_id, other.page_id) == originals[1][1]
+    assert (await database.sources.get_page(page.source_id)).last_touched_at is None
