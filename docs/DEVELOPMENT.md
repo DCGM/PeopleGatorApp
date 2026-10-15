@@ -170,6 +170,11 @@ python3 deploy/preview/tests/test_observability.py -v
 Run those three from the repository root. The host guide explains opt-in Docker
 database-isolation and real log-delivery checks.
 
+For the disposable media-upload concurrency investigation, see
+[Reproduce media upload connection starvation](../people-gator-api/docs/MEDIA-UPLOAD-CONCURRENCY.md).
+It starts its own PostgreSQL container and local S3 endpoint and checks the
+connection-pool saturation threshold without using the development store.
+
 ## Compose Watch alternative
 
 From the repository root, create a root `.env` (distinct from the API `.env`)

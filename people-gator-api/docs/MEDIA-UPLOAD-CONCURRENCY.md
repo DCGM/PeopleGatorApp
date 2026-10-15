@@ -1,0 +1,76 @@
+# Reproduce media upload connection starvation
+
+[Issue #10](https://github.com/DCGM/PeopleGatorApp/issues/10) has a confirmed
+PostgreSQL failure path: media uploads retain their request's database connection
+after looking up the page, throughout the storage wait. Fifteen pending uploads
+consume the default connection pool in one API worker (five pooled connections
+plus ten overflow connections). Independent searches, entity lists and uploads
+then wait for a connection. The health endpoint remains responsive.
+
+## Run the minimal setup
+
+Requirements: Docker with a running daemon, uv and Python 3.14, as described in
+[Development](../../docs/DEVELOPMENT.md). From the repository root:
+
+```sh
+cd people-gator-api
+uv sync --locked --python 3.14
+uv run --locked python scripts/reproduce_media_pool_starvation.py
+```
+
+The script automatically creates a disposable `pgvector/pgvector:pg16` container
+with a random localhost port, migrates it, and seeds the synthetic preview twice.
+It starts one Uvicorn worker and a local HTTP endpoint implementing the S3
+requests needed by this reproduction. The application's unmodified S3 adapter
+and SDK send real HTTP requests to that endpoint. Authentication is overridden
+with a synthetic actor; database dependencies, middleware and lifespan run
+normally. Image processing uses small generated images.
+
+No database URL, S3 account, private data, inference service or `.env` is needed.
+Inherited application settings are ignored. The script removes its container and
+temporary local storage on normal completion or a Python exception.
+
+## Expected result on the affected revision
+
+For **both** image and page-layout PUT endpoints, the script holds storage writes
+on distinct pages until explicitly released, then checks four independent HTTP
+requests: entity listing, seeded Ada text search, another upload and health.
+
+| Held uploads | Requests completed before storage release | Requests waiting |
+| --- | --- | --- |
+| 14 | List, search, independent upload, health | None of the probes |
+| 15 | Health | List, search, independent upload |
+
+It prints four JSON records with the pool's actual checked-out connection count
+and blocked requests. Each case has a one-second observation window after every
+held upload has reached storage. All held uploads must remain pending during
+that window. It releases storage and verifies every request completes with HTTP
+200, list/search results contain records, and uploaded media is readable with
+the expected receipt metadata. The final line is:
+
+```text
+REPRODUCED: 15 stalled uploads starve database requests; 14 do not.
+```
+
+**Exit 0 confirms reproduction of the current bug.** This is a diagnostic
+script, not a regression asserting that the application is fixed. It fails if
+the observations differ. After a fix, regression coverage should require the
+independent requests to complete while all storage gates remain held.
+
+## Boundaries
+
+This confirms connection-pool starvation on PostgreSQL, rather than an event
+loop freeze or a backend-wide storage mutex. Increasing the pool only changes
+the saturation threshold. The existing per-page image lock separately makes a
+read or replacement of the same page wait; this setup uses distinct pages.
+
+The earlier single-upload investigation found that delayed success, S3 denial
+and SDK timeout allow independent requests to progress. Denial and timeout
+return HTTP 502 with `storage_error`, and subsequent reads/uploads succeed.
+Those failure modes are not part of this minimal saturation script.
+
+The original legacy environment, real provider permission policy, Weaviate and
+multiple API workers have not been tested. The local S3 endpoint implements
+only the operations needed here. The one-second window demonstrates blocked
+requests; it does not wait for the database pool's acquisition timeout. This
+setup does not change application behavior, schemas or maintained seed fixtures.
