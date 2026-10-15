@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 import uuid
 
 
@@ -25,6 +26,24 @@ EXAMPLE_SCOPES = {
     "staging-annotator": ["browse", "annotate"],
     "staging-importer": ["browse", "ingest"],
     "staging-admin": ["browse", "annotate", "ingest", "admin"],
+}
+
+# Explicit classification: schema additions require a sanitizer review.
+SANITIZED_COLUMNS = {
+    "pg_demo_users": 'id display_name is_active external_subject external_issuer email'.split(),
+    "pg_demo_api_keys": 'id identifier display_name user_id'.split(),
+    "pg_demo_entities": 'id user_id last_touched_at last_touched_by_user_id last_touched_by_api_key_id kind name name_normalized description short_description wikidata_id nlcr_authority_id search_document'.split(),
+    "pg_demo_aliases": 'id entity_id name name_normalized search_document'.split(),
+    "pg_demo_sources": 'id last_touched_at last_touched_by_user_id last_touched_by_api_key_id url source_type'.split(),
+    "pg_demo_documents": 'id library document_id name name_normalized'.split(),
+    "pg_demo_pages": 'id library document_id page_id'.split(),
+    "pg_demo_images": 'id'.split(),
+    "pg_demo_text_mentions": 'id source_id entity_id entity_link_state entity_link_verified_by_user_id entity_link_verified_at mention mention_normalized context'.split(),
+    "pg_demo_image_occurrences": 'id source_id entity_id entity_link_state entity_link_verified_by_user_id entity_link_verified_at occurrence_type roi'.split(),
+    "pg_demo_faces": 'id user_id identifier confidence keypoints keypoint_types'.split(),
+    "pg_demo_face_models": 'stub embedding_dim'.split(),
+    "pg_demo_face_embeddings": 'face_id model_id embedding'.split(),
+    "alembic_version": ["version_num"],
 }
 
 
@@ -138,7 +157,6 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
     pages keep pixels/faces/vectors; other pages get blank scans and lose biometric
     occurrences. OCR is always replaced with an empty valid layout.
     """
-    from people_gator_api.persistence.postgres.models import Base
     from people_gator_api.media.page_image import page_image_key
     from people_gator_api.media.page_layout import page_layout_key
     from people_gator_api.schemas.sources import document_url, page_url
@@ -146,11 +164,12 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
 
     columns = await connection.fetch("""SELECT table_name, column_name FROM information_schema.columns
         WHERE table_schema='public'""")
-    allowed = {name: set(table.columns.keys()) for name, table in Base.metadata.tables.items()}
-    allowed["alembic_version"] = {"version_num"}
+    allowed = SANITIZED_COLUMNS
     for row in columns:
         if row["column_name"] not in allowed.get(row["table_name"], set()):
             raise ValueError("Unclassified snapshot table/column; extend reviewed sanitizer first")
+    if await connection.fetchval("SELECT count(*) FROM pg_demo_sources WHERE source_type NOT IN ('source','page','document','image')"):
+        raise ValueError("Unclassified source type")
     revision = await connection.fetchval("SELECT version_num FROM alembic_version")
     if not revision or not re.fullmatch(r"[a-z0-9_]{1,64}", revision):
         raise ValueError("Missing/invalid source migration history")
@@ -179,6 +198,9 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
         await connection.execute("""DELETE FROM pg_demo_image_occurrences WHERE source_id NOT IN
             (SELECT id FROM pg_demo_pages WHERE id=ANY($1::uuid[]))""", list(permitted))
         await connection.execute("UPDATE pg_demo_faces SET identifier='Staging face ' || id")
+        from people_gator_api.schemas.enums import FaceKeypointType, EntityType
+        await connection.execute("UPDATE pg_demo_faces SET keypoint_types=$1::varchar[]", [str(k) for k in FaceKeypointType])
+        await connection.execute("UPDATE pg_demo_entities SET kind=NULL WHERE NOT (kind=ANY($1::varchar[]))", [str(k) for k in EntityType])
         # ROI carries arbitrary JSON: retain only validated numeric geometry.
         rows = await connection.fetch("SELECT id, roi FROM pg_demo_image_occurrences")
         from people_gator_api.schemas.common import BoundingBox
@@ -209,6 +231,12 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
                 image = Image.open(io.BytesIO(raw))
                 image.load()
                 image = image.convert("RGB")  # strip EXIF/comments and original metadata
+                for occurrence in await connection.fetch("SELECT o.roi, f.keypoints FROM pg_demo_image_occurrences o LEFT JOIN pg_demo_faces f ON f.id=o.id WHERE o.source_id=$1", page["id"]):
+                    roi = json.loads(occurrence["roi"])
+                    if roi["x"] + roi["width"] > image.width or roi["y"] + roi["height"] > image.height:
+                        raise ValueError("Permitted face ROI is outside its imported image")
+                    if occurrence["keypoints"] and any(not (0 <= x < image.width and 0 <= y < image.height) for x, y in occurrence["keypoints"]):
+                        raise ValueError("Permitted face keypoints are outside its imported image")
             else:
                 image = Image.new("RGB", (1200, 1600), "white")
             buffer = io.BytesIO()
@@ -237,6 +265,23 @@ async def validate_data(connection):
         JOIN pg_demo_entities e ON e.id=t.entity_id JOIN pg_demo_sources s ON s.id=t.source_id LIMIT 1""")
 
 
+def write_auth(path: Path, value: dict):
+    if path.exists() and json.loads(path.read_text()) == value:
+        return
+    descriptor, name = tempfile.mkstemp(prefix=".credential-", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "w") as stream:
+            json.dump(value, stream)
+            stream.flush()
+            if os.geteuid() == 0:
+                os.fchown(stream.fileno(), 10001, 10001)
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def provision_auth(root: Path, supplied: dict):
     import people_gator_api.schemas
     import argon2
@@ -249,7 +294,7 @@ def provision_auth(root: Path, supplied: dict):
             record = supplied["users"][username]
             argon2.extract_parameters(record["hash"])
             users[username] = {"hash": record["hash"], "scopes": [f"people-gator:{s}" for s in scopes]}
-    users_path.write_text(json.dumps(users))
+    write_auth(users_path, users)
     keys_path = root / "api-keys.json"
     keys = json.loads(keys_path.read_text()) if keys_path.exists() else {}
     initial_keys = supplied.get("api_keys", {}) if not keys_path.exists() else {}
@@ -262,11 +307,20 @@ def provision_auth(root: Path, supplied: dict):
         if validated.username not in users or not validated.scopes.issubset(users[validated.username]["scopes"]):
             raise ValueError("API key must belong to a staging user and its permitted scopes")
         keys[identifier] = validated.model_dump(mode="json")
-    keys_path.write_text(json.dumps(keys))
+    write_auth(keys_path, keys)
     jwks = root / "jwks.json"
     if not jwks.exists():
         key = ECKey.generate_key("P-256", parameters={"alg": "ES256", "use": "sig"}, auto_kid=True)
-        jwks.write_text(json.dumps(KeySet([key]).as_dict(private=True)))
+        write_auth(jwks, KeySet([key]).as_dict(private=True))
+
+
+def own_data(root: Path):
+    for directory, _, files in os.walk(root):
+        os.chown(directory, 10001, 10001)
+        os.chmod(directory, 0o700)
+        for name in files:
+            os.chown(Path(directory) / name, 10001, 10001)
+            os.chmod(Path(directory) / name, 0o600)
 
 
 async def main():
@@ -282,10 +336,13 @@ async def main():
         client = s3_client(config)
         key = select_backup(client, bucket, prefix, args.exact_key)
         result = download(client, bucket, key, Path("/work/snapshot.dump"))
+        if not re.fullmatch(r"[a-f0-9]{40}", result.get("source_application_revision") or ""):
+            raise ValueError("Backup publisher must record application-revision metadata")
         result["backup_date"] = backup_date(key, prefix).isoformat()
         Path("/work/provenance.json").write_text(json.dumps(result))
     elif args.action == "auth":
         provision_auth(Path("/data/peoplegator_api"), json.loads(Path("/private/credential-input.json").read_text()))
+        own_data(Path("/data/peoplegator_api"))
     else:
         connection = await connect()
         try:
@@ -295,8 +352,8 @@ async def main():
                 source_path = Path("/private/media-source.json")
                 source = json.loads(source_path.read_text()) if source_path.exists() else {}
                 result = await sanitize(connection, LocalFilesystem("/data"), source, policy)
-                path = Path("/work/provenance.json")
-                path.write_text(json.dumps({**json.loads(path.read_text()), **result}))
+                own_data(Path("/data"))
+                print(json.dumps(result))
             else:
                 await validate_data(connection)
         finally:
@@ -306,7 +363,7 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except Exception:
+    except Exception as error:
         # Exception bodies can contain SQL, OCR or credentials. No private logs in Actions.
-        print("Private staging preparation failed; active data was not selected for this operation", file=sys.stderr)
+        print(f"Private staging preparation failed ({type(error).__name__}); active data was not selected for this operation", file=sys.stderr)
         sys.exit(1)

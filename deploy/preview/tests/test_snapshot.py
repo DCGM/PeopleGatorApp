@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import secrets
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -90,11 +92,59 @@ class BackupTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("STAGING_TEST_DATABASE_PORT"), "Set isolated STAGING_TEST_DATABASE_PORT; requires backend venv")
 class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.database = "staging_0123456789abcdef"
+        cls.username = os.environ.get("STAGING_TEST_DATABASE_USER", "test")
+        cls.password = os.environ.get("STAGING_TEST_DATABASE_PASSWORD", "test")
+        cls.container = os.environ.get("STAGING_TEST_POSTGRES_CONTAINER")
+        if not cls.container:
+            return  # explicitly prepared local disposable database
+        cls.database = "staging_" + secrets.token_hex(8)
+        cls.source = "fixture_" + secrets.token_hex(8)
+        def sql(query, database="postgres"):
+            return subprocess.run(["docker", "exec", "-i", cls.container, "psql", "-XqAt", "-U", cls.username,
+                                   "-d", database, "-v", "ON_ERROR_STOP=1"], input=query, text=True,
+                                  capture_output=True, check=True).stdout
+        cls.sql = staticmethod(sql)
+        sql(f"CREATE DATABASE {cls.source}; CREATE DATABASE {cls.database};")
+        cls.workspace = tempfile.TemporaryDirectory()
+        cls.environment = {k: v for k, v in os.environ.items() if not k.startswith(("PEOPLE_GATOR_API__PERSISTENCE", "PEOPLE_GATOR_API__STORAGE"))}
+        cls.environment.update({"PEOPLE_GATOR_API__PERSISTENCE": json.dumps({"postgres": {
+            "host": "127.0.0.1", "port": int(os.environ["STAGING_TEST_DATABASE_PORT"]), "user": cls.username,
+            "password": cls.password, "database": cls.source, "schema_mode": "validate"}, "weaviate": None}),
+            "PEOPLE_GATOR_API__STORAGE": json.dumps({"local": {"root": cls.workspace.name}, "s3": None})})
+        api = MODULE.parents[2] / "people-gator-api"
+        for command in (("database", "migrate"), ("seed",), ("seed",), ("database", "check")):
+            subprocess.run([sys.executable, "-m", "people_gator_api.cli." + command[0], *command[1:]],
+                           cwd=api, env=cls.environment, capture_output=True, check=True)
+        # Represent a retained production-shaped store at an older real revision.
+        subprocess.run([sys.executable, "-m", "alembic", "downgrade", "d34a021b0005"], cwd=api,
+                       env=cls.environment, capture_output=True, check=True)
+        sql("UPDATE pg_demo_users SET email='SENSITIVE-PRODUCTION@example.test'; "
+            "UPDATE pg_demo_entities SET description='SENSITIVE-PRODUCTION'; "
+            "UPDATE pg_demo_text_mentions SET context='SENSITIVE-PRODUCTION';", cls.source)
+        # A real custom-format pg_dump/pg_restore fixture: no production dump or secrets.
+        archive = subprocess.run(["docker", "exec", cls.container, "pg_dump", "-Fc", "-U", cls.username,
+                                  "-d", cls.source], capture_output=True, check=True).stdout
+        cls.archive = archive
+        assert archive[:5] == b"PGDMP"
+        subprocess.run(["docker", "exec", "-i", cls.container, "pg_restore", "--no-owner", "--no-privileges",
+                        "--exit-on-error", "--single-transaction", "-U", cls.username, "-d", cls.database],
+                       input=archive, capture_output=True, check=True)
+        assert sql("SELECT version_num FROM alembic_version", cls.source) == sql("SELECT version_num FROM alembic_version", cls.database)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.container:
+            cls.sql(f"DROP DATABASE {cls.source} WITH (FORCE); DROP DATABASE {cls.database} WITH (FORCE);")
+            cls.workspace.cleanup()
+
     async def asyncSetUp(self):
         import people_gator_api.schemas
         import asyncpg
         self.connection = await asyncpg.connect(host="127.0.0.1", port=int(os.environ["STAGING_TEST_DATABASE_PORT"]),
-                                                user="test", password="test", database="staging_0123456789abcdef")
+                                                user=self.username, password=self.password, database=self.database)
         self.addAsyncCleanup(self.connection.close)
 
     async def test_sanitize_real_seed_preserves_graph_vectors_and_rejects_unclassified_schema(self):
@@ -135,6 +185,21 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 layout = json.loads(await filesystem.read_bytes(page_layout_key(row["library"], row["document_id"], row["page_id"])))
                 self.assertEqual(layout["regions"], [])
             self.assertFalse((Path(directory) / "peoplegator_api").exists())
+            if self.container:
+                self.assertEqual(result["source_schema_revision"], "d34a021b0005")
+                upgraded = {**self.environment, "PEOPLE_GATOR_API__PERSISTENCE": json.dumps({"postgres": {
+                    "host": "127.0.0.1", "port": int(os.environ["STAGING_TEST_DATABASE_PORT"]), "user": self.username,
+                    "password": self.password, "database": self.database, "schema_mode": "validate"}, "weaviate": None})}
+                # Real candidate migrations, full check, repeat, and retain staging-only edits.
+                for action in ("migrate", "check", "migrate", "check"):
+                    await connection.execute("UPDATE pg_demo_entities SET description='Staging-only edit' WHERE id=(SELECT id FROM pg_demo_entities ORDER BY id LIMIT 1)")
+                    process = await asyncio.create_subprocess_exec(sys.executable, "-m", "people_gator_api.cli.database", action,
+                        cwd=MODULE.parents[2] / "people-gator-api", env=upgraded,
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    stdout, stderr = await process.communicate()
+                    self.assertEqual(process.returncode, 0, stderr.decode())
+                    self.assertEqual(await connection.fetchval("SELECT count(*) FROM pg_demo_entities WHERE description='Staging-only edit'"), 1)
+                await snapshot.validate_data(connection)
             await connection.execute("CREATE TABLE unclassified_private_data (secret text)")
             try:
                 with self.assertRaisesRegex(ValueError, "Unclassified"):

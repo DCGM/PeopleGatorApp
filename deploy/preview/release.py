@@ -24,6 +24,7 @@ import tempfile
 BUNDLE_FILES = (
     "preview.py", "compose.pr.yaml", "compose.infrastructure.yaml",
     "otel-collector.yaml", "pgadmin-servers.json",
+    "staging.py", "snapshot.py", "compose.staging.yaml", "staging-login.html",
 )
 DEFAULT_RELEASES = Path("/var/lib/people-gator-preview-controller/releases")
 
@@ -42,13 +43,16 @@ def reviewed_source(source: Path, revision: str) -> None:
         raise ValueError("Release revision must be a full Git commit SHA")
     if os.environ.get("GITHUB_ACTIONS") == "true":
         repository = os.environ.get("GITHUB_REPOSITORY", "")
-        expected = f"{repository}/.github/workflows/pr-preview.yml@refs/heads/main"
+        expected = {f"{repository}/.github/workflows/{name}@refs/heads/main"
+                    for name in ("pr-preview.yml", "staging.yml")}
         if (
             not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
-            or os.environ.get("GITHUB_WORKFLOW_REF") != expected
+            or os.environ.get("GITHUB_WORKFLOW_REF") not in expected
             or os.environ.get("GITHUB_EVENT_NAME") not in {
                 "workflow_run", "pull_request_target", "schedule", "workflow_dispatch",
             }
+            or (os.environ.get("GITHUB_WORKFLOW_REF", "").endswith("/staging.yml@refs/heads/main")
+                and os.environ.get("GITHUB_EVENT_NAME") not in {"workflow_run", "workflow_dispatch"})
             or os.environ.get("GITHUB_REF") != "refs/heads/main"
             or os.environ.get("GITHUB_WORKFLOW_SHA") != revision
             or git(source, "rev-parse", "HEAD").decode().strip() != revision
@@ -65,7 +69,8 @@ def reviewed_source(source: Path, revision: str) -> None:
 
 def validate_bundle(directory: Path) -> None:
     """Parse code and render Compose using synthetic settings, without a daemon."""
-    compile((directory / "preview.py").read_bytes(), "preview.py", "exec")
+    for name in ("preview.py", "staging.py", "snapshot.py"):
+        compile((directory / name).read_bytes(), name, "exec")
     json.loads((directory / "pgadmin-servers.json").read_text())
     environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_")}
     environment.update({
@@ -75,6 +80,7 @@ def validate_bundle(directory: Path) -> None:
         "DATABASE_NETWORK": "preview-validation-db", "WEB_NETWORK": "preview-validation-web",
         "CERTIFICATE_RESOLVER": "tlschallenge", "OTEL_NETWORK": "preview-validation-logging",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "PREVIEW_LOG_PORT": "24224",
+        "STAGING_HOST": "staging.example.test", "MEDIA_VOLUME": "staging-validation-media", "AUTH_VOLUME": "staging-validation-auth",
         "PR_NUMBER": "123", "PREVIEW_HOST": "pr-123.example.test", "COMMIT_SHA": "0" * 40,
         "FRONTEND_IMAGE": "example.invalid/frontend:validation",
         "BACKEND_IMAGE": "example.invalid/backend:validation", "DB_NAME": "preview_pr_123",
@@ -83,6 +89,7 @@ def validate_bundle(directory: Path) -> None:
     })
     for name, required in (
         ("compose.pr.yaml", {"frontend", "backend", "storage-init", "migrate", "seed"}),
+        ("compose.staging.yaml", {"frontend", "backend", "storage-init", "migrate", "check"}),
         ("compose.infrastructure.yaml", {"postgres", "otel-collector", "pgadmin"}),
     ):
         result = subprocess.run(

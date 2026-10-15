@@ -214,6 +214,20 @@ class ReleaseTests(unittest.TestCase):
             self.publish()
 
 
+    def test_staging_publication_requires_reviewed_main_and_rejects_pull_request_events(self):
+        base = {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "DCGM/PeopleGatorApp",
+                "GITHUB_WORKFLOW_REF": "DCGM/PeopleGatorApp/.github/workflows/staging.yml@refs/heads/main",
+                "GITHUB_WORKFLOW_SHA": self.revision, "GITHUB_REF": "refs/heads/main"}
+        for event in ("workflow_run", "workflow_dispatch"):
+            with self.subTest(event=event), patch.dict(os.environ, {**base, "GITHUB_EVENT_NAME": event}):
+                self.assertTrue(self.publish().is_dir())
+        for changes in ({"GITHUB_EVENT_NAME": "pull_request_target"}, {"GITHUB_EVENT_NAME": "pull_request"},
+                        {"GITHUB_REF": "refs/heads/issue/16"},
+                        {"GITHUB_WORKFLOW_REF": base["GITHUB_WORKFLOW_REF"].replace("heads/main", "heads/issue/16")}):
+            with self.subTest(changes=changes), patch.dict(os.environ, {**base, "GITHUB_EVENT_NAME": "workflow_dispatch", **changes}), self.assertRaises(ValueError):
+                self.publish()
+
+
 class WorkflowCredentialTests(unittest.TestCase):
     """Execute the registry shell steps with a fake daemon and private config."""
 
@@ -364,6 +378,10 @@ class WorkflowCredentialTests(unittest.TestCase):
                     self.assertFalse(temporary_config.exists())
                     self.assertIn("retained-login", (self.ambient / "config.json").read_text())
                     self.assertEqual(list(self.root.glob("people-gator-preview-docker.*")), [])
+
+    def test_staging_registry_credentials_are_disposable_on_success_and_failures(self):
+        self.workflow = (MODULE_PATH.parents[2] / ".github/workflows/staging.yml").read_text()
+        self.test_registry_credentials_are_disposable_on_success_and_failures()
 
     def test_image_matrix_jobs_cannot_remove_each_others_registry_credentials(self):
         self.workflow = (MODULE_PATH.parents[2] / ".github/workflows/pr-ci.yml").read_text()

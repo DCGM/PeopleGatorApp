@@ -1,0 +1,8 @@
+{
+  "endpoint_url": "https://s3-provider.example.invalid",
+  "region": "OPERATOR_REGION",
+  "bucket": "peoplegator-ingest",
+  "prefix": "production/db-backups/",
+  "access_key_id": "PREFIX_SCOPED_READER_ID",
+  "secret_access_key": "PRIVATE_READER_SECRET"
+}
