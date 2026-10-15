@@ -24,6 +24,7 @@ import urllib.request
 
 
 INSTALL_DIR = Path(__file__).resolve().parent
+DEFAULT_CONFIG = Path("/opt/people-gator-preview/config.json")
 
 
 class PreviewCredentials(TypedDict):
@@ -408,7 +409,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 def main() -> None:
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default=os.environ.get("PREVIEW_CONFIG", str(INSTALL_DIR / "config.json")))
+    parser.add_argument("--config", default=os.environ.get("PREVIEW_CONFIG", str(DEFAULT_CONFIG)))
     subparsers = parser.add_subparsers(dest="action", required=True)
     subparsers.add_parser("init")
     subparsers.add_parser("check-access")

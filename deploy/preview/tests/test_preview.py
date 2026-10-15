@@ -108,7 +108,8 @@ class GitHubAccessTests(unittest.TestCase):
         config.write_text(json.dumps({**self.config, "state_dir": str(state)}))
         with patch.object(preview.urllib.request, "urlopen", return_value=response(
             {"full_name": "DCGM/PeopleGatorApp"}
-        )), patch.object(preview.sys, "argv", ["preview.py", "--config", str(config), "check-access"]):
+        )), patch.dict(os.environ, {"PREVIEW_CONFIG": str(config)}), \
+             patch.object(preview.sys, "argv", ["preview.py", "check-access"]):
             # main sets umask for real lifecycle writes; don't alter the test process.
             with patch.object(preview.os, "umask"):
                 preview.main()
