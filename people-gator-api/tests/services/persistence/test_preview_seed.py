@@ -1372,3 +1372,82 @@ async def test_media_upload_sandbox_is_usable_and_preserves_replacements(seed_ta
     assert (await get_page_image(other.library, other.document_id, other.page_id)).content == originals[1][0]
     assert await get_page_layout(other.library, other.document_id, other.page_id) == originals[1][1]
     assert (await database.sources.get_page(page.source_id)).last_touched_at is None
+
+
+@pytest.mark.asyncio
+async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(seed_target):
+    from itertools import combinations
+
+    from people_gator_api.schemas.enums import EntityLinkState as State
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.schemas.mentions import TextMentionListFilter, TextMentionPatchRequest
+    from people_gator_api.schemas.missing import MISSING
+
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    expected = {
+        'links-1': {'auto': State.automatic, 'manual': State.manual},
+        'links-2': {'verified': State.verified, 'unassigned': None},
+    }
+    for example, page_key, selected in (
+        ('scan-toolbar', 'links-2', []),
+        ('scan-toolbar-union', 'links-1', [State.automatic, State.manual]),
+        ('scan-toolbar-assigned', 'links-2', list(State)),
+    ):
+        link = urlsplit(first.filter_examples[example])
+        assert parse_qs(link.query).get('link_state', []) == selected
+        page = await database.sources.get_page(first.pages[page_key])
+        assert link.path == (
+            f'/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}'
+        )
+        image = await get_page_image(page.library, page.document_id, page.page_id)
+        with Image.open(io.BytesIO(image.content)) as scan:
+            assert scan.size == (800, 1100)
+        for size in range(4):
+            for states in combinations(list(State), size):
+                matching = {key for key, state in expected[page_key].items()
+                            if not states or state in states}
+                faces = await database.faces.list(FaceListRequest(
+                    limit=100, filter_=FaceListFilter(
+                        source_id=[page.source_id], entity_link_state=list(states) if states else MISSING,
+                    ),
+                ))
+                mentions = await database.text_mentions.list(TextMentionListRequest(
+                    limit=100, filter_=TextMentionListFilter(
+                        source_id=[page.source_id], entity_link_state=list(states) if states else MISSING,
+                    ),
+                ))
+                assert {face.detection_id for face in faces.items} == {
+                    first.faces['links-' + key] for key in matching
+                }
+                assert {mention.mention_id for mention in mentions.items} == {
+                    first.mentions['links-' + key + '-mention'] for key in matching
+                }
+                spans = await get_text_mention_spans(
+                    database, page.source_id, library=page.library,
+                    document_id=page.document_id, page_id=page.page_id,
+                    entity_link_state=list(states) if states else MISSING,
+                )
+                # OCR overlays represent assigned mentions; unassigned records
+                # remain available through the mention repository.
+                assert {span.mention_id for span in spans} == {
+                    first.mentions['links-' + key + '-mention']
+                    for key in matching if expected[page_key][key] is not None
+                }
+
+    actor = GenericActor(user_id=first.users['reviewer'])
+    reviewed_face = await database.faces.patch(
+        first.faces['links-verified'], FacePatchRequest(entity_link_state=State.manual), actor,
+    )
+    reviewed_mention = await database.text_mentions.patch(
+        first.mentions['links-verified-mention'],
+        TextMentionPatchRequest(entity_link_state=State.manual), actor,
+    )
+    page_before = await database.sources.get_page(first.pages['links-2'])
+    document_before = await database.sources.get_document(first.documents['link-states'])
+    second = await preview.seed_preview(database, filesystem)
+    assert second == first
+    assert await database.faces.get(reviewed_face.detection_id) == reviewed_face
+    assert await database.text_mentions.get(reviewed_mention.mention_id) == reviewed_mention
+    assert await database.sources.get_page(page_before.source_id) == page_before
+    assert await database.sources.get_document(document_before.source_id) == document_before
