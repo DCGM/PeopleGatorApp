@@ -23,6 +23,13 @@ The first build on each runner is cold; cache reuse requires retaining that
 runner's tool-cache directory and Docker volumes. Builds on other runners or
 fresh disposable machines start with their own caches.
 
+Each image matrix job uses a private temporary Docker registry configuration;
+one job's completion cannot log out another job sharing the same runner account.
+The selected Docker context is imported into that directory. Buildx metadata stays
+in its original directory via `BUILDX_CONFIG`, so cache reuse and the setup action's
+later builder cleanup keep working. Login-action logout is disabled only for these
+private configs; an unconditional cleanup step deletes each job's directory.
+
 The preview host runs a versioned controller release through a self-hosted Actions
 runner. Each lifecycle job publishes its exact reviewed `main` bundle into a
 runner-owned directory without sudo; operator settings and preview state stay

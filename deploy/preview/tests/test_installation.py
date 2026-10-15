@@ -365,6 +365,52 @@ class WorkflowCredentialTests(unittest.TestCase):
                     self.assertIn("retained-login", (self.ambient / "config.json").read_text())
                     self.assertEqual(list(self.root.glob("people-gator-preview-docker.*")), [])
 
+    def test_image_matrix_jobs_cannot_remove_each_others_registry_credentials(self):
+        self.workflow = (MODULE_PATH.parents[2] / ".github/workflows/pr-ci.yml").read_text()
+        login, build = self.step("Log into image registry"), self.step("Build and publish image")
+        self.assertIn("logout: false", login)
+        for step in (login, build):
+            self.assertIn("DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}", step)
+        self.assertIn("BUILDX_CONFIG: ${{ steps.registry-config.outputs.buildx-config }}", build)
+        self.assertIn("if: always() && steps.registry-config.outputs.path != ''",
+                      self.step("Remove image registry credentials"))
+        for context in ("default", "rootless-ci"):
+            configurations = []
+            environment = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}",
+                           "RUNNER_TEMP": str(self.root), "DOCKER_CONFIG": str(self.ambient),
+                           "DOCKER_TEST_LOG": str(self.root / "image-docker-log"),
+                           "DOCKER_TEST_CONTEXT": context, "DOCKER_TEST_FAIL": "",
+                           "GH_TOKEN": "synthetic-job-token", "GH_ACTOR": "synthetic-actor"}
+            environment.pop("BUILDX_CONFIG", None)
+            try:
+                for job in ("backend", "frontend"):
+                    output = self.root / f"image-output-{job}"
+                    output.write_text("")
+                    environment["GITHUB_OUTPUT"] = str(output)
+                    result = self.shell(self.script("Prepare image registry configuration"), environment)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+                    configurations.append(values["path"])
+                    self.assertEqual(values["buildx-config"], str(self.ambient / "buildx"))
+                    result = self.shell('printf %s "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin',
+                                        {**environment, "DOCKER_CONFIG": values["path"]})
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotEqual(*configurations)
+                result = self.shell(self.script("Remove image registry credentials"),
+                                    {**environment, "IMAGE_DOCKER_CONFIG": configurations[0]})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(Path(configurations[0]).exists())
+                # The later-finishing frontend can still authenticate after
+                # backend completion; the ambient context/config stays intact.
+                result = self.shell("docker pull image", {**environment, "DOCKER_CONFIG": configurations[1]})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("retained-login", (self.ambient / "config.json").read_text())
+            finally:
+                for configuration in configurations:
+                    self.shell(self.script("Remove image registry credentials"),
+                               {**environment, "IMAGE_DOCKER_CONFIG": configuration})
+            self.assertEqual(list(self.root.glob("people-gator-ci-docker.*")), [])
+
 
 if __name__ == "__main__":
     unittest.main()
