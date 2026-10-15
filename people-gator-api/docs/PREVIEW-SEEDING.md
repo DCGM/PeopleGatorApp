@@ -177,6 +177,8 @@ unassigned face and mention). `scan-toolbar-union` opens page 1 with automatic
 and manual evidence selected together. Toggle each state, reset, reload and use
 browser back/forward to compare pressed states, URL and evidence. Check the
 neighboring tools and keyboard arrow/Space operation at desktop and mobile sizes.
+In light and dark themes, the toolbar container is transparent: the scan stays
+visible in the gaps between the controls, including when they wrap on mobile.
 The existing linked records, deterministic local JPEGs and OCR layouts supply
 this scenario; adding these links never resets reviewed assignments or timestamps.
 Integration coverage queries faces and mentions for every state combination on
