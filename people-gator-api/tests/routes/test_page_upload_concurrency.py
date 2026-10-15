@@ -13,13 +13,16 @@ from PIL import Image
 import pytest
 import pytest_asyncio
 
-from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.media import page_image
 from people_gator_api.media.page_image import page_image_key
 from people_gator_api.media.page_layout import page_layout_key
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.routes.v1 import router
-from people_gator_api.seeding.preview import seed_preview
+from people_gator_api.schemas.common import GenericActor
+from people_gator_api.schemas.entities import EntityCreateRequest
+from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest
+from people_gator_api.schemas.users import UserCreateRequest
+from people_gator_api.seeding.fixtures import fixture_id
 from people_gator_api.services import auth_service, database_service
 from people_gator_api.services.api_key_service import APIKeyRecord
 from people_gator_api.settings import PageImageCacheSettings, S3Settings, StorageSettings, settings
@@ -116,14 +119,33 @@ async def assert_readable(client, page, resource, receipt, storage):
 
 
 @pytest_asyncio.fixture
-async def upload_target(migrated_postgres, tmp_path, monkeypatch):
+async def upload_target(migrated_postgres, monkeypatch):
     engine = migrated_postgres
     sessions = database_service.make_postgres_session_factory(engine)
     async with sessions() as session:
         database = postgres_database(session)
-        seeded = await seed_preview(database, LocalFilesystem(tmp_path))
-        pages = [await database.sources.get_page(source_id)
-                 for source_id in list(seeded.pages.values())[:16]]
+        # This scenario needs no vectors. Registering preview models here would
+        # attach dynamic HNSW indexes to process-wide ORM metadata and affect
+        # subsequent bootstrap tests in the same pytest process.
+        user = await database.users.get_or_create(UserCreateRequest(
+            display_name="Upload reviewer", is_active=True,
+            external_subject="reviewer", external_issuer="urn:people-gator:preview-seed",
+        ))
+        await database.entities.create(
+            EntityCreateRequest(entity_type="person", name="Ada Upload"),
+            GenericActor(user_id=user.user_id),
+        )
+        library, document_id = "preview-concurrency", fixture_id("issue10-concurrency-document")
+        await database.sources.get_or_create_document(DocumentCreateRequest(
+            library=library, document_id=document_id, name="Upload concurrency test",
+        ))
+        pages = [
+            (await database.sources.get_or_create_page(PageCreateRequest(
+                library=library, document_id=document_id,
+                page_id=fixture_id(f"issue10-concurrency-page-{index}"),
+            )))[0]
+            for index in range(16)
+        ]
     monkeypatch.setattr(database_service, "_postgres_engine", engine)
     monkeypatch.setattr(database_service, "_postgres_sessions", sessions)
     monkeypatch.setattr(settings, "page_image_cache", PageImageCacheSettings(widths=[64, 128]))

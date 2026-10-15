@@ -1,5 +1,6 @@
 import io
 import uuid
+from contextlib import asynccontextmanager
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,8 +19,6 @@ from people_gator_api.routes.v1.media import router
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import PageResponse, page_url
 from people_gator_api.services.auth_service import get_current_user
-from contextlib import asynccontextmanager
-
 from people_gator_api.services.database_service import get_database, get_database_context
 from people_gator_api.settings import (
     LocalStorageSettings,
