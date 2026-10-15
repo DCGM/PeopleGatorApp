@@ -362,7 +362,7 @@ onBeforeUnmount(() => {
 
     <section ref="viewerElement" class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
       aria-label="Pan and zoom document page">
-      <DocumentControls class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)] p-2"
+      <DocumentControls class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
         @pointerdown.stop @wheel.stop @keydown.stop
         v-model:link-states="linkStates" :selected-line-index="selectedLineIndex" :line-count="transcription.length"
         :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
