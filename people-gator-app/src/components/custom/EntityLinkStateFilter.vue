@@ -28,16 +28,13 @@ function reset() {
 }
 </script>
 <template>
-  <div
-    v-if="toolbar"
-    class="flex w-full flex-row flex-wrap items-center gap-2"
-    aria-label="Link state"
-  >
+  <template v-if="toolbar">
     <ToggleGroup
       type="multiple"
       :model-value="selected"
       variant="outline"
       size="sm"
+      class="shrink-0"
       aria-label="Link state"
       @update:model-value="update"
     >
@@ -61,7 +58,7 @@ function reset() {
         >All</Button
       >
     </UiTooltip>
-  </div>
+  </template>
   <Combobox
     v-else
     v-model:open="open"

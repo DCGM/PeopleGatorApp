@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LinkStatePanel from './LinkStatePanel.vue'
+import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 import type { EntityLinkState } from '@/client'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import {
@@ -48,7 +48,9 @@ defineEmits<{
 
 <template>
   <div
-    class="flex select-none flex-wrap items-center justify-center gap-2 [&_button:disabled]:bg-white/90 [&_button:disabled]:backdrop-blur-[50px] [&_button:disabled]:text-slate-400 [&_button:disabled]:opacity-100"
+    role="toolbar"
+    aria-label="Scan tools"
+    class="flex max-w-full select-none flex-row flex-wrap items-center justify-center gap-2"
   >
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
@@ -157,7 +159,7 @@ defineEmits<{
       </Button>
     </ButtonGroup>
 
-    <LinkStatePanel v-model="linkStates" />
+    <EntityLinkStateFilter v-model="linkStates" toolbar />
 
     <ButtonGroup class="shrink-0 drop-shadow-md" aria-label="Translation">
       <Button
