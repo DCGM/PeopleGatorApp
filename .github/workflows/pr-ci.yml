@@ -52,12 +52,9 @@ jobs:
           --health-interval 2s --health-timeout 3s --health-retries 30
     env:
       PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: localhost
-      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: ${{ job.services.postgres.ports[5432] }}
       PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ci
       PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ci
       PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ci
-      PEOPLE_GATOR_POSTGRES_TEST_URL: postgresql+asyncpg://ci:ci@localhost:${{ job.services.postgres.ports[5432] }}/ci
-      PEOPLE_GATOR_SCHEMA_TEST_URL: postgresql+asyncpg://ci:ci@localhost:${{ job.services.postgres.ports[5432] }}/ci_schema
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,6 +64,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: people-gator-api/uv.lock
+      - name: Configure isolated PostgreSQL test port
+        env:
+          CI_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          {
+            echo "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT=$CI_POSTGRES_PORT"
+            echo "PEOPLE_GATOR_POSTGRES_TEST_URL=postgresql+asyncpg://ci:ci@localhost:$CI_POSTGRES_PORT/ci"
+            echo "PEOPLE_GATOR_SCHEMA_TEST_URL=postgresql+asyncpg://ci:ci@localhost:$CI_POSTGRES_PORT/ci_schema"
+          } >> "$GITHUB_ENV"
       - run: uv sync --locked --python 3.14
         working-directory: people-gator-api
       - name: Create disposable schema and seed databases on the same CI server
@@ -90,7 +96,7 @@ jobs:
       - name: Exercise private snapshot restore and sanitization on synthetic data
         working-directory: people-gator-api
         env:
-          STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports[5432] }}
+          STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
           STAGING_TEST_DATABASE_USER: ci
           STAGING_TEST_DATABASE_PASSWORD: ci
           STAGING_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
@@ -101,7 +107,7 @@ jobs:
       - name: Exercise candidate container migration and API startup gates
         working-directory: people-gator-api
         env:
-          STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports[5432] }}
+          STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
           STAGING_TEST_DATABASE_USER: ci
           STAGING_TEST_DATABASE_PASSWORD: ci
           STAGING_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
