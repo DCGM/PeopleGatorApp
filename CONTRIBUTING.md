@@ -82,8 +82,12 @@ and mobile views**. An unrelated page or desktop-only evidence is insufficient.
   when practical alongside the required after captures. Include light/dark
   evidence when theme behavior changes.
 - Embed images in the PR description with meaningful alt text/captions. Preview
-  URLs and videos may supplement screenshots. Update evidence when later commits
-  materially change the UI.
+  URLs and videos may supplement screenshots. Use the template's H3 feature/state
+  heading followed by a two-column Markdown table: label the headers **Desktop**
+  and **Mobile** with their CSS viewport dimensions, and embed the matching images
+  in the next rendered row. Repeat the heading/table block for each major
+  feature/state, replacing placeholder headings, URLs and alt text. Update
+  evidence when later commits materially change the UI.
 - Backend-only, documentation-only and frontend-internal changes with no rendered
   UI impact may mark screenshots `Not applicable` with a brief reason.
   User-visible frontend changes cannot use this exemption. If capture is blocked,
