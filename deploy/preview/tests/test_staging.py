@@ -258,6 +258,16 @@ class StagingTests(unittest.TestCase):
         self.assertIn("push:\n    branches: [main]", ci)
         self.assertIn("github.event.pull_request.head.sha || github.sha", ci)
 
+    def test_disposable_ci_workers_are_outside_live_staging_recovery_scope(self):
+        controller = self.controller
+        other_root = self.root / "ci-fixture"
+        other_root.mkdir()
+        other = FakeStaging(other_root)
+        self.assertNotEqual(controller.worker_label, other.worker_label)
+        staging.Staging.reap_workers(controller)
+        self.assertIn("label=" + controller.worker_label, controller.events[-1])
+        self.assertNotIn(other.worker_label, controller.events[-1])
+
     def test_private_subprocess_failures_never_expose_source_values_to_logs(self):
         controller = self.controller
         controller.private_command = staging.Staging.private_command.__get__(controller)
