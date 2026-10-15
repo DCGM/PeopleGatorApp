@@ -144,10 +144,19 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         "--exit-on-error", "--single-transaction", "-U", cls.username, "-d", cls.database],
                        input=archive, capture_output=True, check=True)
         assert sql("SELECT version_num FROM alembic_version", cls.source) == sql("SELECT version_num FROM alembic_version", cls.database)
+        # Standalone integration tests cannot inherit pytest conftest's defaults.
+        # Select this fixture's database/storage before any application import.
+        local_environment = dict(cls.environment)
+        config = json.loads(local_environment["PEOPLE_GATOR_API__PERSISTENCE"])
+        config["postgres"]["database"] = cls.database
+        local_environment["PEOPLE_GATOR_API__PERSISTENCE"] = json.dumps(config)
+        cls.settings_patch = patch.dict(os.environ, local_environment, clear=True)
+        cls.settings_patch.start()
 
     @classmethod
     def tearDownClass(cls):
         if cls.container:
+            cls.settings_patch.stop()
             cls.sql(f"DROP DATABASE {cls.source} WITH (FORCE); DROP DATABASE {cls.database} WITH (FORCE);")
             cls.workspace.cleanup()
 
