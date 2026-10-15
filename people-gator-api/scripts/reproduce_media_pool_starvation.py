@@ -2,8 +2,10 @@
 
 From people-gator-api: uv run --locked python scripts/reproduce_media_pool_starvation.py
 Exit 0 means the current starvation bug was reproduced, not that it was fixed.
+Pass --expect-fixed to require independent requests to complete before release.
 """
 
+import argparse
 import asyncio
 from contextlib import contextmanager
 import io
@@ -44,7 +46,7 @@ def disposable_postgres():
                        stdout=subprocess.DEVNULL)
 
 
-async def reproduce(storage: Path):
+async def reproduce(storage: Path, *, expect_fixed: bool = False):
     # Initialize the schema package before the existing shared settings imports.
     import people_gator_api.schemas  # noqa: F401
     from aiohttp import web
@@ -158,7 +160,7 @@ async def reproduce(storage: Path):
                     try:
                         await asyncio.wait_for(entered.wait(), timeout=15)
                         pool = database_service._postgres_engine.pool
-                        assert pool.checkedout() == count, pool.status()
+                        assert pool.checkedout() == (0 if expect_fixed else count), pool.status()
                         pool_status = pool.status()
                         probes = {
                             "list": asyncio.create_task(client.get("/api/v1/entities")),
@@ -169,9 +171,9 @@ async def reproduce(storage: Path):
                             "health": asyncio.create_task(client.get("/api/v1/health")),
                         }
                         # Gates, not a minute-long storage sleep, control this observation.
-                        await asyncio.wait(probes.values(), timeout=1)
+                        await asyncio.wait(probes.values(), timeout=5 if expect_fixed else 1)
                         blocked = sorted(name for name, task in probes.items() if not task.done())
-                        expected = ["independent-upload", "list", "search"] if count == 15 else []
+                        expected = ["independent-upload", "list", "search"] if count == 15 and not expect_fixed else []
                         assert blocked == expected, (resource, count, blocked)
                         assert probes["health"].done() and probes["health"].result().status_code == 200
                         assert all(not task.done() for task in uploads)
@@ -210,10 +212,18 @@ async def reproduce(storage: Path):
             if api_socket is not None:
                 api_socket.close()
             await runner.cleanup()
-    print("REPRODUCED: 15 stalled uploads starve database requests; 14 do not.", flush=True)
+    print(
+        "FIXED: independent requests complete with 14 and 15 stalled uploads."
+        if expect_fixed else
+        "REPRODUCED: 15 stalled uploads starve database requests; 14 do not.",
+        flush=True,
+    )
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expect-fixed", action="store_true")
+    args = parser.parse_args()
     with disposable_postgres() as port, tempfile.TemporaryDirectory(prefix="issue10-") as temporary:
         # Ignore inherited application settings and .env files; only our container is used.
         for name in list(os.environ):
@@ -233,7 +243,7 @@ def main():
         original_directory = Path.cwd()
         try:
             os.chdir(temporary)
-            asyncio.run(reproduce(storage))
+            asyncio.run(reproduce(storage, expect_fixed=args.expect_fixed))
         finally:
             os.chdir(original_directory)
 

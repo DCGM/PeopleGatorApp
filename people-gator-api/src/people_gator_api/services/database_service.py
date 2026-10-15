@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncGenerator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Annotated
 
 if TYPE_CHECKING:
@@ -207,6 +208,21 @@ async def get_database() -> AsyncGenerator[Database, None]:
 type DatabaseDependency = Annotated[Database, Depends(get_database)]
 
 
+def get_database_context() -> AbstractAsyncContextManager[Database]:
+    """Create an explicitly scoped facade for work that outlives its DB lookup.
+
+    Exit this context before waiting on storage or page locks. Ordinary request
+    dependencies intentionally keep their sessions until the request finishes.
+    Both scopes use the same backend lifecycle and Database contract.
+    """
+    return asynccontextmanager(get_database)()
+
+
+type DatabaseContextDependency = Annotated[
+    AbstractAsyncContextManager[Database], Depends(get_database_context)
+]
+
+
 async def init_db() -> None:
     """Initialize the enabled persistence backend and its schema."""
     if settings.persistence.backend == "weaviate":
@@ -240,11 +256,13 @@ async def close_db() -> None:
 
 
 __all__ = [
+    "DatabaseContextDependency",
     "DatabaseDependency",
     "close_db",
     "close_postgres",
     "close_weaviate",
     "get_database",
+    "get_database_context",
     "get_weaviate_client",
     "init_db",
     "init_postgres",
