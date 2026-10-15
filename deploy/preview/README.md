@@ -166,8 +166,7 @@ revision. A missing or outdated file fails deployment with an installation comma
 before pulling images or changing preview state. CI seeding alone cannot establish
 that the persistent host runs the seed step. Cleanup/reconciliation remain available
 while an installation upgrade is pending, provided repository access succeeds.
-The checks never install PR code or
-replaces host files automatically.
+The checks never install PR code or replace host files automatically.
 
 The deployer always runs `/opt/people-gator-preview/preview.py`; updating its
 trusted installed copy, Compose templates, collector config and pgAdmin server

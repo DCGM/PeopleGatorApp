@@ -93,7 +93,10 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           path: .preview-controller-ci
-          sparse-checkout: deploy/preview
+          # The installation suite executes registry scripts from this workflow.
+          sparse-checkout: |
+            deploy/preview
+            .github/workflows
           persist-credentials: false
       - name: Test preview controller
         working-directory: .preview-controller-ci
