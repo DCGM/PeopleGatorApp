@@ -1,11 +1,40 @@
 # Reproduce media upload connection starvation
 
 [Issue #10](https://github.com/DCGM/PeopleGatorApp/issues/10) has a confirmed
-PostgreSQL failure path: media uploads retain their request's database connection
+PostgreSQL failure path on the affected revision: media uploads retain their request's database connection
 after looking up the page, throughout the storage wait. Fifteen pending uploads
 consume the default connection pool in one API worker (five pooled connections
 plus ten overflow connections). Independent searches, entity lists and uploads
 then wait for a connection. The health endpoint remains responsive.
+
+The fix scopes each upload's database session to its page lookup. The returned
+`PageResponse` contains the canonical media identity and needs no live session.
+Closing the context returns the connection before reading the multipart file,
+preparing images, waiting for the existing page lock, or awaiting storage. The
+request-scoped dependency used by other routes is unchanged. No pool limits,
+storage timeouts, media receipts or per-page cache ordering are changed.
+
+## Verify the fix
+
+From `people-gator-api`:
+
+```sh
+uv run --locked python scripts/reproduce_media_pool_starvation.py --expect-fixed
+```
+
+For both upload routes, all four probes must complete with 14 and 15 uploads
+still held behind storage gates. The actual pool must report zero checked-out
+connections once every held upload reaches storage. Successful uploads must
+remain readable with matching receipt sizes and media types after release.
+The final line is:
+
+```text
+FIXED: independent requests complete with 14 and 15 stalled uploads.
+```
+
+The original diagnostic mode below remains available for comparison with the
+affected revision (`71c2908`). Running without `--expect-fixed` on fixed code
+intentionally fails its assertions about the old connection-retention behavior.
 
 ## Run the minimal setup
 
@@ -73,4 +102,4 @@ The original legacy environment, real provider permission policy, Weaviate and
 multiple API workers have not been tested. The local S3 endpoint implements
 only the operations needed here. The one-second window demonstrates blocked
 requests; it does not wait for the database pool's acquisition timeout. This
-setup does not change application behavior, schemas or maintained seed fixtures.
+endpoint is a controlled test double, not a full S3 provider validation.

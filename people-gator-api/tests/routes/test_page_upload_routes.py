@@ -18,7 +18,9 @@ from people_gator_api.routes.v1.media import router
 from people_gator_api.schemas.enums import SourceKind
 from people_gator_api.schemas.sources import PageResponse, page_url
 from people_gator_api.services.auth_service import get_current_user
-from people_gator_api.services.database_service import get_database
+from contextlib import asynccontextmanager
+
+from people_gator_api.services.database_service import get_database, get_database_context
 from people_gator_api.settings import (
     LocalStorageSettings,
     PageImageCacheSettings,
@@ -59,6 +61,11 @@ def client(
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_database] = lambda: database
+    @asynccontextmanager
+    async def database_context():
+        yield database
+
+    app.dependency_overrides[get_database_context] = lambda: database_context()
     app.dependency_overrides[get_current_user] = lambda: object()
     with TestClient(app) as test_client:
         yield test_client

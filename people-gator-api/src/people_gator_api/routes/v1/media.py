@@ -48,6 +48,7 @@ from people_gator_api.services.auth_service import (
     DataIngestActorDependency,
 )
 from people_gator_api.services.database_service import (
+    DatabaseContextDependency,
     DatabaseDependency,
 )
 from people_gator_api.utils.http_errors import raise_api_error
@@ -352,12 +353,14 @@ async def get_page_image_by_id_route(
 async def put_page_image_by_id_route(
     page_source_id: uuid.UUID,
     file: UploadFile,
-    database: DatabaseDependency,
+    database_context: DatabaseContextDependency,
     user: DataIngestActorDependency,
 ) -> FileUploadResponse:
     """Create or replace a page scan from a multipart image file upload."""
     del user
-    page = await database.sources.get_page(page_source_id)
+    # Only the detached response is needed during file I/O and page-lock waits.
+    async with database_context as database:
+        page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
@@ -400,12 +403,13 @@ async def get_page_layout_by_id_route(
 async def put_page_layout_by_id_route(
     page_source_id: uuid.UUID,
     payload: PageLayoutModel,
-    database: DatabaseDependency,
+    database_context: DatabaseContextDependency,
     user: DataIngestActorDependency,
 ) -> FileUploadResponse:
     """Create or replace a page's layout with a validated JSON document."""
     del user
-    page = await database.sources.get_page(page_source_id)
+    async with database_context as database:
+        page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
