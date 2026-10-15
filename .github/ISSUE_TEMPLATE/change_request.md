@@ -11,6 +11,8 @@ and [AGENTS.md](https://github.com/DCGM/PeopleGatorApp/blob/main/AGENTS.md).
 Reuse the relevant issue, work on an issue-numbered branch based on `main`,
 commit focused verified units and submit a linked PR with validation and
 limitations. Use a draft while incomplete; merge only with authorization.
+Follow the [PR guidance](https://github.com/DCGM/PeopleGatorApp/blob/main/CONTRIBUTING.md#writing-a-pull-request)
+for the template and applicable desktop/mobile evidence.
 
 ## Summary
 
@@ -43,6 +45,8 @@ Distinguish requested functionality from future ideas. -->
 
 Use the [testing strategy](https://github.com/DCGM/PeopleGatorApp/blob/main/docs/TEST.md)
 to select test levels, fixtures and relevant checks.
+Plan applicable desktop/mobile screenshots and actual browser checks using the
+[PR evidence policy](https://github.com/DCGM/PeopleGatorApp/blob/main/CONTRIBUTING.md#writing-a-pull-request).
 
 <!-- List checks appropriate to the change and required local services.
 Use isolated, disposable stores for database, migration and seed checks.

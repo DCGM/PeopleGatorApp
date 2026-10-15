@@ -46,6 +46,14 @@ browser focus rendering or light/dark appearance. Use the synthetic exploration
 and API smoke example in [Start here](START_HERE.md#explore-the-synthetic-instance)
 for manual checks until those journeys have browser automation.
 
+For frontend features or user-visible frontend changes, record actual browser
+checks and embed labeled desktop **and** mobile screenshots of each major changed
+screen/component and relevant state in the PR, following the
+[PR evidence policy](../CONTRIBUTING.md#writing-a-pull-request). Use the running
+synthetic instance at the PR revision. Screenshots show appearance; they do not
+replace automated tests or establish interaction/accessibility results. Required
+capture blockers keep the PR draft.
+
 ## Running and interpreting checks
 
 Install the pinned dependencies using the
@@ -181,14 +189,19 @@ scope before changing tooling or CI.
 
 Before implementation, map the issue's acceptance criteria to test levels and
 record the chosen commands, fixtures and service prerequisites in its Validation
-plan. Select checks using the table above and the contribution guidelines.
+plan. Plan applicable desktop/mobile screenshot evidence and manual browser
+checks separately from automated tests, using the table above and the
+[PR guidance](../CONTRIBUTING.md#writing-a-pull-request).
 
 During implementation, run focused checks and add regressions/acceptance coverage
 as each coherent unit is completed. Run relevant broader checks before the PR is
 ready; address test and CI findings with focused commits. Avoid re-running
 unaffected suites solely to produce a longer list of checks.
 
-In the PR, report executed results, skips and limitations, including manual
-browser checks and optional services that were unavailable. Keep these results
-separate from proposed tests. Update this guide when the runner, coverage
-boundaries, live-test prerequisites or CI execution change.
+Use the [default PR template](../.github/pull_request_template.md) to report
+executed results, skips and limitations, including actual manual browser checks
+and optional services that were unavailable. Include required desktop/mobile
+screenshots as separate visual evidence, or explain an applicable exemption;
+blocked required captures keep the PR draft. Keep these results separate from
+proposed tests. Update this guide when the runner, coverage boundaries, live-test
+prerequisites or CI execution change.

@@ -33,9 +33,64 @@ limitations in the PR.
    ready. Scope commits to the issue and explain resulting behavior.
 4. Push the branch and open a PR targeting `main`. Link the issue (for example
    `Closes #2`), summarize the behavior and record checks and material limitations.
-   Use a draft PR while incomplete.
+   Follow [Writing a pull request](#writing-a-pull-request) and the default
+   template, including required desktop/mobile evidence. Use a draft PR while
+   incomplete.
 5. Address review and CI failures with further commits. Keep the PR description
    current. Merge only with authorization; do not push implementation to `main`.
+
+## Writing a pull request
+
+Use the [default PR template](.github/pull_request_template.md). Until it is
+available on `main`, copy its contents from the issue branch into the PR body;
+also use it when creating a PR through the CLI. Keep author prompts in HTML
+comments or remove them after filling the sections. Start every PR description
+with **Solution TL;DR** and keep it current as the implementation changes.
+
+| Section | What to include |
+| --- | --- |
+| Solution TL;DR | One to three sentences explaining the problem solved and resulting behavior; include a concrete before/after example when useful. |
+| Related issue | `Closes #N` when the PR completes the issue; `Refs #N` for partial work or a roadmap item that must remain open. Link other dependencies when relevant. |
+| Changes | Meaningful changes in the final implementation and design choices/tradeoffs needed for review, rather than a chronological work log. |
+| Validation | Exact checks actually run and outcomes, relevant manual/browser results and skipped/blocked checks with reasons. Keep plans separate from executed passes; link CI evidence where useful. |
+| Screenshots | Embed the required desktop and mobile evidence described below, or briefly explain an applicable exemption. |
+| Impact and limitations | Applicable API/schema/client/migration effects, preview-seed scenario and documentation updates, rollout/operator steps and known limitations. Use brief, explained `Not applicable` responses for conditional items. |
+
+Complete the template's short checklist for issue linkage, relevant validation,
+screenshots when required, and applicable seed/contract/documentation updates.
+Describe the final change so reviewers can assess it without reading the
+conversation or reconstructing it from commits. Use the
+[testing strategy](docs/TEST.md), [seed requirements](AGENTS.md#keeping-pull-request-previews-representative)
+and [seed guide](people-gator-api/docs/PREVIEW-SEEDING.md) for detailed policies.
+
+### Frontend screenshot evidence
+
+Every frontend feature or user-visible frontend change must include screenshots
+of each major changed screen, component or interaction state in **both desktop
+and mobile views**. An unrelated page or desktop-only evidence is insufficient.
+
+- Capture the actual running application from the PR revision using synthetic
+  seeded data in a [local instance](docs/DEVELOPMENT.md#readiness-and-first-checks)
+  or its PR preview. Use real browser captures, not mockups; exclude private data
+  and credentials.
+- Label each capture with the feature/state and viewport dimensions in CSS
+  pixels. Suggested defaults are desktop **1440 × 900** and mobile **390 × 844**;
+  document other dimensions if used. Responsive filter changes must exercise the
+  existing below-640px mobile behavior.
+- Show the resulting UI and important changed states, such as expanded mobile
+  filters or an open assignment dialog. For visual bug fixes, add before evidence
+  when practical alongside the required after captures. Include light/dark
+  evidence when theme behavior changes.
+- Embed images in the PR description with meaningful alt text/captions. Preview
+  URLs and videos may supplement screenshots. Update evidence when later commits
+  materially change the UI.
+- Backend-only, documentation-only and frontend-internal changes with no rendered
+  UI impact may mark screenshots `Not applicable` with a brief reason.
+  User-visible frontend changes cannot use this exemption. If capture is blocked,
+  explain the blocker and keep the PR draft until required evidence is supplied.
+- Screenshots supplement relevant tests and actual manual keyboard/responsive
+  checks. Report those checks separately; a static image alone does not verify
+  interaction or accessibility.
 
 ## Checks and contracts
 
