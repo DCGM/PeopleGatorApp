@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Installed preview-host controller. Uses only Python's standard library.
+"""Versioned preview-host controller. Uses only Python's standard library.
 
-Run this trusted copy, never a copy checked out from a pull request. GitHub API
+Run a published reviewed release, never a pull-request checkout. GitHub API
 metadata selects images; PRs cannot supply Compose files or host commands.
 """
 
