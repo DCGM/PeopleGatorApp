@@ -10,5 +10,10 @@
   "otel_http_endpoint": "http://lgtm:4318",
   "preview_log_port": 24224,
   "pgadmin_host": "pgadmin-preview.peoplegator.dev",
-  "pgadmin_email": "admin@peoplegator.dev"
+  "pgadmin_email": "admin@peoplegator.dev",
+  "staging": {
+    "host": "staging.peoplegator.dev",
+    "state_dir": "/var/lib/people-gator-staging",
+    "private_dir": "/opt/people-gator-staging"
+  }
 }
