@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -33,6 +34,7 @@ class Staging(Controller):
         self.host = staging.get("host", "staging.peoplegator.dev")
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.host) or self.host.endswith("." + self.domain):
             raise ValueError("Staging needs its independent hostname")
+        self.worker_label = "people-gator.staging.worker=" + hashlib.sha256(str(self.staging_root.resolve()).encode()).hexdigest()[:16]
         self.settings = staging
         private = Path(staging["private_dir"])
         if not private.is_absolute() or private.is_relative_to(self.root) or private.is_relative_to(self.staging_root):
@@ -127,7 +129,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         files = {"download": ["backup-source.json"], "auth": ["credential-input.json"],
                  "sanitize": ["media-policy.json", "media-source.json"], "validate": []}[action]
         args = ["docker", "run", "--rm", "--log-driver", "none", "--read-only", "--cap-drop", "ALL",
-                "--label", "people-gator.staging.worker=true", "--cap-add", "CHOWN", "--cap-add", "DAC_OVERRIDE", "--cap-add", "FOWNER", "--security-opt", "no-new-privileges:true", "--user", "0:0",
+                "--label", self.worker_label, "--cap-add", "CHOWN", "--cap-add", "DAC_OVERRIDE", "--cap-add", "FOWNER", "--security-opt", "no-new-privileges:true", "--user", "0:0",
                 "--tmpfs", "/tmp:size=256m,mode=1777", "--entrypoint", "python",
                 "--mount", f"type=bind,src={INSTALL_DIR / 'snapshot.py'},dst=/snapshot.py,readonly"]
         if action in {"auth", "sanitize", "validate"}:
@@ -232,7 +234,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         # A killed runner/controller can leave a detached preparation worker alive.
         # Holding the host lock, remove only our explicitly labelled workers before
         # another attempt can write the independent credential store.
-        ids = self.command(["docker", "ps", "-aq", "--filter", "label=people-gator.staging.worker=true"]).split()
+        ids = self.command(["docker", "ps", "-aq", "--filter", "label=" + self.worker_label]).split()
         if ids:
             if any(not re.fullmatch(r"[a-f0-9]{12,64}", value) for value in ids):
                 raise ValueError("Invalid abandoned-worker identity")
