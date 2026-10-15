@@ -1,5 +1,5 @@
 {
-  "repository": "DCGM/people_gator",
+  "repository": "DCGM/PeopleGatorApp",
   "state_dir": "/var/lib/people-gator-preview",
   "domain": "preview.peoplegator.dev",
   "web_network": "web",

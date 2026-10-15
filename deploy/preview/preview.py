@@ -17,7 +17,9 @@ import secrets
 import shutil
 import subprocess
 import sys
+import time
 from typing import TypedDict
+import urllib.error
 import urllib.request
 
 
@@ -56,28 +58,88 @@ class Controller:
         self.repository = config["repository"]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repository):
             raise ValueError("Invalid GitHub repository")
+        workflow_repository = os.environ.get("GITHUB_REPOSITORY")
+        if workflow_repository and self.repository.lower() != workflow_repository.lower():
+            raise ValueError(
+                f"Configured repository {self.repository} does not match GITHUB_REPOSITORY "
+                f"{workflow_repository!r}. An operator must update only the repository field "
+                "in the installed config.json to the workflow repository, preserving all "
+                "other settings, state and passwords. See deploy/preview/README.md."
+            )
+        self._access_checked = False
         self.root = Path(config["state_dir"])
         if not self.root.is_absolute():
             raise ValueError("state_dir must be absolute")
         self.domain = config.get("domain", "preview.peoplegator.dev")
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.domain):
             raise ValueError("Invalid preview domain")
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def api(self, endpoint: str):
         token = os.environ.get("GH_TOKEN")
         if not token:
             raise ValueError("GH_TOKEN is required for GitHub lifecycle commands")
+        if not re.fullmatch(r"[!-~]+", token):
+            raise ValueError("GH_TOKEN must contain a token without whitespace or control characters")
+        url = f"https://api.github.com/repos/{self.repository}"
+        if endpoint:
+            url += f"/{endpoint}"
         request = urllib.request.Request(
-            f"https://api.github.com/repos/{self.repository}/{endpoint}",
+            url,
             headers={
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "people-gator-preview",
             },
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
+        # Only idempotent reads are retried. Never retry permission/not-found
+        # responses or interpret them as a closed PR, including during cleanup.
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as error:
+                request_id = error.headers.get("X-GitHub-Request-Id", "")
+                if not re.fullmatch(r"[A-Za-z0-9:-]{1,200}", request_id):
+                    request_id = "unavailable"
+                message = (
+                    f"GitHub API GET {url} failed: HTTP {error.code}; "
+                    f"GitHub request ID: {request_id}."
+                )
+                if error.code in {401, 403, 404}:
+                    message += (
+                        " Check config.json repository against GITHUB_REPOSITORY, then "
+                        "the job token's repository access and contents/actions/pull-requests "
+                        "read permissions. A 404 may mean missing access or a missing resource; "
+                        "it does not establish PR closure."
+                    )
+                transient = error.code in {500, 502, 503, 504}
+                error.close()
+            except (urllib.error.URLError, TimeoutError):
+                # Exception reasons and response bodies may contain credentials
+                # or proxy details. Log only our own endpoint and fixed text.
+                message = f"GitHub API GET {url} failed: network error or timeout."
+                transient = True
+            except ValueError:
+                raise RuntimeError(f"GitHub API GET {url} returned invalid JSON") from None
+            message = message.replace(token, "[REDACTED]")
+            if not transient or attempt == 2:
+                raise RuntimeError(message) from None
+            delay = 2 ** attempt
+            print(f"{message} Retrying in {delay}s ({attempt + 2}/3).", file=sys.stderr, flush=True)
+            time.sleep(delay)
+
+    def check_access(self) -> None:
+        if self._access_checked:
+            return
+        repository = self.api("")
+        if not isinstance(repository, dict) or repository.get("full_name", "").lower() != self.repository.lower():
+            raise ValueError(
+                "GitHub returned a different repository identity. Update the installed "
+                "config.json repository field to its current full name before retrying."
+            )
+        self._access_checked = True
+        print(f"GitHub repository access verified: {self.repository}", flush=True)
 
     def command(self, args: list[str], *, sql: str | None = None) -> str:
         # Avoid ambient Compose interpolation variables overriding private files.
@@ -132,6 +194,7 @@ class Controller:
         return "".join(f"{key}='{value}'\n" for key, value in values.items())
 
     def init(self) -> None:
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         env_file = self.root / "infrastructure.env"
         # Upgrade old unquoted environment files without changing DB credentials.
         existing = {}
@@ -243,6 +306,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         return self.dotenv(values)
 
     def deploy(self, run_id: int) -> None:
+        self.check_access()
         run, candidates = self.eligible_run(run_id)
         current = [number for number in candidates if self.current_pr(number, run["head_sha"])]
         if not current:
@@ -324,6 +388,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         print(f"Removed preview, storage, database and role for PR #{number}")
 
     def cleanup(self, number: int) -> None:
+        self.check_access()
         pr = self.api(f"pulls/{positive_int(number)}")
         if pr["state"] != "closed":
             print(f"PR #{number} is open; ignoring stale close event")
@@ -331,6 +396,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         self.remove(number)
 
     def reconcile(self) -> None:
+        self.check_access()
         # Individual API reads avoid accidentally deleting open PRs on pagination
         # or partial-list failures. API errors fail closed: no inferred closures.
         for directory in sorted(self.root.glob("pr-*")):
@@ -345,6 +411,7 @@ def main() -> None:
     parser.add_argument("--config", default=os.environ.get("PREVIEW_CONFIG", str(INSTALL_DIR / "config.json")))
     subparsers = parser.add_subparsers(dest="action", required=True)
     subparsers.add_parser("init")
+    subparsers.add_parser("check-access")
     subparsers.add_parser("reconcile")
     deploy = subparsers.add_parser("deploy")
     deploy.add_argument("--run-id", type=positive_int, required=True)
@@ -352,6 +419,10 @@ def main() -> None:
     cleanup.add_argument("--pr", type=positive_int, required=True)
     args = parser.parse_args()
     controller = Controller(json.loads(Path(args.config).read_text()))
+    if args.action == "check-access":
+        controller.check_access()
+        return
+    controller.root.mkdir(parents=True, exist_ok=True, mode=0o700)
     # Also serialize manual/operator invocations against GitHub lifecycle jobs.
     with (controller.root / "controller.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

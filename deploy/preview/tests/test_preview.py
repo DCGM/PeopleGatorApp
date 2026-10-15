@@ -1,6 +1,8 @@
 """Exercise lifecycle races, rejected inputs, retry behavior and Compose output."""
 
 import importlib.util
+import io
+from contextlib import redirect_stderr
 import json
 import os
 from pathlib import Path
@@ -8,7 +10,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+import urllib.error
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "preview.py"
@@ -17,21 +20,172 @@ preview = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(preview)
 SHA = "a" * 40
 IMAGES = {
-    component: f"ghcr.io/dcgm/people_gator-{component}@sha256:{'b' * 64}"
+    component: f"ghcr.io/dcgm/peoplegatorapp-{component}@sha256:{'b' * 64}"
     for component in ("frontend", "backend")
 }
 RUN = {
     "id": 100, "run_attempt": 1, "workflow_id": 5, "conclusion": "success",
     "event": "pull_request", "head_sha": SHA,
-    "head_repository": {"full_name": "DCGM/people_gator"},
+    "head_repository": {"full_name": "DCGM/PeopleGatorApp"},
     "pull_requests": [{"number": 123}],
 }
 
 
-def pull_request(*, state="open", sha=SHA, repository="DCGM/people_gator"):
+def pull_request(*, state="open", sha=SHA, repository="DCGM/PeopleGatorApp"):
     return {"number": 123, "state": state, "head": {
         "sha": sha, "repo": {"full_name": repository},
     }}
+
+
+def response(data):
+    return io.BytesIO(json.dumps(data).encode())
+
+
+class GitHubAccessTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.environment = patch.dict(os.environ, {
+            "GH_TOKEN": "synthetic_secret_token", "GITHUB_REPOSITORY": "DCGM/PeopleGatorApp",
+        })
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+        self.config = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root)}
+        self.controller = preview.Controller(self.config)
+        self.controller.command = Mock()
+        self.controller.sql = Mock()
+
+    def error(self, status, *, request_id="ABCD:1234:5678"):
+        return urllib.error.HTTPError(
+            "https://untrusted.invalid/synthetic_secret_token", status,
+            "synthetic_secret_token", {"X-GitHub-Request-Id": request_id},
+            io.BytesIO(b'synthetic_secret_token'),
+        )
+
+    def test_mismatch_is_rejected_before_creating_state_or_making_requests(self):
+        with patch.object(preview.urllib.request, "urlopen") as urlopen:
+            with self.assertRaisesRegex(ValueError, "does not match GITHUB_REPOSITORY.*operator"):
+                preview.Controller({**self.config, "repository": "DCGM/people_gator",
+                                    "state_dir": str(self.root / "untouched")})
+            self.assertFalse((self.root / "untouched").exists())
+            urlopen.assert_not_called()
+
+    def test_case_insensitive_repository_identity_and_authenticated_request(self):
+        with patch.object(preview.urllib.request, "urlopen", return_value=response(
+            {"full_name": "dcgm/peoplegatorapp"}
+        )) as urlopen:
+            self.controller.check_access()
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.github.com/repos/DCGM/PeopleGatorApp")
+        self.assertEqual(request.get_header("Authorization"), "Bearer synthetic_secret_token")
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 30)
+
+    def test_redirected_repository_identity_is_rejected(self):
+        with patch.object(preview.urllib.request, "urlopen", return_value=response(
+            {"full_name": "DCGM/renamed-repo"}
+        )), self.assertRaisesRegex(ValueError, "different repository identity"):
+            self.controller.check_access()
+
+    def test_missing_and_malformed_tokens_fail_even_with_no_previews(self):
+        for token in ("", "bad\ntoken", " token "):
+            with self.subTest(token=repr(token)), patch.dict(os.environ, {"GH_TOKEN": token}):
+                with patch.object(preview.urllib.request, "urlopen") as urlopen:
+                    with self.assertRaisesRegex(ValueError, "GH_TOKEN"):
+                        self.controller.reconcile()
+                    urlopen.assert_not_called()
+
+    def test_empty_reconciliation_still_verifies_repository_access(self):
+        with patch.object(preview.urllib.request, "urlopen", return_value=response(
+            {"full_name": "DCGM/PeopleGatorApp"}
+        )) as urlopen:
+            self.controller.reconcile()
+            urlopen.assert_called_once()
+
+    def test_access_check_does_not_create_state_directory(self):
+        config = self.root / "config.json"
+        state = self.root / "not-created"
+        config.write_text(json.dumps({**self.config, "state_dir": str(state)}))
+        with patch.object(preview.urllib.request, "urlopen", return_value=response(
+            {"full_name": "DCGM/PeopleGatorApp"}
+        )), patch.object(preview.sys, "argv", ["preview.py", "--config", str(config), "check-access"]):
+            # main sets umask for real lifecycle writes; don't alter the test process.
+            with patch.object(preview.os, "umask"):
+                preview.main()
+        self.assertFalse(state.exists())
+
+    def test_access_errors_preserve_state_in_every_lifecycle_path(self):
+        directory = self.root / "pr-123"
+        directory.mkdir()
+        (directory / "state.json").write_text('{"password":"retained-password"}')
+        (directory / "compose.env").write_text("retained running configuration")
+        (directory / "candidate.env").write_text("retained candidate configuration")
+        (directory / "media").mkdir()
+        (directory / "media" / "example").write_bytes(b"retained media")
+        def snapshot():
+            return {p.relative_to(self.root): p.read_bytes()
+                    for p in self.root.rglob("*") if p.is_file()}
+        before = snapshot()
+        for status in (401, 403, 404):
+            for action in (lambda: self.controller.deploy(100),
+                           lambda: self.controller.cleanup(123), self.controller.reconcile):
+                # Exercise both repository preflight failure and PR/run access
+                # failures after repository access has already succeeded.
+                for preflight in (True, False):
+                    self.controller._access_checked = False
+                    replies = ([] if preflight else [response({"full_name": "DCGM/PeopleGatorApp"})])
+                    with self.subTest(status=status, action=action, preflight=preflight):
+                        with patch.object(preview.urllib.request, "urlopen",
+                                          side_effect=[*replies, self.error(status)]) as urlopen:
+                            with self.assertRaises(RuntimeError) as raised:
+                                action()
+                        message = str(raised.exception)
+                        self.assertIn(f"HTTP {status}", message)
+                        self.assertIn("GET https://api.github.com/repos/DCGM/PeopleGatorApp", message)
+                        self.assertIn("ABCD:1234:5678", message)
+                        if not preflight:
+                            self.assertRegex(message, r"/(pulls/123|actions/runs/100)")
+                        self.assertNotIn("synthetic_secret_token", message)
+                        self.assertNotIn("retained-password", message)
+                        self.assertEqual(urlopen.call_count, 1 if preflight else 2)
+                        self.assertEqual(snapshot(), before)
+        self.controller.command.assert_not_called()
+        self.controller.sql.assert_not_called()
+
+    def test_transient_errors_retry_but_are_bounded_and_sanitized(self):
+        failures = [self.error(502), urllib.error.URLError("synthetic_secret_token"),
+                    TimeoutError("synthetic_secret_token")]
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                log = io.StringIO()
+                with patch.object(preview.urllib.request, "urlopen", side_effect=failure) as urlopen, \
+                     patch.object(preview.time, "sleep") as sleep, redirect_stderr(log):
+                    with self.assertRaises(RuntimeError) as raised:
+                        self.controller.api("pulls/123")
+                self.assertEqual(urlopen.call_count, 3)
+                self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
+                self.assertNotIn("synthetic_secret_token", log.getvalue() + str(raised.exception))
+
+    def test_transient_error_can_recover(self):
+        with patch.object(preview.urllib.request, "urlopen", side_effect=[
+            self.error(503), response(pull_request()),
+        ]), patch.object(preview.time, "sleep"):
+            self.assertEqual(self.controller.api("pulls/123")["state"], "open")
+
+    def test_request_id_cannot_inject_logs_or_expose_token(self):
+        for request_id in ("evil\n::warning::injected", "synthetic_secret_token"):
+            with patch.object(preview.urllib.request, "urlopen", side_effect=self.error(
+                404, request_id=request_id,
+            )), self.assertRaises(RuntimeError) as raised:
+                self.controller.api("pulls/123")
+            self.assertNotIn(request_id, str(raised.exception))
+
+    def test_invalid_json_does_not_expose_response_body(self):
+        with patch.object(preview.urllib.request, "urlopen", return_value=io.BytesIO(
+            b"synthetic_secret_token"
+        )), self.assertRaisesRegex(RuntimeError, "returned invalid JSON") as raised:
+            self.controller.api("pulls/123")
+        self.assertNotIn("synthetic_secret_token", str(raised.exception))
 
 
 class LifecycleTests(unittest.TestCase):
@@ -42,12 +196,13 @@ class LifecycleTests(unittest.TestCase):
         self.users = self.root / "users.json"
         self.users.write_text("{}")
         self.controller = preview.Controller({
-            "repository": "DCGM/people_gator", "state_dir": str(self.root),
+            "repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
             "users_file": str(self.users),
         })
         self.controller.command = Mock(return_value="")
         self.controller.sql = Mock(return_value="")
         self.controller.api = Mock(side_effect=lambda endpoint: (
+            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == "" else
             RUN if endpoint == "actions/runs/100" else
             {"path": ".github/workflows/pr-ci.yml"} if endpoint == "actions/workflows/5"
             else pull_request()
@@ -89,11 +244,49 @@ class LifecycleTests(unittest.TestCase):
         self.controller.command.side_effect = ["", json.dumps([inspected])]
         with self.assertRaises(ValueError):
             self.controller.image("frontend", RUN)
+
         inspected["Config"]["Labels"]["org.opencontainers.image.revision"] = SHA
         inspected["RepoDigests"] = ["ghcr.io/attacker/frontend@sha256:" + "b" * 64]
         self.controller.command.side_effect = ["", json.dumps([inspected])]
         with self.assertRaises(ValueError):
             self.controller.image("frontend", RUN)
+
+    def test_deploy_repeats_and_populated_reconciliation_preserve_open_preview(self):
+        (self.root / "infrastructure.env").write_text("existing infrastructure credentials")
+        directory = self.seed_preview()
+        inspected = [{"Config": {"Labels": {"org.opencontainers.image.revision": SHA}},
+                      "RepoDigests": [digest]} for digest in IMAGES.values()]
+        self.controller.command.side_effect = lambda args, **kwargs: (
+            json.dumps([inspected[0 if "frontend" in args[-1] else 1]])
+            if args[:3] == ["docker", "image", "inspect"] else ""
+        )
+        self.controller.deploy(100)
+        expected_tags = {f"ghcr.io/dcgm/peoplegatorapp-{component}:run-100-1"
+                         for component in ("frontend", "backend")}
+        self.assertEqual({call.args[0][-1] for call in self.controller.command.call_args_list
+                          if call.args[0][:2] == ["docker", "pull"]}, expected_tags)
+        state = (directory / "state.json").read_bytes()
+        environment = (directory / "compose.env").read_bytes()
+        self.controller.command.reset_mock()
+        self.controller.sql.reset_mock()
+        self.controller.deploy(100)
+        self.controller.reconcile()
+        self.assertEqual((directory / "state.json").read_bytes(), state)
+        self.assertEqual((directory / "compose.env").read_bytes(), environment)
+        self.assertEqual(json.loads(state)["password"], "c" * 64)
+        self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
+        self.controller.sql.assert_not_called()
+        # Reconciliation removes only the closed PR; repeating closure is safe.
+        closed = self.root / "pr-124"
+        closed.mkdir()
+        (closed / "candidate.env").write_text("interrupted deployment")
+        self.controller.api.side_effect = lambda endpoint: (
+            pull_request(state="closed") if endpoint == "pulls/124" else pull_request()
+        )
+        self.controller.reconcile()
+        self.controller.cleanup(124)
+        self.assertFalse(closed.exists())
+        self.assertEqual((directory / "state.json").read_bytes(), state)
 
     def test_updates_preserve_password_and_ignore_older_runs(self):
         directory = self.seed_preview()
@@ -212,8 +405,10 @@ class LifecycleTests(unittest.TestCase):
 
     def test_failed_cleanup_keeps_state_for_reconciliation(self):
         directory = self.seed_preview()
-        self.controller.api.side_effect = None
-        self.controller.api.return_value = pull_request(state="closed")
+        self.controller.api.side_effect = lambda endpoint: (
+            {"full_name": "DCGM/PeopleGatorApp"} if endpoint == ""
+            else pull_request(state="closed")
+        )
         self.controller.sql.side_effect = RuntimeError("database unavailable")
         with self.assertRaises(RuntimeError):
             self.controller.cleanup(123)
@@ -285,7 +480,7 @@ class DatabaseIsolationTests(unittest.TestCase):
         container = os.environ["PREVIEW_TEST_POSTGRES_CONTAINER"]
         admin = os.environ.get("PREVIEW_TEST_POSTGRES_USER", "ci")
         with tempfile.TemporaryDirectory() as root:
-            controller = preview.Controller({"repository": "DCGM/people_gator", "state_dir": root})
+            controller = preview.Controller({"repository": "DCGM/PeopleGatorApp", "state_dir": root})
 
             def sql(statements, database="postgres"):
                 return controller.command([
