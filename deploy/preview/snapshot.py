@@ -162,6 +162,16 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
     from people_gator_api.schemas.sources import document_url, page_url
     from PIL import Image
 
+    extra_schemas = await connection.fetch("""SELECT nspname FROM pg_namespace
+        WHERE nspname NOT IN ('public','information_schema') AND nspname NOT LIKE 'pg_%'""")
+    if extra_schemas:
+        raise ValueError("Unclassified snapshot schema")
+    routines = await connection.fetchval("""SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.proname NOT IN ('demo_unaccent','pg_demo_clear_entity_link')
+        AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid='pg_proc'::regclass
+            AND d.objid=p.oid AND d.deptype='e')""")
+    if routines:
+        raise ValueError("Unclassified snapshot routine")
     columns = await connection.fetch("""SELECT table_name, column_name FROM information_schema.columns
         WHERE table_schema='public'""")
     allowed = SANITIZED_COLUMNS
