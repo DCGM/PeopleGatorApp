@@ -1,5 +1,9 @@
 # Deployment entry points
 
+For automatic main deployments and explicit production-snapshot initialization,
+see [Staging](preview/STAGING.md). Staging retains its own database, credentials and media;
+PR previews continue to use the automatic synthetic seed.
+
 Use [Deployment](../docs/DEPLOYMENT.md) for workflow selection, image build/start
 order, configuration and CI/CD. Use [Development](../docs/DEVELOPMENT.md) for local
 Compose Watch or native API/Vite development.
