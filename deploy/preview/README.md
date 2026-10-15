@@ -1,5 +1,9 @@
 # Pull request previews
 
+For automatic main deployments and explicit production-snapshot initialization,
+see [Staging](STAGING.md). Staging retains its own database, credentials and media;
+PR previews continue to use the automatic synthetic seed.
+
 Opening, reopening, or updating a PR runs frontend type checks and unit tests,
 backend unit/integration/migration tests, and preview-controller tests on a
 self-hosted CI runner. Only after these pass does that runner build the existing
