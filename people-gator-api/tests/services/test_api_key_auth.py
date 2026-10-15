@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -13,7 +14,7 @@ from people_gator_api.app import get_app
 from people_gator_api.schemas.api_keys import APIKeyResponse
 from people_gator_api.schemas.users import UserResponse
 from people_gator_api.services import auth_service
-from people_gator_api.services.database_service import get_database
+from people_gator_api.services.database_service import get_database_context
 from people_gator_api.settings import settings, StorageSettings, LocalStorageSettings
 
 
@@ -63,7 +64,11 @@ def authenticated_client(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(auth_service, "verify_access_token", verify)
     app = FastAPI()
-    app.dependency_overrides[get_database] = lambda: database
+    @asynccontextmanager
+    async def database_context():
+        yield database
+
+    app.dependency_overrides[get_database_context] = lambda: database_context()
 
     @app.get("/browse")
     async def browse(actor: auth_service.BrowseActorDependency):
