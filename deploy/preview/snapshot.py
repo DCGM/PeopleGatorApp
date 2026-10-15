@@ -163,7 +163,7 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
     from PIL import Image
 
     extra_schemas = await connection.fetch("""SELECT nspname FROM pg_namespace
-        WHERE nspname NOT IN ('public','information_schema') AND nspname NOT LIKE 'pg_%'""")
+        WHERE nspname NOT IN ('public','information_schema') AND left(nspname,3)<>'pg_'""")
     if extra_schemas:
         raise ValueError("Unclassified snapshot schema")
     routines = await connection.fetchval("""SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
