@@ -362,17 +362,16 @@ onBeforeUnmount(() => {
 
     <section ref="viewerElement" class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
       aria-label="Pan and zoom document page">
-      <div class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)] p-2" role="toolbar"
-        aria-label="Scan tools" @pointerdown.stop @wheel.stop @keydown.stop>
-        <DocumentControls v-model:link-states="linkStates" :selected-line-index="selectedLineIndex" :line-count="transcription.length"
-          :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
-          :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
-          :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
-          :selected-language="selectedLanguage" :show-badge-names="showBadgeNames" @previous-line="previousLine"
-          @next-line="nextLine" @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom"
-          @reset-view="resetView" @select-translation="selectTranslation"
-          @toggle-badge-names="showBadgeNames = !showBadgeNames" />
-      </div>
+      <DocumentControls class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)] p-2"
+        @pointerdown.stop @wheel.stop @keydown.stop
+        v-model:link-states="linkStates" :selected-line-index="selectedLineIndex" :line-count="transcription.length"
+        :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
+        :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
+        :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
+        :selected-language="selectedLanguage" :show-badge-names="showBadgeNames" @previous-line="previousLine"
+        @next-line="nextLine" @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom"
+        @reset-view="resetView" @select-translation="selectTranslation"
+        @toggle-badge-names="showBadgeNames = !showBadgeNames" />
       <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
         <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
           :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
