@@ -166,7 +166,7 @@ The CLI's `scan-toolbar` link opens **Link state review / page 2** with verified
 and unassigned faces and mentions. The inline **Automatic**, **Manual** and
 **Verified** multi-select toggles sit beside navigation, zoom, Names and translation.
 Their icons stay directly available on mobile (labels appear at wide viewports);
-hover or focus for their accessible descriptions. The toolbar wraps within the
+each has an accessible name and a native title description. The toolbar wraps within the
 viewer, including below 640px, without sliders, active-filter tags or a generic
 clear-filters row. This scan-toolbar exception does not change the comboboxes,
 tags or mobile collapse behavior of actual search/filter panels.

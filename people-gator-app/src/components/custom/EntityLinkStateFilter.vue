@@ -38,18 +38,17 @@ function reset() {
       aria-label="Link state"
       @update:model-value="update"
     >
-      <UiTooltip
+      <ToggleGroupItem
         v-for="state in linkStates"
         :key="state"
-        :text="linkStateVisuals[state].accessible"
+        :value="state"
+        :aria-label="linkStateVisuals[state].label"
+        :title="linkStateVisuals[state].accessible"
+        class="gap-1"
       >
-        <ToggleGroupItem :value="state" :aria-label="linkStateVisuals[state].label" class="gap-1">
-          <component :is="linkStateVisuals[state].icon" class="size-3.5" aria-hidden="true" /><span
-            class="hidden xl:inline"
-            >{{ linkStateVisuals[state].label }}</span
-          >
-        </ToggleGroupItem>
-      </UiTooltip>
+        <component :is="linkStateVisuals[state].icon" class="size-3.5" aria-hidden="true" />
+        <span class="hidden xl:inline">{{ linkStateVisuals[state].label }}</span>
+      </ToggleGroupItem>
     </ToggleGroup>
     <UiTooltip
       text="All includes unassigned annotations. Selecting all three states includes assigned annotations only."

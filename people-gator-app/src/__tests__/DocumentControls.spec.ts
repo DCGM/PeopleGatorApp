@@ -43,8 +43,12 @@ describe('scan toolbar', () => {
     const state = (name: string) => wrapper.get(`button[aria-label="${name}"]`)
     const all = () => wrapper.findAll('button').find((button) => button.text() === 'All')!
     const expectSelection = (labels: string[]) => {
-      for (const label of ['Automatic', 'Manual', 'Verified'])
+      for (const label of ['Automatic', 'Manual', 'Verified']) {
         expect(state(label).attributes('aria-pressed')).toBe(String(labels.includes(label)))
+        // Tooltip triggers must not overwrite the state used by standard
+        // ToggleGroup styling with their own open/closed state.
+        expect(state(label).attributes('data-state')).toBe(labels.includes(label) ? 'on' : 'off')
+      }
       expect(all().attributes('aria-pressed')).toBe(String(labels.length === 0))
       expect(wrapper.find('[role="combobox"]').exists()).toBe(false)
       expect(wrapper.find('[data-slot="badge"]').exists()).toBe(false)
