@@ -24,10 +24,11 @@ concurrency:
 jobs:
   lifecycle:
     if: >-
-      github.event_name != 'workflow_run' ||
+      github.workflow_ref == format('{0}/.github/workflows/pr-preview.yml@refs/heads/main', github.repository) &&
+      (github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+       github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: [self-hosted, linux, x64, people-gator-preview]
     timeout-minutes: 20
     env:
@@ -38,7 +39,6 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       # Only the reviewed workflow revision is read here, never the PR head.
-      # The controller and Compose files still require an operator installation.
       - name: Read trusted preview deployment requirements
         uses: actions/checkout@v4
         with:
@@ -46,13 +46,15 @@ jobs:
           path: .preview-workflow
           sparse-checkout: deploy/preview
           persist-credentials: false
-      # Use reviewed code even while an older controller is installed. This is
-      # read-only preflight; lifecycle mutations still use the installed copy.
+      - name: Publish reviewed preview controller release
+        id: controller-release
+        run: python3 .preview-workflow/deploy/preview/release.py --revision "$GITHUB_WORKFLOW_SHA"
+      - name: Select preview controller release
+        env:
+          CONTROLLER_RELEASE: ${{ steps.controller-release.outputs.path }}
+        run: echo "PREVIEW_CONTROLLER=$CONTROLLER_RELEASE/preview.py" >> "$GITHUB_ENV"
       - name: Check preview repository and GitHub access
-        run: python3 .preview-workflow/deploy/preview/preview.py check-access
-      - name: Require installed preview seeding before deployment
-        if: github.event_name == 'workflow_run'
-        run: python3 .preview-workflow/deploy/preview/check_installation.py
+        run: python3 "$PREVIEW_CONTROLLER" check-access
       - name: Use temporary registry credentials
         id: registry-config
         if: github.event_name == 'workflow_run'
@@ -81,13 +83,13 @@ jobs:
         run: |
           case "$EVENT_NAME" in
             workflow_run)
-              python3 /opt/people-gator-preview/preview.py deploy --run-id "$RUN_ID"
+              python3 "$PREVIEW_CONTROLLER" deploy --run-id "$RUN_ID"
               ;;
             pull_request_target)
-              python3 /opt/people-gator-preview/preview.py cleanup --pr "$PR_NUMBER"
+              python3 "$PREVIEW_CONTROLLER" cleanup --pr "$PR_NUMBER"
               ;;
             schedule|workflow_dispatch)
-              python3 /opt/people-gator-preview/preview.py reconcile
+              python3 "$PREVIEW_CONTROLLER" reconcile
               ;;
             *) exit 2 ;;
           esac
