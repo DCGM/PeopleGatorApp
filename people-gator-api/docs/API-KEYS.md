@@ -41,7 +41,7 @@ IDs and names without granting access to user administration; `q` searches names
 Run `uv run alembic upgrade head` before starting in schema validation mode. The
 migration extends the complete-schema revision `c82e7f4a901d`. If the database was
 created in bootstrap mode and already has these tables, follow the
-[bootstrap adoption instructions](database-migrations.md) first.
+[bootstrap adoption instructions](DATABASE-MIGRATIONS.md) first.
 
 For the generated TypeScript client, select the method in the authentication
 callback because each operation lists both available schemes:
