@@ -54,7 +54,7 @@ defineEmits<{
   >
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Previous line"
         title="Previous line"
@@ -63,11 +63,11 @@ defineEmits<{
       >
         <ChevronUp />
       </Button>
-      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5 bg-background">
+      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5">
         <Rows3 class="size-3" /> Line
       </ButtonGroupText>
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Next line"
         title="Next line"
@@ -80,7 +80,7 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Previous face"
         title="Previous face"
@@ -89,11 +89,11 @@ defineEmits<{
       >
         <ChevronLeft />
       </Button>
-      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5 bg-background">
+      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5">
         <ScanFace class="size-3" /> Face
       </ButtonGroupText>
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Next face"
         title="Next face"
@@ -106,7 +106,7 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Zoom out"
         title="Zoom out"
@@ -115,11 +115,11 @@ defineEmits<{
       >
         <Minus />
       </Button>
-      <ButtonGroupText class="font-mono text-sm justify-center px-1 py-0.5 min-w-9 bg-background">
+      <ButtonGroupText class="font-mono text-sm justify-center px-1 py-0.5 min-w-9">
         {{ zoomPercent }}%
       </ButtonGroupText>
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Zoom in"
         title="Zoom in"
@@ -129,7 +129,7 @@ defineEmits<{
         <Plus />
       </Button>
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon-sm"
         aria-label="Center page"
         title="Center page"
@@ -141,14 +141,9 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="outline"
+        :variant="showBadgeNames ? 'default' : 'secondary'"
         size="sm"
         class="font-mono text-sm"
-        :class="
-          showBadgeNames
-            ? 'bg-muted text-foreground'
-            : 'bg-white/90 backdrop-blur-[50px] text-muted-foreground dark:bg-white/90 dark:text-slate-500'
-        "
         :aria-label="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
         :title="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
         :aria-pressed="showBadgeNames"
@@ -165,24 +160,19 @@ defineEmits<{
       <Button
         v-for="option in translationOptions"
         :key="option"
-        variant="outline"
+        :variant="
+          (option === 'off' ? !isTranslationOpen : isTranslationOpen && selectedLanguage === option)
+            ? 'default'
+            : 'secondary'
+        "
         size="sm"
         class="font-mono text-sm uppercase"
-        :class="
-          (option === 'off' ? !isTranslationOpen : isTranslationOpen && selectedLanguage === option)
-            ? 'bg-muted font-semibold text-foreground'
-            : 'bg-white/90 backdrop-blur-[50px] text-muted-foreground hover:text-foreground dark:bg-white/90 dark:text-slate-500'
-        "
         :aria-pressed="
           option === 'off' ? !isTranslationOpen : isTranslationOpen && selectedLanguage === option
         "
         @click="$emit('select-translation', option)"
       >
-        <Languages
-          v-if="option === 'off'"
-          class="size-[1.25em] transition-colors"
-          :class="isTranslationOpen ? 'text-secondary' : 'text-muted-foreground/50'"
-        />
+        <Languages v-if="option === 'off'" class="size-[1.25em]" />
         {{ option }}
       </Button>
     </ButtonGroup>

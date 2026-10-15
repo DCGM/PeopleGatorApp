@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { Check, ChevronsUpDown } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
 import { linkStates, linkStateVisuals, parseLinkStates } from '@/lib/entity-links'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -44,7 +44,7 @@ function reset() {
         :value="state"
         :aria-label="linkStateVisuals[state].label"
         :title="linkStateVisuals[state].accessible"
-        class="gap-1"
+        :class="[buttonVariants({ variant: 'secondary', size: 'sm' }), 'gap-1']"
       >
         <component :is="linkStateVisuals[state].icon" class="size-3.5" aria-hidden="true" />
         <span class="hidden xl:inline">{{ linkStateVisuals[state].label }}</span>
@@ -53,7 +53,11 @@ function reset() {
     <UiTooltip
       text="All includes unassigned annotations. Selecting all three states includes assigned annotations only."
     >
-      <Button variant="outline" size="sm" :aria-pressed="selected.length === 0" @click="reset"
+      <Button
+        :variant="selected.length === 0 ? 'default' : 'secondary'"
+        size="sm"
+        :aria-pressed="selected.length === 0"
+        @click="reset"
         >All</Button
       >
     </UiTooltip>
