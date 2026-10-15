@@ -141,6 +141,15 @@ class ReleaseTests(unittest.TestCase):
             self.publish(revision)
         self.assertEqual(list(self.releases.iterdir()), [])
 
+    def test_bundle_without_seed_service_cannot_be_published(self):
+        compose = self.bundle / "compose.pr.yaml"
+        compose.write_text(compose.read_text().replace("  seed:\n", "  obsolete-service:\n"))
+        revision = self.commit()
+        with self.assertRaisesRegex(ValueError, "missing required lifecycle services"):
+            self.publish(revision)
+        self.assertFalse((self.releases / revision).exists())
+        self.assertEqual(list(self.releases.glob(".staging-*")), [])
+
     def test_corrupted_or_symlinked_cached_release_is_not_overwritten(self):
         release = self.publish()
         controller = release / "preview.py"
@@ -197,6 +206,12 @@ class ReleaseTests(unittest.TestCase):
                 **base, "GITHUB_EVENT_NAME": "workflow_dispatch", **changes,
             }), self.assertRaisesRegex(ValueError, "main preview lifecycle"):
                 self.publish()
+        (self.bundle / "preview.py").write_text("# checkout HEAD differs from the workflow SHA\n")
+        self.git("add", ".")
+        self.git("commit", "-m", "Different checkout revision")
+        with patch.dict(os.environ, {**base, "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+             self.assertRaisesRegex(ValueError, "main preview lifecycle"):
+            self.publish()
 
 
 class WorkflowCredentialTests(unittest.TestCase):
