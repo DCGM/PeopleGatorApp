@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
+import { scanToolbarButtonClass } from './scan-toolbar'
 import type { EntityLinkState } from '@/client'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import {
@@ -54,7 +55,8 @@ defineEmits<{
   >
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Previous line"
         title="Previous line"
@@ -63,11 +65,12 @@ defineEmits<{
       >
         <ChevronUp />
       </Button>
-      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5">
+      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5 bg-background">
         <Rows3 class="size-3" /> Line
       </ButtonGroupText>
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Next line"
         title="Next line"
@@ -80,7 +83,8 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Previous face"
         title="Previous face"
@@ -89,11 +93,12 @@ defineEmits<{
       >
         <ChevronLeft />
       </Button>
-      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5">
+      <ButtonGroupText size="icon-sm" class="font-mono text-sm px-1 py-0.5 bg-background">
         <ScanFace class="size-3" /> Face
       </ButtonGroupText>
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Next face"
         title="Next face"
@@ -106,7 +111,8 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Zoom out"
         title="Zoom out"
@@ -115,11 +121,12 @@ defineEmits<{
       >
         <Minus />
       </Button>
-      <ButtonGroupText class="font-mono text-sm justify-center px-1 py-0.5 min-w-9">
+      <ButtonGroupText class="font-mono text-sm justify-center px-1 py-0.5 min-w-9 bg-background">
         {{ zoomPercent }}%
       </ButtonGroupText>
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Zoom in"
         title="Zoom in"
@@ -129,7 +136,8 @@ defineEmits<{
         <Plus />
       </Button>
       <Button
-        variant="secondary"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="icon-sm"
         aria-label="Center page"
         title="Center page"
@@ -141,7 +149,8 @@ defineEmits<{
 
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
-        :variant="showBadgeNames ? 'default' : 'secondary'"
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="sm"
         class="font-mono text-sm"
         :aria-label="showBadgeNames ? 'Hide overlay badge names' : 'Show overlay badge names'"
@@ -160,11 +169,8 @@ defineEmits<{
       <Button
         v-for="option in translationOptions"
         :key="option"
-        :variant="
-          (option === 'off' ? !isTranslationOpen : isTranslationOpen && selectedLanguage === option)
-            ? 'default'
-            : 'secondary'
-        "
+        variant="outline"
+        :class="scanToolbarButtonClass"
         size="sm"
         class="font-mono text-sm uppercase"
         :aria-pressed="
