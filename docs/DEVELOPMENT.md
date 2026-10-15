@@ -117,6 +117,12 @@ request through `/token/login` and verify `/api/v1/entities` returns fixtures;
 see [Start here](START_HERE.md). A running PID alone does not establish readiness.
 Codex onboarding supports local HTTP validation, not user-facing localhost links.
 
+Use this running synthetic instance or the PR preview to capture required
+desktop/mobile screenshots from the PR revision. Follow the
+[PR evidence policy](../CONTRIBUTING.md#writing-a-pull-request) for changed
+screens/states, viewport labels and embedding images; report actual browser
+checks separately from screenshots and keep blocked required captures in a draft PR.
+
 ## Test stores and validation
 
 The [testing strategy](TEST.md) explains current coverage, when to write each kind

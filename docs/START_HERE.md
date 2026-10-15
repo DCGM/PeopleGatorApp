@@ -82,6 +82,8 @@ Do not point destructive schema tests at your seed store or an external dataset.
 
 For a feature change, run its focused tests during implementation and the relevant
 CI checks before opening the PR. Add a usable synthetic fixture and preservation
-coverage for changed visible/data behavior, following AGENTS.md. Documentation
+coverage for changed visible/data behavior, following AGENTS.md. Use the
+[PR guidance and template](../CONTRIBUTING.md#writing-a-pull-request) to report
+results and applicable desktop/mobile screenshot evidence. Documentation
 changes need link/command/contract checks; do not change application behavior
 merely to make a documentation example appear to work.

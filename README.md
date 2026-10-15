@@ -120,4 +120,4 @@ workflow. There is no automatic production release workflow in this repository.
 | [Data maintenance](docs/DATA_MAINTENANCE.md) | Reviewed audits, repairs and recovery |
 | [Deployment](docs/DEPLOYMENT.md) | Docker, CI/CD and configuration reference |
 | [Observability](docs/OBSERVABILITY.md) | Logs, traces, metrics and dashboard queries |
-| [Contributing](CONTRIBUTING.md), [agent instructions](AGENTS.md) | Issue → branch → commits → PR workflow |
+| [Contributing](CONTRIBUTING.md), [agent instructions](AGENTS.md) | Issue → branch → commits → PR workflow, PR template and review evidence (including desktop/mobile screenshots) |

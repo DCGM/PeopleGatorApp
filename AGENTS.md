@@ -23,8 +23,12 @@ All future implementation jobs must follow this GitHub workflow:
    each commit to its functionality and use a clear message explaining the change.
 4. Push the issue branch and create or update its pull request. Link the GitHub
    issue, describe the resulting behavior, and record relevant validation and
-   material limitations. Keep the PR description current as the implementation
-   changes. Use a draft PR when work is still incomplete.
+   material limitations. Use the [default PR template](.github/pull_request_template.md)
+   and current [PR guidance](CONTRIBUTING.md#writing-a-pull-request), starting with
+   **Solution TL;DR** and including desktop/mobile screenshots for each major
+   frontend change as required there. Keep the PR description and evidence
+   current as the implementation changes. Use a draft PR when work is still
+   incomplete, including when required screenshot evidence is blocked.
 5. Address review and CI findings with further focused commits on the same issue
    branch. Finish through the pull request workflow; merge only when the user has
    authorized merging. Do not include unrelated work in the commits or PR.
