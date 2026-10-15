@@ -7,11 +7,17 @@ consume the default connection pool in one API worker (five pooled connections
 plus ten overflow connections). Independent searches, entity lists and uploads
 then wait for a connection. The health endpoint remains responsive.
 
-The fix scopes each upload's database session to its page lookup. The returned
+The fix scopes page image/layout GET and PUT database sessions to their page lookup. The returned
 `PageResponse` contains the canonical media identity and needs no live session.
 Closing the context returns the connection before reading the multipart file,
 preparing images, waiting for the existing page lock, or awaiting storage. The
-request-scoped dependency used by other routes is unchanged. No pool limits,
+request-scoped dependency used by other routes is unchanged. Authentication also
+uses an explicit short context: its detached actor/user/key schemas need no
+live session. This releases the user repository's transaction-scoped identity
+lock before media I/O, so concurrent bearer requests for the same user can
+authenticate independently. Context dependencies are uncached because each is
+single-use and authentication and media lookups require separate instances.
+No pool limits,
 storage timeouts, media receipts or per-page cache ordering are changed.
 
 ## Verify the fix

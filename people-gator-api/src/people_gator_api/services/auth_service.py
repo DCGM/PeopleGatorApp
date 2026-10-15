@@ -15,7 +15,8 @@ import argon2
 from pydantic import TypeAdapter
 from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserCreateRequest, UserResponse
-from people_gator_api.services.database_service import DatabaseDependency
+from people_gator_api.persistence.contracts import Database
+from people_gator_api.services.database_service import DatabaseContextDependency
 from people_gator_api.services.filesystem_service import get_filesystem
 from people_gator_api.services.jwk_service import (
     issue_access_token,
@@ -143,7 +144,7 @@ class AuthContext(GenericActor):
     scopes: set[str]
 
 
-async def authenticate_bearer(token: str, database: DatabaseDependency) -> AuthContext:
+async def authenticate_bearer(token: str, database: Database) -> AuthContext:
     try:
         claims = await verify_access_token(token)
     except HTTPException as exc:
@@ -157,7 +158,7 @@ async def authenticate_bearer(token: str, database: DatabaseDependency) -> AuthC
     return AuthContext(user_id=user.user_id, user=user, authentication_method="bearer", scopes=set(claims["scopes"]))
 
 
-async def authenticate_api_key(secret: str, database: DatabaseDependency, required_scopes: list[str]) -> AuthContext:
+async def authenticate_api_key(secret: str, database: Database, required_scopes: list[str]) -> AuthContext:
     identifier, record = await verify_api_key(secret)
     _check_scopes(required_scopes, record.scopes)
     user = await database.users.get_or_create(UserCreateRequest(
@@ -176,7 +177,7 @@ async def authenticate_api_key(secret: str, database: DatabaseDependency, requir
 async def get_auth_context(
     security_scopes: SecurityScopes,
     request: Request,
-    database: DatabaseDependency,
+    database_context: DatabaseContextDependency,
     token: Annotated[str | None, Security(security)],
     api_key: Annotated[str | None, Security(api_key_security)],
 ) -> AuthContext:
@@ -187,11 +188,15 @@ async def get_auth_context(
     if has_bearer:
         if not token or not token.strip():
             raise HTTPException(401, "Invalid bearer token", headers={"WWW-Authenticate": "Bearer"})
-        context = await authenticate_bearer(token, database)
+        # Authentication returns detached schemas. Release its connection and
+        # user-identity advisory lock before the handler waits on external I/O.
+        async with database_context as database:
+            context = await authenticate_bearer(token, database)
     elif has_key:
         if not api_key or not api_key.strip():
             raise HTTPException(401, "Invalid API key", headers={"WWW-Authenticate": "APIKey"})
-        context = await authenticate_api_key(api_key, database, security_scopes.scopes)
+        async with database_context as database:
+            context = await authenticate_api_key(api_key, database, security_scopes.scopes)
     else:
         raise HTTPException(401, "Missing credentials", headers={"WWW-Authenticate": "Bearer, APIKey"})
     _check_scopes(security_scopes.scopes, context.scopes)

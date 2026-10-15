@@ -320,13 +320,14 @@ async def get_page_route(
 )
 async def get_page_image_by_id_route(
     page_source_id: uuid.UUID,
-    database: DatabaseDependency,
+    database_context: DatabaseContextDependency,
     user: BrowseActorDependency,
     width: int | None = None,
 ) -> Response:
     """Stream one page image, optionally a cached JPEG derivative."""
     del user
-    page = await database.sources.get_page(page_source_id)
+    async with database_context as database:
+        page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     try:
@@ -384,12 +385,13 @@ async def put_page_image_by_id_route(
 )
 async def get_page_layout_by_id_route(
     page_source_id: uuid.UUID,
-    database: DatabaseDependency,
+    database_context: DatabaseContextDependency,
     user: BrowseActorDependency,
 ) -> PageLayoutModel:
     """Fetch the page layout for one page by its Source UUID."""
     del user
-    page = await database.sources.get_page(page_source_id)
+    async with database_context as database:
+        page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
     return await _fetch_layout_for_page(page)

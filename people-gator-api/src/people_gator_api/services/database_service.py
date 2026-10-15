@@ -219,7 +219,8 @@ def get_database_context() -> AbstractAsyncContextManager[Database]:
 
 
 type DatabaseContextDependency = Annotated[
-    AbstractAsyncContextManager[Database], Depends(get_database_context)
+    # Context managers are single-use; auth and handlers need distinct instances.
+    AbstractAsyncContextManager[Database], Depends(get_database_context, use_cache=False)
 ]
 
 
