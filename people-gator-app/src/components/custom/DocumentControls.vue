@@ -19,6 +19,7 @@ import {
 import type { Language } from '@/client'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group'
+import { Card } from '@/components/ui/card'
 
 defineProps<{
   selectedLineIndex: number
@@ -47,10 +48,10 @@ defineEmits<{
 </script>
 
 <template>
-  <div
+  <Card
     role="toolbar"
     aria-label="Scan tools"
-    class="flex max-w-full select-none flex-row flex-wrap items-center justify-center gap-2"
+    class="flex max-w-full select-none flex-row flex-wrap items-center justify-center gap-2 p-0"
   >
     <ButtonGroup class="shrink-0 drop-shadow-md">
       <Button
@@ -186,5 +187,5 @@ defineEmits<{
         {{ option }}
       </Button>
     </ButtonGroup>
-  </div>
+  </Card>
 </template>
