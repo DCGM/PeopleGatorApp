@@ -67,6 +67,17 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(result["sha256"], hashlib.sha256(raw).hexdigest())
             client.get_object.assert_called_once_with(Bucket="bucket", Key="key", IfMatch=identity["ETag"], VersionId="pinned-version")
 
+    def test_encrypted_object_identity_is_not_assumed_to_be_an_md5_checksum(self):
+        raw = b"PGDMP synthetic encrypted-object archive"
+        identity = {"ETag": '"' + "a" * 32 + '"', "ContentLength": len(raw), "ServerSideEncryption": "aws:kms",
+                    "Metadata": {"sha256": hashlib.sha256(raw).hexdigest()}}
+        client = Mock()
+        client.head_object.return_value = identity
+        client.get_object.return_value = {**identity, "Body": io.BytesIO(raw)}
+        with tempfile.TemporaryDirectory() as directory:
+            result = snapshot.download(client, "bucket", "key", Path(directory) / "dump")
+            self.assertEqual(result["sha256"], hashlib.sha256(raw).hexdigest())
+
     def test_changed_disappeared_truncated_and_corrupt_object_fail_without_fallback(self):
         identity = {"ETag": '"opaque-etag"', "ContentLength": 5, "VersionId": "v1"}
         for change in ("changed", "disappeared", "truncated", "checksum", "get_identity"):
