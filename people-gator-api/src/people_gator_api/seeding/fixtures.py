@@ -114,6 +114,7 @@ DOCUMENTS = (
     Document(
         "scan-only", "preview-mzk", "Unregistered scan collection", registered=False
     ),
+    Document("issue10-media", "preview-mzk", "Media upload sandbox"),
 )
 
 
@@ -281,6 +282,9 @@ PAGES = (
     Page("grouped-mirror-1", "grouped-mirror", 1),
     Page("legacy-document-1", "legacy-document", 1),
     Page("scan-only-1", "scan-only", 1),
+    # Evidence-free pages for replacing scans/layouts without invalidating boxes.
+    Page("media-upload-1", "issue10-media", 1),
+    Page("media-upload-2", "issue10-media", 2),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

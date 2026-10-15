@@ -368,6 +368,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     no_ocr_page = await database.sources.get_page(pages["faces-no-ocr-1"])
     if no_ocr_page is None:
         raise ValueError("Faces without OCR preview page is missing")
+    upload_page = await database.sources.get_page(pages["media-upload-1"])
+    if upload_page is None:
+        raise ValueError("Media upload preview page is missing")
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -377,6 +380,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "media-upload": (
+                f"/libraries/{upload_page.library}/documents/{upload_page.document_id}"
+                f"/pages/{upload_page.page_id}"
+            ),
             "faces-without-ocr": (
                 f"/libraries/{no_ocr_page.library}/documents/{no_ocr_page.document_id}"
                 f"/pages/{no_ocr_page.page_id}"
