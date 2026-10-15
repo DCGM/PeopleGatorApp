@@ -160,6 +160,28 @@ find the example even before loading its second scan. The existing Document
 awaiting scans demonstrates zero statistics. Seed deployment order remains
 storage initialization → migrations → seed → application startup.
 
+### Inline scan toolbar (#14)
+
+The CLI's `scan-toolbar` link opens **Link state review / page 2** with verified
+and unassigned faces and mentions. The inline **Automatic**, **Manual** and
+**Verified** multi-select toggles sit beside navigation, zoom, Names and translation.
+Their icons stay directly available on mobile (labels appear at wide viewports);
+hover or focus for their accessible descriptions. The toolbar wraps within the
+viewer, including below 640px, without sliders, active-filter tags or a generic
+clear-filters row. This scan-toolbar exception does not change the comboboxes,
+tags or mobile collapse behavior of actual search/filter panels.
+
+Compare `scan-toolbar-assigned` (all three toggles pressed, only the verified
+face and mention on page 2) with **All** (no states selected, also includes the
+unassigned face and mention). `scan-toolbar-union` opens page 1 with automatic
+and manual evidence selected together. Toggle each state, reset, reload and use
+browser back/forward to compare pressed states, URL and evidence. Check the
+neighboring tools and keyboard arrow/Space operation at desktop and mobile sizes.
+The existing linked records, deterministic local JPEGs and OCR layouts supply
+this scenario; adding these links never resets reviewed assignments or timestamps.
+Integration coverage queries faces and mentions for every state combination on
+both pages, checks media/verified OCR spans, and repeats the seed after a review edit.
+
 ### Faces without OCR
 
 The **Faces without OCR** document adds a synthetic scan with two unassigned

@@ -365,6 +365,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
+    toolbar_union_page = await database.sources.get_page(pages["links-1"])
+    if toolbar_union_page is None:
+        raise ValueError("Scan toolbar union preview page is missing")
     no_ocr_page = await database.sources.get_page(pages["faces-no-ocr-1"])
     if no_ocr_page is None:
         raise ValueError("Faces without OCR preview page is missing")
@@ -380,6 +383,23 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Reuse the maintained review records and local media: page 1 has
+            # automatic/manual evidence; page 2 has verified/unassigned evidence.
+            # These links add a toolbar scenario without rewriting reviewed data.
+            "scan-toolbar": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}"
+            ),
+            "scan-toolbar-union": (
+                f"/libraries/{toolbar_union_page.library}/documents/{toolbar_union_page.document_id}"
+                f"/pages/{toolbar_union_page.page_id}?"
+                + urlencode({"link_state": ["automatic", "manual"]}, doseq=True)
+            ),
+            "scan-toolbar-assigned": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}?"
+                + urlencode({"link_state": ["automatic", "manual", "verified"]}, doseq=True)
+            ),
             "media-upload": (
                 f"/libraries/{upload_page.library}/documents/{upload_page.document_id}"
                 f"/pages/{upload_page.page_id}"
