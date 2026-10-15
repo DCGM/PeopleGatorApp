@@ -188,13 +188,15 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             shutil.rmtree(work)
 
     def readiness(self):
-        for path in ("/api/v1/health", "/healthz", "/"):
+        for path in ("/api/v1/health", "/healthz", "/staging-login.html", "/"):
             for attempt in range(30):
                 try:
                     with urllib.request.urlopen(f"https://{self.host}{path}", timeout=5) as response:
                         body = response.read(1024 * 1024)
                         if path == "/api/v1/health" and json.loads(body).get("status") != "ok":
                             raise ValueError("API readiness returned an unexpected body")
+                        if path == "/staging-login.html" and b"<form>" not in body:
+                            raise ValueError("Staging sign-in page is unavailable")
                         if path == "/" and b"<html" not in body.lower():
                             raise ValueError("Frontend readiness did not return HTML")
                     break
