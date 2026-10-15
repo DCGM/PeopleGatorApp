@@ -26,7 +26,10 @@ https://github.com/DCGM/PeopleGatorApp/blob/main/docs/TEST.md -->
 captures from this PR revision with synthetic seeded data, locally or in its PR
 preview. Embed desktop AND mobile images for each major changed screen/component
 and relevant interaction state, with meaningful alt text/captions and CSS viewport
-dimensions (suggested: 1440 × 900 and 390 × 844). Repeat the slots below as needed.
+dimensions (suggested: 1440 × 900 and 390 × 844). Repeat the heading/table block
+below for each major feature/state. Replace the heading, image URLs and alt text;
+adjust viewport dimensions to match the captures. For an applicable exemption,
+remove the example block and briefly explain "Not applicable" instead.
 For responsive filters, exercise below-640px mobile behavior; include before
 evidence for visual fixes when practical and light/dark views for theme changes.
 Never include private data or credentials. URLs/videos only supplement images.
@@ -37,12 +40,13 @@ cannot. Screenshots supplement tests and actual keyboard/responsive checks;
 they do not prove interactions or accessibility. Full policy and local setup:
 https://github.com/DCGM/PeopleGatorApp/blob/main/CONTRIBUTING.md#writing-a-pull-request
 https://github.com/DCGM/PeopleGatorApp/blob/main/docs/DEVELOPMENT.md#readiness-and-first-checks
-
-Desktop — [feature/state], 1440 × 900 CSS pixels:
-![Desktop: describe the feature/state](uploaded-image-url)
-Mobile — [feature/state], 390 × 844 CSS pixels:
-![Mobile: describe the feature/state](uploaded-image-url)
 -->
+
+### [Feature/state shown]
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: describe the feature/state](desktop-image-url) | ![Mobile: describe the feature/state](mobile-image-url) |
 
 ## Impact and limitations
 
