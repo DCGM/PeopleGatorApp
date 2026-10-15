@@ -1,6 +1,6 @@
 # Issue 14: inline scan toolbar evidence
 
-After captures use the running application source at `ade7a52`, PostgreSQL 16
+After captures use the running application source at `eb791c8`, PostgreSQL 16
 with pgvector, and disposable local storage. Captured on 2026-10-15 in headless
 Chromium 153.0.8010.12 with device scale factor 1, after migration, two successful
 seed CLI runs and schema validation. `npm ci --prefer-offline --no-audit --no-fund`
@@ -27,7 +27,10 @@ All, deselection, direct links, reload and back/forward. Assertions checked URL
 values, pressed states, rendered face counts and assigned OCR mention fragments,
 and the absence of toolbar comboboxes, filter badges or collapse controls.
 Arrow keys moved focus between toggles; Space selected them without navigating
-the scan. Keyboard focus had the standard visible ring. Previous/next line and
+the scan. Keyboard focus had the standard visible ring. Pressed items retained their
+`data-state=on` styling; native titles avoid tooltip-trigger state collisions.
+The standard Card toolbar surface keeps icons readable over pale scans in both
+themes. Previous/next line and
 face, zoom in/out/reset, Names and translation on/off controls responded.
 Translation generation was not validated because no external service is configured.
 
