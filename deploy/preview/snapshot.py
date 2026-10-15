@@ -119,14 +119,15 @@ def download(client, bucket: str, key: str, destination: Path) -> dict:
     # TLS, exact length, optional publisher SHA256, archive validation and restore
     # protect downloads where an ETag is not a content checksum.
     etag = identity["ETag"].strip('"')
-    if re.fullmatch(r"[a-fA-F0-9]{32}", etag):
+    expected = identity.get("Metadata", {}).get("sha256")
+    opaque_encryption = identity.get("ServerSideEncryption") == "aws:kms" or identity.get("SSECustomerAlgorithm")
+    if not expected and not opaque_encryption and re.fullmatch(r"[a-fA-F0-9]{32}", etag):
         md5 = hashlib.md5(usedforsecurity=False)
         with destination.open("rb") as stream:
             while chunk := stream.read(1024 * 1024):
                 md5.update(chunk)
         if md5.hexdigest() != etag.lower():
             raise ValueError("Object checksum mismatch")
-    expected = identity.get("Metadata", {}).get("sha256")
     if expected and digest.hexdigest() != expected:
         raise ValueError("Publisher checksum mismatch")
     return {"bucket": bucket, "key": key, "version_id": version, "etag": identity["ETag"],
