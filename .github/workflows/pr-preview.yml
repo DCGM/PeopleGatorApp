@@ -40,13 +40,16 @@ jobs:
       # Only the reviewed workflow revision is read here, never the PR head.
       # The controller and Compose files still require an operator installation.
       - name: Read trusted preview deployment requirements
-        if: github.event_name == 'workflow_run'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.workflow_sha }}
           path: .preview-workflow
           sparse-checkout: deploy/preview
           persist-credentials: false
+      # Use reviewed code even while an older controller is installed. This is
+      # read-only preflight; lifecycle mutations still use the installed copy.
+      - name: Check preview repository and GitHub access
+        run: python3 .preview-workflow/deploy/preview/preview.py check-access
       - name: Require installed preview seeding before deployment
         if: github.event_name == 'workflow_run'
         run: python3 .preview-workflow/deploy/preview/check_installation.py
