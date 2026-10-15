@@ -1,14 +1,16 @@
 # Reproduce media upload connection starvation
 
 [Issue #10](https://github.com/DCGM/PeopleGatorApp/issues/10) has a confirmed
-PostgreSQL failure path on the affected revision: media uploads retain their request's database connection
-after looking up the page, throughout the storage wait. Fifteen pending uploads
+PostgreSQL failure path on the affected revision: media uploads retain their
+request's database connection after looking up the page, throughout the storage
+wait. Fifteen pending uploads
 consume the default connection pool in one API worker (five pooled connections
 plus ten overflow connections). Independent searches, entity lists and uploads
 then wait for a connection. The health endpoint remains responsive.
 
-The fix scopes page image/layout GET and PUT database sessions to their page lookup. The returned
-`PageResponse` contains the canonical media identity and needs no live session.
+The fix scopes page image/layout GET and PUT database sessions to their page
+lookup. The returned `PageResponse` contains the canonical media identity and
+needs no live session.
 Closing the context returns the connection before reading the multipart file,
 preparing images, waiting for the existing page lock, or awaiting storage. The
 request-scoped dependency used by other routes is unchanged. Authentication also
@@ -17,8 +19,8 @@ live session. This releases the user repository's transaction-scoped identity
 lock before media I/O, so concurrent bearer requests for the same user can
 authenticate independently. Context dependencies are uncached because each is
 single-use and authentication and media lookups require separate instances.
-No pool limits,
-storage timeouts, media receipts or per-page cache ordering are changed.
+No pool limits, storage timeouts, media receipts or per-page cache ordering are
+changed.
 
 ## Verify the fix
 
@@ -41,6 +43,19 @@ FIXED: independent requests complete with 14 and 15 stalled uploads.
 The original diagnostic mode below remains available for comparison with the
 affected revision (`71c2908`). Running without `--expect-fixed` on fixed code
 intentionally fails its assertions about the old connection-retention behavior.
+
+The CI regression suite additionally exercises actual authentication and
+user/API-key repositories, stubbing only credential verification. With the
+disposable schema-test URL configured as in Development, run:
+
+```sh
+uv run --locked pytest tests/routes/test_page_upload_concurrency.py -q
+```
+
+The tests cover 14/15 gated uploads for both media types and authentication
+methods, delayed S3 denial and actual SDK read timeout/retry, recovery on the
+same page, readable results and receipts, and 15 readers plus 15 replacements
+waiting behind one page image lock without retaining database connections.
 
 ## Run the minimal setup
 
@@ -87,10 +102,10 @@ the expected receipt metadata. The final line is:
 REPRODUCED: 15 stalled uploads starve database requests; 14 do not.
 ```
 
-**Exit 0 confirms reproduction of the current bug.** This is a diagnostic
-script, not a regression asserting that the application is fixed. It fails if
-the observations differ. After a fix, regression coverage should require the
-independent requests to complete while all storage gates remain held.
+**Exit 0 in the original mode confirms reproduction of the bug on the affected
+revision.** It fails if the observations differ. Use `--expect-fixed` and the
+regression suite above to require independent progress while storage gates
+remain held.
 
 ## Boundaries
 
