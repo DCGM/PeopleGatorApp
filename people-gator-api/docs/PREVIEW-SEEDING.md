@@ -179,6 +179,9 @@ browser back/forward to compare pressed states, URL and evidence. Check the
 neighboring tools and keyboard arrow/Space operation at desktop and mobile sizes.
 In light and dark themes, the toolbar container is transparent: the scan stays
 visible in the gaps between the controls, including when they wrap on mobile.
+Clickable tools use standard filled shadcn button styles in both themes; selected
+Names, translation and All controls use the primary variant, and link-state
+toggles retain their standard pressed accent over a filled secondary background.
 The existing linked records, deterministic local JPEGs and OCR layouts supply
 this scenario; adding these links never resets reviewed assignments or timestamps.
 Integration coverage queries faces and mentions for every state combination on
