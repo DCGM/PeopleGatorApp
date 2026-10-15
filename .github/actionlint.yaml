@@ -2,3 +2,4 @@ self-hosted-runner:
   labels:
     - people-gator-ci
     - people-gator-preview
+    - people-gator-staging
