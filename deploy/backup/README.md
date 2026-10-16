@@ -136,3 +136,128 @@ Inspect and explicitly remove only that failed candidate before retrying. No
 automatic connection/routing switch or destructive in-place recovery is provided.
 Before adopting the recovered database, run the compatible application's schema
 checks/migrations and validate matching media/auth storage and writable behavior.
+
+## Two buckets and three storage identities
+
+Provision the buckets privately through the provider before enabling the agent.
+Keep the account grants separate:
+
+| Identity | Bucket | Operations | Private host configuration |
+| --- | --- | --- | --- |
+| Backup publisher | `peoplegator-db-backup` | Prefix list/read/write and incomplete multipart abort; no final deletes | `/opt/people-gator-staging/backup-publisher.json` |
+| Restore reader | `peoplegator-db-backup` | Prefix list/read/version-read only | `/opt/people-gator-staging/backup-restore.json` |
+| Staging application | `peoplegator-staging` | List/read/write/delete, no backup bucket access | `/opt/people-gator-staging/storage.json` |
+
+The three `*-policy.example.json` files are S3 IAM identity-policy examples for
+these grants. Change the backup prefix consistently in configuration and policies.
+Attach each policy only to its corresponding identity; remove unrelated broader
+policies, block anonymous access and enforce conditional backup creation. Providers
+with different policy dialects need equivalent bucket/prefix/operation restrictions.
+These files do not create buckets/accounts or apply provider policy automatically.
+
+Copy the publisher/restore JSON examples into those private paths, mode 600 in
+the runner's mode-700 directory, and supply independent credentials. The restore
+file also needs explicit database provisioning/target-owner connection settings.
+The app's `storage.json` uses the shape of
+[`staging.storage.example.json`](../preview/staging.storage.example.json),
+with `local: null` and only the staging identity. Do not put backup credentials
+in root `.env`: live-preview's API imports that entire file. No operation inherits
+the app's storage settings or AWS credentials.
+
+For later staging initialization, create the controller's private
+`backup-source.json` from the restore file's **storage section only**, using
+[`staging.backup-source.example.json`](../preview/staging.backup-source.example.json).
+That download-only input must not contain database provisioning credentials. Its
+bucket is now `peoplegator-db-backup`; the staging destination remains
+`peoplegator-staging`. The database loader restores original data. Staging's current
+classification/sanitization/activation flow is a separate follow-up in #16; this
+change does not claim to make that flow preserve an unmodified production dataset.
+
+## Enable scheduled live-preview backups
+
+The agent is a separate service in the live-preview deployment. This keeps
+publisher/database-reader credentials out of the API container. The overlay has
+no project name, no `env_file`, no Docker socket and no application file-storage
+mount. Run from the repository root, with the existing source deployment/network
+already available and the private publisher config provisioned:
+
+```sh
+docker compose -f compose.live-preview.yaml -f deploy/backup/compose.agent.yaml \
+  --profile backups up -d --no-deps --build backup-agent
+```
+
+Only the named agent service starts; this does not rebuild/restart the source API,
+frontend or database. The `backups` profile is opt-in and the base live-preview
+file is unchanged. Nonsecret settings may be exported before the command:
+`BACKUP_PUBLISHER_CONFIG`, `BACKUP_DATABASE_NETWORK`, `BACKUP_AT_UTC` (default
+`02:00`), `BACKUP_RETRY_SECONDS` (300), `BACKUP_TEMP_SIZE` (`2g`),
+`BACKUP_WORKER_IMAGE`, `BACKUP_RUN_UID` and `BACKUP_RUN_GID`.
+
+The network defaults to `people-gator-live-preview_default`; it must reach both
+the configured source database and HTTPS backup endpoint. The source database
+itself is not attached to another network. The default worker UID/GID 0 maps to
+the runner on the documented rootless Docker host, allowing a mode-600 config
+file. On rootful Docker either provision root-owned mode-600 config for UID 0,
+or use matching UID/GID and explicitly prepare ownership of the agent state
+volume. Never make credentials group/world-readable to work around ownership.
+The worker has all capabilities dropped, a read-only filesystem and only a
+bounded temporary mount plus its separate persistent lock volume.
+
+Scheduling is daily in UTC. Startup before the due time waits; startup after it
+catches up. Failures retry with fixed safe logs and the configured delay. A valid
+existing dated object is recognized only after checking length and publisher
+metadata; a corrupt/foreign dated object requires operator inspection and is
+never overwritten. That metadata check relies on the publisher's atomic immutable
+object contract; it is not a full archive restore/checksum download. Finishing a
+backup after midnight retains its start date and does not skip the next day's
+schedule. Source `application_revision` must be updated with source deployments;
+it is operator-supplied provenance, not inferred from a possibly newer worker.
+
+The scheduler holds a nonblocking lock at `/state/agent/controller.lock`. To run
+one manual backup using the same lock and service configuration, stop the agent,
+run the one-shot command, then restart it (using the same Compose arguments):
+
+```sh
+docker compose -f compose.live-preview.yaml -f deploy/backup/compose.agent.yaml --profile backups stop backup-agent
+docker compose -f compose.live-preview.yaml -f deploy/backup/compose.agent.yaml --profile backups run --rm --no-deps backup-agent \
+  publish --config /run/backup-publisher.json --lock-file /state/agent/controller.lock
+docker compose -f compose.live-preview.yaml -f deploy/backup/compose.agent.yaml --profile backups up -d --no-deps backup-agent
+```
+
+An already running agent refuses a competing manual command using this lock.
+Conditional final-key publication also prevents overwrite by another host that
+cannot share the volume. A lock prevents duplicate work; it is not the S3
+immutability mechanism. Retain this state volume for the same deployment.
+
+Native schedulers reload the explicit private file on each attempt. Docker file
+bind mounts pin the mounted inode: after atomic host config/credential replacement,
+recreate only the agent with `up -d --no-deps --force-recreate backup-agent` using
+the same Compose arguments. Keep the previous credential valid until recreation.
+The API and restore process need no restart when the publisher identity rotates.
+
+## Production deployment and validation
+
+The same image and service work in a production deployment with independently
+provisioned database-reader/publisher credentials and its explicit source network.
+There is no existing production Compose stack in this repository to install into.
+After reviewing source connectivity, bucket policy and capacity, an operator can
+use the agent file standalone from the repository root:
+
+```sh
+docker compose --project-directory . -p people-gator-production-backup \
+  -f deploy/backup/compose.agent.yaml --profile backups up -d --build backup-agent
+```
+
+Set the nonsecret overrides above to production's private file path, network and
+desired UTC schedule. `--project-directory .` makes the root build context correct
+for standalone use. This service continuously schedules backups; production
+installation is not performed automatically by PR code or GitHub preview jobs.
+Verify one manual publication and a full restore into a separate database before
+relying on it for recovery. No retention deletion, PITR/WAL backup or automatic
+database replacement is included.
+
+Run the backend's `tests/backup` suite for scheduling/retry/lock/credential tests.
+Build the worker and set `BACKUP_TEST_IMAGE` when running
+`deploy/backup/tests/test_roundtrip.py` with the backend Python interpreter. It
+uses only disposable synthetic PostgreSQL16/pgvector and TLS S3 containers,
+including a real scheduled Compose agent; no operator private files are read.

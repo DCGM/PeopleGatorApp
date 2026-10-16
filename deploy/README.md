@@ -17,6 +17,7 @@ Compose Watch or native API/Vite development.
 | [`preview/release.py`](preview/release.py) | Validates and atomically publishes reviewed `main` bundles without recurring sudo |
 | [`preview/preview.py`](preview/preview.py) | Trusted lifecycle controller executed from a versioned runner-owned release |
 | [`preview/README.md`](preview/README.md) | Host installation, credentials, upgrades, recovery and checks |
+| [`backup/README.md`](backup/README.md) | Independent PostgreSQL backup publisher, restore loader and opt-in scheduled worker |
 
 Before installing previews, read the host guide fully and set the example
 configuration's `repository` to `DCGM/PeopleGatorApp`. Provision private runner-owned

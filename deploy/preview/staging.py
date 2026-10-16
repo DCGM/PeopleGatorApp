@@ -210,7 +210,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 source = inputs[name]
                 target = json.loads(values["STAGING_STORAGE"])["s3"]
                 if (source["endpoint_url"].rstrip("/") == target["endpoint_url"].rstrip("/")
-                        and source.get("bucket", "peoplegator-ingest") == target["bucket_name"]):
+                        and source.get("bucket", "peoplegator-db-backup") == target["bucket_name"]):
                     raise ValueError("Snapshot source must be separate from the staging S3 bucket")
         if work:
             args += ["--mount", f"type=bind,src={work},dst=/work"]
