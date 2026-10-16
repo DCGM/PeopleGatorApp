@@ -181,6 +181,15 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                   ("pg_demo_entities", "pg_demo_text_mentions", "pg_demo_sources")}
         expected_vectors = await connection.fetchval("""SELECT count(*) FROM pg_demo_face_embeddings e
             JOIN pg_demo_image_occurrences o ON o.id=e.face_id WHERE o.source_id=$1""", page["id"])
+        # Landmark order is supplied by the API caller, not fixed by the enum.
+        # Shuffle both arrays together to retain a valid face in a different order.
+        face = await connection.fetchrow("""SELECT f.* FROM pg_demo_faces f
+            JOIN pg_demo_image_occurrences o ON o.id=f.id WHERE o.source_id=$1 LIMIT 1""", page["id"])
+        self.assertIsNotNone(face, "The permitted seeded page must contain a face")
+        expected_types = list(reversed(face["keypoint_types"]))
+        expected_points = list(reversed(face["keypoints"]))
+        await connection.execute("UPDATE pg_demo_faces SET keypoint_types=$1, keypoints=$2 WHERE id=$3",
+                                 expected_types, expected_points, face["id"])
         image = io.BytesIO()
         Image.new("RGB", (1200, 1600), "gray").save(image, format="JPEG")
         client = Mock()
@@ -190,6 +199,18 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             result = await snapshot.sanitize(connection, filesystem, {"bucket": "test"}, {"permitted_page_ids": [str(page["id"])]})
             self.assertEqual(result["permitted_pages"], 1)
             self.assertEqual(await connection.fetchval("SELECT count(*) FROM pg_demo_face_embeddings"), expected_vectors)
+            retained_face = await connection.fetchrow("SELECT keypoint_types, keypoints FROM pg_demo_faces WHERE id=$1", face["id"])
+            self.assertEqual(retained_face["keypoint_types"], expected_types)
+            self.assertEqual(retained_face["keypoints"], expected_points)
+            # Invalid labels must fail closed instead of being silently relabeled.
+            for invalid_types in (expected_types[:-1] + ["unclassified-landmark"], [expected_types[0]] * 5):
+                with self.subTest(keypoint_types=invalid_types):
+                    await connection.execute("UPDATE pg_demo_faces SET keypoint_types=$1 WHERE id=$2", invalid_types, face["id"])
+                    try:
+                        with self.assertRaisesRegex(ValueError, "each known keypoint type exactly once"):
+                            await snapshot.sanitize(connection, filesystem, {"bucket": "test"}, {"permitted_page_ids": [str(page["id"])]})
+                    finally:
+                        await connection.execute("UPDATE pg_demo_faces SET keypoint_types=$1 WHERE id=$2", expected_types, face["id"])
             for table, count in counts.items():
                 self.assertEqual(await connection.fetchval(f"SELECT count(*) FROM {table}"), count)
             self.assertEqual(await connection.fetchval("SELECT count(*) FROM pg_demo_users WHERE email IS NOT NULL OR is_active"), 0)
