@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Private staging preparation worker, run with the candidate backend's dependencies.
 
-Never run on active data. Transfer credentials are supplied only to download and
-sanitize through stdin, never to the API. Worker output is private to the controller.
+Never run on active data. Transfer credentials are supplied only to preparation
+workers through stdin, never to the API. Worker output is private to the controller.
 """
 from __future__ import annotations
 
@@ -305,6 +305,68 @@ async def validate_data(connection):
         JOIN pg_demo_entities e ON e.id=t.entity_id JOIN pg_demo_sources s ON s.id=t.source_id LIMIT 1""")
 
 
+async def copy_media(filesystem, source, mappings):
+    """Copy original media bytes into fresh generation prefixes, excluding auth."""
+    def prefix(value):
+        if not isinstance(value, str) or not value or any(part in {"", ".", ".."} for part in value.split("/")) or "\\" in value:
+            raise ValueError("Invalid media transfer prefix")
+        if "peoplegator_api" in value.split("/"):
+            raise ValueError("Authentication objects cannot be copied as media")
+        return value + "/"
+
+    root = source.get("prefix", "").strip("/")
+    if root:
+        prefix(root)
+    roots = [(prefix(posixpath.join(root, origin)), prefix(target)) for origin, target in mappings]
+    if len({origin for origin, _ in roots}) != len(roots):
+        raise ValueError("Media source prefixes must be distinct")
+    client = s3_client(source)
+    copied = 0
+    for origin, target in roots:
+        for page in client.get_paginator("list_objects_v2").paginate(Bucket=source["bucket"], Prefix=origin):
+            for item in page.get("Contents", []):
+                key = item["Key"]
+                if not key.startswith(origin):
+                    raise ValueError("Media listing escaped the configured prefix")
+                if key.endswith("/"):
+                    continue
+                # A more specific mapping owns nested roots, such as scans in
+                # images/ndk. Copy each object only once, at its canonical key.
+                if any(other != origin and other.startswith(origin) and key.startswith(other) for other, _ in roots):
+                    continue
+                relative = key[len(origin):]
+                prefix(relative)
+                if not isinstance(item.get("ETag"), str) or not item["ETag"]:
+                    raise ValueError("Source media needs an object identity")
+                condition = {"IfMatch": item["ETag"]}
+                response = client.get_object(Bucket=source["bucket"], Key=key, **condition)
+                try:
+                    raw = response["Body"].read()
+                finally:
+                    response["Body"].close()
+                if len(raw) != item["Size"] or (condition and response.get("ETag") != item["ETag"]):
+                    raise ValueError("Source media changed or was truncated during transfer")
+                await filesystem.write_bytes(target + relative, raw)
+                copied += 1
+    return copied
+
+
+async def preserve(connection, filesystem, source):
+    """Keep restored rows, graph identities, vectors and original media intact."""
+    from people_gator_api.settings import settings
+    revision = await connection.fetchval("SELECT version_num FROM alembic_version")
+    if not isinstance(revision, str) or not re.fullmatch(r"[a-zA-Z0-9_]{1,64}", revision):
+        raise ValueError("Missing/invalid source migration history")
+    await validate_data(connection)
+    copied = await copy_media(filesystem, source, [
+        (source.get("image_prefix", "images"), settings.image_content.key_prefix),
+        (source.get("page_image_prefix", "images/ndk"), settings.page_image.key_prefix),
+        (source.get("page_layout_prefix", "page-layouts"), settings.page_layout.key_prefix),
+    ])
+    await validate_page_media(connection, filesystem)
+    return {"source_schema_revision": revision, "data_mode": "original", "media_objects": copied}
+
+
 async def read_auth(filesystem, key: str):
     from botocore.exceptions import ClientError
     try:
@@ -366,24 +428,38 @@ def staging_filesystem():
 async def validate_storage(connection, filesystem):
     """Read actual bucket objects before activation; no local/read-through fallback."""
     from people_gator_api.settings import settings
+    for key in (settings.jwk.users_path, settings.api_keys.keys_path, settings.jwk.key_path):
+        if await read_auth(filesystem, key) is None:
+            raise ValueError("Missing staging S3 authentication object")
+    await validate_page_media(connection, filesystem)
+
+
+async def validate_page_media(connection, filesystem):
+    from botocore.exceptions import ClientError
     from people_gator_api.media.page_image import page_image_key
     from people_gator_api.media.page_layout import page_layout_key
     from people_gator_api.schemas.pero import PageLayoutModel
     from PIL import Image
-    for key in (settings.jwk.users_path, settings.api_keys.keys_path, settings.jwk.key_path):
-        if await read_auth(filesystem, key) is None:
-            raise ValueError("Missing staging S3 authentication object")
-    for page in await connection.fetch("SELECT * FROM pg_demo_pages ORDER BY id LIMIT 10"):
+    for page in await connection.fetch("SELECT * FROM pg_demo_pages ORDER BY id"):
         image = await filesystem.read_bytes(page_image_key(page["library"], page["document_id"], page["page_id"]))
         Image.open(io.BytesIO(image)).verify()
-        layout = await filesystem.read_bytes(page_layout_key(page["library"], page["document_id"], page["page_id"]))
+        # OCR is optional in the standard application. Keep its absence rather
+        # than inventing a layout for a page that has no OCR yet.
+        try:
+            layout = await filesystem.read_bytes(page_layout_key(page["library"], page["document_id"], page["page_id"]))
+        except FileNotFoundError:
+            continue
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+                continue
+            raise
         PageLayoutModel.model_validate_json(layout)
 
 
 async def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["download", "sanitize", "auth", "validate"])
+    parser.add_argument("action", choices=["download", "copy", "sanitize", "auth", "validate"])
     parser.add_argument("--exact-key", default="")
     args = parser.parse_args()
     inputs = json.load(sys.stdin)
@@ -404,7 +480,10 @@ async def main():
         filesystem = staging_filesystem()
         connection = await connect()
         try:
-            if args.action == "sanitize":
+            if args.action == "copy":
+                result = await preserve(connection, filesystem, inputs["media-source.json"])
+                print(json.dumps(result))
+            elif args.action == "sanitize":
                 policy = inputs["media-policy.json"]
                 source = inputs.get("media-source.json", {})
                 result = await sanitize(connection, filesystem, source, policy)

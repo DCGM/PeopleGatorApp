@@ -182,6 +182,25 @@ class StagingTests(unittest.TestCase):
         self.assertEqual(list(controller.staging_root.glob("snapshot-*")), [])
         self.assertFalse(any("CREATE" in event or "up " in event for event in controller.events))
 
+    def test_refresh_copies_original_data_and_media_without_invoking_sanitizer(self):
+        controller = self.controller
+        controller.prepare = staging.Staging.prepare.__get__(controller)
+        controller.provision = lambda values: controller.events.append("provision")
+        controller.private_command = lambda *args, **kwargs: controller.events.append("private-restore")
+        def worker(action, values, directory, *, work=None, **kwargs):
+            controller.events.append("worker-" + action)
+            if action == "download":
+                (work / "snapshot.dump").write_bytes(b"PGDMP synthetic original data")
+                (work / "provenance.json").write_text(json.dumps({"bucket": "backup", "key": "archive", "backup_date": "2026-10-16"}))
+            return json.dumps({"data_mode": "original", "media_objects": 3})
+        controller.worker = worker
+        controller.deploy(refresh=True)
+        state = json.loads((controller.staging_root / "state.json").read_text())
+        self.assertEqual(state["provenance"]["data_mode"], "original")
+        self.assertLess(controller.events.index("worker-copy"), controller.events.index("worker-auth"))
+        self.assertNotIn("worker-sanitize", controller.events)
+        self.assertEqual(list(controller.staging_root.glob("snapshot-*")), [])
+
     def test_new_main_during_full_check_blocks_startup(self):
         controller = self.controller
         controller.initial()

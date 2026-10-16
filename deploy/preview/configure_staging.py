@@ -168,7 +168,7 @@ def configure(config_path: Path, storage_file: Path | None = None, *, env_file: 
         if backup is not None:
             source = json.loads(backup)
             if (source["endpoint_url"].rstrip("/") == proposed["s3"]["endpoint_url"].rstrip("/")
-                    and source.get("bucket", "peoplegator-ingest") == proposed["s3"]["bucket_name"]):
+                    and source.get("bucket", "peoplegator-db-backup") == proposed["s3"]["bucket_name"]):
                 raise ConfigurationError("Staging destination must be separate from the configured backup source bucket")
         for directory in (private, state):
             if directory.exists() and (directory.is_symlink() or directory.stat().st_uid != os.geteuid()):

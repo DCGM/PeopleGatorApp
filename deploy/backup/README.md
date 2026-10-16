@@ -177,9 +177,9 @@ For later staging initialization, create the controller's private
 [`staging.backup-source.example.json`](../preview/staging.backup-source.example.json).
 That download-only input must not contain database provisioning credentials. Its
 bucket is now `peoplegator-db-backup`; the staging destination remains
-`peoplegator-staging`. The database loader restores original data. Staging's current
-classification/sanitization/activation flow is a separate follow-up in #16; this
-change does not claim to make that flow preserve an unmodified production dataset.
+`peoplegator-staging`. The database loader restores original data. Staging refresh preserves original data and copies media into an independent
+generation before migration and activation; see the staging guide for source
+configuration and its separate credential provisioning.
 
 ## Enable scheduled live-preview backups
 
