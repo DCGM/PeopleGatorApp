@@ -13,7 +13,8 @@ scripts should be reviewed as issue changes, not improvised against retained dat
 2. Take a consistent database backup and matching storage backup before a write.
    Preserve migration history, face-model registrations, JWT keys and credential
    files securely. Verify restoration in an isolated environment before relying
-   on that backup. The repository does not automate general PostgreSQL backups.
+   on that backup. The [backup worker](../deploy/backup/README.md) publishes
+   consistent PostgreSQL custom archives using independent backup credentials.
 3. Use a read-only session or browse-scoped API to collect evidence. From the API
    project, run `uv run --locked python -m people_gator_api.cli.database check`
    against the selected store; it validates migration/schema readiness without
