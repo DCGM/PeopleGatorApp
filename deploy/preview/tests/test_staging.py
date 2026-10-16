@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -365,6 +366,29 @@ class StagingTests(unittest.TestCase):
         staging.Staging.reap_workers(controller)
         self.assertIn("label=" + controller.worker_label, controller.events[-1])
         self.assertNotIn(other.worker_label, controller.events[-1])
+
+    def test_runner_cancellation_removes_labelled_workers_and_restores_handlers(self):
+        controller = self.controller
+        reaped = []
+        controller.reap_workers = lambda: reaped.append(controller.worker_label)
+        handlers = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+        for number in handlers:
+            reaped.clear()
+            def interrupted(*args, **kwargs):
+                # The runner signals the controller while a worker transfer is running.
+                os.kill(os.getpid(), number)
+                raise AssertionError("cancellation must interrupt the operation")
+            with self.subTest(signal=number.name), patch.object(controller, "deploy", side_effect=interrupted), \
+                    self.assertRaises(staging.OperationCancelled):
+                controller.operate(refresh=True)
+            self.assertEqual(reaped, [controller.worker_label])
+            self.assertEqual({n: signal.getsignal(n) for n in handlers}, handlers)
+        reaped.clear()
+        with patch.object(controller, "deploy") as deploy:
+            controller.operate(7, refresh=True, exact_key="key")
+        deploy.assert_called_once_with(7, refresh=True, exact_key="key")
+        self.assertEqual(reaped, [])
+        self.assertEqual({n: signal.getsignal(n) for n in handlers}, handlers)
 
     def test_private_subprocess_failures_never_expose_source_values_to_logs(self):
         controller = self.controller

@@ -423,7 +423,9 @@ projects, volumes and `preview_pr_N` databases/roles; staging is outside that tr
 active pair; `previous.json`/`previous.env` preserve prior metadata/config.
 `activation.json` journals replacement. If refresh startup/readiness fails, the
 controller restores the old pair/config and checks it; preparation failure never
-replaces active services. Abandoned labelled preparation workers are removed under the host lock before a retry.
+replaces active services. Cancelling the job (SIGINT/SIGTERM) stops the controller and removes its labelled
+preparation workers while it still holds the host lock. Workers abandoned by a
+killed controller are removed under the host lock before the next attempt.
 If interrupted during refresh activation, the next
 invocation recovers the journal before doing other work. If success was already
 committed, recovery reconstructs `compose.env` from committed state. Allow a brief
