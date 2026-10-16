@@ -26,10 +26,20 @@ from urllib.parse import urlsplit
 from preview import Controller, INSTALL_DIR, positive_int, write_private
 
 
+class StagingConfigurationError(ValueError):
+    """Fixed operator guidance safe to print without private input values."""
+
+
 class Staging(Controller):
     def __init__(self, config: dict):
         super().__init__(config)
-        staging = config["staging"]
+        staging = config.get("staging")
+        if not isinstance(staging, dict) or not all(staging.get(key) for key in ("state_dir", "private_dir")):
+            raise StagingConfigurationError(
+                "Missing staging host settings. An operator must add the staging section "
+                "to the installed preview config, preserving existing settings. "
+                "See deploy/preview/STAGING.md; repository .env files are not loaded by the controller."
+            )
         self.staging_root = Path(staging["state_dir"])
         if not self.staging_root.is_absolute() or self.staging_root.is_relative_to(self.root):
             raise ValueError("Staging state must be absolute and outside preview state")
@@ -47,6 +57,11 @@ class Staging(Controller):
     def storage(self):
         """One explicit staging bucket, never an implicit/local storage default."""
         path = Path(self.settings["private_dir"]) / "storage.json"
+        if not path.is_file():
+            raise StagingConfigurationError(
+                "Missing private staging storage.json. Run configure_staging.py as the deployment "
+                "runner with explicit S3 settings; see deploy/preview/STAGING.md."
+            )
         return self.validate_storage(json.loads(path.read_text()))
 
     @staticmethod
@@ -385,6 +400,9 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except StagingConfigurationError as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
     except Exception:
         print("Staging deployment failed; private candidate state/diagnostics retained. See staging operator guide.", file=sys.stderr)
         sys.exit(1)

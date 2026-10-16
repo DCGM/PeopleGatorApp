@@ -274,7 +274,7 @@ class StagingTests(unittest.TestCase):
         controller.deploy()
         path.unlink()
         controller.events.clear()
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaisesRegex(staging.StagingConfigurationError, "storage.json"):
             controller.deploy()
         self.assertEqual(controller.events, [])
 
@@ -354,6 +354,18 @@ class StagingTests(unittest.TestCase):
             controller.private_command([sys.executable, "-c", "import sys; print('private-sentinel'); sys.exit(1)"])
         self.assertIn("private-sentinel", (controller.staging_root / "last-error.log").read_text())
         self.assertEqual((controller.staging_root / "last-error.log").stat().st_mode & 0o777, 0o600)
+
+    def test_missing_staging_settings_report_safe_guidance_before_github_or_docker(self):
+        config = self.root / "host.json"
+        config.write_text(json.dumps({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root),
+                                      "private_operator_value": "private-sentinel"}))
+        result = subprocess.run([sys.executable, str(DIRECTORY / "staging.py"), "--config", str(config),
+                                 "check-access"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Missing staging host settings", result.stderr)
+        self.assertIn(".env files are not loaded", result.stderr)
+        self.assertNotIn("private-sentinel", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":
