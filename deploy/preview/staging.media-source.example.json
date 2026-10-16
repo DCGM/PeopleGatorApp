@@ -3,6 +3,7 @@
   "region": "OPERATOR_REGION",
   "bucket": "OPERATOR_MEDIA_BUCKET",
   "prefix": "",
+  "page_image_prefix": "images/ndk",
   "access_key_id": "MEDIA_READER_ID",
   "secret_access_key": "PRIVATE_MEDIA_READER_SECRET"
 }

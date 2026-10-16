@@ -1,10 +1,10 @@
-# Stable staging project; database and media switch together by generation.
-# Authentication has its own retained volume and is never restored from production.
+# Stable staging project; database and S3 media prefix switch by generation.
+# One staging S3 bucket holds stable authentication keys and generation media/cache.
 x-staging-labels: &staging-labels
   people-gator.environment: staging
   people-gator.staging.sha: ${COMMIT_SHA:-unknown}
 
-# Docker sends stdout/stderr, including one-off migration and seed logs, to the host collector.
+# Docker sends stdout/stderr, including migration/check logs, to the host collector.
 # The driver connects from the Docker daemon, not from the container's network.
 x-staging-logging: &staging-logging
   driver: fluentd
@@ -42,35 +42,21 @@ x-backend: &backend
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${DB_PASSWORD:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${DB_NAME:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
-    PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /data
+    PEOPLE_GATOR_API__STORAGE: ${STAGING_STORAGE:?explicit S3 storage required}
+    PEOPLE_GATOR_API__IMAGE_CONTENT__KEY_PREFIX: ${MEDIA_PREFIX:?required}/images
+    PEOPLE_GATOR_API__PAGE_IMAGE__KEY_PREFIX: ${MEDIA_PREFIX:?required}/images/ndk
+    PEOPLE_GATOR_API__PAGE_LAYOUT__KEY_PREFIX: ${MEDIA_PREFIX:?required}/page-layouts
+    PEOPLE_GATOR_API__PAGE_IMAGE_CACHE__KEY_PREFIX: ${MEDIA_PREFIX:?required}/cache/page-images
+    PEOPLE_GATOR_API__ALIGNED_FACE_CROP__CACHE_KEY_PREFIX: ${MEDIA_PREFIX:?required}/cache/aligned-face-crops
     PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
     PEOPLE_GATOR_API__API_KEYS__KEYS_PATH: peoplegator_api/api-keys.json
     PEOPLE_GATOR_API__JWK__KEY_PATH: peoplegator_api/jwks.json
     PEOPLE_GATOR_API__JWK__ISSUER: https://${STAGING_HOST:?required}
     PEOPLE_GATOR_API__JWK__AUDIENCE: ${STAGING_HOST:?required}
     PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:?required}
-  volumes:
-    - media:/data
-    - auth:/data/peoplegator_api:ro
-  networks: [database]
+  networks: [database, web]
 
 services:
-  storage-init:
-    image: ${BACKEND_IMAGE:?required}
-    profiles: [tools]
-    logging: *staging-logging
-    labels: *staging-labels
-    user: '0:0'
-    entrypoint: [python, -c]
-    command:
-      - "import os; os.makedirs('/data/peoplegator_api', exist_ok=True); os.chown('/data', 10001, 10001); os.chown('/data/peoplegator_api', 10001, 10001)"
-    network_mode: none
-    read_only: true
-    cap_drop: [ALL]
-    cap_add: [CHOWN]
-    security_opt: [no-new-privileges:true]
-    volumes: [media:/data, auth:/data/peoplegator_api]
-
   migrate:
     <<: *backend
     profiles: [tools]
@@ -134,14 +120,6 @@ services:
       - traefik.http.routers.pg-staging-app.tls=true
       - traefik.http.routers.pg-staging-app.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
       - traefik.http.services.pg-staging-app.loadbalancer.server.port=8080
-
-volumes:
-  media:
-    external: true
-    name: ${MEDIA_VOLUME:?required}
-  auth:
-    external: true
-    name: ${AUTH_VOLUME:?required}
 
 networks:
   database:

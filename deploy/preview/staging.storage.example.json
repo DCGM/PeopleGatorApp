@@ -1,0 +1,11 @@
+{
+  "local": null,
+  "s3": {
+    "endpoint_url": "https://staging-s3-provider.example.invalid",
+    "region": "OPERATOR_REGION",
+    "bucket_name": "peoplegator-staging",
+    "access_key_id": "STAGING_BUCKET_WRITER_ID",
+    "secret_access_key": "PRIVATE_STAGING_BUCKET_WRITER_SECRET",
+    "timeout_seconds": 30
+  }
+}

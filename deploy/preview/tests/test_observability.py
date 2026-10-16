@@ -61,7 +61,7 @@ HTTPServer(('0.0.0.0', 4318), Sink).serve_forever()
                             "--log-opt", "labels=people-gator.preview.pr,people-gator.preview.sha,com.docker.compose.service",
                             "python:3.12", "python", "-c",
                             f"import sys; print('preview-smoke-{service}', flush=True); print('preview-stderr-{service}', file=sys.stderr, flush=True)")
-            for service in ("frontend", "backend", "migrate", "check", "storage-init"):
+            for service in ("frontend", "backend", "migrate", "check"):
                 self.docker("run", "--rm", "--network", "none",
                             "--label", "people-gator.environment=staging",
                             "--label", "people-gator.staging.sha=" + "b" * 40,
@@ -75,7 +75,7 @@ HTTPServer(('0.0.0.0', 4318), Sink).serve_forever()
             while time.monotonic() < deadline:
                 payload = b"".join(base64.b64decode(line) for line in self.docker("logs", sink).splitlines())
                 if all(f"preview-stderr-{name}".encode() in payload
-                       for name in ("frontend", "backend", "migrate", "seed", "storage-init")) and b"staging-smoke-storage-init" in payload:
+                       for name in ("frontend", "backend", "migrate", "seed", "storage-init")) and b"staging-smoke-check" in payload:
                     break
                 time.sleep(0.25)
             for service in ("frontend", "backend", "migrate", "seed", "storage-init"):
@@ -83,7 +83,7 @@ HTTPServer(('0.0.0.0', 4318), Sink).serve_forever()
                               self.docker("logs", collector))
                 self.assertIn(f"preview-stderr-{service}".encode(), payload)
                 self.assertIn(f"people-gator-preview.{service}".encode(), payload)
-            for service in ("frontend", "backend", "migrate", "check", "storage-init"):
+            for service in ("frontend", "backend", "migrate", "check"):
                 self.assertIn(f"staging-smoke-{service}".encode(), payload, self.docker("logs", collector))
                 self.assertIn(f"people-gator-staging.{service}".encode(), payload)
             self.assertIn(b"b" * 40, payload)

@@ -121,7 +121,7 @@ jobs:
               docker image rm "$STAGING_TEST_IMAGE" || true
             }
             trap cleanup EXIT
-            docker network create "$STAGING_TEST_NETWORK"
+            docker network create --internal "$STAGING_TEST_NETWORK"
             docker network connect --alias preview-postgres "$STAGING_TEST_NETWORK" "$STAGING_TEST_POSTGRES_CONTAINER"
             docker build -t "$STAGING_TEST_IMAGE" .
             uv run --locked python ../deploy/preview/tests/test_staging_runtime.py -v

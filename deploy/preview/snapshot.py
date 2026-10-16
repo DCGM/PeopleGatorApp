@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Private staging preparation worker, run with the candidate backend's dependencies.
 
-Never run on active data. Transfer credentials are mounted only for download and
-sanitize, never on the API. All worker output is suppressed by the controller.
+Never run on active data. Transfer credentials are supplied only to download and
+sanitize through stdin, never to the API. Worker output is private to the controller.
 """
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ import io
 import json
 import os
 from pathlib import Path
+import posixpath
 import re
 import sys
-import tempfile
 import uuid
 
 
@@ -193,6 +193,9 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
     source_prefix = source.get("prefix", "").strip("/")
     if source_prefix and (".." in source_prefix.split("/") or "\\" in source_prefix):
         raise ValueError("Invalid media import prefix")
+    source_image_prefix = source.get("page_image_prefix", "images/ndk").strip("/")
+    if not source_image_prefix or ".." in source_image_prefix.split("/") or "\\" in source_image_prefix:
+        raise ValueError("Invalid source scan prefix")
     async with connection.transaction():
         await connection.execute("""UPDATE pg_demo_users SET display_name='Historical staging actor ' || id,
             external_subject='historical-' || id, external_issuer='urn:people-gator:staging:history',
@@ -232,8 +235,10 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
             library = pseudonym("staging", page["library"])
             if page["id"] in permitted:
                 # Read canonical source keys only; no recursive source copy or credentials.
-                key = page_image_key(page["library"], page["document_id"], page["page_id"])
-                request_key = f"{source_prefix}/{key}" if source_prefix else key
+                # Source uses its original canonical scan namespace; destination
+                # helpers use this candidate generation's configured prefixes.
+                request_key = posixpath.join(source_prefix, source_image_prefix, page["library"],
+                                            str(page["document_id"]), f"{page['page_id']}.jpg")
                 response = client.get_object(Bucket=source["bucket"], Key=request_key)
                 try:
                     raw = response["Body"].read()
@@ -276,39 +281,38 @@ async def validate_data(connection):
         JOIN pg_demo_entities e ON e.id=t.entity_id JOIN pg_demo_sources s ON s.id=t.source_id LIMIT 1""")
 
 
-def write_auth(path: Path, value: dict):
-    if path.exists() and json.loads(path.read_text()) == value:
-        return
-    descriptor, name = tempfile.mkstemp(prefix=".credential-", dir=path.parent)
-    temporary = Path(name)
+async def read_auth(filesystem, key: str):
+    from botocore.exceptions import ClientError
     try:
-        with os.fdopen(descriptor, "w") as stream:
-            json.dump(value, stream)
-            stream.flush()
-            if os.geteuid() == 0:
-                os.fchown(stream.fileno(), 10001, 10001)
-            os.fsync(stream.fileno())
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
+        value = json.loads(await filesystem.read_bytes(key))
+        if not isinstance(value, dict):
+            raise ValueError("Malformed staging authentication object")
+        return value
+    except ClientError as error:
+        if error.response.get("Error", {}).get("Code") not in {"NoSuchKey", "404", "NotFound"}:
+            raise
+        return None
 
 
-def provision_auth(root: Path, supplied: dict):
+async def provision_auth(filesystem, supplied: dict):
     import people_gator_api.schemas
     import argon2
     from joserfc.jwk import ECKey, KeySet
-    root.mkdir(parents=True, exist_ok=True)
-    users_path = root / "users.json"
-    users = json.loads(users_path.read_text()) if users_path.exists() else {}
+    from people_gator_api.settings import settings
+    users_path = settings.jwk.users_path
+    initial_users = await read_auth(filesystem, users_path)
+    users = dict(initial_users) if initial_users is not None else {}
     for username, scopes in EXAMPLE_SCOPES.items():
         if username not in users:
             record = supplied["users"][username]
             argon2.extract_parameters(record["hash"])
             users[username] = {"hash": record["hash"], "scopes": [f"people-gator:{s}" for s in scopes]}
-    write_auth(users_path, users)
-    keys_path = root / "api-keys.json"
-    keys = json.loads(keys_path.read_text()) if keys_path.exists() else {}
-    initial_keys = supplied.get("api_keys", {}) if not keys_path.exists() else {}
+    if users != initial_users:
+        await filesystem.write_bytes(users_path, json.dumps(users).encode())
+    keys_path = settings.api_keys.keys_path
+    existing_keys = await read_auth(filesystem, keys_path)
+    keys = dict(existing_keys) if existing_keys is not None else {}
+    initial_keys = supplied.get("api_keys", {}) if existing_keys is None else {}
     for identifier, record in initial_keys.items():
         if identifier in keys:
             continue
@@ -318,20 +322,38 @@ def provision_auth(root: Path, supplied: dict):
         if validated.username not in users or not validated.scopes.issubset(users[validated.username]["scopes"]):
             raise ValueError("API key must belong to a staging user and its permitted scopes")
         keys[identifier] = validated.model_dump(mode="json")
-    write_auth(keys_path, keys)
-    jwks = root / "jwks.json"
-    if not jwks.exists():
+    if keys != existing_keys:
+        await filesystem.write_bytes(keys_path, json.dumps(keys).encode())
+    jwks = settings.jwk.key_path
+    if await read_auth(filesystem, jwks) is None:
         key = ECKey.generate_key("P-256", parameters={"alg": "ES256", "use": "sig"}, auto_kid=True)
-        write_auth(jwks, KeySet([key]).as_dict(private=True))
+        await filesystem.write_bytes(jwks, json.dumps(KeySet([key]).as_dict(private=True)).encode())
 
 
-def own_data(root: Path):
-    for directory, _, files in os.walk(root):
-        os.chown(directory, 10001, 10001)
-        os.chmod(directory, 0o700)
-        for name in files:
-            os.chown(Path(directory) / name, 10001, 10001)
-            os.chmod(Path(directory) / name, 0o600)
+def staging_filesystem():
+    import people_gator_api.schemas
+    from people_gator_api.settings import settings
+    from people_gator_api.services.filesystem_service import get_filesystem
+    if settings.storage.s3 is None or settings.storage.local is not None:
+        raise ValueError("Staging preparation requires explicit S3 storage; local storage is forbidden")
+    return get_filesystem()
+
+
+async def validate_storage(connection, filesystem):
+    """Read actual bucket objects before activation; no local/read-through fallback."""
+    from people_gator_api.settings import settings
+    from people_gator_api.media.page_image import page_image_key
+    from people_gator_api.media.page_layout import page_layout_key
+    from people_gator_api.schemas.pero import PageLayoutModel
+    from PIL import Image
+    for key in (settings.jwk.users_path, settings.api_keys.keys_path, settings.jwk.key_path):
+        if await read_auth(filesystem, key) is None:
+            raise ValueError("Missing staging S3 authentication object")
+    for page in await connection.fetch("SELECT * FROM pg_demo_pages ORDER BY id LIMIT 10"):
+        image = await filesystem.read_bytes(page_image_key(page["library"], page["document_id"], page["page_id"]))
+        Image.open(io.BytesIO(image)).verify()
+        layout = await filesystem.read_bytes(page_layout_key(page["library"], page["document_id"], page["page_id"]))
+        PageLayoutModel.model_validate_json(layout)
 
 
 async def main():
@@ -340,8 +362,9 @@ async def main():
     parser.add_argument("action", choices=["download", "sanitize", "auth", "validate"])
     parser.add_argument("--exact-key", default="")
     args = parser.parse_args()
+    inputs = json.load(sys.stdin)
     if args.action == "download":
-        config = json.loads(Path("/private/backup-source.json").read_text())
+        config = inputs["backup-source.json"]
         bucket = config.get("bucket", "peoplegator-ingest")
         prefix = config.get("prefix", "production/db-backups/")
         client = s3_client(config)
@@ -352,21 +375,19 @@ async def main():
         result["backup_date"] = backup_date(key, prefix).isoformat()
         Path("/work/provenance.json").write_text(json.dumps(result))
     elif args.action == "auth":
-        provision_auth(Path("/data/peoplegator_api"), json.loads(Path("/private/credential-input.json").read_text()))
-        own_data(Path("/data/peoplegator_api"))
+        await provision_auth(staging_filesystem(), inputs["credential-input.json"])
     else:
+        filesystem = staging_filesystem()
         connection = await connect()
         try:
             if args.action == "sanitize":
-                from people_gator_api.filesystem.local import LocalFilesystem
-                policy = json.loads(Path("/private/media-policy.json").read_text())
-                source_path = Path("/private/media-source.json")
-                source = json.loads(source_path.read_text()) if source_path.exists() else {}
-                result = await sanitize(connection, LocalFilesystem("/data"), source, policy)
-                own_data(Path("/data"))
+                policy = inputs["media-policy.json"]
+                source = inputs.get("media-source.json", {})
+                result = await sanitize(connection, filesystem, source, policy)
                 print(json.dumps(result))
             else:
                 await validate_data(connection)
+                await validate_storage(connection, filesystem)
         finally:
             await connection.close()
 

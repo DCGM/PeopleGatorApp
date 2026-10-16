@@ -217,3 +217,4 @@ __marimo__/
 /deploy/preview/media-source.json
 /deploy/preview/media-policy.json
 /deploy/preview/credential-input.json
+/deploy/preview/storage.json
