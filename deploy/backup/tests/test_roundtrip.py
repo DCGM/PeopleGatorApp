@@ -47,6 +47,7 @@ class RoundtripTests(unittest.TestCase):
         cls.sql("ALTER SYSTEM SET ssl = 'on';")
         cls.sql("SELECT pg_reload_conf();")
         cls.sql("CREATE DATABASE source; CREATE DATABASE recovered;")
+        cls.sql("CREATE ROLE recovery_owner LOGIN PASSWORD 'target-secret'; CREATE ROLE outsider LOGIN PASSWORD 'outsider';")
         cls.sql("""CREATE EXTENSION vector;
 CREATE TABLE alembic_version(version_num text PRIMARY KEY);
 INSERT INTO alembic_version VALUES ('fixture_revision');
@@ -130,6 +131,37 @@ with tempfile.TemporaryDirectory() as work:
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         pending = self.provider.source.list_multipart_uploads(Bucket=self.storage["bucket"])
         self.assertFalse(pending.get("Uploads"))
+
+    def test_restore_loader_preserves_original_data_and_refuses_existing_or_bad_targets(self):
+        publisher = copy.deepcopy(self.config)
+        publisher["storage"]["prefix"] = "restore-fixture/"
+        published = self.worker("publish", "--config", "-", config=publisher)
+        self.assertEqual(published.returncode, 0, published.stderr.decode())
+        config = {"storage": publisher["storage"], "database": {**publisher["database"], "database": "postgres"},
+                  "target": {"database": "recovered_loader", "user": "recovery_owner", "password": "target-secret"}}
+        command = "mkdir -m 700 /tmp/report && python -m people_gator_api.backup restore --config - --report /tmp/report/provenance.json"
+        result = self.worker("-c", command, config=config, entrypoint="sh")
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        for query in ("SELECT version_num FROM alembic_version", "SELECT * FROM entities",
+                      "SELECT * FROM models", "SELECT id, entity_id, model_id, embedding::text FROM faces"):
+            self.assertEqual(self.sql(query, "source"), self.sql(query, "recovered_loader"))
+        self.assertEqual(self.sql("SELECT has_database_privilege('outsider','recovered_loader','CONNECT')"), "f")
+        duplicate = self.worker("-c", command, config=config, entrypoint="sh")
+        self.assertNotEqual(duplicate.returncode, 0)
+        self.assertIn(b"existing target", duplicate.stderr)
+        config["target"].update(database="failed_loader", password="wrong-password")
+        failure = self.worker("-c", command, config=config, entrypoint="sh")
+        self.assertNotEqual(failure.returncode, 0)
+        self.assertEqual(self.sql("SELECT count(*) FROM pg_database WHERE datname='failed_loader'"), "0")
+        self.assertEqual(self.sql("SELECT count(*) FROM faces", "recovered_loader"), "1")
+        # A validly named newer corrupt object must fail, without older fallback.
+        bad = b"PGDMP corrupt latest"
+        self.provider.source.put_object(Bucket=self.storage["bucket"], Key="restore-fixture/peoplegator-prod-2099-10-17.dump",
+            Body=bad, Metadata={"sha256": hashlib.sha256(bad).hexdigest(), "application-revision": "a" * 40})
+        config["target"].update(database="corrupt_loader", password="target-secret")
+        corrupt = self.worker("-c", command, config=config, entrypoint="sh")
+        self.assertNotEqual(corrupt.returncode, 0)
+        self.assertEqual(self.sql("SELECT count(*) FROM pg_database WHERE datname='corrupt_loader'"), "0")
 
     def test_verified_postgres_tls_accepts_explicit_ca_and_rejects_untrusted_or_wrong_hostname(self):
         for scenario in ("trusted", "untrusted", "wrong-hostname"):
