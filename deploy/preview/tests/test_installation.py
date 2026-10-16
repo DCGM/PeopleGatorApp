@@ -150,6 +150,30 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse((self.releases / revision).exists())
         self.assertEqual(list(self.releases.glob(".staging-*")), [])
 
+    def test_staging_bundle_cannot_publish_local_storage_or_split_buckets(self):
+        compose = self.bundle / "compose.staging.yaml"
+        original = compose.read_text()
+        variants = [
+            original.replace("${STAGING_STORAGE:?explicit S3 storage required}",
+                             "'{\"local\":{\"root\":\"/data\"},\"s3\":null}'"),
+            original.replace("\n  networks: [database, web]\n", "\n  volumes: [legacy:/data]\n  networks: [database, web]\n")
+                + "\nvolumes:\n  legacy: {}\n",
+            original.replace("  check:\n    <<: *backend\n", "  check:\n    <<: *backend\n"
+                "    environment:\n      PEOPLE_GATOR_API__STORAGE: '{\"local\":null,\"s3\":{\"bucket_name\":\"different-bucket\"}}'\n"),
+            original.replace("    PEOPLE_GATOR_API__STORAGE: ${STAGING_STORAGE:?explicit S3 storage required}\n",
+                "    PEOPLE_GATOR_API__STORAGE: ${STAGING_STORAGE:?explicit S3 storage required}\n"
+                "    PEOPLE_GATOR_API__STORAGE__S3__BUCKET_NAME: hidden-override\n"),
+        ]
+        for index, value in enumerate(variants):
+            with self.subTest(index=index):
+                compose.write_text(value)
+                revision = self.commit()
+                with self.assertRaisesRegex(ValueError, "Staging release requires"):
+                    self.publish(revision)
+                self.assertFalse((self.releases / revision).exists())
+                self.assertEqual(list(self.releases.glob(".staging-*")), [])
+        compose.write_text(original)
+
     def test_corrupted_or_symlinked_cached_release_is_not_overwritten(self):
         release = self.publish()
         controller = release / "preview.py"

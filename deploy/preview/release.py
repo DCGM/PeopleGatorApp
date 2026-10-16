@@ -106,6 +106,23 @@ def validate_bundle(directory: Path) -> None:
         config = json.loads(result.stdout)
         if not required.issubset(config.get("services", {})):
             raise ValueError(f"Release {name} is missing required lifecycle services")
+        if name == "compose.staging.yaml":
+            services = config["services"]
+            if config.get("volumes") or "storage-init" in services:
+                raise ValueError("Staging release requires S3 without local storage services/volumes")
+            storage = None
+            for service in ("backend", "migrate", "check"):
+                runtime = services[service]
+                runtime_environment = runtime.get("environment", {})
+                selected = json.loads(runtime_environment.get("PEOPLE_GATOR_API__STORAGE", "null"))
+                if (not isinstance(selected, dict) or set(selected) != {"s3", "local"}
+                        or selected["local"] is not None or not isinstance(selected["s3"], dict)
+                        or runtime.get("volumes")
+                        or any(key.startswith("PEOPLE_GATOR_API__STORAGE__") for key in runtime_environment)):
+                    raise ValueError("Staging release requires explicit S3 storage for every backend service")
+                if storage is not None and selected != storage:
+                    raise ValueError("Staging release requires one S3 bucket across backend services")
+                storage = selected
 
 
 def verify_release(directory: Path, manifest: dict) -> None:
