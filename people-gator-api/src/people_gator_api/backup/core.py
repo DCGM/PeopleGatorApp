@@ -64,6 +64,13 @@ def validate_database(database):
     require(type(database.get("port")) is int and 1 <= database["port"] <= 65535, "Explicit database port is required")
     require(database.get("sslmode") in {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"},
             "Explicit PostgreSQL sslmode is required")
+    certificate = database.get("sslrootcert")
+    if certificate is not None:
+        text_fields(database, ("sslrootcert",))
+        require((certificate == "system" and database["sslmode"] == "verify-full") or Path(certificate).is_absolute(),
+                "PostgreSQL sslrootcert must be an absolute CA path, or system with verify-full")
+    require(database["sslmode"] != "verify-ca" or certificate is not None,
+            "verify-ca requires an explicit sslrootcert path")
     return database
 
 
@@ -119,6 +126,8 @@ def database_environment(database, work):
     environment.update(PGHOST=database["host"], PGPORT=str(database["port"]), PGUSER=database["user"],
                        PGDATABASE=database["database"], PGPASSFILE=str(password_file),
                        PGSSLMODE=database["sslmode"], PGCONNECT_TIMEOUT="15")
+    if database.get("sslrootcert") or database["sslmode"] == "verify-full":
+        environment["PGSSLROOTCERT"] = database.get("sslrootcert", "system")
     return environment
 
 

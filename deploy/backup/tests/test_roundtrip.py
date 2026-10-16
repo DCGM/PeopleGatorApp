@@ -1,11 +1,13 @@
 """Real PostgreSQL/S3 operator roundtrip; only disposable synthetic resources."""
 import hashlib
+import copy
 import json
 import os
 from pathlib import Path
 import secrets
 import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "preview" / "tests"))
@@ -16,7 +18,10 @@ from s3_fixture import S3Fixture
 class RoundtripTests(unittest.TestCase):
     @classmethod
     def docker(cls, *args, data=None, check=True):
-        return subprocess.run(["docker", *args], input=data, capture_output=True, check=check, timeout=180)
+        result = subprocess.run(["docker", *args], input=data, capture_output=True, timeout=180)
+        if check and result.returncode:
+            raise RuntimeError("Disposable Docker fixture command failed: " + result.stderr.decode())
+        return result
 
     @classmethod
     def setUpClass(cls):
@@ -28,7 +33,19 @@ class RoundtripTests(unittest.TestCase):
                    "--network-alias", "backup-db", "--log-driver", "none", "--tmpfs", "/var/lib/postgresql/data",
                    "-e", "POSTGRES_USER=fixture", "-e", "POSTGRES_PASSWORD=fixture", "pgvector/pgvector:pg16")
         cls.addClassCleanup(lambda: cls.docker("rm", "-f", cls.database, check=False))
-        cls.docker("exec", cls.database, "sh", "-c", "until pg_isready -U fixture; do sleep 0.2; done")
+        cls.docker("exec", cls.database, "sh", "-c", "until pg_isready -h 127.0.0.1 -U fixture; do sleep 0.2; done")
+        cls.certificates = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.certificates.cleanup)
+        cls.ca = Path(cls.certificates.name) / "server.crt"
+        key = Path(cls.certificates.name) / "server.key"
+        subprocess.run(["openssl", "req", "-x509", "-nodes", "-newkey", "rsa:2048", "-days", "1",
+                        "-keyout", str(key), "-out", str(cls.ca), "-subj", "/CN=backup-db",
+                        "-addext", "subjectAltName=DNS:backup-db"], capture_output=True, check=True)
+        for path in (cls.ca, key):
+            cls.docker("exec", "--user", "postgres", "-i", cls.database, "sh", "-c",
+                       "umask 077; cat > /var/lib/postgresql/data/" + path.name, data=path.read_bytes())
+        cls.sql("ALTER SYSTEM SET ssl = 'on';")
+        cls.sql("SELECT pg_reload_conf();")
         cls.sql("CREATE DATABASE source; CREATE DATABASE recovered;")
         cls.sql("""CREATE EXTENSION vector;
 CREATE TABLE alembic_version(version_num text PRIMARY KEY);
@@ -59,6 +76,7 @@ CREATE INDEX fixture_vector ON faces USING hnsw (embedding vector_cosine_ops);
         command = ["run", "--rm", "-i", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                    "--network", self.network, "--log-driver", "none", "--tmpfs", "/tmp:size=256m,mode=1777",
                    "--mount", f"type=bind,src={self.provider.ca},dst=/test-ca.crt,readonly",
+                   "--mount", f"type=bind,src={self.ca},dst=/test-db-ca.crt,readonly",
                    "-e", "AWS_CA_BUNDLE=/test-ca.crt"]
         if entrypoint:
             command += ["--entrypoint", entrypoint]
@@ -112,6 +130,25 @@ with tempfile.TemporaryDirectory() as work:
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         pending = self.provider.source.list_multipart_uploads(Bucket=self.storage["bucket"])
         self.assertFalse(pending.get("Uploads"))
+
+    def test_verified_postgres_tls_accepts_explicit_ca_and_rejects_untrusted_or_wrong_hostname(self):
+        for scenario in ("trusted", "untrusted", "wrong-hostname"):
+            config = copy.deepcopy(self.config)
+            config["storage"]["prefix"] = scenario + "/"
+            config["database"].update(sslmode="verify-full", sslrootcert="/test-db-ca.crt")
+            if scenario == "untrusted":
+                config["database"]["sslrootcert"] = "system"
+            if scenario == "wrong-hostname":
+                config["database"]["host"] = self.database
+            result = self.worker("publish", "--config", "-", config=config)
+            if scenario == "trusted":
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+            else:
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"PostgreSQL tool failed", result.stderr)
+                self.assertNotIn(b"Traceback", result.stderr)
+                self.assertFalse(self.provider.source.list_objects_v2(Bucket=self.storage["bucket"],
+                                 Prefix=config["storage"]["prefix"]).get("Contents"))
 
 
 if __name__ == "__main__":

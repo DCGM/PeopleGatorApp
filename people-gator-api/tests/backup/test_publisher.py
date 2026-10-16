@@ -126,3 +126,25 @@ def test_private_file_permissions_and_literal_fields(tmp_path):
         invalid["storage"][field] = "private-sentinel\n"
         with pytest.raises(core.BackupError):
             core.validate_publisher(invalid)
+
+
+def test_verified_postgres_tls_uses_explicit_trust_and_ignores_ambient_override(tmp_path):
+    database = {**CONFIG["database"], "sslmode": "verify-full"}
+    with patch.dict(os.environ, {"PGSSLROOTCERT": "untrusted-ambient"}):
+        environment = core.database_environment(database, tmp_path)
+    assert environment["PGSSLROOTCERT"] == "system"
+    database["sslrootcert"] = "/run/private/db-ca.crt"
+    assert core.database_environment(database, tmp_path)["PGSSLROOTCERT"] == "/run/private/db-ca.crt"
+    database.update(sslmode="require", sslrootcert="system")
+    with pytest.raises(core.BackupError):
+        core.validate_database(database)
+
+
+def test_conditional_race_conflict_is_not_misreported_as_existing_backup(tmp_path):
+    path = tmp_path / "archive"
+    path.write_bytes(b"PGDMP")
+    client = Mock()
+    client.put_object.side_effect = failure(409)
+    with pytest.raises(core.BackupError, match="conflicted") as error:
+        core.upload_archive(client, CONFIG["storage"], "key", path, {})
+    assert not isinstance(error.value, core.BackupExists)
