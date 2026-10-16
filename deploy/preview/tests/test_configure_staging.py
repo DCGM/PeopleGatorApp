@@ -82,6 +82,16 @@ class ConfigureTests(unittest.TestCase):
         self.assertFalse(self.state.exists())
         self.assertEqual(list(self.root.glob("*.bak-*")), [])
 
+    def test_complete_operator_owned_host_config_allows_runner_storage_update(self):
+        del self.original["staging"]["auth_volume"]
+        self.config.write_text(json.dumps(self.original))
+        before = self.config.read_bytes()
+        with patch.object(updater.os, "access", return_value=False):
+            self.apply()
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertEqual(list(self.root.glob("config.json.bak-*")), [])
+        self.assertEqual(json.loads((self.private / "storage.json").read_text()), STORAGE)
+
     def test_configured_backup_bucket_cannot_be_used_as_destination(self):
         self.private.mkdir()
         (self.private / "backup-source.json").write_text(json.dumps({
