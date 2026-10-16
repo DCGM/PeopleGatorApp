@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import time
 
-from .core import (BackupError, BackupExists, client_for, head_or_none, object_key,
+from .core import (BackupError, BackupExists, client_for, head_or_none, object_key, object_metadata,
                    publish, read_config, require, validate_publisher)
 
 
@@ -45,7 +45,7 @@ def next_due(now, at, completed_day=None):
 
 def verify_existing(client, config, day):
     stored = head_or_none(client, config["storage"], object_key(config["storage"], day))
-    metadata = (stored or {}).get("Metadata", {})
+    metadata = object_metadata(stored or {})
     require(stored is not None and type(stored.get("ContentLength")) is int and stored["ContentLength"] >= 5
             and isinstance(metadata, dict)
             and isinstance(metadata.get("sha256"), str) and re.fullmatch(r"[a-f0-9]{64}", metadata["sha256"])

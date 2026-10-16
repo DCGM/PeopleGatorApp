@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import tempfile
 
-from .core import (BackupError, client_for, database_environment, require, run_tool,
+from .core import (BackupError, client_for, database_environment, object_metadata, require, run_tool,
                    text_fields, validate_database, validate_storage)
 
 
@@ -45,8 +45,9 @@ def select_backup(client, storage, exact_key=""):
 def download(client, storage, key, destination):
     request = {"Bucket": storage["bucket"], "Key": key}
     before = client.head_object(**request)
-    checksum = before.get("Metadata", {}).get("sha256", "")
-    revision = before.get("Metadata", {}).get("application-revision", "")
+    metadata = object_metadata(before)
+    checksum = metadata.get("sha256", "")
+    revision = metadata.get("application-revision", "")
     require(re.fullmatch(r"[a-f0-9]{64}", checksum) and re.fullmatch(r"[a-f0-9]{40}", revision),
             "Backup needs valid publisher SHA256 and application-revision metadata")
     require(type(before.get("ContentLength")) is int and before["ContentLength"] >= 5,
@@ -70,7 +71,8 @@ def download(client, storage, key, destination):
     finally:
         response["Body"].close()
     after = client.head_object(**request)
-    require(all(after.get(field) == before.get(field) for field in ("ETag", "VersionId", "ContentLength", "Metadata")),
+    require(all(after.get(field) == before.get(field) for field in ("ETag", "VersionId", "ContentLength"))
+            and object_metadata(after) == metadata,
             "Backup changed during download")
     require(size == before["ContentLength"] and digest.hexdigest() == checksum,
             "Backup length or SHA256 checksum did not match")

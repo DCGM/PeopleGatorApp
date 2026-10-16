@@ -151,3 +151,28 @@ def test_conditional_race_conflict_is_not_misreported_as_existing_backup(tmp_pat
     with pytest.raises(core.BackupError, match="conflicted") as error:
         core.upload_archive(client, CONFIG["storage"], "key", path, {})
     assert not isinstance(error.value, core.BackupExists)
+
+
+@pytest.mark.parametrize("multipart", [False, True])
+@pytest.mark.parametrize("casing", [str.lower, str.title, str.upper])
+def test_upload_accepts_metadata_header_casing_without_changing_values(tmp_path, multipart, casing):
+    raw = b"PGDMP synthetic archive"
+    path = tmp_path / "archive"
+    path.write_bytes(raw)
+    metadata = {"sha256": hashlib.sha256(raw).hexdigest(), "application-revision": "a" * 40}
+    client = Mock()
+    client.head_object.return_value = {"ContentLength": len(raw), "Metadata": {casing(k): v for k, v in metadata.items()}}
+    client.create_multipart_upload.return_value = {"UploadId": "upload"}
+    client.upload_part.return_value = {"ETag": "part"}
+    result = core.upload_archive(client, CONFIG["storage"], "key", path, metadata,
+                                 part_size=10 if multipart else 1024)
+    assert result["sha256"] == metadata["sha256"]
+    request = client.complete_multipart_upload if multipart else client.put_object
+    assert request.call_args.kwargs["IfNoneMatch"] == "*"
+    client.delete_object.assert_not_called()
+
+
+@pytest.mark.parametrize("metadata", [None, {"sha256": 123}, {"sha256": "a", "Sha256": "b"}])
+def test_invalid_or_conflicting_metadata_is_rejected_without_exposing_values(metadata):
+    with pytest.raises(core.BackupError, match="backup object metadata"):
+        core.object_metadata({"Metadata": metadata})

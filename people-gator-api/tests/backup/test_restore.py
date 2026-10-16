@@ -38,7 +38,7 @@ def test_selection_uses_paginated_exact_calendar_dates_and_never_upload_order():
         restore.select_backup(client, CONFIG["storage"], prefix + "../secret")
 
 
-@pytest.mark.parametrize("failure", ["checksum", "size", "get-identity", "after-identity", "metadata", "not-custom"])
+@pytest.mark.parametrize("failure", ["checksum", "size", "get-identity", "after-identity", "after-metadata", "metadata", "not-custom"])
 def test_bad_or_changed_backup_fails_before_database_access_and_closes_body(tmp_path, failure):
     tmp_path.chmod(0o700)
     raw = b"invalid archive" if failure == "not-custom" else b"PGDMP fixture"
@@ -53,6 +53,9 @@ def test_bad_or_changed_backup_fails_before_database_access_and_closes_body(tmp_
     if failure == "after-identity":
         before = client.head_object.return_value
         client.head_object.side_effect = [before, {**before, "ETag": '"changed"'}]
+    if failure == "after-metadata":
+        before = client.head_object.return_value
+        client.head_object.side_effect = [before, {**before, "Metadata": {**before["Metadata"], "Sha256": "b" * 64}}]
     if failure == "metadata":
         client.head_object.return_value["Metadata"] = {}
     with patch.object(restore, "run_tool") as tool, pytest.raises(core.BackupError):
@@ -61,6 +64,20 @@ def test_bad_or_changed_backup_fails_before_database_access_and_closes_body(tmp_
     if failure != "metadata":
         assert response["Body"].closed
     assert not (tmp_path / "report").exists()
+
+
+def test_download_accepts_header_casing_changes_and_retains_exact_provenance(tmp_path):
+    raw = b"PGDMP fixture"
+    client = client_for(raw)
+    before = client.head_object.return_value
+    client.head_object.side_effect = [
+        {**before, "Metadata": {k.title(): v for k, v in before["Metadata"].items()}}, before]
+    destination = tmp_path / "archive"
+    result = restore.download(client, CONFIG["storage"], KEY, destination)
+    assert destination.read_bytes() == raw
+    assert result["sha256"] == hashlib.sha256(raw).hexdigest()
+    assert result["application_revision"] == "a" * 40
+    assert client.get_object.return_value["Body"].closed
 
 
 def test_restore_authenticates_as_target_owner_and_cleans_only_new_database(tmp_path):

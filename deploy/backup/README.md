@@ -72,6 +72,14 @@ uploads for process/host crashes, which cannot run cleanup code.
 Uploads use at most a 64 MiB part buffer and 10,000 parts (625 GiB per archive);
 larger archives need a reviewed worker limit change or physical backup tooling.
 
+Metadata header names are read without case sensitivity, including providers
+returning `Sha256` or `Application-Revision`. Checksum and revision values remain
+exact, and conflicting duplicate names fail verification. If an older worker
+reports a metadata verification failure after upload, inspect/verify that dated
+archive with the updated worker; do not overwrite or republish the same dated key
+to change metadata casing. Publisher, scheduled existing-object checks and both
+restore download paths use this behavior.
+
 Publisher permissions: prefix-scoped ListBucket, GetObject (HEAD verification),
 PutObject, AbortMultipartUpload. No bucket creation, final-object deletion or
 application-bucket access is required. Private configuration and dumps must stay
