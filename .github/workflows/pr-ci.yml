@@ -93,6 +93,15 @@ jobs:
           uv run --locked python -m people_gator_api.cli.database check
       - run: uv run --locked pytest tests
         working-directory: people-gator-api
+      - name: Exercise isolated database backup publisher and recovery
+        env:
+          BACKUP_TEST_IMAGE: people-gator-backup-test:${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if [ -f deploy/backup/tests/test_roundtrip.py ]; then
+            trap 'docker image rm "$BACKUP_TEST_IMAGE" || true' EXIT
+            docker build -f deploy/backup/Dockerfile -t "$BACKUP_TEST_IMAGE" .
+            people-gator-api/.venv/bin/python deploy/backup/tests/test_roundtrip.py -v
+          fi
       - name: Exercise private snapshot restore and sanitization on synthetic data
         working-directory: people-gator-api
         env:
