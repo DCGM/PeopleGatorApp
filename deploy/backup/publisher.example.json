@@ -5,7 +5,8 @@
     "user": "backup_reader",
     "password": "REPLACE_WITH_PRIVATE_DATABASE_PASSWORD",
     "database": "people_gator",
-    "sslmode": "require"
+    "sslmode": "verify-full",
+    "sslrootcert": "system"
   },
   "storage": {
     "endpoint_url": "https://s3-provider.example.invalid",

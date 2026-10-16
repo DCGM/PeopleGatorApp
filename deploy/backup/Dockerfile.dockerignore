@@ -1,0 +1,9 @@
+**
+!deploy/
+!deploy/backup/
+!deploy/backup/requirements.lock
+!people-gator-api/
+!people-gator-api/src/
+!people-gator-api/src/people_gator_api/
+!people-gator-api/src/people_gator_api/backup/
+!people-gator-api/src/people_gator_api/backup/*.py

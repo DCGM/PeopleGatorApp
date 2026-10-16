@@ -19,8 +19,11 @@ placeholders. Set the actual source application's full Git revision, database
 host/name/user/password/port, explicit sslmode and explicit HTTPS S3 endpoint,
 region, bucket, prefix and publisher credentials. No `.env`, application settings,
 ambient AWS credentials or instance profile supplies missing configuration.
-PostgreSQL TLS certificate settings should use the standard trusted CA store;
-choose `verify-full` for remote production connections. A local unencrypted
+Choose `verify-full` for remote production connections: it explicitly sets
+`sslrootcert: system` by default to use libpq 16's system trust support. For a
+private CA, set `sslrootcert` to an absolute path and mount that CA read-only into
+the worker at the same path. Ambient `PGSSLROOTCERT` is ignored. `verify-ca`
+requires an explicit CA path. A local unencrypted
 Compose database requires explicit `sslmode: disable`.
 
 Run the worker on the source database's network, passing configuration through
