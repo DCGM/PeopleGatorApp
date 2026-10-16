@@ -182,9 +182,9 @@ print("S3 login, API keys, scan replacement and both media caches passed")'''
             self.assertEqual(retained, {k: after[k] for k in retained})
             self.assertTrue(any(k.startswith(new_values["MEDIA_PREFIX"] + "/images/ndk/") for k in after))
             retained = after
-            # Missing source media may leave private partial generation objects;
+            # Invalid source media may leave private partial generation objects;
             # it must preserve every active/previous object and stable auth key.
-            s3.source.delete_object(Bucket=source["bucket"], Key=source_key)
+            s3.source.put_object(Bucket=source["bucket"], Key=source_key, Body=b"invalid source JPEG")
             failed, failed_values, failed_directory, failed_candidate = generation()
             with self.assertRaises(RuntimeError):
                 controller.prepare(failed, failed_values, failed_directory, failed_candidate, "")

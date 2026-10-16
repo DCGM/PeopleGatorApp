@@ -255,6 +255,8 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         source_root = Path(json.loads(self.environment["PEOPLE_GATOR_API__STORAGE"])["local"]["root"])
         objects = {str(path.relative_to(source_root)): path.read_bytes()
                    for prefix in ("images", "page-layouts") for path in (source_root / prefix).rglob("*") if path.is_file()}
+        missing_scan = next(key for key in objects if key.startswith("images/ndk/"))
+        del objects[missing_scan]  # A source page may be registered before its scan is uploaded.
         objects["peoplegator_api/users.json"] = b"source authentication must not be copied"
         client = Mock()
         client.get_paginator.return_value.paginate.side_effect = lambda **kwargs: [{"Contents": [
@@ -264,6 +266,7 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
             filesystem = LocalFilesystem(directory)
             result = await snapshot.preserve(connection, filesystem, {"bucket": "source-fixture"})
             self.assertEqual(result["data_mode"], "original")
+            self.assertEqual(result["missing_page_scans"], 1)
             self.assertEqual(await rows(), before)
             for page in await connection.fetch("SELECT * FROM pg_demo_pages"):
                 for key in (page_image_key(page["library"], page["document_id"], page["page_id"]),
@@ -275,6 +278,10 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                             await filesystem.read_bytes(key)
             self.assertFalse((Path(directory) / "peoplegator_api").exists())
             self.assertEqual(result["media_objects"], len(objects) - 1)
+            copied_scan = next(key for key in objects if key.startswith("images/ndk/"))
+            (Path(directory) / copied_scan).unlink()
+            with self.assertRaisesRegex(ValueError, "Copied source media"):
+                await snapshot.validate_page_media(connection, filesystem, expected_keys={copied_scan})
 
     async def test_sanitize_real_seed_preserves_graph_vectors_and_rejects_unclassified_schema(self):
         from people_gator_api.filesystem.local import LocalFilesystem
