@@ -44,6 +44,52 @@ class ConfigureTests(unittest.TestCase):
     def apply(self, **kwargs):
         updater.configure(self.config, self.input, **kwargs)
 
+    def test_explicit_env_import_maps_only_s3_literals_without_executing_them(self):
+        env = self.root / ".env"
+        env.write_text("\n".join([
+            "AWS_ENDPOINT_URL=https://s3.example.test", "AWS_S3_REGION=test",
+            "export AWS_ACCESS_KEY_ID='private-id'", 'AWS_SECRET_ACCESS_KEY="private-sentinel" # private',
+            "OPENROUTER_API_KEY=ignored", "POSTGRES_PASSWORD=ignored",
+        ]))
+        updater.configure(self.config, env_file=env, bucket="staging-fixture")
+        self.assertEqual(json.loads((self.private / "storage.json").read_text()), STORAGE)
+        self.assertNotIn("private-sentinel", self.output.getvalue())
+        for value in ("$(touch marker)", "${AWS_SECRET_ACCESS_KEY}", "`touch marker`", "'unterminated"):
+            env.write_text("AWS_SECRET_ACCESS_KEY=" + value)
+            with self.subTest(value=value), self.assertRaises(updater.ConfigurationError):
+                updater.storage_from_env(env, "staging-fixture")
+        self.assertFalse((self.root / "marker").exists())
+
+    def test_env_requires_explicit_complete_settings_and_bucket(self):
+        env = self.root / ".env"
+        env.write_text("AWS_ACCESS_KEY_ID=private-id\nAWS_ACCESS_KEY_ID=duplicate")
+        with self.assertRaisesRegex(updater.ConfigurationError, "Duplicate"):
+            updater.storage_from_env(env, "staging-fixture")
+        env.write_text("AWS_ACCESS_KEY_ID=private-id")
+        with self.assertRaisesRegex(updater.ConfigurationError, "endpoint, region"):
+            updater.storage_from_env(env, "staging-fixture")
+        with self.assertRaisesRegex(updater.ConfigurationError, "--bucket"):
+            updater.configure(self.config, env_file=env)
+        self.assertFalse(self.private.exists())
+
+    def test_operator_owned_host_config_fails_before_backups_or_directory_writes(self):
+        before = self.config.read_bytes()
+        with patch.object(updater.os, "access", return_value=False):
+            with self.assertRaisesRegex(updater.ConfigurationError, "operator-owned"):
+                self.apply()
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertFalse(self.private.exists())
+        self.assertFalse(self.state.exists())
+        self.assertEqual(list(self.root.glob("*.bak-*")), [])
+
+    def test_configured_backup_bucket_cannot_be_used_as_destination(self):
+        self.private.mkdir()
+        (self.private / "backup-source.json").write_text(json.dumps({
+            "endpoint_url": STORAGE["s3"]["endpoint_url"], "bucket": STORAGE["s3"]["bucket_name"]}))
+        with self.assertRaisesRegex(updater.ConfigurationError, "separate"):
+            self.apply()
+        self.assertFalse((self.private / "storage.json").exists())
+
     def test_preserves_settings_private_inputs_and_state_with_private_backups(self):
         self.private.mkdir()
         self.state.mkdir()

@@ -15,10 +15,11 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 import sys
 import tempfile
 
-from staging import Staging
+from staging import Staging, StagingConfigurationError
 
 
 class ConfigurationError(ValueError):
@@ -48,6 +49,41 @@ def serialize(value) -> bytes:
     return (json.dumps(value, indent=2) + "\n").encode()
 
 
+def storage_from_env(path: Path, bucket: str):
+    """Read only explicit S3 inputs; never source a shell file or expand variables."""
+    supported = {"AWS_ENDPOINT_URL_S3", "AWS_ENDPOINT_URL", "AWS_S3_REGION", "AWS_REGION",
+                 "AWS_DEFAULT_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"}
+    values = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, separator, value = line.partition("=")
+        key = key.strip()
+        if not separator or key not in supported:
+            continue
+        if key in values:
+            raise ConfigurationError("Duplicate S3 setting in the explicit env file")
+        try:
+            tokens = shlex.split(value, comments=True)
+        except ValueError:
+            raise ConfigurationError("Invalid quoting in the explicit S3 env file") from None
+        if len(tokens) != 1 or not tokens[0] or "${" in tokens[0] or "$(" in tokens[0] or "`" in tokens[0]:
+            raise ConfigurationError("S3 env values must be nonempty literals; quote spaces and do not use interpolation")
+        values[key] = tokens[0]
+    storage = {"local": None, "s3": {
+        "endpoint_url": values.get("AWS_ENDPOINT_URL_S3") or values.get("AWS_ENDPOINT_URL", ""),
+        "region": values.get("AWS_S3_REGION") or values.get("AWS_REGION") or values.get("AWS_DEFAULT_REGION", ""),
+        "bucket_name": bucket,
+        "access_key_id": values.get("AWS_ACCESS_KEY_ID", ""),
+        "secret_access_key": values.get("AWS_SECRET_ACCESS_KEY", ""),
+    }}
+    try:
+        return Staging.validate_storage(storage)
+    except ValueError:
+        raise ConfigurationError("Explicit S3 env input needs an HTTPS endpoint, region, access key, secret key and destination bucket") from None
+
+
 def prompt_storage(previous):
     current = (previous or {}).get("s3") or {}
     result = {}
@@ -73,7 +109,10 @@ def host_lock(root: Path, dry_run: bool):
         yield
 
 
-def configure(config_path: Path, storage_file: Path | None = None, *, dry_run=False):
+def configure(config_path: Path, storage_file: Path | None = None, *, env_file: Path | None = None,
+              bucket: str | None = None, dry_run=False):
+    if (env_file is None) != (bucket is None) or (storage_file is not None and env_file is not None):
+        raise ConfigurationError("Use --env-file with --bucket, or --storage-file, or interactive input")
     original = existing(config_path)
     if original is None:
         raise ConfigurationError("Existing preview host config is required; this script never resets host configuration")
@@ -97,7 +136,8 @@ def configure(config_path: Path, storage_file: Path | None = None, *, dry_run=Fa
         raise ConfigurationError("Host config and staging storage settings must be separate files")
     before_storage = existing(storage_path)
     previous = json.loads(before_storage) if before_storage is not None else None
-    proposed = json.loads(storage_file.read_bytes()) if storage_file else prompt_storage(previous)
+    proposed = (storage_from_env(env_file, bucket) if env_file else
+                json.loads(storage_file.read_bytes()) if storage_file else prompt_storage(previous))
     controller.validate_storage(proposed)
     controller.dotenv({"STAGING_STORAGE": json.dumps(proposed)})
     # Prompts happen outside the host lock; detect concurrent edits before writing.
@@ -118,6 +158,18 @@ def configure(config_path: Path, storage_file: Path | None = None, *, dry_run=Fa
             changes.append((config_path, original, serialize(candidate)))
         if proposed != previous:
             changes.append((storage_path, before_storage, serialize(proposed)))
+        if any(path == config_path for path, _, _ in changes) and not os.access(config_path.parent, os.W_OK):
+            raise ConfigurationError(
+                "An operator must add/update the staging section in the root-owned host config first, "
+                "preserving existing settings. Keep the settings directory operator-owned; "
+                "then rerun as the deployment runner. See deploy/preview/STAGING.md."
+            )
+        backup = existing(private / "backup-source.json")
+        if backup is not None:
+            source = json.loads(backup)
+            if (source["endpoint_url"].rstrip("/") == proposed["s3"]["endpoint_url"].rstrip("/")
+                    and source.get("bucket", "peoplegator-ingest") == proposed["s3"]["bucket_name"]):
+                raise ConfigurationError("Staging destination must be separate from the configured backup source bucket")
         for directory in (private, state):
             if directory.exists() and (directory.is_symlink() or directory.stat().st_uid != os.geteuid()):
                 raise ConfigurationError("Staging directories must be owned by the deployment runner and must not be symlinks")
@@ -158,10 +210,13 @@ def main(argv=None):
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("/opt/people-gator-preview/config.json"))
-    parser.add_argument("--storage-file", type=Path, help="Read full S3 settings from a private JSON file instead of prompting")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--storage-file", type=Path, help="Read full S3 settings from a private JSON file instead of prompting")
+    inputs.add_argument("--env-file", type=Path, help="Read explicit AWS S3 settings from a private dotenv file without shell evaluation")
+    parser.add_argument("--bucket", help="Dedicated staging destination bucket, required with --env-file")
     parser.add_argument("--dry-run", action="store_true", help="Validate and report changes without writing files")
     args = parser.parse_args(argv)
-    configure(args.config, args.storage_file, dry_run=args.dry_run)
+    configure(args.config, args.storage_file, env_file=args.env_file, bucket=args.bucket, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
@@ -171,6 +226,6 @@ if __name__ == "__main__":
         # JSON errors and filesystem paths can contain secrets; never echo them.
         # Our validation messages are fixed and contain no supplied values.
         error = sys.exception()
-        message = str(error) if isinstance(error, ConfigurationError) else "Settings update failed; check explicit S3 configuration, private files, ownership and permissions"
+        message = str(error) if isinstance(error, (ConfigurationError, StagingConfigurationError)) else "Settings update failed; check explicit S3 configuration, private files, ownership and permissions"
         print(message, file=sys.stderr)
         sys.exit(1)

@@ -183,6 +183,29 @@ this checkout or a reviewed controller release. The preview host config and its
 runner-owned state directory must already exist. The one-time directory setup
 above still applies if `/opt` or `/var/lib` cannot be written by that user.
 
+The host config directory stays operator-owned, as required by the preview
+installation guide. If its `staging` section is missing or still contains
+`auth_volume`, an operator must first use
+`sudoedit /opt/people-gator-preview/config.json` to add the following section
+or update the existing one, preserving all other settings:
+
+```json
+"staging": {
+  "host": "staging.peoplegator.dev",
+  "state_dir": "/var/lib/people-gator-staging",
+  "private_dir": "/opt/people-gator-staging"
+}
+```
+
+Include the JSON comma separating it from the preceding setting. Remove the
+obsolete `auth_volume` field if present. Provision both staging directories as
+mode 700 owned by the existing runner account. Do not make
+`/opt/people-gator-preview` runner-writable or run the helper as root: it checks
+the preview state owner's identity. The helper reports this prerequisite before
+writing backups or staging settings when the host config needs an operator edit.
+Once the section is complete, it can update runner-owned `storage.json` without
+writing the operator-owned host config.
+
 ```sh
 python3 deploy/preview/configure_staging.py
 ```
@@ -213,6 +236,29 @@ and atomically replaces settings with mode-600 files in mode-700 staging
 directories. Ordinary write failures restore already-replaced settings. Reruns
 with the same settings retain file contents and create no additional backups.
 Backups contain credentials and must remain private; retain them for recovery.
+
+The lifecycle controller does **not** automatically read the repository's
+`.env` or ambient AWS variables. To import a private dotenv file explicitly:
+
+```sh
+python3 deploy/preview/configure_staging.py \
+  --env-file /private/staging.env --bucket peoplegator-staging --dry-run
+```
+
+Remove `--dry-run` to save the validated settings. The importer reads only
+`AWS_ENDPOINT_URL_S3` (or `AWS_ENDPOINT_URL`), `AWS_S3_REGION` (or `AWS_REGION`,
+then `AWS_DEFAULT_REGION`), `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+Values must be literals; quoted values, comments and `export KEY=value` are
+supported. Shell commands and variable interpolation are rejected. Other
+settings, including PostgreSQL and inference credentials, are ignored.
+Credentials are never printed. Use credentials scoped to the dedicated staging
+bucket; do not reuse production reader/writer credentials for the running API.
+`--bucket` is mandatory and selects the staging **destination**. The default
+backup **source** `peoplegator-ingest` remains separately configured in
+`backup-source.json`; it must not also be the destination. This import neither
+creates buckets nor supplies the other required private inputs. Keep
+`credential-input.json`, `media-policy.json` and `backup-source.json` provisioned
+as described in their sections before requesting the first `refresh`.
 
 For active S3 staging, endpoint/region/bucket must match committed `state.json`;
 credential rotation within that destination is allowed. Pending activation and
