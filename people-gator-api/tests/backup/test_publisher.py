@@ -133,6 +133,9 @@ def test_verified_postgres_tls_uses_explicit_trust_and_ignores_ambient_override(
     with patch.dict(os.environ, {"PGSSLROOTCERT": "untrusted-ambient"}):
         environment = core.database_environment(database, tmp_path)
     assert environment["PGSSLROOTCERT"] == "system"
+    database["sslrootcert"] = None
+    core.validate_database(database)
+    assert core.database_environment(database, tmp_path)["PGSSLROOTCERT"] == "system"
     database["sslrootcert"] = "/run/private/db-ca.crt"
     assert core.database_environment(database, tmp_path)["PGSSLROOTCERT"] == "/run/private/db-ca.crt"
     database.update(sslmode="require", sslrootcert="system")
