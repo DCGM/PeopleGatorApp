@@ -138,6 +138,15 @@ Controller release publication also rejects local staging services/volumes or
 backend, migration and check services configured for different buckets.
 Never place these credentials in frontend variables or commit the private file.
 
+For SeaweedFS named IAM policies, grant `s3:ListBucket` on
+`arn:aws:s3:::peoplegator-staging` and object read/write/delete on
+`arn:aws:s3:::peoplegator-staging/*` in separate statements. A policy that assigns
+listing only to the object ARN returns `AccessDenied` for bucket listings. Inspect
+the attached policy with `s3.policy -get -name <policy-name>` in `weed shell`;
+the [application policy example](../backup/staging-policy.example.json) shows the
+required resource split. Update only the staging account's policy and retain a
+private copy of its prior definition.
+
 Provision the bucket explicitly before the first refresh. Use a private bucket,
 block anonymous/public reads, and grant the staging principal only this bucket's
 required listing/read/write/delete operations. It must have no production or PR
@@ -362,9 +371,11 @@ staging bucket, preserving relative canonical keys. Nested scan paths are copied
 once. Authentication namespaces, path traversal and unexpected listing prefixes
 are rejected. Each transfer pins the listed ETag and checks length/identity.
 
-All referenced page scans and present OCR layouts must validate before activation.
-Pages without OCR retain that absence. A listed source object that disappears or
-changes fails preparation instead of creating blank substitutes. Staging creates its own
+Existing scans and OCR layouts must validate before activation. Registered pages
+with no source scan retain that absence, recorded as `missing_page_scans` in private
+provenance; pages without OCR likewise remain without OCR. A listed source object
+that disappears or changes during copy, or a copied destination object that goes
+missing before validation, fails preparation. Staging creates its own
 caches. The running API has only staging storage credentials and no production
 mount or read-through fallback. Later source deletion cannot break the copied
 objects. Refresh retains the stable staging authentication namespace.

@@ -305,7 +305,7 @@ async def validate_data(connection):
         JOIN pg_demo_entities e ON e.id=t.entity_id JOIN pg_demo_sources s ON s.id=t.source_id LIMIT 1""")
 
 
-async def copy_media(filesystem, source, mappings):
+async def copy_media(filesystem, source, mappings, *, copied_keys=None):
     """Copy original media bytes into fresh generation prefixes, excluding auth."""
     def prefix(value):
         if not isinstance(value, str) or not value or any(part in {"", ".", ".."} for part in value.split("/")) or "\\" in value:
@@ -344,9 +344,11 @@ async def copy_media(filesystem, source, mappings):
                     raw = response["Body"].read()
                 finally:
                     response["Body"].close()
-                if len(raw) != item["Size"] or (condition and response.get("ETag") != item["ETag"]):
+                if len(raw) != item["Size"] or response.get("ETag") != item["ETag"]:
                     raise ValueError("Source media changed or was truncated during transfer")
                 await filesystem.write_bytes(target + relative, raw)
+                if copied_keys is not None:
+                    copied_keys.add(target + relative)
                 copied += 1
     return copied
 
@@ -358,13 +360,15 @@ async def preserve(connection, filesystem, source):
     if not isinstance(revision, str) or not re.fullmatch(r"[a-zA-Z0-9_]{1,64}", revision):
         raise ValueError("Missing/invalid source migration history")
     await validate_data(connection)
+    copied_keys = set()
     copied = await copy_media(filesystem, source, [
         (source.get("image_prefix", "images"), settings.image_content.key_prefix),
         (source.get("page_image_prefix", "images/ndk"), settings.page_image.key_prefix),
         (source.get("page_layout_prefix", "page-layouts"), settings.page_layout.key_prefix),
-    ])
-    await validate_page_media(connection, filesystem)
-    return {"source_schema_revision": revision, "data_mode": "original", "media_objects": copied}
+    ], copied_keys=copied_keys)
+    missing_scans = await validate_page_media(connection, filesystem, expected_keys=copied_keys)
+    return {"source_schema_revision": revision, "data_mode": "original", "media_objects": copied,
+            "missing_page_scans": missing_scans}
 
 
 async def read_auth(filesystem, key: str):
@@ -434,26 +438,35 @@ async def validate_storage(connection, filesystem):
     await validate_page_media(connection, filesystem)
 
 
-async def validate_page_media(connection, filesystem):
+async def validate_page_media(connection, filesystem, *, expected_keys=()):
     from botocore.exceptions import ClientError
     from people_gator_api.media.page_image import page_image_key
     from people_gator_api.media.page_layout import page_layout_key
     from people_gator_api.schemas.pero import PageLayoutModel
     from PIL import Image
-    for page in await connection.fetch("SELECT * FROM pg_demo_pages ORDER BY id"):
-        image = await filesystem.read_bytes(page_image_key(page["library"], page["document_id"], page["page_id"]))
-        Image.open(io.BytesIO(image)).verify()
-        # OCR is optional in the standard application. Keep its absence rather
-        # than inventing a layout for a page that has no OCR yet.
+    async def optional_bytes(key):
         try:
-            layout = await filesystem.read_bytes(page_layout_key(page["library"], page["document_id"], page["page_id"]))
+            return await filesystem.read_bytes(key)
         except FileNotFoundError:
-            continue
+            pass
         except ClientError as error:
-            if error.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
-                continue
-            raise
-        PageLayoutModel.model_validate_json(layout)
+            if error.response.get("Error", {}).get("Code") not in {"NoSuchKey", "404", "NotFound"}:
+                raise
+        if key in expected_keys:
+            raise ValueError("Copied source media is missing from the staging destination")
+        return None
+
+    missing_scans = 0
+    for page in await connection.fetch("SELECT * FROM pg_demo_pages ORDER BY id"):
+        image = await optional_bytes(page_image_key(page["library"], page["document_id"], page["page_id"]))
+        if image is None:
+            missing_scans += 1  # Preserve registered pages with no source scan yet.
+        else:
+            Image.open(io.BytesIO(image)).verify()
+        layout = await optional_bytes(page_layout_key(page["library"], page["document_id"], page["page_id"]))
+        if layout is not None:
+            PageLayoutModel.model_validate_json(layout)
+    return missing_scans
 
 
 async def main():
