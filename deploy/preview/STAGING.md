@@ -365,17 +365,24 @@ Configure private `media-source.json` from `staging.media-source.example.json`.
 This source reader is independent of the database backup reader and is available
 only to the explicit preparation worker. `prefix` selects an optional source
 root; `image_prefix`, `page_image_prefix` and `page_layout_prefix` default to
-`images`, `images/ndk` and `page-layouts`. The worker copies original bytes from
-those namespaces into their corresponding **new generation prefixes** in the
-staging bucket, preserving relative canonical keys. Nested scan paths are copied
-once. Authentication namespaces, path traversal and unexpected listing prefixes
-are rejected. Each transfer pins the listed ETag and checks length/identity.
+`images`, `images/ndk` and `page-layouts`. The worker never lists or copies
+whole namespaces, because a source bucket can hold far more than one dataset. It
+copies only the media the restored records reference: the scan and OCR layout of
+every registered page and the content of every image source. It derives keys
+with the application's canonical media-key helpers and writes them under the
+corresponding **new generation prefixes** in the staging bucket, preserving
+relative keys. Transfers run with bounded concurrency (16 objects in flight).
+Authentication namespaces and path traversal are rejected. Each transfer checks
+its identity and length, and verifies simple-upload MD5 ETags.
 
-Existing scans and OCR layouts must validate before activation. Registered pages
-with no source scan retain that absence, recorded as `missing_page_scans` in private
-provenance; pages without OCR likewise remain without OCR. A listed source object
-that disappears or changes during copy, or a copied destination object that goes
-missing before validation, fails preparation. Staging creates its own
+Existing scans and OCR layouts must validate before activation. Referenced
+objects absent from the source stay absent: registered pages with no source scan
+are recorded as `missing_page_scans`, and all absent referenced objects as
+`missing_media_objects`, in private provenance alongside `media_objects` and
+`media_bytes`. Pages without OCR likewise remain without OCR. A source object
+that changes or is truncated during copy, a source read error other than an
+absent key, or a copied destination object that goes missing before validation
+fails preparation. Staging creates its own
 caches. The running API has only staging storage credentials and no production
 mount or read-through fallback. Later source deletion cannot break the copied
 objects. Refresh retains the stable staging authentication namespace.
@@ -436,7 +443,7 @@ provenance; do not upload or paste these into public CI/issues.
 
 Reserve capacity for **active + preparation + retained previous database/media**,
 a compressed dump and PostgreSQL restore/index/WAL overhead. Source transfer has
-provider egress/API cost proportional to the archive and copied media. Raise
+provider egress/API cost proportional to the archive and the referenced media. Raise
 capacity/timeouts deliberately for large collections. Dumps are deleted when an
 operation exits normally or fails; a killed process may leave `snapshot-*` private
 work directories. Failed/previous generation databases and S3 prefixes are retained
