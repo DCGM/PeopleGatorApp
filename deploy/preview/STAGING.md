@@ -122,6 +122,8 @@ JSON `null` and supply the complete `s3` object: explicit HTTPS `endpoint_url`,
 `timeout_seconds`. The controller rejects missing/local/mixed configurations;
 the preparation worker independently requires the S3 backend. Runtime and
 preparation select the same S3 settings through `PEOPLE_GATOR_API__STORAGE`.
+Controller release publication also rejects local staging services/volumes or
+backend, migration and check services configured for different buckets.
 Never place these credentials in frontend variables or commit the private file.
 
 Provision the bucket explicitly before the first refresh. Use a private bucket,
@@ -353,7 +355,8 @@ The actual worker downloads a pinned synthetic dump, restores/sanitizes it,
 imports a permitted seeded scan with vectors, and provisions the three auth
 objects into one staging bucket. The actual staging Compose runs repeated
 migration/check, full startup and restart gates. API requests verify S3 login,
-API keys, scan reads and cache writes after the source scan is deleted. Failed
+API keys, scan reads/replacement and both cache types after the source scan is
+deleted. Failed
 refresh, repeated auth provisioning, scope edits and key revocation preserve
 active S3 objects/signing keys. Drift/revision failures remain independent gates.
 Resources use unique test projects, databases, buckets and networks, with Traefik
