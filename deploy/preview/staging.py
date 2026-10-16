@@ -194,14 +194,14 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
     def worker(self, action, values, directory, *, work=None, exact_key=""):
         # Credentials are explicit and supplied only to their operation via stdin.
         files = {"download": ["backup-source.json"], "auth": ["credential-input.json"],
-                 "sanitize": ["media-policy.json", "media-source.json"], "validate": []}[action]
+                 "copy": ["media-source.json"], "sanitize": ["media-policy.json", "media-source.json"], "validate": []}[action]
         args = ["docker", "run", "--rm", "--log-driver", "none", "--read-only", "--cap-drop", "ALL",
                 "--label", self.worker_label, "--security-opt", "no-new-privileges:true",
                 # Only download needs to write the private host work directory.
                 "--user", "0:0" if action == "download" else "10001:10001",
                 "--tmpfs", "/tmp:size=256m,mode=1777", "--entrypoint", "python",
                 "--mount", f"type=bind,src={INSTALL_DIR / 'snapshot.py'},dst=/snapshot.py,readonly"]
-        if action in {"auth", "sanitize", "validate"}:
+        if action in {"auth", "copy", "sanitize", "validate"}:
             # The database network is internal. A separate network provides S3
             # egress without attaching PostgreSQL to a public-facing network.
             args += ["--network", self.config.get("web_network", "web")]
@@ -213,7 +213,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             args += ["--env-file", str(environment)]
         for name in files:
             path = Path(self.settings["private_dir"]) / name
-            if name == "media-source.json" and not path.exists():
+            if action == "sanitize" and name == "media-source.json" and not path.exists():
                 continue  # allowed only when the policy permits no source images
             if not path.is_file():
                 raise ValueError(f"Provision private staging input {name} first")
@@ -253,7 +253,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 self.private_command(self.infra("exec", "-T", "postgres", "pg_restore", "--exit-on-error",
                     "--single-transaction", "--no-owner", "--no-privileges", "--no-comments", "--no-security-labels",
                     "-U", "preview_admin", "--role", values["DB_USER"], "-d", values["DB_NAME"]), input_file=stream)
-            report = json.loads(self.worker("sanitize", values, directory))
+            report = json.loads(self.worker("copy", values, directory))
             generation["provenance"] = {**provenance, **report}
             write_private(directory / "provenance.json", json.dumps(generation["provenance"]))
             self.worker("auth", values, directory)
@@ -319,7 +319,10 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         active_path = self.staging_root / "state.json"
         old = json.loads(active_path.read_text()) if active_path.exists() else None
         if not old and not refresh:
-            raise ValueError("Explicit snapshot initialization is required before normal staging deployment")
+            raise StagingConfigurationError(
+                "Explicit snapshot initialization is required before normal staging deployment. "
+                "After provisioning private inputs, run staging.yml with operation=refresh."
+            )
         if not (self.root / "infrastructure.env").is_file():
             raise ValueError("Operator must initialize shared infrastructure first")
         storage = self.storage_identity(self.storage())

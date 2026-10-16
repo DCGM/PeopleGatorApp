@@ -58,8 +58,10 @@ class RuntimeTests(unittest.TestCase):
                 WHERE o.source_id=p.id) LIMIT 1""", fixture.source))
         source_key = f"images/ndk/{page['library']}/{page['document_id']}/{page['page_id']}.jpg"
         source_root = Path(json.loads(fixture.environment["PEOPLE_GATOR_API__STORAGE"])["local"]["root"])
-        s3.source.put_object(Bucket=source["bucket"], Key=source_key, Body=(source_root / source_key).read_bytes())
-        (private / "media-policy.json").write_text(json.dumps({"permitted_page_ids": [page["id"]]}))
+        for prefix in ("images", "page-layouts"):
+            for path in (source_root / prefix).rglob("*"):
+                if path.is_file():
+                    s3.source.put_object(Bucket=source["bucket"], Key=str(path.relative_to(source_root)), Body=path.read_bytes())
         import argon2
         hasher = argon2.PasswordHasher()
         supplied = {"users": {name: {"hash": hasher.hash("private-synthetic-staging-password")} for name in snapshot.EXAMPLE_SCOPES},
@@ -95,7 +97,8 @@ class RuntimeTests(unittest.TestCase):
             # Actual TLS downloads, pg_restore, scan import, S3 auth and Compose.
             controller.prepare(active, values, directory, candidate, "")
             self.assertEqual(active["provenance"]["source_schema_revision"], "d34a021b0005")
-            self.assertEqual(active["provenance"]["permitted_pages"], 1)
+            self.assertEqual(active["provenance"]["data_mode"], "original")
+            self.assertGreater(active["provenance"]["media_objects"], 0)
             self.assertEqual(list(state.glob("snapshot-*")), [])
             def gate(action, success=True, env_file=candidate):
                 try:

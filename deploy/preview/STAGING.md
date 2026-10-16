@@ -51,7 +51,7 @@ PR and packages read. CI image publication additionally needs packages write.
    encrypted operator storage and restrict host/runner access accordingly.
 5. After merge, wait for a successful main CI build and invoke **Main staging
    deployment → Run workflow → main → refresh**. An uninitialized normal deploy
-   deliberately fails. Verify classification, login, permitted media, entity
+   deliberately fails. Verify original data, login, copied media, entity
    links, vector queries and writable operations before admitting staging users.
 
 Workflow publication accepts only the exact reviewed `main` workflow revision
@@ -148,7 +148,7 @@ bucket permissions. One bucket contains these distinct key namespaces:
 | `peoplegator_api/users.json` | Stable staging users and password hashes |
 | `peoplegator_api/api-keys.json` | Stable API-key hashes, owners and scopes |
 | `peoplegator_api/jwks.json` | Stable independent ES256 signing keys |
-| `generations/<16-hex>/images/ndk/...` | Snapshot's permitted or redacted scans |
+| `generations/<16-hex>/images/ndk/...` | Snapshot's original scans |
 | `generations/<16-hex>/page-layouts/...` | Redacted OCR layouts |
 | `generations/<16-hex>/images/...` | Other generation media |
 | `generations/<16-hex>/cache/page-images/...` | Resized scans |
@@ -275,7 +275,7 @@ bucket; do not reuse production reader/writer credentials for the running API.
 backup **source** `peoplegator-db-backup` remains separately configured in
 `backup-source.json`; it must not also be the destination. This import neither
 creates buckets nor supplies the other required private inputs. Keep
-`credential-input.json`, `media-policy.json` and `backup-source.json` provisioned
+`credential-input.json`, `media-source.json` and `backup-source.json` provisioned
 as described in their sections before requesting the first `refresh`.
 
 For active S3 staging, endpoint/region/bucket must match committed `state.json`;
@@ -326,8 +326,8 @@ Changing supplied defaults does not rotate an existing account or signing key.
 API-key identifiers should start with `staging-`, belong to a staging user and
 carry explicit scopes. First authenticated use registers associated actors
 through application repository contracts. Historical production actors/key IDs
-retain attribution FKs but receive inactive historical identities and no
-production credentials. Input files are sent to operation-scoped workers through
+retain their original rows and attribution FKs; production authentication
+files and signing keys are not copied. Input files are sent to operation-scoped workers through
 stdin, never mounted in the running API or included in public logs/artifacts.
 
 Open **https://staging.peoplegator.dev/staging-login.html**, choose an example
@@ -342,55 +342,39 @@ reduce an account's scopes, use `/docs` with those permitted scopes; the predefi
 page requests the documented default set. The app's existing demo auto-login
 fallback is not a staging credential and fails if there is no valid session.
 
-## Media classification and transformations
+## Preserve original data and copy independent media
 
-Copy `staging.media-policy.example.json` to private `media-policy.json`.
-`permitted_page_ids` contains **source/page record UUIDs** (`pg_demo_pages.id`),
-not archive `page_id`s. An empty allowlist imports **no** production scans, faces
-or vectors. To retain a representative real vector graph, the operator must
-explicitly permit the associated page pixels, face geometry and biometric
-vectors for all staging users with browse scope. Staging does not implement
-per-page access control: restrict host/network/accounts to the permitted dataset.
+Explicit refresh restores the source database and preserves its original rows,
+text, names, identifiers, actor attribution, embeddings and relationships. It does
+not pseudonymize records, blank scans, replace OCR or remove face/vector records.
+Candidate migrations run afterward. Authentication files remain independently
+provisioned staging objects; source credential/signing files are never imported.
+The legacy standalone sanitizer remains available for existing operator tests but
+is not called by staging refresh. `media-policy.json` is not used by this path.
 
-When any pages are allowed, separately configure private `media-source.json`
-from `staging.media-source.example.json`. This is independent of the database
-backup prefix/credentials. Only explicit preparation receives source readers.
-`prefix` selects an optional source root and `page_image_prefix` defaults to
-`images/ndk`; neither inherits the candidate generation prefix. Canonical source
-scan keys are copied individually into a **new generation prefix in the staging bucket**;
-no recursive bucket copy, production mount or read-through fallback exists.
-A missing permitted image fails preparation. Removing production assets after
-copy cannot break the independent copy. Account/credential paths can never be
-selected by the importer. Source JPEG EXIF/comments are removed on re-encoding.
-Existing derivatives are not copied; staging creates its own on demand.
+Configure private `media-source.json` from `staging.media-source.example.json`.
+This source reader is independent of the database backup reader and is available
+only to the explicit preparation worker. `prefix` selects an optional source
+root; `image_prefix`, `page_image_prefix` and `page_layout_prefix` default to
+`images`, `images/ndk` and `page-layouts`. The worker copies original bytes from
+those namespaces into their corresponding **new generation prefixes** in the
+staging bucket, preserving relative canonical keys. Nested scan paths are copied
+once. Authentication namespaces, path traversal and unexpected listing prefixes
+are rejected. Each transfer pins the listed ETag and checks length/identity.
 
-Reviewed sanitization is deliberately conservative:
+All referenced page scans and present OCR layouts must validate before activation.
+Pages without OCR retain that absence. A listed source object that disappears or
+changes fails preparation instead of creating blank substitutes. Staging creates its own
+caches. The running API has only staging storage credentials and no production
+mount or read-through fallback. Later source deletion cannot break the copied
+objects. Refresh retains the stable staging authentication namespace.
 
-- Preserve entity/source/annotation UUIDs and attribution/verification FKs;
-  pseudonymize user identity/email, entity names/descriptions/authority IDs,
-  aliases, document names, library metadata, face identifiers and API-key labels.
-  Unknown entity types are cleared. Non-page URLs become nonresolving `.invalid`
-  placeholders; canonical page/document URLs use pseudonymous library names.
-- All mention text becomes a redacted placeholder and contexts are cleared.
-  All OCR layouts become valid empty layouts; private text never enters media.
-- Only explicitly permitted pages retain pixels and their face/vector graph.
-  Other pages get blank JPEGs in the staging bucket and lose image occurrences/faces/vectors
-  through FK cascades. Their text annotations remain linked but redacted.
-  Model registrations/dimensions remain; retained vectors are unchanged.
-  Geometry is reduced to validated numeric boxes/keypoints and checked against
-  imported image bounds. Face landmark labels retain their original coordinate
-  mapping in any input order; unknown or duplicate labels fail preparation.
-  Redacted pages never expose old originals/derivatives.
-- An explicit schema/routine/table/column classification rejects unknown schema objects
-  rather than allowing newly introduced text/auth columns through. Extend this
-  reviewed sanitizer before using a new source contract. Candidate migrations
-  run after sanitization and must also pass full schema/revision validation.
-
-These transformations trade original text/OCR search for preserving historical
-relational shape and permitted embedding queries; this is **not synthetic
-reconstruction**. Source dump application provenance, source migration revision,
-object identity/checksums and policy checksum live privately in generation
-`provenance.json`. No raw data or credentials enter Actions summaries.
+Use source media corresponding to the database archive. Independently changing
+source objects are not a transactional database/media snapshot; arrange a matched
+backup or pause source media writes when a consistent pair is required. Original
+source content remains available to staging users under the existing scope-based
+access controls. Source application/migration revisions, object identity/checksums
+and transfer counts are recorded privately in generation `provenance.json`.
 
 ## Refresh, activation, persistence and recovery
 
@@ -409,7 +393,7 @@ Each refresh uses `staging_<16-hex>` database/login and
 database password. Database CONNECT
 is revoked from PUBLIC **before enabling connections**. PR roles have no access.
 Preparation is unserved: private download → archive validation → restricted-role
-restore → sanitize/import → auth initialization → candidate migration/data checks
+restore → original media copy → auth initialization → candidate migration/data checks
 → runtime-configured full check → API lifespan/health → frontend/HTTPS readiness.
 The stable Compose project `people-gator-staging` switches database and media in
 the same configuration. Authentication uses stable keys in that same bucket.
@@ -441,7 +425,7 @@ provenance; do not upload or paste these into public CI/issues.
 
 Reserve capacity for **active + preparation + retained previous database/media**,
 a compressed dump and PostgreSQL restore/index/WAL overhead. Source transfer has
-provider egress/API cost proportional to the archive and permitted scans. Raise
+provider egress/API cost proportional to the archive and copied media. Raise
 capacity/timeouts deliberately for large collections. Dumps are deleted when an
 operation exits normally or fails; a killed process may leave `snapshot-*` private
 work directories. Failed/previous generation databases and S3 prefixes are retained
@@ -466,8 +450,10 @@ Standard-library suites: `test_preview.py`, `test_installation.py`,
 `test_observability.py`, `test_staging.py`, `test_snapshot.py` in `tests/`.
 The backend CI job additionally runs snapshot integration with its backend venv,
 random test port and a disposable PostgreSQL service. That suite seeds twice,
-creates a real historical-revision synthetic `pg_dump -Fc`, restores it, sanitizes
-sensitive sentinels, checks relationships/media/vectors, migrates/checks twice and
+creates a real historical-revision synthetic `pg_dump -Fc` and restores it. The
+original-data test compares every restored row and media bytes before/after copy;
+legacy sanitizer tests still check redaction separately. It checks relationships,
+media/vectors, migrates/checks twice and
 retains staging edits. A permitted seeded face uses reversed landmark order to
 verify that sanitization preserves label/coordinate pairs; unknown and duplicate
 labels must fail preparation. No production dump is used by CI.
@@ -482,8 +468,8 @@ Docker Compose and OpenSSL are required. The suite starts separate disposable
 TLS MinIO source/staging providers with unrelated credentials, private buckets,
 a test CA and an isolated egress network; no real provider inputs are read.
 
-The actual worker downloads a pinned synthetic dump, restores/sanitizes it,
-imports a permitted seeded scan with vectors, and provisions the three auth
+The actual worker downloads a pinned synthetic dump, restores original data,
+copies the seeded media without redaction, and provisions the three auth
 objects into one staging bucket. The actual staging Compose runs repeated
 migration/check, full startup and restart gates. API requests verify S3 login,
 API keys, scan reads/replacement and both cache types after the source scan is
@@ -493,7 +479,7 @@ active S3 objects/signing keys. Drift/revision failures remain independent gates
 Resources use unique test projects, databases, buckets and networks, with Traefik
 disabled; never point tests at shared preview, staging or production services.
 
-Real S3-provider access, production classification/snapshot preparation, DNS/TLS,
+Real S3-provider access, original snapshot/media preparation, DNS/TLS,
 main workflow scheduling and real HTTPS writable smoke checks require the private
 operator inputs and a merged reviewed revision. Local synthetic passes do not
 establish those live outcomes. The PR preview's automatic seed and its contracts

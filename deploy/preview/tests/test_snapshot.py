@@ -11,7 +11,7 @@ import secrets
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 MODULE = Path(__file__).resolve().parents[1] / "snapshot.py"
 spec = importlib.util.spec_from_file_location("snapshot", MODULE)
@@ -129,6 +129,53 @@ class BackupTests(unittest.TestCase):
             client.get_paginator.assert_not_called()
 
 
+class MediaCopyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_copy_preserves_bytes_names_and_layouts_but_excludes_auth_and_duplicate_scan_paths(self):
+        objects = {"images/hash.jpg": b"original image", "images/ndk/library/document/page.jpg": b"original scan",
+                   "page-layouts/library/document/page.json": b'{"original":"OCR"}',
+                   "peoplegator_api/users.json": b"source credentials"}
+        client = Mock()
+        def listing(**kwargs):
+            rows = [{"Key": k, "Size": len(v), "ETag": '"identity"'} for k, v in objects.items() if k.startswith(kwargs["Prefix"])]
+            return [{"Contents": rows[:1]}, {"Contents": rows[1:]}]
+        client.get_paginator.return_value.paginate.side_effect = listing
+        bodies = []
+        def get(**kwargs):
+            self.assertEqual(kwargs["IfMatch"], '"identity"')
+            body = io.BytesIO(objects[kwargs["Key"]])
+            bodies.append(body)
+            return {"Body": body, "ETag": '"identity"'}
+        client.get_object.side_effect = get
+        filesystem = Mock(write_bytes=AsyncMock())
+        mappings = [("images", "generations/new/images"), ("images/ndk", "generations/new/images/ndk"),
+                    ("page-layouts", "generations/new/page-layouts")]
+        with patch.object(snapshot, "s3_client", return_value=client):
+            self.assertEqual(await snapshot.copy_media(filesystem, {"bucket": "source"}, mappings), 3)
+        copied = {call.args[0]: call.args[1] for call in filesystem.write_bytes.await_args_list}
+        self.assertEqual(copied, {"generations/new/" + k: v for k, v in objects.items() if not k.startswith("peoplegator_api/")})
+        self.assertEqual(client.get_object.call_count, 3)
+        self.assertTrue(all(body.closed for body in bodies))
+
+    async def test_bad_prefix_changed_or_missing_media_fails_without_writing_auth(self):
+        filesystem = Mock(write_bytes=AsyncMock())
+        with self.assertRaisesRegex(ValueError, "prefix"):
+            await snapshot.copy_media(filesystem, {"bucket": "source"}, [("../images", "generation/images")])
+        with self.assertRaisesRegex(ValueError, "Authentication"):
+            await snapshot.copy_media(filesystem, {"bucket": "source"}, [("peoplegator_api", "generation/images")])
+        for failure in ("key", "size", "identity", "missing"):
+            client = Mock()
+            key = "images/../../peoplegator_api/users.json" if failure == "key" else "images/image.jpg"
+            client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": key, "Size": 8, "ETag": '"identity"'}]}]
+            body = io.BytesIO(b"too short" if failure == "size" else b"original")
+            client.get_object.return_value = {"Body": body, "ETag": '"changed"' if failure == "identity" else '"identity"'}
+            if failure == "missing":
+                client.get_object.side_effect = FileNotFoundError
+            with self.subTest(failure=failure), patch.object(snapshot, "s3_client", return_value=client):
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    await snapshot.copy_media(filesystem, {"bucket": "source"}, [("images", "generation/images")])
+            filesystem.write_bytes.assert_not_awaited()
+
+
 @unittest.skipUnless(os.environ.get("STAGING_TEST_DATABASE_PORT"), "Set isolated STAGING_TEST_DATABASE_PORT; requires backend venv")
 class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
@@ -194,6 +241,40 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.connection = await asyncpg.connect(host="127.0.0.1", port=int(os.environ["STAGING_TEST_DATABASE_PORT"]),
                                                 user=self.username, password=self.password, database=self.database)
         self.addAsyncCleanup(self.connection.close)
+
+    async def test_original_copy_preserves_all_rows_vectors_and_media_bytes(self):
+        from people_gator_api.filesystem.local import LocalFilesystem
+        from people_gator_api.media.page_image import page_image_key
+        from people_gator_api.media.page_layout import page_layout_key
+        connection = self.connection
+        async def rows():
+            return {table: [r["row"] for r in await connection.fetch(
+                f"SELECT row_to_json(t)::text AS row FROM {table} t ORDER BY row_to_json(t)::text")]
+                for table in snapshot.SANITIZED_COLUMNS}
+        before = await rows()
+        source_root = Path(json.loads(self.environment["PEOPLE_GATOR_API__STORAGE"])["local"]["root"])
+        objects = {str(path.relative_to(source_root)): path.read_bytes()
+                   for prefix in ("images", "page-layouts") for path in (source_root / prefix).rglob("*") if path.is_file()}
+        objects["peoplegator_api/users.json"] = b"source authentication must not be copied"
+        client = Mock()
+        client.get_paginator.return_value.paginate.side_effect = lambda **kwargs: [{"Contents": [
+            {"Key": k, "Size": len(v), "ETag": '"fixture"'} for k, v in objects.items() if k.startswith(kwargs["Prefix"])]}]
+        client.get_object.side_effect = lambda **kwargs: {"Body": io.BytesIO(objects[kwargs["Key"]]), "ETag": '"fixture"'}
+        with tempfile.TemporaryDirectory() as directory, patch.object(snapshot, "s3_client", return_value=client):
+            filesystem = LocalFilesystem(directory)
+            result = await snapshot.preserve(connection, filesystem, {"bucket": "source-fixture"})
+            self.assertEqual(result["data_mode"], "original")
+            self.assertEqual(await rows(), before)
+            for page in await connection.fetch("SELECT * FROM pg_demo_pages"):
+                for key in (page_image_key(page["library"], page["document_id"], page["page_id"]),
+                            page_layout_key(page["library"], page["document_id"], page["page_id"])):
+                    if key in objects:
+                        self.assertEqual(await filesystem.read_bytes(key), objects[key])
+                    else:
+                        with self.assertRaises(FileNotFoundError):
+                            await filesystem.read_bytes(key)
+            self.assertFalse((Path(directory) / "peoplegator_api").exists())
+            self.assertEqual(result["media_objects"], len(objects) - 1)
 
     async def test_sanitize_real_seed_preserves_graph_vectors_and_rejects_unclassified_schema(self):
         from people_gator_api.filesystem.local import LocalFilesystem
