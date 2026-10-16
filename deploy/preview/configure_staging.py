@@ -19,6 +19,9 @@ import shlex
 import sys
 import tempfile
 
+# Sibling modules run from immutable, exactly verified controller releases.
+# Never write __pycache__ there: re-publication rejects unexpected files.
+sys.dont_write_bytecode = True
 from staging import Staging, StagingConfigurationError
 
 

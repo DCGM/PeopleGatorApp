@@ -10,6 +10,8 @@ import sys
 import secrets
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -129,51 +131,110 @@ class BackupTests(unittest.TestCase):
             client.get_paginator.assert_not_called()
 
 
-class MediaCopyTests(unittest.IsolatedAsyncioTestCase):
-    async def test_copy_preserves_bytes_names_and_layouts_but_excludes_auth_and_duplicate_scan_paths(self):
-        objects = {"images/hash.jpg": b"original image", "images/ndk/library/document/page.jpg": b"original scan",
-                   "page-layouts/library/document/page.json": b'{"original":"OCR"}',
-                   "peoplegator_api/users.json": b"source credentials"}
-        client = Mock()
-        def listing(**kwargs):
-            rows = [{"Key": k, "Size": len(v), "ETag": '"identity"'} for k, v in objects.items() if k.startswith(kwargs["Prefix"])]
-            return [{"Contents": rows[:1]}, {"Contents": rows[1:]}]
-        client.get_paginator.return_value.paginate.side_effect = listing
-        bodies = []
-        def get(**kwargs):
-            self.assertEqual(kwargs["IfMatch"], '"identity"')
-            body = io.BytesIO(objects[kwargs["Key"]])
+class MissingObject(Exception):
+    """Shape of botocore's ClientError for an absent key."""
+    def __init__(self, code="NoSuchKey"):
+        super().__init__(code)
+        self.response = {"Error": {"Code": code}}
+
+
+def source_client(objects, etag=lambda raw: '"opaque-identity"', delay=0.0):
+    client = Mock()
+    bodies, active, peak = [], [0], [0]
+    lock = threading.Lock()
+    def get(**kwargs):
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        try:
+            time.sleep(delay)
+            if kwargs["Key"] not in objects:
+                raise MissingObject()
+            raw = objects[kwargs["Key"]]
+            body = io.BytesIO(raw)
             bodies.append(body)
-            return {"Body": body, "ETag": '"identity"'}
-        client.get_object.side_effect = get
+            return {"Body": body, "ETag": etag(raw), "ContentLength": len(raw)}
+        finally:
+            with lock:
+                active[0] -= 1
+    client.get_object.side_effect = get
+    return client, bodies, peak
+
+
+class MediaCopyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_copy_reads_only_referenced_keys_and_keeps_absent_media_absent(self):
+        objects = {"images/web/photo.jpg": b"original image", "images/ndk/library/document/page.jpg": b"original scan",
+                   "page-layouts/library/document/page.json": b'{"original":"OCR"}',
+                   "images/ndk/library/unregistered/page.jpg": b"not referenced by the restored data"}
+        transfers = {"generations/new/images/web/photo.jpg": "images/web/photo.jpg",
+                     "generations/new/images/ndk/library/document/page.jpg": "images/ndk/library/document/page.jpg",
+                     "generations/new/page-layouts/library/document/page.json": "page-layouts/library/document/page.json",
+                     "generations/new/images/ndk/library/document/absent.jpg": "images/ndk/library/document/absent.jpg"}
+        client, bodies, _ = source_client(objects, etag=lambda raw: f'"{hashlib.md5(raw).hexdigest()}"')
         filesystem = Mock(write_bytes=AsyncMock())
-        mappings = [("images", "generations/new/images"), ("images/ndk", "generations/new/images/ndk"),
-                    ("page-layouts", "generations/new/page-layouts")]
         with patch.object(snapshot, "s3_client", return_value=client):
-            self.assertEqual(await snapshot.copy_media(filesystem, {"bucket": "source"}, mappings), 3)
-        copied = {call.args[0]: call.args[1] for call in filesystem.write_bytes.await_args_list}
-        self.assertEqual(copied, {"generations/new/" + k: v for k, v in objects.items() if not k.startswith("peoplegator_api/")})
-        self.assertEqual(client.get_object.call_count, 3)
+            copied, missing, size = await snapshot.copy_media(filesystem, {"bucket": "source"}, transfers)
+        written = {call.args[0]: call.args[1] for call in filesystem.write_bytes.await_args_list}
+        expected = {destination: objects[key] for destination, key in transfers.items() if key in objects}
+        self.assertEqual(written, expected)
+        self.assertEqual(copied, set(expected))
+        self.assertEqual(missing, {"generations/new/images/ndk/library/document/absent.jpg"})
+        self.assertEqual(size, sum(map(len, expected.values())))
+        # Never list namespaces: the source bucket holds far more than this dataset.
+        client.get_paginator.assert_not_called()
+        self.assertEqual({call.kwargs["Key"] for call in client.get_object.call_args_list}, set(transfers.values()))
         self.assertTrue(all(body.closed for body in bodies))
 
-    async def test_bad_prefix_changed_or_missing_media_fails_without_writing_auth(self):
+    async def test_transfers_run_concurrently_within_the_bound(self):
+        objects = {f"images/ndk/library/document/{index}.jpg": b"scan" for index in range(24)}
+        client, _, peak = source_client(objects, delay=0.02)
         filesystem = Mock(write_bytes=AsyncMock())
-        with self.assertRaisesRegex(ValueError, "prefix"):
-            await snapshot.copy_media(filesystem, {"bucket": "source"}, [("../images", "generation/images")])
-        with self.assertRaisesRegex(ValueError, "Authentication"):
-            await snapshot.copy_media(filesystem, {"bucket": "source"}, [("peoplegator_api", "generation/images")])
-        for failure in ("key", "size", "identity", "missing"):
-            client = Mock()
-            key = "images/../../peoplegator_api/users.json" if failure == "key" else "images/image.jpg"
-            client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": key, "Size": 8, "ETag": '"identity"'}]}]
-            body = io.BytesIO(b"too short" if failure == "size" else b"original")
-            client.get_object.return_value = {"Body": body, "ETag": '"changed"' if failure == "identity" else '"identity"'}
-            if failure == "missing":
-                client.get_object.side_effect = FileNotFoundError
-            with self.subTest(failure=failure), patch.object(snapshot, "s3_client", return_value=client):
-                with self.assertRaises((ValueError, FileNotFoundError)):
-                    await snapshot.copy_media(filesystem, {"bucket": "source"}, [("images", "generation/images")])
+        with patch.object(snapshot, "s3_client", return_value=client) as factory:
+            copied, _, _ = await snapshot.copy_media(
+                filesystem, {"bucket": "source"}, {"generation/" + key: key for key in objects}, concurrency=4)
+        self.assertEqual(len(copied), 24)
+        self.assertEqual(factory.call_args.kwargs["max_connections"], 4)
+        self.assertGreater(peak[0], 1)
+        self.assertLessEqual(peak[0], 4)
+
+    async def test_unsafe_keys_corrupt_media_and_source_errors_fail_without_writing(self):
+        for name, transfers in {"traversal": {"generation/images/a.jpg": "images/../../secret.jpg"},
+                                "authentication": {"generation/images/a.jpg": "peoplegator_api/users.json"},
+                                "destination": {"peoplegator_api/users.json": "images/a.jpg"}}.items():
+            filesystem = Mock(write_bytes=AsyncMock())
+            with self.subTest(name), patch.object(snapshot, "s3_client") as factory, \
+                    self.assertRaisesRegex(ValueError, "prefix|Authentication"):
+                await snapshot.copy_media(filesystem, {"bucket": "source"}, transfers)
+            factory.assert_not_called()
             filesystem.write_bytes.assert_not_awaited()
+        for failure in ("truncated", "checksum", "identity", "denied"):
+            raw = b"original"
+            client = Mock()
+            response = {"Body": io.BytesIO(raw), "ETag": f'"{hashlib.md5(raw).hexdigest()}"', "ContentLength": len(raw)}
+            if failure == "truncated":
+                response["ContentLength"] = len(raw) + 1
+            elif failure == "checksum":
+                response["ETag"] = f'"{hashlib.md5(b"changed").hexdigest()}"'
+            elif failure == "identity":
+                del response["ETag"]
+            client.get_object.return_value = response
+            if failure == "denied":
+                client.get_object.side_effect = MissingObject("AccessDenied")
+            filesystem = Mock(write_bytes=AsyncMock())
+            with self.subTest(failure), patch.object(snapshot, "s3_client", return_value=client):
+                with self.assertRaises((ValueError, MissingObject)):
+                    await snapshot.copy_media(filesystem, {"bucket": "source"}, {"generation/images/a.jpg": "images/a.jpg"})
+            filesystem.write_bytes.assert_not_awaited()
+
+    async def test_multipart_and_kms_identities_are_not_treated_as_checksums(self):
+        for extra in ({"ETag": '"0123456789abcdef0123456789abcdef-2"'},
+                      {"ETag": '"0123456789abcdef0123456789abcdef"', "ServerSideEncryption": "aws:kms"}):
+            client = Mock()
+            client.get_object.return_value = {"Body": io.BytesIO(b"original"), "ContentLength": 8, **extra}
+            filesystem = Mock(write_bytes=AsyncMock())
+            with self.subTest(extra), patch.object(snapshot, "s3_client", return_value=client):
+                copied, _, _ = await snapshot.copy_media(filesystem, {"bucket": "source"}, {"generation/images/a.jpg": "images/a.jpg"})
+            self.assertEqual(copied, {"generation/images/a.jpg"})
 
 
 @unittest.skipUnless(os.environ.get("STAGING_TEST_DATABASE_PORT"), "Set isolated STAGING_TEST_DATABASE_PORT; requires backend venv")
@@ -257,16 +318,24 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                    for prefix in ("images", "page-layouts") for path in (source_root / prefix).rglob("*") if path.is_file()}
         missing_scan = next(key for key in objects if key.startswith("images/ndk/"))
         del objects[missing_scan]  # A source page may be registered before its scan is uploaded.
+        referenced = set(objects)
         objects["peoplegator_api/users.json"] = b"source authentication must not be copied"
-        client = Mock()
-        client.get_paginator.return_value.paginate.side_effect = lambda **kwargs: [{"Contents": [
-            {"Key": k, "Size": len(v), "ETag": '"fixture"'} for k, v in objects.items() if k.startswith(kwargs["Prefix"])]}]
-        client.get_object.side_effect = lambda **kwargs: {"Body": io.BytesIO(objects[kwargs["Key"]]), "ETag": '"fixture"'}
+        # Source buckets hold other collections; unregistered media is never read.
+        unreferenced = {"images/ndk/other-library/document/page.jpg", "page-layouts/other-library/document/page.json",
+                        "images/unregistered.example/photo.jpg"}
+        objects.update({key: b"unreferenced source media" for key in unreferenced})
+        client, _, _ = source_client(objects)
         with tempfile.TemporaryDirectory() as directory, patch.object(snapshot, "s3_client", return_value=client):
             filesystem = LocalFilesystem(directory)
             result = await snapshot.preserve(connection, filesystem, {"bucket": "source-fixture"})
             self.assertEqual(result["data_mode"], "original")
             self.assertEqual(result["missing_page_scans"], 1)
+            requested = {call.kwargs["Key"] for call in client.get_object.call_args_list}
+            self.assertTrue(referenced <= requested)
+            self.assertFalse(requested & (unreferenced | {"peoplegator_api/users.json"}))
+            client.get_paginator.assert_not_called()
+            for key in unreferenced:
+                self.assertFalse((Path(directory) / key).exists())
             self.assertEqual(await rows(), before)
             for page in await connection.fetch("SELECT * FROM pg_demo_pages"):
                 for key in (page_image_key(page["library"], page["document_id"], page["page_id"]),
@@ -277,7 +346,9 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         with self.assertRaises(FileNotFoundError):
                             await filesystem.read_bytes(key)
             self.assertFalse((Path(directory) / "peoplegator_api").exists())
-            self.assertEqual(result["media_objects"], len(objects) - 1)
+            self.assertEqual(result["media_objects"], len(referenced))
+            self.assertEqual(result["media_bytes"], sum(len(objects[key]) for key in referenced))
+            self.assertEqual(result["missing_media_objects"], len(requested - referenced))
             copied_scan = next(key for key in objects if key.startswith("images/ndk/"))
             (Path(directory) / copied_scan).unlink()
             with self.assertRaisesRegex(ValueError, "Copied source media"):

@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -23,11 +24,22 @@ import time
 import urllib.request
 from urllib.parse import urlsplit
 
+# Sibling modules run from immutable, exactly verified controller releases.
+# Never write __pycache__ there: re-publication rejects unexpected files.
+sys.dont_write_bytecode = True
 from preview import Controller, INSTALL_DIR, positive_int, write_private
 
 
 class StagingConfigurationError(ValueError):
     """Fixed operator guidance safe to print without private input values."""
+
+
+class OperationCancelled(Exception):
+    """The runner cancelled this job (SIGINT/SIGTERM)."""
+
+
+def cancelled(signum, frame):
+    raise OperationCancelled()
 
 
 class Staging(Controller):
@@ -312,6 +324,22 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 raise ValueError("Invalid abandoned-worker identity")
             self.command(["docker", "rm", "-f", *ids])
 
+    def operate(self, run_id=None, *, refresh=False, exact_key=""):
+        # Runner cancellation signals only this process tree; a detached
+        # preparation worker would keep transferring. Remove our labelled
+        # workers while this process still holds the host lock.
+        previous = {number: signal.signal(number, cancelled) for number in (signal.SIGINT, signal.SIGTERM)}
+        try:
+            self.deploy(run_id, refresh=refresh, exact_key=exact_key)
+        except OperationCancelled:
+            for number in previous:
+                signal.signal(number, signal.SIG_IGN)
+            self.reap_workers()
+            raise
+        finally:
+            for number, handler in previous.items():
+                signal.signal(number, handler)
+
     def deploy(self, run_id=None, *, refresh=False, exact_key=""):
         self.reap_workers()
         self.recover_activation(refresh_requested=refresh)
@@ -397,7 +425,7 @@ def main():
     # Same inode as ALL preview lifecycle/manual operations across runner processes.
     with (controller.root / "controller.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        controller.deploy(args.run_id, refresh=args.action == "refresh", exact_key=args.exact_key)
+        controller.operate(args.run_id, refresh=args.action == "refresh", exact_key=args.exact_key)
 
 
 if __name__ == "__main__":
@@ -405,6 +433,9 @@ if __name__ == "__main__":
         main()
     except StagingConfigurationError as error:
         print(str(error), file=sys.stderr)
+        sys.exit(1)
+    except OperationCancelled:
+        print("Staging operation cancelled; its preparation workers were removed. Retry explicitly.", file=sys.stderr)
         sys.exit(1)
     except Exception:
         print("Staging deployment failed; private candidate state/diagnostics retained. See staging operator guide.", file=sys.stderr)

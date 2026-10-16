@@ -78,6 +78,18 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual({p.name: (p.stat().st_mtime_ns, p.read_bytes()) for p in release.iterdir()}, original)
         self.assertEqual(list(self.releases.glob(".staging-*")), [])
 
+    def test_running_controllers_from_a_release_keeps_it_republishable(self):
+        release = self.publish()
+        config = self.root / "missing-staging-settings.json"
+        config.write_text(json.dumps({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root / "state")}))
+        # Each entry point imports its siblings from the release directory.
+        for command in (["staging.py", "--config", str(config), "check-access"], ["configure_staging.py", "--help"]):
+            subprocess.run(["python3", str(release / command[0]), *command[1:]], cwd=self.root,
+                           env={k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"},
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual({p.name for p in release.iterdir()}, {*installation.BUNDLE_FILES, "release.json"})
+        self.assertEqual(self.publish(), release)
+
     def test_publication_cli_exports_the_selected_release_path(self):
         output = self.root / "github-output"
         result = subprocess.run([

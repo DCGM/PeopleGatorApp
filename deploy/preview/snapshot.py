@@ -21,6 +21,8 @@ import uuid
 
 
 BACKUP_NAME = re.compile(r"peoplegator-prod-(\d{4}-\d{2}-\d{2})\.dump")
+# Bounded parallel source reads/staging writes; each holds one object in memory.
+MEDIA_TRANSFER_CONCURRENCY = 16
 EXAMPLE_SCOPES = {
     "staging-viewer": ["browse"],
     "staging-annotator": ["browse", "annotate"],
@@ -77,7 +79,7 @@ def select_backup(client, bucket: str, prefix: str, exact_key: str = "") -> str:
     return max(candidates)[1]
 
 
-def s3_client(config: dict):
+def s3_client(config: dict, *, max_connections: int = 10):
     import boto3
     from botocore.config import Config
     if not config.get("endpoint_url", "").startswith("https://"):
@@ -87,7 +89,8 @@ def s3_client(config: dict):
                         region_name=config["region"],
                         aws_access_key_id=config["access_key_id"],
                         aws_secret_access_key=config["secret_access_key"],
-                        config=Config(retries={"max_attempts": 3, "mode": "standard"}))
+                        config=Config(retries={"max_attempts": 3, "mode": "standard"},
+                                      max_pool_connections=max_connections))
 
 
 def object_metadata(response):
@@ -305,70 +308,124 @@ async def validate_data(connection):
         JOIN pg_demo_entities e ON e.id=t.entity_id JOIN pg_demo_sources s ON s.id=t.source_id LIMIT 1""")
 
 
-async def copy_media(filesystem, source, mappings, *, copied_keys=None):
-    """Copy original media bytes into fresh generation prefixes, excluding auth."""
-    def prefix(value):
-        if not isinstance(value, str) or not value or any(part in {"", ".", ".."} for part in value.split("/")) or "\\" in value:
-            raise ValueError("Invalid media transfer prefix")
-        if "peoplegator_api" in value.split("/"):
-            raise ValueError("Authentication objects cannot be copied as media")
-        return value + "/"
+def media_key(value):
+    """Validate a relative media key or prefix, excluding traversal and auth."""
+    if not isinstance(value, str) or not value or any(part in {"", ".", ".."} for part in value.split("/")) or "\\" in value:
+        raise ValueError("Invalid media transfer prefix")
+    if "peoplegator_api" in value.split("/"):
+        raise ValueError("Authentication objects cannot be copied as media")
+    return value
 
+
+async def referenced_media(connection, source):
+    """Map each staging media key the restored records can serve to its source key.
+
+    Source buckets hold far more than one dataset, so never list or copy whole
+    namespaces. Destination keys come from the application's canonical helpers.
+    """
+    from people_gator_api.media.image_content import image_content_key
+    from people_gator_api.media.page_image import page_image_key
+    from people_gator_api.media.page_layout import page_layout_key
+    from people_gator_api.settings import settings
     root = source.get("prefix", "").strip("/")
     if root:
-        prefix(root)
-    roots = [(prefix(posixpath.join(root, origin)), prefix(target)) for origin, target in mappings]
-    if len({origin for origin, _ in roots}) != len(roots):
-        raise ValueError("Media source prefixes must be distinct")
-    client = s3_client(source)
-    copied = 0
-    for origin, target in roots:
-        for page in client.get_paginator("list_objects_v2").paginate(Bucket=source["bucket"], Prefix=origin):
-            for item in page.get("Contents", []):
-                key = item["Key"]
-                if not key.startswith(origin):
-                    raise ValueError("Media listing escaped the configured prefix")
-                if key.endswith("/"):
-                    continue
-                # A more specific mapping owns nested roots, such as scans in
-                # images/ndk. Copy each object only once, at its canonical key.
-                if any(other != origin and other.startswith(origin) and key.startswith(other) for other, _ in roots):
-                    continue
-                relative = key[len(origin):]
-                prefix(relative)
-                if not isinstance(item.get("ETag"), str) or not item["ETag"]:
-                    raise ValueError("Source media needs an object identity")
-                condition = {"IfMatch": item["ETag"]}
-                response = client.get_object(Bucket=source["bucket"], Key=key, **condition)
-                try:
-                    raw = response["Body"].read()
-                finally:
-                    response["Body"].close()
-                if len(raw) != item["Size"] or response.get("ETag") != item["ETag"]:
-                    raise ValueError("Source media changed or was truncated during transfer")
-                await filesystem.write_bytes(target + relative, raw)
-                if copied_keys is not None:
-                    copied_keys.add(target + relative)
-                copied += 1
-    return copied
+        media_key(root)
+    namespaces = {
+        kind: (posixpath.join(root, media_key(source.get(name, default).strip("/"))), target.strip("/") + "/")
+        for kind, name, default, target in (
+            ("image", "image_prefix", "images", settings.image_content.key_prefix),
+            ("scan", "page_image_prefix", "images/ndk", settings.page_image.key_prefix),
+            ("layout", "page_layout_prefix", "page-layouts", settings.page_layout.key_prefix))}
+    transfers = {}
+
+    def add(kind, destination):
+        origin, target = namespaces[kind]
+        if not destination.startswith(target):
+            raise ValueError("Media key escaped its staging prefix")
+        transfers[destination] = posixpath.join(origin, media_key(destination[len(target):]))
+
+    for page in await connection.fetch("SELECT library, document_id, page_id FROM pg_demo_pages ORDER BY id"):
+        add("scan", page_image_key(page["library"], page["document_id"], page["page_id"]))
+        add("layout", page_layout_key(page["library"], page["document_id"], page["page_id"]))
+    for image in await connection.fetch(
+            "SELECT url FROM pg_demo_sources WHERE source_type='image' AND url IS NOT NULL ORDER BY id"):
+        add("image", image_content_key(image["url"]))
+    return transfers
+
+
+async def copy_media(filesystem, source, transfers, *, concurrency=MEDIA_TRANSFER_CONCURRENCY):
+    """Copy referenced original media bytes into fresh generation keys.
+
+    Returns copied destination keys, referenced keys absent from the source and
+    copied bytes. Absent objects stay absent, as the source data has them.
+    """
+    for destination, key in transfers.items():
+        media_key(destination)
+        media_key(key)
+    client = s3_client(source, max_connections=concurrency)
+    limit = asyncio.Semaphore(concurrency)
+    copied, missing = set(), set()
+    size = 0
+
+    def fetch(key):
+        try:
+            response = client.get_object(Bucket=source["bucket"], Key=key)
+        except Exception as error:
+            # botocore ClientError, matched structurally: controller tests run
+            # from sparse checkouts without backend dependencies.
+            details = getattr(error, "response", None)
+            if isinstance(details, dict) and details.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+                return None
+            raise
+        try:
+            raw = response["Body"].read()
+        finally:
+            response["Body"].close()
+        identity = response.get("ETag")
+        if not isinstance(identity, str) or not identity:
+            raise ValueError("Source media needs an object identity")
+        if len(raw) != response.get("ContentLength"):
+            raise ValueError("Source media changed or was truncated during transfer")
+        # Simple-upload ETags are MD5s; multipart/KMS identities are not checksums.
+        etag = identity.strip('"')
+        opaque = response.get("ServerSideEncryption") == "aws:kms" or response.get("SSECustomerAlgorithm")
+        if not opaque and re.fullmatch(r"[a-fA-F0-9]{32}", etag) \
+                and hashlib.md5(raw, usedforsecurity=False).hexdigest() != etag.lower():
+            raise ValueError("Source media checksum mismatch")
+        return raw
+
+    async def transfer(destination, key):
+        nonlocal size
+        async with limit:
+            raw = await asyncio.to_thread(fetch, key)
+            if raw is None:
+                missing.add(destination)
+                return
+            await filesystem.write_bytes(destination, raw)
+            copied.add(destination)
+            size += len(raw)
+
+    try:
+        async with asyncio.TaskGroup() as group:
+            for destination, key in transfers.items():
+                group.create_task(transfer(destination, key))
+    except ExceptionGroup as failures:
+        # The first failure cancelled the remaining transfers; report it plainly.
+        raise failures.exceptions[0] from None
+    return copied, missing, size
 
 
 async def preserve(connection, filesystem, source):
     """Keep restored rows, graph identities, vectors and original media intact."""
-    from people_gator_api.settings import settings
     revision = await connection.fetchval("SELECT version_num FROM alembic_version")
     if not isinstance(revision, str) or not re.fullmatch(r"[a-zA-Z0-9_]{1,64}", revision):
         raise ValueError("Missing/invalid source migration history")
     await validate_data(connection)
-    copied_keys = set()
-    copied = await copy_media(filesystem, source, [
-        (source.get("image_prefix", "images"), settings.image_content.key_prefix),
-        (source.get("page_image_prefix", "images/ndk"), settings.page_image.key_prefix),
-        (source.get("page_layout_prefix", "page-layouts"), settings.page_layout.key_prefix),
-    ], copied_keys=copied_keys)
-    missing_scans = await validate_page_media(connection, filesystem, expected_keys=copied_keys)
-    return {"source_schema_revision": revision, "data_mode": "original", "media_objects": copied,
-            "missing_page_scans": missing_scans}
+    transfers = await referenced_media(connection, source)
+    copied, missing, size = await copy_media(filesystem, source, transfers)
+    missing_scans = await validate_page_media(connection, filesystem, expected_keys=copied)
+    return {"source_schema_revision": revision, "data_mode": "original", "media_objects": len(copied),
+            "media_bytes": size, "missing_media_objects": len(missing), "missing_page_scans": missing_scans}
 
 
 async def read_auth(filesystem, key: str):
