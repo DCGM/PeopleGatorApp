@@ -302,7 +302,9 @@ Reviewed sanitization is deliberately conservative:
   through FK cascades. Their text annotations remain linked but redacted.
   Model registrations/dimensions remain; retained vectors are unchanged.
   Geometry is reduced to validated numeric boxes/keypoints and checked against
-  imported image bounds. Redacted pages never expose old originals/derivatives.
+  imported image bounds. Face landmark labels retain their original coordinate
+  mapping in any input order; unknown or duplicate labels fail preparation.
+  Redacted pages never expose old originals/derivatives.
 - An explicit schema/routine/table/column classification rejects unknown schema objects
   rather than allowing newly introduced text/auth columns through. Extend this
   reviewed sanitizer before using a new source contract. Candidate migrations
@@ -390,7 +392,9 @@ The backend CI job additionally runs snapshot integration with its backend venv,
 random test port and a disposable PostgreSQL service. That suite seeds twice,
 creates a real historical-revision synthetic `pg_dump -Fc`, restores it, sanitizes
 sensitive sentinels, checks relationships/media/vectors, migrates/checks twice and
-retains staging edits. No production dump is used by CI.
+retains staging edits. A permitted seeded face uses reversed landmark order to
+verify that sanitization preserves label/coordinate pairs; unknown and duplicate
+labels must fail preparation. No production dump is used by CI.
 
 For candidate-image/lifespan/S3 checks, build the backend Dockerfile and set
 `STAGING_TEST_IMAGE`, `STAGING_TEST_POSTGRES_CONTAINER`, `STAGING_TEST_NETWORK`,

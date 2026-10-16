@@ -213,7 +213,6 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
             (SELECT id FROM pg_demo_pages WHERE id=ANY($1::uuid[]))""", list(permitted))
         await connection.execute("UPDATE pg_demo_faces SET identifier='Staging face ' || id")
         from people_gator_api.schemas.enums import FaceKeypointType, EntityType
-        await connection.execute("UPDATE pg_demo_faces SET keypoint_types=$1::varchar[]", [str(k) for k in FaceKeypointType])
         await connection.execute("UPDATE pg_demo_entities SET kind=NULL WHERE NOT (kind=ANY($1::varchar[]))", [str(k) for k in EntityType])
         # ROI carries arbitrary JSON: retain only validated numeric geometry.
         rows = await connection.fetch("SELECT id, roi FROM pg_demo_image_occurrences")
@@ -247,12 +246,18 @@ async def sanitize(connection, filesystem, source: dict, policy: dict) -> dict:
                 image = Image.open(io.BytesIO(raw))
                 image.load()
                 image = image.convert("RGB")  # strip EXIF/comments and original metadata
-                for occurrence in await connection.fetch("SELECT o.roi, f.keypoints FROM pg_demo_image_occurrences o LEFT JOIN pg_demo_faces f ON f.id=o.id WHERE o.source_id=$1", page["id"]):
+                for occurrence in await connection.fetch("SELECT o.roi, f.keypoints, f.keypoint_types FROM pg_demo_image_occurrences o LEFT JOIN pg_demo_faces f ON f.id=o.id WHERE o.source_id=$1", page["id"]):
                     roi = json.loads(occurrence["roi"])
                     if roi["x"] + roi["width"] > image.width or roi["y"] + roi["height"] > image.height:
                         raise ValueError("Permitted face ROI is outside its imported image")
-                    if occurrence["keypoints"] and any(not (0 <= x < image.width and 0 <= y < image.height) for x, y in occurrence["keypoints"]):
-                        raise ValueError("Permitted face keypoints are outside its imported image")
+                    if occurrence["keypoints"] is not None:
+                        # Labels and coordinates are parallel arrays in caller order.
+                        # Validate the labels without changing their coordinate mapping.
+                        if (len(occurrence["keypoint_types"]) != len(FaceKeypointType)
+                                or set(occurrence["keypoint_types"]) != set(FaceKeypointType)):
+                            raise ValueError("Permitted face must contain each known keypoint type exactly once")
+                        if any(not (0 <= x < image.width and 0 <= y < image.height) for x, y in occurrence["keypoints"]):
+                            raise ValueError("Permitted face keypoints are outside its imported image")
             else:
                 image = Image.new("RGB", (1200, 1600), "white")
             buffer = io.BytesIO()
