@@ -8,6 +8,7 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "preview" / "tests"))
@@ -181,6 +182,56 @@ with tempfile.TemporaryDirectory() as work:
                 self.assertNotIn(b"Traceback", result.stderr)
                 self.assertFalse(self.provider.source.list_objects_v2(Bucket=self.storage["bucket"],
                                  Prefix=config["storage"]["prefix"]).get("Contents"))
+
+    def test_scheduled_compose_agent_uses_private_config_and_shared_lock(self):
+        root = Path(__file__).resolve().parents[3]
+        project = "backup-agent-fixture-" + secrets.token_hex(6)
+        with tempfile.TemporaryDirectory() as work:
+            private = Path(work)
+            config = copy.deepcopy(self.config)
+            config["storage"]["prefix"] = "schedule-fixture/"
+            source = private / "publisher.json"
+            source.write_text(json.dumps(config))
+            source.chmod(0o600)
+            # Match UID0's private bind ownership in both rootful/rootless Docker;
+            # this changes only this synthetic fixture file, never operator inputs.
+            self.docker("run", "--rm", "--user", "0", "--entrypoint", "chown",
+                        "--mount", f"type=bind,src={source},dst=/publisher.json",
+                        os.environ["BACKUP_TEST_IMAGE"], "0:0", "/publisher.json")
+            override = private / "override.json"
+            override.write_text(json.dumps({"services": {"backup-agent": {"environment": {"AWS_CA_BUNDLE": "/test-ca.crt"},
+                "volumes": [{"type": "bind", "source": str(self.provider.ca), "target": "/test-ca.crt", "read_only": True}]}}}))
+            environment = {**os.environ, "BACKUP_WORKER_IMAGE": os.environ["BACKUP_TEST_IMAGE"],
+                           "BACKUP_DATABASE_NETWORK": self.network, "BACKUP_PUBLISHER_CONFIG": str(source),
+                           "BACKUP_AT_UTC": "00:00", "BACKUP_RETRY_SECONDS": "1", "BACKUP_RUN_UID": "0", "BACKUP_RUN_GID": "0"}
+            command = ["docker", "compose", "--project-name", project, "--project-directory", str(root),
+                       "--env-file", "/dev/null", "-f", str(root / "deploy/backup/compose.agent.yaml"),
+                       "-f", str(override), "--profile", "backups"]
+            def compose(*args, check=True):
+                return subprocess.run([*command, *args], env=environment, capture_output=True, check=check, timeout=120)
+            def wait_log(message):
+                for _ in range(100):
+                    logs = compose("logs", "--no-color", "backup-agent").stdout
+                    if message in logs:
+                        self.assertNotIn(config["storage"]["secret_access_key"].encode(), logs)
+                        return
+                    time.sleep(0.2)
+                self.fail("Disposable scheduled agent did not reach expected safe status")
+            try:
+                compose("up", "--no-build", "-d", "--no-deps", "backup-agent")
+                wait_log(b"Backup published and verified")
+                objects = self.provider.source.list_objects_v2(Bucket=self.storage["bucket"], Prefix="schedule-fixture/")["Contents"]
+                self.assertEqual(len(objects), 1)
+                before = objects[0]["ETag"]
+                competing = compose("run", "--rm", "--no-deps", "backup-agent", "publish", "--config", "/run/backup-publisher.json",
+                                    "--lock-file", "/state/agent/controller.lock", check=False)
+                self.assertNotEqual(competing.returncode, 0)
+                self.assertIn(b"Another backup operation", competing.stderr)
+                compose("up", "--no-build", "-d", "--no-deps", "--force-recreate", "backup-agent")
+                wait_log(b"Existing dated backup metadata verified")
+                self.assertEqual(self.provider.source.head_object(Bucket=self.storage["bucket"], Key=objects[0]["Key"])["ETag"], before)
+            finally:
+                compose("down", "--volumes", "--remove-orphans", check=False)
 
 
 if __name__ == "__main__":

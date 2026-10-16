@@ -72,20 +72,32 @@ Configure the provider's explicit HTTPS S3-compatible endpoint/region and
 dedicated read-only credentials. No AWS-default endpoint, instance-profile or
 production runtime credentials are inherited. Grant listing only for the
 configured prefix and `GetObject`/`GetObjectVersion` there; no put/delete rights.
-The default bucket is `peoplegator-ingest`, prefix `production/db-backups/`.
+The default bucket is `peoplegator-db-backup`, prefix `production/db-backups/`.
 Change the leading prefix for the real bucket layout as necessary. This layout
 is a contract, **not evidence that a production backup already exists**.
 
 The publisher creates consistent PostgreSQL custom-format `pg_dump -Fc` archives
 named exactly `peoplegator-prod-YYYY-MM-DD.dump`, e.g.
-`s3://peoplegator-ingest/production/db-backups/peoplegator-prod-2026-10-15.dump`.
+`s3://peoplegator-db-backup/production/db-backups/peoplegator-prod-2026-10-15.dump`.
 Use UTC dates. Complete uploads under a temporary nonmatching key or as an
 uncompleted multipart upload; publish the final matching key only when complete.
 Published dated backups are immutable. Retain data, model registrations/vectors,
 relationships and Alembic history. Do not include cluster roles. Publish SHA-256
 in object metadata `sha256` and source Git SHA in `application-revision`.
-Backup creation/scheduling is a separate production operator responsibility;
+The [backup worker](../backup/README.md) creates, validates and publishes this
+format, with opt-in live-preview scheduling and a reusable production service.
+Provision its publisher identity independently from the restore reader and the
+staging application identity. The operator installs/enables the source scheduler;
 staging never connects to the live production database to create a dump.
+
+The current bucket split is `peoplegator-db-backup` for archives and
+`peoplegator-staging` for application files. Private publisher and restore configs
+may live in `/opt/people-gator-staging/backup-publisher.json` and
+`backup-restore.json`; only the restore storage section belongs in the staging
+controller's download-only `backup-source.json`. Existing private files with an
+explicit different source bucket retain that setting until the operator changes
+it. Never replace an active staging destination to adopt a new default: retained
+destination identity checks still require an explicit data migration.
 
 The restore environment uses PostgreSQL **16** tools from shared
 `pgvector/pgvector:pg16`. Supply pg_dump 16 archives from PostgreSQL 16 with the

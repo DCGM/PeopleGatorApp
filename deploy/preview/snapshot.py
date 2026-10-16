@@ -370,7 +370,7 @@ async def main():
     inputs = json.load(sys.stdin)
     if args.action == "download":
         config = inputs["backup-source.json"]
-        bucket = config.get("bucket", "peoplegator-ingest")
+        bucket = config.get("bucket", "peoplegator-db-backup")
         prefix = config.get("prefix", "production/db-backups/")
         client = s3_client(config)
         key = select_backup(client, bucket, prefix, args.exact_key)

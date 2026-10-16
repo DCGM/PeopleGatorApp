@@ -1,0 +1,49 @@
+# Opt-in overlay for compose.live-preview.yaml; also runnable standalone with -p.
+# No project name: preserve the live-preview project's containers and volumes.
+services:
+  backup-agent:
+    profiles: [backups]
+    build:
+      context: .
+      dockerfile: deploy/backup/Dockerfile
+    image: ${BACKUP_WORKER_IMAGE:-people-gator-backup:local}
+    restart: unless-stopped
+    # On rootless Docker, UID 0 maps to the host runner/private-file owner.
+    user: "${BACKUP_RUN_UID:-0}:${BACKUP_RUN_GID:-0}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command:
+      - schedule
+      - --config
+      - /run/backup-publisher.json
+      - --lock-file
+      - /state/agent/controller.lock
+      - --at
+      - ${BACKUP_AT_UTC:-02:00}
+      - --retry-seconds
+      - ${BACKUP_RETRY_SECONDS:-300}
+    tmpfs:
+      - /tmp:size=${BACKUP_TEMP_SIZE:-2g},mode=1777
+    volumes:
+      - type: bind
+        source: ${BACKUP_PUBLISHER_CONFIG:-/opt/people-gator-staging/backup-publisher.json}
+        target: /run/backup-publisher.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - backup-agent-state:/state
+    networks: [backup-source]
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  backup-agent-state:
+
+networks:
+  backup-source:
+    external: true
+    name: ${BACKUP_DATABASE_NETWORK:-people-gator-live-preview_default}
