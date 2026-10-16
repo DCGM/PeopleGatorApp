@@ -148,6 +148,7 @@ jobs:
           python3 deploy/preview/tests/test_installation.py -v
           python3 deploy/preview/tests/test_observability.py -v
           python3 deploy/preview/tests/test_staging.py -v
+          python3 deploy/preview/tests/test_configure_staging.py -v
           python3 deploy/preview/tests/test_snapshot.py -v
 
   images:
