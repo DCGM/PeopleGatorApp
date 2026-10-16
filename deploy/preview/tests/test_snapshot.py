@@ -236,36 +236,47 @@ class SnapshotIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_credentials_use_private_hashes_and_preserve_operator_edits(self):
         import argon2
         from people_gator_api.services import api_key_service, auth_service
-        from people_gator_api.filesystem.local import LocalFilesystem
+        from botocore.exceptions import ClientError
         hasher = argon2.PasswordHasher()
         supplied = {"users": {name: {"hash": hasher.hash("private-staging-password")} for name in snapshot.EXAMPLE_SCOPES},
                     "api_keys": {"staging-importer-key": {"hash": hasher.hash("private-staging-key"),
                         "username": "staging-importer", "display_name": "Staging importer",
                         "scopes": ["people-gator:browse", "people-gator:ingest"]}}}
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "peoplegator_api"
-            snapshot.provision_auth(root, supplied)
-            files = {p.name: p.read_bytes() for p in root.iterdir()}
-            self.assertNotIn(b"private-staging-password", files["users.json"])
-            snapshot.provision_auth(root, {"users": {}, "api_keys": {}})
-            self.assertEqual(files, {p.name: p.read_bytes() for p in root.iterdir()})
-            filesystem = LocalFilesystem(directory)
-            with patch.object(api_key_service, "get_filesystem", return_value=filesystem), patch.object(auth_service, "get_filesystem", return_value=filesystem):
-                identifier, record = await api_key_service.verify_api_key("private-staging-key")
-                self.assertEqual(identifier, "staging-importer-key")
-                users = await auth_service.get_users()
-                self.assertTrue(hasher.verify(users["staging-viewer"]["hash"], "private-staging-password"))
-                from fastapi import HTTPException
-                with self.assertRaises(HTTPException):
-                    await api_key_service.verify_api_key("production-key")
-                (root / "api-keys.json").write_text("{}")
-                with self.assertRaises(HTTPException):
-                    await api_key_service.verify_api_key("private-staging-key")
-            users = json.loads((root / "users.json").read_text())
-            users["staging-viewer"]["scopes"] = []
-            (root / "users.json").write_text(json.dumps(users))
-            snapshot.provision_auth(root, {"users": {}, "api_keys": {}})
-            self.assertEqual(json.loads((root / "users.json").read_text())["staging-viewer"]["scopes"], [])
+        class MemoryS3:
+            def __init__(self):
+                self.objects = {}
+            async def read_bytes(self, key):
+                if key not in self.objects:
+                    raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+                return self.objects[key]
+            async def write_bytes(self, key, value):
+                self.objects[key] = value
+        filesystem = MemoryS3()
+        await snapshot.provision_auth(filesystem, supplied)
+        files = dict(filesystem.objects)
+        self.assertNotIn(b"private-staging-password", files["peoplegator_api/users.json"])
+        await snapshot.provision_auth(filesystem, {"users": {}, "api_keys": {}})
+        self.assertEqual(files, filesystem.objects)
+        with patch.object(api_key_service, "get_filesystem", return_value=filesystem), patch.object(auth_service, "get_filesystem", return_value=filesystem):
+            identifier, record = await api_key_service.verify_api_key("private-staging-key")
+            self.assertEqual(identifier, "staging-importer-key")
+            users = await auth_service.get_users()
+            self.assertTrue(hasher.verify(users["staging-viewer"]["hash"], "private-staging-password"))
+            from fastapi import HTTPException
+            with self.assertRaises(HTTPException):
+                await api_key_service.verify_api_key("production-key")
+            await filesystem.write_bytes("peoplegator_api/api-keys.json", b"{}")
+            with self.assertRaises(HTTPException):
+                await api_key_service.verify_api_key("private-staging-key")
+        users = json.loads(await filesystem.read_bytes("peoplegator_api/users.json"))
+        users["staging-viewer"]["scopes"] = []
+        await filesystem.write_bytes("peoplegator_api/users.json", json.dumps(users).encode())
+        await snapshot.provision_auth(filesystem, {"users": {}, "api_keys": {}})
+        self.assertEqual(json.loads(await filesystem.read_bytes("peoplegator_api/users.json"))["staging-viewer"]["scopes"], [])
+        await filesystem.write_bytes("peoplegator_api/users.json", b"null")
+        with self.assertRaisesRegex(ValueError, "Malformed"):
+            await snapshot.provision_auth(filesystem, supplied)
+        self.assertEqual(await filesystem.read_bytes("peoplegator_api/users.json"), b"null")
 
 
 if __name__ == "__main__":

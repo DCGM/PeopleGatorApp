@@ -32,6 +32,14 @@ for local use, set it to your local application URL if you want matching links.
 The public preview keeps its existing `test` / `test` login. Seed actors do not
 add login accounts or usable API-key secrets.
 
+The [staging S3 runtime test](../../deploy/preview/STAGING.md#validation) reuses
+these synthetic fixtures: it runs the seed twice in a disposable source database,
+creates a historical-revision dump, restores/sanitizes it and imports a permitted
+seeded page with linked face vectors into one disposable TLS S3 bucket. Staging
+users, API keys, signing keys, scans, OCR and both media caches use that bucket.
+This tests the existing filesystem contract without changing PR preview fixtures
+or automatically seeding the actual staging environment.
+
 ## What to explore
 
 | Scenario | Example |

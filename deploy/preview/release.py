@@ -80,7 +80,10 @@ def validate_bundle(directory: Path) -> None:
         "DATABASE_NETWORK": "preview-validation-db", "WEB_NETWORK": "preview-validation-web",
         "CERTIFICATE_RESOLVER": "tlschallenge", "OTEL_NETWORK": "preview-validation-logging",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "PREVIEW_LOG_PORT": "24224",
-        "STAGING_HOST": "staging.example.test", "MEDIA_VOLUME": "staging-validation-media", "AUTH_VOLUME": "staging-validation-auth",
+        "STAGING_HOST": "staging.example.test", "MEDIA_PREFIX": "generations/0000000000000000",
+        "STAGING_STORAGE": json.dumps({"local": None, "s3": {
+            "endpoint_url": "https://s3.example.invalid", "bucket_name": "staging-validation",
+            "region": "test", "access_key_id": "validation", "secret_access_key": "validation"}}),
         "PR_NUMBER": "123", "PREVIEW_HOST": "pr-123.example.test", "COMMIT_SHA": "0" * 40,
         "FRONTEND_IMAGE": "example.invalid/frontend:validation",
         "BACKEND_IMAGE": "example.invalid/backend:validation", "DB_NAME": "preview_pr_123",
@@ -89,7 +92,7 @@ def validate_bundle(directory: Path) -> None:
     })
     for name, required in (
         ("compose.pr.yaml", {"frontend", "backend", "storage-init", "migrate", "seed"}),
-        ("compose.staging.yaml", {"frontend", "backend", "storage-init", "migrate", "check"}),
+        ("compose.staging.yaml", {"frontend", "backend", "migrate", "check"}),
         ("compose.infrastructure.yaml", {"postgres", "otel-collector", "pgadmin"}),
     ):
         result = subprocess.run(

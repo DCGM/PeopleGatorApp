@@ -108,6 +108,60 @@ change its selection. Missing/denied listing/download, no matching backup or a
 corrupt latest archive fails; **there is no older-backup fallback**. Retry of an
 explicit operation starts fresh; pass its recorded exact key for reproducibility.
 
+## Required S3 storage
+
+Staging uses **one dedicated staging-owned S3-compatible bucket** for every
+application file: scans, OCR, other images, caches, users, API keys and signing
+keys. PostgreSQL remains a separate service for relational data and vectors.
+There is no local file-storage option, `/data` mount, media/auth Docker volume,
+`storage-init` service or local fallback in staging. PR preview storage is unchanged.
+
+Copy `staging.storage.example.json` to private `storage.json`. Set `local` to
+JSON `null` and supply the complete `s3` object: explicit HTTPS `endpoint_url`,
+`region`, `bucket_name`, `access_key_id`, `secret_access_key` and optional positive
+`timeout_seconds`. The controller rejects missing/local/mixed configurations;
+the preparation worker independently requires the S3 backend. Runtime and
+preparation select the same S3 settings through `PEOPLE_GATOR_API__STORAGE`.
+Never place these credentials in frontend variables or commit the private file.
+
+Provision the bucket explicitly before the first refresh. Use a private bucket,
+block anonymous/public reads, and grant the staging principal only this bucket's
+required listing/read/write/delete operations. It must have no production or PR
+bucket permissions. One bucket contains these distinct key namespaces:
+
+| Keys | Lifecycle |
+| --- | --- |
+| `peoplegator_api/users.json` | Stable staging users and password hashes |
+| `peoplegator_api/api-keys.json` | Stable API-key hashes, owners and scopes |
+| `peoplegator_api/jwks.json` | Stable independent ES256 signing keys |
+| `generations/<16-hex>/images/ndk/...` | Snapshot's permitted or redacted scans |
+| `generations/<16-hex>/page-layouts/...` | Redacted OCR layouts |
+| `generations/<16-hex>/images/...` | Other generation media |
+| `generations/<16-hex>/cache/page-images/...` | Resized scans |
+| `generations/<16-hex>/cache/aligned-face-crops/...` | Aligned face crops |
+
+The configured media helpers apply generation prefixes; canonical document/page
+identities remain unchanged. Authentication keys stay outside those media prefixes
+and are never served by media routes or mounted in the frontend. The bucket is
+not an HTTP static website. Only the backend/preparation workers receive its
+private S3 credentials. Every refresh writes a fresh media/cache prefix and
+switches that prefix together with the database after validation. Failed
+preparation never writes the active prefix or replaces existing credentials.
+
+Backend, migration/check and S3 preparation containers join the configured `web`
+network for outbound HTTPS. Preparation also joins the internal database network
+when it needs PostgreSQL. PostgreSQL itself stays on its existing internal
+network. Ensure Docker DNS and outbound connectivity reach the configured S3
+endpoints; an internal-only network cannot download/import S3 objects.
+
+The successful state records endpoint/region/bucket identity. Changing that
+identity or supplying legacy local-volume state is rejected before migration or
+replacement. Credential rotation within the same bucket is supported through
+private `storage.json`; retain access for active containers until redeployment.
+Moving buckets or adopting an older local deployment requires an explicit
+operator migration of credentials, active media and state under the host lock;
+the controller does not silently switch to an empty bucket or convert local data.
+
 ## Private account and API-key provisioning
 
 Copy `staging.credentials.example.json` to private `credential-input.json` and
@@ -126,29 +180,26 @@ channel, not the repository or CI logs.
 | `staging-importer` | browse + `people-gator:ingest` |
 | `staging-admin` | browse + annotate + ingest + `people-gator:admin` |
 
-The auth volume defaults to `people-gator-staging-auth` (optional private config
-`auth_volume`, restricted to a `people-gator-staging-*` name). Its mode-700
-`peoplegator_api` directory holds mode-600 `users.json`, `api-keys.json` and
-`jwks.json`, owned by container UID/GID **10001:10001**. It is mounted read-only
-in the running backend at `/data/peoplegator_api`, separate from the media volume.
-`JWK__USERS_PATH`, `API_KEYS__KEYS_PATH`, `JWK__KEY_PATH` explicitly select these
-files. Neither frontend nor media routes mount or serve this directory. Distinct
-ES256 signing keys are generated once; issuer is `https://staging.peoplegator.dev`,
-audience `staging.peoplegator.dev`, CORS is restricted to that HTTPS origin.
+The three authentication objects live at the stable `peoplegator_api/` keys in
+that same staging bucket. `JWK__USERS_PATH`, `API_KEYS__KEYS_PATH` and
+`JWK__KEY_PATH` explicitly select them. Distinct ES256 signing keys are generated
+once; issuer is `https://staging.peoplegator.dev`, audience is
+`staging.peoplegator.dev`, and CORS is restricted to that HTTPS origin.
 Production tokens and unconfigured production API secrets cannot authenticate.
 
-Credential file replacements are atomic and retain UID/GID 10001 before publication.
-Explicit initialization adds missing example users without resetting existing
-hashes/scopes. The API-key file is initialized **only if absent**, so removing a
-key stays revoked across repeated refreshes even if it remains in the input
-file. Add/rotate/revoke later keys by editing the staging-owned file privately
-under the host lock (or replace it from a private backup). Do not delete/recreate
-the auth volume. Changing supplied defaults does not rotate an existing account
-or signing key. API-key identifiers should start with `staging-`, belong to a
-staging user and carry explicit scopes; first authenticated use registers the
-associated user/key through the application's repository contracts. Historical
-production actors/key IDs retain attribution FKs but receive inactive,
-unmatchable historical identities with no production credentials.
+Credential changes use complete atomic S3 object PUTs. Explicit initialization
+adds missing example users without resetting existing hashes/scopes. The API-key
+object is initialized **only if absent**, so removing a key stays revoked across
+refreshes even if it remains in the input file. Add/rotate/revoke later keys by
+privately replacing that bucket object under the host lock (or restore a private
+versioned backup). Do not delete the credential objects to refresh the dataset.
+Changing supplied defaults does not rotate an existing account or signing key.
+API-key identifiers should start with `staging-`, belong to a staging user and
+carry explicit scopes. First authenticated use registers associated actors
+through application repository contracts. Historical production actors/key IDs
+retain attribution FKs but receive inactive historical identities and no
+production credentials. Input files are sent to operation-scoped workers through
+stdin, never mounted in the running API or included in public logs/artifacts.
 
 Open **https://staging.peoplegator.dev/staging-login.html**, choose an example
 account and sign in with its privately supplied password. This staging-only
@@ -174,8 +225,10 @@ per-page access control: restrict host/network/accounts to the permitted dataset
 
 When any pages are allowed, separately configure private `media-source.json`
 from `staging.media-source.example.json`. This is independent of the database
-backup prefix/credentials. Only explicit preparation mounts source readers.
-Canonical source scan keys are copied individually into a **new staging volume**;
+backup prefix/credentials. Only explicit preparation receives source readers.
+`prefix` selects an optional source root and `page_image_prefix` defaults to
+`images/ndk`; neither inherits the candidate generation prefix. Canonical source
+scan keys are copied individually into a **new generation prefix in the staging bucket**;
 no recursive bucket copy, production mount or read-through fallback exists.
 A missing permitted image fails preparation. Removing production assets after
 copy cannot break the independent copy. Account/credential paths can never be
@@ -192,7 +245,7 @@ Reviewed sanitization is deliberately conservative:
 - All mention text becomes a redacted placeholder and contexts are cleared.
   All OCR layouts become valid empty layouts; private text never enters media.
 - Only explicitly permitted pages retain pixels and their face/vector graph.
-  Other pages get blank local JPEGs and lose image occurrences/faces/vectors
+  Other pages get blank JPEGs in the staging bucket and lose image occurrences/faces/vectors
   through FK cascades. Their text annotations remain linked but redacted.
   Model registrations/dimensions remain; retained vectors are unchanged.
   Geometry is reduced to validated numeric boxes/keypoints and checked against
@@ -221,15 +274,16 @@ SHA/attempts are rejected before migration and again before application replacem
 an older run cannot overwrite a newer attempted build.
 
 Each refresh uses `staging_<16-hex>` database/login and
-`people-gator-staging-<16-hex>-media`, with a fresh random password. Database CONNECT
+`generations/<16-hex>/` in the configured staging bucket, with a fresh random
+database password. Database CONNECT
 is revoked from PUBLIC **before enabling connections**. PR roles have no access.
 Preparation is unserved: private download → archive validation → restricted-role
 restore → sanitize/import → auth initialization → candidate migration/data checks
 → runtime-configured full check → API lifespan/health → frontend/HTTPS readiness.
 The stable Compose project `people-gator-staging` switches database and media in
-the same configuration. Authentication is a separate retained volume. Upload,
-replacement, deletion, derived media, entity merges and annotations use staging
-credentials/volumes exclusively. PR cleanup only handles `pr-N` directories,
+the same configuration. Authentication uses stable keys in that same bucket.
+Upload, replacement, deletion, derived media, entity merges and annotations use
+staging credentials and generation prefixes exclusively. PR cleanup only handles `pr-N` directories,
 projects, volumes and `preview_pr_N` databases/roles; staging is outside that tree.
 
 `state.json` is the successful activation commit point. `compose.env` records the
@@ -259,15 +313,16 @@ a compressed dump and PostgreSQL restore/index/WAL overhead. Source transfer has
 provider egress/API cost proportional to the archive and permitted scans. Raise
 capacity/timeouts deliberately for large collections. Dumps are deleted when an
 operation exits normally or fails; a killed process may leave `snapshot-*` private
-work directories. Failed/previous generation databases and volumes are retained
+work directories. Failed/previous generation databases and S3 prefixes are retained
 for inspection/recovery, never automatically garbage-collected. Under the shared
 host lock, confirm the active and previous manifests, back up what is needed,
-then remove only named unused staging generations/work directories. Never run
-broad Docker volume prune or remove the auth volume. This retention costs disk.
+then remove only named unused staging databases, generation prefixes and work
+directories. Preserve `peoplegator_api/` and the active/previous generation
+prefixes. This retention costs host disk and bucket storage/API operations.
 
 For backup/recovery, take a consistent private custom-format dump of the active
-generation with its configured role, stop writes while archiving its media and
-**separately** archive the auth volume (contains signing keys/hashes) plus state
+generation with its configured role, stop writes while archiving its S3 media
+prefix and **separately** back up `peoplegator_api/` (signing keys/hashes) plus state
 and reviewed release revision. Store encrypted outside releases/CI. Restore a
 matched pair privately and use a reviewed compatible image, full migration/check
 and readiness sequence before activation. Explicit refresh replaces DB/media,
@@ -284,15 +339,25 @@ creates a real historical-revision synthetic `pg_dump -Fc`, restores it, sanitiz
 sensitive sentinels, checks relationships/media/vectors, migrates/checks twice and
 retains staging edits. No production dump is used by CI.
 
-For candidate-image/lifespan checks, build the backend Dockerfile locally and set
+For candidate-image/lifespan/S3 checks, build the backend Dockerfile and set
 `STAGING_TEST_IMAGE`, `STAGING_TEST_POSTGRES_CONTAINER`, `STAGING_TEST_NETWORK`,
 `STAGING_TEST_DATABASE_PORT` (and optional `STAGING_TEST_DATABASE_USER/PASSWORD`).
-Use a **dedicated disposable** pgvector/PG16 container/network with alias
-`preview-postgres`, then run `test_staging_runtime.py` with the backend venv.
-It restores/sanitizes through the actual worker, migrates/checks through the same
-image/runtime role, rejects stale revision/schema drift/wrong database, and checks
-healthy startup and invalid-revision rejection on restart. It creates/drops test
-stores/volumes; never point it at shared preview, staging or production.
+Use a **dedicated disposable** pgvector/PG16 container with alias
+`preview-postgres` on an internal test network. The host-side seed fixture also
+needs its own mapped port. Run `test_staging_runtime.py` with the backend venv;
+Docker Compose and OpenSSL are required. The suite starts separate disposable
+TLS MinIO source/staging providers with unrelated credentials, private buckets,
+a test CA and an isolated egress network; no real provider inputs are read.
+
+The actual worker downloads a pinned synthetic dump, restores/sanitizes it,
+imports a permitted seeded scan with vectors, and provisions the three auth
+objects into one staging bucket. The actual staging Compose runs repeated
+migration/check, full startup and restart gates. API requests verify S3 login,
+API keys, scan reads and cache writes after the source scan is deleted. Failed
+refresh, repeated auth provisioning, scope edits and key revocation preserve
+active S3 objects/signing keys. Drift/revision failures remain independent gates.
+Resources use unique test projects, databases, buckets and networks, with Traefik
+disabled; never point tests at shared preview, staging or production services.
 
 Real S3-provider access, production classification/snapshot preparation, DNS/TLS,
 main workflow scheduling and real HTTPS writable smoke checks require the private

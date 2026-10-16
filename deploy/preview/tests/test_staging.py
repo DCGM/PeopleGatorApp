@@ -16,6 +16,8 @@ import staging
 
 SHA = "a" * 40
 IMAGES = {part: f"ghcr.io/dcgm/peoplegatorapp-{part}@sha256:" + "b" * 64 for part in ("frontend", "backend")}
+STORAGE = {"local": None, "s3": {"endpoint_url": "https://staging-s3.example.invalid",
+    "region": "test", "bucket_name": "staging-fixture", "access_key_id": "synthetic", "secret_access_key": "synthetic"}}
 
 
 class FakeStaging(staging.Staging):
@@ -26,12 +28,15 @@ class FakeStaging(staging.Staging):
         self.root.mkdir()
         (self.root / "infrastructure.env").write_text("synthetic infra")
         self.staging_root.mkdir()
+        (root / "private").mkdir()
+        (root / "private" / "storage.json").write_text(json.dumps(STORAGE))
         self.run = {"id": 100, "run_attempt": 1, "workflow_id": 9, "head_sha": SHA,
                     "event": "push", "conclusion": "success", "head_branch": "main",
                     "head_repository": {"full_name": self.repository}}
         self.main_sha = SHA
         self.workflow_path = ".github/workflows/pr-ci.yml"
         self.events = []
+        self.inputs = []
         self.fail = None
 
     def reap_workers(self):
@@ -56,6 +61,7 @@ class FakeStaging(staging.Staging):
         return IMAGES[part]
 
     def command(self, args, *, sql=None):
+        self.inputs.append(sql)
         operation = " ".join(args[args.index("-f") + 2:]) if "-f" in args else " ".join(args)
         self.events.append(operation)
         if self.fail and self.fail in operation:
@@ -118,7 +124,7 @@ class StagingTests(unittest.TestCase):
         controller.main_sha = controller.run["head_sha"]
         controller.deploy()
         state = json.loads((controller.staging_root / "state.json").read_text())
-        for field in ("generation", "password", "provenance"):
+        for field in ("generation", "password", "provenance", "storage"):
             self.assertEqual(state[field], original[field])
         self.assertNotIn("prepare", controller.events)
         self.assertFalse(any("seed" in event or "download" in event or "auth" in event for event in controller.events))
@@ -226,24 +232,97 @@ class StagingTests(unittest.TestCase):
 
     def test_runtime_has_no_transfer_credentials_or_source_mount_and_worker_is_private(self):
         controller = self.controller
-        state = {"generation": "0" * 16, "password": "1" * 64}
+        state = {"generation": "0" * 16, "password": "1" * 64, "storage": controller.storage_identity(STORAGE)}
         values = controller.values(state, IMAGES, SHA)
         self.assertFalse(any("SOURCE" in key or "AWS" in key for key in values))
         compose = (DIRECTORY / "compose.staging.yaml").read_text()
-        self.assertIn("auth:/data/peoplegator_api:ro", compose)
+        self.assertIn("PEOPLE_GATOR_API__STORAGE: ${STAGING_STORAGE:?", compose)
+        self.assertNotIn("/data", compose)
+        self.assertNotIn("storage-init", compose)
         self.assertIn("SCHEMA_MODE: validate", compose)
         self.assertIn("command: [check]", compose)
         self.assertNotIn("command: [seed]", compose)
         self.assertNotIn("PR_NUMBER", compose)
         private = self.root / "private"
-        private.mkdir()
-        (private / "backup-source.json").write_text("private")
+        (private / "backup-source.json").write_text('{"bucket":"synthetic-source","endpoint_url":"https://source.example.invalid"}')
         controller.worker = staging.Staging.worker.__get__(controller)
         controller.worker("download", values, controller.staging_root)
         call = controller.events[-1]
         self.assertIn("--log-driver none", call)
-        self.assertIn("/private/backup-source.json,readonly", call)
+        self.assertNotIn("/private/backup-source.json", call)
+        self.assertEqual(json.loads(controller.inputs[-1])["backup-source.json"]["bucket"], "synthetic-source")
         self.assertNotIn("--network people-gator-preview-db", call)
+
+    def test_s3_configuration_is_required_and_bucket_identity_cannot_change(self):
+        controller = self.controller
+        path = self.root / "private" / "storage.json"
+        original = controller.initial()
+        for invalid in ({}, {"local": {"root": "/data"}, "s3": None},
+                        {**STORAGE, "local": {"root": "/data"}}, {"s3": STORAGE["s3"]},
+                        {**STORAGE, "s3": {**STORAGE["s3"], "endpoint_url": ""}},
+                        {**STORAGE, "s3": {**STORAGE["s3"], "endpoint_url": "http://storage.example.invalid"}},
+                        {**STORAGE, "s3": {**STORAGE["s3"], "timeout_seconds": 0}},
+                        {**STORAGE, "s3": {**STORAGE["s3"], "bucket_name": "different-bucket"}}):
+            with self.subTest(config=invalid):
+                path.write_text(json.dumps(invalid))
+                controller.events.clear()
+                with self.assertRaises(ValueError):
+                    controller.deploy()
+                self.assertEqual(controller.events, [])
+                self.assertEqual(json.loads((controller.staging_root / "state.json").read_text()), original)
+        path.write_text(json.dumps(STORAGE))
+        controller.deploy()
+        path.unlink()
+        controller.events.clear()
+        with self.assertRaises(FileNotFoundError):
+            controller.deploy()
+        self.assertEqual(controller.events, [])
+
+    def test_snapshot_source_cannot_be_the_staging_destination(self):
+        controller = self.controller
+        state = controller.initial()
+        values = controller.values(state, IMAGES, SHA)
+        (self.root / "private" / "backup-source.json").write_text(json.dumps({
+            "bucket": STORAGE["s3"]["bucket_name"], "endpoint_url": STORAGE["s3"]["endpoint_url"]}))
+        controller.worker = staging.Staging.worker.__get__(controller)
+        controller.events.clear()
+        with self.assertRaisesRegex(ValueError, "separate"):
+            controller.worker("download", values, controller.staging_root)
+        self.assertEqual(controller.events, [])
+
+    def test_compose_and_preparation_use_same_s3_bucket_and_generation_prefixes(self):
+        controller = self.controller
+        state = controller.initial()
+        values = controller.values(state, IMAGES, SHA)
+        environment = controller.runtime_environment(values)
+        self.assertEqual(json.loads(environment["PEOPLE_GATOR_API__STORAGE"]), STORAGE)
+        self.assertTrue(environment["PEOPLE_GATOR_API__PAGE_IMAGE__KEY_PREFIX"].startswith("generations/" + state["generation"]))
+        controller.command = staging.Staging.command.__get__(controller)
+        rendered = json.loads(controller.command(controller.compose_staging(controller.staging_root / "compose.env", "--profile", "tools", "config", "--format", "json")))
+        for service in ("backend", "migrate", "check"):
+            config = rendered["services"][service]
+            for key, value in environment.items():
+                if key != "PEOPLE_GATOR_API__PERSISTENCE" and key != "PEOPLE_GATOR_API__OTEL__ENABLED":
+                    self.assertEqual(config["environment"][key], value, key)
+            self.assertNotIn("volumes", config)
+            self.assertEqual(set(config["networks"]), {"database", "web"})
+        self.assertNotIn("volumes", rendered)
+        self.assertNotIn("storage-init", rendered["services"])
+
+    def test_sanitize_worker_has_database_and_s3_connectivity_without_source_mounts(self):
+        controller = self.controller
+        state = controller.initial()
+        values = controller.values(state, IMAGES, SHA)
+        (self.root / "private" / "media-policy.json").write_text('{"permitted_page_ids":[]}')
+        controller.worker = staging.Staging.worker.__get__(controller)
+        controller.worker("sanitize", values, controller.staging_root)
+        command = controller.events[-1]
+        self.assertIn("--network web", command)
+        self.assertIn("--network " + values["DATABASE_NETWORK"], command)
+        self.assertNotIn("type=volume", command)
+        self.assertNotIn("--cap-add", command)
+        self.assertIn("--user 10001:10001", command)
+        self.assertEqual(json.loads(controller.inputs[-1]), {"media-policy.json": {"permitted_page_ids": []}})
 
     def test_shared_host_lock_and_reviewed_main_workflow_guards(self):
         source = (DIRECTORY / "staging.py").read_text()

@@ -10,6 +10,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlsplit
 
 from preview import Controller, INSTALL_DIR, positive_int, write_private
 
@@ -39,9 +41,54 @@ class Staging(Controller):
         private = Path(staging["private_dir"])
         if not private.is_absolute() or private.is_relative_to(self.root) or private.is_relative_to(self.staging_root):
             raise ValueError("Private staging inputs must live outside release/preview/state directories")
-        self.auth_volume = staging.get("auth_volume", "people-gator-staging-auth")
-        if not re.fullmatch(r"people-gator-staging-[a-z0-9-]+", self.auth_volume):
-            raise ValueError("Invalid staging-owned auth volume")
+        if "auth_volume" in staging:
+            raise ValueError("Staging requires S3 storage; remove the local auth volume configuration")
+
+    def storage(self):
+        """One explicit staging bucket, never an implicit/local storage default."""
+        path = Path(self.settings["private_dir"]) / "storage.json"
+        config = json.loads(path.read_text())
+        if set(config) != {"s3", "local"} or config["local"] is not None or not isinstance(config["s3"], dict):
+            raise ValueError("Staging requires explicit S3 storage with local: null")
+        s3 = config["s3"]
+        required = {"endpoint_url", "region", "bucket_name", "access_key_id", "secret_access_key"}
+        if (not required.issubset(s3) or set(s3) - required - {"timeout_seconds"}
+                or any(not isinstance(s3[key], str) or not s3[key].strip() for key in required)):
+            raise ValueError("Incomplete/unsupported staging S3 configuration")
+        endpoint = urlsplit(s3["endpoint_url"])
+        if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username
+                or endpoint.password or endpoint.query or endpoint.fragment or endpoint.path not in {"", "/"}):
+            raise ValueError("An explicit S3-compatible endpoint is required")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", s3["bucket_name"]):
+            raise ValueError("Invalid staging bucket name")
+        timeout = s3.get("timeout_seconds", 30)
+        if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("Invalid staging S3 timeout")
+        return config
+
+    @staticmethod
+    def storage_identity(config):
+        return {key: config["s3"][key] for key in ("endpoint_url", "region", "bucket_name")}
+
+    def runtime_environment(self, values):
+        prefix = values["MEDIA_PREFIX"]
+        return {
+            "PEOPLE_GATOR_API__PERSISTENCE": json.dumps({"postgres": {
+                "host": "preview-postgres", "port": 5432, "user": values["DB_USER"],
+                "password": values["DB_PASSWORD"], "database": values["DB_NAME"], "schema_mode": "validate"}, "weaviate": None}),
+            "PEOPLE_GATOR_API__STORAGE": values["STAGING_STORAGE"],
+            "PEOPLE_GATOR_API__IMAGE_CONTENT__KEY_PREFIX": prefix + "/images",
+            "PEOPLE_GATOR_API__PAGE_IMAGE__KEY_PREFIX": prefix + "/images/ndk",
+            "PEOPLE_GATOR_API__PAGE_LAYOUT__KEY_PREFIX": prefix + "/page-layouts",
+            "PEOPLE_GATOR_API__PAGE_IMAGE_CACHE__KEY_PREFIX": prefix + "/cache/page-images",
+            "PEOPLE_GATOR_API__ALIGNED_FACE_CROP__CACHE_KEY_PREFIX": prefix + "/cache/aligned-face-crops",
+            "PEOPLE_GATOR_API__JWK__USERS_PATH": "peoplegator_api/users.json",
+            "PEOPLE_GATOR_API__API_KEYS__KEYS_PATH": "peoplegator_api/api-keys.json",
+            "PEOPLE_GATOR_API__JWK__KEY_PATH": "peoplegator_api/jwks.json",
+            "PEOPLE_GATOR_API__JWK__ISSUER": "https://" + self.host,
+            "PEOPLE_GATOR_API__JWK__AUDIENCE": self.host,
+            "PEOPLE_GATOR_API__OTEL__ENABLED": "false",
+        }
 
     def compose_staging(self, env_file: Path, *args: str) -> list[str]:
         return ["docker", "compose", "--project-name", "people-gator-staging", "--env-file", str(env_file),
@@ -57,9 +104,9 @@ class Staging(Controller):
 
     def private_command(self, args, *, input_text=None, input_file=None):
         environment = {k: v for k, v in os.environ.items() if not k.startswith(("COMPOSE_", "PEOPLE_GATOR_API__"))}
-        for key in ("STAGING_HOST", "MEDIA_VOLUME", "DB_NAME", "DB_USER", "DB_PASSWORD", "BACKEND_IMAGE",
+        for key in ("STAGING_HOST", "MEDIA_PREFIX", "STAGING_STORAGE", "DB_NAME", "DB_USER", "DB_PASSWORD", "BACKEND_IMAGE",
                     "FRONTEND_IMAGE", "CORS_ORIGIN_REGEX", "COMMIT_SHA", "DATABASE_NETWORK", "WEB_NETWORK",
-                    "CERTIFICATE_RESOLVER", "PREVIEW_LOG_ADDRESS", "AUTH_VOLUME"):
+                    "CERTIFICATE_RESOLVER", "PREVIEW_LOG_ADDRESS"):
             environment.pop(key, None)
         options = {"stdin": input_file} if input_file else {"input": input_text}
         result = subprocess.run(args, **options, text=True, capture_output=True, env=environment, timeout=7200)
@@ -101,10 +148,14 @@ class Staging(Controller):
         identity = generation["generation"]
         if not re.fullmatch(r"[a-f0-9]{16}", identity) or not re.fullmatch(r"[a-f0-9]{64}", generation["password"]):
             raise ValueError("Invalid staging generation state")
+        storage = self.storage()
+        if generation.get("storage") != self.storage_identity(storage):
+            raise ValueError("Staging S3 bucket identity changed or legacy local state was supplied")
         return {"COMMIT_SHA": sha, "STAGING_HOST": self.host,
                 "PREVIEW_LOG_ADDRESS": f"127.0.0.1:{self.config.get('preview_log_port', 24224)}",
                 "DB_NAME": f"staging_{identity}", "DB_USER": f"staging_{identity}",
-                "AUTH_VOLUME": self.auth_volume, "DB_PASSWORD": generation["password"], "MEDIA_VOLUME": f"people-gator-staging-{identity}-media",
+                "DB_PASSWORD": generation["password"], "MEDIA_PREFIX": f"generations/{identity}",
+                "STAGING_STORAGE": json.dumps(storage),
                 "DATABASE_NETWORK": self.config.get("database_network", "people-gator-preview-db"),
                 "WEB_NETWORK": self.config.get("web_network", "web"),
                 "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
@@ -121,45 +172,49 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
 """)
         self.sql("CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm; "
                  "CREATE EXTENSION IF NOT EXISTS unaccent; REVOKE CREATE ON SCHEMA public FROM PUBLIC;", database=name)
-        for volume in (values["MEDIA_VOLUME"], values["AUTH_VOLUME"]):
-            self.command(["docker", "volume", "create", volume])
 
     def worker(self, action, values, directory, *, work=None, exact_key=""):
-        # Credentials are separate, explicit, operation-scoped read-only mounts.
+        # Credentials are explicit and supplied only to their operation via stdin.
         files = {"download": ["backup-source.json"], "auth": ["credential-input.json"],
                  "sanitize": ["media-policy.json", "media-source.json"], "validate": []}[action]
         args = ["docker", "run", "--rm", "--log-driver", "none", "--read-only", "--cap-drop", "ALL",
-                "--label", self.worker_label, "--cap-add", "CHOWN", "--cap-add", "DAC_OVERRIDE", "--cap-add", "FOWNER", "--security-opt", "no-new-privileges:true", "--user", "0:0",
+                "--label", self.worker_label, "--security-opt", "no-new-privileges:true",
+                # Only download needs to write the private host work directory.
+                "--user", "0:0" if action == "download" else "10001:10001",
                 "--tmpfs", "/tmp:size=256m,mode=1777", "--entrypoint", "python",
                 "--mount", f"type=bind,src={INSTALL_DIR / 'snapshot.py'},dst=/snapshot.py,readonly"]
         if action in {"auth", "sanitize", "validate"}:
+            # The database network is internal. A separate network provides S3
+            # egress without attaching PostgreSQL to a public-facing network.
+            args += ["--network", self.config.get("web_network", "web")]
             if action != "auth":
                 args += ["--network", values["DATABASE_NETWORK"]]
             environment = directory / "worker.env"
-            config = {"PEOPLE_GATOR_API__PERSISTENCE": json.dumps({"postgres": {
-                "host": "preview-postgres", "port": 5432, "user": values["DB_USER"],
-                "password": values["DB_PASSWORD"], "database": values["DB_NAME"], "schema_mode": "validate"}, "weaviate": None}),
-                "PEOPLE_GATOR_API__STORAGE": '{"local":{"root":"/data"},"s3":null}',
-                "PEOPLE_GATOR_API__OTEL__ENABLED": "false"}
+            config = self.runtime_environment(values)
             write_private(environment, "".join(f"{k}={v}\n" for k, v in config.items()))
             args += ["--env-file", str(environment)]
-        if action in {"auth", "sanitize", "validate"}:
-            args += ["--mount", f"type=volume,src={values['MEDIA_VOLUME']},dst=/data"]
-        if action == "auth":
-            args += ["--network", "none", "--mount", f"type=volume,src={values['AUTH_VOLUME']},dst=/data/peoplegator_api"]
         for name in files:
             path = Path(self.settings["private_dir"]) / name
             if name == "media-source.json" and not path.exists():
                 continue  # allowed only when the policy permits no source images
             if not path.is_file():
                 raise ValueError(f"Provision private staging input {name} first")
-            args += ["--mount", f"type=bind,src={path},dst=/private/{name},readonly"]
+        # Host inputs stay mode-600; container UID 10001 receives only JSON stdin.
+        inputs = {name: json.loads((Path(self.settings["private_dir"]) / name).read_text())
+                  for name in files if (Path(self.settings["private_dir"]) / name).exists()}
+        for name in ("backup-source.json", "media-source.json"):
+            if name in inputs:
+                source = inputs[name]
+                target = json.loads(values["STAGING_STORAGE"])["s3"]
+                if (source["endpoint_url"].rstrip("/") == target["endpoint_url"].rstrip("/")
+                        and source.get("bucket", "peoplegator-ingest") == target["bucket_name"]):
+                    raise ValueError("Snapshot source must be separate from the staging S3 bucket")
         if work:
             args += ["--mount", f"type=bind,src={work},dst=/work"]
-        args += [values["BACKEND_IMAGE"], "/snapshot.py", action]
+        args += ["--interactive", values["BACKEND_IMAGE"], "/snapshot.py", action]
         if exact_key:
             args += ["--exact-key", exact_key]
-        return self.command(args)
+        return self.command(args, sql=json.dumps(inputs))
 
     def prepare(self, generation, values, directory, env_file, exact_key):
         # Fresh work/database/media on every explicit attempt; partial generations
@@ -183,7 +238,6 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             report = json.loads(self.worker("sanitize", values, directory))
             generation["provenance"] = {**provenance, **report}
             write_private(directory / "provenance.json", json.dumps(generation["provenance"]))
-            self.command(self.compose_staging(env_file, "run", "--rm", "--no-deps", "storage-init"))
             self.worker("auth", values, directory)
         finally:
             # Dump never survives a completed/failed operation or enters CI artifacts.
@@ -250,9 +304,12 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             raise ValueError("Explicit snapshot initialization is required before normal staging deployment")
         if not (self.root / "infrastructure.env").is_file():
             raise ValueError("Operator must initialize shared infrastructure first")
+        storage = self.storage_identity(self.storage())
+        if old and old.get("storage") != storage:
+            raise ValueError("Retained staging requires its original S3 bucket; migrate legacy storage explicitly")
         images = {part: self.image(part, run) for part in ("frontend", "backend")}
         self.fence(run)
-        generation = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32)} if refresh else dict(old)
+        generation = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32), "storage": storage} if refresh else dict(old)
         directory = self.staging_root / ("generation-" + generation["generation"])
         directory.mkdir(mode=0o700, exist_ok=True)
         candidate = directory / "candidate.env"
