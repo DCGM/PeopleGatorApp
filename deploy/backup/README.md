@@ -78,3 +78,61 @@ application-bucket access is required. Private configuration and dumps must stay
 outside Git, public CI artifacts and general application logs. Unit and disposable
 roundtrip checks are described in the implementation PR; no real dataset is used
 in automated checks.
+
+## Restore original data into a new database
+
+Copy `restore.example.json` privately (mode 600). `storage` uses the **restore
+reader** identity, with prefix-scoped ListBucket, GetObject and GetObjectVersion
+only. `database` is a separate provisioning connection to a maintenance database.
+`target` names a new database and an existing restricted LOGIN owner with its own
+password. The owner must have no superuser, database/role creation, replication,
+bypass-RLS or role-membership privileges. Provision that dedicated owner first;
+this command never copies source roles or grants the app provisioning credentials.
+
+With native PostgreSQL 16 tools and backend dependencies, run:
+
+```sh
+mkdir -m 700 /private/recovery-reports
+python -m people_gator_api.backup restore --config /private/restore.json \
+  --report /private/recovery-reports/recovery-2026-10-16.json
+```
+
+Optionally pass `--exact-key production/db-backups/peoplegator-prod-YYYY-MM-DD.dump`.
+Without it, all listing pages are checked and the greatest valid filename date
+is selected. Temporary/unrelated/invalid names are ignored. The selected key's
+ETag, available version, size and publisher SHA256/revision metadata are pinned.
+Download is conditional and streamed; identity/metadata are checked again after
+download. Missing metadata, truncation, checksum mismatch, changed objects or a
+corrupt latest archive fail before database creation. There is no older fallback.
+
+The worker image supports the same `restore` command and stdin config. Mount a
+private mode-700 report directory at a writable path, owned by the container's
+effective UID, and pass `--report` inside it. For rootless Docker the host runner
+maps to container UID 0: use `--user 0:0` with all capabilities dropped; for
+rootful Docker match the private directory owner's UID/GID. Supply a writable
+temporary mount with space for the archive. Neither backup nor provisioning
+credentials belong in the API, frontend, process arguments or public logs.
+
+The provisioning identity must create/drop databases, assign ownership to the
+target owner, and install the application's compatible `vector`, `pg_trgm` and
+`unaccent` extensions. The target starts with public CONNECT revoked. Extension
+installation uses provisioning credentials; archive SQL authenticates directly
+as the restricted owner, with a separate passfile. Restore is transactional and
+ignores source owners, grants, comments and security labels. It preserves data,
+links, vector values and Alembic history exactly: no sanitization, seeding,
+migration or stamping. It requires a valid restored Alembic revision. Use only
+trusted application archives: restoring SQL is not a sandbox. See
+[PostgreSQL 16 pg_restore](https://www.postgresql.org/docs/16/app-pgrestore.html).
+
+Existing target databases and existing report files are refused. The report is
+reserved exclusively before side effects, written mode 600 and contains source
+identity/checksum/revisions and destination identity, without credentials. An
+ordinary setup/restore/report failure drops only the database this operation
+confirmed creating; source/active databases are untouched. If cleanup fails or
+the process/host dies, a partial unserved target/report can remain for operator
+inspection. A network failure during CREATE DATABASE has an uncertain result;
+the tool cannot safely assume ownership and never drops an unconfirmed target.
+Inspect and explicitly remove only that failed candidate before retrying. No
+automatic connection/routing switch or destructive in-place recovery is provided.
+Before adopting the recovered database, run the compatible application's schema
+checks/migrations and validate matching media/auth storage and writable behavior.
