@@ -1,0 +1,19 @@
+{
+  "database": {
+    "host": "db",
+    "port": 5432,
+    "user": "backup_reader",
+    "password": "REPLACE_WITH_PRIVATE_DATABASE_PASSWORD",
+    "database": "people_gator",
+    "sslmode": "require"
+  },
+  "storage": {
+    "endpoint_url": "https://s3-provider.example.invalid",
+    "region": "us-east-1",
+    "bucket": "peoplegator-db-backup",
+    "prefix": "production/db-backups/",
+    "access_key_id": "BACKUP_PUBLISHER_ID",
+    "secret_access_key": "PRIVATE_BACKUP_PUBLISHER_SECRET"
+  },
+  "application_revision": "0000000000000000000000000000000000000000"
+}
