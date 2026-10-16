@@ -1,0 +1,24 @@
+{
+  "database": {
+    "host": "preview-postgres",
+    "port": 5432,
+    "user": "recovery_provisioner",
+    "password": "PRIVATE_PROVISIONING_PASSWORD",
+    "database": "postgres",
+    "sslmode": "verify-full",
+    "sslrootcert": "system"
+  },
+  "storage": {
+    "endpoint_url": "https://s3-provider.example.invalid",
+    "region": "us-east-1",
+    "bucket": "peoplegator-db-backup",
+    "prefix": "production/db-backups/",
+    "access_key_id": "BACKUP_RESTORE_READER_ID",
+    "secret_access_key": "PRIVATE_BACKUP_RESTORE_READER_SECRET"
+  },
+  "target": {
+    "database": "recovered_people_gator",
+    "user": "recovery_owner",
+    "password": "PRIVATE_RESTRICTED_TARGET_OWNER_PASSWORD"
+  }
+}
