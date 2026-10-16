@@ -164,6 +164,57 @@ Moving buckets or adopting an older local deployment requires an explicit
 operator migration of credentials, active media and state under the host lock;
 the controller does not silently switch to an empty bucket or convert local data.
 
+### Update an existing host's settings
+
+Run the configuration helper **as the existing deployment runner user**, from
+this checkout or a reviewed controller release. The preview host config and its
+runner-owned state directory must already exist. The one-time directory setup
+above still applies if `/opt` or `/var/lib` cannot be written by that user.
+
+```sh
+python3 deploy/preview/configure_staging.py
+```
+
+It reads `/opt/people-gator-preview/config.json`, preserves unrelated host and
+staging settings, adds missing staging defaults and removes the obsolete
+`auth_volume` setting. Prompts collect endpoint, region, bucket and credentials;
+both credential fields use hidden input. Enter preserves an existing value.
+Only `storage.json` and the staging config stanza can change. Backup/media
+reader inputs, account hashes, active database/media, journals and credential
+objects in S3 are left untouched. It makes no network calls and does not verify
+provider connectivity or create the bucket.
+
+For automation, provide a complete private JSON storage configuration using the
+`staging.storage.example.json` shape. Secrets must stay in that private file,
+never in command arguments. Optional `--config` selects a different host config:
+
+```sh
+python3 deploy/preview/configure_staging.py \
+  --config /opt/people-gator-preview/config.json \
+  --storage-file /private/staging-storage.json --dry-run
+```
+
+Remove `--dry-run` to apply. A dry run writes no files or directories. Apply
+takes the same preview host lock as deployments, detects concurrent edits,
+creates mode-600 `*.bak-<UTC timestamp>-<suffix>` backups of changed files,
+and atomically replaces settings with mode-600 files in mode-700 staging
+directories. Ordinary write failures restore already-replaced settings. Reruns
+with the same settings retain file contents and create no additional backups.
+Backups contain credentials and must remain private; retain them for recovery.
+
+For active S3 staging, endpoint/region/bucket must match committed `state.json`;
+credential rotation within that destination is allowed. Pending activation and
+legacy local-volume state block updates so they cannot silently redirect an
+existing dataset. Resolve activation or perform a deliberate data migration
+first. The script does not reset state, move data or publish controller releases.
+
+After applying, it prints the appropriate `gh workflow run staging.yml --ref main`
+command: `operation=deploy` for initialized staging or explicit `operation=refresh`
+for first initialization. Run that separately once the reviewed change is on
+`main` and the required private inputs/bucket are provisioned. Existing containers
+keep their old credentials until redeployment; retain those credentials during
+rotation until the new deployment passes readiness.
+
 ## Private account and API-key provisioning
 
 Copy `staging.credentials.example.json` to private `credential-input.json` and

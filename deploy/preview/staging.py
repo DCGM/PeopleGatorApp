@@ -47,7 +47,10 @@ class Staging(Controller):
     def storage(self):
         """One explicit staging bucket, never an implicit/local storage default."""
         path = Path(self.settings["private_dir"]) / "storage.json"
-        config = json.loads(path.read_text())
+        return self.validate_storage(json.loads(path.read_text()))
+
+    @staticmethod
+    def validate_storage(config):
         if set(config) != {"s3", "local"} or config["local"] is not None or not isinstance(config["s3"], dict):
             raise ValueError("Staging requires explicit S3 storage with local: null")
         s3 = config["s3"]

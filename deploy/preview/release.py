@@ -24,7 +24,7 @@ import tempfile
 BUNDLE_FILES = (
     "preview.py", "compose.pr.yaml", "compose.infrastructure.yaml",
     "otel-collector.yaml", "pgadmin-servers.json",
-    "staging.py", "snapshot.py", "compose.staging.yaml", "staging-login.html",
+    "staging.py", "snapshot.py", "configure_staging.py", "compose.staging.yaml", "staging-login.html",
 )
 DEFAULT_RELEASES = Path("/var/lib/people-gator-preview-controller/releases")
 
@@ -69,7 +69,7 @@ def reviewed_source(source: Path, revision: str) -> None:
 
 def validate_bundle(directory: Path) -> None:
     """Parse code and render Compose using synthetic settings, without a daemon."""
-    for name in ("preview.py", "staging.py", "snapshot.py"):
+    for name in ("preview.py", "staging.py", "snapshot.py", "configure_staging.py"):
         compile((directory / name).read_bytes(), name, "exec")
     json.loads((directory / "pgadmin-servers.json").read_text())
     environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_")}
