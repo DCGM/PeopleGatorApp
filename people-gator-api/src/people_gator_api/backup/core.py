@@ -127,7 +127,7 @@ def database_environment(database, work):
                        PGDATABASE=database["database"], PGPASSFILE=str(password_file),
                        PGSSLMODE=database["sslmode"], PGCONNECT_TIMEOUT="15")
     if database.get("sslrootcert") or database["sslmode"] == "verify-full":
-        environment["PGSSLROOTCERT"] = database.get("sslrootcert", "system")
+        environment["PGSSLROOTCERT"] = database.get("sslrootcert") or "system"
     return environment
 
 
