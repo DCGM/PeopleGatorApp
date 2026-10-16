@@ -90,8 +90,26 @@ def s3_client(config: dict):
                         config=Config(retries={"max_attempts": 3, "mode": "standard"}))
 
 
+def object_metadata(response):
+    # Keep the controller worker standalone: trusted-controller tests also run
+    # from sparse checkouts without the backend package or its dependencies.
+    supplied = response.get("Metadata", {})
+    if not isinstance(supplied, dict):
+        raise ValueError("Invalid backup object metadata")
+    result = {}
+    for key, value in supplied.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ValueError("Invalid backup object metadata")
+        normalized = key.lower()
+        if normalized in result and result[normalized] != value:
+            raise ValueError("Conflicting backup object metadata")
+        result[normalized] = value
+    return result
+
+
 def download(client, bucket: str, key: str, destination: Path) -> dict:
     identity = client.head_object(Bucket=bucket, Key=key)
+    metadata = object_metadata(identity)
     version = identity.get("VersionId")
     request = {"Bucket": bucket, "Key": key, "IfMatch": identity["ETag"]}
     if version and version != "null":
@@ -111,7 +129,8 @@ def download(client, bucket: str, key: str, destination: Path) -> dict:
         response["Body"].close()
     # Check the current key as well as the pinned version. Replacement fails closed.
     after = client.head_object(Bucket=bucket, Key=key)
-    if any(after.get(field) != identity.get(field) for field in ("ETag", "VersionId", "ContentLength")):
+    if (any(after.get(field) != identity.get(field) for field in ("ETag", "VersionId", "ContentLength"))
+            or object_metadata(after) != metadata):
         raise ValueError("Backup changed during download")
     if size != identity["ContentLength"]:
         raise ValueError("Incomplete backup")
@@ -119,7 +138,7 @@ def download(client, bucket: str, key: str, destination: Path) -> dict:
     # TLS, exact length, optional publisher SHA256, archive validation and restore
     # protect downloads where an ETag is not a content checksum.
     etag = identity["ETag"].strip('"')
-    expected = identity.get("Metadata", {}).get("sha256")
+    expected = metadata.get("sha256")
     opaque_encryption = identity.get("ServerSideEncryption") == "aws:kms" or identity.get("SSECustomerAlgorithm")
     if not expected and not opaque_encryption and re.fullmatch(r"[a-fA-F0-9]{32}", etag):
         md5 = hashlib.md5(usedforsecurity=False)
@@ -132,7 +151,7 @@ def download(client, bucket: str, key: str, destination: Path) -> dict:
         raise ValueError("Publisher checksum mismatch")
     return {"bucket": bucket, "key": key, "version_id": version, "etag": identity["ETag"],
             "size": size, "sha256": digest.hexdigest(),
-            "source_application_revision": identity.get("Metadata", {}).get("application-revision")}
+            "source_application_revision": metadata.get("application-revision")}
 
 
 async def connect():

@@ -64,8 +64,9 @@ def test_completed_yesterday_after_midnight_still_runs_today_at_due(tmp_path):
     assert calls == [utc(16, 23, 59), utc(17, 2)]
 
 
-def test_restart_verifies_existing_publisher_metadata_and_rejects_corrupt_dates(tmp_path, capsys):
-    good = {"ContentLength": 50, "Metadata": {"sha256": "a" * 64, "application-revision": "b" * 40}}
+@pytest.mark.parametrize("casing", [str.lower, str.title, str.upper])
+def test_restart_verifies_existing_publisher_metadata_and_rejects_corrupt_dates(tmp_path, capsys, casing):
+    good = {"ContentLength": 50, "Metadata": {casing("sha256"): "a" * 64, casing("application-revision"): "b" * 40}}
     client = Mock()
     client.head_object.side_effect = [{"ContentLength": 0, "Metadata": {}}, good]
     attempts = []

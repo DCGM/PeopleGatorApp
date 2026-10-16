@@ -78,6 +78,34 @@ class BackupTests(unittest.TestCase):
             result = snapshot.download(client, "bucket", "key", Path(directory) / "dump")
             self.assertEqual(result["sha256"], hashlib.sha256(raw).hexdigest())
 
+    def test_metadata_names_ignore_case_but_values_and_conflicts_remain_checked(self):
+        raw = b"PGDMP synthetic archive"
+        metadata = {"sha256": hashlib.sha256(raw).hexdigest(), "application-revision": "a" * 40}
+        identity = {"ETag": '"opaque"', "ContentLength": len(raw)}
+        before = {**identity, "Metadata": {k.title(): v for k, v in metadata.items()}}
+        for change in ("casing", "checksum", "revision", "conflict"):
+            after_metadata = dict(metadata)
+            if change == "checksum":
+                after_metadata["sha256"] = "b" * 64
+            elif change == "revision":
+                after_metadata["application-revision"] = "b" * 40
+            elif change == "conflict":
+                after_metadata["Sha256"] = "b" * 64
+            client = Mock()
+            client.head_object.side_effect = [before, {**identity, "Metadata": after_metadata}]
+            client.get_object.return_value = {**identity, "Body": io.BytesIO(raw)}
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
+                destination = Path(directory) / "archive"
+                if change == "casing":
+                    result = snapshot.download(client, "bucket", "key", destination)
+                    self.assertEqual(result["source_application_revision"], "a" * 40)
+                    self.assertEqual(result["sha256"], metadata["sha256"])
+                    self.assertEqual(destination.read_bytes(), raw)
+                else:
+                    with self.assertRaises(ValueError):
+                        snapshot.download(client, "bucket", "key", destination)
+            self.assertTrue(client.get_object.return_value["Body"].closed)
+
     def test_changed_disappeared_truncated_and_corrupt_object_fail_without_fallback(self):
         identity = {"ETag": '"opaque-etag"', "ContentLength": 5, "VersionId": "v1"}
         for change in ("changed", "disappeared", "truncated", "checksum", "get_identity"):

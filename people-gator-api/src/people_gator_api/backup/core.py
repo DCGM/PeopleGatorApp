@@ -115,6 +115,19 @@ def digest_file(path):
     return digest.hexdigest()
 
 
+def object_metadata(response):
+    """Metadata comes from case-insensitive HTTP headers on S3 providers."""
+    supplied = response.get("Metadata", {})
+    require(isinstance(supplied, dict), "Invalid backup object metadata")
+    result = {}
+    for key, value in supplied.items():
+        require(isinstance(key, str) and isinstance(value, str), "Invalid backup object metadata")
+        normalized = key.lower()
+        require(normalized not in result or result[normalized] == value, "Conflicting backup object metadata")
+        result[normalized] = value
+    return result
+
+
 def database_environment(database, work):
     # Neither libpq service files/options nor application/AWS credentials leak in.
     environment = {k: v for k, v in os.environ.items() if not k.startswith(("PG", "AWS_", "PEOPLE_GATOR_"))}
@@ -171,7 +184,8 @@ def upload_archive(client, storage, key, archive, metadata, *, part_size=64 * 10
         if upload is not None:
             client.abort_multipart_upload(**request, UploadId=upload)
     stored = client.head_object(**request)
-    require(stored["ContentLength"] == size and all(stored.get("Metadata", {}).get(k) == v for k, v in metadata.items()),
+    stored_metadata = object_metadata(stored)
+    require(stored["ContentLength"] == size and all(stored_metadata.get(k) == v for k, v in metadata.items()),
             "Published backup metadata verification failed; inspect the dated object before retrying")
     return {"key": key, "size": size, "sha256": metadata["sha256"], "version_id": stored.get("VersionId")}
 
