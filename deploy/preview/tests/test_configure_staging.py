@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import configure_staging as updater
+import provision_staging as provisioner
 
 
 STORAGE = {"local": None, "s3": {"endpoint_url": "https://s3.example.test", "region": "test",
@@ -208,6 +209,117 @@ class ConfigureTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("private-sentinel", result.stdout + result.stderr)
         self.assertFalse(self.private.exists())
+
+
+class ProvisionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.preview = self.root / "preview"
+        self.preview.mkdir(mode=0o700)
+        (self.preview / "controller.lock").touch(mode=0o600)
+        self.private = self.root / "private"
+        self.state = self.root / "state"
+        self.config = self.root / "config.json"
+        self.original = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.preview),
+            "private-sentinel": {"password": "preserved-secret"}, "staging": {
+                "host": "stage.example.test", "state_dir": str(self.state),
+                "private_dir": str(self.private), "operator_setting": "preserved"}}
+        self.config.write_text(json.dumps(self.original))
+        self.config.chmod(0o644)
+        self.output = io.StringIO()
+        output = redirect_stdout(self.output)
+        output.__enter__()
+        self.addCleanup(output.__exit__, None, None, None)
+
+    def test_provisions_runner_directories_preserves_config_and_reruns(self):
+        before = self.config.read_bytes()
+        provisioner.provision(self.config)
+        for directory in (self.private, self.state):
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(directory.stat().st_uid, self.preview.stat().st_uid)
+            self.assertEqual(directory.stat().st_gid, self.preview.stat().st_gid)
+        self.assertEqual(self.config.read_bytes(), before)
+        provisioner.provision(self.config)
+        self.assertEqual(list(self.root.glob("config.json.bak-*")), [])
+        self.assertNotIn("preserved-secret", self.output.getvalue())
+
+    def test_adds_missing_host_default_with_private_backup_preserves_metadata(self):
+        del self.original["staging"]["host"]
+        self.config.write_text(json.dumps(self.original))
+        before = self.config.read_bytes()
+        metadata = self.config.stat()
+        provisioner.provision(self.config)
+        expected = {**self.original, "staging": {"host": "staging.peoplegator.dev", **self.original["staging"]}}
+        self.assertEqual(json.loads(self.config.read_text()), expected)
+        self.assertEqual(self.config.stat().st_mode, metadata.st_mode)
+        self.assertEqual(self.config.stat().st_uid, metadata.st_uid)
+        self.assertEqual(self.config.stat().st_gid, metadata.st_gid)
+        backup, = self.root.glob("config.json.bak-*")
+        self.assertEqual(backup.read_bytes(), before)
+        self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(backup.stat().st_uid, metadata.st_uid)
+        provisioner.provision(self.config)
+        self.assertEqual(len(list(self.root.glob("config.json.bak-*"))), 1)
+
+    def test_missing_staging_section_dry_run_does_not_write(self):
+        del self.original["staging"]
+        self.config.write_text(json.dumps(self.original))
+        before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(provisioner, "DEFAULT_STAGING", {"host": "staging.peoplegator.dev",
+                "state_dir": str(self.state), "private_dir": str(self.private)}):
+            provisioner.provision(self.config, dry_run=True)
+        self.assertEqual(before, {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()})
+        self.assertFalse(self.private.exists())
+        self.assertFalse(self.state.exists())
+
+    def test_rejects_shared_state_and_symlinks_before_writes(self):
+        for state in (self.preview, self.private, self.preview / "staging", self.root):
+            self.original["staging"]["state_dir"] = str(state)
+            self.config.write_text(json.dumps(self.original))
+            with self.subTest(state=state), self.assertRaises(provisioner.ProvisionError):
+                provisioner.provision(self.config)
+            self.assertFalse(self.private.exists())
+        link = self.root / "config-link.json"
+        link.symlink_to(self.config)
+        with self.assertRaises(provisioner.ProvisionError):
+            provisioner.provision(link)
+
+    def test_refuses_insecure_directory_and_preserves_config_on_setup_failure(self):
+        self.private.mkdir(mode=0o755)
+        with self.assertRaisesRegex(provisioner.ProvisionError, "mode 700"):
+            provisioner.provision(self.config)
+        self.assertFalse(self.state.exists())
+        self.private.chmod(0o700)
+        with patch.object(provisioner.os, "chown", side_effect=PermissionError):
+            # Simulates an administrator setup failure; no host config update.
+            with self.assertRaises(PermissionError):
+                provisioner.provision(self.config)
+        self.assertEqual(json.loads(self.config.read_text()), self.original)
+
+    def test_refuses_pending_activation_and_legacy_storage(self):
+        self.state.mkdir(mode=0o700)
+        journal = self.state / "activation.json"
+        journal.write_text("private activation")
+        with self.assertRaisesRegex(provisioner.ProvisionError, "activation"):
+            provisioner.provision(self.config)
+        journal.unlink()
+        self.original["staging"]["auth_volume"] = "old-volume"
+        self.config.write_text(json.dumps(self.original))
+        with self.assertRaisesRegex(provisioner.ProvisionError, "migration"):
+            provisioner.provision(self.config)
+        self.assertFalse(self.private.exists())
+
+    def test_cli_requires_sudo_and_never_echoes_malformed_config(self):
+        self.config.write_text('{"preserved-secret": invalid}')
+        result = subprocess.run([sys.executable, str(Path(provisioner.__file__)), "--config", str(self.config),
+                                 "--dry-run"], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("preserved-secret", result.stdout + result.stderr)
+        with patch.object(provisioner.os, "geteuid", return_value=1000), patch.object(sys, "argv", ["provision_staging.py"]):
+            with self.assertRaises(SystemExit):
+                provisioner.main()
 
 
 if __name__ == "__main__":

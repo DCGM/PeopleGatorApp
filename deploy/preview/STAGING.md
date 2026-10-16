@@ -183,8 +183,26 @@ this checkout or a reviewed controller release. The preview host config and its
 runner-owned state directory must already exist. The one-time directory setup
 above still applies if `/opt` or `/var/lib` cannot be written by that user.
 
+For first-time host setup, an administrator can run the standalone helper below
+from a reviewed checkout. First validate without sudo, then apply:
+
+```sh
+python3 deploy/preview/provision_staging.py --dry-run
+sudo python3 deploy/preview/provision_staging.py
+```
+
+The helper adds missing staging defaults to the existing host config and creates
+mode-700 staging directories owned by the existing preview runner. It takes the
+existing shared controller lock, preserves host config ownership/permissions and
+unrelated settings, saves a private backup before replacing changed config, and
+is safe to rerun. It does not configure credentials, install a controller, restore
+a database, restart services or access bucket objects. Existing directories with
+unexpected ownership/permissions, symlinked paths, legacy storage and pending
+activation require inspection instead of automatic changes. The setup helper is
+an explicit administrator action; it is never run by deployment workflows.
+
 The host config directory stays operator-owned, as required by the preview
-installation guide. If its `staging` section is missing or still contains
+installation guide. For manual setup, if its `staging` section is missing or still contains
 `auth_volume`, an operator must first use
 `sudoedit /opt/people-gator-preview/config.json` to add the following section
 or update the existing one, preserving all other settings:
@@ -254,7 +272,7 @@ settings, including PostgreSQL and inference credentials, are ignored.
 Credentials are never printed. Use credentials scoped to the dedicated staging
 bucket; do not reuse production reader/writer credentials for the running API.
 `--bucket` is mandatory and selects the staging **destination**. The default
-backup **source** `peoplegator-ingest` remains separately configured in
+backup **source** `peoplegator-db-backup` remains separately configured in
 `backup-source.json`; it must not also be the destination. This import neither
 creates buckets nor supplies the other required private inputs. Keep
 `credential-input.json`, `media-policy.json` and `backup-source.json` provisioned
