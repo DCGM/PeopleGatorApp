@@ -1,5 +1,13 @@
 # Pull request previews
 
+> **Lifecycle commands moved.** Previews are installed, deployed, cleaned up and
+> diagnosed with [`people-gator-deploy pr`](../people-gator-deploy/README.md), which
+> the PR preview workflow installs from its reviewed `main` commit. This guide
+> remains the reference for host prerequisites (DNS, Traefik, runner isolation,
+> token permissions, users file), pgAdmin and logging. Sections describing
+> `preview.py`, `release.py` and controller bundles apply only to hosts not yet
+> adopted with `people-gator-deploy pr adopt`.
+
 For automatic main deployments and explicit production-snapshot initialization,
 see [Staging](STAGING.md). Staging retains its own database, credentials and media;
 PR previews continue to use the automatic synthetic seed.

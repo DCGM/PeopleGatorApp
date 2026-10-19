@@ -165,16 +165,14 @@ Schema tests drop/recreate objects. Reuse only disposable stores. Optional live
 Weaviate coverage needs its own service and
 `PEOPLE_GATOR_WEAVIATE_TEST_HTTP_PORT`/`PEOPLE_GATOR_WEAVIATE_TEST_GRPC_PORT`;
 it is not required for the PostgreSQL path. CI also tests the migration/seed CLI
-twice in a third isolated database and runs preview-controller tests:
+twice in a third isolated database and runs the deployment utility tests:
 
 ```sh
-python3 deploy/preview/tests/test_preview.py -v
-python3 deploy/preview/tests/test_installation.py -v
-python3 deploy/preview/tests/test_observability.py -v
+PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
 ```
 
-Run those three from the repository root. The host guide explains opt-in Docker
-database-isolation and real log-delivery checks.
+Run it from the repository root. The [utility guide](../deploy/people-gator-deploy/README.md#development)
+explains the opt-in database-isolation, snapshot, runtime-image and log-delivery checks.
 
 For the disposable media-upload concurrency investigation, see
 [Reproduce media upload connection starvation](../people-gator-api/docs/MEDIA-UPLOAD-CONCURRENCY.md).

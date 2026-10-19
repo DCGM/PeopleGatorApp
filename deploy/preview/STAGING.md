@@ -1,5 +1,15 @@
 # Main staging on the preview host
 
+> **Lifecycle commands moved.** Staging is installed, updated, initialized
+> (`snapshot-init`) and refreshed with
+> [`people-gator-deploy staging`](../people-gator-deploy/README.md). This guide
+> remains the reference for S3 buckets and permissions, the backup source, private
+> account/API-key inputs and data semantics. The utility now copies only media
+> referenced by the restored database. References to `staging.py`,
+> `configure_staging.py`, `provision_staging.py` and the shared preview
+> `config.json` apply only to hosts not yet adopted with
+> `people-gator-deploy staging adopt`.
+
 `staging.yml` deploys successful **push-to-main** runs of `PR CI`, using their
 frontend/backend images. PR CI tests and builds the exact main SHA (not a PR
 head). It uses random published PostgreSQL test ports so the three runner
