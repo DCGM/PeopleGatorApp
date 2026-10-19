@@ -201,6 +201,51 @@ class ReleaseTests(unittest.TestCase):
         self.release.deploy("v1.1.0")
         self.assertEqual(self.state()["tag"], "v1.1.0")
 
+    def test_failed_upgrade_recovers_last_healthy_release_including_first_upgrade(self):
+        for earlier in (False, True):
+            with self.subTest(earlier_release=earlier), tempfile.TemporaryDirectory() as temporary:
+                controller = FakeRelease(Path(temporary))
+                if earlier:
+                    controller.deploy("v0.9.0")
+                controller.deploy("v1.0.0")
+                controller.fail = "readiness"
+                with self.assertRaisesRegex(DeployError, "readiness"):
+                    controller.deploy("v1.1.0")
+                controller.fail = None
+                self.assertEqual(controller.recover()["tag"], "v1.0.0")
+                self.assertEqual(controller.state()["tag"], "v1.0.0")
+                self.assertIn("RELEASE_TAG='v1.0.0'", (controller.root / "compose.env").read_text())
+                self.assertFalse((controller.root / "activation.json").exists())
+
+    def test_retry_repairs_each_interrupted_commit_without_losing_recovery_target(self):
+        for filename in ("previous.json", "previous.env", "state.json", "compose.env", "history.jsonl"):
+            with self.subTest(interrupted_file=filename), tempfile.TemporaryDirectory() as temporary:
+                controller = FakeRelease(Path(temporary))
+                controller.deploy("v1.0.0")
+                original = release.write_private
+                def interrupted(path, content):
+                    if path == controller.root / filename:
+                        raise OSError("Simulated interruption")
+                    return original(path, content)
+                with patch.object(release, "write_private", side_effect=interrupted), self.assertRaises(OSError):
+                    controller.deploy("v1.1.0")
+                controller.deploy("v1.1.0")
+                self.assertEqual(controller.state()["tag"], "v1.1.0")
+                self.assertIn("RELEASE_TAG='v1.1.0'", (controller.root / "compose.env").read_text())
+                self.assertEqual(controller.state("previous.json")["tag"], "v1.0.0")
+                self.assertIn("RELEASE_TAG='v1.0.0'", (controller.root / "previous.env").read_text())
+                self.assertEqual(len((controller.root / "history.jsonl").read_text().splitlines()), 2)
+                self.assertFalse((controller.root / "activation.json").exists())
+
+    def test_interrupted_recovery_retries_the_same_target(self):
+        self.release.deploy("v1.0.0")
+        self.release.deploy("v1.1.0")
+        self.release.fail = "readiness"
+        with self.assertRaisesRegex(DeployError, "readiness"):
+            self.release.recover()
+        self.release.fail = None
+        self.assertEqual(self.release.recover()["tag"], "v1.0.0")
+
     def test_private_inputs_keep_roles_separate_and_cannot_override_production_settings(self):
         runtime = Path(self.release.config["runtime_file"])
         original = runtime.read_text()

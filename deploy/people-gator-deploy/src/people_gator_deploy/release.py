@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import secrets
 
 from .core import DeployError
 from .host import INSTALL_DIR, Host, IneligibleRun, positive_int, routed_readiness, summary, write_private
@@ -136,28 +137,54 @@ class Release(Host):
         except DeployError:
             return False
 
+    def pending_activation(self):
+        pending = self.state("activation.json")
+        if pending and "record" not in pending:
+            # Read journals written by the original package before its commit
+            # protocol included the full environment and recovery target.
+            pending = {"record": {k: v for k, v in pending.items() if k != "candidate"},
+                       "environment": Path(pending["candidate"]).read_text()}
+        return pending
+
+    def finish_activation(self, pending):
+        """Complete the file publication idempotently after routed readiness."""
+        record = pending["record"]
+        if pending.get("previous"):
+            write_private(self.root / "previous.json", json.dumps(pending["previous"]))
+            write_private(self.root / "previous.env", pending["previous_environment"])
+        write_private(self.root / "state.json", json.dumps(record))
+        write_private(self.root / "compose.env", pending["environment"])
+        history = self.root / "history.jsonl"
+        lines = history.read_text().splitlines() if history.exists() else []
+        if not lines or json.loads(lines[-1]) != record:
+            # Atomic replacement also prevents a partial JSONL tail on interruption.
+            write_private(history, "".join(line + "\n" for line in lines) + json.dumps(record) + "\n")
+        (self.root / "activation.json").unlink()
+
+    def reconcile_activation(self):
+        pending = self.pending_activation()
+        if pending and self.state() == pending["record"]:
+            # State is the commit point. A retry must finish publishing compose
+            # and history before returning "already deployed" or accepting a tag.
+            self.finish_activation(pending)
+
     def activate(self, candidate: Path, record: dict):
-        journal = self.root / "activation.json"
-        write_private(journal, json.dumps({"candidate": str(candidate), **record}))
+        current = self.state()
+        record = {**record, "activation": secrets.token_hex(16)}
+        pending = {"record": record, "environment": candidate.read_text(), "previous": current,
+                   "previous_environment": (self.root / "compose.env").read_text() if current else None}
+        write_private(self.root / "activation.json", json.dumps(pending))
         self.command(self.compose_release(candidate, "config", "--quiet"))
         self.command(self.compose_release(candidate, "up", "-d", "--wait", "--wait-timeout", "300", "backend"))
         self.command(self.compose_release(candidate, "up", "-d", "--wait", "--wait-timeout", "180", "frontend"))
         self.readiness()
-        # Commit point: state/compose.env describe the healthy release.
-        current = self.state()
-        if current:
-            write_private(self.root / "previous.json", json.dumps(current))
-            write_private(self.root / "previous.env", (self.root / "compose.env").read_text())
-        write_private(self.root / "state.json", json.dumps(record))
-        write_private(self.root / "compose.env", candidate.read_text())
-        with (self.root / "history.jsonl").open("a") as stream:
-            stream.write(json.dumps(record) + "\n")
-        journal.unlink()
+        self.finish_activation(pending)
 
     def deploy(self, tag: str, *, commit: str | None = None, run_id: int | None = None, backup_record=None) -> dict:
         self.validate_inputs()
+        self.reconcile_activation()
         journal = self.root / "activation.json"
-        if journal.exists() and json.loads(journal.read_text()).get("tag") != tag:
+        if journal.exists() and self.pending_activation()["record"]["tag"] != tag:
             raise DeployError(f"{journal}: an interrupted activation of another tag needs operator review; "
                               "inspect status, then rerun that tag's update or use recover")
         resolved, run = self.eligible(tag, commit=commit, run_id=run_id)
@@ -198,16 +225,26 @@ class Release(Host):
         Changing images never undoes migrations: an older image whose check
         rejects the current schema is refused, and no downgrade is attempted.
         """
-        previous = self.state("previous.json")
-        if not previous or not (self.root / "previous.env").exists():
+        self.validate_inputs()
+        self.reconcile_activation()
+        pending = self.pending_activation()
+        if pending and pending["record"].get("recovered"):
+            # Retry the same recovery if its startup/readiness was interrupted.
+            previous, environment = pending["record"], pending["environment"]
+        else:
+            # A failed candidate never became the committed release. Recover
+            # the last healthy state, rather than skipping back one more release.
+            previous = self.state() if pending else self.state("previous.json")
+            env = self.root / ("compose.env" if pending else "previous.env")
+            environment = env.read_text() if env.exists() else None
+        if not previous or environment is None:
             raise DeployError("No retained previous release to recover")
         candidate = self.root / "recovery.env"
-        write_private(candidate, (self.root / "previous.env").read_text())
+        write_private(candidate, environment)
         if not self.schema_current(candidate):
             raise DeployError(f"The retained release {previous['tag']} rejects the current database schema; "
                               "restore the recorded backup into the database explicitly or roll forward")
         record = {**previous, "recovered": True}
-        (self.root / "activation.json").unlink(missing_ok=True)
         self.activate(candidate, record)
         print(f"Recovered release {previous['tag']} ({previous['commit']})")
         return {"tag": previous["tag"], "commit": previous["commit"], "recovered": True}

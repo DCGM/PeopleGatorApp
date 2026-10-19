@@ -204,7 +204,12 @@ startup → routed readiness → state commit. Expect downtime while the backend
 restarts. Re-delivering the deployed tag is a no-op; a tag that does not contain
 the deployed commit is refused. `release recover` reactivates the retained
 previous images only if their database check accepts the current schema;
-changing images never undoes migrations and nothing downgrades a schema.
+changing images never undoes migrations and nothing downgrades a schema. After a
+failed activation, recovery targets the last healthy committed release, including
+when the first upgrade fails. After a successful activation, it targets the
+retained previous release. Activation journals retain the complete environment
+and recovery target; retries repair interrupted state/environment/history
+publication before treating a delivery as complete.
 
 **Release access boundary.** The production stack has no reload, debug, seed or
 development mounts, but the current frontend build embeds demo auto-login
