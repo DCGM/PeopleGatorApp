@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Preview PostgreSQL",
+      "Group": "People Gator previews",
+      "Host": "preview-postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "preview_admin",
+      "SSLMode": "prefer"
+    }
+  }
+}
