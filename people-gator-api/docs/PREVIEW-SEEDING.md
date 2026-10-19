@@ -110,10 +110,12 @@ throwaway local storage. Seed integration tests also run in isolated schemas on
 `PEOPLE_GATOR_SCHEMA_TEST_URL`, checking filters, vector discovery, OCR highlights,
 face crops, reruns, review edits, merges/deletions and checkpoint recovery.
 
-The trusted deployment utility runs `storage-init`, `migrate`, then `seed` from the
-candidate backend image before starting backend/frontend. A failing seed command
-stops startup and leaves the previous deployment configuration/version intact,
-allowing retry. Repository writes may already have committed, so checkpoints are
+The trusted deployment utility removes the selected PR's old containers while
+retaining its database and media volume, then runs `storage-init`, `migrate`, and
+`seed` from the candidate backend image before starting backend/frontend. A
+failing seed command stops startup and leaves the previous deployment
+configuration/version intact for retry, but the preview stays stopped until a
+successful retry. Repository writes may already have committed, so checkpoints are
 used to resume; the seed is not one atomic database/filesystem transaction.
 
 After one-time operator installation, the lifecycle workflow installs or reuses

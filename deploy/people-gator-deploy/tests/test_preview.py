@@ -296,6 +296,47 @@ class LifecycleTests(unittest.TestCase):
         self.controller.deploy_pr(123, {**RUN, "id": 99}, IMAGES)
         self.controller.command.assert_not_called()
 
+    def test_redeployment_removes_only_selected_pr_containers_before_database_preparation(self):
+        directory = self.seed_preview()
+        events = []
+        def command(args, **kwargs):
+            events.append(args)
+            return ""
+        self.controller.command.side_effect = command
+        self.controller.sql.side_effect = lambda *args, **kwargs: events.append("database-preparation")
+        self.controller.deploy_pr(123, RUN, IMAGES)
+        down = events[0]
+        self.assertIn("down", down)
+        self.assertEqual(down[down.index("--project-name") + 1], "people-gator-pr-123")
+        self.assertIn("--remove-orphans", down)
+        self.assertNotIn("--volumes", down)
+        self.assertEqual(events[1], "database-preparation")
+        self.assertEqual(json.loads((directory / "state.json").read_text())["password"], "c" * 64)
+
+    def test_existing_project_is_removed_even_without_local_preview_state(self):
+        projects = {"people-gator-pr-123", "people-gator-pr-124", "people-gator-staging"}
+        def command(args, **kwargs):
+            if "down" in args:
+                projects.remove(args[args.index("--project-name") + 1])
+            return ""
+        def provision(number, password):
+            self.assertNotIn("people-gator-pr-123", projects)
+            self.assertEqual(projects, {"people-gator-pr-124", "people-gator-staging"})
+        self.controller.command.side_effect = command
+        self.controller.provision_database = provision
+        self.assertTrue(self.controller.deploy_pr(123, RUN, IMAGES))
+
+    def test_failed_container_removal_preserves_state_and_stops_redeployment(self):
+        directory = self.seed_preview()
+        state = (directory / "state.json").read_bytes()
+        self.controller.command.side_effect = RuntimeError("container removal failed")
+        with self.assertRaisesRegex(RuntimeError, "container removal failed"):
+            self.controller.deploy_pr(123, RUN, IMAGES)
+        self.controller.sql.assert_not_called()
+        self.assertEqual((directory / "state.json").read_bytes(), state)
+        self.assertEqual((directory / "compose.env").read_text(), "placeholder")
+        self.controller.readiness.assert_not_called()
+
     def test_same_run_from_old_controller_is_seeded_once_after_upgrade(self):
         directory = self.seed_preview()
         state_file = directory / "state.json"
@@ -304,7 +345,8 @@ class LifecycleTests(unittest.TestCase):
         state_file.write_text(json.dumps(state))
         self.controller.deploy_pr(123, RUN, IMAGES)
         commands = [call.args[0] for call in self.controller.command.call_args_list]
-        self.assertEqual([command[-1] for command in commands[:3]], ["storage-init", "migrate", "seed"])
+        self.assertIn("down", commands[0])
+        self.assertEqual([command[-1] for command in commands[1:4]], ["storage-init", "migrate", "seed"])
         self.assertEqual(json.loads(state_file.read_text())["seeded_version"], [100, 1])
         self.controller.command.reset_mock()
         self.controller.deploy_pr(123, RUN, IMAGES)
@@ -316,7 +358,7 @@ class LifecycleTests(unittest.TestCase):
         state = json.loads(state_file.read_text())
         state.update(version=[100, 1], sha=SHA, images=IMAGES)
         state_file.write_text(json.dumps(state))
-        self.controller.command.side_effect = ["", "", RuntimeError("seed failed")]
+        self.controller.command.side_effect = ["", "", "", RuntimeError("seed failed")]
         with self.assertRaisesRegex(RuntimeError, "seed failed"):
             self.controller.deploy_pr(123, RUN, IMAGES)
         self.assertEqual(json.loads(state_file.read_text()), state)
@@ -326,12 +368,13 @@ class LifecycleTests(unittest.TestCase):
     def test_seeding_runs_after_migrations_and_before_application_startup(self):
         self.controller.deploy_pr(123, RUN, IMAGES)
         commands = [call.args[0] for call in self.controller.command.call_args_list]
-        self.assertEqual([command[-1] for command in commands[:3]], ["storage-init", "migrate", "seed"])
-        self.assertIn("up", commands[3])
+        self.assertIn("down", commands[0])
+        self.assertEqual([command[-1] for command in commands[1:4]], ["storage-init", "migrate", "seed"])
+        self.assertIn("up", commands[4])
 
     def test_seed_failure_preserves_running_configuration_for_retry(self):
         directory = self.seed_preview()
-        self.controller.command.side_effect = ["", "", RuntimeError("seed failed")]
+        self.controller.command.side_effect = ["", "", "", RuntimeError("seed failed")]
         with self.assertRaisesRegex(RuntimeError, "seed failed"):
             self.controller.deploy_pr(123, RUN, IMAGES)
         self.assertEqual((directory / "compose.env").read_text(), "placeholder")
@@ -373,7 +416,7 @@ class LifecycleTests(unittest.TestCase):
 
     def test_migration_failure_preserves_running_configuration_for_retry(self):
         directory = self.seed_preview()
-        self.controller.command.side_effect = ["", RuntimeError("migration failed")]
+        self.controller.command.side_effect = ["", "", RuntimeError("migration failed")]
         with self.assertRaises(RuntimeError):
             self.controller.deploy_pr(123, RUN, IMAGES)
         self.assertEqual((directory / "compose.env").read_text(), "placeholder")

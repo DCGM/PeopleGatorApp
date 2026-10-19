@@ -170,9 +170,12 @@ Secret values and raw service output are never printed; failed service output is
 kept in the environment's private `last-error.log`.
 
 **Ownership and locks.** Installation is fresh only: `install` refuses a non-empty
-`state_dir`, infrastructure files or an existing application/infrastructure Compose
+`state_dir`, infrastructure files or an existing staging/release/infrastructure Compose
 project it did not create. Ownership is recorded only after those checks pass.
-A first application deployment also checks for project collisions. It records `owned.json`
+A first staging/release deployment also checks for project collisions. PR updates
+remove the selected PR project's previous containers before redeployment, even
+when local per-PR state is unavailable; databases and volumes are retained.
+Installation records `owned.json`
 and, for managed infrastructure, `infrastructure-owned.json`; an external
 environment cannot change infrastructure it does not own. Operations take the
 environment's `environment.lock`, then the infrastructure `controller.lock` —
@@ -186,8 +189,14 @@ Ctrl-C) removes the operation's own containers.
 **PR previews.** `pr update --run-id` deploys a successful same-repository PR CI
 run whose head is still an open PR head; images are verified by revision label
 and pinned by digest. Each preview has its own database, role and storage, and
-runs storage-init → migrate → seed → startup → routed readiness. Redeployments
-keep credentials, seeded identities, edits and media. `pr cleanup --pr N` removes
+runs container removal → storage-init → migrate → seed → startup → routed readiness.
+Updates stop and remove the selected PR project's containers and orphans without
+deleting its database or media volume. Retained state keeps credentials, seeded
+identities, edits and media; when local credentials are unavailable, database-role
+access is regenerated after stopping the old containers. Stale and already-complete
+runs leave the current deployment alone. Expect downtime during preparation; a
+failed migration or seed leaves the preview stopped until a successful retry.
+`pr cleanup --pr N` removes
 one closed preview including its database; `pr reconcile` repeats that for every
 preview GitHub reports closed (API errors never imply closure). `pr uninstall`
 stops all previews but keeps their data.

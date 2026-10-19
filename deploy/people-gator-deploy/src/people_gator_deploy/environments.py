@@ -246,7 +246,7 @@ class Environment:
     def require_fresh_application_project(self):
         """A fresh descriptor cannot adopt another application's Compose stack."""
         if self.name == "pr":
-            return  # Each preview gets its own project when a PR is selected.
+            return  # deploy_pr removes the selected PR's old containers before redeployment.
         if (self.root / "compose.env").exists() or (self.root / "activation.json").exists():
             return  # Retained applications and interrupted activations are ours.
         project = self.settings.get("project", "people-gator-" + self.name)

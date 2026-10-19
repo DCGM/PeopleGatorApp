@@ -141,15 +141,17 @@ rejects non-default workflow sources (release tags must point at commits on
 `main`); restrict runner access to the trusted workflows and protect/review
 `main`. The utility verifies repository/open-PR/current-head identity, pulls
 candidate images with temporary registry credentials, verifies their revisions
-and deploys by immutable digest. Preview order is storage initialization →
+and deploys by immutable digest. Preview order is selected PR container removal → storage initialization →
 migration → seed → backend/frontend health → routed readiness. A failed seed
 blocks success. Existing database, media and JWT keys survive successful preview
-updates. Each PR uses a restricted database role.
+updates. Container removal retains volumes and the database; it also replaces a
+previous per-PR stack when local instance state is unavailable. Expect downtime
+during preparation, including until a successful retry after a failed migration
+or seed. Each PR uses a restricted database role.
 
 Close events clean up that PR's containers, storage, database and role; hourly and
 manual reconciliation retry missed cleanup. Shared PostgreSQL, pgAdmin and logging
-remain running. A failed migration has no automatic schema rollback, even if the
-previous application continues running.
+remain running. A failed migration has no automatic schema rollback.
 
 Install the utility and configure each environment's descriptor once using the
 [utility guide](../deploy/people-gator-deploy/README.md); installation is fresh

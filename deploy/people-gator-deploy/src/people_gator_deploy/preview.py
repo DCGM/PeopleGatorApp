@@ -140,6 +140,11 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         write_private(state_file, json.dumps(state))
         candidate = directory / "candidate.env"
         write_private(candidate, self.env(number, state, images, sha=run["head_sha"]))
+        # Replace this PR's containers explicitly, including an earlier stack
+        # whose local controller state is unavailable. Keep its media volume,
+        # database and retained credentials so review edits survive redeployment.
+        self.command(self.compose(number, candidate, "--profile", "tools",
+                                  "down", "--remove-orphans", "--timeout", "30"))
         self.provision_database(number, state["password"])
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "storage-init"))
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "migrate"))
