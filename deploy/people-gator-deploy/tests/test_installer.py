@@ -41,6 +41,12 @@ class InstallationTests(unittest.TestCase):
             executable = Path(result["executable"])
             invocation = subprocess.check_output([executable, "--version"], cwd="/tmp")
             self.assertEqual(json.loads(invocation)["revision"], first)
+            default = prefix / "bin/people-gator-deploy"
+            def default_revision():
+                environment = {**os.environ, "PATH": str(default.parent) + os.pathsep + os.environ["PATH"]}
+                return json.loads(subprocess.check_output(["people-gator-deploy", "--version"],
+                                                         cwd="/tmp", env=environment))["revision"]
+            self.assertEqual(default_revision(), first)
             (Path(result["config"]) / "private.json").write_text("retained")
             original = installer.integrity(executable.parent.parent)
             self.assertTrue(installer.install(source, first, prefix=prefix)["default_activated"])
@@ -53,10 +59,13 @@ class InstallationTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     installer.install(source, second, prefix=prefix)
             self.assertEqual((prefix / "bin/people-gator-deploy").resolve(), executable)
+            self.assertEqual(default_revision(), first)
             updated = installer.install(source, second, prefix=prefix)
             self.assertTrue(updated["default_activated"])
+            self.assertEqual(default_revision(), second)
             self.assertEqual(json.loads(subprocess.check_output([executable, "--version"]))["revision"], first)
             self.assertFalse(installer.install(source, first, prefix=prefix)["default_activated"])
+            self.assertEqual(default_revision(), second)
             self.assertEqual((prefix / "bin/people-gator-deploy").resolve(), Path(updated["executable"]))
             self.assertEqual((Path(result["config"]) / "private.json").read_text(), "retained")
             self.assertEqual(git("status", "--porcelain"), "")

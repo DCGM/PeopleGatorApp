@@ -62,6 +62,12 @@ an existing commit only re-verifies it. The default executable
 (`bin/people-gator-deploy`) moves only to a descendant commit, so installing an
 older commit pins it without downgrading the default.
 
+The launcher resolves that default symlink to select its version's interpreter.
+Linux `readlink` and `dirname` (normally supplied by coreutils) must be on PATH.
+Version 1.0.1 fixes invocation through the default executable; reinstall a newer
+reviewed revision with `deploy/install.py` if a 1.0.0 default reports `bin/python`
+missing. Versioned executables remain usable during that upgrade.
+
 **How updates happen.** Every deployment workflow run installs the utility at its
 own workflow commit — the reviewed `main` commit that triggered it, or the tagged
 commit for releases — before doing anything else, and then uses that exact

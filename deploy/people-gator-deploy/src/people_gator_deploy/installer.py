@@ -118,8 +118,9 @@ def install(source: Path, revision: str, *, scope="user", prefix=None, run_as=No
                     run([temporary / "bin/python", "-m", "pip", "install", "--no-deps", "--no-compile", str(package)], env=environment, timeout=300)
                 for cache in temporary.rglob("__pycache__"):
                     shutil.rmtree(cache)
-                # A relative launcher survives atomic directory publication and spaces in paths.
-                atomic(temporary / "bin/people-gator-deploy", '#!/bin/sh\nexec "$(dirname -- "$0")/python" -I -B -m people_gator_deploy "$@"\n')
+                # Resolve the default bin symlink before locating this version's
+                # interpreter. This also survives publication and spaces in paths.
+                atomic(temporary / "bin/people-gator-deploy", '#!/bin/sh\nlauncher="$(readlink -f -- "$0")" || exit 1\nexec "$(dirname -- "$launcher")/python" -I -B -m people_gator_deploy "$@"\n')
                 (temporary / "bin/people-gator-deploy").chmod(0o755)
                 metadata = {**paths, "version": __version__, "revision": revision,
                             "config_schema": CONFIG_SCHEMA, "state_schema": STATE_SCHEMA,
