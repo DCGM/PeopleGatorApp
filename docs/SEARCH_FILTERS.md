@@ -164,7 +164,7 @@ references use `preview.invalid`; no external authority data is fetched.
 Page sidebar URLs use `panel=activity` (default `face`) and
 `activity_group=user` (default local day). Day boundaries use consecutive local
 midnights, including daylight-saving changes; the upper bound is inclusive at
-23:59:59.999 local time. Group entries show their own recorded annotation edit
+23:59:59.999999 local time, preserving database microsecond precision. Group entries show their own recorded annotation edit
 time, rather than the page/document processing timestamp. Activity time/user
 chips can be removed independently and clearing them retains other criteria and
 the return journey.

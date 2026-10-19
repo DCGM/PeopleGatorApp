@@ -1,3 +1,4 @@
+import { localTimeToUtc, utcToLocalTime } from '@/viewmodels/people-filters'
 import { describe, expect, it } from 'vitest'
 import type { LocationQuery } from 'vue-router'
 import {
@@ -21,6 +22,16 @@ const shared: LocationQuery = {
 }
 
 describe('shared annotation filters and scoped navigation', () => {
+  it('preserves database microseconds through local and UTC URL conversion', () => {
+    const utc = '2026-03-29T21:59:59.999999Z'
+    expect(localTimeToUtc(utcToLocalTime(utc))).toBe(utc)
+    expect(
+      evidenceUrlError({ evidence_from: '2026-03-29T21:59:59.999Z', evidence_to: utc }),
+    ).toBeUndefined()
+    expect(
+      evidenceUrlError({ evidence_from: utc, evidence_to: '2026-03-29T21:59:59.999Z' }),
+    ).toContain('before or equal')
+  })
   it('normalizes local/UTC dates and repeated selections with inclusive equal bounds', () => {
     const filters = readEvidenceFilters(shared)
     const query = evidenceFiltersQuery(filters)

@@ -29,7 +29,10 @@ export function emptyPeopleFilters(): PeopleProcessingFilters {
 export function localTimeToUtc(value: string): string | undefined {
   if (!value) return undefined
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+  if (Number.isNaN(date.getTime())) return undefined
+  const utc = date.toISOString()
+  const fraction = value.match(/\.(\d{4,6})$/)?.[1]
+  return fraction ? utc.replace(/\.\d{3}Z$/, `.${fraction}Z`) : utc
 }
 
 export function utcToLocalTime(value: unknown): string {
@@ -37,7 +40,8 @@ export function utcToLocalTime(value: unknown): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   const pad = (n: number) => String(n).padStart(2, '0')
-  const seconds = `${pad(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3, '0')}`
+  const fraction = value.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/i)?.[1]
+  const seconds = `${pad(date.getSeconds())}.${fraction?.padEnd(3, '0') ?? String(date.getMilliseconds()).padStart(3, '0')}`
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${seconds}`
 }
 
@@ -63,7 +67,10 @@ export function processingFilterError(filters: PeopleProcessingFilters): string 
   const to = localTimeToUtc(filters.touchedTo)
   if ((filters.touchedFrom && !from) || (filters.touchedTo && !to))
     return 'Enter a valid date and time.'
-  if (from && to && from > to) return 'The start time must be before or equal to the end time.'
+  const comparable = (value: string) =>
+    value.replace(/\.(\d+)Z$/, (_, fraction: string) => `.${fraction.padEnd(6, '0')}Z`)
+  if (from && to && comparable(from) > comparable(to))
+    return 'The start time must be before or equal to the end time.'
   return undefined
 }
 

@@ -35,7 +35,7 @@ export function localDayBounds(day: string) {
   to.setMilliseconds(to.getMilliseconds() - 1)
   return {
     touchedFrom: utcToLocalTime(from.toISOString()),
-    touchedTo: utcToLocalTime(to.toISOString()),
+    touchedTo: utcToLocalTime(to.toISOString().replace('.999Z', '.999999Z')),
   }
 }
 export function usePageActivity(sourceId: MaybeRefOrGetter<string>) {
