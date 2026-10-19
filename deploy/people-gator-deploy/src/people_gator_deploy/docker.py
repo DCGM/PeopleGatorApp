@@ -27,7 +27,7 @@ class Docker:
     def environment(self):
         environment = {key: value for key, value in os.environ.items()
                        if key not in INTERPOLATION | AMBIENT
-                       and not key.startswith(("COMPOSE_", "PEOPLE_GATOR_API__", "AWS_"))}
+                       and not key.startswith(("COMPOSE_", "PEOPLE_GATOR_", "AWS_"))}
         if self.registry_config:
             environment["DOCKER_CONFIG"] = self.registry_config
         return environment

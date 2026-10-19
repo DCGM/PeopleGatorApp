@@ -100,7 +100,10 @@ class DockerAdapterTests(unittest.TestCase):
 
     def test_every_command_names_its_context_and_drops_ambient_interpolation(self):
         with self.environment("rootless", DB_PASSWORD="ambient", AWS_SECRET_ACCESS_KEY="ambient",
-                              PEOPLE_GATOR_API__STORAGE="ambient", DOCKER_HOST="tcp://ambient:2375"):
+                              PEOPLE_GATOR_API__STORAGE="ambient", DOCKER_HOST="tcp://ambient:2375",
+                              PEOPLE_GATOR_POSTGRES_TEST_URL="postgresql://synthetic:secret@host/test",
+                              PEOPLE_GATOR_SCHEMA_TEST_URL="postgresql://synthetic:secret@host/schema",
+                              PEOPLE_GATOR_DEPLOY_CONFIG="/private/descriptor.json"):
             Docker("rootless").run(["docker", "compose", "--project-name", "p", "ps"])
         call = self.calls()[0]
         self.assertEqual(call["args"][:2], ["--context", "rootless"])
