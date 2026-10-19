@@ -179,11 +179,12 @@ def _ref(obj: _StoredObject, name: str, required: bool = False) -> uuid.UUID | N
     return result
 
 
-def _require_postgres_for_evidence(f):
+def _require_postgres_for_evidence(f, *, allow_document_scope=False):
     if f is not None and not is_missing(f) and any(
         not is_missing(getattr(f, field)) for field in (
             "evidence_origin", "evidence_library", "evidence_source_id", "evidence_touched_from", "evidence_touched_to",
-            "evidence_touched_by_user_id", "evidence_touched_by_api_key_id")):
+            "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
+            *(() if allow_document_scope else ("document_source_id",)))):
         raise NotImplementedError("Recorded annotation provenance/edit filters require PostgreSQL")
 
 
@@ -196,7 +197,7 @@ def _props(
     Keeping this conversion at the boundary avoids leaking untyped client data.
     """
     if hasattr(model, "provenance"):
-        if model.provenance.origin != "unknown":
+        if model.provenance.model_dump(exclude_defaults=True):
             raise NotImplementedError("Recorded creation provenance requires PostgreSQL")
         exclude = (exclude or set()) | {"provenance"}
     return model.model_dump(mode="json", exclude=exclude, exclude_unset=True)
@@ -808,7 +809,7 @@ class WeaviateEntityRepository(EntityRepository):
         )
         if not is_missing(query.filter_) and (not is_missing(query.filter_.entity_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.entity_id))
-        _require_postgres_for_evidence(query.filter_)
+        _require_postgres_for_evidence(query.filter_, allow_document_scope=True)
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -1619,7 +1620,7 @@ async def _basic_search[F: FoundItemBase](
         filters = WeaviateFaceRepository(client).filters(q.filter_)
     elif n == ENTITY_COLLECTION and q.filter_ is not None:
         f = q.filter_
-        _require_postgres_for_evidence(f)
+        _require_postgres_for_evidence(f, allow_document_scope=True)
         filters = _direct(
             f,
             {
