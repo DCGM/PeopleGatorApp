@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from people_gator_deploy import config
+from people_gator_deploy.installer import layout
 from people_gator_deploy.core import DeployError, write_json
 
 
@@ -68,9 +69,61 @@ class ConfigurationTests(unittest.TestCase):
     def test_overlapping_environments_rejected(self):
         config.configure("pr", self.path, self.value)
         staging = {**self.value, "environment": "staging", "host": "staging.example.invalid",
-                   "private_dir": str(self.root / "private"), "state_dir": str(self.root / "state/pr/child")}
+                   "storage": {"endpoint_url": "https://s3.example.invalid", "region": "synthetic", "bucket_name": "staging-bucket",
+                                  "access_key_id": "synthetic", "secret_access_key": "synthetic"}, "state_dir": str(self.root / "state/pr/child")}
         with self.assertRaisesRegex(DeployError, "overlaps|outside"):
             config.configure("staging", self.path.parent.parent / "staging/config.json", staging)
+
+    def test_single_staging_descriptor_validates_sections_without_echoing_secrets(self):
+        path = self.path.parent.parent / "staging/config.json"
+        storage = {"endpoint_url": "https://staging.example.invalid", "region": "r", "bucket_name": "staging-bucket",
+                   "access_key_id": "id", "secret_access_key": "PRIVATE-DESTINATION-SECRET"}
+        source = {"endpoint_url": "https://backup.example.invalid", "region": "r", "bucket": "backups",
+                  "access_key_id": "id", "secret_access_key": "PRIVATE-SOURCE-SECRET"}
+        value = {**self.value, "host": "staging.example.invalid", "state_dir": str(self.root / "state/staging"),
+                 "infrastructure": {**self.value["infrastructure"], "mode": "external"}, "storage": storage}
+        config.configure("staging", path, value)  # snapshot sections are optional until snapshot operations
+        for changes, field in (({"storage": {**storage, "endpoint_url": "http://insecure.invalid"}}, "storage"),
+                               ({"backup_source": {**source, "endpoint_url": "ftp://x"}}, "backup_source"),
+                               ({"media_source": {**source, "bucket": "staging-bucket",
+                                                  "endpoint_url": storage["endpoint_url"]}}, "media_source"),
+                               ({"accounts": {"users": {"staging-viewer": {"hash": "plaintext"}}}}, "accounts")):
+            with self.subTest(field=field), self.assertRaises(DeployError) as raised:
+                config.configure("staging", path, changes)
+            self.assertIn(f"; {field}", str(raised.exception))
+            self.assertNotIn("PRIVATE-", str(raised.exception))
+        config.configure("staging", path, {"backup_source": source, "media_source": source})
+        stored = config.read("staging", path)
+        self.assertEqual(stored["backup_source"]["secret_access_key"], "PRIVATE-SOURCE-SECRET")
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in path.parent.glob("config.backup-*.json")))
+        write_json(Path(value["state_dir"]) / "owned.json", {"environment": "staging"})
+        config.configure("staging", path, {"storage": {"secret_access_key": "rotated"}})  # rotation is allowed
+        with self.assertRaisesRegex(DeployError, "resource identity"):
+            config.configure("staging", path, {"storage": {"bucket_name": "other-bucket"}})
+
+    def test_example_descriptors_remain_valid_and_default_to_user_scope_paths(self):
+        examples = Path(__file__).resolve().parents[1] / "examples"
+        scope = layout("user", self.root / "user prefix")
+        patcher = patch.object(config, "installation", return_value=scope)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        staging = json.loads((examples / "staging.json").read_text())
+        path = Path(scope["config"]) / "staging/config.json"
+        config.configure("staging", path, staging)
+        stored = config.read("staging", path)
+        self.assertEqual(stored["state_dir"], str(Path(scope["state"]) / "staging"))
+        self.assertEqual(stored["infrastructure"], {"mode": "external", "project": "people-gator-preview-infra",
+                                                    "state_dir": str(Path(scope["state"]) / "infrastructure")})
+        self.assertTrue(Path(stored["state_dir"]).is_relative_to(self.root))
+        for name in config.ENVIRONMENTS:
+            value = json.loads((examples / f"{name}.json").read_text())
+            if name == "release":
+                self.assertFalse(value["access_reviewed"])  # operators must confirm it themselves
+                value["access_reviewed"] = True
+            with self.subTest(environment=name):
+                path = self.root / f"examples/{name}/config.json"
+                self.assertTrue(config.configure(name, path, value, dry_run=True)["valid"])
 
 
 if __name__ == "__main__":

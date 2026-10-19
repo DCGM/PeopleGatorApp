@@ -1,0 +1,9 @@
+{
+  "repository": "DCGM/PeopleGatorApp",
+  "docker_context": "rootless",
+  "host": "people.example.invalid",
+  "database_network": "people-gator-production-db",
+  "runtime_file": "/home/RUNNER/people-gator/release-runtime.env",
+  "migration_file": "/home/RUNNER/people-gator/release-migration.env",
+  "access_reviewed": false
+}

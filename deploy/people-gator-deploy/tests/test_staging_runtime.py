@@ -40,19 +40,14 @@ class RuntimeTests(unittest.TestCase):
             subprocess.run(["docker", "network", "rm", egress], capture_output=True, check=True)
 
     def exercise(self, fixture, image, network, root, s3):
-        private = root / "private"
-        private.mkdir()
         (root / "preview").mkdir()
         state = root / "staging"
         state.mkdir()
-        (private / "storage.json").write_text(json.dumps({"local": None, "s3": s3.staging_config}))
         source = {**s3.source_config, "bucket": s3.source_config["bucket_name"]}
         del source["bucket_name"]
         key = "production/db-backups/peoplegator-prod-2026-10-15.dump"
         s3.source.put_object(Bucket=source["bucket"], Key=key, Body=fixture.archive,
             Metadata={"sha256": hashlib.sha256(fixture.archive).hexdigest(), "application-revision": "a" * 40})
-        (private / "backup-source.json").write_text(json.dumps(source))
-        (private / "media-source.json").write_text(json.dumps(source))
         page = json.loads(fixture.sql("""SELECT row_to_json(p) FROM pg_demo_pages p
             WHERE EXISTS (SELECT FROM pg_demo_image_occurrences o JOIN pg_demo_face_embeddings e ON e.face_id=o.id
                 WHERE o.source_id=p.id) LIMIT 1""", fixture.source))
@@ -69,12 +64,13 @@ class RuntimeTests(unittest.TestCase):
                     "api_keys": {"staging-importer-key": {"hash": hasher.hash("private-staging-key"),
                         "username": "staging-importer", "display_name": "Synthetic importer",
                         "scopes": ["people-gator:browse", "people-gator:ingest"]}}}
-        (private / "credential-input.json").write_text(json.dumps(supplied))
         context = os.environ.get("STAGING_TEST_DOCKER_CONTEXT") or subprocess.check_output(
             ["docker", "context", "show"], text=True).strip()
         controller = staging.Staging({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "preview"),
-            "docker_context": context, "database_network": network, "web_network": s3.network, "staging": {
-                "state_dir": str(state), "private_dir": str(private), "host": "staging-fixture.example.invalid"}})
+            "docker_context": context, "database_network": network, "web_network": s3.network,
+            # The single staging descriptor's sections.
+            "storage": s3.staging_config, "backup_source": source, "media_source": source, "accounts": supplied,
+            "staging": {"state_dir": str(state), "host": "staging-fixture.example.invalid"}})
         controller.sql = fixture.sql
         controller.infra = lambda *args: ["docker", "exec", "-i", fixture.container,
             *[fixture.username if arg == "preview_admin" else arg for arg in args[3:]]]

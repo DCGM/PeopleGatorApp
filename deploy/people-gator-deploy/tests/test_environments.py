@@ -66,18 +66,10 @@ class EnvironmentTests(unittest.TestCase):
             value.update(domain="preview.example.invalid", users_file=str(self.users))
         else:
             value.update(host="staging.example.invalid", state_dir=str(self.root / "state/staging"),
-                         private_dir=str(self.root / "private/staging"))
+                         storage={"endpoint_url": "https://s3.example.invalid", "region": "synthetic", "bucket_name": "staging-bucket",
+                                  "access_key_id": "synthetic", "secret_access_key": "synthetic"})
         config.configure(name, path, {**value, **changes})
         return path
-
-    def staging_storage(self):
-        private = self.root / "private/staging"
-        private.mkdir(mode=0o700)
-        storage = private / "storage.json"
-        storage.write_text(json.dumps({"local": None, "s3": {
-            "endpoint_url": "https://s3.example.invalid", "region": "synthetic", "bucket_name": "staging-bucket",
-            "access_key_id": "synthetic", "secret_access_key": "synthetic"}}))
-        storage.chmod(0o600)
 
     def environment(self, path, name="pr"):
         environment = Environment(name, path)
@@ -134,7 +126,6 @@ class EnvironmentTests(unittest.TestCase):
     def test_second_environment_cannot_claim_or_change_shared_infrastructure(self):
         self.environment(self.descriptor()).install()
         credentials = (self.infra / "infrastructure.env").read_bytes()
-        self.staging_storage()
         claimed = self.environment(self.descriptor("staging"), "staging")
         with self.assertRaisesRegex(DeployError, "belongs to another environment"):
             claimed.install()

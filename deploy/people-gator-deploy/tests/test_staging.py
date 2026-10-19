@@ -1,7 +1,4 @@
-"""Staging eligibility, ordered gates, persistence, refresh recovery and isolation.
-
-Carried forward from deploy/preview/tests/test_staging.py onto the package.
-"""
+"""Staging eligibility, ordered gates, persistence, refresh recovery and isolation."""
 import json
 import os
 from pathlib import Path
@@ -20,18 +17,21 @@ SHA = "a" * 40
 IMAGES = {part: f"ghcr.io/dcgm/peoplegatorapp-{part}@sha256:" + "b" * 64 for part in ("frontend", "backend")}
 STORAGE = {"local": None, "s3": {"endpoint_url": "https://staging-s3.example.invalid",
     "region": "test", "bucket_name": "staging-fixture", "access_key_id": "synthetic", "secret_access_key": "synthetic"}}
+SOURCE = {"endpoint_url": "https://source.example.invalid", "region": "test", "bucket": "synthetic-source",
+          "access_key_id": "synthetic-reader", "secret_access_key": "synthetic-reader-secret"}
+ACCOUNTS = {"users": {name: {"hash": "$argon2id$v=19$synthetic"} for name in staging.ACCOUNTS}}
+# One private descriptor: staging bucket plus snapshot-only sources and accounts.
+DESCRIPTOR = {"storage": STORAGE["s3"], "backup_source": {**SOURCE, "prefix": "production/db-backups/"},
+              "media_source": SOURCE, "accounts": ACCOUNTS}
 
 
 class FakeStaging(staging.Staging):
     def __init__(self, root):
         super().__init__({"repository": "DCGM/PeopleGatorApp", "state_dir": str(root / "preview"),
-                          "users_file": str(root / "preview-users.json"), "staging": {
-                              "state_dir": str(root / "staging"), "private_dir": str(root / "private")}})
+                          **json.loads(json.dumps(DESCRIPTOR)), "staging": {"state_dir": str(root / "staging")}})
         self.root.mkdir()
         (self.root / "infrastructure.env").write_text("synthetic infra")
         self.staging_root.mkdir()
-        (root / "private").mkdir()
-        (root / "private" / "storage.json").write_text(json.dumps(STORAGE))
         self.run = {"id": 100, "run_attempt": 1, "workflow_id": 9, "head_sha": SHA,
                     "event": "push", "conclusion": "success", "head_branch": "main",
                     "head_repository": {"full_name": self.repository}}
@@ -267,47 +267,62 @@ class StagingTests(unittest.TestCase):
         self.assertIn("command: [check]", compose)
         self.assertNotIn("command: [seed]", compose)
         self.assertNotIn("PR_NUMBER", compose)
-        private = self.root / "private"
-        (private / "backup-source.json").write_text('{"bucket":"synthetic-source","endpoint_url":"https://source.example.invalid"}')
         controller.worker = staging.Staging.worker.__get__(controller)
         controller.worker("download", values, controller.staging_root)
         call = controller.events[-1]
         self.assertIn("--log-driver none", call)
-        self.assertNotIn("/private/backup-source.json", call)
+        self.assertNotIn("synthetic-reader-secret", call)
+        self.assertEqual(set(json.loads(controller.inputs[-1])), {"backup-source.json"})
         self.assertEqual(json.loads(controller.inputs[-1])["backup-source.json"]["bucket"], "synthetic-source")
         self.assertNotIn("--network people-gator-preview-db", call)
 
     def test_s3_configuration_is_required_and_bucket_identity_cannot_change(self):
         controller = self.controller
-        path = self.root / "private" / "storage.json"
         original = controller.initial()
-        for invalid in ({}, {"local": {"root": "/data"}, "s3": None},
-                        {**STORAGE, "local": {"root": "/data"}}, {"s3": STORAGE["s3"]},
-                        {**STORAGE, "s3": {**STORAGE["s3"], "endpoint_url": ""}},
-                        {**STORAGE, "s3": {**STORAGE["s3"], "endpoint_url": "http://storage.example.invalid"}},
-                        {**STORAGE, "s3": {**STORAGE["s3"], "timeout_seconds": 0}},
-                        {**STORAGE, "s3": {**STORAGE["s3"], "bucket_name": "different-bucket"}}):
+        for invalid in (None, {}, {**STORAGE["s3"], "endpoint_url": ""},
+                        {**STORAGE["s3"], "endpoint_url": "http://storage.example.invalid"},
+                        {**STORAGE["s3"], "timeout_seconds": 0}, {**STORAGE["s3"], "root": "/data"},
+                        {**STORAGE["s3"], "bucket_name": "different-bucket"}):
             with self.subTest(config=invalid):
-                path.write_text(json.dumps(invalid))
+                controller.config["storage"] = invalid
                 controller.events.clear()
                 with self.assertRaises(ValueError):
                     controller.deploy()
                 self.assertEqual(controller.events, [])
                 self.assertEqual(json.loads((controller.staging_root / "state.json").read_text()), original)
-        path.write_text(json.dumps(STORAGE))
-        controller.deploy()
-        path.unlink()
+        controller.config["storage"] = dict(STORAGE["s3"], secret_access_key="rotated")
+        controller.deploy()  # credentials rotate within the same bucket
+        del controller.config["storage"]
         controller.events.clear()
-        with self.assertRaisesRegex(staging.StagingConfigurationError, "storage.json"):
+        with self.assertRaisesRegex(staging.StagingConfigurationError, "needs storage"):
             controller.deploy()
         self.assertEqual(controller.events, [])
+
+    def test_snapshot_sections_are_needed_only_by_snapshot_operations(self):
+        controller = self.controller
+        original = controller.initial()
+        for name in ("backup_source", "media_source", "accounts"):
+            del controller.config[name]
+        controller.deploy()  # retained-data update needs no source credentials
+        self.assertNotIn("prepare", controller.events)
+        controller.events.clear()
+        with self.assertRaisesRegex(staging.StagingConfigurationError, "needs backup_source for snapshot-init/refresh"):
+            controller.deploy(refresh=True)
+        self.assertEqual(controller.events, [])
+        controller.config.update(json.loads(json.dumps(DESCRIPTOR)))
+        controller.config["accounts"]["users"].pop("staging-admin")
+        with self.assertRaisesRegex(DeployError, "accounts.users must define exactly"):
+            controller.deploy(refresh=True)
+        self.assertEqual(controller.events, [])
+        self.assertEqual(json.loads((controller.staging_root / "state.json").read_text())["generation"],
+                         original["generation"])
 
     def test_snapshot_source_cannot_be_the_staging_destination(self):
         controller = self.controller
         state = controller.initial()
         values = controller.values(state, IMAGES, SHA)
-        (self.root / "private" / "backup-source.json").write_text(json.dumps({
-            "bucket": STORAGE["s3"]["bucket_name"], "endpoint_url": STORAGE["s3"]["endpoint_url"]}))
+        controller.config["backup_source"] = {**SOURCE, "bucket": STORAGE["s3"]["bucket_name"],
+                                              "endpoint_url": STORAGE["s3"]["endpoint_url"]}
         controller.worker = staging.Staging.worker.__get__(controller)
         controller.events.clear()
         with self.assertRaisesRegex(ValueError, "separate"):
@@ -337,8 +352,7 @@ class StagingTests(unittest.TestCase):
         controller = self.controller
         state = controller.initial()
         values = controller.values(state, IMAGES, SHA)
-        source = {"bucket": "synthetic-source", "endpoint_url": "https://source.example.invalid"}
-        (self.root / "private" / "media-source.json").write_text(json.dumps(source))
+        source = SOURCE
         controller.transfer = {"concurrency": 4, "max_object_mib": 64}
         controller.worker = staging.Staging.worker.__get__(controller)
         controller.worker("copy", values, controller.staging_root)
@@ -348,7 +362,7 @@ class StagingTests(unittest.TestCase):
         self.assertIn("--memory 768m", command)
         self.assertNotIn("type=volume", command)
         self.assertNotIn("--cap-add", command)
-        self.assertNotIn("media-source.json", command)
+        self.assertNotIn("synthetic-reader-secret", command)
         self.assertIn("--user 10001:10001", command)
         self.assertEqual(json.loads(controller.inputs[-1]), {"media-source.json": source,
                                                              "transfer": {"concurrency": 4, "max_object_mib": 64}})

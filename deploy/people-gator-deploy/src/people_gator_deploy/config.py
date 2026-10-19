@@ -82,16 +82,24 @@ def validate(value, environment, path, *, inputs=False):
             require(protected_file(users), "users_file",
                     "needs a regular users file owned by this account or root, not group/world writable")
     elif environment == "staging":
-        private = absolute("private_dir", value.get("private_dir"))
-        require(not (private.is_relative_to(root) or root.is_relative_to(private)), "private_dir", "must be outside state")
-        if inputs:
-            storage = private / "storage.json"
-            require(private_file(storage), "private_dir/storage.json", "needs an owned mode-600 storage descriptor")
-            try:
-                from .staging import Staging
-                Staging.validate_storage(json.loads(storage.read_text()))
-            except (ValueError, OSError):
-                raise problem(environment, path, "storage.s3", "invalid explicit staging S3 settings") from None
+        # One private descriptor holds the staging bucket and, for snapshot
+        # operations, the backup/media sources and staging accounts.
+        from .staging import SNAPSHOT_INPUTS, Staging, validate_section
+        storage = value.get("storage")
+        try:
+            Staging.validate_storage({"local": None, "s3": storage})
+        except DeployError:
+            raise problem(environment, path, "storage", "needs the staging S3 bucket: https endpoint_url, region, "
+                          "bucket_name, access_key_id, secret_access_key, optional timeout_seconds") from None
+        for name in SNAPSHOT_INPUTS:
+            if name in value:
+                try:
+                    validate_section(name, value[name])
+                except DeployError as error:
+                    raise problem(environment, path, name, str(error)) from None
+                if name != "accounts" and (value[name]["endpoint_url"].rstrip("/"), value[name]["bucket"]) == \
+                        (storage["endpoint_url"].rstrip("/"), storage["bucket_name"]):
+                    raise problem(environment, path, name, "must be separate from the staging storage bucket")
     else:
         for field in ("runtime_file", "migration_file"):
             ref = absolute(field, value.get(field))
@@ -122,6 +130,23 @@ def merge(original, changes):
     return result
 
 
+def defaults(environment, value):
+    """Fill locations from the installation scope, so user scope needs no root-owned paths."""
+    state = Path(installation()["state"])
+    value.setdefault("schema_version", CONFIG_SCHEMA)
+    value.setdefault("environment", environment)
+    value.setdefault("state_dir", str(state / environment))
+    value.setdefault("web_network", "web")
+    if environment != "release":
+        value.setdefault("database_network", "people-gator-preview-db")
+        infra = value.setdefault("infrastructure", {})
+        if isinstance(infra, dict):
+            infra.setdefault("mode", "managed" if environment == "pr" else "external")
+            infra.setdefault("project", "people-gator-preview-infra")
+            infra.setdefault("state_dir", str(state / "infrastructure"))
+    return value
+
+
 def configure(environment, path, changes, *, dry_run=False, expected=None):
     original = path.read_bytes() if path.exists() else None
     if original is not None and not private_file(path):
@@ -132,14 +157,14 @@ def configure(environment, path, changes, *, dry_run=False, expected=None):
         previous = json.loads(original) if original else {}
     except ValueError:
         raise problem(environment, path, "descriptor", "malformed JSON; restore a private backup") from None
-    candidate = merge(previous, changes)
-    candidate.setdefault("schema_version", CONFIG_SCHEMA)
-    candidate.setdefault("environment", environment)
+    candidate = defaults(environment, merge(previous, changes))
     validate(candidate, environment, path)
     # Data identities cannot change while an environment is installed.
     if previous and (Path(previous.get("state_dir", "/nonexistent")) / "owned.json").exists():
-        fields = ("state_dir", "infrastructure", "database_network", "private_dir", "runtime_file", "migration_file")
-        if any(candidate.get(field) != previous.get(field) for field in fields):
+        fields = ("state_dir", "infrastructure", "database_network", "runtime_file", "migration_file")
+        def bucket(value):  # credentials may rotate; the bucket identity may not
+            return {key: (value.get("storage") or {}).get(key) for key in ("endpoint_url", "region", "bucket_name")}
+        if any(candidate.get(field) != previous.get(field) for field in fields) or bucket(candidate) != bucket(previous):
             raise problem(environment, path, "resource identity", "installed resource identity changes require explicit migration")
     # Detect accidental state overlap among descriptors in this installation.
     for sibling in path.parent.parent.glob("*/config.json"):

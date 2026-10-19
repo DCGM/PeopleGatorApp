@@ -113,8 +113,7 @@ class Environment:
             values["state_dir"] = infra["state_dir"]
             if self.name == "staging":
                 from .staging import Staging
-                values["staging"] = {"state_dir": str(self.root), "private_dir": values["private_dir"],
-                                     "host": values["host"]}
+                values["staging"] = {"state_dir": str(self.root), "host": values["host"]}
                 result = Staging(values)
             else:
                 from .preview import Preview

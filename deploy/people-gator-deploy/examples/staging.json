@@ -1,0 +1,59 @@
+{
+  "repository": "DCGM/PeopleGatorApp",
+  "docker_context": "rootless",
+  "host": "staging.peoplegator.dev",
+  "storage": {
+    "endpoint_url": "https://staging-s3-provider.example.invalid",
+    "region": "OPERATOR_REGION",
+    "bucket_name": "peoplegator-staging",
+    "access_key_id": "STAGING_BUCKET_WRITER_ID",
+    "secret_access_key": "PRIVATE_STAGING_BUCKET_WRITER_SECRET",
+    "timeout_seconds": 30
+  },
+  "backup_source": {
+    "endpoint_url": "https://s3-provider.example.invalid",
+    "region": "OPERATOR_REGION",
+    "bucket": "peoplegator-db-backup",
+    "prefix": "production/db-backups/",
+    "access_key_id": "PREFIX_SCOPED_READER_ID",
+    "secret_access_key": "PRIVATE_READER_SECRET"
+  },
+  "media_source": {
+    "endpoint_url": "https://media-provider.example.invalid",
+    "region": "OPERATOR_REGION",
+    "bucket": "OPERATOR_MEDIA_BUCKET",
+    "prefix": "",
+    "image_prefix": "images",
+    "page_image_prefix": "images/ndk",
+    "page_layout_prefix": "page-layouts",
+    "access_key_id": "MEDIA_READER_ID",
+    "secret_access_key": "PRIVATE_MEDIA_READER_SECRET"
+  },
+  "accounts": {
+    "users": {
+      "staging-viewer": {
+        "hash": "$argon2id$UNIQUE_STAGING_PASSWORD_HASH"
+      },
+      "staging-annotator": {
+        "hash": "$argon2id$UNIQUE_STAGING_PASSWORD_HASH"
+      },
+      "staging-importer": {
+        "hash": "$argon2id$UNIQUE_STAGING_PASSWORD_HASH"
+      },
+      "staging-admin": {
+        "hash": "$argon2id$UNIQUE_STAGING_PASSWORD_HASH"
+      }
+    },
+    "api_keys": {
+      "staging-importer-example": {
+        "display_name": "Staging importer",
+        "hash": "$argon2id$UNIQUE_STAGING_API_SECRET_HASH",
+        "username": "staging-importer",
+        "scopes": [
+          "people-gator:browse",
+          "people-gator:ingest"
+        ]
+      }
+    }
+  }
+}

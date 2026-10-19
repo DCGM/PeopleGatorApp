@@ -22,6 +22,48 @@ from .host import INSTALL_DIR, Host, IneligibleRun, positive_int, routed_readine
 
 # Bounded referenced-media transfer; memory is bounded by concurrency * object size.
 TRANSFER_DEFAULTS = {"concurrency": 8, "max_object_mib": 256}
+# Example staging accounts provisioned once into the staging bucket.
+ACCOUNTS = ("staging-viewer", "staging-annotator", "staging-importer", "staging-admin")
+# Descriptor sections used only by snapshot-init/refresh, and the worker input each feeds.
+SNAPSHOT_INPUTS = {"backup_source": "backup-source.json", "media_source": "media-source.json",
+                   "accounts": "credential-input.json"}
+SOURCE_REQUIRED = {"endpoint_url", "region", "bucket", "access_key_id", "secret_access_key"}
+SOURCE_OPTIONAL = {"backup_source": {"prefix"},
+                   "media_source": {"prefix", "image_prefix", "page_image_prefix", "page_layout_prefix"}}
+
+
+def https_endpoint(value):
+    endpoint = urlsplit(value) if isinstance(value, str) else None
+    return bool(endpoint and endpoint.scheme == "https" and endpoint.hostname and not endpoint.username
+                and not endpoint.password and not endpoint.query and not endpoint.fragment
+                and endpoint.path in {"", "/"})
+
+
+def validate_section(name, value):
+    """Shape of one snapshot section; raises DeployError naming the descriptor field."""
+    if name == "accounts":
+        users = value.get("users") if isinstance(value, dict) else None
+        if not isinstance(users, dict) or set(users) != set(ACCOUNTS):
+            raise DeployError(f"accounts.users must define exactly {', '.join(ACCOUNTS)}")
+        for user, record in users.items():
+            if not isinstance(record, dict) or not str(record.get("hash", "")).startswith("$argon2id$"):
+                raise DeployError(f"accounts.users.{user}.hash must be an Argon2id hash")
+        keys = value.get("api_keys", {})
+        if not isinstance(keys, dict) or set(value) - {"users", "api_keys"}:
+            raise DeployError("accounts supports only users and api_keys")
+        for identifier, record in keys.items():
+            if (not isinstance(record, dict) or record.get("username") not in users
+                    or not str(record.get("hash", "")).startswith("$argon2id$")):
+                raise DeployError(f"accounts.api_keys.{identifier} needs a staging username and Argon2id hash")
+        return value
+    if (not isinstance(value, dict) or not SOURCE_REQUIRED.issubset(value)
+            or set(value) - SOURCE_REQUIRED - SOURCE_OPTIONAL[name]
+            or any(not isinstance(value[key], str) or not value[key].strip() for key in SOURCE_REQUIRED)):
+        raise DeployError(f"{name} needs {', '.join(sorted(SOURCE_REQUIRED))} "
+                          f"(optional: {', '.join(sorted(SOURCE_OPTIONAL[name]))})")
+    if not https_endpoint(value["endpoint_url"]):
+        raise DeployError(f"{name}.endpoint_url must be an explicit HTTPS S3-compatible endpoint")
+    return value
 
 
 class StagingConfigurationError(DeployError):
@@ -32,9 +74,9 @@ class Staging(Host):
     def __init__(self, config: dict):
         super().__init__(config)
         staging = config.get("staging")
-        if not isinstance(staging, dict) or not all(staging.get(key) for key in ("state_dir", "private_dir")):
+        if not isinstance(staging, dict) or not staging.get("state_dir"):
             raise StagingConfigurationError(
-                "Missing staging settings; run people-gator-deploy staging configure with state_dir and private_dir."
+                "Missing staging settings; run people-gator-deploy staging configure with state_dir and storage."
             )
         self.staging_root = Path(staging["state_dir"])
         if not self.staging_root.is_absolute() or self.staging_root.is_relative_to(self.root):
@@ -44,11 +86,6 @@ class Staging(Host):
             raise DeployError("Staging needs its independent hostname")
         self.worker_label = "people-gator.staging.worker=" + hashlib.sha256(str(self.staging_root.resolve()).encode()).hexdigest()[:16]
         self.settings = staging
-        private = Path(staging["private_dir"])
-        if not private.is_absolute() or private.is_relative_to(self.root) or private.is_relative_to(self.staging_root):
-            raise DeployError("Private staging inputs must live outside utility/infrastructure/state directories")
-        if "auth_volume" in staging:
-            raise DeployError("Staging requires S3 storage; remove the local auth volume configuration")
         transfer = {**TRANSFER_DEFAULTS, **config.get("media_transfer", {})}
         if (set(transfer) != set(TRANSFER_DEFAULTS)
                 or not all(isinstance(v, int) and not isinstance(v, bool) for v in transfer.values())
@@ -62,13 +99,27 @@ class Staging(Host):
 
     def storage(self):
         """One explicit staging bucket, never an implicit/local storage default."""
-        path = Path(self.settings["private_dir"]) / "storage.json"
-        if not path.is_file():
+        if not isinstance(self.config.get("storage"), dict):
             raise StagingConfigurationError(
-                f"Missing private staging storage descriptor {path}; supply explicit S3 settings "
-                "(see deploy/people-gator-deploy/README.md)."
+                "The staging descriptor needs storage (the staging S3 bucket); "
+                "add it with people-gator-deploy staging configure --input <private-json>."
             )
-        return self.validate_storage(json.loads(path.read_text()))
+        return self.validate_storage({"local": None, "s3": self.config["storage"]})
+
+    def snapshot_input(self, name):
+        """A snapshot section, required only by snapshot-init/refresh."""
+        if name not in self.config:
+            raise StagingConfigurationError(
+                f"The staging descriptor needs {name} for snapshot-init/refresh; "
+                "add it with people-gator-deploy staging configure --input <private-json>."
+            )
+        value = validate_section(name, self.config[name])
+        if name != "accounts":
+            target = self.storage()["s3"]
+            if (value["endpoint_url"].rstrip("/") == target["endpoint_url"].rstrip("/")
+                    and value["bucket"] == target["bucket_name"]):
+                raise DeployError(f"{name} must be separate from the staging storage bucket")
+        return value
 
     @staticmethod
     def validate_storage(config):
@@ -79,9 +130,7 @@ class Staging(Host):
         if (not required.issubset(s3) or set(s3) - required - {"timeout_seconds"}
                 or any(not isinstance(s3[key], str) or not s3[key].strip() for key in required)):
             raise DeployError("Incomplete/unsupported staging S3 configuration")
-        endpoint = urlsplit(s3["endpoint_url"])
-        if (endpoint.scheme != "https" or not endpoint.hostname or endpoint.username
-                or endpoint.password or endpoint.query or endpoint.fragment or endpoint.path not in {"", "/"}):
+        if not https_endpoint(s3["endpoint_url"]):
             raise DeployError("An explicit S3-compatible endpoint is required")
         if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", s3["bucket_name"]):
             raise DeployError("Invalid staging bucket name")
@@ -157,7 +206,7 @@ class Staging(Host):
             raise DeployError("Invalid staging generation state")
         storage = self.storage()
         if generation.get("storage") != self.storage_identity(storage):
-            raise DeployError("Staging S3 bucket identity changed or legacy local state was supplied")
+            raise DeployError("Staging S3 bucket identity changed")
         return {"COMMIT_SHA": sha, "STAGING_HOST": self.host,
                 "PREVIEW_LOG_ADDRESS": f"127.0.0.1:{self.config.get('preview_log_port', 24224)}",
                 "DB_NAME": f"staging_{identity}", "DB_USER": f"staging_{identity}",
@@ -181,9 +230,10 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                  "CREATE EXTENSION IF NOT EXISTS unaccent; REVOKE CREATE ON SCHEMA public FROM PUBLIC;", database=name)
 
     def worker(self, action, values, directory, *, work=None, exact_key=""):
-        # Credentials are explicit and supplied only to their operation via stdin.
-        files = {"download": ["backup-source.json"], "auth": ["credential-input.json"],
-                 "copy": ["media-source.json"], "validate": []}[action]
+        sections = {"download": ["backup_source"], "auth": ["accounts"],
+                    "copy": ["media_source"], "validate": []}[action]
+        # Descriptor sections reach their operation's worker only via stdin.
+        inputs = {SNAPSHOT_INPUTS[name]: self.snapshot_input(name) for name in sections}
         memory = self.transfer["concurrency"] * self.transfer["max_object_mib"] + 512
         args = ["docker", "run", "--rm", "--log-driver", "none", "--read-only", "--cap-drop", "ALL",
                 "--label", self.worker_label, "--security-opt", "no-new-privileges:true",
@@ -202,21 +252,8 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             settings = self.runtime_environment(values)
             write_private(environment, "".join(f"{k}={v}\n" for k, v in settings.items()))
             args += ["--env-file", str(environment)]
-        private = Path(self.settings["private_dir"])
-        for name in files:
-            if not (private / name).is_file():
-                raise StagingConfigurationError(f"Provision private staging input {private / name} first")
-        # Host inputs stay mode-600; container UID 10001 receives only JSON stdin.
-        inputs = {name: json.loads((private / name).read_text()) for name in files}
         if action == "copy":
             inputs["transfer"] = self.transfer
-        for name in ("backup-source.json", "media-source.json"):
-            if name in inputs:
-                source = inputs[name]
-                target = json.loads(values["STAGING_STORAGE"])["s3"]
-                if (source["endpoint_url"].rstrip("/") == target["endpoint_url"].rstrip("/")
-                        and source.get("bucket", "peoplegator-db-backup") == target["bucket_name"]):
-                    raise DeployError("Snapshot source must be separate from the staging S3 bucket")
         if work:
             args += ["--mount", f"type=bind,src={work},dst=/work"]
         args += ["--interactive", values["BACKEND_IMAGE"], "/snapshot.py", action]
@@ -293,6 +330,10 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
     def deploy(self, run_id=None, *, refresh=False, exact_key=""):
         if exact_key and not refresh:
             raise DeployError("--exact-key is only valid for snapshot-init/refresh")
+        if refresh:
+            # Every snapshot section is checked before any lookup or mutation.
+            for name in SNAPSHOT_INPUTS:
+                self.snapshot_input(name)
         self.staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.reap_workers()
         self.recover_activation(refresh_requested=refresh)
@@ -308,7 +349,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             raise DeployError("Shared infrastructure must be installed first")
         storage = self.storage_identity(self.storage())
         if old and old.get("storage") != storage:
-            raise DeployError("Retained staging requires its original S3 bucket; migrate legacy storage explicitly")
+            raise DeployError("Retained staging requires its original S3 bucket; moving buckets needs a data migration")
         images = {part: self.image(part, run) for part in ("frontend", "backend")}
         self.fence(run)
         generation = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32), "storage": storage} if refresh else dict(old)
