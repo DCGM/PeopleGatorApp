@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
+import EvidenceFilterControls from '@/components/custom/EvidenceFilterControls.vue'
+import EvidenceFilterTags from '@/components/custom/EvidenceFilterTags.vue'
+import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -33,6 +37,7 @@ const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const route = useRoute()
 const router = useRouter()
+const evidence = useEvidenceFilters()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter()
@@ -44,8 +49,12 @@ const selectedFaceId = ref<string | null>(
 const selectedPersonId = ref<string | null>(
   typeof route.query.selectedPerson === 'string' ? route.query.selectedPerson : null,
 )
-const candidateTerm = ref('')
-const candidateBrowseMode = ref<CandidateBrowseMode>('page')
+const candidateTerm = ref(
+  typeof route.query.candidate_text === 'string' ? route.query.candidate_text : '',
+)
+const candidateBrowseMode = ref<CandidateBrowseMode>(
+  route.query.candidate_mode === 'face' ? 'face' : 'page',
+)
 const candidateSearchResetKey = ref(0)
 const debouncedCandidateTerm = useDebounce(candidateTerm, 250)
 const {
@@ -76,6 +85,8 @@ const {
   debouncedCandidateTerm,
   candidateBrowseMode,
   linkStates,
+  evidence.params,
+  computed(() => !evidence.error.value),
 )
 
 const selectedLineIndex = ref(0)
@@ -125,6 +136,8 @@ function syncRoute() {
   void router.replace({
     query: {
       ...route.query,
+      candidate_text: candidateTerm.value || undefined,
+      candidate_mode: candidateBrowseMode.value,
       person: selectedFaceId.value ?? undefined,
       selectedPerson: selectedPersonId.value ?? undefined,
       line: line?.id,
@@ -132,6 +145,17 @@ function syncRoute() {
     },
   })
 }
+
+watch(
+  () => [route.query.candidate_text, route.query.candidate_mode],
+  () => {
+    candidateTerm.value =
+      typeof route.query.candidate_text === 'string' ? route.query.candidate_text : ''
+    candidateBrowseMode.value = route.query.candidate_mode === 'face' ? 'face' : 'page'
+  },
+)
+
+watch([candidateTerm, candidateBrowseMode], syncRoute)
 
 function showOnPageEntities() {
   candidateTerm.value = ''
@@ -301,12 +325,17 @@ watch(
 watch([faces, transcription, annotationsLoading], () => {
   if (annotationsLoading.value) return
   let changed = false
-  if (selectedFaceId.value && !faces.value.some(face => face.id === selectedFaceId.value)) {
+  if (selectedFaceId.value && !faces.value.some((face) => face.id === selectedFaceId.value)) {
     selectedFaceId.value = null
     selectedPersonId.value = null
     changed = true
   }
-  if (selectedEntityKey.value && !transcription.value.some(line => line.entities?.some(span => transcriptionEntityKey(span) === selectedEntityKey.value))) {
+  if (
+    selectedEntityKey.value &&
+    !transcription.value.some((line) =>
+      line.entities?.some((span) => transcriptionEntityKey(span) === selectedEntityKey.value),
+    )
+  ) {
     selectedEntityKey.value = null
     selectedPersonId.value = null
     changed = true
@@ -349,34 +378,81 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <div class="w-full px-2 py-2">
+    <SearchFilterPanel label="Page evidence" filters-only
+      ><EvidenceFilterControls
+    /></SearchFilterPanel>
+    <EvidenceFilterTags context />
+  </div>
   <main class="workspace-grid">
-    <section class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"
-      aria-labelledby="page-transcription-title">
-      <DocumentTeleprompter class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
-        :transcription="transcription" :selected-line-index="selectedLineIndex" :selected-entity-key="selectedEntityKey"
-        :related-entity-id="selectedPersonId" :is-translation-open="isTranslationOpen"
-        :selected-language="selectedLanguage" :current-translation="currentTranslation"
-        :translation-loading="translationLoading" @select-line="selectLine" @select-entity="selectEntity"
-        @navigate-line="navigateLine" />
+    <section
+      class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"
+      aria-labelledby="page-transcription-title"
+    >
+      <DocumentTeleprompter
+        class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
+        :transcription="transcription"
+        :selected-line-index="selectedLineIndex"
+        :selected-entity-key="selectedEntityKey"
+        :related-entity-id="selectedPersonId"
+        :is-translation-open="isTranslationOpen"
+        :selected-language="selectedLanguage"
+        :current-translation="currentTranslation"
+        :translation-loading="translationLoading"
+        @select-line="selectLine"
+        @select-entity="selectEntity"
+        @navigate-line="navigateLine"
+      />
     </section>
 
-    <section ref="viewerElement" class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
-      aria-label="Pan and zoom document page">
-      <DocumentControls class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
-        @pointerdown.stop @wheel.stop @keydown.stop
-        v-model:link-states="linkStates" :selected-line-index="selectedLineIndex" :line-count="transcription.length"
-        :selected-face-index="selectedFaceIndex" :face-count="faces.length" :zoom-percent="zoomPercent"
-        :minimum-zoom-percent="minimumZoomPercent" :maximum-zoom-percent="maximumZoomPercent"
-        :translation-options="translationOptions" :is-translation-open="isTranslationOpen"
-        :selected-language="selectedLanguage" :show-badge-names="showBadgeNames" @previous-line="previousLine"
-        @next-line="nextLine" @previous-face="previousFace" @next-face="nextFace" @set-zoom="setZoom"
-        @reset-view="resetView" @select-translation="selectTranslation"
-        @toggle-badge-names="showBadgeNames = !showBadgeNames" />
-      <div ref="zoomElement" class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center">
-        <div ref="pageElement" class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
-          :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }">
-          <LoadableImage :src="pageImageUrl" :loading="pageImageLoading" :alt="`Scan ${pageId}`"
-            class="absolute inset-0 size-full" image-class="object-contain" @load="pageImageLoaded">
+    <section
+      ref="viewerElement"
+      class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
+      aria-label="Pan and zoom document page"
+    >
+      <DocumentControls
+        class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
+        @pointerdown.stop
+        @wheel.stop
+        @keydown.stop
+        v-model:link-states="linkStates"
+        :selected-line-index="selectedLineIndex"
+        :line-count="transcription.length"
+        :selected-face-index="selectedFaceIndex"
+        :face-count="faces.length"
+        :zoom-percent="zoomPercent"
+        :minimum-zoom-percent="minimumZoomPercent"
+        :maximum-zoom-percent="maximumZoomPercent"
+        :translation-options="translationOptions"
+        :is-translation-open="isTranslationOpen"
+        :selected-language="selectedLanguage"
+        :show-badge-names="showBadgeNames"
+        @previous-line="previousLine"
+        @next-line="nextLine"
+        @previous-face="previousFace"
+        @next-face="nextFace"
+        @set-zoom="setZoom"
+        @reset-view="resetView"
+        @select-translation="selectTranslation"
+        @toggle-badge-names="showBadgeNames = !showBadgeNames"
+      />
+      <div
+        ref="zoomElement"
+        class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
+      >
+        <div
+          ref="pageElement"
+          class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
+          :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }"
+        >
+          <LoadableImage
+            :src="pageImageUrl"
+            :loading="pageImageLoading"
+            :alt="`Scan ${pageId}`"
+            class="absolute inset-0 size-full"
+            image-class="object-contain"
+            @load="pageImageLoaded"
+          >
             <template #fallback>
               <div class="flex size-full items-center justify-center text-muted-foreground">
                 <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
@@ -385,18 +461,34 @@ onBeforeUnmount(() => {
           </LoadableImage>
         </div>
       </div>
-      <DocumentPageOverlay :page-bounds="pageBounds" :transcription="transcription" :faces="faces"
-        :selected-line-index="selectedLineIndex" :selected-face-id="selectedFace?.id ?? null"
-        :selected-person-id="selectedPersonId" :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
-        :show-badge-names="showBadgeNames" @select-line="selectLine" @select-face="selectFace" />
+      <DocumentPageOverlay
+        :page-bounds="pageBounds"
+        :transcription="transcription"
+        :faces="faces"
+        :selected-line-index="selectedLineIndex"
+        :selected-face-id="selectedFace?.id ?? null"
+        :selected-person-id="selectedPersonId"
+        :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
+        :show-badge-names="showBadgeNames"
+        @select-line="selectLine"
+        @select-face="selectFace"
+      />
     </section>
 
-    <FaceGallery class="workspace-galery" :faces="faces" :selected-face-id="selectedFace?.id ?? null"
-      :loading="isLoading" @reset-filters="linkStates = []" @select="selectFace" />
+    <FaceGallery
+      class="workspace-galery"
+      :faces="faces"
+      :selected-face-id="selectedFace?.id ?? null"
+      :loading="isLoading"
+      @reset-filters="linkStates = []"
+      @select="selectFace"
+    />
 
     <div class="workspace-current min-w-0 border-t bg-background">
       <details id="link-statistics" class="border-b text-xs" @keydown.stop>
-        <summary class="cursor-pointer px-5 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <summary
+          class="cursor-pointer px-5 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
           Link statistics
         </summary>
         <div class="max-h-52 overflow-y-auto px-5 pb-4">
@@ -406,26 +498,56 @@ onBeforeUnmount(() => {
           <p class="my-2 font-semibold">Whole document</p>
           <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
           <p v-else-if="documentQuery.error.value" role="alert">
-            Could not load document statistics. <button class="underline" @click="documentQuery.refetch()">Retry</button>
+            Could not load document statistics.
+            <button class="underline" @click="documentQuery.refetch()">Retry</button>
           </p>
-          <EntityLinkStatistics v-else-if="documentQuery.data.value" :stats="documentQuery.data.value.entity_link_stats" unassigned />
+          <EntityLinkStatistics
+            v-else-if="documentQuery.data.value"
+            :stats="documentQuery.data.value.entity_link_stats"
+            unassigned
+          />
         </div>
       </details>
-      <CurrentFacePanel class="p-5" :face="selectedFace ?? null"
-        :assignment-pending="assignmentStatus === 'pending'" @find-profile="focusSimilarPeopleSearch"
-        @create="createSimilarPerson" @unassign="unassignSelectedFace">
-        <VerifyEntityLink v-if="selectedFace" v-bind="selectedFace" :id="selectedFace.id" kind="face" />
+      <CurrentFacePanel
+        class="p-5"
+        :face="selectedFace ?? null"
+        :assignment-pending="assignmentStatus === 'pending'"
+        @find-profile="focusSimilarPeopleSearch"
+        @create="createSimilarPerson"
+        @unassign="unassignSelectedFace"
+      >
+        <VerifyEntityLink
+          v-if="selectedFace"
+          v-bind="selectedFace"
+          :id="selectedFace.id"
+          kind="face"
+        />
       </CurrentFacePanel>
     </div>
-    <SimilarPeopleSearch :key="candidateSearchResetKey" ref="similarPeopleSearch" v-model="candidateTerm"
-      v-model:result-mode="candidateBrowseMode" class="workspace-search bg-background px-5 pb-5"
-      :selected-face="selectedFace ?? null" />
-    <SimilarPeopleResults class="workspace-results min-h-0 bg-background px-5 pb-5"
-      :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []" :loading="isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
-        " :has-next-page="hasNextPage" :is-fetching-next-page="isFetchingNextPage" :selected-face="selectedFace ?? null"
-      :viewed-person-id="selectedPersonId" :assignment-pending="assignmentStatus === 'pending'"
-      :search-term="`${candidateBrowseMode}:${candidateTerm}`" @load-more="loadMore()" @preview="previewSimilarPerson"
-      @assign="assignSimilarPerson" />
+    <SimilarPeopleSearch
+      :key="candidateSearchResetKey"
+      ref="similarPeopleSearch"
+      v-model="candidateTerm"
+      v-model:result-mode="candidateBrowseMode"
+      class="workspace-search bg-background px-5 pb-5"
+      :selected-face="selectedFace ?? null"
+    />
+    <SimilarPeopleResults
+      class="workspace-results min-h-0 bg-background px-5 pb-5"
+      :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []"
+      :loading="
+        isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
+      "
+      :has-next-page="hasNextPage"
+      :is-fetching-next-page="isFetchingNextPage"
+      :selected-face="selectedFace ?? null"
+      :viewed-person-id="selectedPersonId"
+      :assignment-pending="assignmentStatus === 'pending'"
+      :search-term="`${candidateBrowseMode}:${candidateTerm}`"
+      @load-more="loadMore()"
+      @preview="previewSimilarPerson"
+      @assign="assignSimilarPerson"
+    />
   </main>
 </template>
 
@@ -469,11 +591,15 @@ onBeforeUnmount(() => {
 .bg-viewer {
   background-color: var(--color-muted);
   background-image:
-    linear-gradient(color-mix(in srgb, var(--color-foreground) 5.5%, transparent) 1px,
-      transparent 1px),
-    linear-gradient(90deg,
+    linear-gradient(
       color-mix(in srgb, var(--color-foreground) 5.5%, transparent) 1px,
-      transparent 1px);
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-foreground) 5.5%, transparent) 1px,
+      transparent 1px
+    );
   background-size: 24px 24px;
 }
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
+import { useEvidenceFilters, relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import { computed } from 'vue'
 import { ArrowUpRight, ChevronRight } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
@@ -10,12 +12,15 @@ import DocumentCardSkeleton from '@/components/custom/DocumentCardSkeleton.vue'
 import { Button } from '@/components/ui/button'
 import { documentTitle, useDocumentGroup } from '@/viewmodels/document-list'
 
+const route = useRoute()
+const evidence = useEvidenceFilters()
 const linkStates = useLinkStateFilter()
 const props = defineProps<{ document: DocumentResponse }>()
 const { cards, totalCount, filteredCount, error, isLoading, retry } = useDocumentGroup(
   () => props.document,
   4,
   linkStates,
+  evidence.params,
 )
 const widePreviews = useMediaQuery('(min-width: 640px)')
 const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 : 2))
@@ -25,6 +30,7 @@ const remainingCount = computed(() =>
 const documentLocation = computed(() => ({
   name: 'document-search',
   query: {
+    ...relatedEvidenceQuery(route, { evidence_document: [props.document.source_id] }),
     library: props.document.library,
     document: props.document.document_id,
     ...(linkStates.value.length && { link_state: linkStates.value }),
@@ -86,7 +92,7 @@ const documentLocation = computed(() => ({
           class="scan-card group min-w-0"
           :to="{
             name: 'document-page',
-            query: { link_state: linkStates },
+            query: relatedEvidenceQuery(route, { evidence_document: [document.source_id] }),
             params: { libraryId: card.library, documentId: card.documentId, pageId: card.pageId },
           }"
         >

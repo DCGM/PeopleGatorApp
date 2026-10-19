@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import EvidenceFilterControls from './EvidenceFilterControls.vue'
+import EvidenceFilterTags from './EvidenceFilterTags.vue'
 import { computed, ref } from 'vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
-import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
+import type { ActiveFilter } from './ActiveFilters.vue'
 import FilterDateTimePicker from './FilterDateTimePicker.vue'
 import FilterMultiSelect from './FilterMultiSelect.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
-import { emptyDocumentFilters, type DocumentFilters } from '@/viewmodels/document-filters'
+import { type DocumentFilters } from '@/viewmodels/document-filters'
 import { linkStateVisuals } from '@/lib/entity-links'
 
 defineProps<{ resultCount: number; filterError?: string }>()
@@ -37,8 +39,8 @@ const apiKeys = usePeopleFilterOptions('api-key', apiKeySearch)
 const active = computed<ActiveFilter[]>(() => {
   const chips: ActiveFilter[] = []
   for (const [key, label] of [
-    ['touchedFrom', 'From'],
-    ['touchedTo', 'To'],
+    ['touchedFrom', 'Document processing from'],
+    ['touchedTo', 'Document processing to'],
   ] as const)
     if (filters.value[key])
       chips.push({
@@ -48,8 +50,8 @@ const active = computed<ActiveFilter[]>(() => {
       })
   for (const [key, label, labels] of [
     ['libraries', 'Library', libraryOptions.labels.value],
-    ['userIds', 'User', users.labels.value],
-    ['apiKeyIds', 'API key', apiKeys.labels.value],
+    ['userIds', 'Document processing user', users.labels.value],
+    ['apiKeyIds', 'Document processing API key', apiKeys.labels.value],
   ] as const)
     for (const value of filters.value[key])
       chips.push({ key, value, label: `${label}: ${labels[value] ?? value}` })
@@ -99,6 +101,7 @@ function remove(chip: ActiveFilter) {
       @retry="libraryOptions.retry()"
     />
     <EntityLinkStateFilter v-model="linkStates" />
+    <EvidenceFilterControls hide-state />
     <FilterSingleSelect
       v-model="unassigned"
       label="Unassigned faces"
@@ -110,20 +113,20 @@ function remove(chip: ActiveFilter) {
     />
     <FilterDateTimePicker
       v-model="touchedFrom"
-      label="Last processed from"
+      label="Document processing from"
       :invalid="!!filterError"
       class="flex-none max-w-full"
     />
     <FilterDateTimePicker
       v-model="touchedTo"
-      label="Last processed to"
+      label="Document processing to"
       :invalid="!!filterError"
       class="flex-none max-w-full"
     />
     <FilterMultiSelect
       v-model="userIds"
       v-model:search="userSearch"
-      label="Users"
+      label="Document processing users"
       :options="users.options.value"
       :is-loading="users.isLoading.value"
       :error="users.error.value"
@@ -136,7 +139,7 @@ function remove(chip: ActiveFilter) {
     <FilterMultiSelect
       v-model="apiKeyIds"
       v-model:search="apiKeySearch"
-      label="API keys"
+      label="Document processing API keys"
       :options="apiKeys.options.value"
       :is-loading="apiKeys.isLoading.value"
       :error="apiKeys.error.value"
@@ -148,5 +151,5 @@ function remove(chip: ActiveFilter) {
     />
   </SearchFilterPanel>
   <p v-if="filterError" role="alert">{{ filterError }}</p>
-  <ActiveFilters :filters="active" @remove="remove" @clear="filters = emptyDocumentFilters()" />
+  <EvidenceFilterTags hide-state context :additional-filters="active" @remove-additional="remove" />
 </template>

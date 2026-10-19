@@ -20,6 +20,10 @@ export type SimilarPersonCandidate = {
   wikidataId?: string
   nlcrAuthorityId?: string
   faceId?: string
+  sourceId?: string
+  referenceFaceId?: string
+  candidateMode?: string
+  candidateText?: string
   entityKey?: string
   entityLineIndex?: number
 }

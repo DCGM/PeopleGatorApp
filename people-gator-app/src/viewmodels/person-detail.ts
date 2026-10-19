@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from './evidence-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 
@@ -24,7 +25,13 @@ function percentage(value: number) {
 
 const PERSON_DETAIL_GC_TIME = 60 * 60_000
 
-export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: MaybeRefOrGetter<EntityLinkState[]> = []) {
+export function usePersonDetail(
+  personId: MaybeRefOrGetter<string>,
+  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidenceValid: MaybeRefOrGetter<boolean> = true,
+  matchedFaceIds: MaybeRefOrGetter<string[]> = [],
+) {
   const entityQuery = useEntityQuery(personId)
   const patchEntity = usePatchEntityMutation()
   const touchedUserId = computed(() => entityQuery.data.value?.last_touched_by_user_id ?? '')
@@ -47,30 +54,52 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: 
   const hasPerson = computed(() => Boolean(toValue(personId)))
   const faceQuery = useFaceListQuery(
     computed(() => ({
+      ...toValue(evidence),
       'filter.entity_id': [toValue(personId)],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
       return_total_count: true,
     })),
-    hasPerson,
+    computed(() => hasPerson.value && toValue(evidenceValid)),
   )
   const mentionQuery = useTextMentionListQuery(
     computed(() => ({
+      ...toValue(evidence),
       'filter.entity_id': [toValue(personId)],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
       return_total_count: true,
     })),
-    hasPerson,
+    computed(() => hasPerson.value && toValue(evidenceValid)),
   )
 
-  const faceRecords = computed(() =>
-    (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+  const matchedFaces = useFaceListQuery(
+    computed(() => ({
+      ...toValue(evidence),
+      'filter.entity_id': [toValue(personId)],
+      'filter.detection_id': toValue(matchedFaceIds),
+      limit: 100,
+    })),
+    computed(() => hasPerson.value && toValue(evidenceValid) && toValue(matchedFaceIds).length > 0),
   )
-  const discoveryFaces = useFaceListQuery(computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })), hasPerson)
-  const discoveryFaceRecords = computed(() => (discoveryFaces.data.value?.pages ?? []).flatMap(page => page.items))
+  const faceRecords = computed(() => [
+    ...new Map(
+      [
+        ...(matchedFaces.data.value?.pages ?? []).flatMap((page) => page.items),
+        ...(faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
+      ].map((face) => [face.detection_id, face]),
+    ).values(),
+  ])
+  const discoveryFaces = useFaceListQuery(
+    computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })),
+    hasPerson,
+  )
+  const discoveryFaceRecords = computed(() =>
+    (discoveryFaces.data.value?.pages ?? []).flatMap((page) => page.items),
+  )
   const faceEmbeddingModel = computed(
-    () => discoveryFaceRecords.value.find((face) => face.embeddings?.length)?.embeddings?.[0] ?? null,
+    () =>
+      discoveryFaceRecords.value.find((face) => face.embeddings?.length)?.embeddings?.[0] ?? null,
   )
   const similarityFaceIds = computed(() => {
     const model = faceEmbeddingModel.value
@@ -168,13 +197,16 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: 
   const faces = computed<PersonFace[]>(() =>
     faceRecords.value.flatMap((face, faceIndex) => {
       const page = pages.value.get(face.source_id)
-      if (!page) return []
       const portrait =
         alignedCropUrls.value.get(face.detection_id) ?? imageUrls.value.get(face.source_id) ?? ''
       const pageImageIndex = imageSourceIds.value.indexOf(face.source_id)
       return [
         {
           ...linkMetadata(face),
+          metadata: face,
+          sourceId: face.source_id,
+          sourceLoading:
+            pageQueries.value[sourceIds.value.indexOf(face.source_id)]?.isPending ?? false,
           id: face.detection_id,
           portrait,
           portraitLoading:
@@ -182,10 +214,10 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: 
             ((alignedCropQueries.value[faceIndex]?.isPending ?? false) ||
               (pageImageIndex >= 0 && (imageQueries.value[pageImageIndex]?.isPending ?? false))),
           confidence: percentage(face.confidence),
-          library: page.library,
-          documentId: page.document_id,
-          pageId: page.page_id,
-          pageLabel: page.page_id,
+          library: page?.library ?? 'Source unavailable',
+          documentId: page?.document_id ?? face.source_id,
+          pageId: page?.page_id ?? '',
+          pageLabel: page?.page_id ?? '',
           position: face.bounding_box,
         },
       ]
@@ -195,18 +227,21 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: 
   const mentions = computed<PersonMention[]>(() =>
     mentionRecords.value.flatMap((mention) => {
       const page = pages.value.get(mention.source_id)
-      if (!page) return []
       return [
         {
           ...linkMetadata(mention),
+          metadata: mention,
+          sourceId: mention.source_id,
+          sourceLoading:
+            pageQueries.value[sourceIds.value.indexOf(mention.source_id)]?.isPending ?? false,
           id: mention.mention_id,
           excerpt: mention.context || mention.name,
           matchedText: mention.name,
-          library: page.library,
-          documentId: page.document_id,
-          documentTitle: page.document_id,
-          pageId: page.page_id,
-          pageLabel: page.page_id,
+          library: page?.library ?? 'Source unavailable',
+          documentId: page?.document_id ?? mention.source_id,
+          documentTitle: page?.document_id ?? mention.source_id,
+          pageId: page?.page_id ?? '',
+          pageLabel: page?.page_id ?? '',
         },
       ]
     }),
@@ -235,6 +270,13 @@ export function usePersonDetail(personId: MaybeRefOrGetter<string>, linkStates: 
   }
 
   return {
+    missingMatchedFaces: computed(
+      () =>
+        !matchedFaces.isPending.value &&
+        toValue(matchedFaceIds).some(
+          (id) => !faceRecords.value.some((face) => face.detection_id === id),
+        ),
+    ),
     entity: entityQuery.data,
     faceError: faceQuery.error,
     mentionError: mentionQuery.error,

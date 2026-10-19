@@ -98,3 +98,58 @@ viewmodel URL parsing and controls together. Test AND/OR combinations, empty or
 invalid inputs, evidence scope and cursor reset. Follow the shared layout rules
 in [AGENTS.md](../AGENTS.md) and extend the preview fixtures. A UI control must
 represent a working server criterion.
+
+## Shared evidence navigation (#31)
+
+Documents, scan search, page workspaces, people search and person details expose
+one shared set of annotation criteria. Their names, OR selections, inclusive time
+bounds and AND combination match the API fields documented in
+[annotation processing](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md#annotation-criteria-versus-resource-processing-31).
+Documents/people return resources containing matching evidence. Profiles return
+that person's matching faces/mentions with filtered counts alongside overall
+statistics. Every condition must match the same annotation, including document,
+state and actor; results cannot combine unrelated annotations.
+
+| Browser URL | API criterion / scope |
+| --- | --- |
+| `link_state` | `filter.entity_link_state` |
+| `evidence_origin` | `filter.evidence_origin`: automatic/manual/authority/unknown, independent of link state |
+| `evidence_library` | `filter.evidence_library` |
+| `evidence_document` | `filter.document_source_id`: internal registered document source UUID |
+| `evidence_source` | `filter.evidence_source_id`: exact source UUID |
+| `evidence_from`, `evidence_to` | `filter.evidence_touched_from/to`: annotation edit time, timezone required |
+| `evidence_user`, `evidence_key` | `filter.evidence_touched_by_user_id/api_key_id`: annotation's last actor |
+| People `document` | Legacy internal document selection; mapped to active shared evidence on navigation |
+| Scan `library`, `document` | Resource library/archive UUID; opening a scan also retains its exact source |
+| `touched_from/to`, `touched_by`, `api_key` | Current person/source processing, **never** annotation edits |
+| `origin_person_*`, `origin_source_*` | Visible originating resource criteria retained with their original meaning |
+| `origin_text` | Name/alias/source search signal; never literal text filtering of face images |
+| `origin_matched_face`, `origin_reference_face` | Actual matching detection / reference face signals |
+| `origin_return` | Internal cursor-free originating URL; Return restores the original search |
+| `tab` | Faces (default), mentions or discover; incoming assigned-mentions searches open Mentions |
+| `discovery_assignment`, `discovery_text`, `candidate_mode`, `candidate_text` | View-specific discovery/candidate choices, retained as origin context on related navigation |
+
+Related links copy the current shared selections and scope resource-specific
+criteria as origin context. Changes carry forward on the next related link.
+Each view is reproducible from its URL, including copied links and browser
+Back/Forward. Destination queries start at their own first page; source cursors
+never travel across resources. Removing a filter tag changes controls, URL and
+server results. A single Clear all filters action per panel and profile broadening preserve origin
+text and the return URL; clearing text remains a separate action. Invalid copied
+annotation bounds/origins/UUIDs show recoverable criteria and block evidence
+requests until corrected/removed. Missing matched detections and unavailable
+source pages are reported without blocking identity details. Missing option
+labels fall back to identifiers without exposing credentials.
+
+Face-similarity entity results include `matched_detection_ids`; profile links
+retain these actual witnesses. They are loaded within the fixed person and
+current evidence scope, independently of the first evidence page. Verification
+metadata and actions remain available. Provenance details identify detection
+confidence separately from similarity and show recorded creation and annotation
+edit attribution; owner, verifier and last editor are independent.
+
+PostgreSQL implements these persisted metadata and shared filters. The optional
+Weaviate adapter explicitly rejects the new provenance/edit filter groups and
+recorded provenance ingestion; it must not silently return unfiltered results.
+No authority crawler or historical audit log is introduced. Synthetic authority
+references use `preview.invalid`; no external authority data is fetched.

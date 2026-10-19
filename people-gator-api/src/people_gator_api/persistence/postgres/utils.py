@@ -446,10 +446,10 @@ async def validate_cursor(
         return
     valid = await session.scalar(
         select(
-            exists().where(
+            exists(select(1).select_from(model).where(
                 model.id == cursor,  # type: ignore[attr-defined]
                 *filters,
-            )
+            ))
         )
     )
     if not valid:

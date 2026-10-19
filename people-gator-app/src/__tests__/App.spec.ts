@@ -150,11 +150,15 @@ describe('App', () => {
       'Page page',
     ])
     expect(crumbs[0]!.attributes('href')).toBe('/scans')
-    expect(crumbs[1]!.attributes('href')).toBe('/scans?library=library')
+    expect(crumbs[1]!.attributes('href')).toContain('library=library')
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'library', document: 'document' })
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      document: 'document',
+      origin_return: '/libraries/library/documents/document/pages/page',
+    })
     expect(wrapper.get('h1').text()).toBe('Document pages')
     await wrapper
       .get('input[placeholder="Search a person, page or document…"]')
@@ -163,11 +167,17 @@ describe('App', () => {
     expect(router.currentRoute.value.query).toEqual({
       library: 'library',
       document: 'document',
+      origin_return: '/libraries/library/documents/document/pages/page',
       q: 'archives',
     })
     await wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'library' })
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      evidence_library: ['library'],
+      origin_return: '/libraries/library/documents/document/pages/page',
+      origin_text: 'archives',
+    })
     expect(
       wrapper.get('input[placeholder="Search a person, page or document…"]').element,
     ).toHaveProperty('value', '')
@@ -402,7 +412,7 @@ describe('Scans and Documents navigation', () => {
     expect(document.title).toBe('Documents | People Gator')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBeUndefined()
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans?library=mzk')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('library=mzk')
     expect(
       wrapper
         .get('[aria-label="Breadcrumb"]')
@@ -412,7 +422,7 @@ describe('Scans and Documents navigation', () => {
     await router.push('/libraries/mzk/documents/album/pages/scan')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
-      '/scans?library=mzk&document=album',
+      '/scans?origin_return=/libraries/mzk/documents/album/pages/scan&library=mzk&document=album',
     )
     wrapper.unmount()
   })
@@ -440,9 +450,11 @@ describe('Scans and Documents navigation', () => {
     await router.push('/documents?library=a&library=b')
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
-      '/documents?library=a&library=b',
+      '/documents?evidence_library=a&evidence_library=b&origin_return=/documents?library=a%26library=b&library=a&library=b',
     )
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain(
+      'evidence_library=a&evidence_library=b',
+    )
     expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
       'PeopleGator',
       'Documents',

@@ -121,12 +121,14 @@ describe('document search and bounded groups', () => {
       [...wrapper.get('.document-pages').element.children].map((node) => node.tagName),
     ).toEqual(['ARTICLE', 'ARTICLE'])
     expect(wrapper.findAll('.scan-card').map((node) => node.attributes('href'))).toEqual([
-      '/libraries/a/documents/shared/pages/a-1',
-      '/libraries/b/documents/shared/pages/b-1',
+      '/libraries/a/documents/shared/pages/a-1?evidence_document=a-shared&origin_return=/documents',
+      '/libraries/b/documents/shared/pages/b-1?evidence_document=b-shared&origin_return=/documents',
     ])
     for (const [index, library] of ['a', 'b'].entries()) {
       const link = wrapper.findAll('.document-link')[index]!
-      expect(link.attributes('href')).toBe(`/scans?library=${library}&document=shared`)
+      expect(link.attributes('href')).toBe(
+        `/scans?evidence_document=${library}-shared&origin_return=/documents&library=${library}&document=shared`,
+      )
       expect(link.get('p').text()).toBe(`${library} · shared`)
       expect(link.attributes('aria-label')).toContain(`in ${library}`)
     }
@@ -183,7 +185,9 @@ describe('document search and bounded groups', () => {
     expect(wrapper.findAll('.scan-card')).toHaveLength(8)
     expect(wrapper.text()).toContain('20 registered pages')
     expect(wrapper.findAll('.more-pages').map((node) => node.text())).toEqual(['+16', '+16'])
-    expect(wrapper.get('.more-pages').attributes('href')).toBe('/scans?library=a&document=shared')
+    expect(wrapper.get('.more-pages').attributes('href')).toBe(
+      '/scans?evidence_document=a-shared&origin_return=/documents&library=a&document=shared',
+    )
     expect(wrapper.text()).not.toContain('Showing 4 of')
     expect(wrapper.find('button[aria-label^="Load more pages"]').exists()).toBe(false)
     await wrapper

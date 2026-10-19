@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from './evidence-filters'
 import type { EntityLinkState } from '@/client'
 import {
   emptyPeopleFilters,
@@ -31,6 +32,8 @@ export function usePeopleSearch(
   pageSize = 12,
   processingFilters: MaybeRefOrGetter<PeopleProcessingFilters> = emptyPeopleFilters(),
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidenceValid: MaybeRefOrGetter<boolean> = true,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentEntityFilter(toValue(filter)))
@@ -39,10 +42,14 @@ export function usePeopleSearch(
     computed(() => ({
       query: normalizedSearch.value,
       ...assignment.value,
-      processingFilters: { ...peopleFiltersQuery(toValue(processingFilters)), ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }) },
+      processingFilters: {
+        ...toValue(evidence),
+        ...peopleFiltersQuery(toValue(processingFilters)),
+        ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
+      },
       limit: pageSize,
     })),
-    computed(() => !filterError.value),
+    computed(() => !filterError.value && toValue(evidenceValid)),
   )
 
   const pageRecords = computed<EntitySearchRecord[]>(() => {
@@ -105,8 +112,14 @@ export function usePeopleSearch(
       id: person.entity_id,
       name: person.name || 'Unnamed person',
       aliases: person.aliases ?? [],
-      faces: person.entity_link_stats?.faces?.total ?? faceCountQueries.value[index]?.data?.total_count ?? 0,
-      names: person.entity_link_stats?.mentions?.total ?? mentionCountQueries.value[index]?.data?.total_count ?? 0,
+      faces:
+        person.entity_link_stats?.faces?.total ??
+        faceCountQueries.value[index]?.data?.total_count ??
+        0,
+      names:
+        person.entity_link_stats?.mentions?.total ??
+        mentionCountQueries.value[index]?.data?.total_count ??
+        0,
     })),
   )
 

@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import EvidenceFilterControls from './EvidenceFilterControls.vue'
+import EvidenceFilterTags from './EvidenceFilterTags.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 import type { EntityLinkState } from '@/client'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import { computed } from 'vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
-import ActiveFilters from './ActiveFilters.vue'
 import { linkStateVisuals } from '@/lib/entity-links'
 
 import FilterSingleSelect from './FilterSingleSelect.vue'
@@ -17,7 +18,7 @@ const props = defineProps<{
   hasMoreResults?: boolean
 }>()
 
-const emit = defineEmits<{ removeScope: [key: 'library' | 'document']; clearFilters: [] }>()
+const emit = defineEmits<{ removeScope: [key: 'library' | 'document'] }>()
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<PageContentFilter>('assignment', { required: true })
 const active = computed(() => [
@@ -44,9 +45,6 @@ function remove(chip: { key: string; value: string }) {
   if (chip.key === 'assignment') assignment.value = 'all'
   else linkStates.value = linkStates.value.filter((state) => state !== chip.value)
 }
-function clear() {
-  emit('clearFilters')
-}
 </script>
 
 <template>
@@ -58,6 +56,7 @@ function clear() {
     :has-more-results="hasMoreResults"
   >
     <EntityLinkStateFilter v-model="linkStates" />
+    <EvidenceFilterControls hide-state />
     <FilterSingleSelect
       v-model="assignment"
       label="Page content"
@@ -69,5 +68,5 @@ function clear() {
       ]"
     />
   </SearchFilterPanel>
-  <ActiveFilters :filters="active" @remove="remove" @clear="clear" />
+  <EvidenceFilterTags hide-state context :additional-filters="active" @remove-additional="remove" />
 </template>

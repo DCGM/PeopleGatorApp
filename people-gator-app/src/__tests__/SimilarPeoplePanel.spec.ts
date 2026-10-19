@@ -88,6 +88,7 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
       name: 'person-detail',
       params: { personId: 'anna-novakova' },
+      query: { origin_matched_face: 'face-01' },
     })
     expect(wrapper.get('p[title="Local lecturer and town historian."]').text()).toBe(
       'Local lecturer and town historian.',
@@ -177,6 +178,7 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
       name: 'person-detail',
       params: { personId: 'anna-novakova' },
+      query: { origin_matched_face: 'face-current' },
     })
     const wikidataLink = wrapper.get('a[href="https://www.wikidata.org/wiki/Q42"]')
     expect(wikidataLink.text()).toBe('Wikidata')

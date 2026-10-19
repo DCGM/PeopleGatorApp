@@ -1,4 +1,3 @@
-from people_gator_api.schemas.provenance import EvidenceOrigin
 """Typed dependencies for list and search query-string parameters.
 
 The schemas remain transport-neutral while this module owns the HTTP naming
@@ -7,6 +6,7 @@ convention: search inputs use ``query.<field>``, filters use
 """
 
 import uuid
+from people_gator_api.schemas.provenance import EvidenceOrigin
 from datetime import datetime
 from typing import Annotated, Any
 

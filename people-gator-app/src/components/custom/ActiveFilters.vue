@@ -3,7 +3,7 @@ import { X } from '@lucide/vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 export type ActiveFilter = { key: string; value: string; label: string }
-defineProps<{ filters: ActiveFilter[] }>()
+defineProps<{ filters: ActiveFilter[]; hideClear?: boolean }>()
 const emit = defineEmits<{ remove: [filter: ActiveFilter]; clear: [] }>()
 </script>
 <template>
@@ -30,7 +30,7 @@ const emit = defineEmits<{ remove: [filter: ActiveFilter]; clear: [] }>()
         ><X aria-hidden="true"
       /></Button>
     </Badge>
-    <Button type="button" variant="ghost" size="sm" @click="emit('clear')"
+    <Button v-if="!hideClear" type="button" variant="ghost" size="sm" @click="emit('clear')"
       >Clear all filters</Button
     >
   </div>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useEvidenceFilters, relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import { ref, watch } from 'vue'
+
 import { useRoute, useRouter } from 'vue-router'
 import { UserRound } from '@lucide/vue'
 
@@ -16,12 +18,43 @@ import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
 const linkStates = useLinkStateFilter()
 const route = useRoute()
 const router = useRouter()
+const evidence = useEvidenceFilters()
 
 const resultsPerPage = 12
-const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
-const assignment = ref(normalizeAssignmentFilter(route.query.assignment ?? route.query.filters))
-
-const processingFilters = ref(readPeopleFilters(route.query))
+function updateQuery(changes: import('vue-router').LocationQueryRaw) {
+  void router.push({ query: { ...route.query, ...changes, page: undefined, cursor: undefined } })
+}
+const searchTerm = computed({
+  get: () => (typeof route.query.q === 'string' ? route.query.q : ''),
+  set: (q: string) => updateQuery({ q: q || undefined }),
+})
+const assignment = computed({
+  get: () => normalizeAssignmentFilter(route.query.assignment ?? route.query.filters),
+  set: (value) =>
+    updateQuery({ assignment: value === 'all' ? undefined : value, filters: undefined }),
+})
+const processingState = ref(readPeopleFilters(route.query))
+watch(
+  () => route.query,
+  (query) => {
+    processingState.value = readPeopleFilters(query)
+  },
+)
+const processingFilters = computed({
+  get: () => processingState.value,
+  set: (value) => {
+    processingState.value = value
+    updateQuery({
+      touched_from: undefined,
+      touched_to: undefined,
+      touched_by: undefined,
+      api_key: undefined,
+      document: undefined,
+      evidence_document: undefined,
+      ...peopleFiltersUrl(value),
+    })
+  },
+})
 
 const {
   error,
@@ -32,36 +65,15 @@ const {
   loadMore,
   people,
   resultCount,
-} = usePeopleSearch(searchTerm, assignment, resultsPerPage, processingFilters, linkStates)
-
-function updateSearch() {
-  void router.replace({
-    name: 'people-search',
-    query: {
-      ...(linkStates.value.length && { link_state: linkStates.value }),
-      ...peopleFiltersUrl(processingFilters.value),
-      ...(searchTerm.value && { q: searchTerm.value }),
-      ...(assignment.value !== 'all' && { assignment: assignment.value }),
-    },
-  })
-}
-watch([searchTerm, assignment, processingFilters], updateSearch, { deep: true })
-watch(
-  () => route.query,
-  (query) => {
-    searchTerm.value = typeof query.q === 'string' ? query.q : ''
-    assignment.value = normalizeAssignmentFilter(query.assignment ?? query.filters)
-    const restored = readPeopleFilters(query)
-    if (JSON.stringify(restored) !== JSON.stringify(processingFilters.value))
-      processingFilters.value = restored
-  },
+} = usePeopleSearch(
+  searchTerm,
+  assignment,
+  resultsPerPage,
+  processingFilters,
+  linkStates,
+  evidence.params,
+  computed(() => !evidence.error.value),
 )
-function clearFilters() {
-  void router.push({
-    name: 'people-search',
-    query: searchTerm.value ? { q: searchTerm.value } : {},
-  })
-}
 </script>
 
 <template>
@@ -76,7 +88,6 @@ function clearFilters() {
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       v-model:processing-filters="processingFilters"
-      @clear-filters="clearFilters"
       :filter-error="filterError"
       :result-count="resultCount"
     />
@@ -90,7 +101,14 @@ function clearFilters() {
           v-for="person in people"
           :key="person.id"
           class="group min-w-0"
-          :to="{ name: 'person-detail', params: { personId: person.id } }"
+          :to="{
+            name: 'person-detail',
+            params: { personId: person.id },
+            query: relatedEvidenceQuery(route, {
+              origin_matched_face: undefined,
+              origin_reference_face: undefined,
+            }),
+          }"
         >
           <PeopleCard :name="person.name" :faces="person.faces" :names="person.names" />
         </RouterLink>

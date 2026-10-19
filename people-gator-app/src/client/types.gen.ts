@@ -1055,8 +1055,6 @@ export type FoundDocument = {
 
 /**
  * FoundEntity
- *
- * A single result from a nearest-neighbour search over an annotation collection.
  */
 export type FoundEntity = {
     /**
@@ -1155,6 +1153,12 @@ export type FoundEntity = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Matched Detection Ids
+     *
+     * Actual face-similarity witnesses for this result; never an arbitrary portrait.
+     */
+    matched_detection_ids?: Array<string>;
 };
 
 /**

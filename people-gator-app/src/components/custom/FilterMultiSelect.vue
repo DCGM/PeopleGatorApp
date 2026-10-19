@@ -26,7 +26,7 @@ defineProps<{
 }>()
 const selected = defineModel<string[]>({ required: true })
 const search = defineModel<string>('search', { default: '' })
-const emit = defineEmits<{ loadMore: []; retry: [] }>()
+const emit = defineEmits<{ loadMore: []; retry: []; openChange: [value: boolean] }>()
 const open = ref(false)
 
 function updateSelection(value: unknown) {
@@ -38,6 +38,7 @@ function updateSelection(value: unknown) {
 <template>
   <Combobox
     v-model:open="open"
+    @update:open="emit('openChange', $event)"
     :model-value="selected"
     multiple
     ignore-filter

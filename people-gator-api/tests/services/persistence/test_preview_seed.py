@@ -1507,3 +1507,58 @@ async def test_provenance_annotation_filter_parity_and_rerun_preservation(seed_t
     assert changed.last_touched_by_api_key_id is None
     assert changed.last_touched_at > automatic.last_touched_at
     assert changed.provenance == automatic.provenance
+
+
+@pytest.mark.asyncio
+async def test_annotation_metadata_migration_keeps_historical_unknown(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+    db, filesystem, engine = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    detection_id = seed.faces['provenance-authority']
+    # End repository reads before the separate DDL connection takes table locks.
+    await db.faces._session.rollback()
+    async with engine.begin() as connection:
+        def migrate(sync):
+            config = migration_config()
+            config.attributes['connection'] = sync
+            command.downgrade(config, 'd34a021b0006')
+            command.upgrade(config, 'head')
+            command.upgrade(config, 'head')
+        await connection.run_sync(migrate)
+    await validate_postgres_schema(engine)
+    face = await db.faces.get(detection_id)
+    assert face.entity_link_state.value == 'verified'
+    assert face.provenance.origin.value == 'unknown'
+    assert face.last_touched_at is None and face.created_at is None
+    matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        detection_id=[detection_id], evidence_origin=['unknown'])))
+    assert [item.detection_id for item in matches.items] == [detection_id]
+    matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        detection_id=[detection_id], evidence_touched_from='2000-01-01T00:00:00Z')))
+    assert not matches.items
+    await preview.seed_preview(db, filesystem)
+    assert (await db.faces.get(detection_id)).last_touched_at is None
+
+
+@pytest.mark.asyncio
+async def test_evidence_pagination_counts_and_similarity_witnesses(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    person = seed.entities['provenance-review']
+    ids, cursor = [], None
+    while True:
+        page = await db.faces.list(FaceListRequest(limit=1, return_total_count=True, cursor=cursor,
+            filter_=FaceListFilter(entity_id=[person], evidence_origin=['automatic', 'manual', 'authority', 'unknown'])))
+        assert page.total_count == 4
+        assert all(face.entity_id == person for face in page.items)
+        ids.extend(face.detection_id for face in page.items)
+        cursor = page.cursor
+        if cursor is None:
+            break
+    assert len(ids) == len(set(ids)) == 4
+    found = await db.entities.search(SearchEntitiesRequest(limit=100, query=QueryBase(
+        face_id=[seed.faces['provenance-auto']], face_embedding_model=MODEL),
+        filter_=EntityListFilter(evidence_origin=['authority'])))
+    assert [item.entity_id for item in found.items] == [person]
+    assert found.items[0].matched_detection_ids == [seed.faces['provenance-authority']]

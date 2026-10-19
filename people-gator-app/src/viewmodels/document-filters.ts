@@ -90,7 +90,18 @@ export function useDocumentFilters() {
     get: () => readDocumentFilters(route.query),
     set: (value: DocumentFilters) => {
       void router.push({
-        query: { ...(searchTerm.value && { q: searchTerm.value }), ...documentFiltersUrl(value) },
+        query: {
+          ...route.query,
+          touched_from: undefined,
+          touched_to: undefined,
+          library: undefined,
+          touched_by: undefined,
+          api_key: undefined,
+          link_state: undefined,
+          unassigned: undefined,
+          ...(searchTerm.value && { q: searchTerm.value }),
+          ...documentFiltersUrl(value),
+        },
       })
     },
   })

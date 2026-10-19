@@ -13,7 +13,7 @@ import {
   type ListFacesRouteApiV1FacesGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
-import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
+import { initialCursor, nextCursor, withCursor, useFirstPageOnFilterChange } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type FaceListParams = NonNullable<ListFacesRouteApiV1FacesGetData['query']>
@@ -60,8 +60,10 @@ export function useFaceListQuery(
   params?: MaybeRefOrGetter<FaceListParams | undefined>,
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
+  const key = computed(() => queryKeys.faces.infinite(toValue(params)))
+  useFirstPageOnFilterChange(key)
   return useInfiniteQuery({
-    queryKey: computed(() => queryKeys.faces.infinite(toValue(params))),
+    queryKey: key,
     queryFn: ({ pageParam, signal }) => fetchFaces(withCursor(toValue(params), pageParam), signal),
     initialPageParam: computed(() => initialCursor(params)),
     getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
@@ -83,7 +85,11 @@ export function useCreateFaceMutation() {
     mutationFn: (body: FaceCreateRequest) =>
       responseData(
         createFaceRouteApiV1FacesPost({
-          body: { ...body, ...(body.entity_id && { entity_link_state: 'manual' }) },
+          body: {
+            ...body,
+            provenance: body.provenance ?? { origin: 'manual' },
+            ...(body.entity_id && { entity_link_state: 'manual' }),
+          },
           throwOnError: true,
         }),
       ),
@@ -111,6 +117,7 @@ export function useCreateFacesMutation() {
         createFaceBatchRouteApiV1FacesBatchPost({
           body: body.map((item) => ({
             ...item,
+            provenance: item.provenance ?? { origin: 'manual' },
             ...(item.entity_id && { entity_link_state: 'manual' as const }),
           })),
           throwOnError: true,

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useRoute, useRouter } from 'vue-router'
+import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import SearchFilterPanel from './SearchFilterPanel.vue'
 import {
   Check,
@@ -9,7 +11,6 @@ import {
   UserRoundX,
   UserRoundSearch,
 } from '@lucide/vue'
-import type { AcceptableValue } from 'reka-ui'
 import { computed, ref, watch } from 'vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -21,8 +22,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 
+const route = useRoute()
+const router = useRouter()
 const props = defineProps<{
   faces: PersonDiscoveryFace[]
   people: PersonDiscoveryCandidate[]
@@ -49,7 +52,24 @@ const selectedPersonIds = ref<Set<string>>(new Set())
 const selectionAnchorId = ref<string | null>(null)
 const personSelectionAnchorId = ref<string | null>(null)
 type FaceFilter = 'all' | 'unassigned' | 'assigned'
-const faceFilter = ref<FaceFilter>('all')
+const fallbackFaceFilter = ref<FaceFilter>('all')
+const faceFilter = computed({
+  get: () => {
+    const value = route?.query.discovery_assignment
+    return value === 'unassigned' || value === 'assigned'
+      ? value
+      : route
+        ? 'all'
+        : fallbackFaceFilter.value
+  },
+  set: (value: FaceFilter) => {
+    fallbackFaceFilter.value = value
+    if (route)
+      void router.push({
+        query: { ...route.query, discovery_assignment: value === 'all' ? undefined : value },
+      })
+  },
+})
 const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unassigned', label: 'Unassigned' },
@@ -62,10 +82,6 @@ const visibleFaces = computed(() =>
     return true
   }),
 )
-const unassignedFaceCount = computed(
-  () => props.faces.filter((face) => !face.assignedEntityId).length,
-)
-const assignedFaceCount = computed(() => props.faces.length - unassignedFaceCount.value)
 const selectedFaces = computed(() =>
   props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
 )
@@ -175,12 +191,6 @@ function assignSelectedFaces() {
   )
 }
 
-function updateFaceFilter(value: AcceptableValue | AcceptableValue[]) {
-  if (faceFilterOptions.some((option) => option.value === value)) {
-    faceFilter.value = value as FaceFilter
-  }
-}
-
 watch(
   () => props.faces.map((face) => face.id),
   (availableFaceIds) => {
@@ -239,34 +249,13 @@ function initials(name: string) {
         <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
       </div>
 
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
-        :model-value="faceFilter"
-        class="mt-4 w-full sm:w-auto"
-        aria-label="Filter similar faces by assignment"
-        @update:model-value="updateFaceFilter"
-      >
-        <ToggleGroupItem
-          v-for="option in faceFilterOptions"
-          :key="option.value"
-          :value="option.value"
-          class="min-w-0 px-3 text-xs"
-          :aria-label="option.label"
-        >
-          <span class="truncate">{{ option.label }}</span>
-          <code>
-            {{
-              option.value === 'all'
-                ? props.faces.length
-                : option.value === 'unassigned'
-                  ? unassignedFaceCount
-                  : assignedFaceCount
-            }}
-          </code>
-        </ToggleGroupItem>
-      </ToggleGroup>
+      <SearchFilterPanel label="Discovery faces" filters-only class="mt-4">
+        <FilterSingleSelect
+          v-model="faceFilter"
+          label="Discovery assignment"
+          :options="faceFilterOptions"
+        />
+      </SearchFilterPanel>
 
       <div
         v-if="selectedFaces.length"
@@ -327,7 +316,7 @@ function initials(name: string) {
                 documentId: face.documentId,
                 pageId: face.pageId,
               },
-              query: { person: face.id },
+              query: relatedEvidenceQuery(route, { person: face.id, origin_matched_face: face.id }),
             }"
             class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             :aria-label="`Open face ${face.id} on its source document`"
@@ -397,6 +386,17 @@ function initials(name: string) {
               >
                 {{ face.assignedEntityName || face.assignedEntityId || 'Unassigned' }}
               </b>
+              <RouterLink
+                v-if="face.assignedEntityId"
+                :to="{
+                  name: 'person-detail',
+                  params: { personId: face.assignedEntityId },
+                  query: relatedEvidenceQuery(route, { origin_matched_face: face.id }),
+                }"
+                class="relative z-20"
+                :aria-label="`Open matching person ${face.assignedEntityName || face.assignedEntityId}`"
+                >Profile</RouterLink
+              >
               <code class="ml-auto shrink-0 text-sm text-muted-foreground">
                 sim {{ face.score }}%
               </code>
@@ -501,7 +501,15 @@ function initials(name: string) {
         <div v-for="person in props.people" :key="person.id" class="group relative min-w-0">
           <RouterLink
             v-if="!selectedPersonIds.size"
-            :to="{ name: 'person-detail', params: { personId: person.id } }"
+            :to="{
+              name: 'person-detail',
+              params: { personId: person.id },
+              query: relatedEvidenceQuery(route, {
+                origin_matched_face: person.matchedFaceIds?.length
+                  ? person.matchedFaceIds
+                  : undefined,
+              }),
+            }"
             class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :aria-label="`Open ${person.name}`"
           />

@@ -9,15 +9,18 @@ export type PeopleProcessingFilters = {
   apiKeyIds: string[]
 }
 
-export type ProcessingQueryParams = Pick<
-  EntityListParams,
-  | 'filter.entity_link_state'
-  | 'filter.last_touched_from'
-  | 'filter.last_touched_to'
-  | 'filter.document_source_id'
-  | 'filter.last_touched_by_user_id'
-  | 'filter.last_touched_by_api_key_id'
->
+import type { EvidenceQuery } from './evidence-filters'
+
+export type ProcessingQueryParams = EvidenceQuery &
+  Pick<
+    EntityListParams,
+    | 'filter.entity_link_state'
+    | 'filter.last_touched_from'
+    | 'filter.last_touched_to'
+    | 'filter.document_source_id'
+    | 'filter.last_touched_by_user_id'
+    | 'filter.last_touched_by_api_key_id'
+  >
 
 export function emptyPeopleFilters(): PeopleProcessingFilters {
   return { touchedFrom: '', touchedTo: '', documentIds: [], userIds: [], apiKeyIds: [] }
@@ -49,7 +52,7 @@ export function readPeopleFilters(query: LocationQuery): PeopleProcessingFilters
   return {
     touchedFrom: utcToLocalTime(query.touched_from),
     touchedTo: utcToLocalTime(query.touched_to),
-    documentIds: ids(query.document),
+    documentIds: ids(query.evidence_document ?? query.document),
     userIds: ids(query.touched_by),
     apiKeyIds: ids(query.api_key),
   }

@@ -81,8 +81,18 @@ describe('PersonDetailView', () => {
 
     const wrapper = mount(PersonDetailView, {
       global: {
-        plugins: [router], stubs: { RouterLink: RouterLinkStub, VerifyEntityLink: true } },
+        plugins: [router],
+        stubs: {
+          RouterLink: RouterLinkStub,
+          VerifyEntityLink: true,
+          EvidenceFilterControls: true,
+          EvidenceFilterTags: true,
+        },
+      },
     })
+    expect(
+      wrapper.get('[aria-label="Person evidence panel"]').element.closest('template'),
+    ).toBeNull()
     const mentionLink = wrapper.findAllComponents(RouterLinkStub).find((link) => {
       const target = link.props('to')
       return typeof target !== 'string' && target?.name === 'document-page'
@@ -96,7 +106,7 @@ describe('PersonDetailView', () => {
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
-      query: { selectedPerson: 'person-ada' },
+      query: expect.objectContaining({ selectedPerson: 'person-ada' }),
     })
   })
 })

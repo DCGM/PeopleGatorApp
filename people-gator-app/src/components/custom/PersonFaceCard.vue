@@ -15,7 +15,7 @@ const props = defineProps<{
 
 <template>
   <Card
-    class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary"
+    class="gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary"
   >
     <CardHeader class="relative gap-0 px-0">
       <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
@@ -37,7 +37,11 @@ const props = defineProps<{
     </CardContent>
     <CardFooter class="gap-1 px-0">
       <small class="flex-1 truncate font-heading">{{ props.face.id }}</small>
-      <small class="whitespace-nowrap text-secondary">{{ props.face.confidence }}%</small>
+      <small
+        class="whitespace-nowrap text-secondary"
+        :title="`Detection confidence: ${props.face.confidence}%`"
+        >Detection {{ props.face.confidence }}%</small
+      >
       <ChevronRight
         class="size-4 shrink-0 transition-all duration-200 group-hover:translate-x-1 group-focus:-translate-x-1"
         aria-hidden="true"

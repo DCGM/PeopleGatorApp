@@ -11,7 +11,7 @@ import {
   type TextMentionCreateRequest,
 } from '@/client'
 import { responseData } from '@/query/api'
-import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
+import { initialCursor, nextCursor, withCursor, useFirstPageOnFilterChange } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type TextMentionListParams = NonNullable<
@@ -28,8 +28,10 @@ export function useTextMentionListQuery(
   params?: MaybeRefOrGetter<TextMentionListParams | undefined>,
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
+  const key = computed(() => queryKeys.textMentions.infinite(toValue(params)))
+  useFirstPageOnFilterChange(key)
   return useInfiniteQuery({
-    queryKey: computed(() => queryKeys.textMentions.infinite(toValue(params))),
+    queryKey: key,
     queryFn: ({ pageParam, signal }) =>
       fetchTextMentions(withCursor(toValue(params), pageParam), signal),
     initialPageParam: computed(() => initialCursor(params)),
@@ -59,7 +61,11 @@ export function useCreateTextMentionMutation() {
     mutationFn: (body: TextMentionCreateRequest) =>
       responseData(
         createTextMentionRouteApiV1TextMentionsPost({
-          body: { ...body, entity_link_state: 'manual' },
+          body: {
+            ...body,
+            provenance: body.provenance ?? { origin: 'manual' },
+            entity_link_state: 'manual',
+          },
           throwOnError: true,
         }),
       ),
@@ -85,7 +91,11 @@ export function useCreateTextMentionsMutation() {
     mutationFn: (body: TextMentionCreateRequest[]) =>
       responseData(
         createTextMentionBatchRouteApiV1TextMentionsBatchPost({
-          body: body.map((item) => ({ ...item, entity_link_state: 'manual' })),
+          body: body.map((item) => ({
+            ...item,
+            provenance: item.provenance ?? { origin: 'manual' },
+            entity_link_state: 'manual',
+          })),
           throwOnError: true,
         }),
       ),
