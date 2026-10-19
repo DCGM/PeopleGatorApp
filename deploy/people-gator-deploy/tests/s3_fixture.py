@@ -1,5 +1,4 @@
-"""Disposable TLS S3 providers for staging runtime tests; never real buckets."""
-import json
+"""Disposable TLS S3 provider for backup roundtrip tests; never real buckets."""
 from pathlib import Path
 import secrets
 import subprocess
@@ -24,12 +23,12 @@ class S3Fixture:
         certs.mkdir()
         self.ca = certs / "public.crt"
         subprocess.run(["openssl", "req", "-x509", "-nodes", "-newkey", "rsa:2048", "-days", "1",
-            "-keyout", str(certs / "private.key"), "-out", str(self.ca), "-subj", "/CN=staging-s3",
-            "-addext", "subjectAltName=DNS:staging-s3,DNS:source-s3,IP:127.0.0.1"],
+            "-keyout", str(certs / "private.key"), "-out", str(self.ca), "-subj", "/CN=source-s3",
+            "-addext", "subjectAltName=DNS:source-s3,IP:127.0.0.1"],
             capture_output=True, check=True)
         try:
-            for kind in ("staging", "source"):
-                name = "staging-test-s3-" + secrets.token_hex(8)
+            for kind in ("source",):
+                name = "backup-test-s3-" + secrets.token_hex(8)
                 self.names.append(name)
                 secret = secrets.token_hex(24)
                 subprocess.run(["docker", "run", "--rm", "-d", "--name", name, "--log-driver", "none",
@@ -67,28 +66,3 @@ class S3Fixture:
         for name in self.names:
             subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         self.temporary.cleanup()
-
-    def worker_command(self, controller):
-        """Trust the fixture CA in preparation workers; download also reaches the fixture network."""
-        original = controller.private_command
-        def command(args, **kwargs):
-            if args[:2] == ["docker", "run"]:
-                args = [*args[:2], "--mount", f"type=bind,src={self.ca},dst=/test-ca.crt,readonly",
-                        "--env", "AWS_CA_BUNDLE=/test-ca.crt", *args[2:]]
-                if args[-1] == "download":
-                    args = [*args[:2], "--network", self.network, *args[2:]]
-            return original(args, **kwargs)
-        return command
-
-    def compose_override(self, path):
-        path.write_text(json.dumps({"services": {name: {
-            "logging": {"driver": "none"},
-            "environment": {"AWS_CA_BUNDLE": "/test-ca.crt"},
-            "labels": {"traefik.enable": "false"},
-            "volumes": [{"type": "bind", "source": str(self.ca), "target": "/test-ca.crt", "read_only": True}],
-        } for name in ("backend", "migrate", "check")}}))
-
-    def objects(self):
-        return {item["Key"]: self.staging.get_object(Bucket=self.staging_config["bucket_name"], Key=item["Key"])["Body"].read()
-                for page in self.staging.get_paginator("list_objects_v2").paginate(Bucket=self.staging_config["bucket_name"])
-                for item in page.get("Contents", [])}

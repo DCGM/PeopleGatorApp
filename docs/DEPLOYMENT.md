@@ -8,7 +8,7 @@
 | Compose Watch | `compose.dev.yaml` | Local reload; schema bootstrap and sample users |
 | Existing live preview | `compose.live-preview.yaml` | Developer-managed shared host with external Traefik and S3 |
 | PR preview | [`people-gator-deploy pr`](../deploy/people-gator-deploy/README.md) | Isolated synthetic review environment per same-repository PR |
-| Staging | [`people-gator-deploy staging`](../deploy/people-gator-deploy/README.md) | Every successful `main` build on retained original-data snapshot |
+| Staging | [`people-gator-deploy staging`](../deploy/people-gator-deploy/README.md) | Every successful `main` build on retained database snapshot; storage managed externally |
 | Tagged release | [`people-gator-deploy release`](../deploy/people-gator-deploy/README.md) | Production stack for `v*` tags on tested `main` commits |
 | Production-format images | `people-gator-api/Dockerfile`, `people-gator-app/Dockerfile` | Building blocks for a separately configured deployment |
 

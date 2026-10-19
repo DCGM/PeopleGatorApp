@@ -1,5 +1,5 @@
-# Stable staging project; database and S3 media prefix switch by generation.
-# One staging S3 bucket holds stable authentication keys and generation media/cache.
+# Stable staging project; only the database switches by generation.
+# Storage, media and authentication settings are supplied externally to backend.
 x-staging-labels: &staging-labels
   people-gator.environment: staging
   people-gator.staging.sha: ${COMMIT_SHA:-unknown}
@@ -31,7 +31,7 @@ x-backend: &backend
   tmpfs: ['/tmp:size=128m,mode=1777']
   mem_limit: 2g
   pids_limit: 256
-  environment:
+  environment: &database-environment
     PEOPLE_GATOR_API__HOST: 0.0.0.0
     PEOPLE_GATOR_API__PORT: '8000'
     PEOPLE_GATOR_API__DEBUG: 'false'
@@ -42,33 +42,30 @@ x-backend: &backend
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${DB_PASSWORD:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${DB_NAME:?required}
     PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
-    PEOPLE_GATOR_API__STORAGE: ${STAGING_STORAGE:?explicit S3 storage required}
-    PEOPLE_GATOR_API__IMAGE_CONTENT__KEY_PREFIX: ${MEDIA_PREFIX:?required}/images
-    PEOPLE_GATOR_API__PAGE_IMAGE__KEY_PREFIX: ${MEDIA_PREFIX:?required}/images/ndk
-    PEOPLE_GATOR_API__PAGE_LAYOUT__KEY_PREFIX: ${MEDIA_PREFIX:?required}/page-layouts
-    PEOPLE_GATOR_API__PAGE_IMAGE_CACHE__KEY_PREFIX: ${MEDIA_PREFIX:?required}/cache/page-images
-    PEOPLE_GATOR_API__ALIGNED_FACE_CROP__CACHE_KEY_PREFIX: ${MEDIA_PREFIX:?required}/cache/aligned-face-crops
-    PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
-    PEOPLE_GATOR_API__API_KEYS__KEYS_PATH: peoplegator_api/api-keys.json
-    PEOPLE_GATOR_API__JWK__KEY_PATH: peoplegator_api/jwks.json
-    PEOPLE_GATOR_API__JWK__ISSUER: https://${STAGING_HOST:?required}
-    PEOPLE_GATOR_API__JWK__AUDIENCE: ${STAGING_HOST:?required}
     PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:?required}
-  networks: [database, web]
+  networks: [database]
 
 services:
   migrate:
     <<: *backend
     profiles: [tools]
     command: [migrate]
+    environment:
+      <<: *database-environment
+      PEOPLE_GATOR_API__STORAGE: '{"local":{"root":"/tmp/database-tools"},"s3":null}'
 
   check:
     <<: *backend
     profiles: [tools]
     command: [check]
+    environment:
+      <<: *database-environment
+      PEOPLE_GATOR_API__STORAGE: '{"local":{"root":"/tmp/database-tools"},"s3":null}'
 
   backend:
     <<: *backend
+    env_file:
+      - ${RUNTIME_FILE:?externally managed application settings required}
     restart: unless-stopped
     command: [api]
     networks: [database, web]

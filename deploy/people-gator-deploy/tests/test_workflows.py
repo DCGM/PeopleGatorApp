@@ -105,12 +105,12 @@ class LifecycleWorkflowTests(unittest.TestCase):
 
     def test_staging_events_retain_data_unless_snapshot_operations_are_explicit(self):
         workflow = (WORKFLOWS / "staging.yml").read_text()
-        base = {"MANUAL_RUN_ID": "", "EXACT_KEY": "", "BACKUP_RECORD": "", "RUN_ID": "789"}
+        base = {"MANUAL_RUN_ID": "", "BACKUP_RECORD": "", "RUN_ID": "789"}
         cases = (
             ({"EVENT_NAME": "workflow_run", "OPERATION": "refresh"}, ["staging", "update", "--run-id", "789"]),
             ({"EVENT_NAME": "workflow_dispatch", "OPERATION": "update"}, ["staging", "update"]),
-            ({"EVENT_NAME": "workflow_dispatch", "OPERATION": "snapshot-init", "EXACT_KEY": "p/k.dump"},
-             ["staging", "snapshot-init", "--exact-key", "p/k.dump"]),
+            ({"EVENT_NAME": "workflow_dispatch", "OPERATION": "snapshot-init"},
+             ["staging", "snapshot-init"]),
             ({"EVENT_NAME": "workflow_dispatch", "OPERATION": "refresh", "MANUAL_RUN_ID": "790",
               "BACKUP_RECORD": "/private/record"},
              ["staging", "refresh", "--run-id", "790", "--backup-record", "/private/record"]),

@@ -18,10 +18,11 @@ data. No production data, usable deployment credentials or tokens are included.
 `PLAYWRIGHT_MODULE` when Playwright is not installed in Node's normal module path.
 Serve the compiled app with `VITE_API_BASE_URL=/`, the static sign-in page and
 same-origin proxy routes `/api/` and `/token/` to the actual API. Provision only
-synthetic staging example credentials in a disposable S3 bucket using
-`staging.storage.example.json` and the staging preparation worker. The existing
-captures show the unchanged sign-in UI; the S3 storage correction is verified by
-the separate disposable TLS S3 runtime suite.
+synthetic staging credentials through your externally managed application storage.
+These captures document the existing sign-in UI. Staging deployment now manages
+only the database; storage, media and credential provisioning are external
+operator work. Its database runtime suite tests restore/migration/startup without
+an S3 provider or media copying.
 
 Executed Chromium checks at both viewports:
 

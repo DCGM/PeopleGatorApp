@@ -1,10 +1,13 @@
 """Lifecycle API semantics: ownership, idempotence, preservation and actionable failures."""
 from contextlib import contextmanager, redirect_stderr
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import os
 from pathlib import Path
 import tempfile
+import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -68,9 +71,11 @@ class EnvironmentTests(unittest.TestCase):
         if name == "pr":
             value.update(domain="preview.example.invalid", users_file=str(self.users))
         else:
+            runtime = self.root / "private/staging.env"
+            runtime.write_text("# External application storage and auth settings\n")
+            runtime.chmod(0o600)
             value.update(host="staging.example.invalid", state_dir=str(self.root / "state/staging"),
-                         storage={"endpoint_url": "https://s3.example.invalid", "region": "synthetic", "bucket_name": "staging-bucket",
-                                  "access_key_id": "synthetic", "secret_access_key": "synthetic"})
+                         runtime_file=str(runtime))
         config.configure(name, path, {**value, **changes})
         return path
 
@@ -231,6 +236,39 @@ class EnvironmentTests(unittest.TestCase):
         for field, value in (("project", "unowned-release"), ("docker_context", "other-daemon")):
             with self.subTest(field=field), self.assertRaisesRegex(DeployError, "explicit migration"):
                 config.configure("release", path, {field: value})
+
+    def test_simultaneous_snapshot_initializations_cannot_replace_committed_data(self):
+        preview = self.environment(self.descriptor())
+        preview.install()
+        path = self.descriptor("staging", infrastructure={**preview.settings["infrastructure"], "mode": "external"})
+        environment = self.environment(path, "staging")
+        environment.install()
+        calls = []
+        def deploy(run_id, *, refresh):
+            calls.append(refresh)
+            write_json(environment.root / "state.json", {"generation": "first", "reviewed_edit": "keep"})
+        controller = SimpleNamespace(deploy=deploy)
+        barrier = threading.Barrier(2)
+        original_lock = Environment.environment_lock
+        @contextmanager
+        def synchronized_lock(instance, **kwargs):
+            barrier.wait(timeout=10)
+            with original_lock(instance, **kwargs):
+                yield
+        def initialize():
+            try:
+                environment.snapshot_init()
+            except DeployError as error:
+                return str(error)
+            return "initialized"
+        with patch.object(Environment, "environment_lock", synchronized_lock), \
+                patch.object(environment, "controller", return_value=controller), ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(initialize) for _ in range(2)]
+            outcomes = [future.result(timeout=15) for future in futures]
+        self.assertEqual(outcomes.count("initialized"), 1)
+        self.assertTrue(any("refresh" in result and "backup-record" in result for result in outcomes))
+        self.assertEqual(calls, [True])
+        self.assertEqual(json.loads((environment.root / "state.json").read_text())["reviewed_edit"], "keep")
 
 
 if __name__ == "__main__":

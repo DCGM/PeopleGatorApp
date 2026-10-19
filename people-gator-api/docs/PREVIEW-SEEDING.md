@@ -33,14 +33,13 @@ for local use, set it to your local application URL if you want matching links.
 The public preview keeps its existing `test` / `test` login. Seed actors do not
 add login accounts or usable API-key secrets.
 
-The [staging S3 runtime test](../../deploy/people-gator-deploy/tests/test_staging_runtime.py) reuses
-these synthetic fixtures: it runs the seed twice in a disposable source database,
-creates a historical-revision dump, restores it and copies the media its rows
-reference, including seeded pages with linked face vectors, into one disposable
-TLS S3 bucket. Staging
-users, API keys, signing keys, scans, OCR and both media caches use that bucket.
-This tests the existing filesystem contract without changing PR preview fixtures
-or automatically seeding the actual staging environment.
+The [staging database runtime test](../../deploy/people-gator-deploy/tests/test_staging_runtime.py)
+reuses these synthetic fixtures: it runs the seed twice in a disposable source
+database, creates a historical-revision local dump, restores original rows,
+links and vectors, then checks migrations, retained edits and API startup.
+There is no S3 service or media copy in that test. Staging storage/media/auth are
+managed externally; missing objects do not invalidate the database snapshot.
+This does not automatically seed the actual staging environment.
 
 ## What to explore
 

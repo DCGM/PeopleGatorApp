@@ -313,16 +313,14 @@ class Environment:
             raise DeployError("release update requires --tag <release-tag>")
         return self._deploy("update", run_id=run_id, tag=tag, commit=commit, backup_record=backup_record)
 
-    def snapshot_init(self, *, run_id=None, exact_key=""):
+    def snapshot_init(self, *, run_id=None):
         """Explicit one-time staging population from a verified snapshot."""
-        if (self.root / "state.json").exists():
-            raise DeployError(f"Staging snapshot already initialized; replacing it requires {self.command('refresh')} --backup-record <path>")
-        return self._deploy("snapshot-init", run_id=run_id, exact_key=exact_key)
+        return self._deploy("snapshot-init", run_id=run_id)
 
-    def refresh(self, *, run_id=None, exact_key="", backup_record=None):
+    def refresh(self, *, run_id=None, backup_record=None):
         """Replace staging data with a new snapshot generation (explicit destructive intent)."""
         self.private_record(backup_record, "refresh", "retained-state backup and replacement intent")
-        return self._deploy("refresh", run_id=run_id, exact_key=exact_key)
+        return self._deploy("refresh", run_id=run_id)
 
     def recover(self, *, backup_record=None, compatibility_reviewed=False):
         """Release-only explicit recovery to the retained previous images."""
@@ -340,6 +338,9 @@ class Environment:
         self.prerequisites()
         with self.environment_lock():
             self.require_installed()
+            if operation == "snapshot-init" and (self.root / "state.json").exists():
+                raise DeployError(f"Staging snapshot already initialized; replacing it requires "
+                                  f"{self.command('refresh')} --backup-record <path>")
             self.require_fresh_application_project()
             controller = self.controller()
             self.journal(operation, "preparing", **{k: v for k, v in options.items() if k in {"run_id", "tag", "commit"} and v})
@@ -350,8 +351,7 @@ class Environment:
                     if self.name == "pr":
                         result = {"deployed": controller.deploy(options["run_id"])}
                     elif self.name == "staging":
-                        controller.deploy(options.get("run_id"), refresh=operation in {"refresh", "snapshot-init"},
-                                          exact_key=options.get("exact_key", ""))
+                        controller.deploy(options.get("run_id"), refresh=operation in {"refresh", "snapshot-init"})
                         result = {}
                     elif operation == "recover":
                         result = controller.recover()
@@ -459,9 +459,8 @@ class Environment:
             "infra-upgrade": self.infra_upgrade,
             "cleanup": lambda: self.cleanup(options.get("pr")),
             "reconcile": self.reconcile,
-            "snapshot-init": lambda: self.snapshot_init(run_id=options.get("run_id"), exact_key=options.get("exact_key", "")),
-            "refresh": lambda: self.refresh(run_id=options.get("run_id"), exact_key=options.get("exact_key", ""),
-                                            backup_record=options.get("backup_record")),
+            "snapshot-init": lambda: self.snapshot_init(run_id=options.get("run_id")),
+            "refresh": lambda: self.refresh(run_id=options.get("run_id"), backup_record=options.get("backup_record")),
             "database-migrate": lambda: self.database_migrate(backup_record=options.get("backup_record")),
             "recover": lambda: self.recover(backup_record=options.get("backup_record"),
                                             compatibility_reviewed=options.get("compatibility_reviewed", False)),

@@ -69,38 +69,47 @@ class ConfigurationTests(unittest.TestCase):
     def test_overlapping_environments_rejected(self):
         config.configure("pr", self.path, self.value)
         staging = {**self.value, "environment": "staging", "host": "staging.example.invalid",
-                   "storage": {"endpoint_url": "https://s3.example.invalid", "region": "synthetic", "bucket_name": "staging-bucket",
-                                  "access_key_id": "synthetic", "secret_access_key": "synthetic"}, "state_dir": str(self.root / "state/pr/child")}
+                   "runtime_file": str(self.root / "private/runtime.env"), "state_dir": str(self.root / "state/pr/child")}
         with self.assertRaisesRegex(DeployError, "overlaps|outside"):
             config.configure("staging", self.path.parent.parent / "staging/config.json", staging)
 
-    def test_single_staging_descriptor_validates_sections_without_echoing_secrets(self):
+    def test_staging_requires_external_runtime_and_validates_only_snapshot_metadata(self):
         path = self.path.parent.parent / "staging/config.json"
-        storage = {"endpoint_url": "https://staging.example.invalid", "region": "r", "bucket_name": "staging-bucket",
-                   "access_key_id": "id", "secret_access_key": "PRIVATE-DESTINATION-SECRET"}
-        source = {"endpoint_url": "https://backup.example.invalid", "region": "r", "bucket": "backups",
-                  "access_key_id": "id", "secret_access_key": "PRIVATE-SOURCE-SECRET"}
         value = {**self.value, "host": "staging.example.invalid", "state_dir": str(self.root / "state/staging"),
-                 "infrastructure": {**self.value["infrastructure"], "mode": "external"}, "storage": storage}
-        config.configure("staging", path, value)  # snapshot sections are optional until snapshot operations
-        for changes, field in (({"storage": {**storage, "endpoint_url": "http://insecure.invalid"}}, "storage"),
-                               ({"backup_source": {**source, "endpoint_url": "ftp://x"}}, "backup_source"),
-                               ({"media_source": {**source, "bucket": "staging-bucket",
-                                                  "endpoint_url": storage["endpoint_url"]}}, "media_source"),
-                               ({"accounts": {"users": {"staging-viewer": {"hash": "plaintext"}}}}, "accounts")):
+                 "infrastructure": {**self.value["infrastructure"], "mode": "external"},
+                 "runtime_file": str(self.root / "private/runtime.env")}
+        config.configure("staging", path, value)
+        self.assertNotIn("storage", config.read("staging", path))
+        with self.assertRaisesRegex(DeployError, "managed externally"):
+            config.configure("staging", path, {"media_source": {"secret_access_key": "unused-secret"}})
+        for changes, field in (({"runtime_file": "relative.env"}, "runtime_file"),
+                               ({"snapshot": {"path": "/private/snapshot.dump"}}, "snapshot")):
             with self.subTest(field=field), self.assertRaises(DeployError) as raised:
                 config.configure("staging", path, changes)
             self.assertIn(f"; {field}", str(raised.exception))
-            self.assertNotIn("PRIVATE-", str(raised.exception))
-        config.configure("staging", path, {"backup_source": source, "media_source": source})
-        stored = config.read("staging", path)
-        self.assertEqual(stored["backup_source"]["secret_access_key"], "PRIVATE-SOURCE-SECRET")
+        snapshot = {"path": "/private/snapshot.dump", "sha256": "a" * 64, "application_revision": "b" * 40}
+        config.configure("staging", path, {"snapshot": snapshot})
+        self.assertEqual(config.read("staging", path)["snapshot"], snapshot)
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in path.parent.glob("config.backup-*.json")))
+
+    def test_external_runtime_configuration_removes_obsolete_staging_sections(self):
+        path = self.path.parent.parent / "staging/config.json"
+        value = {**self.value, "schema_version": 1, "environment": "staging", "host": "staging.example.invalid",
+                 "state_dir": str(self.root / "state/staging"),
+                 "infrastructure": {**self.value["infrastructure"], "mode": "external"},
+                 "storage": {"secret_access_key": "obsolete-secret"}, "media_source": {"secret_access_key": "obsolete-source"},
+                 "accounts": {"users": {}}, "backup_source": {}, "media_transfer": {}}
+        write_json(path, value)
         write_json(Path(value["state_dir"]) / "owned.json", {"environment": "staging"})
-        config.configure("staging", path, {"storage": {"secret_access_key": "rotated"}})  # rotation is allowed
-        with self.assertRaisesRegex(DeployError, "resource identity"):
-            config.configure("staging", path, {"storage": {"bucket_name": "other-bucket"}})
+        write_json(Path(value["state_dir"]) / "state.json", {"generation": "retained"})
+        config.configure("staging", path, {"runtime_file": str(self.root / "private/runtime.env")})
+        current = config.read("staging", path)
+        for field in ("storage", "media_source", "accounts", "backup_source", "media_transfer"):
+            self.assertNotIn(field, current)
+        # Descriptor backups preserve the previous private input for operator review.
+        self.assertIn("obsolete-secret", next(path.parent.glob("config.backup-*.json")).read_text())
+        self.assertEqual(json.loads((Path(value["state_dir"]) / "state.json").read_text()), {"generation": "retained"})
 
     def test_example_descriptors_remain_valid_and_default_to_user_scope_paths(self):
         examples = Path(__file__).resolve().parents[1] / "examples"

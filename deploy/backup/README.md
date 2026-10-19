@@ -3,8 +3,9 @@
 The backup worker is independent of API settings and application file storage.
 It receives an explicit private JSON configuration with database connection
 settings and a dedicated S3 publisher identity for `peoplegator-db-backup`.
-The API never needs that identity. The staging application's separate bucket is
-`peoplegator-staging`; a third, read-only backup identity is for restore workers.
+The API never needs that identity. Backup publisher/restore storage is separate
+from application storage. Staging application storage is managed externally; the
+staging deployment utility receives only a local database archive.
 
 ## Publish a backup
 
@@ -154,7 +155,7 @@ Keep the account grants separate:
 | --- | --- | --- | --- |
 | Backup publisher | `peoplegator-db-backup` | Prefix list/read/write and incomplete multipart abort; no final deletes | `/opt/people-gator-staging/backup-publisher.json` |
 | Restore reader | `peoplegator-db-backup` | Prefix list/read/version-read only | `/opt/people-gator-staging/backup-restore.json` |
-| Staging application | `peoplegator-staging` | List/read/write/delete, no backup bucket access | `storage` section of the staging descriptor |
+| Application storage (external example) | `peoplegator-staging` | Operator-managed application grants, no backup bucket access | Externally maintained API runtime configuration |
 
 The three `*-policy.example.json` files are S3 IAM identity-policy examples for
 these grants. Change the backup prefix consistently in configuration and policies.
@@ -166,20 +167,18 @@ These files do not create buckets/accounts or apply provider policy automaticall
 Copy the publisher/restore JSON examples into those private paths, mode 600 in
 the runner's mode-700 directory, and supply independent credentials. The restore
 file also needs explicit database provisioning/target-owner connection settings.
-The staging descriptor's `storage` section uses the shape shown in
-[`examples/staging.json`](../people-gator-deploy/examples/staging.json),
-with only the staging bucket identity. Do not put backup credentials
-in root `.env`: live-preview's API imports that entire file. No operation inherits
-the app's storage settings or AWS credentials.
+Do not put backup credentials in root `.env`: live-preview's API imports that
+entire file. No backup operation inherits the app's storage settings or AWS
+credentials.
 
-For later staging initialization, fill the staging descriptor's `backup_source`
-section from the restore file's **storage section only** (shape in
-[`examples/staging.json`](../people-gator-deploy/examples/staging.json)).
-That download-only input must not contain database provisioning credentials. Its
-bucket is now `peoplegator-db-backup`; the staging destination remains
-`peoplegator-staging`. The database loader restores original data. Staging refresh preserves original data and copies media into an independent
-generation before migration and activation; see the staging guide for source
-configuration and its separate credential provisioning.
+For staging initialization, obtain a verified custom-format database dump
+externally, keep it private on the deployment host and configure its absolute
+path, SHA-256 and source application revision in the staging descriptor's
+`snapshot` section ([example](../people-gator-deploy/examples/staging.json)).
+The staging utility restores databases only; backup downloads, application S3
+configuration, media copying and auth provisioning remain external operator work.
+The IAM examples above describe external backup/application operations, not
+requirements imposed by staging deployment.
 
 ## Enable scheduled live-preview backups
 

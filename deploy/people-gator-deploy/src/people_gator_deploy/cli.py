@@ -21,8 +21,8 @@ from . import config
 OPTIONS = {
     "pr": {"status": ["pr"], "check": ["pr"], "logs": ["pr", "tail"], "start": ["pr"], "stop": ["pr"],
            "update": ["run_id"], "cleanup": ["pr"]},
-    "staging": {"logs": ["tail"], "update": ["run_id"], "snapshot-init": ["run_id", "exact_key"],
-                "refresh": ["run_id", "exact_key", "backup_record"]},
+    "staging": {"logs": ["tail"], "update": ["run_id"], "snapshot-init": ["run_id"],
+                "refresh": ["run_id", "backup_record"]},
     "release": {"logs": ["tail"], "update": ["tag", "commit", "run_id", "backup_record"],
                 "database-migrate": ["backup_record"], "recover": ["backup_record", "compatibility_reviewed"]},
 }
@@ -30,7 +30,6 @@ ARGUMENTS = {
     "pr": (("--pr",), {"type": int, "help": "Pull request number of one preview instance"}),
     "tail": (("--tail",), {"type": int, "default": 200}),
     "run_id": (("--run-id",), {"type": int, "help": "Successful PR CI run ID"}),
-    "exact_key": (("--exact-key",), {"default": "", "help": "Exact dated backup key (snapshot operations)"}),
     "backup_record": (("--backup-record",), {"type": Path, "help": "Private file recording a completed backup"}),
     "tag": (("--tag",), {"help": "Release tag, for example v1.2.3"}),
     "commit": (("--commit",), {"help": "Commit delivered by the tag event; a moved tag is rejected"}),

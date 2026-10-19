@@ -4,7 +4,8 @@ PR previews, staging from `main` and tagged releases are operated by one
 installable utility, [`people-gator-deploy`](people-gator-deploy/README.md):
 install it once per deployment account, configure each environment's single
 descriptor once, and let the short workflows invoke it. PR previews use the
-automatic synthetic seed; staging retains its own original-data snapshot,
+automatic synthetic seed; staging retains its own original-data database snapshot
+with storage managed externally,
 credentials and media; releases run the tested tagged images against real,
 operator-provided data.
 

@@ -63,40 +63,30 @@ Protect release tags (`v*`) with a ruleset so only maintainers can create them.
 
 ## Staging
 
-Staging shares the preview PostgreSQL (`infrastructure.mode: external`) and has its
-own hostname, state and S3 bucket. Everything private is in **one mode-600
-descriptor**: `storage`, and for `snapshot-init`/`refresh` only, `backup_source`,
-`media_source` and `accounts` ([example](examples/staging.json)). Sections reach
-only the operation-scoped worker that needs them, via stdin; the running API
-receives only `storage`.
+Staging shares the preview PostgreSQL (`infrastructure.mode: external`) and has
+its own hostname and database state. The utility manages **databases only**;
+S3, media and authentication objects are operated externally.
 
-- **`storage`** — one dedicated private bucket for every staging file. Grant the
-  staging identity list on the bucket and read/write/delete on its objects, and
-  nothing else ([policy example](../backup/staging-policy.example.json); SeaweedFS
-  needs listing on the bucket ARN, not the object ARN). Keys:
-  `peoplegator_api/{users,api-keys,jwks}.json` (stable auth) and
-  `generations/<id>/{images,images/ndk,page-layouts,cache/...}` (per snapshot).
-  Credentials can rotate in place; the bucket identity cannot change after install.
-- **`backup_source`** — read-only access to the backup bucket prefix (list on the
-  prefix, `GetObject`/`GetObjectVersion`; no writes). Backups are PostgreSQL 16
-  `pg_dump -Fc` archives named `peoplegator-prod-YYYY-MM-DD.dump` with
-  `sha256` and `application-revision` object metadata, published by the
-  [backup worker](../backup/README.md). The newest dated key is selected unless
-  `--exact-key` is given; there is no fallback to an older backup.
-- **`media_source`** — read-only access to the production media bucket. Only
-  objects referenced by the restored rows are read (`prefix`, `image_prefix`,
-  `page_image_prefix`, `page_layout_prefix` default to `""`, `images`,
-  `images/ndk`, `page-layouts`). Use media matching the backup, or pause source
-  writes, for a consistent pair. Both sources must differ from `storage`.
-- **`accounts`** — Argon2id hashes for `staging-viewer` (browse),
-  `staging-annotator` (+annotate), `staging-importer` (+ingest) and `staging-admin`
-  (+admin), plus optional API keys. Generate unique staging secrets privately, for
-  example `uv run python -c "import argon2, getpass; print(argon2.PasswordHasher().hash(getpass.getpass()))"`
-  in `people-gator-api`; never reuse production secrets. Missing users are added
-  once; the API-key file is written only if absent, so revoked keys stay revoked;
-  signing keys are generated once.
-- Sign in at `https://<host>/staging-login.html` with a staging account. The
-  page holds no credentials; the app's demo auto-login does not work on staging.
+The private descriptor ([example](examples/staging.json)) names:
+
+- `runtime_file`: an owned private `PEOPLE_GATOR_API__*` env file for the backend's
+  externally managed application settings. Supply storage, media prefixes and
+  authentication configuration appropriate for your external environment. Do
+  not put persistence settings in this file; staging generates its database
+  connection. Routine updates require neither a snapshot nor S3 source inputs.
+- `snapshot`: needed only by `snapshot-init`/`refresh`. Provide a private, local
+  PostgreSQL 16 `pg_dump -Fc` archive, its expected `sha256` and the source
+  `application_revision`. Obtain/download backups externally before running the
+  utility. The pinned archive is read without copying or deleting it; checksums,
+  archive validation and candidate database checks gate activation.
+
+No bucket, account, signing-key, media-copy or S3-object validation is part of
+staging installation or refresh. Missing scans/layouts do not fail a database
+snapshot. Operators maintain external storage/auth compatibility separately;
+staging never rewrites media prefixes or imports production auth objects.
+Sign in at `https://<host>/staging-login.html` using externally provisioned
+accounts. The page contains no credentials; the demo auto-login only works if
+those credentials have explicitly been supplied externally.
 
 ## Releases
 

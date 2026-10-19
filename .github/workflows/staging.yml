@@ -15,9 +15,6 @@ on:
       run_id:
         description: Successful current-main PR CI run ID (empty selects latest successful main run)
         type: string
-      exact_key:
-        description: Optional exact dated backup key within the configured prefix (snapshot-init/refresh only)
-        type: string
       backup_record:
         description: Absolute path of a private host file recording the retained-state backup (refresh only)
         type: string
@@ -51,7 +48,6 @@ jobs:
       RUN_ID: ${{ github.event.workflow_run.id }}
       OPERATION: ${{ inputs.operation || 'update' }}
       MANUAL_RUN_ID: ${{ inputs.run_id }}
-      EXACT_KEY: ${{ inputs.exact_key }}
       BACKUP_RECORD: ${{ inputs.backup_record }}
     steps:
       # Only the reviewed workflow revision is read here, never the PR head.
@@ -81,6 +77,5 @@ jobs:
             selected_run="$RUN_ID"
           fi
           if [ -n "$selected_run" ]; then args+=(--run-id "$selected_run"); fi
-          if [ -n "$EXACT_KEY" ]; then args+=(--exact-key "$EXACT_KEY"); fi
           if [ -n "$BACKUP_RECORD" ]; then args+=(--backup-record "$BACKUP_RECORD"); fi
           "$DEPLOY" "${args[@]}"

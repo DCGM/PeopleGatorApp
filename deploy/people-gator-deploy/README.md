@@ -4,7 +4,7 @@ One installable deployment utility for **PR previews**, **staging from `main`**
 and **tagged releases**. It is a standard-library-only Python package with the
 `people-gator-deploy` command and an equivalent Python API
 (`people_gator_deploy.environments.Environment`). Compose files, the login page,
-the collector configuration and the snapshot worker ship inside the package.
+the collector configuration and the database validator ship inside the package.
 
 **Prerequisites:** Linux, Python 3.11+ with `venv`/`ensurepip`, Git, Docker Engine
 and Docker Compose v2.32+, plus the proxy, DNS, runners and buckets in
@@ -28,6 +28,8 @@ people-gator-deploy pr configure --input /secure/place/pr.json
 people-gator-deploy pr install            # creates shared PostgreSQL/collector/pgAdmin
 people-gator-deploy pr preflight
 
+# Supply a private local custom-format dump, its SHA-256/source revision,
+# and an externally maintained API runtime env file in the staging descriptor.
 people-gator-deploy staging configure --input /secure/place/staging.json
 people-gator-deploy staging install
 # after the next successful main CI build:
@@ -98,12 +100,13 @@ people-gator-deploy staging migrate-config [--dry-run]              # explicit s
 ```
 
 `configure` deep-merges the input into the descriptor (so a file with only
-`{"storage": {"secret_access_key": "…"}}` rotates one secret), validates
+`{"snapshot": {"sha256": "…"}}` updates the expected archive checksum), validates
 everything, keeps a private `config.backup-<sha256>.json` and refuses concurrent
 edits (`--expected-digest` for read-modify-write tools). It never contacts
-services or prints secrets. Once installed, state/infrastructure paths and the
-staging bucket identity cannot change: that needs a data migration, not an empty
-destination.
+services or prints secrets. Once installed, state/infrastructure paths, Docker
+context, project names and
+private runtime/migration file paths cannot change implicitly. Their contents
+can be maintained externally without switching the utility's resource identity.
 
 Common fields: `repository`, absolute `state_dir`, explicit `docker_context`,
 `web_network`, and the hostname (`domain` for previews, `host` otherwise).
@@ -116,18 +119,25 @@ Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`,
   (`mode: managed`, a Compose `project` and its own `state_dir`): the preview
   environment owns the shared PostgreSQL/collector/pgAdmin.
 * **staging** — `host`, `database_network`, `infrastructure` (`mode: external`,
-  the preview's `project`/`state_dir`) and four sections:
+  the preview's `project`/`state_dir`) and an absolute `runtime_file` pointing to
+  an owned private API env file. It contains externally managed application
+  settings such as storage, media prefixes and authentication. Only the backend
+  receives it; migration/check/validation tools receive database settings only.
+  It must not define persistence settings, which staging owns.
 
-  | Section | Needed by | Contents |
-  | --- | --- | --- |
-  | `storage` | every operation | Staging S3 bucket: `endpoint_url` (HTTPS), `region`, `bucket_name`, `access_key_id`, `secret_access_key`, optional `timeout_seconds` |
-  | `backup_source` | `snapshot-init`, `refresh` | Backup bucket reader: `endpoint_url`, `region`, `bucket`, keys, optional `prefix` |
-  | `media_source` | `snapshot-init`, `refresh` | Media bucket reader: `endpoint_url`, `region`, `bucket`, keys, optional prefixes |
-  | `accounts` | `snapshot-init`, `refresh` | Argon2id `users` for the four staging accounts, optional `api_keys` |
+  `snapshot` is needed only by `snapshot-init`/`refresh`: `path` is an absolute
+  path to an owned private PostgreSQL custom-format archive, `sha256` is its
+  expected 64-character lowercase SHA-256 and `application_revision` is the
+  source application's 40-character Git SHA. Obtain and verify the archive
+  externally, and record its checksum/source revision before configuring it.
+  The utility never downloads backups or requires S3/media-source credentials.
+  Optional `project` defaults to `people-gator-staging`.
 
-  Optional `media_transfer: {"concurrency": 8, "max_object_mib": 256}`. Routine
-  `staging update` needs only `storage`; snapshot operations validate all
-  sections before any lookup or change.
+  When converting a pre-rollout descriptor, explicitly configure `runtime_file`
+  and `snapshot`; configure removes obsolete `storage`, `backup_source`,
+  `media_source`, `accounts` and `media_transfer` sections, retaining a private
+  backup. Existing database generations stay intact; any storage/auth setup and
+  media-prefix compatibility are the operator's external responsibility.
 * **release** — `host`, `database_network` (external PostgreSQL), mode-600
   `runtime_file` and `migration_file` with only `PEOPLE_GATOR_API__*` lines, and
   `"access_reviewed": true` (see the access boundary below). Optional `project`,
@@ -155,13 +165,14 @@ Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`,
 Exit codes: `0` success, `1` actionable failure, `2` invalid usage, `130` cancelled.
 Failures name the selected path, the field or condition and a corrective
 command, for example
-`staging configuration: <path>; backup_source: backup_source.endpoint_url must be an explicit HTTPS S3-compatible endpoint; run people-gator-deploy staging configure --config '<path>' --input <private-json>`.
+`staging configuration: <path>; snapshot: snapshot needs an absolute path, sha256 and application_revision; run people-gator-deploy staging configure --config '<path>' --input <private-json>`.
 Secret values and raw service output are never printed; failed service output is
 kept in the environment's private `last-error.log`.
 
 **Ownership and locks.** Installation is fresh only: `install` refuses a non-empty
-`state_dir`, infrastructure files or an existing Compose project it did not
-create, and refusals happen before anything is written. It records `owned.json`
+`state_dir`, infrastructure files or an existing application/infrastructure Compose
+project it did not create. Ownership is recorded only after those checks pass.
+A first application deployment also checks for project collisions. It records `owned.json`
 and, for managed infrastructure, `infrastructure-owned.json`; an external
 environment cannot change infrastructure it does not own. Operations take the
 environment's `environment.lock`, then the infrastructure `controller.lock` —
@@ -182,17 +193,24 @@ preview GitHub reports closed (API errors never imply closure). `pr uninstall`
 stops all previews but keeps their data.
 
 **Staging.** `staging update` deploys the current successful main build and
-retains the database, media and credentials; it never downloads, restores or
-seeds, and fences stale attempts before migration and activation. Initialize
-once with `staging snapshot-init [--exact-key <dated-key>]`; replace data only
-with `staging refresh --backup-record <private file>`. Preparation restores the
-verified backup into a new generation database, copies **only media referenced
-by the restored rows** (keys derived with the application's canonical helpers;
-nothing is listed) with bounded parallelism, reports objects absent at the
-source separately from objects that change during transfer, provisions
-independent auth without overwriting existing users/keys/JWKs, validates, and
-switches the database/media pair together. Progress streams to a private
-`*.progress.log` in the generation directory. Failures keep the active pair.
+retains the database; it never reads a snapshot, restores or seeds. Initialize
+once with `staging snapshot-init`; replace the database only with
+`staging refresh --backup-record <private file>`. The one-time initialization
+check runs under the environment lock, so queued initializations cannot replace
+an already initialized database without the refresh backup guard.
+
+Preparation pins a local archive's inode, verifies its SHA-256/custom format,
+restores original rows into a separate database/role, rejects changes to the
+archive during restore, and validates rows, links, vectors and migration history.
+It then migrates, checks the runtime role and starts the backend/frontend before
+recording success. Failed refreshes retain the active database.
+
+S3 and all media/authentication objects are managed externally. Staging does not
+provision buckets/users/keys, copy or validate media, change storage generations,
+or impose S3 migration requirements. Missing media does not reject a database
+snapshot. Supply the running application's external settings through
+`runtime_file`; application startup and routed readiness remain required. Normal
+updates and database refreshes leave that file and external storage untouched.
 
 **Releases.** A `v*` tag push runs `release.yml`. The tag resolves to its commit
 (annotated or lightweight); moved tags, tags not on `main`, and commits without a

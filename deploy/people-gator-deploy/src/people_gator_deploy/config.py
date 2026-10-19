@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 import stat
 import sys
-from urllib.parse import urlsplit
 
 from . import CONFIG_SCHEMA
 from .core import DeployError, atomic, lock, write_json
@@ -75,6 +74,9 @@ def validate(value, environment, path, *, inputs=False):
             require(not (infra_root.is_relative_to(root) or root.is_relative_to(infra_root)), "infrastructure.state_dir", "must be outside environment state")
         require(bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(infra.get("project", "")))), "infrastructure.project", "missing or invalid Compose project")
         require(bool(re.fullmatch(r"[a-zA-Z0-9_.-]+", str(value.get("database_network", "")))), "database_network", "missing or invalid network")
+    if environment in {"staging", "release"}:
+        require(bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(value.get("project", "people-gator-" + environment)))),
+                "project", "invalid Compose project")
     if environment == "pr":
         users = absolute("users_file", value.get("users_file"))
         if inputs:
@@ -82,24 +84,25 @@ def validate(value, environment, path, *, inputs=False):
             require(protected_file(users), "users_file",
                     "needs a regular users file owned by this account or root, not group/world writable")
     elif environment == "staging":
-        # One private descriptor holds the staging bucket and, for snapshot
-        # operations, the backup/media sources and staging accounts.
-        from .staging import SNAPSHOT_INPUTS, Staging, validate_section
-        storage = value.get("storage")
-        try:
-            Staging.validate_storage({"local": None, "s3": storage})
-        except DeployError:
-            raise problem(environment, path, "storage", "needs the staging S3 bucket: https endpoint_url, region, "
-                          "bucket_name, access_key_id, secret_access_key, optional timeout_seconds") from None
-        for name in SNAPSHOT_INPUTS:
-            if name in value:
-                try:
-                    validate_section(name, value[name])
-                except DeployError as error:
-                    raise problem(environment, path, name, str(error)) from None
-                if name != "accounts" and (value[name]["endpoint_url"].rstrip("/"), value[name]["bucket"]) == \
-                        (storage["endpoint_url"].rstrip("/"), storage["bucket_name"]):
-                    raise problem(environment, path, name, "must be separate from the staging storage bucket")
+        runtime = absolute("runtime_file", value.get("runtime_file"))
+        require(not any(field in value for field in ("storage", "backup_source", "media_source", "accounts", "media_transfer")),
+                "descriptor", "storage/media/auth are managed externally; configure runtime_file to remove obsolete sections")
+        if inputs:
+            require(private_file(runtime), "runtime_file", "needs an owned private API environment file")
+            from .release import env_keys
+            try:
+                keys = env_keys(runtime)
+            except DeployError as error:
+                raise problem(environment, path, "runtime_file", str(error)) from None
+            require(not any(key.startswith("PEOPLE_GATOR_API__PERSISTENCE") for key in keys),
+                    "runtime_file", "persistence settings are managed by staging; remove them")
+        if "snapshot" in value:
+            from .staging import validate_snapshot
+            try:
+                validate_snapshot(value["snapshot"])
+            except DeployError as error:
+                raise problem(environment, path, "snapshot", str(error)) from None
+
     else:
         for field in ("runtime_file", "migration_file"):
             ref = absolute(field, value.get(field))
@@ -158,14 +161,21 @@ def configure(environment, path, changes, *, dry_run=False, expected=None):
     except ValueError:
         raise problem(environment, path, "descriptor", "malformed JSON; restore a private backup") from None
     candidate = defaults(environment, merge(previous, changes))
+    # Staging no longer owns S3/media/auth. Explicitly supplying its external
+    # runtime file also drops obsolete private sections from pre-rollout configs.
+    if environment == "staging" and "runtime_file" in changes:
+        for field in ("storage", "backup_source", "media_source", "accounts", "media_transfer"):
+            candidate.pop(field, None)
     validate(candidate, environment, path)
     # Data identities cannot change while an environment is installed.
     if previous and (Path(previous.get("state_dir", "/nonexistent")) / "owned.json").exists():
-        fields = ("state_dir", "infrastructure", "database_network", "runtime_file", "migration_file",
+        fields = ("state_dir", "infrastructure", "database_network", "migration_file",
                   "docker_context", "project")
-        def bucket(value):  # credentials may rotate; the bucket identity may not
-            return {key: (value.get("storage") or {}).get(key) for key in ("endpoint_url", "region", "bucket_name")}
-        if any(candidate.get(field) != previous.get(field) for field in fields) or bucket(candidate) != bucket(previous):
+        # An explicit runtime_file adds the external settings reference to old
+        # staging descriptors without moving any retained database resources.
+        if environment != "staging" or previous.get("runtime_file") is not None:
+            fields += ("runtime_file",)
+        if any(candidate.get(field) != previous.get(field) for field in fields):
             raise problem(environment, path, "resource identity", "installed resource identity changes require explicit migration")
     # Detect accidental state overlap among descriptors in this installation.
     for sibling in path.parent.parent.glob("*/config.json"):
