@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -62,6 +63,8 @@ class LifecycleWorkflowTests(unittest.TestCase):
                 checkout = step(workflow, "Read trusted deployment utility")
                 self.assertIn("ref: ${{ github.workflow_sha }}", checkout)
                 self.assertIn("persist-credentials: false", checkout)
+                # Installer activation compares ancestry with the previous default.
+                self.assertIn("fetch-depth: 0", checkout)
                 self.assertIn("sparse-checkout: deploy", checkout)
                 self.assertIn('deploy/install.py --user --revision "$GITHUB_WORKFLOW_SHA"',
                               step(workflow, "Select trusted deployment utility"))
@@ -77,6 +80,16 @@ class LifecycleWorkflowTests(unittest.TestCase):
                                   "pull_request.head", "/opt/people-gator-preview", "DOCKER_CONFIG"):
                     self.assertNotIn(forbidden, workflow)
                 self.assertIn("cancel-in-progress: false", workflow)
+
+    def test_backup_roundtrip_imports_the_shared_fixture_without_opt_in(self):
+        suite = REPOSITORY / "deploy/backup/tests/test_roundtrip.py"
+        # The trusted workflow's sparse checkout includes deploy, including this
+        # consumer. Import it even when the opt-in Docker test is disabled.
+        result = subprocess.run([sys.executable, "-B", str(suite)], capture_output=True, text=True,
+                                env={k: v for k, v in os.environ.items() if k != "BACKUP_TEST_IMAGE"},
+                                timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("skipped=", result.stderr)
 
     def test_preview_events_map_to_package_operations(self):
         workflow = (WORKFLOWS / "pr-preview.yml").read_text()
