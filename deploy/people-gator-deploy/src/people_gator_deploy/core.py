@@ -40,10 +40,10 @@ def write_json(path, value):
 
 @contextmanager
 def lock(path: Path, *, shared=False):
-    """Never replace/unlink locks: old and new callers must lock the same inode.
+    """Never replace/unlink locks: every caller must lock the same inode.
 
     Shared holders run concurrently with each other but never with an exclusive
-    holder, such as an infrastructure upgrade or a legacy controller.
+    holder, such as an infrastructure upgrade.
     """
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)

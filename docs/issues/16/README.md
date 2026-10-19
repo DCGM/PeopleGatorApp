@@ -1,6 +1,7 @@
 # Issue 16: staging sign-in evidence
 
-Captures show the actual staging-only `deploy/preview/staging-login.html` from
+Captures show the actual staging-only `staging-login.html` (now
+`deploy/people-gator-deploy/src/people_gator_deploy/assets/staging-login.html`) from
 this issue branch, served with the compiled application and real API against a
 disposable, migrated PostgreSQL/pgvector 16 database containing synthetic preview
 data. No production data, usable deployment credentials or tokens are included.
@@ -35,4 +36,4 @@ Executed Chromium checks at both viewports:
 The page is mounted only by staging Compose; PR previews keep their existing
 synthetic demo authentication. Deployment, migration, data-isolation and recovery
 checks are separate from these screenshots; see
-[the staging operator guide](../../../deploy/preview/STAGING.md).
+[the deployment utility guide](../../../deploy/people-gator-deploy/README.md).

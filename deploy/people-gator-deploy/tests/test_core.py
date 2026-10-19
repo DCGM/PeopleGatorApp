@@ -21,7 +21,7 @@ class CoreTests(unittest.TestCase):
             with lock(path / "controller.lock"):
                 self.assertEqual(inode, (path / "controller.lock").stat().st_ino)
 
-    def test_shared_holders_coexist_but_exclude_exclusive_and_legacy_controllers(self):
+    def test_shared_holders_coexist_but_exclude_exclusive_holders_in_other_processes(self):
         # A separate process tries a non-blocking lock in the mode a caller would use.
         probe = ("import fcntl, sys; f = open(sys.argv[1], 'a'); "
                  "mode = fcntl.LOCK_SH if sys.argv[2] == 'shared' else fcntl.LOCK_EX\n"
@@ -32,19 +32,19 @@ class CoreTests(unittest.TestCase):
             path = Path(directory) / "controller.lock"
             with lock(path, shared=True):
                 self.assertEqual(attempt(path, "shared"), 0)  # another environment's work proceeds
-                self.assertEqual(attempt(path, "exclusive"), 3)  # infra upgrade / legacy controller waits
+                self.assertEqual(attempt(path, "exclusive"), 3)  # an infrastructure upgrade waits
             with lock(path):
                 self.assertEqual(attempt(path, "shared"), 3)
-            # A legacy controller holding LOCK_EX on the same inode blocks new shared work.
-            legacy = subprocess.Popen([sys.executable, "-c", "import fcntl, sys, time; f = open(sys.argv[1], 'a'); "
+            # Another process holding LOCK_EX on the same inode blocks shared work.
+            holder = subprocess.Popen([sys.executable, "-c", "import fcntl, sys, time; f = open(sys.argv[1], 'a'); "
                                        "fcntl.flock(f, fcntl.LOCK_EX); print('held', flush=True); time.sleep(30)",
                                        str(path)], stdout=subprocess.PIPE, text=True)
             try:
-                self.assertEqual(legacy.stdout.readline().strip(), "held")
+                self.assertEqual(holder.stdout.readline().strip(), "held")
                 self.assertEqual(attempt(path, "shared"), 3)
             finally:
-                legacy.kill()
-                legacy.wait()
+                holder.kill()
+                holder.wait()
             self.assertEqual(attempt(path, "shared"), 0)
 
     def test_failures_hide_subprocess_output(self):

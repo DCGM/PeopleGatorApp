@@ -2,14 +2,14 @@
 
 Every CLI operation maps to one ``Environment`` method with the same semantics:
 
-* read-only: ``preflight``, ``status``, ``check``, ``logs``, ``migration_inspect``
+* read-only: ``preflight``, ``status``, ``check``, ``logs``
 * lifecycle: ``install``, ``update``, ``uninstall``, ``start``, ``stop``
 * environment specific: PR ``cleanup``/``reconcile``; staging ``snapshot_init``/``refresh``;
-  release ``database_migrate``/``recover``; shared ``infra_upgrade`` and ``adopt``.
+  release ``database_migrate``/``recover``; shared ``infra_upgrade``.
 
 Lock order: per-environment ``environment.lock`` first, then the shared
 infrastructure ``controller.lock`` (shared for environment work, exclusive for
-infrastructure changes and legacy controllers). Package installation uses its
+infrastructure changes). Package installation uses its
 own lock and never waits on either.
 """
 from __future__ import annotations
@@ -25,13 +25,6 @@ from . import config
 from .core import DeployError, lock, write_json
 from .docker import Docker
 from .host import positive_int
-
-LEGACY_FIELDS = {
-    "pr": ("domain", "users_file", "database_network", "web_network", "certificate_resolver",
-           "preview_log_port", "otel_network", "otel_http_endpoint", "pgadmin_host", "pgadmin_email"),
-    "staging": ("host", "private_dir"),
-}
-
 
 class Environment:
     def __init__(self, name, path=None):
@@ -65,7 +58,8 @@ class Environment:
         if value.get("schema_version") != STATE_SCHEMA:
             raise DeployError(f"{path}; unsupported state schema; upgrade the utility or explicitly migrate state")
         if value.get("owner") != self.identity or value.get("environment") != self.name:
-            raise DeployError(f"{path}; resources belong to another descriptor; run {self.command('migration-inspect')}")
+            raise DeployError(f"{path}; resources belong to another descriptor; select that descriptor "
+                              "or an empty state_dir")
         return value
 
     def mark(self, phase, **extra):
@@ -92,7 +86,7 @@ class Environment:
             yield
 
     def shared_lock(self, *, exclusive=False):
-        # Preserve the original controller.lock inode throughout host transition.
+        # Locks are never replaced, so every caller contends on the same inode.
         root = self.infrastructure_root or self.root
         return lock(root / "controller.lock", shared=not exclusive)
 
@@ -257,12 +251,12 @@ class Environment:
             old = self.marker()
             if old and old.get("phase") == "installed":
                 return {"environment": self.name, "installed": True, "changed": False}
-            # Refuse silent adoption, including data that predates the package.
+            # Installation is fresh only: never take over files this environment did not create.
             existing = [p for p in self.root.iterdir()
                         if p.name not in {"environment.lock", "controller.lock", "owned.json"}]
             if existing and not old:
-                raise DeployError(f"{self.root}; existing resources require {self.command('migration-inspect')} "
-                                  "--legacy-config <path>, then explicit adopt")
+                raise DeployError(f"{self.root}; state_dir is not empty and not owned by this environment; "
+                                  "configure an empty state_dir")
             controller = self.controller()
             infra = self.settings.get("infrastructure", {})
             owner = self.infrastructure_owner() if self.name != "release" else None
@@ -280,12 +274,14 @@ class Environment:
                 if infra["mode"] == "managed":
                     if not owner:
                         if (self.infrastructure_root / "infrastructure.env").exists():
-                            raise DeployError(f"{self.infrastructure_root}; existing infrastructure requires explicit adopt")
-                        # Do not adopt an existing Compose project based only on a matching name.
+                            raise DeployError(f"{self.infrastructure_root}; infrastructure files exist without an "
+                                              "owner; configure an empty infrastructure.state_dir")
+                        # Never take over an existing Compose project based only on a matching name.
                         resources = self.docker.run(["docker", "ps", "-aq", "--filter",
                                                      "label=com.docker.compose.project=" + infra["project"]])
                         if resources.strip():
-                            raise DeployError(f"Existing {infra['project']} containers require explicit adopt")
+                            raise DeployError(f"Containers of Compose project {infra['project']} already exist; "
+                                              "configure another infrastructure.project")
                         write_json(self.infrastructure_root / "infrastructure-owned.json",
                                    {"owner": self.identity, "environment": self.name,
                                     "project": infra["project"], "schema_version": STATE_SCHEMA})
@@ -431,62 +427,6 @@ class Environment:
             self.controller().init()
         return {"environment": self.name, "infrastructure": "upgraded"}
 
-    # Existing-host transition ------------------------------------------------------
-
-    def migration_inspect(self, legacy_config):
-        """Dry-run mapping of a legacy deploy/preview host configuration; changes nothing."""
-        if self.name == "release":
-            raise DeployError("Release adoption uses explicit private runtime/migration inputs; no legacy release exists")
-        legacy_config = Path(legacy_config) if legacy_config else None
-        if not legacy_config or not legacy_config.is_absolute() or not legacy_config.is_file():
-            raise DeployError("migration-inspect/adopt requires --legacy-config <absolute legacy config.json>")
-        old = json.loads(legacy_config.read_text())
-        legacy = old if self.name == "pr" else {**old, **old.get("staging", {})}
-        expected = old["state_dir"] if self.name == "pr" else old.get("staging", {}).get("state_dir")
-        problems = []
-        if expected != str(self.root):
-            problems.append(f"state_dir must stay {expected}")
-        if old.get("repository", "").lower() != self.settings["repository"].lower():
-            problems.append("repository differs")
-        if old["state_dir"] != str(self.infrastructure_root):
-            problems.append(f"infrastructure.state_dir must stay {old['state_dir']} (preserves controller.lock and credentials)")
-        if self.settings["infrastructure"]["project"] != "people-gator-preview-infra":
-            problems.append("infrastructure.project must stay people-gator-preview-infra")
-        for field in LEGACY_FIELDS[self.name]:
-            if field in legacy and legacy[field] != self.settings.get(field):
-                problems.append(f"{field} differs from the legacy value")
-        owner = self.infrastructure_owner()
-        mode = self.settings["infrastructure"]["mode"]
-        if mode == "managed" and owner and owner.get("owner") != self.identity:
-            problems.append("shared infrastructure is already owned by another environment; use mode=external")
-        return {"environment": self.name, "config": str(self.path), "legacy_config": str(legacy_config),
-                "legacy_config_sha256": hashlib.sha256(legacy_config.read_bytes()).hexdigest(),
-                "state_dir": str(self.root), "infrastructure_mode": mode, "adoptable": not problems,
-                "problems": problems, "preserves_data": True, "preserves_controller_lock": True, "deploys": False,
-                "steps": ["Disable and drain old lifecycle callers for this environment",
-                          "Back up private config/state and the database; record it in a private --backup-record file",
-                          "adopt: write ownership markers only; no paths move and no services restart",
-                          "Enable package workflows; keep old controller bundles until no job or mount uses them"]}
-
-    def adopt(self, legacy_config, *, backup_record=None, dry_run=False):
-        plan = self.migration_inspect(legacy_config)
-        if dry_run or not plan["adoptable"]:
-            if not plan["adoptable"] and not dry_run:
-                raise DeployError(f"{self.name} adoption refused: " + "; ".join(plan["problems"]))
-            return plan
-        self.private_record(backup_record, "adopt", "the completed backup and drained old callers")
-        with self.environment_lock(installed=False), self.shared_lock(exclusive=True):
-            old = self.marker()
-            if old and old.get("phase") == "installed":
-                return {**plan, "changed": False}
-            write_json(self.root / "adoption.json", plan)
-            if self.settings["infrastructure"]["mode"] == "managed" and not self.infrastructure_owner():
-                write_json(self.infrastructure_root / "infrastructure-owned.json",
-                           {"schema_version": STATE_SCHEMA, "owner": self.identity, "environment": self.name,
-                            "project": self.settings["infrastructure"]["project"]})
-            self.mark("installed", adopted=True)
-        return {**plan, "changed": True}
-
     # Dispatch ------------------------------------------------------------------------
 
     def execute(self, operation, **options):
@@ -502,9 +442,6 @@ class Environment:
             "start": lambda: self.start(options.get("pr")),
             "stop": lambda: self.stop(options.get("pr")),
             "infra-upgrade": self.infra_upgrade,
-            "migration-inspect": lambda: self.migration_inspect(options.get("legacy_config")),
-            "adopt": lambda: self.adopt(options.get("legacy_config"), backup_record=options.get("backup_record"),
-                                        dry_run=options.get("dry_run", False)),
             "cleanup": lambda: self.cleanup(options.get("pr")),
             "reconcile": self.reconcile,
             "snapshot-init": lambda: self.snapshot_init(run_id=options.get("run_id"), exact_key=options.get("exact_key", "")),
@@ -522,7 +459,7 @@ class Environment:
 COMMON = ("configure", "migrate-config", "preflight", "status", "check", "logs",
           "install", "update", "uninstall", "start", "stop")
 OPERATIONS = {
-    "pr": (*COMMON, "cleanup", "reconcile", "infra-upgrade", "migration-inspect", "adopt"),
-    "staging": (*COMMON, "snapshot-init", "refresh", "infra-upgrade", "migration-inspect", "adopt"),
+    "pr": (*COMMON, "cleanup", "reconcile", "infra-upgrade"),
+    "staging": (*COMMON, "snapshot-init", "refresh", "infra-upgrade"),
     "release": (*COMMON, "database-migrate", "recover"),
 }

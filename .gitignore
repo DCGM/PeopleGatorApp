@@ -213,8 +213,3 @@ __marimo__/
 
 # Private staging inputs and database snapshots (templates remain tracked).
 *.dump
-/deploy/preview/backup-source.json
-/deploy/preview/media-source.json
-/deploy/preview/media-policy.json
-/deploy/preview/credential-input.json
-/deploy/preview/storage.json

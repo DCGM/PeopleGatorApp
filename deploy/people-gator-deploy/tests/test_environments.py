@@ -112,13 +112,13 @@ class EnvironmentTests(unittest.TestCase):
         # Every Docker command selects the descriptor's explicit context.
         self.assertTrue(all(isinstance(call, list) for call in environment.docker.calls))
 
-    def test_existing_unowned_state_requires_explicit_adoption(self):
+    def test_installation_is_fresh_only_and_never_takes_over_unowned_state(self):
         self.infra.mkdir(parents=True)
-        (self.infra / "infrastructure.env").write_text("POSTGRES_ADMIN_PASSWORD='legacy'\n")
+        (self.infra / "infrastructure.env").write_text("POSTGRES_ADMIN_PASSWORD='unowned'\n")
         (self.infra / "pr-7").mkdir()
         before = snapshot(self.infra)
         environment = self.environment(self.descriptor())
-        with self.assertRaisesRegex(DeployError, "migration-inspect"):
+        with self.assertRaisesRegex(DeployError, "not empty and not owned"):
             environment.install()
         self.assertEqual(snapshot(self.infra), before)
         self.assertEqual(environment.docker.commands("up"), [])
@@ -169,41 +169,6 @@ class EnvironmentTests(unittest.TestCase):
         status = environment.status()
         self.assertEqual((status["configured"], status["provisioned"]), (True, False))
         self.assertFalse(self.infra.exists())
-
-    def test_legacy_host_adoption_is_inspected_backed_up_and_preserves_everything(self):
-        self.infra.mkdir(parents=True)
-        (self.infra / "infrastructure.env").write_text("POSTGRES_ADMIN_PASSWORD='legacy'\n")
-        (self.infra / "controller.lock").touch()
-        inode = (self.infra / "controller.lock").stat().st_ino
-        (self.infra / "pr-3").mkdir()
-        (self.infra / "pr-3/state.json").write_text('{"password":"retained"}')
-        legacy = self.root / "legacy/config.json"
-        legacy.parent.mkdir()
-        legacy.write_text(json.dumps({"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.infra),
-                                      "domain": "preview.example.invalid", "users_file": str(self.users),
-                                      "database_network": "people-gator-preview-db", "web_network": "web"}))
-        environment = self.environment(self.descriptor())
-        before = snapshot(self.infra)
-        plan = environment.adopt(legacy, dry_run=True)
-        self.assertTrue(plan["adoptable"], plan["problems"])
-        self.assertEqual(snapshot(self.infra), before)
-        with self.assertRaisesRegex(DeployError, "backup-record"):
-            environment.adopt(legacy)
-        record = self.root / "private/backup-record"
-        record.write_text("pg_dump completed; old callers drained")
-        record.chmod(0o600)
-        self.assertTrue(environment.adopt(legacy, backup_record=record)["changed"])
-        self.assertEqual(environment.marker()["phase"], "installed")
-        self.assertEqual((self.infra / "controller.lock").stat().st_ino, inode)
-        for key, value in before.items():
-            self.assertEqual((self.infra / key).read_bytes(), value)
-        self.assertEqual(environment.docker.calls, [])
-        mismatched = self.environment(self.descriptor(domain="other.example.invalid"))
-        write_json(self.infra / "owned.json", {})  # reset marker for the second descriptor
-        (self.infra / "owned.json").unlink()
-        self.assertFalse(mismatched.migration_inspect(legacy)["adoptable"])
-        with self.assertRaisesRegex(DeployError, "domain differs"):
-            mismatched.adopt(legacy, backup_record=record)
 
     def test_release_descriptor_requires_reviewed_access_and_private_role_files(self):
         private = self.root / "private/release"

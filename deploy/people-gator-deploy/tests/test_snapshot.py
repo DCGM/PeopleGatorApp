@@ -1,7 +1,4 @@
-"""Backup selection/pinning, referenced-media transfer, private credentials and snapshot integration.
-
-Carried forward from deploy/preview/tests/test_snapshot.py onto the package asset.
-"""
+"""Backup selection/pinning, referenced-media transfer, private credentials and snapshot integration."""
 import asyncio
 import hashlib
 import importlib.util

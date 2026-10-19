@@ -152,13 +152,13 @@ remain running. A failed migration has no automatic schema rollback, even if the
 previous application continues running.
 
 Install the utility and configure each environment's descriptor once using the
-[utility guide](../deploy/people-gator-deploy/README.md); existing hosts are
-adopted in place with `migration-inspect`/`adopt`. Shared-infrastructure
+[utility guide](../deploy/people-gator-deploy/README.md); installation is fresh
+only and never takes over existing state. Shared-infrastructure
 initialization/upgrades remain explicit operator actions; routine installs do not
 recreate services or reset credentials/state. PR code must never become the host
 controller. In each descriptor, set `repository` to `DCGM/PeopleGatorApp`. GHCR
 image names are derived from the configured repository. Provision the documented
 DNS, Traefik, logging network, runner isolation and token permissions before
-enabling deployment (see the [preview host guide](../deploy/preview/README.md)).
+enabling deployment (see the [host prerequisites](../deploy/people-gator-deploy/HOSTS.md)).
 Utility versions referenced by running jobs or container mounts are retained; no
 automatic version pruning or database rollback is performed.

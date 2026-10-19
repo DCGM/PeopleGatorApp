@@ -7,124 +7,138 @@ and **tagged releases**. It is a standard-library-only Python package with the
 the collector configuration and the snapshot worker ship inside the package.
 
 **Prerequisites:** Linux, Python 3.11+ with `venv`/`ensurepip`, Git, Docker Engine
-and Docker Compose v2.32+. The first installation of each revision downloads
+and Docker Compose v2.32+, plus the proxy, DNS, runners and buckets in
+[HOSTS.md](HOSTS.md). The first installation of each revision downloads
 `setuptools` from the configured package index to build the wheel. No API
 dependencies are installed on the host; database snapshot work runs in
 operation-scoped backend containers.
 
-## Install
+## First setup
 
-From a checkout of an explicitly selected, reviewed commit (the checkout is read
-with `git archive` and is never modified):
+As each deployment runner account (no sudo needed):
 
 ```sh
-python3 deploy/install.py --user --revision <40-character-reviewed-sha>
-# Custom user prefix (paths with spaces are supported):
-python3 deploy/install.py --user --prefix '/srv/deploy tools' --revision <sha>
-# Operator only; routine commands then run as the unprivileged account:
-sudo python3 deploy/install.py --system --revision <sha> --run-as <deployment-user>
+git clone https://github.com/DCGM/PeopleGatorApp.git && cd PeopleGatorApp
+python3 deploy/install.py --user --revision "$(git rev-parse origin/main)"
+export PATH="$HOME/.local/bin:$PATH"
+
+cp deploy/people-gator-deploy/examples/pr.json /secure/place/pr.json   # edit, keep private
+people-gator-deploy pr configure --input /secure/place/pr.json --dry-run
+people-gator-deploy pr configure --input /secure/place/pr.json
+people-gator-deploy pr install            # creates shared PostgreSQL/collector/pgAdmin
+people-gator-deploy pr preflight
+
+people-gator-deploy staging configure --input /secure/place/staging.json
+people-gator-deploy staging install
+# after the next successful main CI build:
+people-gator-deploy staging snapshot-init   # or staging.yml → operation snapshot-init
 ```
 
-The installer prints JSON with the versioned `executable`, scope, descriptor and
-state roots and `path_ready`. Add the reported bin directory to `PATH` if needed.
+Then delete the edited input copies; the descriptor is now the only private
+config. Releases follow the same pattern with `examples/release.json` on the
+release runner account. After that, workflows run everything automatically.
+
+## Installation and updates
+
+```sh
+python3 deploy/install.py --user --revision <40-character-sha>            # default: ~/.local
+python3 deploy/install.py --user --prefix '/srv/deploy tools' --revision <sha>
+sudo python3 deploy/install.py --system --revision <sha> --run-as <deployment-user>
+```
 
 | Scope | Executable | Versions | Descriptors | State |
 | --- | --- | --- | --- | --- |
 | user (default) | `~/.local/bin` | `~/.local/lib/people-gator-deploy/versions/<sha>` | `~/.local/opt/people-gator-deploy/environments/<env>/config.json` | `~/.local/opt/people-gator-deploy/state` |
 | system | `/usr/local/bin` | `/opt/people-gator-deploy/versions/<sha>` | `/etc/people-gator-deploy/environments/<env>/config.json` | `/var/lib/people-gator-deploy` |
 
-`--prefix` replaces `~/.local` (user) or `/` (system). System installs are owned by
-root and readable by everyone; descriptor and state roots belong to `--run-as`.
-Routine operations never need root.
+The installer reads only committed files (`git archive` of the requested commit),
+builds a wheel into a new virtual environment, records version, commit, schema
+versions and a SHA-256 of every installed file in `installation.json`, verifies
+it, then atomically renames it into `versions/<sha>`. Interrupted or failed
+installs leave earlier versions and the default executable untouched. Installing
+an existing commit only re-verifies it. The default executable
+(`bin/people-gator-deploy`) moves only to a descendant commit, so installing an
+older commit pins it without downgrading the default.
 
-Each version is a complete virtual environment with an `installation.json`
-recording version, source commit, configuration/state schema versions and a
-SHA-256 of every installed file. A version is staged and verified before an
-atomic rename, so interrupted or failed installs leave the previous version and
-default executable working. Reinstalling the same commit verifies and reuses it.
-The default executable only moves forward: installing an older commit (for
-example, a retried old workflow) pins that version without downgrading the
-default. Versions are never deleted automatically; remove an old
-`versions/<sha>` directory only when no job or container mount references it.
+**How updates happen.** Every deployment workflow run installs the utility at its
+own workflow commit — the reviewed `main` commit that triggered it, or the tagged
+commit for releases — before doing anything else, and then uses that exact
+versioned executable for the whole job:
 
-```sh
-people-gator-deploy --version          # version, source commit, schema versions
-people-gator-deploy self check         # verify installed file integrity
-people-gator-deploy self ensure --revision <sha>   # reuse or install an exact version
-people-gator-deploy self update --from-main        # operator: install current reviewed main
-```
+- If that version is already installed and its file digests verify, it is reused
+  (about 0.1 s). A corrupt or modified version fails the job.
+- Otherwise it is built and installed (a few seconds; needs Git and package-index access), and the
+  default executable advances if the commit is newer.
+- So after any merge to `main`, the next preview/staging job on each runner
+  account runs the new utility; nothing is checked against GitHub separately, and
+  no host job polls for updates.
 
-`self update --from-main` clones into a temporary directory, resolves `main` to an
-exact commit and calls the same installer. Utility updates never change an
-environment; `<environment> update` never changes the utility. CI cannot upgrade
-a system installation; give CI runners their own user installation.
+Outside CI, update the interactive default with `people-gator-deploy self update
+--from-main` (clones into a temporary directory, resolves `main` to an exact
+commit, then calls the same installer) or pin a version with
+`self ensure --revision <sha>`; `self check` verifies the running installation.
+A system installation is only upgraded by its operator; CI refuses to touch it.
+Utility updates never change an environment; `<env> update` never changes the
+utility. Old versions are kept (about 31 MB each, one per deployed `main` commit); remove
+`versions/<sha>` manually only when no job or container uses it.
 
 ## Descriptors
 
 Each environment has one versioned descriptor (mode 600, owned by the deployment
-account). It is selected by, in order: `--config <path>`,
-`PEOPLE_GATOR_DEPLOY_CONFIG`, then the installation scope's
+account) holding all its settings and secrets. It is selected by, in order:
+`--config <path>`, `PEOPLE_GATOR_DEPLOY_CONFIG`, then the installation scope's
 `environments/<env>/config.json`. Every command prints the selected path and
 scope. Repository `.env` files and ambient AWS/Docker/Compose variables are never
-read. Descriptors reference private files; they need not contain every secret.
+read.
 
 ```sh
-people-gator-deploy pr configure --input /private/pr.json --dry-run   # validate only
-people-gator-deploy pr configure --input /private/pr.json             # create or merge
-people-gator-deploy pr configure --interactive                        # terminal prompts
-people-gator-deploy pr migrate-config --dry-run                        # explicit schema upgrades
+people-gator-deploy staging configure --input <json> [--dry-run]   # create or merge
+people-gator-deploy staging configure --interactive                 # top-level prompts
+people-gator-deploy staging migrate-config [--dry-run]              # explicit schema upgrades
 ```
 
-`configure` merges the input into the existing descriptor, preserving other
-fields, validates paths/hostnames/overlaps, keeps a private
-`config.backup-<sha256>.json` and fails if the file changed concurrently (pass
-`--expected-digest` for read-modify-write tools). It never contacts services.
-Once an environment is installed, changing its state, infrastructure or private
-input paths is refused: that needs a data migration, not an empty destination.
+`configure` deep-merges the input into the descriptor (so a file with only
+`{"storage": {"secret_access_key": "…"}}` rotates one secret), validates
+everything, keeps a private `config.backup-<sha256>.json` and refuses concurrent
+edits (`--expected-digest` for read-modify-write tools). It never contacts
+services or prints secrets. Once installed, state/infrastructure paths and the
+staging bucket identity cannot change: that needs a data migration, not an empty
+destination.
 
-Common fields: `repository` (`DCGM/PeopleGatorApp`), absolute `state_dir`, explicit
-`docker_context` (for example `rootless`), `web_network` (external proxy network),
-and the hostname (`domain` for previews, `host` otherwise). Optional:
-`certificate_resolver`, `otel_network`, `otel_http_endpoint`, `preview_log_port`,
-`pgadmin_host`, `pgadmin_email`.
+Common fields: `repository`, absolute `state_dir`, explicit `docker_context`,
+`web_network`, and the hostname (`domain` for previews, `host` otherwise).
+Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`,
+`preview_log_port`, `pgadmin_host`, `pgadmin_email`. Complete examples:
+[`pr`](examples/pr.json), [`staging`](examples/staging.json),
+[`release`](examples/release.json).
 
-```json
-{
-  "repository": "DCGM/PeopleGatorApp",
-  "state_dir": "/var/lib/people-gator-preview",
-  "docker_context": "rootless",
-  "domain": "preview.peoplegator.dev",
-  "web_network": "web",
-  "database_network": "people-gator-preview-db",
-  "users_file": "/opt/people-gator-preview/users.json",
-  "infrastructure": {"mode": "managed", "project": "people-gator-preview-infra",
-                     "state_dir": "/var/lib/people-gator-preview"}
-}
-```
+* **pr** — `users_file`, `database_network`, and `infrastructure`
+  (`mode: managed`, a Compose `project` and its own `state_dir`): the preview
+  environment owns the shared PostgreSQL/collector/pgAdmin.
+* **staging** — `host`, `database_network`, `infrastructure` (`mode: external`,
+  the preview's `project`/`state_dir`) and four sections:
 
-* **pr** — `users_file` is bind-mounted read-only into the backend (UID 10001): a
-  regular file owned by the account or root and not group/world writable.
-  `infrastructure.mode: managed` makes this environment own the shared
-  PostgreSQL/collector/pgAdmin project.
-* **staging** — `host`, its own `state_dir`, and `private_dir` holding mode-600
-  `storage.json` (destination S3, `local: null`), `backup-source.json`,
-  `media-source.json` and `credential-input.json`. Formats match
-  `deploy/preview/staging.*.example.json`; see [STAGING.md](../preview/STAGING.md)
-  for bucket permissions and account provisioning. Use
-  `infrastructure.mode: external` with the preview infrastructure's `state_dir`
-  and `project`. Optional `media_transfer: {"concurrency": 8, "max_object_mib": 256}`.
+  | Section | Needed by | Contents |
+  | --- | --- | --- |
+  | `storage` | every operation | Staging S3 bucket: `endpoint_url` (HTTPS), `region`, `bucket_name`, `access_key_id`, `secret_access_key`, optional `timeout_seconds` |
+  | `backup_source` | `snapshot-init`, `refresh` | Backup bucket reader: `endpoint_url`, `region`, `bucket`, keys, optional `prefix` |
+  | `media_source` | `snapshot-init`, `refresh` | Media bucket reader: `endpoint_url`, `region`, `bucket`, keys, optional prefixes |
+  | `accounts` | `snapshot-init`, `refresh` | Argon2id `users` for the four staging accounts, optional `api_keys` |
+
+  Optional `media_transfer: {"concurrency": 8, "max_object_mib": 256}`. Routine
+  `staging update` needs only `storage`; snapshot operations validate all
+  sections before any lookup or change.
 * **release** — `host`, `database_network` (external PostgreSQL), mode-600
-  `runtime_file` and `migration_file` containing only `PEOPLE_GATOR_API__*` lines
-  (runtime role plus storage/auth; migration role only), and
-  `"access_reviewed": true` confirming the access boundary below. Optional
-  `project`, `backend_memory`.
+  `runtime_file` and `migration_file` with only `PEOPLE_GATOR_API__*` lines, and
+  `"access_reviewed": true` (see the access boundary below). Optional `project`,
+  `backend_memory`.
 
 ## Operations
 
 | Operation | pr | staging | release | Meaning |
 | --- | --- | --- | --- | --- |
 | `configure`, `migrate-config` | ✓ | ✓ | ✓ | Edit/validate the descriptor only |
-| `preflight` | ✓ | ✓ | ✓ | Read-only: descriptor, private inputs, Docker/Compose, networks, installation |
+| `preflight` | ✓ | ✓ | ✓ | Read-only: descriptor, inputs, Docker/Compose, networks, installation |
 | `status` | ✓ (`--pr`) | ✓ | ✓ | Read-only: configured / provisioned / running / healthy, recorded SHA/images |
 | `check` | ✓ (`--pr`) | ✓ | ✓ | Runtime-role database check and routed readiness; nonzero when unhealthy |
 | `install` | ✓ | ✓ | ✓ | Provision managed resources once; repeat is a no-op |
@@ -136,25 +150,25 @@ and the hostname (`domain` for previews, `host` otherwise). Optional:
 | `snapshot-init` / `refresh` | | ✓ | | Populate once / replace with `--backup-record` |
 | `database-migrate` | | | ✓ | Migration role then runtime check, with `--backup-record` |
 | `recover` | | | ✓ | Reactivate retained previous images (`--backup-record --compatibility-reviewed`) |
-| `infra-upgrade` | ✓ | ✓ | | Owner-only explicit shared-infrastructure upgrade |
-| `migration-inspect` / `adopt` | ✓ | ✓ | | Existing-host transition (below) |
+| `infra-upgrade` | ✓ | | | Owner-only explicit shared-infrastructure upgrade |
 
 Exit codes: `0` success, `1` actionable failure, `2` invalid usage, `130` cancelled.
 Failures name the selected path, the field or condition and a corrective
 command, for example
-`staging configuration: <path>; descriptor: missing, symlinked, wrong owner or not mode 600; run people-gator-deploy staging configure --config '<path>' --input <private-json>`.
+`staging configuration: <path>; backup_source: backup_source.endpoint_url must be an explicit HTTPS S3-compatible endpoint; run people-gator-deploy staging configure --config '<path>' --input <private-json>`.
 Secret values and raw service output are never printed; failed service output is
 kept in the environment's private `last-error.log`.
 
-**Ownership and locks.** `install` writes `owned.json` in the environment state
-and, for managed infrastructure, `infrastructure-owned.json`. Unowned existing
-state or infrastructure is never adopted implicitly, and refusals happen before
-any file is written. Operations take the environment's `environment.lock`, then
-the shared infrastructure `controller.lock` — shared for environment work,
-exclusive for `install`/`infra-upgrade`/`adopt` and for legacy controllers, which
-lock the same inode. A long staging refresh therefore does not block previews.
-Operations journal `operation.json`; success state is written only after routed
-readiness. Cancellation (SIGTERM/Ctrl-C) removes the operation's own containers.
+**Ownership and locks.** Installation is fresh only: `install` refuses a non-empty
+`state_dir`, infrastructure files or an existing Compose project it did not
+create, and refusals happen before anything is written. It records `owned.json`
+and, for managed infrastructure, `infrastructure-owned.json`; an external
+environment cannot change infrastructure it does not own. Operations take the
+environment's `environment.lock`, then the infrastructure `controller.lock` —
+shared for environment work, exclusive for `install`/`infra-upgrade` — so a long
+staging refresh does not block previews. Operations journal `operation.json`;
+success state is written only after routed readiness. Cancellation (SIGTERM or
+Ctrl-C) removes the operation's own containers.
 
 ## Environments
 
@@ -202,34 +216,13 @@ network) before setting `access_reviewed`.
 ## CI/CD
 
 Workflows check out their own reviewed commit (`github.workflow_sha`, never a PR
-head), run `deploy/install.py --user --revision "$GITHUB_WORKFLOW_SHA"` (reusing a
-matching install, publishing `executable` to `$GITHUB_OUTPUT`), run
-`<env> preflight`, then one lifecycle operation with that pinned executable.
-In CI the installer only accepts the default-branch `pr-preview.yml`,
-`staging.yml` and `release.yml`, plus `release.yml` at a `v*` tag whose commit
-is already on `main`. Missing configuration fails the job with the remedy; CI
-never prompts, guesses setup or uses sudo. Each runner account needs its own
-configured descriptors.
-
-## Migrate an existing host
-
-Hosts running the legacy `deploy/preview` controller bundles keep their paths,
-data, credentials and `controller.lock`:
-
-1. Install the utility as the runner account. Write descriptors with the same
-   values as `/opt/people-gator-preview/config.json`: for **pr**,
-   `state_dir` and `infrastructure.state_dir` both equal the legacy `state_dir`
-   (`project: people-gator-preview-infra`, `mode: managed`); for **staging**, the
-   legacy `staging.state_dir`/`private_dir`/`host` with `mode: external`.
-2. `people-gator-deploy pr migration-inspect --legacy-config /opt/people-gator-preview/config.json`
-   prints the mapping and every mismatch; nothing changes.
-3. Disable the lifecycle workflows, let running jobs finish, back up the private
-   config/state and database, and record that in a mode-600 file.
-4. `people-gator-deploy pr adopt --legacy-config … --backup-record <file>` (then
-   `staging`) writes ownership markers only: no paths move, no service restarts.
-5. Re-enable the workflows from the reviewed `main`. Keep
-   `/var/lib/people-gator-preview-controller/releases` until no job or container
-   mount uses an old bundle; old workflow reruns still execute their own commit.
+head), run `deploy/install.py --user --revision "$GITHUB_WORKFLOW_SHA"` (see
+[updates](#installation-and-updates)), run `<env> preflight`, then one lifecycle
+operation with that pinned executable. In CI the installer only accepts the
+default-branch `pr-preview.yml`, `staging.yml` and `release.yml`, plus
+`release.yml` at a `v*` tag whose commit is already on `main`. Missing
+configuration fails the job with the remedy; CI never prompts, guesses setup or
+uses sudo. Each runner account needs its own configured descriptors.
 
 ## Development
 

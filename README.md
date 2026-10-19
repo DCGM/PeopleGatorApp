@@ -64,7 +64,7 @@ people-gator-api/           API package, migrations, backend tests and focused d
     ├── services/          Authentication, shared clients and external services
     └── utils/             Logging, telemetry, hashing and other helpers
 docs/                      Project and operator guides
-deploy/preview/            Trusted preview controller, Compose templates and tests
+deploy/people-gator-deploy/ Deployment utility: PR previews, staging, releases
 .github/workflows/         PR validation, image publication and preview lifecycle
 compose.dev.yaml           Development stack with Compose Watch
 compose.live-preview.yaml  Existing shared live-preview deployment
@@ -101,10 +101,10 @@ exercise the app without project data or external AI credentials.
 For Docker deployments, use [Deployment](docs/DEPLOYMENT.md) and the
 [deployment entry point](deploy/README.md). PR CI type-checks/tests the frontend,
 tests backend contracts and migrations, runs the seed twice, and validates the
-preview controller. Successful same-repository PR builds publish images to GHCR;
-a separate trusted workflow deploys the tested commit and cleans up closed PRs.
-See [the host installation guide](deploy/preview/README.md) before enabling this
-workflow. There is no automatic production release workflow in this repository.
+deployment utility. Successful same-repository PR builds publish images to GHCR;
+trusted workflows deploy PR previews, staging from `main` and `v*` release tags
+with [`people-gator-deploy`](deploy/people-gator-deploy/README.md). Read its
+[host prerequisites](deploy/people-gator-deploy/HOSTS.md) before enabling them.
 
 ## Documentation
 

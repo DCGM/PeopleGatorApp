@@ -110,11 +110,8 @@ jobs:
           STAGING_TEST_DATABASE_PASSWORD: ci
           STAGING_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
-          # Older PR heads still carry the snapshot worker in deploy/preview.
           if [ -f ../deploy/people-gator-deploy/tests/test_snapshot.py ]; then
             uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
-          elif [ -f ../deploy/preview/tests/test_snapshot.py ]; then
-            uv run --locked python ../deploy/preview/tests/test_snapshot.py -v
           fi
       - name: Exercise candidate container migration and API startup gates
         working-directory: people-gator-api
@@ -127,7 +124,6 @@ jobs:
           STAGING_TEST_IMAGE: people-gator-staging-gate:${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           suite=../deploy/people-gator-deploy/tests/test_staging_runtime.py
-          if [ ! -f "$suite" ]; then suite=../deploy/preview/tests/test_staging_runtime.py; fi
           if [ -f "$suite" ]; then
             cleanup() {
               docker network disconnect "$STAGING_TEST_NETWORK" "$STAGING_TEST_POSTGRES_CONTAINER" || true
@@ -159,12 +155,6 @@ jobs:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
-          # Legacy controller bundles stay usable until operators retire them.
-          python3 deploy/preview/tests/test_preview.py -v
-          python3 deploy/preview/tests/test_installation.py -v
-          python3 deploy/preview/tests/test_staging.py -v
-          python3 deploy/preview/tests/test_configure_staging.py -v
-          python3 deploy/preview/tests/test_snapshot.py -v
       - name: Build and run the deployment utility wheel outside the checkout
         working-directory: .deploy-controller-ci
         run: |

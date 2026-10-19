@@ -1,7 +1,4 @@
-"""PR preview lifecycle races, rejected inputs, retry behavior and Compose output.
-
-Carried forward from deploy/preview/tests/test_preview.py onto the package.
-"""
+"""PR preview lifecycle races, rejected inputs, retry behavior and Compose output."""
 
 import io
 from contextlib import redirect_stderr

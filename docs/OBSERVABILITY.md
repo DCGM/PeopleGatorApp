@@ -121,6 +121,6 @@ Its optional end-to-end test uses disposable Docker containers and an OTLP sink:
 PREVIEW_TEST_OTEL=1 python3 -B deploy/people-gator-deploy/tests/test_observability.py -v
 ```
 
-See the [host guide](../deploy/preview/README.md#validation) for image prerequisites.
+See the [utility guide](../deploy/people-gator-deploy/README.md#development) for prerequisites.
 The default run skips that live test. Keep skipped transport checks distinct from
 confirmed delivery and avoid recursive logging of the collector into itself.

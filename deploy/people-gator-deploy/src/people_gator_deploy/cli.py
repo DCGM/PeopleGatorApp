@@ -26,7 +26,6 @@ OPTIONS = {
     "release": {"logs": ["tail"], "update": ["tag", "commit", "run_id", "backup_record"],
                 "database-migrate": ["backup_record"], "recover": ["backup_record", "compatibility_reviewed"]},
 }
-TRANSITION = {"migration-inspect": ["legacy_config"], "adopt": ["legacy_config", "backup_record", "dry_run"]}
 ARGUMENTS = {
     "pr": (("--pr",), {"type": int, "help": "Pull request number of one preview instance"}),
     "tail": (("--tail",), {"type": int, "default": 200}),
@@ -36,8 +35,6 @@ ARGUMENTS = {
     "tag": (("--tag",), {"help": "Release tag, for example v1.2.3"}),
     "commit": (("--commit",), {"help": "Commit delivered by the tag event; a moved tag is rejected"}),
     "compatibility_reviewed": (("--compatibility-reviewed",), {"action": "store_true"}),
-    "legacy_config": (("--legacy-config",), {"type": Path}),
-    "dry_run": (("--dry-run",), {"action": "store_true"}),
 }
 
 
@@ -77,7 +74,7 @@ def parser():
                 sub.add_argument("--expected-digest", help="SHA-256 of the descriptor you edited from")
             elif name == "migrate-config":
                 sub.add_argument("--dry-run", action="store_true")
-            for option in OPTIONS[environment].get(name, []) + TRANSITION.get(name, []):
+            for option in OPTIONS[environment].get(name, []):
                 flags, settings = ARGUMENTS[option]
                 sub.add_argument(*flags, **settings)
     return result
