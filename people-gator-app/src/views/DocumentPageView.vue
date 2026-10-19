@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
-import EvidenceFilterControls from '@/components/custom/EvidenceFilterControls.vue'
-import EvidenceFilterTags from '@/components/custom/EvidenceFilterTags.vue'
-import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -378,12 +375,6 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="w-full px-2 py-2">
-    <SearchFilterPanel label="Page evidence" filters-only
-      ><EvidenceFilterControls
-    /></SearchFilterPanel>
-    <EvidenceFilterTags context />
-  </div>
   <main class="workspace-grid">
     <section
       class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"

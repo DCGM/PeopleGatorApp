@@ -101,8 +101,11 @@ represent a working server criterion.
 
 ## Shared evidence navigation (#31)
 
-Documents, scan search, page workspaces, people search and person details expose
-one shared set of annotation criteria. Their names, OR selections, inclusive time
+Documents, scan search, people search and person details expose one shared set
+of annotation criteria. Page workspaces apply and forward those URL criteria
+without an additional filter panel or tags, preserving space for the scan; edit
+shared criteria in a related list/profile. The existing compact scan toolbar
+continues to control annotation link state. Their names, OR selections, inclusive time
 bounds and AND combination match the API fields documented in
 [annotation processing](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md#annotation-criteria-versus-resource-processing-31).
 Documents/people return resources containing matching evidence. Profiles return
