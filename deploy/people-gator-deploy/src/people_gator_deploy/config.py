@@ -161,7 +161,8 @@ def configure(environment, path, changes, *, dry_run=False, expected=None):
     validate(candidate, environment, path)
     # Data identities cannot change while an environment is installed.
     if previous and (Path(previous.get("state_dir", "/nonexistent")) / "owned.json").exists():
-        fields = ("state_dir", "infrastructure", "database_network", "runtime_file", "migration_file")
+        fields = ("state_dir", "infrastructure", "database_network", "runtime_file", "migration_file",
+                  "docker_context", "project")
         def bucket(value):  # credentials may rotate; the bucket identity may not
             return {key: (value.get("storage") or {}).get(key) for key in ("endpoint_url", "region", "bucket_name")}
         if any(candidate.get(field) != previous.get(field) for field in fields) or bucket(candidate) != bucket(previous):

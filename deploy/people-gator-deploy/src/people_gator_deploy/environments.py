@@ -243,6 +243,19 @@ class Environment:
 
     # Lifecycle -------------------------------------------------------------------
 
+    def require_fresh_application_project(self):
+        """A fresh descriptor cannot adopt another application's Compose stack."""
+        if self.name == "pr":
+            return  # Each preview gets its own project when a PR is selected.
+        if (self.root / "compose.env").exists() or (self.root / "activation.json").exists():
+            return  # Retained applications and interrupted activations are ours.
+        project = self.settings.get("project", "people-gator-" + self.name)
+        resources = self.docker.run(["docker", "ps", "-aq", "--filter",
+                                     "label=com.docker.compose.project=" + project])
+        if resources.strip():
+            raise DeployError(f"Containers of Compose project {project} already exist without owned application "
+                              f"state; configure a different project before {self.command('install')}")
+
     def install(self):
         """Provision managed resources once; repeating it changes nothing."""
         self.prerequisites()
@@ -267,21 +280,22 @@ class Environment:
             if infra.get("mode") == "external" and not (self.infrastructure_root / "infrastructure.env").is_file():
                 raise DeployError(f"{self.infrastructure_root}/infrastructure.env; external infrastructure is "
                                   "uninitialized; its owning environment must run install first")
+            self.require_fresh_application_project()
+            if infra.get("mode") == "managed" and not owner:
+                if (self.infrastructure_root / "infrastructure.env").exists():
+                    raise DeployError(f"{self.infrastructure_root}; infrastructure files exist without an "
+                                      "owner; configure an empty infrastructure.state_dir")
+                resources = self.docker.run(["docker", "ps", "-aq", "--filter",
+                                             "label=com.docker.compose.project=" + infra["project"]])
+                if resources.strip():
+                    raise DeployError(f"Containers of Compose project {infra['project']} already exist; "
+                                      "configure another infrastructure.project")
             self.mark("installing")
             if self.name == "release":
                 controller.install()
             else:
                 if infra["mode"] == "managed":
                     if not owner:
-                        if (self.infrastructure_root / "infrastructure.env").exists():
-                            raise DeployError(f"{self.infrastructure_root}; infrastructure files exist without an "
-                                              "owner; configure an empty infrastructure.state_dir")
-                        # Never take over an existing Compose project based only on a matching name.
-                        resources = self.docker.run(["docker", "ps", "-aq", "--filter",
-                                                     "label=com.docker.compose.project=" + infra["project"]])
-                        if resources.strip():
-                            raise DeployError(f"Containers of Compose project {infra['project']} already exist; "
-                                              "configure another infrastructure.project")
                         write_json(self.infrastructure_root / "infrastructure-owned.json",
                                    {"owner": self.identity, "environment": self.name,
                                     "project": infra["project"], "schema_version": STATE_SCHEMA})
@@ -326,6 +340,7 @@ class Environment:
         self.prerequisites()
         with self.environment_lock():
             self.require_installed()
+            self.require_fresh_application_project()
             controller = self.controller()
             self.journal(operation, "preparing", **{k: v for k, v in options.items() if k in {"run_id", "tag", "commit"} and v})
             # Long snapshot preparation holds the shared lock only in shared mode,

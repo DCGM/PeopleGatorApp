@@ -19,6 +19,7 @@ class FakeDocker:
     def __init__(self):
         self.context = "rootless"
         self.calls = []
+        self.projects = set()
 
     def run(self, args, **kwargs):
         args = [str(value) for value in args]
@@ -27,6 +28,8 @@ class FakeDocker:
             return "synthetic-host"
         if args[:3] == ["docker", "compose", "version"]:
             return "2.40.0\n"
+        if args[:2] == ["docker", "ps"] and args[-1].rpartition("=")[2] in self.projects:
+            return "existing-container\n"
         return ""
 
     @contextmanager
@@ -170,7 +173,7 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual((status["configured"], status["provisioned"]), (True, False))
         self.assertFalse(self.infra.exists())
 
-    def test_release_descriptor_requires_reviewed_access_and_private_role_files(self):
+    def release_descriptor(self):
         private = self.root / "private/release"
         private.mkdir(mode=0o700)
         files = {}
@@ -187,6 +190,10 @@ class EnvironmentTests(unittest.TestCase):
         with self.assertRaisesRegex(DeployError, "access_reviewed"):
             config.configure("release", path, value)
         config.configure("release", path, {**value, "access_reviewed": True})
+        return path, files
+
+    def test_release_descriptor_requires_reviewed_access_and_private_role_files(self):
+        path, files = self.release_descriptor()
         environment = self.environment(path, "release")
         with self.assertRaisesRegex(DeployError, "--tag"):
             environment.update()
@@ -197,6 +204,33 @@ class EnvironmentTests(unittest.TestCase):
         files["runtime_file"].chmod(0o644)
         with self.assertRaisesRegex(DeployError, "runtime_file"):
             environment.preflight()
+
+    def test_release_refuses_an_existing_application_project_without_claiming_it(self):
+        path, _ = self.release_descriptor()
+        environment = self.environment(path, "release")
+        environment.docker.projects.add("people-gator-release")
+        with self.assertRaisesRegex(DeployError, "Compose project people-gator-release already exist"):
+            environment.install()
+        self.assertFalse((environment.root / "owned.json").exists())
+        self.assertEqual(environment.docker.commands("up"), [])
+        # A project that appears between installation and first deployment is
+        # refused too, before login, image pulls, migrations or activation.
+        environment.docker.projects.clear()
+        environment.install()
+        environment.docker.projects.add("people-gator-release")
+        environment.docker.calls.clear()
+        with self.assertRaisesRegex(DeployError, "without owned application state"):
+            environment.update(tag="v1.0.0")
+        self.assertEqual(environment.docker.commands("pull"), [])
+        self.assertFalse((environment.root / "operation.json").exists())
+
+    def test_installed_release_cannot_switch_project_or_docker_context(self):
+        path, _ = self.release_descriptor()
+        environment = self.environment(path, "release")
+        environment.install()
+        for field, value in (("project", "unowned-release"), ("docker_context", "other-daemon")):
+            with self.subTest(field=field), self.assertRaisesRegex(DeployError, "explicit migration"):
+                config.configure("release", path, {field: value})
 
 
 if __name__ == "__main__":
