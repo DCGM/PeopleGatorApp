@@ -299,3 +299,26 @@ derivative refresh, layout replacement and twice-run preservation. Slow success,
 S3 denial, SDK timeout, pool saturation and same-page synchronization are covered
 by gated regression tests, not by introducing failures into preview data. See
 [media concurrency](MEDIA-UPLOAD-CONCURRENCY.md) for the isolated HTTP diagnostic.
+
+## Evidence provenance and annotation edits (#31)
+
+Search for **Irena Evidence**. This new, checkpointed synthetic identity was
+imported from a synthetic authority; its reference is deliberately under
+`preview.invalid`. Its faces in **Evidence provenance ledger** (`preview-mzk`)
+have Automatic and Authority origins. The authority face has a Verified link:
+verification preserves its origin and original importer/API key, while the
+annotation's last editor is the reviewer without an API key. **Evidence
+provenance correspondence** (`preview-nlk`) contains Manual and Unknown origins
+and a separately verified mention. Existing fixtures retain unknown historical
+origins; the seed does not infer provenance from identifiers or link states.
+
+Select Authority origin + Manual/Verified link states + `preview-mzk` to explore
+the same evidence through Documents, People, a profile and its source page.
+Selecting Manual origin in that document must return no match; the manual face
+in the other library cannot satisfy part of the predicate. Annotation edit dates
+and actors are distinct from identity creation and person/document processing.
+The seed uses real actor contexts and records actual server event times; it does
+not fabricate fixed historical timestamps. New fixture keys are additive and
+reruns preserve provenance, edits, attribution and checkpoints. Integration
+coverage asserts equivalent repository matches and unchanged annotation times
+on rerun and identical verification.

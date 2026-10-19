@@ -587,7 +587,18 @@ def search_page(
     )
 
 
-from .entity_link_queries import evidence_predicate, load_link_stats
+from .entity_link_queries import evidence_predicate, load_link_stats, annotation_conditions, EVIDENCE_FIELDS
+
+def provenance_values(record) -> dict:
+    return {"provenance": record.provenance or {}, "created_at": record.created_at,
+            "created_by_user_id": record.created_by_user_id, "created_by_api_key_id": record.created_by_api_key_id}
+
+
+def annotation_values(record) -> dict:
+    return {**provenance_values(record), "last_touched_at": record.last_touched_at,
+            "last_touched_by_user_id": record.last_touched_by_user_id,
+            "last_touched_by_api_key_id": record.last_touched_by_api_key_id}
+
 
 def entity_response(entity: Entity) -> EntityResponse:
     if entity.kind is None or entity.name is None:
@@ -595,6 +606,7 @@ def entity_response(entity: Entity) -> EntityResponse:
             f"entity {entity.id} does not satisfy the persistence contract"
         )
     return EntityResponse(
+        **provenance_values(entity),
         entity_id=entity.id,
         entity_link_stats=getattr(entity, "_entity_link_stats", None) or {},
         user_id=entity.user_id,
@@ -635,6 +647,7 @@ def source_response(source: Source) -> GenericSourceResponse:
 def face_response(face: Face) -> FaceResponse:
     box = face.roi
     return FaceResponse(
+        **annotation_values(face),
         detection_id=face.id,
         identifier=face.identifier,
         source_id=face.source_id,
@@ -660,6 +673,7 @@ def face_response(face: Face) -> FaceResponse:
 
 def mention_response(mention: TextMention) -> TextMentionResponse:
     return TextMentionResponse(
+        **annotation_values(mention),
         mention_id=mention.id,
         name=mention.mention,
         context=mention.context,
@@ -712,7 +726,7 @@ def entity_filters(
     if authority_ids is not None:
         filters.append(Entity.nlcr_authority_id.in_(authority_ids))
     if any(missing_to_none(getattr(filter_values, field)) is not None for field in
-           ("entity_link_state", "source_id", "document_source_id", "detection_id", "mention_id")):
+           (*EVIDENCE_FIELDS, "source_id", "detection_id", "mention_id")):
         filters.append(evidence_predicate(filter_values, entity=True))
     has_mentions = missing_to_none(filter_values.has_mentions)
     if has_mentions is not None:
@@ -732,9 +746,7 @@ def face_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
-    states = missing_to_none(filter_values.entity_link_state)
-    if states is not None:
-        filters.append(Face.entity_link_state.in_(states))
+    filters.extend(annotation_conditions(Face, filter_values))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Face.entity_id.in_(entity_ids))
@@ -754,9 +766,7 @@ def mention_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = []
-    states = missing_to_none(filter_values.entity_link_state)
-    if states is not None:
-        filters.append(TextMention.entity_link_state.in_(states))
+    filters.extend(annotation_conditions(TextMention, filter_values))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(TextMention.entity_id.in_(entity_ids))
@@ -844,7 +854,7 @@ def source_filters(
     if page_ids is not None:
         filters.append(Page.page_id.in_(page_ids))
     if any(missing_to_none(getattr(filter_values, field)) is not None for field in
-           ("entity_link_state", "entity_id", "detection_id", "mention_id")):
+           (*EVIDENCE_FIELDS, "entity_id", "detection_id", "mention_id")):
         filters.append(evidence_predicate(filter_values))
     has_mentions = missing_to_none(filter_values.has_mentions)
     if has_mentions is not None:

@@ -61,3 +61,36 @@ Then run from `people-gator-app`:
 ```sh
 npm run openapi-ts -- --input /tmp/people-gator-openapi.json
 ```
+
+## Annotation criteria versus resource processing (#31)
+
+All entity, source projection, face and text-mention list/search filters now
+share these evidence criteria (prefix with `filter.` over HTTP):
+
+| Field | Meaning |
+| --- | --- |
+| `entity_link_state` | OR of Automatic, Manual, Verified assignment states |
+| `evidence_origin` | OR of recorded `automatic`, `manual`, `authority`, `unknown` creation/import origins |
+| `evidence_library` | Library of the annotation's direct document/page source |
+| `document_source_id` | Internal registered document source UUID, including its direct evidence and pages in the same library/document |
+| `evidence_source_id` | Exact annotation source UUIDs |
+| `evidence_touched_from`, `evidence_touched_to` | Inclusive, timezone-aware annotation-change bounds, normalized to UTC |
+| `evidence_touched_by_user_id`, `evidence_touched_by_api_key_id` | Last annotation editor / registered key, independent of owner and verifier |
+
+Different fields combine with AND; repeated values with OR. The same annotation
+must satisfy every evidence criterion. Documents match containing annotations;
+entities match assigned annotations; face/mention collections return those
+annotations. Filtering and counts precede pagination; cursors include all criteria.
+An explicit assigned-faces/mentions choice requires a matching annotation of that
+kind. Null historical times cannot satisfy edit bounds/actors. Empty selections
+are omitted; malformed/inverted/naive time bounds return 422.
+
+Unprefixed `last_touched_*` still describes the selected **resource** (person or
+source processing). It never becomes an annotation bound when navigating.
+`provenance` is immutable creation metadata with an explicit origin and optional
+source name, HTTP(S) reference and reference ID. Authority origin requires all
+three reference fields. New records capture server creation/ingestion time and
+actor; detector execution time is not inferred. Existing records remain unknown.
+Material annotation changes, including merges/unassignments/embedding edits,
+update annotation time and actor. Identical writes and reads do not. JWT changes
+clear previous API-key attribution. Verification changes state, not origin.

@@ -167,6 +167,7 @@ export type DocumentResponse = {
  * Request body for creating a new entity.
  */
 export type EntityCreateRequest = {
+    provenance?: Provenance;
     /**
      * The type of the entity. Immutable after creation.
      */
@@ -290,6 +291,40 @@ export type EntityLinkStats = {
  */
 export type EntityListFilter = {
     /**
+     * Evidence Origin
+     */
+    evidence_origin?: Array<EvidenceOrigin>;
+    /**
+     * Evidence Library
+     */
+    evidence_library?: Array<string>;
+    /**
+     * Evidence Source Id
+     */
+    evidence_source_id?: Array<string>;
+    /**
+     * Document Source Id
+     *
+     * Internal document source IDs; match faces or mentions on any page.
+     */
+    document_source_id?: Array<string>;
+    /**
+     * Evidence Touched From
+     */
+    evidence_touched_from?: string;
+    /**
+     * Evidence Touched To
+     */
+    evidence_touched_to?: string;
+    /**
+     * Evidence Touched By User Id
+     */
+    evidence_touched_by_user_id?: Array<string>;
+    /**
+     * Evidence Touched By Api Key Id
+     */
+    evidence_touched_by_api_key_id?: Array<string>;
+    /**
      * Entity Link State
      *
      * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -361,12 +396,6 @@ export type EntityListFilter = {
      * Inclusive UTC upper bound of the last touch.
      */
     last_touched_to?: string;
-    /**
-     * Document Source Id
-     *
-     * Internal document source IDs; match faces or mentions on any page.
-     */
-    document_source_id?: Array<string>;
     /**
      * Last Touched By User Id
      *
@@ -579,6 +608,19 @@ export type EntityPatchRequest = {
  * A single entity record.
  */
 export type EntityResponse = {
+    provenance?: Provenance;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     /**
      * Entity Id
      *
@@ -654,11 +696,17 @@ export type EntityResponse = {
 export type EntityType = 'person';
 
 /**
+ * EvidenceOrigin
+ */
+export type EvidenceOrigin = 'automatic' | 'manual' | 'authority' | 'unknown';
+
+/**
  * FaceCreateRequest
  *
  * Request body for ingesting a face detection.
  */
 export type FaceCreateRequest = {
+    provenance?: Provenance;
     /**
      * Entity Link State
      */
@@ -819,6 +867,31 @@ export type FacePatchRequest = {
  * A single face detection record.
  */
 export type FaceResponse = {
+    provenance?: Provenance;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -1004,6 +1077,19 @@ export type FoundEntity = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
+    provenance?: Provenance;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     /**
      * Entity Id
      *
@@ -1095,6 +1181,31 @@ export type FoundFace = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
+    provenance?: Provenance;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -1894,6 +2005,25 @@ export type PageResponse = {
 };
 
 /**
+ * Provenance
+ */
+export type Provenance = {
+    origin?: EvidenceOrigin;
+    /**
+     * Source Name
+     */
+    source_name?: string | null;
+    /**
+     * Reference Id
+     */
+    reference_id?: string | null;
+    /**
+     * Reference Url
+     */
+    reference_url?: string | null;
+};
+
+/**
  * RefreshTokenRequest
  *
  * Request model for refresh token endpoint.
@@ -2039,6 +2169,7 @@ export type TextLineModel = {
  * Request body for recording an entity name found in a source.
  */
 export type TextMentionCreateRequest = {
+    provenance?: Provenance;
     /**
      * Entity Link State
      */
@@ -2141,6 +2272,31 @@ export type TextMentionPatchRequest = {
  * A single mention of an entity name in a text source.
  */
 export type TextMentionResponse = {
+    provenance?: Provenance;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -2181,6 +2337,31 @@ export type TextMentionResponse = {
  * ``end_character`` is exclusive.
  */
 export type TextMentionSpanModel = {
+    provenance?: Provenance;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -2442,6 +2623,34 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -2608,6 +2817,40 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -2707,6 +2950,40 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          * How independently ranked modality result lists are fused.
          */
         'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Filter.Entity Link State
          *
@@ -2880,6 +3157,40 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -3026,6 +3337,34 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Filter.Entity Link State
          *
@@ -3396,6 +3735,40 @@ export type ListFacesRouteApiV1FacesGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -3743,6 +4116,40 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -4010,6 +4417,40 @@ export type ListSourcesRouteApiV1SourcesGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -4209,6 +4650,40 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Filter.Entity Link State
          *
@@ -4480,6 +4955,40 @@ export type ListPagesRouteApiV1PagesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Filter.Entity Link State
          *
@@ -4902,6 +5411,40 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
     };
     query?: {
         /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
          * Filter.Entity Link State
          *
          * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
@@ -4947,6 +5490,40 @@ export type ListImagesRouteApiV1ImagesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Evidence Origin
+         */
+        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Filter.Entity Link State
          *

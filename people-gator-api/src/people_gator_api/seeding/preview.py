@@ -40,6 +40,8 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
+from people_gator_api.schemas.provenance import Provenance
+
 from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
@@ -88,6 +90,13 @@ async def _read_optional(filesystem: Filesystem, key: str) -> bytes | None:
         }:
             return None
         raise
+
+
+def fixture_provenance(origin: str) -> Provenance:
+    if origin == "authority":
+        return Provenance(origin=origin, source_name="Synthetic preview authority",
+                          reference_id="irena-evidence", reference_url="https://preview.invalid/authority/irena-evidence")
+    return Provenance(origin=origin)
 
 
 async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult:
@@ -175,6 +184,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         if entity is None:
             entity = await database.entities.create(
                 EntityCreateRequest(
+                    provenance=fixture_provenance("authority" if person.key == "provenance-review" else "unknown"),
                     entity_type=EntityType.person,
                     name=person.name,
                     aliases=list(person.aliases),
@@ -250,6 +260,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 )
                 detection = await database.faces.create(
                     FaceCreateRequest(
+                        provenance=fixture_provenance(face.origin),
                         identifier=identifier,
                         source_id=source.source_id,
                         bounding_box=face_box(face),
@@ -302,6 +313,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             if record is None:
                 record = await database.text_mentions.create(
                     TextMentionCreateRequest(
+                        provenance=fixture_provenance(mention.origin),
                         name=person.name,
                         entity_link_state=EntityLinkState.manual if mention.state == "manual" else EntityLinkState.automatic,
                         context=mention.text,

@@ -30,6 +30,43 @@ def document_sources(ids):
     )
 
 
+EVIDENCE_FIELDS = (
+    "entity_link_state", "evidence_origin", "evidence_library", "evidence_source_id", "document_source_id",
+    "evidence_touched_from", "evidence_touched_to", "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
+)
+
+
+def annotation_conditions(model, values):
+    """Portable annotation criteria shared by lists, counts and related-resource queries."""
+    from people_gator_api.schemas.missing import missing_to_none
+    conditions = []
+    for field, column in (("entity_link_state", model.entity_link_state),
+                          ("evidence_source_id", model.source_id),
+                          ("evidence_touched_by_user_id", model.last_touched_by_user_id),
+                          ("evidence_touched_by_api_key_id", model.last_touched_by_api_key_id)):
+        value = missing_to_none(getattr(values, field))
+        if value is not None:
+            conditions.append(column.in_(value))
+    origins = missing_to_none(values.evidence_origin)
+    if origins is not None:
+        conditions.append(func.coalesce(model.provenance["origin"].astext, "unknown").in_(origins))
+    for field, op in (("evidence_touched_from", model.last_touched_at.__ge__),
+                      ("evidence_touched_to", model.last_touched_at.__le__)):
+        value = missing_to_none(getattr(values, field))
+        if value is not None:
+            conditions.append(op(value))
+    documents = missing_to_none(values.document_source_id)
+    if documents is not None:
+        conditions.append(model.source_id.in_(document_sources(documents)))
+    libraries = missing_to_none(values.evidence_library)
+    if libraries is not None:
+        conditions.append(model.source_id.in_(union_all(
+            select(Page.__table__.c.id).where(Page.__table__.c.library.in_(libraries)),
+            select(Document.__table__.c.id).where(Document.__table__.c.library.in_(libraries)),
+        )))
+    return conditions
+
+
 def evidence_predicate(filter_values, *, entity=False):
     """All related evidence constraints must be satisfied by the same link.
 
@@ -54,7 +91,7 @@ def evidence_predicate(filter_values, *, entity=False):
     predicates = []
     selections = []
     for model, ids in ((ImageOccurrence, face_ids), (TextMention, mention_ids)):
-        conditions = []
+        conditions = annotation_conditions(model, filter_values)
         if model is ImageOccurrence:
             conditions.append(model.occurrence_type == "face")
         if entity:
@@ -89,11 +126,13 @@ def evidence_predicate(filter_values, *, entity=False):
             else exists(select(1).select_from(model).where(*conditions))
         )
         predicates.append(predicate)
-    if face_ids is not None and mention_ids is not None:
+    wants_faces = face_ids is not None or getattr(filter_values, "has_detections", None) is True or getattr(filter_values, "has_faces", None) is True
+    wants_mentions = mention_ids is not None or getattr(filter_values, "has_mentions", None) is True
+    if wants_faces and wants_mentions:
         return predicates[0] & predicates[1]
-    if face_ids is not None:
+    if wants_faces:
         return predicates[0]
-    if mention_ids is not None:
+    if wants_mentions:
         return predicates[1]
     return Entity.id.in_(union_all(*selections)) if entity else or_(*predicates)
 
