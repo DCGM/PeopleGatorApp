@@ -386,6 +386,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     upload_page = await database.sources.get_page(pages["media-upload-1"])
     if upload_page is None:
         raise ValueError("Media upload preview page is missing")
+    activity_page = next(item for item in PAGES if item.key == "provenance-a-1")
+    activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -395,6 +397,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "page-activity": (
+                f"/libraries/{activity_document.library}/documents/{activity_document.document_id}"
+                f"/pages/{activity_page.page_id}?panel=activity"
+            ),
             # Reuse the maintained review records and local media: page 1 has
             # automatic/manual evidence; page 2 has verified/unassigned evidence.
             # These links add a toolbar scenario without rewriting reviewed data.

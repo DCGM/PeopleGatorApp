@@ -322,3 +322,11 @@ not fabricate fixed historical timestamps. New fixture keys are additive and
 reruns preserve provenance, edits, attribution and checkpoints. Integration
 coverage asserts equivalent repository matches and unchanged annotation times
 on rerun and identical verification.
+
+The `page-activity` example opens the provenance ledger directly with
+`panel=activity`. Its two faces and one mention have two importer edits and one
+later reviewer verification. In the scan sidebar, choose Activity, then By user:
+selecting Preview reviewer shows the verified authority face. By day groups the
+recorded annotation edits in browser local time. The default Face tab and scan
+canvas retain their compact layout. The seed's activity link is additive and
+does not rewrite reviewed fixture data.

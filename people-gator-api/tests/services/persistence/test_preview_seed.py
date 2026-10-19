@@ -1562,3 +1562,22 @@ async def test_evidence_pagination_counts_and_similarity_witnesses(seed_target):
         filter_=EntityListFilter(evidence_origin=['authority'])))
     assert [item.entity_id for item in found.items] == [person]
     assert found.items[0].matched_detection_ids == [seed.faces['provenance-authority']]
+
+
+@pytest.mark.asyncio
+async def test_page_activity_example_distinguishes_annotation_editors(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.schemas.mentions import TextMentionListFilter
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    assert parse_qs(urlsplit(seed.filter_examples['page-activity']).query) == {'panel':['activity']}
+    page_id = seed.pages['provenance-a-1']
+    faces = (await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[page_id])))).items
+    mentions = (await db.text_mentions.list(TextMentionListRequest(limit=100, filter_=TextMentionListFilter(source_id=[page_id])))).items
+    assert len(faces) == 2 and len(mentions) == 1
+    edits = [*faces,*mentions]
+    assert sum(item.last_touched_by_user_id == seed.users['importer'] for item in edits) == 2
+    assert sum(item.last_touched_by_user_id == seed.users['reviewer'] for item in edits) == 1
+    assert all(item.last_touched_at for item in edits)
+    reviewer_faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[page_id], evidence_touched_by_user_id=[seed.users['reviewer']])))
+    assert [item.detection_id for item in reviewer_faces.items] == [seed.faces['provenance-authority']]

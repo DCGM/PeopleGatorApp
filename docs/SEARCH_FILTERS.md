@@ -103,8 +103,12 @@ represent a working server criterion.
 
 Documents, scan search, people search and person details expose one shared set
 of annotation criteria. Page workspaces apply and forward those URL criteria
-without an additional filter panel or tags, preserving space for the scan; edit
-shared criteria in a related list/profile. The existing compact scan toolbar
+without an additional filter panel above the scan. Its sidebar Activity tab
+lists the current page’s faces and mentions by local edit day or last user.
+Selecting a group applies inclusive annotation-day bounds or an annotation-user
+criterion; groups retain the complete source collection so selections can be
+broadened. Unknown historical metadata remains explicit and is not a time/user
+filter. Other shared criteria remain editable in a related list/profile. The existing compact scan toolbar
 continues to control annotation link state. Their names, OR selections, inclusive time
 bounds and AND combination match the API fields documented in
 [annotation processing](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md#annotation-criteria-versus-resource-processing-31).
@@ -156,3 +160,11 @@ Weaviate adapter explicitly rejects the new provenance/edit filter groups and
 recorded provenance ingestion; it must not silently return unfiltered results.
 No authority crawler or historical audit log is introduced. Synthetic authority
 references use `preview.invalid`; no external authority data is fetched.
+
+Page sidebar URLs use `panel=activity` (default `face`) and
+`activity_group=user` (default local day). Day boundaries use consecutive local
+midnights, including daylight-saving changes; the upper bound is inclusive at
+23:59:59.999 local time. Group entries show their own recorded annotation edit
+time, rather than the page/document processing timestamp. Activity time/user
+chips can be removed independently and clearing them retains other criteria and
+the return journey.

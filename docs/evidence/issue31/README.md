@@ -15,6 +15,7 @@ below-640px Collapsible opened in list/profile/discovery panels; unsuffixed mobi
 | `profile-*` | One matching face of four overall, with one clear-all action and retained origin context |
 | `provenance-*` | Expanded recorded identity and face provenance, original importer/key and later JWT reviewer |
 | `mentions-empty-*` | Accessible Mentions tab, filtered zero and recovery |
+| `activity-time-*`, `activity-user-*` | Sidebar Activity tab groups faces/mentions by annotation edit day or last user; clicking groups filters the scan |
 | `page-*` | Same annotation highlighted in its source workspace; URL criteria retained without a filter panel |
 | `discovery-*` | Assigned-elsewhere discovery choice, independent of assigned-evidence state |
 | `people-dark-*` | Standard controls and active tags in dark theme |
@@ -35,3 +36,9 @@ Executed browser checks in Chromium at both widths:
 
 The fixture authority is synthetic and its reference uses `preview.invalid`;
 no external authority was contacted. Inference services are not required.
+
+Additional Activity checks at both viewports: day/user group selection updates
+annotation URL predicates and the scan’s visible annotations; groups retain all
+page records, copied URLs restore the Activity/By user tabs, and clearing removes
+only time/user selection. Recorded editor attribution is independent of owner,
+verifier and page/document processing metadata.

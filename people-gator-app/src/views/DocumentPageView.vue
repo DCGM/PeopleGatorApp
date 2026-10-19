@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
@@ -475,46 +477,64 @@ onBeforeUnmount(() => {
       @select="selectFace"
     />
 
-    <div class="workspace-current min-w-0 border-t bg-background">
-      <details id="link-statistics" class="border-b text-xs" @keydown.stop>
-        <summary
-          class="cursor-pointer px-5 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-        >
-          Link statistics
-        </summary>
-        <div class="max-h-52 overflow-y-auto px-5 pb-4">
-          <p class="break-all text-muted-foreground">{{ page?.library }} · {{ page?.page_id }}</p>
-          <p class="my-2 font-semibold">This page</p>
-          <EntityLinkStatistics v-if="page" :stats="page.entity_link_stats" unassigned />
-          <p class="my-2 font-semibold">Whole document</p>
-          <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
-          <p v-else-if="documentQuery.error.value" role="alert">
-            Could not load document statistics.
-            <button class="underline" @click="documentQuery.refetch()">Retry</button>
-          </p>
-          <EntityLinkStatistics
-            v-else-if="documentQuery.data.value"
-            :stats="documentQuery.data.value.entity_link_stats"
-            unassigned
-          />
-        </div>
-      </details>
-      <CurrentFacePanel
-        class="p-5"
-        :face="selectedFace ?? null"
-        :assignment-pending="assignmentStatus === 'pending'"
-        @find-profile="focusSimilarPeopleSearch"
-        @create="createSimilarPerson"
-        @unassign="unassignSelectedFace"
+    <Tabs
+      class="workspace-current min-w-0 border-t bg-background"
+      :model-value="route.query.panel === 'activity' ? 'activity' : 'face'"
+      @update:model-value="
+        (value) =>
+          router.push({
+            query: { ...route.query, panel: value === 'activity' ? 'activity' : undefined },
+          })
+      "
+    >
+      <TabsList aria-label="Page sidebar" class="mx-5 mt-3"
+        ><TabsTrigger value="face">Face</TabsTrigger
+        ><TabsTrigger value="activity">Activity</TabsTrigger></TabsList
       >
-        <VerifyEntityLink
-          v-if="selectedFace"
-          v-bind="selectedFace"
-          :id="selectedFace.id"
-          kind="face"
-        />
-      </CurrentFacePanel>
-    </div>
+      <TabsContent value="face">
+        <details id="link-statistics" class="border-b text-xs" @keydown.stop>
+          <summary
+            class="cursor-pointer px-5 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            Link statistics
+          </summary>
+          <div class="max-h-52 overflow-y-auto px-5 pb-4">
+            <p class="break-all text-muted-foreground">{{ page?.library }} · {{ page?.page_id }}</p>
+            <p class="my-2 font-semibold">This page</p>
+            <EntityLinkStatistics v-if="page" :stats="page.entity_link_stats" unassigned />
+            <p class="my-2 font-semibold">Whole document</p>
+            <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
+            <p v-else-if="documentQuery.error.value" role="alert">
+              Could not load document statistics.
+              <button class="underline" @click="documentQuery.refetch()">Retry</button>
+            </p>
+            <EntityLinkStatistics
+              v-else-if="documentQuery.data.value"
+              :stats="documentQuery.data.value.entity_link_stats"
+              unassigned
+            />
+          </div>
+        </details>
+        <CurrentFacePanel
+          class="p-5"
+          :face="selectedFace ?? null"
+          :assignment-pending="assignmentStatus === 'pending'"
+          @find-profile="focusSimilarPeopleSearch"
+          @create="createSimilarPerson"
+          @unassign="unassignSelectedFace"
+        >
+          <VerifyEntityLink
+            v-if="selectedFace"
+            v-bind="selectedFace"
+            :id="selectedFace.id"
+            kind="face"
+          />
+        </CurrentFacePanel>
+      </TabsContent>
+      <TabsContent value="activity"
+        ><PageActivityPanel v-if="page" :source-id="page.source_id"
+      /></TabsContent>
+    </Tabs>
     <SimilarPeopleSearch
       :key="candidateSearchResetKey"
       ref="similarPeopleSearch"
