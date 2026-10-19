@@ -236,7 +236,10 @@ failed activation, recovery targets the last healthy committed release, includin
 when the first upgrade fails. After a successful activation, it targets the
 retained previous release. Activation journals retain the complete environment
 and recovery target; retries repair interrupted state/environment/history
-publication before treating a delivery as complete.
+publication before treating a delivery as complete. After routed readiness,
+publication commits `state.json` before replacing the retained rollback files.
+An interruption before that commit preserves the older rollback target; after
+the commit, retries and recovery finish the remaining files from the journal.
 
 **Release access boundary.** The production stack has no reload, debug, seed or
 development mounts, but the current frontend build embeds demo auto-login

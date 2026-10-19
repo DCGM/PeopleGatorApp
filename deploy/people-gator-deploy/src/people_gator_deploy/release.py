@@ -149,10 +149,13 @@ class Release(Host):
     def finish_activation(self, pending):
         """Complete the file publication idempotently after routed readiness."""
         record = pending["record"]
+        # State is the commit point. Before it succeeds, recovery must still
+        # find the older rollback pair. Afterward, the journal can finish every
+        # remaining write before update/recover selects a release.
+        write_private(self.root / "state.json", json.dumps(record))
         if pending.get("previous"):
             write_private(self.root / "previous.json", json.dumps(pending["previous"]))
             write_private(self.root / "previous.env", pending["previous_environment"])
-        write_private(self.root / "state.json", json.dumps(record))
         write_private(self.root / "compose.env", pending["environment"])
         history = self.root / "history.jsonl"
         lines = history.read_text().splitlines() if history.exists() else []

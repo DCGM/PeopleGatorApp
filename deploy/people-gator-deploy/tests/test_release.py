@@ -250,6 +250,32 @@ class ReleaseTests(unittest.TestCase):
         self.release.fail = None
         self.assertEqual(self.release.recover()["tag"], "v1.0.0")
 
+    def test_recovery_after_interrupted_publication_preserves_the_correct_previous_release(self):
+        for filename in ("state.json", "previous.json", "previous.env", "compose.env", "history.jsonl"):
+            for after_write in (False, True):
+                with self.subTest(file=filename, after_write=after_write), tempfile.TemporaryDirectory() as temporary:
+                    controller = FakeRelease(Path(temporary))
+                    controller.deploy("v0.9.0")
+                    controller.deploy("v1.0.0")
+                    original = release.write_private
+                    def interrupted(path, content):
+                        if path == controller.root / filename:
+                            if after_write:
+                                original(path, content)
+                            raise OSError("Simulated publication interruption")
+                        return original(path, content)
+                    with patch.object(release, "write_private", side_effect=interrupted), self.assertRaises(OSError):
+                        controller.deploy("v1.1.0")
+                    committed = controller.state()["tag"] == "v1.1.0"
+                    self.assertEqual(controller.recover()["tag"], "v1.0.0")
+                    expected = "v1.1.0" if committed else "v0.9.0"
+                    self.assertEqual(controller.state("previous.json")["tag"], expected)
+                    self.assertIn(f"RELEASE_TAG='{expected}'", (controller.root / "previous.env").read_text())
+                    self.assertIn("RELEASE_TAG='v1.0.0'", (controller.root / "compose.env").read_text())
+                    self.assertFalse((controller.root / "activation.json").exists())
+                    if not committed:
+                        self.assertEqual(controller.recover()["tag"], "v0.9.0")
+
     def test_private_inputs_keep_roles_separate_and_cannot_override_production_settings(self):
         runtime = Path(self.release.config["runtime_file"])
         original = runtime.read_text()
