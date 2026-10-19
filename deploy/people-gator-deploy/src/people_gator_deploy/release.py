@@ -171,8 +171,13 @@ class Release(Host):
     def activate(self, candidate: Path, record: dict):
         current = self.state()
         record = {**record, "activation": secrets.token_hex(16)}
-        pending = {"record": record, "environment": candidate.read_text(), "previous": current,
-                   "previous_environment": (self.root / "compose.env").read_text() if current else None}
+        # Recovering an uncommitted candidate reactivates the current healthy
+        # release. Keep its older recovery target rather than replacing it with
+        # a duplicate of itself.
+        replaced = current if current and any(current.get(key) != record.get(key)
+                                              for key in ("tag", "commit", "images")) else None
+        pending = {"record": record, "environment": candidate.read_text(), "previous": replaced,
+                   "previous_environment": (self.root / "compose.env").read_text() if replaced else None}
         write_private(self.root / "activation.json", json.dumps(pending))
         self.command(self.compose_release(candidate, "config", "--quiet"))
         self.command(self.compose_release(candidate, "up", "-d", "--wait", "--wait-timeout", "300", "backend"))

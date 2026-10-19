@@ -216,6 +216,10 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(controller.state()["tag"], "v1.0.0")
                 self.assertIn("RELEASE_TAG='v1.0.0'", (controller.root / "compose.env").read_text())
                 self.assertFalse((controller.root / "activation.json").exists())
+                if earlier:
+                    self.assertEqual(controller.state("previous.json")["tag"], "v0.9.0")
+                else:
+                    self.assertIsNone(controller.state("previous.json"))
 
     def test_retry_repairs_each_interrupted_commit_without_losing_recovery_target(self):
         for filename in ("previous.json", "previous.env", "state.json", "compose.env", "history.jsonl"):
