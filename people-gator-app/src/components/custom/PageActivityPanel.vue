@@ -81,7 +81,10 @@ function clear() {
 }
 </script>
 <template>
-  <section class="min-w-0 space-y-3 p-5" aria-label="Page annotation activity">
+  <section
+    class="max-h-[min(50dvh,23rem)] min-w-0 space-y-3 overflow-y-auto p-5"
+    aria-label="Page annotation activity"
+  >
     <h3>Annotation activity</h3>
     <p>
       <small
@@ -103,13 +106,18 @@ function clear() {
         ><TabsTrigger value="user">By user</TabsTrigger></TabsList
       >
     </Tabs>
-    <ActiveFilters :filters="tags" @remove="remove" @clear="clear" />
+    <ActiveFilters
+      clear-label="Clear activity filters"
+      :filters="tags"
+      @remove="remove"
+      @clear="clear"
+    />
     <p v-if="error" role="alert">
       Could not load activity. <Button variant="link" @click="retry">Retry</Button>
     </p>
     <p v-else-if="loading" role="status">Loading all page annotations…</p>
     <p v-else-if="!groups.length">No face or mention activity on this page.</p>
-    <div v-else class="max-h-72 space-y-3 overflow-y-auto">
+    <div v-else class="space-y-3">
       <section v-for="group in groups" :key="group.key" class="min-w-0 space-y-2">
         <Button
           v-if="group.key"

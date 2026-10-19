@@ -631,6 +631,7 @@ onBeforeUnmount(() => {
   }
 
   .workspace-galery {
+    min-height: 12rem;
     grid-column: 2;
     grid-row: 1;
   }

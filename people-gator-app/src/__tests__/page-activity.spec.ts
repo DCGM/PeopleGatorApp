@@ -77,11 +77,11 @@ describe('page annotation activity', () => {
     expect(wrapper.text()).toContain('User not recorded')
     expect(wrapper.text()).toContain('Historical face')
     expect(
-      wrapper.findAll('button').filter((button) => button.text() === 'Clear all filters'),
+      wrapper.findAll('button').filter((button) => button.text() === 'Clear activity filters'),
     ).toHaveLength(1)
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === 'Clear all filters')!
+      .find((button) => button.text() === 'Clear activity filters')!
       .trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.evidence_user).toBeUndefined()
