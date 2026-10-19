@@ -102,7 +102,7 @@ jobs:
             docker build -f deploy/backup/Dockerfile -t "$BACKUP_TEST_IMAGE" .
             people-gator-api/.venv/bin/python deploy/backup/tests/test_roundtrip.py -v
           fi
-      - name: Exercise private snapshot restore and sanitization on synthetic data
+      - name: Exercise private snapshot restore and referenced media transfer on synthetic data
         working-directory: people-gator-api
         env:
           STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
@@ -110,7 +110,10 @@ jobs:
           STAGING_TEST_DATABASE_PASSWORD: ci
           STAGING_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
-          if [ -f ../deploy/preview/tests/test_snapshot.py ]; then
+          # Older PR heads still carry the snapshot worker in deploy/preview.
+          if [ -f ../deploy/people-gator-deploy/tests/test_snapshot.py ]; then
+            uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
+          elif [ -f ../deploy/preview/tests/test_snapshot.py ]; then
             uv run --locked python ../deploy/preview/tests/test_snapshot.py -v
           fi
       - name: Exercise candidate container migration and API startup gates
@@ -123,7 +126,9 @@ jobs:
           STAGING_TEST_NETWORK: people-gator-staging-gate-${{ github.run_id }}-${{ github.run_attempt }}
           STAGING_TEST_IMAGE: people-gator-staging-gate:${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          if [ -f ../deploy/preview/tests/test_staging_runtime.py ]; then
+          suite=../deploy/people-gator-deploy/tests/test_staging_runtime.py
+          if [ ! -f "$suite" ]; then suite=../deploy/preview/tests/test_staging_runtime.py; fi
+          if [ -f "$suite" ]; then
             cleanup() {
               docker network disconnect "$STAGING_TEST_NETWORK" "$STAGING_TEST_POSTGRES_CONTAINER" || true
               docker network rm "$STAGING_TEST_NETWORK" || true
@@ -133,32 +138,45 @@ jobs:
             docker network create --internal "$STAGING_TEST_NETWORK"
             docker network connect --alias preview-postgres "$STAGING_TEST_NETWORK" "$STAGING_TEST_POSTGRES_CONTAINER"
             docker build -t "$STAGING_TEST_IMAGE" .
-            uv run --locked python ../deploy/preview/tests/test_staging_runtime.py -v
+            PYTHONPATH=../deploy/people-gator-deploy/src uv run --locked python "$suite" -v
           fi
-      # Older PR heads may not contain the controller suite added with this workflow.
-      # Keep application checks/builds pinned to the PR head and fetch this suite
-      # from the exact workflow commit into a separate checkout.
-      - name: Check out preview controller tests from workflow commit
+      # Older PR heads may not contain the deployment utility suite added with this
+      # workflow. Keep application checks/builds pinned to the PR head and fetch
+      # this suite from the exact workflow commit into a separate checkout.
+      - name: Check out deployment utility tests from workflow commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.workflow_sha }}
-          path: .preview-controller-ci
-          # The installation suite executes the lifecycle workflow's shell scripts.
+          path: .deploy-controller-ci
+          # The workflow suite inspects and executes the lifecycle workflow scripts.
           sparse-checkout: |
-            deploy/preview
+            deploy
             .github/workflows
           persist-credentials: false
-      - name: Test preview controller
-        working-directory: .preview-controller-ci
+      - name: Test deployment utility
+        working-directory: .deploy-controller-ci
         env:
           PREVIEW_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
+          PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
+          # Legacy controller bundles stay usable until operators retire them.
           python3 deploy/preview/tests/test_preview.py -v
           python3 deploy/preview/tests/test_installation.py -v
-          python3 deploy/preview/tests/test_observability.py -v
           python3 deploy/preview/tests/test_staging.py -v
           python3 deploy/preview/tests/test_configure_staging.py -v
           python3 deploy/preview/tests/test_snapshot.py -v
+      - name: Build and run the deployment utility wheel outside the checkout
+        working-directory: .deploy-controller-ci
+        run: |
+          scratch="$(mktemp -d "$RUNNER_TEMP/people-gator-deploy wheel.XXXXXX")"
+          trap 'rm -rf -- "$scratch"' EXIT
+          python3 -m venv "$scratch/build env"
+          "$scratch/build env/bin/pip" wheel --no-deps -w "$scratch/dist" deploy/people-gator-deploy
+          python3 -m venv "$scratch/run env"
+          "$scratch/run env/bin/pip" install --no-deps "$scratch"/dist/people_gator_deploy-*.whl
+          cd "$scratch"
+          "$scratch/run env/bin/people-gator-deploy" --version
+          "$scratch/run env/bin/people-gator-deploy" --help >/dev/null
 
   images:
     needs: [frontend, backend]

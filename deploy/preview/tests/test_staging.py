@@ -343,19 +343,6 @@ class StagingTests(unittest.TestCase):
         self.assertIn("--user 10001:10001", command)
         self.assertEqual(json.loads(controller.inputs[-1]), {"media-policy.json": {"permitted_page_ids": []}})
 
-    def test_shared_host_lock_and_reviewed_main_workflow_guards(self):
-        source = (DIRECTORY / "staging.py").read_text()
-        self.assertIn('(controller.root / "controller.lock")', source)
-        workflow = (DIRECTORY.parents[1] / ".github/workflows/staging.yml").read_text()
-        self.assertIn("runs-on: [self-hosted, linux, x64, people-gator-staging]", workflow)
-        self.assertIn("group: people-gator-preview-host", workflow)
-        self.assertIn("staging.yml@refs/heads/main", workflow)
-        self.assertIn("ref: ${{ github.workflow_sha }}", workflow)
-        self.assertIn("if: always() && steps.registry-config.outputs.path != ''", workflow)
-        ci = (DIRECTORY.parents[1] / ".github/workflows/pr-ci.yml").read_text()
-        self.assertIn("push:\n    branches: [main]", ci)
-        self.assertIn("github.event.pull_request.head.sha || github.sha", ci)
-
     def test_disposable_ci_workers_are_outside_live_staging_recovery_scope(self):
         controller = self.controller
         other_root = self.root / "ci-fixture"
