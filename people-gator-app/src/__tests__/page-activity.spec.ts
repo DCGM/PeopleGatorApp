@@ -27,7 +27,7 @@ vi.mock('@/viewmodels/page-activity', async (original) => ({
     items: ref(records),
     loading: ref(false),
     error: ref(null),
-    retry: vi.fn(),
+    retry: vi.fn<() => void>(),
   }),
 }))
 vi.mock('@/query/people-filter-options', () => ({

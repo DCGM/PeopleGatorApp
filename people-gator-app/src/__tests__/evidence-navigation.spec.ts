@@ -3,7 +3,15 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { computed, defineComponent } from 'vue'
 import { createMemoryHistory, createRouter, useRoute } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-const api = vi.hoisted(() => ({ faces: vi.fn(), mentions: vi.fn(), entity: vi.fn() }))
+type ApiCall = (request: {
+  path: { entity_id: string }
+  query: Record<string, string | string[] | boolean | undefined>
+}) => Promise<unknown>
+const api = vi.hoisted(() => ({
+  faces: vi.fn<ApiCall>(),
+  mentions: vi.fn<ApiCall>(),
+  entity: vi.fn<ApiCall>(),
+}))
 vi.mock('@/client', () => ({
   listFacesRouteApiV1FacesGet: api.faces,
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
@@ -49,7 +57,7 @@ describe('copied profile URLs and evidence requests', () => {
       Promise.resolve({
         data: {
           items: [],
-          total_count: query['filter.evidence_origin']?.includes('manual') ? 0 : 2,
+          total_count: [query['filter.evidence_origin']].flat().includes('manual') ? 0 : 2,
           limit: 100,
           cursor: query.return_total_count && !query.cursor ? 'next' : null,
         },
@@ -86,16 +94,16 @@ describe('copied profile URLs and evidence requests', () => {
     expect(wrapper.text()).toContain('2 matching of 7 faces')
     await wrapper.get('button').trigger('click')
     await flushPromises()
-    expect(evidenceRequests().slice(-1)[0].cursor).toBe('next')
+    expect(evidenceRequests().slice(-1)[0]?.cursor).toBe('next')
     const original = router.currentRoute.value.fullPath
     await router.push({ query: { ...router.currentRoute.value.query, evidence_origin: 'manual' } })
     await flushPromises()
-    expect(evidenceRequests().slice(-1)[0].cursor).toBeNull()
+    expect(evidenceRequests().slice(-1)[0]?.cursor).toBeNull()
     expect(wrapper.text()).toContain('0 matching of 7 faces')
     router.back()
     await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe(original)
-    expect(evidenceRequests().slice(-1)[0].cursor).toBeNull()
+    expect(evidenceRequests().slice(-1)[0]?.cursor).toBeNull()
     expect(wrapper.text()).toContain('2 matching of 7 faces')
     router.forward()
     await flushPromises()
@@ -105,7 +113,7 @@ describe('copied profile URLs and evidence requests', () => {
     expect(destination.origin_person_touched_from).toBe('2020-01-01T00:00:00Z')
     await router.push({ name: 'person-detail', params: { personId: two }, query: destination })
     await flushPromises()
-    expect(evidenceRequests().slice(-1)[0]['filter.entity_id']).toEqual([two])
+    expect(evidenceRequests().slice(-1)[0]?.['filter.entity_id']).toEqual([two])
     wrapper.unmount()
     client.clear()
   })
