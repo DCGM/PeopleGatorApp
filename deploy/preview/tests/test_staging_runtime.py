@@ -204,8 +204,10 @@ print("S3 login, API keys, scan replacement and both media caches passed")'''
                     controller.command(controller.compose_staging(wrong, "run", "--rm", "--no-deps", "backend"))
             finally:
                 fixture.sql(f"DROP DATABASE {empty} WITH (FORCE);")
+            migrated_revision = fixture.sql("SELECT version_num FROM alembic_version", values["DB_NAME"]).strip()
+            self.assertRegex(migrated_revision, r"^[a-z0-9]+$")
             for mutation, recovery in (
-                ("UPDATE alembic_version SET version_num='unknown_revision'", "UPDATE alembic_version SET version_num='d34a021b0006'"),
+                ("UPDATE alembic_version SET version_num='unknown_revision'", f"UPDATE alembic_version SET version_num='{migrated_revision}'"),
                 ("ALTER TABLE pg_demo_entities RENAME COLUMN description TO drifted_description", "ALTER TABLE pg_demo_entities RENAME COLUMN drifted_description TO description"),
             ):
                 fixture.sql(mutation, values["DB_NAME"])
