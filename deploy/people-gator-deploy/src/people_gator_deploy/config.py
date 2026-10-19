@@ -41,6 +41,12 @@ def private_file(path: Path):
             and stat.S_IMODE(path.stat().st_mode) & 0o077 == 0)
 
 
+def protected_file(path: Path):
+    """Readable by unprivileged containers, but writable only by its trusted owner."""
+    return (path.is_file() and not path.is_symlink() and path.stat().st_uid in {0, os.geteuid()}
+            and stat.S_IMODE(path.stat().st_mode) & 0o022 == 0)
+
+
 def validate(value, environment, path, *, inputs=False):
     def require(condition, field, reason):
         if not condition:
@@ -72,7 +78,9 @@ def validate(value, environment, path, *, inputs=False):
     if environment == "pr":
         users = absolute("users_file", value.get("users_file"))
         if inputs:
-            require(private_file(users), "users_file", "needs an owned mode-600 regular users file")
+            # The backend container (UID 10001) reads this bind mount.
+            require(protected_file(users), "users_file",
+                    "needs a regular users file owned by this account or root, not group/world writable")
     elif environment == "staging":
         private = absolute("private_dir", value.get("private_dir"))
         require(not (private.is_relative_to(root) or root.is_relative_to(private)), "private_dir", "must be outside state")
