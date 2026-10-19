@@ -13,6 +13,14 @@ from people_gator_deploy.core import DeployError
 
 
 class InstallationTests(unittest.TestCase):
+    def setUp(self):
+        # Real disposable operator installs must not inherit the runner's PR-CI
+        # identity. The source-policy test explicitly enables Actions for each
+        # trusted/untrusted workflow case below.
+        environment = patch.dict(os.environ, {"GITHUB_ACTIONS": "false"})
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def test_install_reuse_upgrade_pinning_and_failed_publication(self):
         with tempfile.TemporaryDirectory(prefix="deploy test ") as directory:
             root = Path(directory)
