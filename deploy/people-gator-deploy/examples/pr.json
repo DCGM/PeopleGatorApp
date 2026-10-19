@@ -1,0 +1,9 @@
+{
+  "repository": "DCGM/PeopleGatorApp",
+  "docker_context": "rootless",
+  "domain": "preview.peoplegator.dev",
+  "users_file": "/home/RUNNER/people-gator/preview-users.json",
+  "otel_network": "logging",
+  "otel_http_endpoint": "http://lgtm:4318",
+  "pgadmin_host": "pgadmin-preview.peoplegator.dev"
+}

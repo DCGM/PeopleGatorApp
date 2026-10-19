@@ -108,11 +108,11 @@ executed results, skips and limitations in the PR.
 | Backend | Focused pytest tests plus `uv run --locked pytest tests` with disposable PostgreSQL URLs for integration coverage |
 | Schema/migrations | Migration tests against a separate empty schema store; migrate, repeat, validate and exercise restricted runtime access |
 | Seed or visible/data behavior | Extend seed fixtures/docs/tests; run seed twice on isolated migrated PostgreSQL and local storage |
-| Preview/controller/Compose | `test_preview.py`, `test_installation.py`, `test_observability.py`; enable relevant documented live checks |
+| Deployment utility/Compose/workflows | `python3 -B -m unittest discover -s deploy/people-gator-deploy/tests` with the package on `PYTHONPATH`; enable relevant documented database/image/OTLP checks |
 | Documentation | Verify relative links, source contracts and executable examples; distinguish tested commands from operator-only steps |
 
 Run frontend commands in `people-gator-app`, backend commands in
-`people-gator-api`, controller commands from root. CI additionally smoke-tests
+`people-gator-api`, deployment utility commands from root. CI additionally smoke-tests
 migration/seed/check CLI and builds production images for same-repository PRs.
 Skipped optional services are not successful integration checks. Never use project
 or production stores for destructive schema tests.
@@ -132,11 +132,12 @@ accessible tags; do not restyle shared UI primitives for a screen-specific chang
 ## Review and operations
 
 Never commit credentials or private datasets. Keep application changes separate
-from trusted preview-host releases: after one-time operator provisioning, the
-lifecycle workflow automatically publishes validated controller/Compose bundles
-from its exact reviewed `main` revision without sudo. Candidate PR code must not
-become the host controller. Keep operator configuration and preview state outside
-release bundles; infrastructure upgrades remain explicit operator actions.
+from trusted host tooling: after one-time operator installation and
+configuration, lifecycle workflows install the `people-gator-deploy` utility from
+their exact reviewed `main` revision without sudo and invoke it. Candidate PR code
+must not become the host controller. Keep descriptors, credentials and environment
+state outside utility installations; infrastructure upgrades remain explicit
+operator actions.
 Review migrations, backup/restore and retained-data repairs before applying them;
 follow [Data maintenance](docs/DATA_MAINTENANCE.md).
 

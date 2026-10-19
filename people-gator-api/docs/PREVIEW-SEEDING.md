@@ -23,7 +23,8 @@ migration head and schema before writing data. It does not create or migrate
 schema itself. In a production-format backend container, use its `seed` command:
 
 ```sh
-docker compose --env-file /path/to/pr/compose.env -f deploy/preview/compose.pr.yaml run --rm --no-deps seed
+docker compose --env-file /path/to/pr/compose.env \
+  -f deploy/people-gator-deploy/src/people_gator_deploy/assets/compose.pr.yaml run --rm --no-deps seed
 ```
 
 The CLI prints IDs and clickable person/page URLs using the configured JWK issuer
@@ -32,13 +33,13 @@ for local use, set it to your local application URL if you want matching links.
 The public preview keeps its existing `test` / `test` login. Seed actors do not
 add login accounts or usable API-key secrets.
 
-The [staging S3 runtime test](../../deploy/preview/STAGING.md#validation) reuses
-these synthetic fixtures: it runs the seed twice in a disposable source database,
-creates a historical-revision dump, restores/sanitizes it and imports a permitted
-seeded page with linked face vectors into one disposable TLS S3 bucket. Staging
-users, API keys, signing keys, scans, OCR and both media caches use that bucket.
-This tests the existing filesystem contract without changing PR preview fixtures
-or automatically seeding the actual staging environment.
+The [staging database runtime test](../../deploy/people-gator-deploy/tests/test_staging_runtime.py)
+reuses these synthetic fixtures: it runs the seed twice in a disposable source
+database, creates a historical-revision local dump, restores original rows,
+links and vectors, then checks migrations, retained edits and API startup.
+There is no S3 service or media copy in that test. Staging storage/media/auth are
+managed externally; missing objects do not invalidate the database snapshot.
+This does not automatically seed the actual staging environment.
 
 ## What to explore
 
@@ -91,8 +92,8 @@ the database and seed checkpoint together; to create a completely fresh dataset,
 use a fresh database and storage pair.
 Repository lookups recover entities/faces/mentions created just before a failed
 checkpoint; a corrupt checkpoint is rejected rather than silently discarded.
-Run only one seeder per database/storage pair at a time; the preview controller
-already serializes deployments. The utility does not clear a database.
+Run only one seeder per database/storage pair at a time; the deployment utility
+already serializes preview deployments. The utility does not clear a database.
 
 Fixture definitions live in `seeding/fixtures.py`, media generation in
 `seeding/media.py`, and interface-based orchestration in `seeding/preview.py`.
@@ -109,20 +110,22 @@ throwaway local storage. Seed integration tests also run in isolated schemas on
 `PEOPLE_GATOR_SCHEMA_TEST_URL`, checking filters, vector discovery, OCR highlights,
 face crops, reruns, review edits, merges/deletions and checkpoint recovery.
 
-The trusted preview controller runs `storage-init`, `migrate`, then `seed` from the
-candidate backend image before starting backend/frontend. A failing seed command
-stops startup and leaves the previous deployment configuration/version intact,
-allowing retry. Repository writes may already have committed, so checkpoints are
+The trusted deployment utility removes the selected PR's old containers while
+retaining its database and media volume, then runs `storage-init`, `migrate`, and
+`seed` from the candidate backend image before starting backend/frontend. A
+failing seed command stops startup and leaves the previous deployment
+configuration/version intact for retry, but the preview stays stopped until a
+successful retry. Repository writes may already have committed, so checkpoints are
 used to resume; the seed is not one atomic database/filesystem transaction.
 
-After one-time operator provisioning, the lifecycle workflow publishes complete
-controller/Compose releases automatically from its exact reviewed `main` revision,
-without sudo; see [preview deployment](../../deploy/preview/README.md).
-No workflow checks out and executes PR deployment scripts directly on that host.
-Release publication validates Python and renders both Compose files before atomic
-publication, including the required seed service. The lifecycle runs that exact
-bundle, so a stale fixed installation cannot bypass candidate seeding. PR code
-never supplies the host controller; the candidate image supplies the fixture code.
+After one-time operator installation, the lifecycle workflow installs or reuses
+the `people-gator-deploy` utility from its exact reviewed `main` revision, without
+sudo, and runs that pinned version; see the
+[utility guide](../../deploy/people-gator-deploy/README.md). No workflow checks out
+and executes PR deployment scripts on that host. Installed versions are verified
+against their recorded file digests, so a stale or modified installation cannot
+bypass candidate seeding. PR code never supplies the host controller; the
+candidate image supplies the fixture code.
 Successful preview state includes a `seeded_version` marker; after a host upgrade,
 rerunning the same deployment can seed previews created by older controllers.
 

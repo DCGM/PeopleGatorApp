@@ -37,7 +37,7 @@ every endpoint, browser journey or deployment works.
 | Migrations and schema validation | Opt-in tests migrate disposable PostgreSQL stores, repeat migration, detect drift, preserve bootstrap data and exercise rollback. Schema validation is also tested with a restricted runtime role. | [Schema validation](../people-gator-api/tests/services/persistence/test_postgres_schema_validation.py), [bootstrap adoption](../people-gator-api/tests/services/persistence/test_bootstrap_adoption.py) |
 | Synthetic preview and media | Seed tests migrate isolated schemas, use real local files and query repositories/media services. They cover vectors, filters, OCR spans, crops, rerun/edit preservation and interrupted checkpoints. Selected HTTP tests use real PostgreSQL with an overridden authentication context. Media unit tests use generated image bytes and fake storage to exercise cache/error paths. | [Preview seed suite](../people-gator-api/tests/services/persistence/test_preview_seed.py), [page images](../people-gator-api/tests/services/media/test_page_image.py), [OCR spans](../people-gator-api/tests/services/media/test_text_mention_span_service.py), [seed guide](../people-gator-api/docs/PREVIEW-SEEDING.md) |
 | Storage and optional adapters | Local filesystem tests use temporary files; S3 tests use mocked clients. Weaviate repository/client tests use fakes, with a separate opt-in test against a disposable live Weaviate server. Passing mock tests does not establish live S3 or Weaviate compatibility. | [Local storage](../people-gator-api/tests/services/filesystem/test_local.py), [S3 adapter](../people-gator-api/tests/services/filesystem/test_s3.py), [live Weaviate](../people-gator-api/tests/services/persistence/test_weaviate_link_integration.py) |
-| Preview lifecycle and observability | unittest checks the controller using fake commands, SQL and GitHub responses. Release tests use disposable Git repositories and real Compose rendering to verify source restrictions, atomic publication/recovery, cache integrity and settings preservation. Workflow shell tests exercise release selection and temporary registry credentials with fake commands. These need Git and the Docker CLI; database isolation and actual OTLP delivery are separate opt-in Docker checks. No tests install controller code on the real preview host. | [Controller tests](../deploy/preview/tests/test_preview.py), [installation tests](../deploy/preview/tests/test_installation.py), [log delivery](../deploy/preview/tests/test_observability.py) |
+| Deployment utility and observability | unittest checks PR/staging/release lifecycles with scripted GitHub responses and recording Docker adapters, real files, locks and ordering. Installer tests build real isolated installs from disposable Git repositories (interrupted upgrades, pinning, integrity, CI source policy). Workflow tests execute lifecycle scripts against a stub executable and parse every emitted command with the real CLI; adapter tests use a fake Docker binary for context, credential and cancellation cleanup. Compose files are rendered by the real CLI. Database isolation, local snapshot restore/preservation, the database-only runtime image gate and OTLP delivery are opt-in Docker checks enabled in CI. No tests install code on a real host. | [Package tests](../deploy/people-gator-deploy/tests/), [utility guide](../deploy/people-gator-deploy/README.md#development) |
 
 Type checking and compilation catch contract/type/build errors; they are not
 behavioral test suites. The frontend currently has no configured real-browser
@@ -58,8 +58,8 @@ capture blockers keep the PR draft.
 
 Install the pinned dependencies using the
 [development setup](DEVELOPMENT.md#prerequisites-and-installation). Run frontend commands from
-`people-gator-app`, backend commands from `people-gator-api`, and controller
-commands from the repository root.
+`people-gator-app`, backend commands from `people-gator-api`, and deployment
+utility commands from the repository root.
 
 ### Focused checks during implementation
 
@@ -110,12 +110,10 @@ The ordinary S3 adapter tests do not need a real bucket.
 
 ```sh
 # From the repository root
-python3 deploy/preview/tests/test_preview.py -v
-python3 deploy/preview/tests/test_installation.py -v
-python3 deploy/preview/tests/test_observability.py -v
+PYTHONPATH=deploy/people-gator-deploy/src python3 -B -m unittest discover -s deploy/people-gator-deploy/tests -v
 ```
 
-The [preview host guide](../deploy/preview/README.md#validation) explains
+The [utility guide](../deploy/people-gator-deploy/README.md#development) explains
 `PREVIEW_TEST_POSTGRES_CONTAINER` for actual database-isolation checks and
 `PREVIEW_TEST_OTEL=1` for Docker log-delivery checks. These flags require the
 documented disposable infrastructure; do not enable them against shared data.
