@@ -1,0 +1,113 @@
+# Production application stack for verified release tags.
+# PostgreSQL, object storage and the reverse proxy are external dependencies.
+# Private API settings come from operator-owned env files: MIGRATION_FILE holds
+# only the migration role; RUNTIME_FILE holds the runtime role, storage and auth.
+# The fixed settings below cannot be overridden by those files.
+x-release-labels: &release-labels
+  people-gator.environment: release
+  people-gator.release.tag: ${RELEASE_TAG:?required}
+  people-gator.release.sha: ${COMMIT_SHA:?required}
+
+x-release-logging: &release-logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: '5'
+
+x-backend: &backend
+  image: ${BACKEND_IMAGE:?required}
+  logging: *release-logging
+  labels: *release-labels
+  user: '10001:10001'
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ['/tmp:size=256m,mode=1777']
+  mem_limit: ${BACKEND_MEMORY:-4g}
+  pids_limit: 512
+  env_file:
+    - ${RUNTIME_FILE:?required}
+  environment: &production
+    PEOPLE_GATOR_API__HOST: 0.0.0.0
+    PEOPLE_GATOR_API__PORT: '8000'
+    PEOPLE_GATOR_API__DEBUG: 'false'
+    PEOPLE_GATOR_API__RELOAD: 'false'
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
+    PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:?required}
+  networks: [database]
+
+services:
+  migrate:
+    <<: *backend
+    profiles: [tools]
+    env_file:
+      - ${MIGRATION_FILE:?required}
+    command: [migrate]
+
+  check:
+    <<: *backend
+    profiles: [tools]
+    command: [check]
+
+  backend:
+    <<: *backend
+    restart: unless-stopped
+    command: [api]
+    networks: [database, web]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    labels:
+      - people-gator.environment=release
+      - people-gator.release.tag=${RELEASE_TAG}
+      - people-gator.release.sha=${COMMIT_SHA}
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-release-api.entrypoints=websecure
+      - 'traefik.http.routers.pg-release-api.rule=Host(`${RELEASE_HOST:?required}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`))'
+      - traefik.http.routers.pg-release-api.priority=100
+      - traefik.http.routers.pg-release-api.service=pg-release-api
+      - traefik.http.routers.pg-release-api.tls=true
+      - traefik.http.routers.pg-release-api.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-release-api.loadbalancer.server.port=8000
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?required}
+    logging: *release-logging
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:size=32m,mode=1777']
+    mem_limit: 256m
+    pids_limit: 128
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [web]
+    labels:
+      - people-gator.environment=release
+      - people-gator.release.tag=${RELEASE_TAG}
+      - people-gator.release.sha=${COMMIT_SHA}
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-release-app.entrypoints=websecure
+      - 'traefik.http.routers.pg-release-app.rule=Host(`${RELEASE_HOST}`)'
+      - traefik.http.routers.pg-release-app.priority=10
+      - traefik.http.routers.pg-release-app.service=pg-release-app
+      - traefik.http.routers.pg-release-app.tls=true
+      - traefik.http.routers.pg-release-app.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-release-app.loadbalancer.server.port=8080
+
+networks:
+  database:
+    external: true
+    name: ${DATABASE_NETWORK:?required}
+  web:
+    external: true
+    name: ${WEB_NETWORK:-web}

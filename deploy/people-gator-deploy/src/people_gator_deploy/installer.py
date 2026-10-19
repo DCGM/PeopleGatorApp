@@ -71,16 +71,23 @@ def install(source: Path, revision: str, *, scope="user", prefix=None, run_as=No
     if account and account.pw_uid == 0:
         raise DeployError("The routine deployment account must be unprivileged")
     # CI may execute only its exact reviewed default-branch workflow revision.
+    # Release tags run the tagged workflow, so that commit must already be on main.
+    tagged = False
     if os.environ.get("GITHUB_ACTIONS") == "true":
         repository = os.environ.get("GITHUB_REPOSITORY", "")
+        workflow = os.environ.get("GITHUB_WORKFLOW_REF", "")
         allowed = {f"{repository}/.github/workflows/{name}@refs/heads/main"
                    for name in ("pr-preview.yml", "staging.yml", "release.yml")}
-        if (os.environ.get("GITHUB_WORKFLOW_REF") not in allowed
-                or os.environ.get("GITHUB_WORKFLOW_SHA") != revision):
+        tagged = bool(re.fullmatch(re.escape(f"{repository}/.github/workflows/release.yml@refs/tags/")
+                                   + r"v[0-9A-Za-z.+-]+", workflow))
+        if (workflow not in allowed and not tagged) or os.environ.get("GITHUB_WORKFLOW_SHA") != revision:
             raise DeployError("CI installation requires the exact reviewed main deployment workflow commit")
         if scope != "user":
             raise DeployError("CI cannot upgrade a system installation; ask its operator or select a user prefix")
     git(source, "cat-file", "-e", revision + "^{commit}")
+    if tagged and subprocess.run(["git", "-C", str(source), "merge-base", "--is-ancestor", revision,
+                                  "refs/remotes/origin/main"], capture_output=True).returncode != 0:
+        raise DeployError("Tag-triggered controllers must be commits already reviewed on main")
     paths = layout(scope, prefix)
     versions = Path(paths["versions"])
     versions.mkdir(mode=0o755, parents=True, exist_ok=True)

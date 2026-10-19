@@ -214,6 +214,34 @@ class EnvironmentTests(unittest.TestCase):
         with self.assertRaisesRegex(DeployError, "domain differs"):
             mismatched.adopt(legacy, backup_record=record)
 
+    def test_release_descriptor_requires_reviewed_access_and_private_role_files(self):
+        private = self.root / "private/release"
+        private.mkdir(mode=0o700)
+        files = {}
+        for name, line in (("runtime_file", "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=runtime\n"
+                                            "PEOPLE_GATOR_API__STORAGE__S3__BUCKET_NAME=release\n"),
+                           ("migration_file", "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER=migrator\n")):
+            files[name] = private / f"{name}.env"
+            files[name].write_text(line)
+            files[name].chmod(0o600)
+        path = self.root / "environments/release/config.json"
+        value = {"repository": "DCGM/PeopleGatorApp", "state_dir": str(self.root / "state/release"),
+                 "docker_context": "rootless", "host": "people.example.invalid", "web_network": "web",
+                 "database_network": "production-db", **{k: str(v) for k, v in files.items()}}
+        with self.assertRaisesRegex(DeployError, "access_reviewed"):
+            config.configure("release", path, value)
+        config.configure("release", path, {**value, "access_reviewed": True})
+        environment = self.environment(path, "release")
+        with self.assertRaisesRegex(DeployError, "--tag"):
+            environment.update()
+        self.assertTrue(environment.install()["changed"])
+        self.assertIn(["docker", "network", "inspect", "production-db"], environment.docker.calls)
+        self.assertEqual(environment.preflight()["provisioned"], True)
+        self.assertFalse(environment.install()["changed"])
+        files["runtime_file"].chmod(0o644)
+        with self.assertRaisesRegex(DeployError, "runtime_file"):
+            environment.preflight()
+
 
 if __name__ == "__main__":
     unittest.main()

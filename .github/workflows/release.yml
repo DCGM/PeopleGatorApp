@@ -1,0 +1,72 @@
+name: Tagged application release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)deliver, for example v1.2.3
+        type: string
+        required: true
+      run_id:
+        description: Optional successful main-push PR CI run that built the tagged commit
+        type: string
+      backup_record:
+        description: Absolute path of a private host file recording the pre-migration backup (needed only for migrations)
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+# One release delivery at a time; never cancel a running migration/activation.
+concurrency:
+  group: people-gator-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Tag pushes run the tagged workflow; the installer additionally requires the
+    # tagged commit to be on main. Manual delivery runs only from reviewed main.
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') &&
+       github.workflow_ref == format('{0}/.github/workflows/release.yml@{1}', github.repository, github.ref)) ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.workflow_ref == format('{0}/.github/workflows/release.yml@refs/heads/main', github.repository))
+    runs-on: [self-hosted, linux, x64, people-gator-release]
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_ACTOR: ${{ github.actor }}
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+      TAG_COMMIT: ${{ github.event_name == 'push' && github.sha || '' }}
+      RUN_ID: ${{ inputs.run_id }}
+      BACKUP_RECORD: ${{ inputs.backup_record }}
+    steps:
+      # Controller provenance: the workflow's own commit, never application content.
+      - name: Read trusted deployment utility
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .deploy-controller
+          fetch-depth: 0
+          sparse-checkout: deploy
+          persist-credentials: false
+      - name: Select trusted deployment utility
+        id: utility
+        run: python3 .deploy-controller/deploy/install.py --user --revision "$GITHUB_WORKFLOW_SHA"
+      - name: Check release configuration and prerequisites
+        env:
+          DEPLOY: ${{ steps.utility.outputs.executable }}
+        run: '"$DEPLOY" release preflight'
+      - name: Deliver release
+        env:
+          DEPLOY: ${{ steps.utility.outputs.executable }}
+        run: |
+          args=(release update --tag "$RELEASE_TAG")
+          if [ -n "$TAG_COMMIT" ]; then args+=(--commit "$TAG_COMMIT"); fi
+          if [ -n "$RUN_ID" ]; then args+=(--run-id "$RUN_ID"); fi
+          if [ -n "$BACKUP_RECORD" ]; then args+=(--backup-record "$BACKUP_RECORD"); fi
+          "$DEPLOY" "${args[@]}"
