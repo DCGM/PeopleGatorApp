@@ -427,6 +427,20 @@ stable records/media and never reset checkpoints or reviewer edits. Integration
 coverage resolves every source/media link, checks attributed annotation records
 and page/document statistics through repositories, and verifies an unchanged rerun.
 
+### Selected-person OCR line highlights (issue #45)
+
+Open the seed report's `person-mention-highlights` link to **Viewport focus
+practice** with Ada Novak selected. The existing two linked OCR lines both
+mention Ada by identity and receive orange outlines and tints. The current line
+keeps its accent highlight instead of orange; select the other line to compare.
+Check the overlay in light and dark themes and on desktop and mobile. Selecting
+Lenka Vesela (who has no mentions here) removes the orange highlights.
+
+This presentation scenario reuses the existing page, local image and linked
+mentions. Its entry point does not change checkpoint IDs, assignments or
+processing timestamps. The seed integration test resolves both lines through
+the media service and checks that a rerun preserves a reviewed mention change.
+
 ### Scan editor viewport focus (issue #34)
 
 Open the seed report's `viewport-focus` link, or find **Viewport focus practice**
