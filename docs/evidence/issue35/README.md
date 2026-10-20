@@ -1,59 +1,59 @@
 # Issue #35 browser evidence
 
-Captured from the actual application at frontend revision `ab1fecc`, using the
-isolated, migrated PostgreSQL preview seed and its local synthetic media.
-Desktop viewports are **1440 × 900** CSS pixels; mobile viewports are
-**390 × 844** CSS pixels. The failure screenshots use controlled browser request
-interception, with the real application handling the resulting API/media errors.
-Dark-mode captures enable the application's existing `.dark` theme.
+Captured from the actual application at frontend revision `a0329b1`, using an
+isolated migrated PostgreSQL preview and local synthetic media. Desktop views
+are **1440 × 900** CSS pixels; mobile views are **390 × 844** CSS pixels.
 
 Executed Chromium checks:
 
-- Select a single evidence face and save it with **Use as portrait** in the
-  bottom bar using the keyboard. Verify pending actions are disabled, a failed
-  save retains the selection, retry succeeds, and the saved face shows **Current portrait**.
-- Open the chooser with Enter, select with Space, close with Escape, and check
-  focus returns to the trigger. Choose a linked face, reload, and reset to automatic.
-- Exclude the selected face with the verified-evidence filter and verify its
-  portrait survives reload. Compare the actual authenticated crop bytes across
-  profile, People search, Discover people and a scan assignment candidate.
-- Select an unassigned scan face and search for Irena Evidence as an assignment
-  candidate. Keep scan evidence thumbnails tied to their own detections.
-- Inject a failed portrait PATCH and verify the last confirmed choice remains
-  visible and the chooser remains usable. Exercise no-face and failed-media
-  placeholders. Check mobile overflow and light/dark rendering.
-- No JavaScript page errors occurred. Selection and reset persisted through
-  real API responses; no inference service or private data was used.
+- Select one evidence face with the keyboard and use **Use as portrait** in the
+  bottom bar. Verify save failure retains selection and retry succeeds.
+- Select the face marked **Portrait** and use **Use automatic**. Verify automatic
+  mode and UUID selection persist through reload. No header button or selector
+  popup is present.
+- Exclude the selected face with the verified-evidence filter; the canonical
+  portrait survives reload. Compare actual authenticated crop bytes across
+  profile, People search, Discover people and scan assignment candidates.
+- Exercise a selected unassigned scan face, no-face and failed-media placeholders,
+  light/dark rendering and mobile overflow. No JavaScript page errors occurred.
 
-The seed CLI ran twice against the isolated migrated database and local storage.
-The screenshot data was changed through authenticated API/UI operations to
-exercise manual selection, reset and failure recovery. See the
-[portrait contract](../../../people-gator-api/docs/PERSON-THUMBNAILS.md) and
-[preview guide](../../../people-gator-api/docs/PREVIEW-SEEDING.md).
+Save errors use controlled HTTP 503 interception; missing-media captures use
+controlled HTTP 404 interception. The real application handles both. Dark-mode
+captures enable the existing `.dark` theme. No private data or inference service
+was used. The real seed CLI ran twice against the isolated store and local media.
 
-## Use as portrait in the selected-face action bar
+See the [portrait contract](../../../people-gator-api/docs/PERSON-THUMBNAILS.md)
+and [preview guide](../../../people-gator-api/docs/PREVIEW-SEEDING.md).
+
+## Use as portrait in the bottom action bar
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![Use as portrait in the selected-face action bar, desktop](evidence-toolbar-desktop.png) | ![Use as portrait in the selected-face action bar, mobile](evidence-toolbar-mobile.png) |
+| ![Use as portrait in the bottom action bar, desktop](evidence-toolbar-desktop.png) | ![Use as portrait in the bottom action bar, mobile](evidence-toolbar-mobile.png) |
 
-## Selected-face bar with a recoverable save error
-
-| Desktop — 1440 × 900 | Mobile — 390 × 844 |
-| --- | --- |
-| ![Selected-face bar with a recoverable save error, desktop](toolbar-save-error-desktop.png) | ![Selected-face bar with a recoverable save error, mobile](toolbar-save-error-mobile.png) |
-
-## Profile portrait with the selected face excluded by the verified-evidence filter
+## Marked portrait and Use automatic reset
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![Profile portrait with the selected face excluded by the verified-evidence filter, desktop](profile-desktop.png) | ![Profile portrait with the selected face excluded by the verified-evidence filter, mobile](profile-mobile.png) |
+| ![Marked portrait and Use automatic reset, desktop](toolbar-reset-desktop.png) | ![Marked portrait and Use automatic reset, mobile](toolbar-reset-mobile.png) |
 
-## All linked portrait choices and automatic reset
+## Recoverable portrait save error
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![All linked portrait choices and automatic reset, desktop](picker-desktop.png) | ![All linked portrait choices and automatic reset, mobile](picker-mobile.png) |
+| ![Recoverable portrait save error, desktop](toolbar-save-error-desktop.png) | ![Recoverable portrait save error, mobile](toolbar-save-error-mobile.png) |
+
+## Face actions in dark mode
+
+| Desktop — 1440 × 900 | Mobile — 390 × 844 |
+| --- | --- |
+| ![Face actions in dark mode, desktop](toolbar-dark-desktop.png) | ![Face actions in dark mode, mobile](toolbar-dark-mobile.png) |
+
+## Canonical profile portrait with selected evidence filtered out
+
+| Desktop — 1440 × 900 | Mobile — 390 × 844 |
+| --- | --- |
+| ![Canonical profile portrait with selected evidence filtered out, desktop](profile-desktop.png) | ![Canonical profile portrait with selected evidence filtered out, mobile](profile-mobile.png) |
 
 ## Canonical portrait in People search
 
@@ -61,39 +61,27 @@ exercise manual selection, reset and failure recovery. See the
 | --- | --- |
 | ![Canonical portrait in People search, desktop](people-search-desktop.png) | ![Canonical portrait in People search, mobile](people-search-mobile.png) |
 
-## Canonical portrait in Discover people, independent of matched evidence
+## Canonical portrait in Discover people
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![Canonical portrait in Discover people, independent of matched evidence, desktop](discovery-desktop.png) | ![Canonical portrait in Discover people, independent of matched evidence, mobile](discovery-mobile.png) |
+| ![Canonical portrait in Discover people, desktop](discovery-desktop.png) | ![Canonical portrait in Discover people, mobile](discovery-mobile.png) |
 
-## Portrait in an assignment choice for an unassigned scan face
-
-| Desktop — 1440 × 900 | Mobile — 390 × 844 |
-| --- | --- |
-| ![Portrait in an assignment choice for an unassigned scan face, desktop](scan-candidate-desktop.png) | ![Portrait in an assignment choice for an unassigned scan face, mobile](scan-candidate-mobile.png) |
-
-## Recoverable save error (controlled HTTP 503)
+## Portrait in an unassigned scan face assignment choice
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![Recoverable save error (controlled HTTP 503), desktop](save-error-desktop.png) | ![Recoverable save error (controlled HTTP 503), mobile](save-error-mobile.png) |
+| ![Portrait in an unassigned scan face assignment choice, desktop](scan-candidate-desktop.png) | ![Portrait in an unassigned scan face assignment choice, mobile](scan-candidate-mobile.png) |
 
-## No-face initials and empty portrait choices
-
-| Desktop — 1440 × 900 | Mobile — 390 × 844 |
-| --- | --- |
-| ![No-face initials and empty portrait choices, desktop](no-face-desktop.png) | ![No-face initials and empty portrait choices, mobile](no-face-mobile.png) |
-
-## Linked portrait choices in dark mode
+## No-face initials
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![Linked portrait choices in dark mode, desktop](picker-dark-desktop.png) | ![Linked portrait choices in dark mode, mobile](picker-dark-mobile.png) |
+| ![No-face initials, desktop](no-face-desktop.png) | ![No-face initials, mobile](no-face-mobile.png) |
 
-## Initials after an unavailable portrait response (controlled HTTP 404)
+## Initials after an unavailable portrait response
 
 | Desktop — 1440 × 900 | Mobile — 390 × 844 |
 | --- | --- |
-| ![Initials after an unavailable portrait response (controlled HTTP 404), desktop](media-error-desktop.png) | ![Initials after an unavailable portrait response (controlled HTTP 404), mobile](media-error-mobile.png) |
+| ![Initials after an unavailable portrait response, desktop](media-error-desktop.png) | ![Initials after an unavailable portrait response, mobile](media-error-mobile.png) |
 
