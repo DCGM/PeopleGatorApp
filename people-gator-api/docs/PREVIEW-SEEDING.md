@@ -60,6 +60,7 @@ This does not automatically seed the actual staging environment.
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
 | Multiple embedding models | Deterministic, normalized 8D and 4D synthetic vectors with registered models |
 | Processing filters and details | Reviewer activity without an API key, face-importer and OCR-linker attribution with different registered keys |
+| Scan document-page gallery | Open `document-page-gallery`: 14 evidence-free pages of **Page gallery navigation**, more than one 12-page gallery batch, one without media; `document-page-gallery-filtered` keeps all six Příběhy archivářů pages under an annotation filter |
 
 Open the people search page and try the assignment, document, user and API-key
 filters. The CLI also prints a `mobile-filters` URL combining a Novak search with
@@ -302,6 +303,43 @@ derivative refresh, layout replacement and twice-run preservation. Slow success,
 S3 denial, SDK timeout, pool saturation and same-page synchronization are covered
 by gated regression tests, not by introducing failures into preview data. See
 [media concurrency](MEDIA-UPLOAD-CONCURRENCY.md) for the isolated HTTP diagnostic.
+
+## Scan document-page gallery (issue #40)
+
+The scan workspace shows a **Document pages** strip below the viewer (beside
+the transcription and sidebar on wide screens). It lists every registered page
+of the route's exact library and document. Each item has a thumbnail, the first
+eight characters of the archive page UUID and an accessible name with the full
+UUID. The current page is marked with `aria-current="page"` and scrolled into
+view inside the strip. Selecting an item pushes the canonical page URL, so
+reload and Back/Forward restore it. Evidence, link-state and workspace settings
+are kept. Face, person and line selections are dropped, and pan/zoom resets.
+
+Pages appear in the page list API's stable order (internal source key), 12 per
+request. The order is the same across reloads and cursors, but it is **not** the
+physical page sequence: the archive does not record page numbers, so the gallery
+shows no ordinal. The gallery loads further batches until the current page
+appears. After that it loads when the strip's end is reached or **More pages**
+is activated. Evidence filters never apply to the gallery.
+
+Open the seed report's `document-page-gallery` link, or find **Page gallery
+navigation** in Documents (`preview-mzk`). It has 14 synthetic, evidence-free
+pages with local JPEGs. Page 9 is registered without image or layout, so its
+thumbnail shows *No preview* and its scan reports that it could not be loaded,
+but navigation continues. Scroll or swipe the strip, open a distant page, switch
+quickly, then reload and use Back/Forward. Tab through the page links: arrow keys
+there do not move the face/line selection. Single-page documents such as
+**Viewport focus practice** show one current item. The
+`document-page-gallery-filtered` link opens a Příběhy archivářů scan with the
+face importer's annotation filter. That filter matches four of the document's
+six pages in Documents, yet the gallery still lists all six.
+
+The fixture adds new stable keys only (document `page-gallery`, pages
+`page-gallery-1` to `page-gallery-14`). Reruns add missing pages and media
+without rewriting existing records. Integration tests check exact document
+scoping, 12-page batching without duplicates, the repeated stable order,
+thumbnails and the missing-media 404, the filtered example and twice-run
+preservation.
 
 ## Shared annotation filters and edits (#31)
 

@@ -120,6 +120,7 @@ DOCUMENTS = (
         "scan-only", "preview-mzk", "Unregistered scan collection", registered=False
     ),
     Document("issue10-media", "preview-mzk", "Media upload sandbox"),
+    Document("page-gallery", "preview-mzk", "Page gallery navigation"),
 )
 
 
@@ -151,11 +152,15 @@ class Page:
     faces: tuple[Face, ...] = ()
     mentions: tuple[Mention, ...] = ()
     has_layout: bool = True
+    has_image: bool = True
 
     @property
     def page_id(self) -> UUID:
         return fixture_id("page/" + self.key)
 
+
+PAGE_GALLERY_PAGES = 14
+PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
     Page("provenance-a-1", "provenance-a", 1,
@@ -306,6 +311,12 @@ PAGES = (
     # Evidence-free pages for replacing scans/layouts without invalidating boxes.
     Page("media-upload-1", "issue10-media", 1),
     Page("media-upload-2", "issue10-media", 2),
+    # Evidence-free pages for scan-workspace page navigation: more pages than one
+    # frontend gallery batch (12), and one registered page without stored media.
+    *(Page(f"page-gallery-{i}", "page-gallery", i,
+           has_layout=i != PAGE_GALLERY_MISSING_MEDIA,
+           has_image=i != PAGE_GALLERY_MISSING_MEDIA)
+      for i in range(1, PAGE_GALLERY_PAGES + 1)),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
