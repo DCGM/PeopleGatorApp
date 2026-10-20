@@ -102,7 +102,13 @@ describe('PersonDetailView', () => {
     expect(stats.text()).toContain('Not recorded')
     expect(stats.text()).not.toContain('Last processed')
     expect(stats.find('button[aria-label*="processing information"]').exists()).toBe(false)
-    expect(stats.get('details').attributes('open')).toBeDefined()
+    expect(stats.find('details').exists()).toBe(false)
+    expect(stats.text()).not.toContain('Identity creation')
+    expect(stats.findAll('dd').length).toBeGreaterThanOrEqual(4)
+    for (const value of stats.findAll('dd'))
+      expect(value.classes()).toEqual(expect.arrayContaining(['font-mono', 'text-lg']))
+    for (const title of stats.findAll('dt'))
+      expect(title.classes()).toEqual(['text-muted-foreground'])
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
