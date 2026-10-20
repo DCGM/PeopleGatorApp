@@ -30,9 +30,10 @@ Eligibility means an existing face linked to that person, regardless of evidence
 link state, pagination or evidence filters. The first assigned face becomes the
 saved automatic portrait. Later assignments, identity edits and merges keep that
 choice while it remains linked; automatic mode does not continuously rank faces.
-For historical records, simultaneous batch assignments, an empty merge target,
-a manual reset or an invalidated choice, the lowest eligible UUID breaks ties
-over the available faces. These fallback choices are saved too. A reset already
+For historical records, faces inserted together in one SQL statement, an empty
+merge target, a manual reset or an invalidated choice, the lowest eligible UUID
+breaks ties over the available faces. Bulk requests that the ORM inserts in
+separate statements keep the first statement's choice. These fallback choices are saved too. A reset already
 in automatic mode preserves the saved choice. There is no image-quality service or storage probe in
 this policy. A face can be eligible even when its media is temporarily unavailable.
 
