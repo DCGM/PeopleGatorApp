@@ -13,6 +13,7 @@ import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import PageStatisticsPanel from '@/components/custom/PageStatisticsPanel.vue'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
+import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import CurrentFacePanel from '@/components/custom/CurrentFacePanel.vue'
@@ -29,6 +30,11 @@ import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
+import {
+  pageGalleryQuery,
+  useDocumentPageGallery,
+  type PageGalleryItem,
+} from '@/viewmodels/document-page-gallery'
 import { useTranslationQuery } from '@/query/translation'
 
 const minimumZoomPercent = MINIMUM_ZOOM * 100
@@ -89,6 +95,15 @@ const {
   evidence.params,
   computed(() => !evidence.error.value),
 )
+
+const gallery = useDocumentPageGallery(libraryId, documentId, pageId)
+function galleryLocation(item: PageGalleryItem) {
+  return {
+    name: 'document-page',
+    params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
+    query: pageGalleryQuery(route.query),
+  }
+}
 
 const selectedLineIndex = ref(0)
 const isTranslationOpen = ref(false)
@@ -156,6 +171,12 @@ function applyPendingFocus() {
 }
 
 watch(focusPageKey, () => { pendingFocus.value = null }, { flush: 'sync' })
+// Another page reuses this view: discard the previous page's selections and viewport.
+watch(pageId, () => {
+  selectedEntityKey.value = null
+  selectedLineIndex.value = 0
+  panzoom?.reset({ animate: false })
+})
 watch([pageImageReady, faces, transcription, annotationsLoading], () => {
   scheduleFocus()
 })
@@ -537,6 +558,19 @@ onBeforeUnmount(() => {
       />
     </section>
 
+    <DocumentPageGallery
+      class="workspace-gallery border-t"
+      :items="gallery.items.value"
+      :total-count="gallery.totalCount.value"
+      :loading="gallery.isLoading.value"
+      :error="Boolean(gallery.error.value)"
+      :has-next-page="gallery.hasNextPage.value"
+      :is-fetching-next-page="gallery.isFetchingNextPage.value"
+      :location="galleryLocation"
+      @load-more="gallery.loadMore()"
+      @retry="gallery.retry()"
+    />
+
     <Tabs
       class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
       :model-value="
@@ -634,7 +668,7 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: calc(100vh - 3.25rem);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(28rem, calc(78dvh - 14rem)) minmax(36rem, 85dvh);
+  grid-template-rows: auto minmax(28rem, calc(78dvh - 14rem)) auto minmax(36rem, 85dvh);
 }
 
 .workspace-viewer {
@@ -642,9 +676,14 @@ onBeforeUnmount(() => {
   grid-row: 2;
 }
 
-.workspace-sidebar {
+.workspace-gallery {
   grid-column: 1;
   grid-row: 3;
+}
+
+.workspace-sidebar {
+  grid-column: 1;
+  grid-row: 4;
 }
 
 .workspace-teleprompter {
@@ -676,12 +715,17 @@ onBeforeUnmount(() => {
   .workspace-grid {
     height: calc(100vh - 3.25rem);
     grid-template-columns: minmax(0, 1fr) 25rem;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .workspace-viewer {
     grid-column: 1;
     grid-row: 2;
+  }
+
+  .workspace-gallery {
+    grid-column: 1;
+    grid-row: 3;
   }
 
   .workspace-teleprompter {
@@ -692,7 +736,7 @@ onBeforeUnmount(() => {
 
   .workspace-sidebar {
     grid-column: 2;
-    grid-row: 1 / 3;
+    grid-row: 1 / 4;
     border-left-width: 1px;
     border-top-width: 0;
   }
@@ -708,13 +752,18 @@ onBeforeUnmount(() => {
     grid-row: 1 / 3;
   }
 
+  .workspace-gallery {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
   .workspace-sidebar {
     grid-column: 3;
   }
 
   .workspace-teleprompter {
     grid-column: 1;
-    grid-row: 1 / 3;
+    grid-row: 1 / 4;
     border-right-width: 1px;
     border-bottom-width: 0;
   }

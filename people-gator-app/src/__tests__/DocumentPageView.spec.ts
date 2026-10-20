@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   route: vi.fn(),
   zoom: vi.fn(),
   pan: vi.fn(),
+  reset: vi.fn(),
+  gallery: vi.fn(),
 }))
 vi.mock('vue-router', () => ({ useRoute: mocks.route, useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/composables/link-state-filter', () => ({ useLinkStateFilter: () => ref([]) }))
@@ -19,10 +21,15 @@ vi.mock('@/query/translation', () => ({
   useTranslationQuery: () => ({ data: ref(null), isFetching: ref(false) }),
 }))
 vi.mock('@/viewmodels/document-workspace', () => ({ useDocumentWorkspace: mocks.workspace }))
+vi.mock('@/viewmodels/document-page-gallery', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/viewmodels/document-page-gallery')>()),
+  useDocumentPageGallery: mocks.gallery,
+}))
 vi.mock('@panzoom/panzoom', () => ({
   default: () => ({
     zoom: mocks.zoom,
     pan: mocks.pan,
+    reset: mocks.reset,
     getScale: () => 1,
     getPan: () => ({ x: 0, y: 0 }),
     destroy: vi.fn(),
@@ -56,6 +63,16 @@ beforeEach(() => {
   vi.clearAllMocks()
   route = reactive({ params: { libraryId: 'lib', documentId: 'doc', pageId: 'one' }, query: {} })
   mocks.route.mockReturnValue(route)
+  mocks.gallery.mockReturnValue({
+    items: ref([]),
+    totalCount: ref(null),
+    isLoading: ref(false),
+    error: ref(null),
+    hasNextPage: ref(false),
+    isFetchingNextPage: ref(false),
+    loadMore: vi.fn(),
+    retry: vi.fn(),
+  })
   ready = ref(true)
   faces = ref([face('a'), face('b')])
   lines = ref(
@@ -165,6 +182,38 @@ describe('evidence selection viewport focus', () => {
     gallery.vm.$emit('select', 'missing')
     await settleFocus()
     expect(mocks.pan).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+})
+
+describe('document page gallery navigation', () => {
+  it('scopes the gallery to the route document, not evidence filters', async () => {
+    const wrapper = await mountView()
+    const [library, document, page] = mocks.gallery.mock.calls[0]!
+    expect([library.value, document.value, page.value]).toEqual(['lib', 'doc', 'one'])
+    expect(mocks.gallery.mock.calls[0]).toHaveLength(3)
+    const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
+    route.query = { person: 'a', line: 'l2', link_state: 'manual' }
+    expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
+      name: 'document-page',
+      params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
+      query: { link_state: 'manual' },
+    })
+    wrapper.unmount()
+  })
+
+  it('resets the viewport and page-specific selections when another page opens', async () => {
+    const wrapper = await mountView()
+    const transcription = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    transcription.vm.$emit('select-entity', 1, span('l2'))
+    await settleFocus()
+    expect(transcription.props('selectedEntityKey')).not.toBeNull()
+    expect(transcription.props('selectedLineIndex')).toBe(1)
+    route.params.pageId = 'two'
+    await settleFocus()
+    expect(mocks.reset).toHaveBeenCalledWith({ animate: false })
+    expect(transcription.props('selectedEntityKey')).toBeNull()
+    expect(transcription.props('selectedLineIndex')).toBe(0)
     wrapper.unmount()
   })
 })
