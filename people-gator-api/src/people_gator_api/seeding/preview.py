@@ -214,7 +214,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         )
         pages[page.key] = source.source_id
         image_key = page_image_key(document.library, document.document_id, page.page_id)
-        if await _read_optional(filesystem, image_key) is None:
+        if page.has_image and await _read_optional(filesystem, image_key) is None:
             await filesystem.write_bytes(image_key, page_image(page, document))
         layout_key = page_layout_key(
             document.library, document.document_id, page.page_id
@@ -375,6 +375,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     if upload_page is None:
         raise ValueError("Media upload preview page is missing")
     activity_page = next(item for item in PAGES if item.key == "provenance-a-1")
+    gallery_document = next(item for item in DOCUMENTS if item.key == "page-gallery")
+    search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     return SeedResult(
         entities=active_entities,
@@ -449,6 +451,20 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/{next(item.library for item in DOCUMENTS if item.key == 'focus')}"
                 f"/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'focus')}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
+            ),
+            # Fourteen evidence-free pages exceed one 12-page gallery batch and
+            # page 9 has no media. List order follows internal source keys, so
+            # any page may need a further batch; the gallery loads until found.
+            "document-page-gallery": (
+                f"/libraries/{gallery_document.library}/documents/{gallery_document.document_id}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-gallery-13')}"
+            ),
+            # Annotation filters narrow the scan's evidence, never its page gallery:
+            # this importer filter matches 4 of the 6 registered pages.
+            "document-page-gallery-filtered": (
+                f"/libraries/{search_document.library}/documents/{search_document.document_id}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'issue8-untouched')}?"
+                + urlencode({"evidence_user": actors["importer"].user_id})
             ),
             "media-upload": (
                 f"/libraries/{upload_page.library}/documents/{upload_page.document_id}"

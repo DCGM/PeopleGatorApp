@@ -14,7 +14,8 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    evidence-free people.
 3. Open **Documents** to explore registered documents, including document groups
    across libraries. Open **Scan search** for pages and evidence; follow a result
-   into its page workspace and inspect the OCR/face overlays.
+   into its page workspace and inspect the OCR/face overlays. Use the
+   **Document pages** strip below the scan to open other pages of that document.
 4. On disposable data, change an identity field or assignment and inspect its
    last-processing metadata. Try link-state filters and the mobile filter toggle.
    Review fixture details in the
