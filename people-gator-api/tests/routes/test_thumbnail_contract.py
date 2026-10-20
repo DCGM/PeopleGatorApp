@@ -1,15 +1,8 @@
-import uuid
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
-
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from people_gator_api.routes.v1.entities import router
 from people_gator_api.schemas.entities import EntityPatchRequest
 from people_gator_api.schemas.missing import is_missing
-from people_gator_api.services.auth_service import get_auth_context
-from people_gator_api.services.database_service import get_database
 
 
 def test_openapi_selection_is_optional_nullable_and_in_response_variants():

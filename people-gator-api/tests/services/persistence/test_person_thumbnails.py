@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.persistence.postgres.schema import migration_config, validate_postgres_schema
-from people_gator_api.schemas.common import GenericActor
+from people_gator_api.schemas.api_keys import APIKeyCreateRequest
+from people_gator_api.services.auth_service import AuthContext
 from people_gator_api.schemas.entities import (
     EntityCreateRequest, EntityListRequest, EntityPatchRequest, EntityPatchBatchItem,
 )
@@ -31,7 +32,12 @@ async def portraits(migrated_postgres):
             display_name="Portrait reviewer", is_active=True,
             external_subject=uuid.uuid4().hex, external_issuer="issue35",
         ))
-        actor = GenericActor(user_id=user.user_id)
+        key = await db.api_keys.get_or_create(APIKeyCreateRequest(
+            identifier="portrait-reviewer-" + uuid.uuid4().hex,
+            display_name="Portrait review key", user_id=user.user_id,
+        ))
+        actor = AuthContext(user_id=user.user_id, user=user, api_key_id=key.api_key_id,
+                            authentication_method="api_key", scopes=set())
         entities = await db.entities.create_batch([
             EntityCreateRequest(entity_type=kind, name=name)
             for kind, name in (("person", "Ada Portrait"), ("person", "Other Person"))
@@ -81,6 +87,7 @@ async def test_selection_reset_response_parity_noops_and_later_faces(portraits):
     assert manual.thumbnail_face_id == manual_id
     assert manual.thumbnail_mode == "manual"
     assert manual.last_touched_by_user_id == r.actor.user_id
+    assert manual.last_touched_by_api_key_id == r.actor.api_key_id
     for patch in (EntityPatchRequest(), EntityPatchRequest(thumbnail_face_id=manual_id)):
         unchanged = await r.db.entities.patch(r.person.entity_id, patch, r.actor)
         assert unchanged == manual
