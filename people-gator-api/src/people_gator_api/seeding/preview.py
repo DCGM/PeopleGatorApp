@@ -376,6 +376,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         raise ValueError("Media upload preview page is missing")
     activity_page = next(item for item in PAGES if item.key == "provenance-a-1")
     gallery_document = next(item for item in DOCUMENTS if item.key == "page-gallery")
+    focus_document = next(item for item in DOCUMENTS if item.key == "focus")
+    focus_path = (
+        f"/libraries/{focus_document.library}/documents/{focus_document.document_id}"
+        f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
+    )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     return SeedResult(
@@ -450,17 +455,17 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}?"
                 + urlencode({"link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
-            "viewport-focus": (
-                f"/libraries/{next(item.library for item in DOCUMENTS if item.key == 'focus')}"
-                f"/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'focus')}"
-                f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
-            ),
+            "viewport-focus": focus_path,
             # Reuse Ada's two linked OCR lines; no persisted fixtures need changing.
             "person-mention-highlights": (
-                f"/libraries/{next(item.library for item in DOCUMENTS if item.key == 'focus')}"
-                f"/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'focus')}"
-                f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}?"
-                + urlencode({"selectedPerson": manifest.entities["ada"]})
+                focus_path + "?" + urlencode({"selectedPerson": manifest.entities["ada"]})
+            ),
+            # Ada Review's verified mention spans two OCR lines; Emil Review's
+            # lines on the same page belong to another (or no) identity.
+            "person-mention-highlights-multiline": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}?"
+                + urlencode({"selectedPerson": manifest.entities["link-ada"]})
             ),
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
             # page 9 has no media. List order follows internal source keys, so

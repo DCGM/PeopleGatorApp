@@ -430,16 +430,31 @@ and page/document statistics through repositories, and verifies an unchanged rer
 ### Selected-person OCR line highlights (issue #45)
 
 Open the seed report's `person-mention-highlights` link to **Viewport focus
-practice** with Ada Novak selected. The existing two linked OCR lines both
-mention Ada by identity and receive orange outlines and tints. The current line
-keeps its accent highlight instead of orange; select the other line to compare.
-Check the overlay in light and dark themes and on desktop and mobile. Selecting
-Lenka Vesela (who has no mentions here) removes the orange highlights.
+practice** with Ada Novak selected. Both OCR lines carry Ada's linked mentions
+and receive orange outlines and tints. The current line keeps its accent
+highlight and adds an orange ring, because it also mentions Ada; select the
+other line to compare. Hovering an orange line deepens its tint, and each
+mention line's accessible name ends with "(mentions the selected person)".
+Remove `selectedPerson` from the URL to see the overlay without highlights.
+Check the overlay in light and dark themes and on desktop and mobile.
 
-This presentation scenario reuses the existing page, local image and linked
-mentions. Its entry point does not change checkpoint IDs, assignments or
-processing timestamps. The seed integration test resolves both lines through
-the media service and checks that a rerun preserves a reviewed mention change.
+Open `person-mention-highlights-multiline` for **Link state review / page 2**
+with Ada Review selected. Her verified mention spans two OCR lines, and both
+are orange. The **Emil Review** line has no linked identity and stays plain.
+
+Highlights follow each mention's linked identity, not the line text. Span
+resolution places a mention on every occurrence of its name on the page, so
+both "Ada Novak" records on the focus page cover both lines. If a reviewer
+reassigns one of them, for example to Lenka Vesela, both lines also become
+Lenka's. Similarly, linking the Emil Review line to Ada Review makes that line
+orange for her.
+
+Both entry points reuse existing pages, local images and linked mentions. They
+do not change checkpoint IDs, assignments or processing timestamps. The seed
+integration tests resolve the lines through the media service. They check that
+each identity covers exactly the lines of its own mention records, including
+both fragments of the multi-line mention, and that reruns preserve reviewed
+reassignments.
 
 ### Scan editor viewport focus (issue #34)
 

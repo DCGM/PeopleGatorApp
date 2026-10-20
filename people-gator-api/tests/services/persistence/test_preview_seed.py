@@ -1856,8 +1856,27 @@ async def test_document_navigation_keeps_unannotated_pages_and_explicit_filters(
         assert await db.sources.get_page(untouched.source_id) == untouched
 
 
+async def _page_mention_lines(database, page):
+    """Map each identity to the OCR lines its linked mention spans cover on a page."""
+    spans = await get_text_mention_spans(
+        database, page.source_id, library=page.library,
+        document_id=page.document_id, page_id=page.page_id,
+    )
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    order = [line.id for region in layout.regions for line in region.lines]
+    by_entity: dict[uuid.UUID, set[str]] = {}
+    by_mention: dict[uuid.UUID, set[str]] = {}
+    for span in spans:
+        # A span covers its start line, its end line and every line between.
+        covered = order[order.index(span.start_line_id):order.index(span.end_line_id) + 1]
+        assert covered, "span lines must resolve in the stored layout"
+        by_entity.setdefault(span.entity_id, set()).update(covered)
+        by_mention.setdefault(span.mention_id, set()).update(covered)
+    return by_entity, by_mention
+
+
 @pytest.mark.asyncio
-async def test_person_mention_highlights_reuse_linked_lines_and_preserve_review(seed_target):
+async def test_person_mention_highlights_follow_linked_identity_and_preserve_review(seed_target):
     database, filesystem, _ = seed_target
     result = await preview.seed_preview(database, filesystem)
     page = await database.sources.get_page(result.pages["focus-1"])
@@ -1865,32 +1884,71 @@ async def test_person_mention_highlights_reuse_linked_lines_and_preserve_review(
     assert example.path == (
         f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
     )
+    assert result.filter_examples["viewport-focus"] == example.path
     assert parse_qs(example.query) == {"selectedPerson": [str(result.entities["ada"])]}
 
-    async def mention_lines():
-        spans = await get_text_mention_spans(
-            database, page.source_id, library=page.library,
-            document_id=page.document_id, page_id=page.page_id,
-        )
-        layout = await get_page_layout(page.library, page.document_id, page.page_id)
-        lines = {line.id: line for region in layout.regions for line in region.lines}
-        matching = {span.start_line_id for span in spans if span.entity_id == result.entities["ada"]}
-        assert matching <= lines.keys()
-        assert all("Ada Novak" in lines[line_id].transcription for line_id in matching)
-        return matching
+    ada, lenka = result.entities["ada"], result.entities["lenka"]
+    upper, lower = result.mentions["focus-name-upper"], result.mentions["focus-name-lower"]
+    by_entity, by_mention = await _page_mention_lines(database, page)
+    # Every line of each of Ada's linked mention records is an Ada line.
+    assert {"focus-name-upper", "focus-name-lower"} <= by_mention[upper] | by_mention[lower]
+    assert by_entity[ada] == by_mention[upper] | by_mention[lower]
+    assert lenka not in by_entity
 
-    assert await mention_lines() == {"focus-name-upper", "focus-name-lower"}
     reviewed = await database.text_mentions.patch(
-        result.mentions["focus-name-lower"],
-        TextMentionPatchRequest(entity_id=result.entities["lenka"]),
+        lower,
+        TextMentionPatchRequest(entity_id=lenka),
         GenericActor(user_id=result.users["reviewer"]),
     )
-    reviewed_person = await database.entities.get(result.entities["lenka"])
+    reviewed_person = await database.entities.get(lenka)
     assert await preview.seed_preview(database, filesystem) == result
-    # The remaining Ada record still resolves both occurrences of her name.
-    assert await mention_lines() == {"focus-name-upper", "focus-name-lower"}
+    by_entity, by_mention = await _page_mention_lines(database, page)
+    # Highlights follow the linked identity of each record, not the line text:
+    # Ada keeps exactly her remaining record's lines and Lenka gains the
+    # reviewed record's lines. Both records name "Ada Novak", so the name-based
+    # span resolution places each of them on both occurrences.
+    assert by_entity[ada] == by_mention[upper]
+    assert by_entity[lenka] == by_mention[lower]
+    assert "focus-name-lower" in by_entity[lenka]
     assert await database.text_mentions.get(reviewed.mention_id) == reviewed
-    assert await database.entities.get(result.entities["lenka"]) == reviewed_person
+    assert await database.entities.get(lenka) == reviewed_person
+
+
+@pytest.mark.asyncio
+async def test_person_mention_highlights_cover_multi_line_mentions_by_identity(seed_target):
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["links-2"])
+    example = urlsplit(result.filter_examples["person-mention-highlights-multiline"])
+    assert example.path == (
+        f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
+    )
+    link_ada, link_emil = result.entities["link-ada"], result.entities["link-emil"]
+    assert parse_qs(example.query) == {"selectedPerson": [str(link_ada)]}
+
+    by_entity, _ = await _page_mention_lines(database, page)
+    # Ada Review's verified mention spans both fragments of one OCR mention;
+    # Emil Review's unlinked line carries no identity.
+    assert by_entity == {
+        link_ada: {"links-verified-mention-0", "links-verified-mention-1"},
+    }
+    assert link_emil not in by_entity
+
+    # A reviewer links the "Emil Review" line to Ada Review: the line is now
+    # Ada Review's by identity although its text never names her.
+    unlinked = result.mentions["links-unassigned-mention"]
+    reviewed = await database.text_mentions.patch(
+        unlinked,
+        TextMentionPatchRequest(entity_id=link_ada),
+        GenericActor(user_id=result.users["reviewer"]),
+    )
+    assert await preview.seed_preview(database, filesystem) == result
+    by_entity, by_mention = await _page_mention_lines(database, page)
+    assert by_mention[unlinked] == {"links-unassigned-mention"}
+    assert by_entity[link_ada] == {
+        "links-verified-mention-0", "links-verified-mention-1", "links-unassigned-mention",
+    }
+    assert await database.text_mentions.get(unlinked) == reviewed
 
 
 @pytest.mark.asyncio
