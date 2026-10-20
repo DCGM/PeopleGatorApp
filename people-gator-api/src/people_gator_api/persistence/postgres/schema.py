@@ -112,6 +112,26 @@ def validate_schema(
         if constraint is None or normalized(constraint["sqltext"]) != normalized(expected):
             raise SchemaValidationError("Missing or incompatible source touch consistency constraint")
 
+    if "thumbnail_face_id" in expected_metadata.tables["pg_demo_entities"].c:
+        required = {
+            ("pg_demo_entities", "select_thumbnail"),
+            ("pg_demo_faces", "thumbnail_face_insert"),
+            ("pg_demo_image_occurrences", "thumbnail_reassignment"),
+        }
+        installed = set(connection.execute(text("""
+            SELECT c.relname, t.tgname FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            WHERE c.oid IN (to_regclass('pg_demo_entities'), to_regclass('pg_demo_faces'),
+                            to_regclass('pg_demo_image_occurrences'))
+              AND NOT t.tgisinternal AND t.tgenabled IN ('O', 'A')
+        """)).all())
+        if not required <= installed:
+            raise SchemaValidationError("Missing or disabled person thumbnail lifecycle triggers")
+        checks = {c["name"] for c in inspect(connection).get_check_constraints("pg_demo_entities")}
+        if not {"ck_pg_demo_entities_thumbnail_mode", "ck_pg_demo_entities_manual_thumbnail",
+                "ck_pg_demo_entities_person_thumbnail"} <= checks:
+            raise SchemaValidationError("Missing person thumbnail consistency constraints")
+
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.
     with warnings.catch_warnings():

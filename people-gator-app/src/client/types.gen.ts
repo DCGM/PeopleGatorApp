@@ -510,6 +510,12 @@ export type EntityMergeResponse = {
  */
 export type EntityPatchBatchItem = {
     /**
+     * Thumbnail Face Id
+     *
+     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null resets to automatic selection from all linked faces.
+     */
+    thumbnail_face_id?: string | null;
+    /**
      * Name
      *
      * The name of the entity.
@@ -559,6 +565,12 @@ export type EntityPatchBatchItem = {
  * Request body for patching an existing entity.
  */
 export type EntityPatchRequest = {
+    /**
+     * Thumbnail Face Id
+     *
+     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null resets to automatic selection from all linked faces.
+     */
+    thumbnail_face_id?: string | null;
     /**
      * Name
      *
@@ -667,6 +679,18 @@ export type EntityResponse = {
      * The unique identifier of the user who created or owns the entity.
      */
     user_id: string;
+    /**
+     * Thumbnail Face Id
+     *
+     * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Thumbnail Mode
+     *
+     * Selection policy. Automatic with a null thumbnail_face_id means no thumbnail. Non-person entities always have automatic/null.
+     */
+    thumbnail_mode?: 'automatic' | 'manual';
     entity_link_stats?: EntityLinkStats;
     /**
      * Last Touched At
@@ -1126,6 +1150,18 @@ export type FoundEntity = {
      * The unique identifier of the user who created or owns the entity.
      */
     user_id: string;
+    /**
+     * Thumbnail Face Id
+     *
+     * Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Thumbnail Mode
+     *
+     * Selection policy. Automatic with a null thumbnail_face_id means no thumbnail. Non-person entities always have automatic/null.
+     */
+    thumbnail_mode?: 'automatic' | 'manual';
     entity_link_stats?: EntityLinkStats;
     /**
      * Last Touched At

@@ -80,7 +80,7 @@ class PostgresEntityRepository(EntityRepository):
         statement = select(Entity).where(Entity.id.in_(ids)).options(selectinload(Entity.aliases))
         if lock:
             statement = statement.order_by(Entity.id).with_for_update()
-        rows = await self._session.scalars(statement)
+        rows = await self._session.scalars(statement.execution_options(populate_existing=True))
         result = {row.id: row for row in rows.unique().all()}
         await load_link_stats(self._session, result.values(), entities=True)
         return result
@@ -115,6 +115,7 @@ class PostgresEntityRepository(EntityRepository):
                     .options(selectinload(Entity.aliases))
                     .order_by(Entity.id)
                     .limit(query.limit + 1)
+                    .execution_options(populate_existing=True)
                 )
             )
             .unique()
@@ -197,15 +198,51 @@ class PostgresEntityRepository(EntityRepository):
             raise ValueError("entity patch batch requires unique object IDs")
         if not commands:
             return []
-        await ensure_ids(self._session, User, [context.user_id], "actor user")
-        entities = await self._load_many(ids, lock=True)
-        for command in commands:
-            entity = entities.get(command.entity_id)
-            if entity is not None:
-                if self._apply(entity, command):
+        # Selection and evidence transitions share the same outer lock. Validate
+        # the entire batch before changing anything, including unrelated fields.
+        if any(not is_missing(c.thumbnail_face_id) for c in commands):
+            await lock_annotation_graph(self._session)
+        try:
+            await ensure_ids(self._session, User, [context.user_id], "actor user")
+            entities = await self._load_many(ids, lock=True)
+            selections: dict[uuid.UUID, tuple[uuid.UUID | None, str]] = {}
+            requested = [c.thumbnail_face_id for c in commands
+                         if not is_missing(c.thumbnail_face_id) and c.thumbnail_face_id is not None]
+            owners = dict((await self._session.execute(
+                select(Face.id, Face.entity_id).where(Face.id.in_(requested))
+            )).all()) if requested else {}
+            for command in commands:
+                entity = entities.get(command.entity_id)
+                if entity is None or is_missing(command.thumbnail_face_id):
+                    continue
+                if entity.kind != "person":
+                    raise ValueError("thumbnail selection is supported only for people")
+                face_id = command.thumbnail_face_id
+                if face_id is not None:
+                    if owners.get(face_id) != entity.id:
+                        raise ValueError("thumbnail must be an existing face linked to this person")
+                    selections[entity.id] = (face_id, "manual")
+                elif entity.thumbnail_mode == "manual":
+                    automatic_id = await self._session.scalar(
+                        select(Face.id).where(Face.entity_id == entity.id).order_by(Face.id).limit(1)
+                    )
+                    selections[entity.id] = (automatic_id, "automatic")
+            for command in commands:
+                entity = entities.get(command.entity_id)
+                if entity is None:
+                    continue
+                changed = self._apply(entity, command)
+                selection = selections.get(entity.id)
+                if selection is not None and selection != (entity.thumbnail_face_id, entity.thumbnail_mode):
+                    entity.thumbnail_face_id, entity.thumbnail_mode = selection
+                    changed = True
+                if changed:
                     for name, value in touch_values(context).items():
                         setattr(entity, name, value)
-        await commit(self._session, "entity patch violates a persistence constraint")
+            await commit(self._session, "entity patch violates a persistence constraint")
+        except Exception:
+            await self._session.rollback()
+            raise
         return [
             entity_response(entity) if (entity := entities.get(item_id)) else None
             for item_id in ids
@@ -250,6 +287,7 @@ class PostgresEntityRepository(EntityRepository):
 
             affected_sources = await self._annotation_sources(source_entity_ids)
             target = entities[target_entity_id]
+            had_thumbnail = target.thumbnail_face_id is not None
             for name, value in touch_values(context).items():
                 setattr(target, name, value)
             if target_patch is not None:
@@ -286,6 +324,13 @@ class PostgresEntityRepository(EntityRepository):
             await self._session.execute(
                 delete(Entity).where(Entity.id.in_(source_entity_ids))
             )
+            await self._session.flush()
+            if not had_thumbnail and target.kind == "person":
+                # Resolve once over the complete merged set, independent of the
+                # UPDATE plan's row order. Existing valid target choices survive.
+                await self._session.execute(update(Entity).where(Entity.id == target_entity_id)
+                    .values(thumbnail_face_id=None, thumbnail_mode="automatic"))
+            await self._session.refresh(target, ["thumbnail_face_id", "thumbnail_mode"])
             await touch_sources(self._session, affected_sources, context)
             await load_link_stats(self._session, [target], entities=True)
             response = EntityMergeBatchResponse(

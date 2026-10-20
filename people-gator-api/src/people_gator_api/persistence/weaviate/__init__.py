@@ -852,6 +852,8 @@ class WeaviateEntityRepository(EntityRepository):
     async def patch(
         self, entity_id: uuid.UUID, payload: EntityPatchRequest, context: GenericActor
     ) -> EntityResponse | None:
+        if not is_missing(payload.thumbnail_face_id):
+            raise ValueError("persisted person thumbnails require PostgreSQL")
         del context
         old = await self.get(entity_id)
         if old is None:
@@ -870,6 +872,8 @@ class WeaviateEntityRepository(EntityRepository):
         self, commands: Sequence[EntityPatchBatchItem], context: GenericActor
     ) -> list[EntityResponse | None]:
         _unique([x.entity_id for x in commands], "entity patch batch")
+        if any(not is_missing(x.thumbnail_face_id) for x in commands):
+            raise ValueError("persisted person thumbnails require PostgreSQL")
         return [
             await self.patch(
                 x.entity_id,
