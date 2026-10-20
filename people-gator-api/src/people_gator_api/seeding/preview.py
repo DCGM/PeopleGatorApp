@@ -401,7 +401,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Adding entry points never rewrites reviewer edits or checkpoints.
             # Existing mixed-state faces exercise bulk verification/unassignment;
             # this entry point changes no persisted evidence on retained previews.
-            # Compare the compact Faces and Discover cards on the same identity.
+            # Compare Faces/Discover library + document rows and plain editor names.
+            # Seeded importer/reviewer labels remain usable before the user tab exists.
             "person-face-style-comparison": f"/people/{manifest.entities['provenance-review']}?tab=discover",
             "person-face-review": f"/people/{manifest.entities['provenance-review']}",
             "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({

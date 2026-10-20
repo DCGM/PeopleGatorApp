@@ -1,4 +1,4 @@
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { computed } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
@@ -48,13 +48,12 @@ describe('person evidence cards', () => {
       },
       global: { plugins: [router], stubs: { VerifyEntityLink: true } },
     })
-    expect(wrapper.get('[data-face-source]').text()).toBe('preview-library')
+    expect(wrapper.get('[data-face-source]').text()).toBe('preview-library · document-identifier')
     expect(wrapper.get('[data-face-assignment]').text()).toBe('Verifiedconf 99%')
     expect(wrapper.get('[data-face-assignment]').attributes('aria-label')).toContain(
       'Verified by verifier',
     )
     expect(wrapper.text()).not.toContain('Matching detection')
-    expect(wrapper.text()).not.toContain('document-identifier')
     expect(wrapper.text()).not.toContain('page-identifier')
     expect(wrapper.text()).not.toContain('Detection ID')
     expect(wrapper.find('[data-face-status-badge]').exists()).toBe(false)
@@ -65,10 +64,12 @@ describe('person evidence cards', () => {
     expect(wrapper.get('a').attributes('href')).toContain('evidence_origin=authority')
     expect(wrapper.get('a').attributes('href')).toContain('person=detection')
     expect(wrapper.find('a a').exists()).toBe(false)
-    await wrapper.get('a[title="Evidence changed by Preview reviewer"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.name).toBe('people-search')
-    expect(router.currentRoute.value.query.evidence_user).toBe('reviewer')
+    const editor = wrapper.get('[title="Evidence changed by Preview reviewer"]')
+    expect(editor.element.tagName).toBe('SPAN')
+    expect(editor.find('a').exists()).toBe(false)
+    await editor.trigger('click')
+    expect(router.currentRoute.value.name).toBe('person-detail')
+    expect(router.currentRoute.value.query.evidence_user).toBeUndefined()
     await wrapper.setProps({ face: { ...face, pageId: '', metadata: undefined } })
     expect(wrapper.text()).toContain('Last changed not recorded')
     expect(wrapper.text()).toContain('User not recorded')

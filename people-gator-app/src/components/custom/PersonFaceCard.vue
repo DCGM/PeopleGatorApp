@@ -93,9 +93,9 @@ const sourceTarget = computed(() =>
         >
       </p>
       <div class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground" data-face-source>
-        <b class="min-w-0 flex-1 truncate text-secondary" :title="face.library">{{
-          face.library
-        }}</b>
+        <span class="min-w-0 flex-1 truncate" :title="`${face.library} · ${face.documentId}`">
+          <b class="text-secondary">{{ face.library }}</b> · {{ face.documentId }}
+        </span>
         <ChevronRight
           v-if="sourceTarget"
           class="size-4 shrink-0 transition-transform group-hover/face:translate-x-1"

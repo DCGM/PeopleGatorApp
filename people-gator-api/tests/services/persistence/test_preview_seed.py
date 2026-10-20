@@ -1607,6 +1607,8 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
         seed.users['importer'], seed.users['reviewer'],
     }
     for face in faces:
+        editor = await db.users.get(face.last_touched_by_user_id)
+        assert editor.display_name in {'Preview reviewer', 'Preview face importer'}
         assert face.confidence is not None and 0 <= face.confidence <= 1
         assert face.last_touched_at is not None
         page = await db.sources.get_page(face.source_id)

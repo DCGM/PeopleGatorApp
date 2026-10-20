@@ -340,11 +340,12 @@ The `person-evidence-cards` entry point shows all four Irena Evidence faces,
 including three assignment states, libraries and importer/reviewer attribution.
 Faces uses the same compact card spacing, shape and library color as Discover:
 the first row below the photo is assignment icon/state plus `conf` (detection
-confidence), followed by the library and last-change/user rows. Cards do not show
-raw detection/document/page IDs, matching labels, image status badges or reserved
+confidence), followed by library plus truncated document ID and last-change/user rows. Cards do not show
+raw detection/page IDs, matching labels, image status badges or reserved
 empty details blocks. Source links still open the correct page with its face
 selected, and verification attribution remains available on the assignment row.
-Editor links open people search filtered by that annotation editor.
+Editor names are plain text; a TODO in `AnnotationLastChange.vue` defers user links
+until the user tab exists.
 The additive `person-face-style-comparison` entry point opens the same identity's
 Discover tab; switch to Faces to compare the card presentation and select faces
 for verification/unassignment. Existing source identities, records/media and

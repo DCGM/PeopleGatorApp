@@ -28,13 +28,7 @@ const timestamp = computed(() => annotationChangeTime(props.touchedAt, now.value
         >{{ timestamp }}</time
       ><span v-else>not recorded</span></span
     >
-    <RouterLink
-      v-if="userId"
-      :to="{ name: 'people-search', query: { evidence_user: userId } }"
-      class="block truncate underline underline-offset-2"
-      :title="`Evidence changed by ${userLabel}`"
-      >{{ userLabel }}</RouterLink
-    >
-    <span v-else class="block">{{ userLabel }}</span>
+    <!-- TODO: Link the editor to their user tab once that tab is implemented. -->
+    <span class="block truncate" :title="`Evidence changed by ${userLabel}`">{{ userLabel }}</span>
   </small>
 </template>
