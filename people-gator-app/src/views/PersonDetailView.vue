@@ -63,8 +63,6 @@ const {
   portraitLoading,
   profile,
   processing,
-  processingRefreshing,
-  refreshProcessing,
   updateIdentifiers,
   updateProfile,
 } = usePersonDetail(
@@ -172,7 +170,7 @@ function selectTab(tab: string | number) {
         @update:identifiers="updateIdentifiers"
       >
         <template #statistics>
-          <EntityLinkStatistics :stats="entity?.entity_link_stats" />
+          <EntityLinkStatistics :stats="entity?.entity_link_stats" layout="person" />
           <CreationDetails
             v-if="entity"
             :key="personId"
@@ -184,8 +182,6 @@ function selectTab(tab: string | number) {
             v-if="entity"
             :key="personId"
             :processing="processing"
-            :refreshing="processingRefreshing"
-            @refresh="refreshProcessing"
           />
         </template>
       </PersonEditableDetails>

@@ -44,8 +44,6 @@ vi.mock('@/viewmodels/person-detail', () => ({
       apiKeyId: null,
       apiKeyLabel: null,
     }),
-    processingRefreshing: ref(false),
-    refreshProcessing: vi.fn<() => void>(),
     updateIdentifiers: vi.fn<() => void>(),
     updateProfile: vi.fn<() => void>(),
   }),
@@ -100,14 +98,11 @@ describe('PersonDetailView', () => {
     })
 
     const stats = wrapper.get('aside[aria-label="Person statistics"]')
-    expect(stats.text()).toContain('Last processed')
-    expect(stats.text()).toContain('No processing recorded')
+    expect(stats.text()).toContain('Last change')
+    expect(stats.text()).toContain('Not recorded')
+    expect(stats.text()).not.toContain('Last processed')
+    expect(stats.find('button[aria-label*="processing information"]').exists()).toBe(false)
     expect(stats.get('details').attributes('open')).toBeDefined()
-    expect(
-      stats.get('button[aria-label="Hide processing information"]').attributes('aria-expanded'),
-    ).toBe('true')
-    await stats.get('button[aria-label="Hide processing information"]').trigger('click')
-    expect(stats.text()).not.toContain('No processing recorded')
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },

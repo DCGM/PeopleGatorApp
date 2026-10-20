@@ -27,6 +27,7 @@ vi.mock('@/query/text-mentions', () => ({
   useTextMentionListQuery: () => ({ data: ref(undefined), isPending: ref(false) }),
 }))
 
+import { lastChangeLabel } from '@/lib/annotation-change-time'
 import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails.vue'
 import { usePersonDetail } from '@/viewmodels/person-detail'
 
@@ -55,8 +56,6 @@ function harness() {
           result.entity.value
             ? h(PersonProcessingDetails, {
                 processing: result.processing.value,
-                refreshing: result.processingRefreshing.value,
-                onRefresh: result.refreshProcessing,
               })
             : null
       },
@@ -65,6 +64,7 @@ function harness() {
   )
   return {
     personId,
+    queryClient,
     wrapper,
     get result() {
       return result
@@ -75,6 +75,28 @@ function harness() {
     },
   }
 }
+
+describe('last change wording', () => {
+  const now = new Date(2026, 9, 20, 12, 0, 0)
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString()
+  it.each([
+    [0, 'modified just now'],
+    [59_999, 'modified just now'],
+    [60_000, 'modified 1 min ago'],
+    [59 * 60_000, 'modified 59 min ago'],
+    [3_600_000, 'modified 1 hour ago'],
+    [3 * 3_600_000, 'modified 3 hours ago'],
+    [86_399_999, 'modified 23 hours ago'],
+    [86_400_000, 'modified on 2026-10-19'],
+    [3 * 86_400_000, 'modified on 2026-10-17'],
+  ])('formats %i ms as %s', (elapsed, expected) => {
+    expect(lastChangeLabel(ago(elapsed), now)).toBe(expected)
+  })
+  it('keeps missing or invalid times unknown', () => {
+    expect(lastChangeLabel(null, now)).toBeNull()
+    expect(lastChangeLabel('not a date', now)).toBeNull()
+  })
+})
 
 describe('person processing information', () => {
   beforeEach(() => {
@@ -108,10 +130,27 @@ describe('person processing information', () => {
     })
   })
 
+  it('ages the label on a timer without refetching and clears it on unmount', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+    vi.setSystemTime(new Date('2026-10-14T12:33:56Z'))
+    mocks.entity.mockResolvedValue({ data: processed })
+    const app = harness()
+    await flushPromises()
+    expect(app.wrapper.get('time').text()).toBe('modified 23 hours ago')
+    expect(app.wrapper.text()).toContain('Modified by')
+    expect(app.wrapper.find('button').exists()).toBe(false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(app.wrapper.get('time').text()).toBe('modified on 2026-10-13')
+    expect(mocks.entity).toHaveBeenCalledTimes(1)
+    app.cleanup()
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
   it('keeps historical processing unknown without substituting the record owner', async () => {
     const app = harness()
     await flushPromises()
-    expect(app.wrapper.text()).toContain('No processing recorded')
+    expect(app.wrapper.text()).toContain('Not recorded')
     expect(app.wrapper.find('time').exists()).toBe(false)
     expect(mocks.users).not.toHaveBeenCalled()
     expect(mocks.keys).not.toHaveBeenCalled()
@@ -145,13 +184,15 @@ describe('person processing information', () => {
     app.cleanup()
   })
 
-  it('refreshes pipeline updates and falls back to IDs if actor lookups fail', async () => {
+  it('revalidates pipeline updates and falls back to IDs if actor lookups fail', async () => {
     const app = harness()
     await flushPromises()
     mocks.entity.mockResolvedValue({ data: processed })
     mocks.users.mockRejectedValue(new Error('unavailable'))
     mocks.keys.mockRejectedValue(new Error('unavailable'))
-    await app.wrapper.get('button[aria-label="Refresh processing information"]').trigger('click')
+    expect(app.wrapper.find('button').exists()).toBe(false)
+    // Normal Vue Query revalidation (refocus, remount, mutation invalidation) refreshes it.
+    await app.queryClient.invalidateQueries({ queryKey: ['entities'] })
     await flushPromises()
     expect(mocks.entity).toHaveBeenCalledTimes(2)
     expect(app.wrapper.text()).toContain('pipeline-user')
@@ -161,7 +202,7 @@ describe('person processing information', () => {
     mocks.entity.mockResolvedValue({ data: { ...historical, entity_id: 'historical-person' } })
     app.personId.value = 'historical-person'
     await flushPromises()
-    expect(app.wrapper.text()).toContain('No processing recorded')
+    expect(app.wrapper.text()).toContain('Not recorded')
     expect(app.wrapper.text()).not.toContain('pipeline-user')
     app.cleanup()
   })
