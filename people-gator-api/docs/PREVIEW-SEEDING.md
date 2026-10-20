@@ -358,6 +358,14 @@ the full remaining pane height and scrolls independently of the scan. The seed's
 does not rewrite reviewed fixture data.
 
 
+The `linked-face-states` entry point opens Irena Evidence with Automatic, Manual
+and Verified link states selected. The compact assignment row reuses the same
+shared palette as annotation badges elsewhere: blue for Automatic, amber for
+Manual, green for Verified, and muted for Unassigned, with the standard light/dark
+variants. Face selection keeps its separate highlight. This scenario reuses the
+existing linked faces and local media; its repository test checks the URL state
+filter against actual detections, resolves their media and preserves them on rerun.
+
 The `person-evidence-cards` entry point shows all four Irena Evidence faces,
 including three assignment states, libraries and importer/reviewer attribution.
 Faces uses the same compact card spacing, shape and library color as Discover:

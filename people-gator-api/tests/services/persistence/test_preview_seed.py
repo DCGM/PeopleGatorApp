@@ -1600,6 +1600,15 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
         limit=100, filter_=FaceListFilter(entity_id=[person_id]),
     ))).items
     assert {face.entity_link_state.value for face in faces} == {'automatic', 'manual', 'verified'}
+    states_example = urlsplit(seed.filter_examples['linked-face-states'])
+    assert states_example.path == cards.path
+    assert parse_qs(states_example.query) == {'link_state': ['automatic', 'manual', 'verified']}
+    filtered_faces = (await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(entity_id=[person_id],
+            entity_link_state=parse_qs(states_example.query)['link_state']),
+    ))).items
+    assert {face.detection_id for face in filtered_faces} == {face.detection_id for face in faces}
+    assert all(face.entity_id == person_id for face in filtered_faces)
     assert {face.last_touched_by_user_id for face in faces} == {
         seed.users['importer'], seed.users['reviewer'],
     }

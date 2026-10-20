@@ -79,7 +79,7 @@ const sourceTarget = computed(() =>
       </AspectRatio>
       <p
         class="flex min-w-0 items-center gap-1 text-sm"
-        :class="face.linkState ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'"
+        :class="assignment.classes"
         :title="linkTooltip(face)"
         :aria-label="linkTooltip(face)"
         data-face-assignment
