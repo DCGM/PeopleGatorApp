@@ -33,16 +33,15 @@ docker compose -f compose.dev.yaml ps
 docker compose -f compose.dev.yaml logs --tail 100 backend frontend db
 ```
 
-On the preview host, use the actual PR number and set `controller_revision` to
-the release SHA shown in the lifecycle job's publication log:
+On the preview host, as the deployment account, use the actual PR number:
 
 ```sh
-docker compose --project-name people-gator-pr-123 \
-  --env-file /var/lib/people-gator-preview/pr-123/compose.env \
-  -f "/var/lib/people-gator-preview-controller/releases/$controller_revision/compose.pr.yaml" logs --tail 100 backend
+people-gator-deploy pr status --pr 123
+people-gator-deploy pr logs --pr 123 --tail 100
 ```
 
-Use `candidate.env` when diagnosing a failed candidate. Never dump rendered
+Failed service output is kept in the environment's private `last-error.log`;
+`pr-123/candidate.env` describes a failed candidate. Never dump rendered
 configuration or private state into shared logs. Inspect collector logs through
 the infrastructure Compose project if application logs are missing. A working
 application does not prove remote log delivery.
@@ -113,15 +112,15 @@ timeouts and collector outages using synthetic data; verify receipt at the sink
 instead of relying only on an open port. Controller/logging checks from root:
 
 ```sh
-python3 deploy/preview/tests/test_observability.py -v
+python3 -B deploy/people-gator-deploy/tests/test_observability.py -v
 ```
 
 Its optional end-to-end test uses disposable Docker containers and an OTLP sink:
 
 ```sh
-PREVIEW_TEST_OTEL=1 python3 deploy/preview/tests/test_observability.py -v
+PREVIEW_TEST_OTEL=1 python3 -B deploy/people-gator-deploy/tests/test_observability.py -v
 ```
 
-See the [host guide](../deploy/preview/README.md#validation) for image prerequisites.
+See the [utility guide](../deploy/people-gator-deploy/README.md#development) for prerequisites.
 The default run skips that live test. Keep skipped transport checks distinct from
 confirmed delivery and avoid recursive logging of the collector into itself.

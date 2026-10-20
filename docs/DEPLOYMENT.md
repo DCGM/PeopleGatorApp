@@ -7,11 +7,15 @@
 | Native API/Vite and Docker database | [Development](DEVELOPMENT.md) | Local coding and disposable tests |
 | Compose Watch | `compose.dev.yaml` | Local reload; schema bootstrap and sample users |
 | Existing live preview | `compose.live-preview.yaml` | Developer-managed shared host with external Traefik and S3 |
-| PR preview | [Host installation](../deploy/preview/README.md) | Isolated synthetic review environment per same-repository PR |
-| Production-format images | `people-gator-api/Dockerfile`, `people-gator-app/Dockerfile` | Building blocks for a separately configured release deployment |
+| PR preview | [`people-gator-deploy pr`](../deploy/people-gator-deploy/README.md) | Isolated synthetic review environment per same-repository PR |
+| Staging | [`people-gator-deploy staging`](../deploy/people-gator-deploy/README.md) | Every successful `main` build on retained database snapshot; storage managed externally |
+| Tagged release | [`people-gator-deploy release`](../deploy/people-gator-deploy/README.md) | Production stack for `v*` tags on tested `main` commits |
+| Production-format images | `people-gator-api/Dockerfile`, `people-gator-app/Dockerfile` | Building blocks for a separately configured deployment |
 
-There is no general production Compose/release workflow supplied here.
-`compose.live-preview.yaml` uses development images/reload and a fixed hostname;
+The packaged release stack (`compose.release.yaml`) is the supplied production
+template: no reload, debug, seed or development mounts, separate migration and
+runtime roles, external PostgreSQL/storage/proxy. See its access-boundary
+prerequisite below. `compose.live-preview.yaml` uses development images/reload and a fixed hostname;
 it is not a production release template. It needs the existing `web` network,
 Traefik/TLS and S3 settings. Its startup migrates/adopts before API validation;
 see [Database migrations](../people-gator-api/docs/DATABASE-MIGRATIONS.md).
@@ -119,38 +123,44 @@ head commit on a self-hosted Linux x64 runner labeled `people-gator-ci`:
 1. Frontend: Node 24, `npm ci`, type-check and Vitest.
 2. Backend: Python 3.14/uv locked sync, isolated PostgreSQL test databases,
    migration → seed → seed → check CLI smoke test, then pytest.
-3. Trusted preview-controller tests checked out from the workflow commit in a
-   separate location, including optional DB isolation checks enabled in CI.
+3. Trusted deployment-utility tests checked out from the workflow commit in a
+   separate location, including DB isolation checks, a wheel built and run
+   outside the checkout, and snapshot/runtime suites with the backend environment.
 4. After checks pass, same-repository PRs build both production Dockerfiles and
    publish run/attempt-specific tags to GHCR. Fork PRs receive tests but no image
    publication/deployment. Images carry the tested revision label.
 
-[`pr-preview.yml`](../.github/workflows/pr-preview.yml) runs a versioned trusted
-controller on the separate `people-gator-preview` runner after successful PR CI.
-Every lifecycle job publishes a complete, validated bundle from its exact reviewed
-`main` workflow commit into a private runner-owned directory without sudo, then
-executes that release with separate operator-managed settings. Atomic publication
-and per-revision directories replace the stale installed-file guard. The job and
-publisher reject non-default workflow sources; restrict runner access to the
-trusted deployment workflow/ref and protect/review `main`.
-It verifies repository/open-PR/current-head identity,
-pulls candidate images, verifies their revisions and deploys by immutable digest.
-Deployment order is storage initialization → migration → seed → backend/frontend
-health checks. A failed seed blocks success. Existing database, media and JWT keys
-survive successful preview updates. Each PR uses a restricted database role.
+[`pr-preview.yml`](../.github/workflows/pr-preview.yml),
+[`staging.yml`](../.github/workflows/staging.yml) and
+[`release.yml`](../.github/workflows/release.yml) only select the trusted utility
+and invoke it. Each job checks out its own reviewed workflow commit (never a PR
+head), installs or reuses that exact `people-gator-deploy` revision through
+`deploy/install.py --user` without sudo, runs `<environment> preflight` and then
+one lifecycle operation with the pinned versioned executable. The installer
+rejects non-default workflow sources (release tags must point at commits on
+`main`); restrict runner access to the trusted workflows and protect/review
+`main`. The utility verifies repository/open-PR/current-head identity, pulls
+candidate images with temporary registry credentials, verifies their revisions
+and deploys by immutable digest. Preview order is selected PR container removal → storage initialization →
+migration → seed → backend/frontend health → routed readiness. A failed seed
+blocks success. Existing database, media and JWT keys survive successful preview
+updates. Container removal retains volumes and the database; it also replaces a
+previous per-PR stack when local instance state is unavailable. Expect downtime
+during preparation, including until a successful retry after a failed migration
+or seed. Each PR uses a restricted database role.
 
 Close events clean up that PR's containers, storage, database and role; hourly and
 manual reconciliation retry missed cleanup. Shared PostgreSQL, pgAdmin and logging
-remain running. A failed migration has no automatic schema rollback, even if the
-previous application continues running.
+remain running. A failed migration has no automatic schema rollback.
 
-Provision host settings and the runner-owned release directory once using
-the [complete host guide](../deploy/preview/README.md). Shared-infrastructure
-initialization/upgrades remain explicit operator actions; routine publication
-does not recreate services or reset credentials/state. PR code must never become
-the host controller. In `config.json`, set `repository` to
-`DCGM/PeopleGatorApp`; older installations may still name `DCGM/people_gator`.
-GHCR image names are derived from the configured repository. Provision the
-documented DNS, Traefik, logging network, runner isolation and token permissions
-before enabling deployment. Retain releases referenced by running infrastructure
-bind mounts; no automatic release pruning or database rollback is performed.
+Install the utility and configure each environment's descriptor once using the
+[utility guide](../deploy/people-gator-deploy/README.md); installation is fresh
+only and never takes over existing state. Shared-infrastructure
+initialization/upgrades remain explicit operator actions; routine installs do not
+recreate services or reset credentials/state. PR code must never become the host
+controller. In each descriptor, set `repository` to `DCGM/PeopleGatorApp`. GHCR
+image names are derived from the configured repository. Provision the documented
+DNS, Traefik, logging network, runner isolation and token permissions before
+enabling deployment (see the [host prerequisites](../deploy/people-gator-deploy/HOSTS.md)).
+Utility versions referenced by running jobs or container mounts are retained; no
+automatic version pruning or database rollback is performed.

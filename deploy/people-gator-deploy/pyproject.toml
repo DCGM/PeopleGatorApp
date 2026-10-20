@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "people-gator-deploy"
+version = "1.0.1"
+description = "Trusted PeopleGator deployment lifecycles"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+people-gator-deploy = "people_gator_deploy.cli:main"
+
+[tool.setuptools.package-data]
+people_gator_deploy = ["assets/*", "build.json"]

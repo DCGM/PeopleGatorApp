@@ -16,7 +16,7 @@ permissions:
   pull-requests: read
   packages: read
 
-# Serialize deployment, closure and reconciliation, without cancelling cleanup.
+# Serialize preview deployment, closure and reconciliation, without cancelling cleanup.
 concurrency:
   group: people-gator-preview-host
   cancel-in-progress: false
@@ -33,68 +33,34 @@ jobs:
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PREVIEW_CONFIG: /opt/people-gator-preview/config.json
+      GH_ACTOR: ${{ github.actor }}
       EVENT_NAME: ${{ github.event_name }}
       RUN_ID: ${{ github.event.workflow_run.id }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       # Only the reviewed workflow revision is read here, never the PR head.
-      - name: Read trusted preview deployment requirements
+      - name: Read trusted deployment utility
         uses: actions/checkout@v4
         with:
           ref: ${{ github.workflow_sha }}
-          path: .preview-workflow
-          sparse-checkout: deploy/preview
+          path: .deploy-controller
+          fetch-depth: 0
+          sparse-checkout: deploy
           persist-credentials: false
-      - name: Publish reviewed preview controller release
-        id: controller-release
-        run: python3 .preview-workflow/deploy/preview/release.py --revision "$GITHUB_WORKFLOW_SHA"
-      - name: Select preview controller release
+      - name: Select trusted deployment utility
+        id: utility
+        run: python3 .deploy-controller/deploy/install.py --user --revision "$GITHUB_WORKFLOW_SHA"
+      - name: Check preview configuration and prerequisites
         env:
-          CONTROLLER_RELEASE: ${{ steps.controller-release.outputs.path }}
-        run: echo "PREVIEW_CONTROLLER=$CONTROLLER_RELEASE/preview.py" >> "$GITHUB_ENV"
-      - name: Check preview repository and GitHub access
-        run: python3 "$PREVIEW_CONTROLLER" check-access
-      - name: Use temporary registry credentials
-        id: registry-config
-        if: github.event_name == 'workflow_run'
-        run: |
-          preview_context="$(docker context show)"
-          registry_config="$(mktemp -d "$RUNNER_TEMP/people-gator-preview-docker.XXXXXX")"
-          echo "path=$registry_config" >> "$GITHUB_OUTPUT"
-          # Registry credentials and daemon contexts both live under DOCKER_CONFIG.
-          # Preserve only the selected context, without copying existing logins.
-          if [ "$preview_context" != default ]; then
-            docker context export "$preview_context" "$registry_config/context.dockercontext"
-            DOCKER_CONFIG="$registry_config" docker context import "$preview_context" "$registry_config/context.dockercontext"
-            rm -- "$registry_config/context.dockercontext"
-          fi
-          DOCKER_CONFIG="$registry_config" docker context use "$preview_context"
-          echo "DOCKER_CONFIG=$registry_config" >> "$GITHUB_ENV"
-      - name: Check deployment Docker daemon
-        run: |
-          docker info --format 'Docker daemon: {{.Name}}'
-      - name: Log into image registry
-        if: github.event_name == 'workflow_run'
-        env:
-          GH_ACTOR: ${{ github.actor }}
-        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+          DEPLOY: ${{ steps.utility.outputs.executable }}
+        run: '"$DEPLOY" pr preflight'
       - name: Apply preview lifecycle
+        env:
+          DEPLOY: ${{ steps.utility.outputs.executable }}
         run: |
           case "$EVENT_NAME" in
-            workflow_run)
-              python3 "$PREVIEW_CONTROLLER" deploy --run-id "$RUN_ID"
-              ;;
-            pull_request_target)
-              python3 "$PREVIEW_CONTROLLER" cleanup --pr "$PR_NUMBER"
-              ;;
-            schedule|workflow_dispatch)
-              python3 "$PREVIEW_CONTROLLER" reconcile
-              ;;
+            workflow_run) "$DEPLOY" pr update --run-id "$RUN_ID" ;;
+            pull_request_target) "$DEPLOY" pr cleanup --pr "$PR_NUMBER" ;;
+            schedule|workflow_dispatch) "$DEPLOY" pr reconcile ;;
             *) exit 2 ;;
           esac
-      - name: Remove temporary registry credentials
-        if: always() && steps.registry-config.outputs.path != ''
-        env:
-          PREVIEW_DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}
-        run: rm -rf -- "$PREVIEW_DOCKER_CONFIG"

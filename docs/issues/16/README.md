@@ -1,6 +1,7 @@
 # Issue 16: staging sign-in evidence
 
-Captures show the actual staging-only `deploy/preview/staging-login.html` from
+Captures show the actual staging-only `staging-login.html` (now
+`deploy/people-gator-deploy/src/people_gator_deploy/assets/staging-login.html`) from
 this issue branch, served with the compiled application and real API against a
 disposable, migrated PostgreSQL/pgvector 16 database containing synthetic preview
 data. No production data, usable deployment credentials or tokens are included.
@@ -17,10 +18,11 @@ data. No production data, usable deployment credentials or tokens are included.
 `PLAYWRIGHT_MODULE` when Playwright is not installed in Node's normal module path.
 Serve the compiled app with `VITE_API_BASE_URL=/`, the static sign-in page and
 same-origin proxy routes `/api/` and `/token/` to the actual API. Provision only
-synthetic staging example credentials in a disposable S3 bucket using
-`staging.storage.example.json` and the staging preparation worker. The existing
-captures show the unchanged sign-in UI; the S3 storage correction is verified by
-the separate disposable TLS S3 runtime suite.
+synthetic staging credentials through your externally managed application storage.
+These captures document the existing sign-in UI. Staging deployment now manages
+only the database; storage, media and credential provisioning are external
+operator work. Its database runtime suite tests restore/migration/startup without
+an S3 provider or media copying.
 
 Executed Chromium checks at both viewports:
 
@@ -35,4 +37,4 @@ Executed Chromium checks at both viewports:
 The page is mounted only by staging Compose; PR previews keep their existing
 synthetic demo authentication. Deployment, migration, data-isolation and recovery
 checks are separate from these screenshots; see
-[the staging operator guide](../../../deploy/preview/STAGING.md).
+[the deployment utility guide](../../../deploy/people-gator-deploy/README.md).

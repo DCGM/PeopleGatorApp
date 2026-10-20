@@ -65,7 +65,7 @@ export OpenAPI locally. See [Search filters](SEARCH_FILTERS.md) for query rules.
 | Media/layout/crops | `media/`, `filesystem/`, `services/filesystem_service.py` |
 | Frontend screen | `people-gator-app/src/router/index.ts`, `views/`, `viewmodels/`, `query/` |
 | Generated contract | `people-gator-app/src/client/`, `openapi-ts.config.ts` |
-| Preview fixtures and operators | `seeding/`, `cli/`, `deploy/preview/preview.py` |
+| Preview fixtures and operators | `seeding/`, `cli/`, `deploy/people-gator-deploy/` |
 
 The [Architecture](ARCHITECTURE.md) guide connects those modules; the
 [Database](DATABASE.md) guide maps SQL tables and IDs. Paths above are relative

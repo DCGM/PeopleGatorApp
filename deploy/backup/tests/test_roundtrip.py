@@ -11,7 +11,7 @@ import tempfile
 import time
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "preview" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "people-gator-deploy" / "tests"))
 from s3_fixture import S3Fixture
 
 
