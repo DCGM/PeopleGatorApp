@@ -36,7 +36,7 @@ vi.mock('@/client', () => ({
 }))
 vi.mock('@/query/client', () => ({
   getAccessToken: async () =>
-    `header.${btoa(JSON.stringify({ scope: 'people-gator:annotate' }))}.sig`,
+    `header.${btoa(JSON.stringify({ scopes: ['people-gator:annotate'] }))}.sig`,
 }))
 vi.mock('@/query/people-filter-options', () => ({
   usePeopleFilterOptions: () => ({ labels: ref({}) }),

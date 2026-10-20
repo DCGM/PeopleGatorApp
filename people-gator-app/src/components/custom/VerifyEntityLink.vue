@@ -14,9 +14,8 @@ onMounted(async () => {
     const token = await getAccessToken()
     const encoded = token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')
     const claims = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')))
-    const scopes = Array.isArray(claims.scope)
-      ? claims.scope
-      : String(claims.scope ?? '').split(' ')
+    const granted = claims.scopes ?? claims.scope
+    const scopes = Array.isArray(granted) ? granted : String(granted ?? '').split(' ')
     allowed.value = scopes.includes('people-gator:annotate')
   } catch {
     allowed.value = false

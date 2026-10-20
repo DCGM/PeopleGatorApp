@@ -90,7 +90,12 @@ const sourceTarget = computed(() =>
         <p v-if="!face.pageId" class="text-xs text-muted-foreground" role="status">
           {{ face.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
         </p>
-        <VerifyEntityLink v-bind="face" :id="face.id" kind="face" />
+        <VerifyEntityLink
+          v-if="face.linkState !== 'verified'"
+          v-bind="face"
+          :id="face.id"
+          kind="face"
+        />
       </div>
     </CardFooter>
   </Card>
