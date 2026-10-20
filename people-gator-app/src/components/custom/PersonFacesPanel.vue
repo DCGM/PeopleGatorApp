@@ -107,7 +107,13 @@ watch(
         >Click faces to add them; use the checkboxes to remove them or Shift-select a range.
         Unassigning keeps the face and source image.</template
       >
-      <Button type="button" size="sm" variant="outline" :disabled="busy" @click="review('unassign')"
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        class="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive dark:hover:bg-destructive/10"
+        :disabled="busy"
+        @click="review('unassign')"
         ><Unlink aria-hidden="true" />{{
           busy && mutation.variables.value?.action === 'unassign'
             ? 'Unassigning…'
@@ -117,6 +123,8 @@ watch(
       <Button
         type="button"
         size="sm"
+        variant="outline"
+        class="border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950 dark:hover:text-emerald-300"
         :disabled="busy || !unverified.length"
         @click="review('verify')"
         ><BadgeCheck aria-hidden="true" />{{

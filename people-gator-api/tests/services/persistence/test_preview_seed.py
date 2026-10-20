@@ -1646,6 +1646,9 @@ async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rer
     actor = GenericActor(user_id=seed.users['reviewer'])
     automatic = await db.faces.get(seed.faces['provenance-auto'])
     manual = await db.faces.get(seed.faces['provenance-manual'])
+    assert automatic.entity_link_state.value == 'automatic'
+    assert manual.entity_link_state.value == 'manual'
+    assert (await db.faces.get(seed.faces['provenance-authority'])).entity_link_state.value == 'verified'
     updated = await db.faces.patch_batch([
         FacePatchBatchItem(detection_id=automatic.detection_id, entity_link_state='verified'),
         FacePatchBatchItem(detection_id=manual.detection_id, entity_id=None, entity_link_state=None),

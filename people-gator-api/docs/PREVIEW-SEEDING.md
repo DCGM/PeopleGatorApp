@@ -348,7 +348,9 @@ Editor names are plain text; a TODO in `AnnotationLastChange.vue` defers user li
 until the user tab exists.
 The additive `person-face-style-comparison` entry point opens the same identity's
 Discover tab; switch to Faces to compare the card presentation and select faces
-for verification/unassignment. Existing source identities, records/media and
+for verification/unassignment. Verify selected uses a green outline; Unassign
+selected uses a red outline, with the same behavior in light/dark themes.
+Existing source identities, records/media and
 review edits are reused. Detection origin is retained in data/filtering but has
 no disclosure on the card. The top-bar **Back to People search · “Irena”** link restores the saved
 search; raw origin metadata is not rendered as filter tags. Shared evidence

@@ -399,7 +399,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             # Presentation examples reuse linked synthetic records and media.
             # Adding entry points never rewrites reviewer edits or checkpoints.
-            # Existing mixed-state faces exercise bulk verification/unassignment;
+            # Mixed-state faces exercise green-outline Verify/red-outline Unassign;
             # this entry point changes no persisted evidence on retained previews.
             # Compare Faces/Discover library + document rows and plain editor names.
             # Seeded importer/reviewer labels remain usable before the user tab exists.
