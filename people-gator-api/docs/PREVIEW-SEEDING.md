@@ -68,7 +68,7 @@ assignment, document, user and API-key filters. On screens narrower than 640px,
 filter controls are collapsed by default behind the search row's sliders
 button, while active badges remain visible below. Opening it reveals every
 filter; the sliders button collapses it without clearing the query. Desktop
-shows all selectors in one wrapping flex panel. In a person's detail view, expand Last processed in the stats sidebar.
+shows all selectors in one wrapping flex panel. In a person's detail view, the stats sidebar always shows **Last change**.
 Edit a profile or assign a face to see processing attribution change. The two
 synthetic API-key registry entries demonstrate historical filtering and attribution;
 they cannot authenticate requests because no secret configuration is installed.
@@ -447,3 +447,22 @@ the same evidence to recenter it. Data refreshes and resizing alone preserve
 manual placement; pending focus waits for image readiness and usable bounds,
 and page changes discard it. The added fixture has new stable keys and adds
 missing records/media without rewriting existing reviewer edits or timestamps.
+
+## Person sidebar statistics and Last change (#43)
+
+The CLI's `person-last-change` link opens **Ada Review**, reusing the Link state
+review fixtures. Her sidebar shows **Face annotations** and **Mention
+annotations** as automatic/manual/verified icon-value pairs (1 / 0 / 1 each),
+right to left, beside the existing Face detections, Document mentions and
+Libraries totals. **Last change** is always visible with the editor under
+**Modified by** and the API key (or **No API key**).
+
+Under 24 hours the value reads `modified just now`, `modified N min ago` or
+`modified N hour(s) ago`; from exactly 24 hours it reads `modified on yyyy-mm-dd`
+in browser local time. The exact timestamp stays in the `<time datetime>` and
+its title. The text ages on a local timer without refetching. Records without
+change metadata show **Not recorded** and never substitute the owner. Seeded
+timestamps are not reset on rerun, so a long-lived preview normally shows the
+date form; edit Ada's short description to see the relative form and the
+updated editor without reloading. No seed records or API contracts changed.
+

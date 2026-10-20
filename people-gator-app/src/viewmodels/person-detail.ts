@@ -307,8 +307,6 @@ export function usePersonDetail(
     portraitLoading: computed(() => faces.value[0]?.portraitLoading ?? false),
     profile,
     processing,
-    processingRefreshing: entityQuery.isFetching,
-    refreshProcessing: () => entityQuery.refetch(),
     updateProfile,
     updateIdentifiers,
     updateStatus: patchEntity.status,

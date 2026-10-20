@@ -364,4 +364,31 @@ describe('entity link review', () => {
     expect(wrapper.findAll('[aria-label="Verified: 5 faces"]')).toHaveLength(1)
     wrapper.unmount()
   })
+
+  it('shows titled person annotation groups without a competing total', () => {
+    const wrapper = mount(EntityLinkStatistics, {
+      props: {
+        stats: { faces: { ...counts, total: 14 }, mentions: { ...counts, verified: 0 } },
+        layout: 'person',
+      },
+    })
+    const groups = wrapper.findAll('dd')
+    expect(wrapper.findAll('dt').map((title) => title.text())).toEqual([
+      'Face annotations',
+      'Mention annotations',
+    ])
+    expect(groups[0]!.classes()).toEqual(
+      expect.arrayContaining(['flex-row-reverse', 'justify-between', 'font-mono']),
+    )
+    expect(
+      groups[0]!.findAll('[tabindex="0"]').map((item) => item.attributes('aria-label')),
+    ).toEqual([
+      `Automatic: ${counts.automatic} faces`,
+      `Manual: ${counts.manual} faces`,
+      'Verified: 5 faces',
+    ])
+    expect(wrapper.find('[aria-label="Verified: 0 mentions"]').text()).toBe('0')
+    expect(wrapper.text()).not.toContain('Total')
+    wrapper.unmount()
+  })
 })
