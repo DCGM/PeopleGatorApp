@@ -85,8 +85,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (8, 21, 12)
-    assert len(result.documents) == 13 and len(result.pages) == 24
+    assert await counts(database) == (8, 24, 14)
+    assert len(result.documents) == 14 and len(result.pages) == 25
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -234,7 +234,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (8, 21, 12)
+    assert await counts(database) == (8, 24, 14)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -256,7 +256,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (9, 21, 12)
+    assert await counts(database) == (9, 24, 14)
 
 
 @pytest.mark.asyncio
@@ -280,8 +280,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 8 and len(result.faces) == 21
-    assert await counts(database) == (8, 21, 12)
+    assert len(result.entities) == 8 and len(result.faces) == 24
+    assert await counts(database) == (8, 24, 14)
 
 
 @pytest.mark.asyncio
@@ -301,7 +301,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (7, 20, 11)
+    assert await counts(database) == (7, 23, 13)
 
 
 @pytest.mark.asyncio
@@ -1451,3 +1451,39 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
     assert await database.text_mentions.get(reviewed_mention.mention_id) == reviewed_mention
     assert await database.sources.get_page(page_before.source_id) == page_before
     assert await database.sources.get_document(document_before.source_id) == document_before
+
+
+@pytest.mark.asyncio
+async def test_viewport_focus_targets_and_repeated_occurrences(seed_target):
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["focus-1"])
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    spans = await get_text_mention_spans(database, page.source_id, library=page.library,
+                                       document_id=page.document_id, page_id=page.page_id)
+    assert {span.mention_id for span in spans} == {
+        result.mentions["focus-name-upper"], result.mentions["focus-name-lower"]
+    }
+    assert {span.entity_id for span in spans} == {result.entities["ada"]}
+    assert len({span.start_line_id for span in spans}) == 2
+    lines = {line.id: line for region in layout.regions for line in region.lines}
+    assert {lines[span.start_line_id].polygon[0][1] for span in spans} == {460, 1000}
+    upper = await database.faces.get(result.faces["focus-upper"])
+    lower = await database.faces.get(result.faces["focus-lower"])
+    tiny = await database.faces.get(result.faces["focus-tiny"])
+    assert lower.bounding_box.y > upper.bounding_box.y + upper.bounding_box.height
+    assert tiny.bounding_box.width == 16 and tiny.bounding_box.height == 19
+    for face in (upper, lower, tiny):
+        box = face.bounding_box
+        assert all(box.x <= point.x <= box.x + box.width and
+                   box.y <= point.y <= box.y + box.height for point in face.keypoints)
+    assert urlsplit(result.filter_examples["viewport-focus"]).path.endswith(f"/pages/{page.page_id}")
+    reviewed = await database.faces.patch(
+        lower.detection_id, FacePatchRequest(entity_id=result.entities["lenka"]),
+        GenericActor(user_id=result.users["reviewer"]),
+    )
+    repeated = await preview.seed_preview(database, filesystem)
+    assert repeated.faces == result.faces and repeated.mentions == result.mentions
+    stored = await database.faces.get(lower.detection_id)
+    assert stored.entity_id == result.entities["lenka"]
+    assert stored.last_touched_at == reviewed.last_touched_at

@@ -302,3 +302,24 @@ derivative refresh, layout replacement and twice-run preservation. Slow success,
 S3 denial, SDK timeout, pool saturation and same-page synchronization are covered
 by gated regression tests, not by introducing failures into preview data. See
 [media concurrency](MEDIA-UPLOAD-CONCURRENCY.md) for the isolated HTTP diagnostic.
+
+### Scan editor viewport focus (issue #34)
+
+Open the seed report's `viewport-focus` link, or find **Viewport focus practice**
+in Documents. Its page has two Ada Novak portraits in separated regions, a tiny
+unassigned face near the upper right, and two distinct Ada Novak mentions at
+heights 460 and 1000. Select each face in the gallery or overlay, use previous/next
+or left/right arrows, and activate each name in the transcription with a mouse
+or keyboard. Each occurrence focuses its own containing OCR line: precise mention
+polygons are not exposed by the workspace span type, and character offsets are
+not treated as image coordinates. An identity-level candidate preview does not
+choose an arbitrary spatial occurrence.
+
+Automatic focus uses the viewer's supported 55–350% range, with a named
+`MAXIMUM_AUTOMATIC_ZOOM` of 3.5 (350%), 20% proportional context and a 24 CSS-pixel
+gutter below the measured toolbar. Very large targets stop at the supported
+minimum even when they cannot completely fit. Pan/zoom manually, then activate
+the same evidence to recenter it. Data refreshes and resizing alone preserve
+manual placement; pending focus waits for image readiness and usable bounds,
+and page changes discard it. The added fixture has new stable keys and adds
+missing records/media without rewriting existing reviewer edits or timestamps.

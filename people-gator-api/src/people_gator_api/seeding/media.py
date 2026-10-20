@@ -18,6 +18,8 @@ PAGE_SIZE = (800, 1100)  # width, height
 
 
 def face_box(face: Face) -> BoundingBox:
+    if face.box is not None:
+        return BoundingBox(x=face.box[0], y=face.box[1], width=face.box[2], height=face.box[3])
     return BoundingBox(x=70 + face.slot * 250, y=220, width=160, height=190)
 
 
@@ -25,7 +27,7 @@ def face_keypoints(face: Face) -> list[FaceKeypoint]:
     box = face_box(face)
     points = ((50, 65), (110, 65), (80, 100), (55, 135), (105, 135))
     return [
-        FaceKeypoint(type=kind, x=box.x + x, y=box.y + y)
+        FaceKeypoint(type=kind, x=box.x + x * box.width / 160, y=box.y + y * box.height / 190)
         for kind, (x, y) in zip(FaceKeypointType, points, strict=True)
     ]
 
@@ -35,7 +37,7 @@ def page_layout(page: Page) -> PageLayoutModel:
     for mention in page.mentions:
         for fragment, transcription in enumerate(mention.text.split("\n")):
             index = len(lines)
-            y = 540 + index * 55
+            y = mention.y if mention.y is not None else 540 + index * 55
             lines.append(TextLineModel(
                 id=mention.key + (f"-{fragment}" if "\n" in mention.text else ""),
                 baseline=[[50, y + 25], [750, y + 25]],
@@ -78,6 +80,12 @@ def page_image(page: Page, document: Document) -> bytes:
         x, y = box.x, box.y
         colors = ("#e6bd99", "#c99d80", "#efd3b8", "#bfa58c")
         draw.ellipse((x, y, x + box.width, y + box.height), fill=colors[face.group])
+        if face.box is not None:
+            for point in face_keypoints(face)[:2]:
+                radius = max(1, box.width / 32)
+                draw.ellipse((point.x - radius, point.y - radius,
+                              point.x + radius, point.y + radius), fill="#303030")
+            continue
         draw.arc((x, y - 5, x + box.width, y + 100), 180, 360, fill="#54463b", width=18)
         points = face_keypoints(face)
         for point in points[:2]:
