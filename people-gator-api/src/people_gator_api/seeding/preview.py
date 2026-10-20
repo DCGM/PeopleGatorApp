@@ -385,6 +385,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "document-pages-without-annotations": "/documents?" + urlencode({
+                "q": "Příběhy archivářů",
+            }),
             "annotation-editor-filters": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "evidence_user": actors["importer"].user_id,
                 "evidence_key": registered_keys["importer"],

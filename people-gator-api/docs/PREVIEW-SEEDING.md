@@ -305,6 +305,15 @@ by gated regression tests, not by introducing failures into preview data. See
 
 ## Shared annotation filters and edits (#31)
 
+The `document-pages-without-annotations` example finds **Příběhy archivářů**.
+Open its heading or +more link to browse all six registered pages, including
+its page without faces or mentions. Navigation adds only the document's library
+and archive ID; it does not invent annotation criteria. Explicit modification
+user/key/date and link-state selections still carry through and narrow results.
+The repository test paginates all six pages and checks that selecting the importer
+reduces the list to four annotated pages. Twice-run preservation retains the
+unannotated page and its source/processing metadata.
+
 The `scan-assignment-search` example opens scans for Irena's annotation review ledger.
 Open its page, select a face and search for **Ada Novak** in the assignment panel.
 Ada has evidence elsewhere and must remain available as a database candidate:

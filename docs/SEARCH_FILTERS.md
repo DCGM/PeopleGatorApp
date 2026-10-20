@@ -137,6 +137,10 @@ state and actor; results cannot combine unrelated annotations.
 
 Related links copy the current shared selections and keep resource-specific
 criteria separate. Source metadata is not rendered as removable origin tags.
+Opening a document's scan list uses library/archive scope and shows all
+registered pages by default, including pages without faces or mentions. Document
+heading, +more and page links copy only the selected annotation criteria;
+ordinary document browsing does not add an evidence-presence restriction.
 Opening a scan preserves explicitly selected evidence filters without adding
 `evidence_source` for the opened page. The workspace already constrains its
 annotations to that page; database assignment searches can still find people

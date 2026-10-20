@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { useEvidenceFilters, relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { useEvidenceFilters, relatedEvidenceQuery, sharedEvidenceUrl } from '@/viewmodels/evidence-filters'
 import { computed } from 'vue'
 import { ArrowUpRight, ChevronRight } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
@@ -27,10 +27,15 @@ const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 
 const remainingCount = computed(() =>
   Math.max(0, (filteredCount.value ?? 0) - visibleCards.value.length),
 )
+// Browsing a document already scopes pages by library/archive ID. Copy the
+// selected annotation criteria without inventing a requirement for evidence.
+const navigationQuery = computed(() =>
+  relatedEvidenceQuery(route, sharedEvidenceUrl(route.query)),
+)
 const documentLocation = computed(() => ({
   name: 'document-search',
   query: {
-    ...relatedEvidenceQuery(route, { evidence_document: [props.document.source_id] }),
+    ...navigationQuery.value,
     library: props.document.library,
     document: props.document.document_id,
     ...(linkStates.value.length && { link_state: linkStates.value }),
@@ -92,7 +97,7 @@ const documentLocation = computed(() => ({
           class="scan-card group min-w-0"
           :to="{
             name: 'document-page',
-            query: relatedEvidenceQuery(route, { evidence_document: [document.source_id] }),
+            query: navigationQuery,
             params: { libraryId: card.library, documentId: card.documentId, pageId: card.pageId },
           }"
         >

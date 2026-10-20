@@ -1802,3 +1802,35 @@ async def test_annotation_editor_example_uses_same_user_and_key_and_preserves_cr
         assert await preview.seed_preview(db, filesystem) == seed
         for face in matches.items:
             assert await db.faces.get(face.detection_id) == face
+
+
+@pytest.mark.asyncio
+async def test_document_navigation_keeps_unannotated_pages_and_explicit_filters(seed_target):
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    example = urlsplit(seed.filter_examples['document-pages-without-annotations'])
+    assert example.path == '/documents'
+    assert parse_qs(example.query) == {'q': ['Příběhy archivářů']}
+    document = await db.sources.get_document(seed.documents['issue8-search'])
+    scope = dict(library=[document.library], document_id=[document.document_id])
+    pages, cursor = [], None
+    while True:
+        result = await db.sources.list_pages(PageListRequest(limit=2, cursor=cursor,
+            return_total_count=True, filter_=PageListFilter(**scope)))
+        assert result.total_count == 6
+        pages.extend(result.items)
+        cursor = result.cursor
+        if cursor is None:
+            break
+    assert len({page.source_id for page in pages}) == 6
+    untouched = next(page for page in pages if page.source_id == seed.pages['issue8-untouched'])
+    assert untouched.entity_link_stats.faces.total == 0
+    assert untouched.entity_link_stats.mentions.total == 0
+    filtered = await db.sources.list_pages(PageListRequest(limit=100,
+        return_total_count=True, filter_=PageListFilter(**scope,
+            evidence_touched_by_user_id=[seed.users['importer']])))
+    assert filtered.total_count == 4
+    assert untouched.source_id not in {page.source_id for page in filtered.items}
+    for _ in range(2):
+        assert await preview.seed_preview(db, filesystem) == seed
+        assert await db.sources.get_page(untouched.source_id) == untouched

@@ -121,13 +121,13 @@ describe('document search and bounded groups', () => {
       [...wrapper.get('.document-pages').element.children].map((node) => node.tagName),
     ).toEqual(['ARTICLE', 'ARTICLE'])
     expect(wrapper.findAll('.scan-card').map((node) => node.attributes('href'))).toEqual([
-      '/libraries/a/documents/shared/pages/a-1?evidence_document=a-shared',
-      '/libraries/b/documents/shared/pages/b-1?evidence_document=b-shared',
+      '/libraries/a/documents/shared/pages/a-1',
+      '/libraries/b/documents/shared/pages/b-1',
     ])
     for (const [index, library] of ['a', 'b'].entries()) {
       const link = wrapper.findAll('.document-link')[index]!
       expect(link.attributes('href')).toBe(
-        `/scans?evidence_document=${library}-shared&library=${library}&document=shared`,
+        `/scans?library=${library}&document=shared`,
       )
       expect(link.get('p').text()).toBe(`${library} · shared`)
       expect(link.attributes('aria-label')).toContain(`in ${library}`)
@@ -160,6 +160,26 @@ describe('document search and bounded groups', () => {
       )
     expect(documentTitle({ document_id: 'legacy', name: ' ' })).toBe('Document legacy')
   })
+  it.each(['', '?library=a'])('opens all document pages without implicit annotation filters: %s', async (query) => {
+    const { wrapper, router } = await render('/documents' + query)
+    const firstLink = wrapper.get('.document-link')
+    expect(firstLink.attributes('href')).toBe('/scans?library=a&document=shared')
+    expect(wrapper.get('a.scan-card').attributes('href')).toBe('/libraries/a/documents/shared/pages/a-1')
+    await firstLink.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ library: 'a', document: 'shared' })
+  })
+  it('retains explicitly selected annotation filters in document and scan links', async () => {
+    const key = '00000000-0000-4000-8000-000000000001'
+    const { wrapper, router } = await render(`/documents?library=a&evidence_key=${key}&link_state=verified`)
+    expect(wrapper.get('a.scan-card').attributes('href')).toContain('evidence_key=' + key)
+    expect(wrapper.get('a.scan-card').attributes('href')).toContain('link_state=verified')
+    await wrapper.get('.document-link').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'a', document: 'shared', evidence_key: [key], link_state: ['verified'],
+    })
+  })
   it('loads at most four previews and paginates document results without following page cursors', async () => {
     api.documents.mockImplementation(({ query }) =>
       Promise.resolve(
@@ -186,7 +206,7 @@ describe('document search and bounded groups', () => {
     expect(wrapper.text()).toContain('20 registered pages')
     expect(wrapper.findAll('.more-pages').map((node) => node.text())).toEqual(['+16', '+16'])
     expect(wrapper.get('.more-pages').attributes('href')).toBe(
-      '/scans?evidence_document=a-shared&library=a&document=shared',
+      '/scans?library=a&document=shared',
     )
     expect(wrapper.text()).not.toContain('Showing 4 of')
     expect(wrapper.find('button[aria-label^="Load more pages"]').exists()).toBe(false)
