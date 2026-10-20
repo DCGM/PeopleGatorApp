@@ -37,7 +37,7 @@ export type TranscriptionEntitySpan = LinkMetadata & {
 }
 
 export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
-  return entity.mention_id ?? entity.entity_id ?? `${entity.line_id}:${entity.start_index}:${entity.end_index}`
+  return entity.mention_id ?? `${entity.line_id}:${entity.start_index}:${entity.end_index}`
 }
 
 export type TranscriptionLine = {

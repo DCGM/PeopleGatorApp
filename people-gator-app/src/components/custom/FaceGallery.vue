@@ -60,7 +60,16 @@ function updateFaceFilter(value: AcceptableValue | AcceptableValue[]) {
 function scrollSelectedThumbnailIntoView() {
   void nextTick(() => {
     const selected = thumbnailList.value?.querySelector<HTMLElement>('[aria-current="true"]')
-    selected?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    const viewport = thumbnailList.value?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    if (!selected || !viewport) return
+    const target = selected.getBoundingClientRect()
+    const bounds = viewport.getBoundingClientRect()
+    if (target.left >= bounds.left && target.right <= bounds.right) return
+    // Keep selection visible inside the strip without scrolling the document viewer offscreen.
+    viewport.scrollTo?.({
+      left: viewport.scrollLeft + target.left - bounds.left - (bounds.width - target.width) / 2,
+      behavior: 'smooth',
+    })
   })
 }
 

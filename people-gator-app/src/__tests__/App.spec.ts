@@ -95,6 +95,8 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     loadMore: vi.fn<() => void>(),
     pageDimensions: ref({ width: 210, height: 297 }),
     pageImageLoading: ref(false),
+    pageImageReady: ref(false),
+    annotationsLoading: ref(false),
     pageImageUrl: ref(''),
     similarPeople: ref(documentWorkspaceMock.similarPeople),
     similarPeopleLoading: ref(false),

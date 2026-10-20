@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -27,8 +28,8 @@ import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
 import { useTranslationQuery } from '@/query/translation'
 
-const minimumZoomPercent = 55
-const maximumZoomPercent = 350
+const minimumZoomPercent = MINIMUM_ZOOM * 100
+const maximumZoomPercent = MAXIMUM_ZOOM * 100
 const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const route = useRoute()
@@ -63,6 +64,7 @@ const {
   pageDimensions,
   pageImageLoading,
   pageImageLoaded,
+  pageImageReady,
   pageImageUrl,
   similarPeople,
   similarPeopleLoading,
@@ -91,6 +93,62 @@ const pageBounds = ref<PageViewportBounds | null>(null)
 const similarPeopleSearch = ref<InstanceType<typeof SimilarPeopleSearch> | null>(null)
 let panzoom: PanzoomObject | undefined
 let pageResizeObserver: ResizeObserver | undefined
+const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
+type FocusTarget = { kind: 'face'; id: string } | { kind: 'line'; id: string; entityKey?: string }
+let focusFrame: number | undefined
+const pendingFocus = ref<{ page: string; target: FocusTarget } | null>(null)
+
+function scheduleFocus() {
+  void nextTick(() => {
+    if (!pendingFocus.value) return
+    if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+    // Panzoom writes transforms on animation frames. Measure after those writes,
+    // including when keyboard navigation requests another target in quick succession.
+    focusFrame = requestAnimationFrame(() => {
+      focusFrame = undefined
+      applyPendingFocus()
+    })
+  })
+}
+
+function requestFocus(target: FocusTarget) {
+  pendingFocus.value = { page: focusPageKey.value, target }
+  scheduleFocus()
+}
+
+function applyPendingFocus() {
+  const request = pendingFocus.value
+  const viewer = viewerElement.value
+  const pageNode = pageElement.value
+  if (!request || !panzoom || !viewer || !pageNode || !pageImageReady.value || annotationsLoading.value) return
+  if (request.page !== focusPageKey.value) { pendingFocus.value = null; return }
+  if (page.value?.page_id !== pageId.value) return
+  const target = request.target
+  const position = target.kind === 'face'
+    ? (selectedFaceId.value === target.id ? faces.value.find(face => face.id === target.id)?.position : undefined)
+    : transcription.value.find((line, index) => index === selectedLineIndex.value && line.id === target.id &&
+        (!target.entityKey || (selectedEntityKey.value === target.entityKey &&
+          line.entities?.some(entity => transcriptionEntityKey(entity) === target.entityKey))))?.position
+  if (!position) { pendingFocus.value = null; return }
+  const viewerRect = viewer.getBoundingClientRect()
+  const pageRect = pageNode.getBoundingClientRect()
+  const toolbar = viewer.querySelector('.viewer-tools')?.getBoundingClientRect()
+  const transform = focusTransform(position, {
+    left: pageRect.left - viewerRect.left, top: pageRect.top - viewerRect.top,
+    width: pageRect.width, height: pageRect.height,
+  }, { width: viewerRect.width, height: viewerRect.height,
+    toolbarBottom: toolbar ? toolbar.bottom - viewerRect.top : 0 },
+  { scale: panzoom.getScale(), ...panzoom.getPan() })
+  if (!transform) return
+  pendingFocus.value = null
+  panzoom.zoom(transform.scale, { animate: false })
+  panzoom.pan(transform.x, transform.y, { animate: false, force: true })
+}
+
+watch(focusPageKey, () => { pendingFocus.value = null }, { flush: 'sync' })
+watch([pageImageReady, faces, transcription, annotationsLoading], () => {
+  scheduleFocus()
+})
 
 const selectedFace = computed(() => faces.value.find((face) => face.id === selectedFaceId.value))
 const selectedPersonCandidate = computed(() =>
@@ -140,6 +198,7 @@ function showOnPageEntities() {
 }
 
 function selectFace(faceId: string) {
+  requestFocus({ kind: 'face', id: faceId })
   selectedFaceId.value = faceId
   selectedPersonId.value = faces.value.find((face) => face.id === faceId)?.personId ?? null
   if (selectedPersonId.value) showOnPageEntities()
@@ -157,12 +216,14 @@ function selectLine(index: number) {
   if (index < 0 || index >= transcription.value.length) return
   selectedLineIndex.value = index
   selectedEntityKey.value = null
+  requestFocus({ kind: 'line', id: transcription.value[index]!.id })
   syncRoute()
 }
 
 function selectEntity(index: number, entity: TranscriptionEntitySpan) {
   selectedLineIndex.value = index
   selectedEntityKey.value = transcriptionEntityKey(entity)
+  requestFocus({ kind: 'line', id: entity.line_id, entityKey: transcriptionEntityKey(entity) })
   selectedPersonId.value = entity.entity_id ?? null
   if (selectedPersonId.value) showOnPageEntities()
   syncRoute()
@@ -196,6 +257,7 @@ function navigateLine(direction: 'next' | 'previous') {
 }
 
 function previewSimilarPerson(person: SimilarPersonCandidate) {
+  pendingFocus.value = null
   selectedPersonId.value = person.id
   if (person.entityLineIndex !== undefined) {
     selectedLineIndex.value = person.entityLineIndex
@@ -230,6 +292,7 @@ function setZoom(direction: 'in' | 'out') {
     panzoom.zoomOut({ animate: false, step: controlledZoomStep })
 }
 function resetView() {
+  pendingFocus.value = null
   panzoom?.reset({ animate: false })
 }
 
@@ -332,14 +395,18 @@ onMounted(async () => {
   }) as EventListener)
   window.addEventListener('resize', updatePageBounds)
   if (typeof ResizeObserver !== 'undefined' && viewerElement.value && pageElement.value) {
-    pageResizeObserver = new ResizeObserver(updatePageBounds)
+    pageResizeObserver = new ResizeObserver(() => { updatePageBounds(); scheduleFocus() })
     pageResizeObserver.observe(viewerElement.value)
     pageResizeObserver.observe(pageElement.value)
   }
   updatePageBounds()
+  if (selectedFaceId.value) requestFocus({ kind: 'face', id: selectedFaceId.value })
+  scheduleFocus()
 })
 
 onBeforeUnmount(() => {
+  if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+  pendingFocus.value = null
   window.removeEventListener('keydown', handleNavigationKeydown)
   window.removeEventListener('resize', updatePageBounds)
   viewerElement.value?.removeEventListener('wheel', handleWheel)

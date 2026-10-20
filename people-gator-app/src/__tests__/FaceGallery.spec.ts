@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import FaceGallery from '@/components/custom/FaceGallery.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
@@ -73,6 +73,21 @@ describe('FaceGallery', () => {
       wrapper.get('[aria-label="Select face 1: not annotated, Unassigned"]').attributes('aria-pressed'),
     ).toBe('false')
     expect(wrapper.emitted('select')).toBeUndefined()
+  })
+
+  it('scrolls only the thumbnail viewport when navigation selects an offscreen face', async () => {
+    const wrapper = mount(FaceGallery, { props: { faces, selectedFaceId: null } })
+    const viewport = wrapper.get('[data-slot="scroll-area-viewport"]').element as HTMLElement
+    const selected = wrapper.get('[aria-label^="Select face 2:"]').element as HTMLElement
+    const scrollTo = vi.fn()
+    viewport.scrollTo = scrollTo
+    selected.scrollIntoView = vi.fn()
+    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({ left: 0, right: 100, width: 100 } as DOMRect)
+    vi.spyOn(selected, 'getBoundingClientRect').mockReturnValue({ left: 120, right: 180, width: 60 } as DOMRect)
+    await wrapper.setProps({ selectedFaceId: 'face-2' })
+    await wrapper.vm.$nextTick()
+    expect(scrollTo).toHaveBeenCalledWith({ left: 100, behavior: 'smooth' })
+    expect(selected.scrollIntoView).not.toHaveBeenCalled()
   })
 
   it('uses a useful empty-state label when the page has no faces', () => {
