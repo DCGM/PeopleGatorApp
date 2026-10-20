@@ -4,13 +4,14 @@ import { originOptions } from '@/viewmodels/evidence-filters'
 const props = defineProps<{
   record: EntityResponse | FaceResponse | TextMentionResponse
   label: string
+  expanded?: boolean
 }>()
 function format(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : 'Not recorded'
 }
 </script>
 <template>
-  <details class="max-w-full break-words">
+  <details :open="expanded" class="max-w-full break-words">
     <summary>
       {{ label }}:
       {{

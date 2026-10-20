@@ -173,7 +173,13 @@ function selectTab(tab: string | number) {
       >
         <template #statistics>
           <EntityLinkStatistics :stats="entity?.entity_link_stats" />
-          <ProvenanceDetails v-if="entity" :record="entity" label="Identity creation / import" />
+          <ProvenanceDetails
+            v-if="entity"
+            :key="personId"
+            :record="entity"
+            label="Identity creation / import"
+            expanded
+          />
           <PersonProcessingDetails
             v-if="entity"
             :key="personId"
