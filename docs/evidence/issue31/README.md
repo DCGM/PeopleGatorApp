@@ -2,7 +2,7 @@
 
 Actual Chromium captures with the maintained synthetic PostgreSQL/local-media
 preview. Linked-face colors, selection, identity and profile captures are refreshed
-at `c67e6c0`; unchanged navigation/list/pane captures remain from `c5dd377`.
+at `a1e4b0a`; unchanged navigation/list/pane captures remain from `c5dd377`.
 Desktop viewports are **1440 × 900** and mobile viewports **390 × 844 CSS pixels**.
 Full-page captures retain those CSS widths. Obsolete captures have been removed.
 
@@ -23,10 +23,10 @@ Full-page captures retain those CSS widths. Obsolete captures have been removed.
   Back, reload and old saved-return links preserve current filter state.
 - Opening a scan leaves database assignment search available for Ada, whose
   evidence is outside the opened page. Explicit shared criteria still apply.
-- Linked-face assignment rows use the shared state palette: Automatic blue,
+- Linked-face assignment rows use only the shared state text colors: Automatic blue,
   Manual amber, Verified green and Unassigned muted. In both themes and both
-  viewports, browser checks compared actual foreground/background colors with
-  the corresponding standard scan badges. All three assigned states are visibly
+  viewports, browser checks compared text colors with the corresponding standard
+  scan badges and confirmed every assignment row has a transparent background. All three assigned states are visibly
   distinct and remain colored during selection. The `linked-face-states` entry
   point reuses the existing synthetic profile and media.
 - Space, Shift-range selection, click-to-add and Clear work for Faces. Green
@@ -44,13 +44,13 @@ review edits and media are synthetic and self-contained.
 
 ## Captures
 
-### Linked faces — standard annotation-state colors (light)
+### Linked faces — standard annotation-state text colors (light)
 
 | Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
 | --- | --- |
 | ![Desktop: blue Automatic, amber Manual and green Verified linked faces](linked-face-state-colors-desktop.png) | ![Mobile: blue Automatic, amber Manual and green Verified linked faces](linked-face-state-colors-mobile.png) |
 
-### Linked faces — standard annotation-state colors (dark)
+### Linked faces — standard annotation-state text colors (dark)
 
 | Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
 | --- | --- |
