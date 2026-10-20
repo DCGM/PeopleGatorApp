@@ -16,7 +16,7 @@ below-640px Collapsible opened in list/profile/discovery panels; unsuffixed mobi
 | `provenance-*` | Recorded identity provenance and compact face last-change attribution |
 | `mentions-empty-*` | Accessible Mentions tab, filtered zero and recovery |
 | `activity-time-*`, `activity-user-*` | Sidebar Activity tab groups faces/mentions by annotation edit day or last user; clicking groups filters the scan |
-| `cards-*`, `cards-detail-*` | Equal-sized cards, complete wrapped sources, matching/status image overlays, linked annotation editors; top-bar return link replaces the generic People breadcrumb |
+| `cards-*`, `cards-detail-*` | Compact cards: assignment icon/state and confidence below the photo, colored library row and adjacent change/user rows; linked source/editor navigation |
 | `statistics-*` | Dedicated Statistics tab with page/document totals, no disclosure |
 | `page-*` | Same annotation highlighted in its source workspace; URL criteria retained without a filter panel |
 | `discovery-*` | Assigned-elsewhere discovery choice, independent of assigned-evidence state |
@@ -47,9 +47,9 @@ verifier and page/document processing metadata.
 
 PR #37 review follow-up captures also check top-level pane tabs, independently
 scrollable Activity in a 1440 × 450 CSS viewport, copied Activity/Statistics URLs,
-keyboard tab activation, equal card dimensions and uncut source references at
-both standard widths. The matching label remains within its image and cannot
-change card height. The source breadcrumb retains enough mobile width to be
+keyboard tab activation and equal card dimensions at both standard widths.
+Cards now use the compact Discover presentation; source navigation still
+selects the correct face without rendering raw IDs or matching labels. The source breadcrumb retains enough mobile width to be
 readable. Authorized users can select faces to verify their links using the API's actual `scopes` JWT
 claim. Editor links navigate to an active annotation-user filter. The full
 people/profile/scan and documents/scan/profile journeys were repeated after
@@ -74,3 +74,22 @@ origin, source and downloadable face media. Frontend tests additionally cover
 view-only permissions, failed/partially missing batches, retry, pending-action
 disabling, pagination and filter/navigation reset. Identity disclosures retain
 their collapse controls.
+
+
+The compact-card revision adds `compact-faces-{light,dark}-*`,
+`compact-faces-selected-{light,dark}-*` and
+`compact-discover-{light,dark}-*` comparisons, all at the standard desktop/mobile
+CSS viewport dimensions. Faces and Discover use the same square corners,
+8px padding, grid gaps, library color and theme-aware assignment text. Faces
+shows its state icon/label and `conf` detection confidence directly below the
+photo, then library, last-change time and linked editor. Fixed-height source and
+footer blocks, image status badges, matching-detection labels and visible raw
+IDs are removed. Loading skeletons follow the same compact structure.
+
+Chromium checks passed in light/dark at both widths: assignment precedes library;
+change/user starts within 8px of the library; card heights are equal; library
+colors, padding and corner styles match Discover; visible card text contains no
+UUIDs; Space/Shift selection, Clear and source-link restoration still work.
+Selection and filtered profile screenshots were refreshed from this revision.
+No horizontal overflow or browser JavaScript errors occurred. Earlier before
+captures remain available in commit `a9f5022` for comparison.
