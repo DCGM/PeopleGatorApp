@@ -1,139 +1,177 @@
-# Issue 31 browser evidence
+# Shared filters and document navigation — issue #31
 
-Actual local application captures using the synthetic PostgreSQL preview seed,
-with API/Vite running from this issue branch. No private data or credentials are
-shown. Desktop viewport: **1440 × 900 CSS pixels**. Mobile viewport:
-**390 × 844 CSS pixels**. Screenshots capture the full page at those viewport
-widths; their image heights vary with content. `*-expanded-mobile.png` shows the
-below-640px Collapsible opened in list/profile/discovery panels; unsuffixed mobile states show collapsed filters.
-The navigation review section below identifies current captures; older profile
-captures with named return breadcrumbs are retained as historical evidence.
+Actual Chromium captures of application revision `c5dd377` with the maintained
+synthetic PostgreSQL/local-media preview. Desktop viewports are **1440 × 900**
+and mobile viewports **390 × 844 CSS pixels**. Full-page captures retain those
+CSS widths. Every capture below is refreshed for this revision; obsolete
+captures have been removed.
 
-| Capture | State |
+## Verified interactions
+
+- The document-pages preview finds **Příběhy archivářů**. Its heading opens all
+  six registered pages, including the page with no face or mention annotations.
+  The outgoing request has library/archive scope and no invented annotation
+  document/library predicate. Browsing from a library-scoped document list also
+  retains all six pages.
+- Selecting the importer API key shows four pages; removing its tag restores six.
+  Controls, tags, URL, API predicates and rendered results agree at both widths.
+- People and profile controls share modification user/key/date and document/page
+  criteria, library and assignment states. Mobile settings collapse without
+  hiding active tags or changing selections. Creation/import and Last processed
+  show separately recorded times and actors.
+- Normal People breadcrumbs forward edited/cleared keys. Keyboard activation,
+  Back, reload and old saved-return links preserve current filter state.
+- Opening a scan leaves database assignment search available for Ada, whose
+  evidence is outside the opened page. Explicit shared criteria still apply.
+- Space, Shift-range selection, click-to-add and Clear work for Faces. Green
+  Verify and red Unassign actions remain available; compact Faces/Discover,
+  source/editor rows, expanded creation/processing, Mentions empty state and
+  Activity/Statistics were checked in the running app.
+- Activity groups use actual annotation editors/dates. Selecting a reviewer
+  constrains the Faces pane. Page/document statistics stay separately labeled.
+- No JavaScript errors or horizontal overflow were observed. The affected
+  profile/card states were checked in light and dark modes.
+
+Screenshots show appearance; these interaction checks and the automated
+regressions provide separate behavioral evidence. Fixtures, source identities,
+review edits and media are synthetic and self-contained.
+
+## Captures
+
+### Documents — shared criteria and separate processing settings
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
 | --- | --- |
-| `people-*` | Shared evidence filters in people search; origin text retained |
-| `documents-*` | Documents containing the same Verified, Authority evidence; separate document processing bound |
-| `scans-*` | Matching registered page scope and preserved processing context |
-| Original `profile-*` | Historical filtered-profile captures; superseded by `profile-standard-breadcrumb-*` and `profile-expanded-current-filters-*` |
-| `provenance-*` | Recorded identity provenance and compact face last-change attribution |
-| `mentions-empty-*` | Accessible Mentions tab, filtered zero and recovery |
-| `activity-time-*`, `activity-user-*` | Sidebar Activity tab groups faces/mentions by annotation edit day or last user; clicking groups filters the scan |
-| `cards-*`, `cards-detail-*` | Compact cards: assignment icon/state and confidence below the photo, colored library/document row and adjacent change/user rows; source navigation and plain editor names |
-| `statistics-*` | Dedicated Statistics tab with page/document totals, no disclosure |
-| `page-*` | Same annotation highlighted in its source workspace; URL criteria retained without a filter panel |
-| `discovery-*` | Assigned-elsewhere discovery choice, independent of assigned-evidence state |
-| `people-dark-*` | Standard controls and active tags in dark theme |
+| ![Desktop: Documents — shared criteria and separate processing settings](documents-desktop.png) | ![Mobile: Documents — shared criteria and separate processing settings](documents-mobile.png) |
 
-Executed browser checks in Chromium at both widths:
+### Document navigation — all six registered pages, including the unannotated page
 
-- People → profile → source page → profile, and Documents → matching scans →
-  source page → profile retain active evidence criteria and correct scope.
-- Source processing bounds stay separate from annotation criteria, which populate the actual profile controls. Raw origin metadata is not rendered as chips.
-- The scan workspace has no added filter panel/tags; it keeps the existing compact toolbar, with shared criteria applied and forwarded through its URL.
-- Reload, Back/Forward and direct URLs reproduce the selections/results.
-- Individual evidence-tag removal updates the URL; one clear-all button is
-  rendered alongside active criteria and preserves unrelated search context.
-- Mobile filter toggles start collapsed, expose `aria-expanded`, open via Enter
-  and retain selected tags while collapsed. Expanded controls remain usable.
-- Discovery assignment changes are serialized separately from annotation states.
-- No document-level horizontal overflow or browser JavaScript errors occurred.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Document navigation — all six registered pages, including the unannotated page](document-pages-all-desktop.png) | ![Mobile: Document navigation — all six registered pages, including the unannotated page](document-pages-all-mobile.png) |
 
-The fixture authority is synthetic and its reference uses `preview.invalid`;
-no external authority was contacted. Inference services are not required.
+### Document navigation — explicit importer API key narrows results to four pages
 
-Additional Activity checks at both viewports: day/user group selection updates
-annotation URL predicates and the scan’s visible annotations; groups retain all
-page records, copied URLs restore the Activity/By user tabs, and clearing removes
-only time/user selection. Recorded editor attribution is independent of owner,
-verifier and page/document processing metadata.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Document navigation — explicit importer API key narrows results to four pages](document-pages-filtered-desktop.png) | ![Mobile: Document navigation — explicit importer API key narrows results to four pages](document-pages-filtered-mobile.png) |
 
-PR #37 review follow-up captures also check top-level pane tabs, independently
-scrollable Activity in a 1440 × 450 CSS viewport, copied Activity/Statistics URLs,
-keyboard tab activation and equal card dimensions at both standard widths.
-Cards now use the compact Discover presentation; source navigation still
-selects the correct face without rendering raw IDs or matching labels. Profiles now use the normal People breadcrumb hierarchy.
-Authorized users can select faces to verify their links using the API's actual `scopes` JWT
-claim. Editor names are plain text pending a future user tab. The full
-people/profile/scan and documents/scan/profile journeys were repeated after
-removing origin chips; browser checks report no JavaScript errors or horizontal
-overflow. All captures use disposable migrated PostgreSQL/local storage.
+### Scans — expanded shared settings within document scope
 
-The latest PR #37 selection follow-up adds `faces-selection-*`,
-`discover-selection-*` and `identity-expanded-*` at the same desktop/mobile CSS
-viewports. Faces and Discover now share checkbox and floating action-panel
-components. Faces moves verification into that panel alongside unassignment;
-identity creation/import and Last processed open by default. Profile, card,
-provenance and mention empty-state captures were also refreshed from this revision.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Scans — expanded shared settings within document scope](scans-desktop.png) | ![Mobile: Scans — expanded shared settings within document scope](scans-mobile.png) |
 
-Chromium checks passed at both widths: Space activation, Shift ranges,
-click-to-add mode, Clear, source-link restoration and selection reset when
-switching tabs; the floating panel remains within the viewport with no
-horizontal overflow or JavaScript errors. Against a separately migrated,
-twice-seeded disposable PostgreSQL/local-media instance, browser Verify and
-Unassign actions persisted correct states, recorded verifier attribution,
-cleared verification on unassignment, refreshed profile totals and retained
-origin, source and downloadable face media. Frontend tests additionally cover
-view-only permissions, failed/partially missing batches, retry, pending-action
-disabling, pagination and filter/navigation reset. Identity disclosures retain
-their collapse controls.
+### People — shared API-key filter; mobile settings collapsed
 
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: People — shared API-key filter; mobile settings collapsed](people-desktop.png) | ![Mobile: People — shared API-key filter; mobile settings collapsed](people-mobile.png) |
 
-The compact-card revision adds `compact-faces-{light,dark}-*`,
-`compact-faces-selected-{light,dark}-*` and
-`compact-discover-{light,dark}-*` comparisons, all at the standard desktop/mobile
-CSS viewport dimensions. Faces and Discover use the same square corners,
-8px padding, grid gaps, library color and theme-aware assignment text. Faces
-shows its state icon/label and `conf` detection confidence directly below the
-photo, then library plus truncated document ID, last-change time and plain editor name. Fixed-height source and
-footer blocks, image status badges, matching-detection labels and visible detection/page IDs are removed. Loading skeletons follow the same compact structure.
+### People — shared settings expanded
 
-Chromium checks passed in light/dark at both widths: assignment precedes library;
-change/user starts within 8px of the library/document row; card heights are equal; library
-colors, padding and corner styles match Discover; visible card text omits detection IDs; Space/Shift selection, Clear and source-link restoration still work.
-Selection and filtered profile screenshots were refreshed from this revision.
-No horizontal overflow or browser JavaScript errors occurred. Earlier before
-captures remain available in commit `a9f5022` for comparison.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: People — shared settings expanded](people-expanded-desktop.png) | ![Mobile: People — shared settings expanded](people-expanded-mobile.png) |
 
+### Profile — modification user and API key selected together
 
-Editor-name follow-up: annotation editors render as plain truncated text with
-full-name tooltips, with no link or underline. A source TODO defers linking to
-the editor's user tab until that tab is implemented. The source row now includes
-library plus a truncated document ID, matching the Discover row layout; its
-full reference remains available in a tooltip. Desktop/mobile light/dark and
-selected/filtered screenshots were refreshed for this revision.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Profile — modification user and API key selected together](profile-filters-desktop.png) | ![Mobile: Profile — modification user and API key selected together](profile-filters-mobile.png) |
 
-Selected-face action colors: Verify selected is a green outline Button;
-Unassign selected is a red outline Button. The selected-state captures at both
-standard viewport sizes show the requested colors in light/dark. Chromium
-checks confirmed text/border colors, a 1px outline, keyboard focus, hover,
-selection/Clear behavior and action-panel bounds, with no overflow or JavaScript
-errors. Standard Button focus and disabled behavior remain in place.
+### Identity creation/import and Last processed — expanded by default
 
-## Navigation review fixes
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Identity creation/import and Last processed — expanded by default](identity-expanded-desktop.png) | ![Mobile: Identity creation/import and Last processed — expanded by default](identity-expanded-mobile.png) |
 
-`scan-assignment-navigation-*` shows Ada Novak as a database assignment candidate
-after opening Irena's scan from scan search. Opening the result adds no implicit
-evidence-source criterion. The browser checked the real search request as well
-as the rendered candidate; existing explicit shared filters remain supported by
-the navigation regression tests.
+### Faces — compact cards in light mode
 
-`profile-standard-breadcrumb-*` and `profile-standard-breadcrumb-dark-*` show the
-normal PeopleGator → People → person ID hierarchy after changing the annotation
-API key from the importer to the OCR linker. There is no custom source/return
-breadcrumb. `people-updated-filters-*` shows the current OCR key applied after
-keyboard activation of the People breadcrumb. Browser checks also covered
-removing the key, Back/reload, and ignoring an old `origin_return` URL containing
-the original key.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Faces — compact cards in light mode](compact-faces-light-desktop.png) | ![Mobile: Faces — compact cards in light mode](compact-faces-light-mobile.png) |
 
-`profile-expanded-current-filters-*` includes the open mobile settings state;
-`mentions-current-filters-*` shows the corresponding Mentions empty state. Compact
-Faces/Discover, selected-face and expanded-identity captures were refreshed with
-normal breadcrumbs in both viewport sizes, including light/dark card states.
+### Faces — compact cards in dark mode
 
-These captures use the actual running application and an isolated, migrated,
-twice-seeded PostgreSQL database with disposable local media. Desktop viewport:
-**1440 × 900 CSS pixels**; mobile: **390 × 844 CSS pixels**. Full-page captures
-retain those CSS widths. Checks passed in Chromium with no JavaScript errors or
-horizontal overflow. The profile was also checked/captured in dark mode. The
-earlier filtered-profile screenshots with named return breadcrumbs are historical
-and are superseded by these navigation captures.
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Faces — compact cards in dark mode](compact-faces-dark-desktop.png) | ![Mobile: Faces — compact cards in dark mode](compact-faces-dark-mobile.png) |
+
+### Faces — Verify and Unassign selection actions in light mode
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Faces — Verify and Unassign selection actions in light mode](compact-faces-selected-light-desktop.png) | ![Mobile: Faces — Verify and Unassign selection actions in light mode](compact-faces-selected-light-mobile.png) |
+
+### Faces — Verify and Unassign selection actions in dark mode
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Faces — Verify and Unassign selection actions in dark mode](compact-faces-selected-dark-desktop.png) | ![Mobile: Faces — Verify and Unassign selection actions in dark mode](compact-faces-selected-dark-mobile.png) |
+
+### Discover — matching compact cards in light mode
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Discover — matching compact cards in light mode](compact-discover-light-desktop.png) | ![Mobile: Discover — matching compact cards in light mode](compact-discover-light-mobile.png) |
+
+### Discover — matching compact cards in dark mode
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Discover — matching compact cards in dark mode](compact-discover-dark-desktop.png) | ![Mobile: Discover — matching compact cards in dark mode](compact-discover-dark-mobile.png) |
+
+### Mentions — filtered empty state and recovery
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Mentions — filtered empty state and recovery](mentions-current-filters-desktop.png) | ![Mobile: Mentions — filtered empty state and recovery](mentions-current-filters-mobile.png) |
+
+### Scan Activity — annotation changes grouped by local day
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Scan Activity — annotation changes grouped by local day](activity-time-desktop.png) | ![Mobile: Scan Activity — annotation changes grouped by local day](activity-time-mobile.png) |
+
+### Scan Activity — annotation changes grouped by editor
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Scan Activity — annotation changes grouped by editor](activity-user-desktop.png) | ![Mobile: Scan Activity — annotation changes grouped by editor](activity-user-mobile.png) |
+
+### Scan Statistics — separate page and document totals
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Scan Statistics — separate page and document totals](statistics-desktop.png) | ![Mobile: Scan Statistics — separate page and document totals](statistics-mobile.png) |
+
+### Scan assignment — database search finds Ada outside the opened page
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Scan assignment — database search finds Ada outside the opened page](scan-assignment-navigation-desktop.png) | ![Mobile: Scan assignment — database search finds Ada outside the opened page](scan-assignment-navigation-mobile.png) |
+
+### Profile — edited API key and expanded shared controls
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Profile — edited API key and expanded shared controls](profile-expanded-current-filters-desktop.png) | ![Mobile: Profile — edited API key and expanded shared controls](profile-expanded-current-filters-mobile.png) |
+
+### Profile — normal breadcrumbs with current filters
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Profile — normal breadcrumbs with current filters](profile-standard-breadcrumb-desktop.png) | ![Mobile: Profile — normal breadcrumbs with current filters](profile-standard-breadcrumb-mobile.png) |
+
+### Profile — normal breadcrumbs in dark mode
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: Profile — normal breadcrumbs in dark mode](profile-standard-breadcrumb-dark-desktop.png) | ![Mobile: Profile — normal breadcrumbs in dark mode](profile-standard-breadcrumb-dark-mobile.png) |
+
+### People — edited profile API key remains active after navigation
+
+| Desktop — 1440 × 900 CSS pixels | Mobile — 390 × 844 CSS pixels |
+| --- | --- |
+| ![Desktop: People — edited profile API key remains active after navigation](people-updated-filters-desktop.png) | ![Mobile: People — edited profile API key remains active after navigation](people-updated-filters-mobile.png) |
