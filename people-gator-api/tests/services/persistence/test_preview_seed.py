@@ -1609,6 +1609,12 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
     ))).items
     assert {face.detection_id for face in filtered_faces} == {face.detection_id for face in faces}
     assert all(face.entity_id == person_id for face in filtered_faces)
+    for state in ('automatic', 'manual', 'verified'):
+        by_state = await db.faces.list(FaceListRequest(limit=100,
+            filter_=FaceListFilter(entity_id=[person_id], entity_link_state=[state])))
+        assert {face.detection_id for face in by_state.items} == {
+            face.detection_id for face in filtered_faces if face.entity_link_state.value == state
+        }
     assert {face.last_touched_by_user_id for face in faces} == {
         seed.users['importer'], seed.users['reviewer'],
     }

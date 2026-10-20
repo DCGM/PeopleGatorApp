@@ -22,6 +22,9 @@ const props = defineProps<{
 defineEmits<{ toggle: [event: MouseEvent]; add: [event: MouseEvent] }>()
 const route = useRoute()
 const assignment = computed(() => linkStateVisuals[props.face.linkState ?? 'unassigned'])
+const assignmentTextClasses = computed(() =>
+  assignment.value.classes.split(' ').filter((name) => name.split(':').pop()?.startsWith('text-')),
+)
 const sourceTarget = computed(() =>
   props.face.pageId
     ? {
@@ -79,7 +82,7 @@ const sourceTarget = computed(() =>
       </AspectRatio>
       <p
         class="flex min-w-0 items-center gap-1 text-sm"
-        :class="assignment.classes"
+        :class="assignmentTextClasses"
         :title="linkTooltip(face)"
         :aria-label="linkTooltip(face)"
         data-face-assignment

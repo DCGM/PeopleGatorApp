@@ -359,10 +359,10 @@ does not rewrite reviewed fixture data.
 
 
 The `linked-face-states` entry point opens Irena Evidence with Automatic, Manual
-and Verified link states selected. The compact assignment row reuses the same
+and Verified link states selected. The compact assignment row uses text colors from the same
 shared palette as annotation badges elsewhere: blue for Automatic, amber for
 Manual, green for Verified, and muted for Unassigned, with the standard light/dark
-variants. Face selection keeps its separate highlight. This scenario reuses the
+variants. State rows have no background tint. Face selection keeps its separate highlight. This scenario reuses the
 existing linked faces and local media; its repository test checks the URL state
 filter against actual detections, resolves their media and preserves them on rerun.
 
