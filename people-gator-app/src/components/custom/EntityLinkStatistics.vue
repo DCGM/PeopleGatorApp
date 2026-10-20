@@ -14,7 +14,7 @@ const personTitles = { faces: 'Face annotations', mentions: 'Mention annotations
     <div v-for="kind in ['faces', 'mentions'] as const" :key="kind">
       <dt class="text-muted-foreground">{{ personTitles[kind] }}</dt>
       <!-- Right-to-left item order only; each icon/value pair keeps its own reading order. -->
-      <dd class="flex flex-row-reverse flex-wrap justify-between gap-x-3 font-mono text-lg">
+      <dd class="flex flex-row-reverse flex-wrap justify-between gap-x-3 font-mono">
         <UiTooltip
           v-for="state in linkStates"
           :key="state"
@@ -25,7 +25,7 @@ const personTitles = { faces: 'Face annotations', mentions: 'Mention annotations
             class="inline-flex items-center gap-1"
             :aria-label="`${linkStateVisuals[state].label}: ${stats[kind]?.[state] ?? 0} ${kind}`"
           >
-            <component :is="linkStateVisuals[state].icon" class="size-4" aria-hidden="true" />{{
+            <component :is="linkStateVisuals[state].icon" class="size-3.5" aria-hidden="true" />{{
               stats[kind]?.[state] ?? 0
             }}
           </span>

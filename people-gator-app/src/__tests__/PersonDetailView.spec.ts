@@ -106,7 +106,7 @@ describe('PersonDetailView', () => {
     expect(stats.text()).not.toContain('Identity creation')
     expect(stats.findAll('dd').length).toBeGreaterThanOrEqual(4)
     for (const value of stats.findAll('dd'))
-      expect(value.classes()).toEqual(expect.arrayContaining(['font-mono', 'text-lg']))
+      expect(value.classes()).toEqual(expect.arrayContaining(['font-mono']))
     for (const title of stats.findAll('dt'))
       expect(title.classes()).toEqual(['text-muted-foreground'])
     expect(mentionLink?.props('to')).toEqual({

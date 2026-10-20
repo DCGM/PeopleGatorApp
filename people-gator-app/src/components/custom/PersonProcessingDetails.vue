@@ -22,24 +22,24 @@ const exactTime = computed(() => {
   <dl aria-label="Last change" class="mt-3 grid content-start gap-3">
     <div class="min-w-0">
       <dt class="text-muted-foreground">Last change</dt>
-      <dd v-if="modified" class="font-mono text-lg">
+      <dd v-if="modified" class="font-mono">
         <time :datetime="props.processing.touchedAt ?? undefined" :title="exactTime">{{
           modified
         }}</time>
         <span class="sr-only">, exact time {{ exactTime }}</span>
       </dd>
-      <dd v-else class="font-mono text-lg">Not recorded</dd>
+      <dd v-else class="font-mono">Not recorded</dd>
     </div>
     <template v-if="modified">
       <div class="min-w-0">
         <dt class="text-muted-foreground">Modified by</dt>
-        <dd class="font-mono text-lg break-words" :title="props.processing.userId ?? undefined">
+        <dd class="font-mono break-words" :title="props.processing.userId ?? undefined">
           {{ props.processing.userLabel || 'Unknown user' }}
         </dd>
       </div>
       <div class="min-w-0">
         <dt class="text-muted-foreground">API key</dt>
-        <dd class="font-mono text-lg break-words" :title="props.processing.apiKeyId ?? undefined">
+        <dd class="font-mono break-words" :title="props.processing.apiKeyId ?? undefined">
           {{ props.processing.apiKeyLabel || 'No API key' }}
         </dd>
       </div>
