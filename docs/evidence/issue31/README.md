@@ -99,3 +99,10 @@ the editor's user tab until that tab is implemented. The source row now includes
 library plus a truncated document ID, matching the Discover row layout; its
 full reference remains available in a tooltip. Desktop/mobile light/dark and
 selected/filtered screenshots were refreshed for this revision.
+
+Selected-face action colors: Verify selected is a green outline Button;
+Unassign selected is a red outline Button. The selected-state captures at both
+standard viewport sizes show the requested colors in light/dark. Chromium
+checks confirmed text/border colors, a 1px outline, keyboard focus, hover,
+selection/Clear behavior and action-panel bounds, with no overflow or JavaScript
+errors. Standard Button focus and disabled behavior remain in place.
