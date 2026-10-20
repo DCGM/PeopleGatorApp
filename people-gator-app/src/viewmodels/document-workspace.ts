@@ -397,6 +397,7 @@ export function useDocumentWorkspace(
     annotationsLoading: computed(() => faceQuery.isPending.value || spanQuery.isPending.value || faceQuery.hasNextPage.value),
     pageDimensions: computed(() => annotationDimensions.value ?? { height: 297, width: 210 }),
     pageImageLoaded,
+    pageImageReady: computed(() => imageDimensions.value !== null),
     pageImageLoading: pageImageQuery.isPending,
     pageImageUrl,
     similarPeopleLoading: computed(
