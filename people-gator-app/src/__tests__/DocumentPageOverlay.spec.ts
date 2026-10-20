@@ -37,14 +37,23 @@ describe('DocumentPageOverlay', () => {
     const lines = wrapper.findAll('[data-region-type="line"]')
     expect(lines[0]!.classes()).toContain('border-accent')
     expect(lines[0]!.classes()).not.toContain('border-orange-500')
+    // The current line is also a mention, so it keeps the accent with an orange ring.
+    expect(lines[0]!.classes()).toContain('ring-orange-500')
+    expect(lines[0]!.attributes('aria-label')).toBe(
+      'Select line 1: Ada (mentions the selected person)',
+    )
     for (const line of lines.slice(1, 3)) {
       expect(line.classes()).toContain('border-orange-500')
       expect(line.classes()).toContain('bg-orange-500/15')
+      expect(line.classes()).toContain('hover:bg-orange-500/30')
+      expect(line.attributes('aria-label')).toMatch(/\(mentions the selected person\)$/)
+      expect(line.attributes('aria-pressed')).toBe('false')
     }
-    for (const line of lines.slice(3)) {
+    for (const [offset, line] of lines.slice(3).entries()) {
       expect(line.classes()).toContain('border-transparent')
       expect(line.classes()).toContain('hover:border-accent/70')
       expect(line.classes()).not.toContain('border-orange-500')
+      expect(line.attributes('aria-label')).toBe(`Select line ${offset + 4}: Ada`)
     }
 
     await lines[1]!.trigger('click')
@@ -53,10 +62,14 @@ describe('DocumentPageOverlay', () => {
     expect(lines[0]!.classes()).toContain('border-orange-500')
     expect(lines[1]!.classes()).toContain('border-accent')
     expect(lines[1]!.classes()).not.toContain('border-orange-500')
+    expect(lines[1]!.classes()).toContain('ring-orange-500')
     expect(lines[1]!.attributes('aria-pressed')).toBe('true')
 
     await wrapper.setProps({ selectedPersonId: 'person-2' })
     expect(lines[0]!.classes()).toContain('border-transparent')
+    expect(lines[1]!.classes()).toContain('border-accent')
+    expect(lines[1]!.classes()).not.toContain('ring-orange-500')
+    expect(lines[1]!.attributes('aria-label')).toBe('Select line 2: Ada')
     expect(lines[2]!.classes()).toContain('border-orange-500')
     expect(lines[3]!.classes()).toContain('border-orange-500')
 
@@ -64,6 +77,8 @@ describe('DocumentPageOverlay', () => {
     for (const [index, line] of lines.entries()) {
       expect(line.classes()).toContain(index === 1 ? 'border-accent' : 'border-transparent')
       expect(line.classes()).not.toContain('border-orange-500')
+      expect(line.classes()).not.toContain('ring-orange-500')
+      expect(line.attributes('aria-label')).not.toContain('mentions')
     }
   })
 
