@@ -212,42 +212,15 @@ function selectTab(tab: string | number) {
 
         <TabsContent
           value="faces"
-          class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+          class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         >
-          <div v-for="face in faces" :key="face.id" class="flex min-w-0 flex-col gap-2">
-            <p v-if="matchingFaceIds.includes(face.id)" role="status">Matching detection</p>
-            <RouterLink
-              v-if="face.pageId"
-              :to="{
-                name: 'document-page',
-                params: {
-                  libraryId: face.library,
-                  documentId: face.documentId,
-                  pageId: face.pageId,
-                },
-                query: relatedEvidenceQuery(route, { person: face.id }),
-              }"
-              class="group block"
-            >
-              <PersonFaceCard :face="face" :person-name="profile.name" />
-            </RouterLink>
-            <template v-if="!face.pageId"
-              ><PersonFaceCard :face="face" :person-name="profile.name" />
-              <p>
-                {{
-                  face.sourceLoading
-                    ? 'Loading source page…'
-                    : 'Source page unavailable. Broaden evidence or retry loading this profile.'
-                }}
-              </p></template
-            >
-            <ProvenanceDetails
-              v-if="face.metadata"
-              :record="face.metadata"
-              label="Detection origin"
-            />
-            <VerifyEntityLink v-bind="face" :id="face.id" kind="face" />
-          </div>
+          <PersonFaceCard
+            v-for="face in faces"
+            :key="face.id"
+            :face="face"
+            :person-name="profile.name"
+            :matching="matchingFaceIds.includes(face.id)"
+          />
           <PersonFaceCardSkeleton v-if="faceLoading" />
           <div class="col-span-full text-sm">
             <p v-if="faceError" role="alert">

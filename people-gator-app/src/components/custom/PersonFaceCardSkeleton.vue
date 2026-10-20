@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import { AspectRatio } from '@/components/ui/aspect-ratio'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 </script>
 
 <template>
-  <Card class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 shadow-none" role="status"
-    aria-label="Loading person face">
-    <CardHeader class="relative gap-0 px-0">
-      <AspectRatio :ratio="210 / 297" class="overflow-hidden bg-muted">
-        <Skeleton class="h-full w-full rounded-none" />
-      </AspectRatio>
-      <Skeleton class="absolute left-3 top-3 h-6 w-16 rounded-sm" />
-    </CardHeader>
-    <CardContent class="flex items-center gap-2 px-0">
-      <Skeleton class="h-4 w-10" />
-      <span class="text-xs text-primary/10">·</span>
-      <Skeleton class="h-4 w-20" />
+  <Card class="min-w-0 gap-0 overflow-hidden py-0" role="status" aria-label="Loading person face">
+    <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
+      <Skeleton class="size-full rounded-none" />
+    </AspectRatio>
+    <CardContent class="px-3 pt-3">
+      <div class="h-20 space-y-2">
+        <Skeleton class="h-3 w-20" /><Skeleton class="h-3 w-full" /><Skeleton class="h-3 w-full" />
+      </div>
+      <Skeleton class="mt-2 h-4 w-full" />
     </CardContent>
-    <CardFooter class="gap-2 px-0">
-      <Skeleton class="h-4 flex-1" />
-      <Skeleton class="h-4 w-10" />
-      <Skeleton class="size-4" />
+    <CardFooter class="block px-3 pb-3 pt-2">
+      <div class="h-10 space-y-2"><Skeleton class="h-3 w-24" /><Skeleton class="h-3 w-20" /></div>
+      <div class="mt-2 h-16"><Skeleton class="h-6 w-20" /></div>
     </CardFooter>
-    <span class="sr-only">Loading person face</span>
   </Card>
 </template>
