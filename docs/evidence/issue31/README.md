@@ -50,8 +50,27 @@ scrollable Activity in a 1440 × 450 CSS viewport, copied Activity/Statistics UR
 keyboard tab activation, equal card dimensions and uncut source references at
 both standard widths. The matching label remains within its image and cannot
 change card height. The source breadcrumb retains enough mobile width to be
-readable. Authorized users see Verify link using the API's actual `scopes` JWT
+readable. Authorized users can select faces to verify their links using the API's actual `scopes` JWT
 claim. Editor links navigate to an active annotation-user filter. The full
 people/profile/scan and documents/scan/profile journeys were repeated after
 removing origin chips; browser checks report no JavaScript errors or horizontal
 overflow. All captures use disposable migrated PostgreSQL/local storage.
+
+The latest PR #37 selection follow-up adds `faces-selection-*`,
+`discover-selection-*` and `identity-expanded-*` at the same desktop/mobile CSS
+viewports. Faces and Discover now share checkbox and floating action-panel
+components. Faces moves verification into that panel alongside unassignment;
+identity creation/import and Last processed open by default. Profile, card,
+provenance and mention empty-state captures were also refreshed from this revision.
+
+Chromium checks passed at both widths: Space activation, Shift ranges,
+click-to-add mode, Clear, source-link restoration and selection reset when
+switching tabs; the floating panel remains within the viewport with no
+horizontal overflow or JavaScript errors. Against a separately migrated,
+twice-seeded disposable PostgreSQL/local-media instance, browser Verify and
+Unassign actions persisted correct states, recorded verifier attribution,
+cleared verification on unassignment, refreshed profile totals and retained
+origin, source and downloadable face media. Frontend tests additionally cover
+view-only permissions, failed/partially missing batches, retry, pending-action
+disabling, pagination and filter/navigation reset. Identity disclosures retain
+their collapse controls.
