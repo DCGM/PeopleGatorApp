@@ -203,7 +203,7 @@ function selectTab(tab: string | number) {
           <SearchFilterPanel label="Person evidence" filters-only
             ><EvidenceFilterControls
           /></SearchFilterPanel>
-          <EvidenceFilterTags context />
+          <EvidenceFilterTags />
           <p v-if="missingMatchedFaces" role="status">
             A matching face is unavailable or outside the current evidence filters. Broaden evidence
             or return to the originating search.

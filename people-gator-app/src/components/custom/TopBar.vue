@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { relatedEvidenceQuery, returnLocation } from '@/viewmodels/evidence-filters'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
-import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
+import { RouterLink, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import PeopleGatorIcon from '@/components/custom/PeopleGatorIcon'
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/breadcrumb'
 
 const route = useRoute()
+const router = useRouter()
 
 const breadcrumbs = computed(() => {
   const library =
@@ -26,6 +27,35 @@ const breadcrumbs = computed(() => {
       to: { name: 'document-search' } as RouteLocationRaw,
     },
   ]
+  if (route.name === 'person-detail') {
+    const back = returnLocation(route.query)
+    const destination = back ? router.resolve(back) : null
+    const names: Record<string, string> = {
+      'people-search': 'People search',
+      'document-list': 'Documents',
+      'document-search': 'Scan search',
+      'document-page': 'Source scan',
+      'person-detail': 'Person profile',
+    }
+    const name = destination && names[String(destination.name)]
+    const term = destination?.query.q
+    items.push(
+      name && back
+        ? {
+            label: `Back to ${name}${typeof term === 'string' && term ? ` · “${term}”` : ''}`,
+            to: back,
+          }
+        : {
+            label: 'People',
+            to: { name: 'people-search', query: relatedEvidenceQuery(route) },
+          },
+    )
+    items.push({
+      label: String(route.params.personId),
+      to: { path: route.path, query: route.query },
+    })
+    return items
+  }
   if (route.name === 'document-list') {
     items.push({
       label: 'Documents',
@@ -71,6 +101,10 @@ const breadcrumbs = computed(() => {
   return items
 })
 
+const hasSourceBreadcrumb = computed(
+  () => route.name === 'person-detail' && breadcrumbs.value[1]?.label.startsWith('Back to '),
+)
+
 const isScanRoute = computed(
   () => route.name === 'document-search' || route.name === 'document-page',
 )
@@ -112,10 +146,22 @@ const isPeopleRoute = computed(
           class="min-w-0 flex-nowrap gap-1 font-heading text-base font-extralight leading-normal sm:gap-2"
         >
           <template v-for="(crumb, index) in breadcrumbs" :key="index">
-            <BreadcrumbSeparator v-if="index" class="shrink-0" />
+            <BreadcrumbSeparator
+              v-if="index"
+              class="shrink-0"
+              :class="hasSourceBreadcrumb && 'hidden sm:block'"
+            />
             <BreadcrumbItem
               class="min-w-0"
-              :class="index === breadcrumbs.length - 1 ? 'flex-[0_1_auto]' : 'flex-[0_2_auto]'"
+              :class="
+                hasSourceBreadcrumb
+                  ? index === 1
+                    ? 'flex-1 sm:flex-[1_1_auto]'
+                    : 'hidden sm:flex sm:flex-[0_3_auto]'
+                  : index === breadcrumbs.length - 1
+                    ? 'flex-[0_1_auto]'
+                    : 'flex-[0_2_auto]'
+              "
             >
               <BreadcrumbLink
                 as-child

@@ -210,17 +210,6 @@ export function relatedEvidenceQuery(
   if (route.name === 'people-search' && query.assignment === 'mentions') result.tab = 'mentions'
   return { ...result, ...extra }
 }
-export function originContext(query: LocationQuery) {
-  return Object.entries(query)
-    .filter(([key]) => key.startsWith('origin_') && key !== 'origin_return')
-    .flatMap(([key, value]) =>
-      queryValues(value).map((v) => ({
-        key,
-        value: v,
-        label: `${key.replace('origin_person_', 'Origin · person record · ').replace('origin_source_', 'Origin · source processing/content · ').replace('origin_', 'Origin · ').replace(/_/g, ' ')}: ${v}`,
-      })),
-    )
-}
 export function returnLocation(query: LocationQuery): string | undefined {
   const path = query.origin_return
   return typeof path === 'string' &&

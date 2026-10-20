@@ -151,5 +151,5 @@ function remove(chip: ActiveFilter) {
     />
   </SearchFilterPanel>
   <p v-if="filterError" role="alert">{{ filterError }}</p>
-  <EvidenceFilterTags hide-state context :additional-filters="active" @remove-additional="remove" />
+  <EvidenceFilterTags hide-state :additional-filters="active" @remove-additional="remove" />
 </template>

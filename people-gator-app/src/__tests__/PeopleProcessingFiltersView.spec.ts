@@ -315,7 +315,8 @@ describe('people filter controls and URL restoration', () => {
     expect(
       wrapper.findAll('button').filter((button) => button.text() === 'Clear all filters'),
     ).toHaveLength(0)
-    expect(wrapper.text()).toContain('Origin · text: archive')
+    expect(wrapper.text()).not.toContain('Origin ·')
+    expect(wrapper.text()).not.toContain('Return to originating view')
     wrapper.unmount()
   })
 })

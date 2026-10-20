@@ -68,5 +68,5 @@ function remove(chip: { key: string; value: string }) {
       ]"
     />
   </SearchFilterPanel>
-  <EvidenceFilterTags hide-state context :additional-filters="active" @remove-additional="remove" />
+  <EvidenceFilterTags hide-state :additional-filters="active" @remove-additional="remove" />
 </template>

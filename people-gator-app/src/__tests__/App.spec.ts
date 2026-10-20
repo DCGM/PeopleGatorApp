@@ -113,6 +113,41 @@ describe('App', () => {
     expect(wrapper.get('nav').text()).not.toContain('People Gator')
   })
 
+  it('replaces the generic People breadcrumb with the saved source view and its actual selections', async () => {
+    const saved =
+      '/people?q=Irena&link_state=verified&evidence_library=preview-mzk&touched_from=2025-01-01T00:00:00Z'
+    await router.push({
+      name: 'person-detail',
+      params: { personId: 'irena' },
+      query: {
+        origin_return: saved,
+        origin_text: 'Irena',
+        link_state: 'verified',
+        evidence_library: 'preview-mzk',
+      },
+    })
+    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
+    expect(crumb.text()).toBe('Back to People search · “Irena”')
+    expect(crumb.attributes('href')).toBe(saved)
+    expect(wrapper.text()).not.toContain('Origin ·')
+    await crumb.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('people-search')
+    expect(router.currentRoute.value.query).toEqual({
+      q: 'Irena',
+      link_state: 'verified',
+      evidence_library: 'preview-mzk',
+      touched_from: '2025-01-01T00:00:00Z',
+    })
+    await router.push({
+      name: 'person-detail',
+      params: { personId: 'irena' },
+      query: { origin_return: '/libraries/preview-mzk/documents/doc/pages/page?panel=activity' },
+    })
+    expect(wrapper.get('[aria-label="Breadcrumb"]').text()).toContain('Back to Source scan')
+  })
+
   it('renders floating document controls inside the viewer', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
     await router.isReady()

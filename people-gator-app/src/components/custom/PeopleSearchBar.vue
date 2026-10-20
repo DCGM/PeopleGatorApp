@@ -174,7 +174,6 @@ function removeFilter(key: keyof PeopleProcessingFilters | 'linkState', value: s
   <EvidenceFilterTags
     hide-state
     hide-documents
-    context
     :additional-filters="active"
     @remove-additional="
       (chip) => removeFilter(chip.key as keyof PeopleProcessingFilters | 'linkState', chip.value)

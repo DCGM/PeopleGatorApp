@@ -1,22 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  useEvidenceFilters,
-  originOptions,
-  originContext,
-  returnLocation,
-  evidenceKeys,
-} from '@/viewmodels/evidence-filters'
+import { useEvidenceFilters, originOptions, evidenceKeys } from '@/viewmodels/evidence-filters'
 import type { EvidenceFilters } from '@/viewmodels/evidence-filters'
 import { linkStateVisuals } from '@/lib/entity-links'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
-import { Button } from '@/components/ui/button'
 const props = defineProps<{
   hideState?: boolean
   hideDocuments?: boolean
-  context?: boolean
   additionalFilters?: ActiveFilter[]
 }>()
 const emit = defineEmits<{ removeAdditional: [filter: ActiveFilter] }>()
@@ -111,9 +103,6 @@ function remove(chip: ActiveFilter) {
     [key]: Array.isArray(value) ? value.filter((v) => v !== chip.value) : '',
   }
 }
-function removeContext(chip: { key: string; value: string }) {
-  void router.push({ query: { ...route.query, [chip.key]: undefined } })
-}
 const combinedTags = computed(() => [
   ...tags.value.filter(
     (tag) =>
@@ -140,16 +129,8 @@ function clearPanel() {
     query: Object.fromEntries(Object.entries(route.query).filter(([key]) => !keys.has(key))),
   })
 }
-const contextTags = computed(() => originContext(route.query))
-const back = computed(() => returnLocation(route.query))
 </script>
 <template>
   <p v-if="error" role="alert">{{ error }}</p>
   <ActiveFilters :filters="combinedTags" @remove="remove" @clear="clearPanel" />
-  <template v-if="context">
-    <ActiveFilters :filters="contextTags" hide-clear @remove="removeContext" />
-    <Button v-if="back" as-child variant="link"
-      ><RouterLink :to="back">Return to originating view</RouterLink></Button
-    >
-  </template>
 </template>
