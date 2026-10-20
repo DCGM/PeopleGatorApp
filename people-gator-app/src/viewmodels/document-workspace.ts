@@ -15,7 +15,7 @@ import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
-import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
+import { lineMentionsEntity, transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import { useCreateEntityMutation, useEntityListQuery } from '@/query/entities'
 import { fetchFaceAlignedCrop, useAssignFaceMutation, useFaceListQuery } from '@/query/faces'
@@ -305,9 +305,7 @@ export function useDocumentWorkspace(
     )
     const lines = transcription.value
     return candidateRecords.value.map((entity) => {
-      const entityLineIndex = lines.findIndex((line) =>
-        line.entities?.some((span) => span.entity_id === entity.entity_id),
-      )
+      const entityLineIndex = lines.findIndex((line) => lineMentionsEntity(line, entity.entity_id))
       const entitySpan =
         entityLineIndex >= 0
           ? lines[entityLineIndex]?.entities?.find((span) => span.entity_id === entity.entity_id)

@@ -4,6 +4,7 @@ import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
 import type { CSSProperties } from 'vue'
 
+import { lineMentionsEntity } from '@/viewmodels/document-workspace.types'
 import type {
   Face,
   PageViewportBounds,
@@ -46,11 +47,28 @@ function faceSelectionState(face: Face): keyof typeof faceSelectionClasses {
 
 const lineSelectionClasses = {
   selected: 'z-10 border-accent bg-accent/20 ring-1 ring-background/75',
+  // The current line keeps its accent; an orange ring still shows it is a mention.
+  selectedMentioned: 'z-10 border-accent bg-accent/20 ring-2 ring-orange-500',
+  mentioned: 'border-orange-500 bg-orange-500/15 hover:bg-orange-500/30',
   default: 'border-transparent hover:border-accent/70 hover:bg-accent/10',
 } as const
 
+function lineMentionsSelectedPerson(index: number) {
+  return (
+    props.selectedPersonId !== null &&
+    lineMentionsEntity(props.transcription[index], props.selectedPersonId)
+  )
+}
+
 function lineSelectionState(index: number): keyof typeof lineSelectionClasses {
-  return index === props.selectedLineIndex ? 'selected' : 'default'
+  const mentioned = lineMentionsSelectedPerson(index)
+  if (index === props.selectedLineIndex) return mentioned ? 'selectedMentioned' : 'selected'
+  return mentioned ? 'mentioned' : 'default'
+}
+
+function lineLabel(line: TranscriptionLine, index: number) {
+  const label = `Select line ${index + 1}: ${line.text}`
+  return lineMentionsSelectedPerson(index) ? `${label} (mentions the selected person)` : label
 }
 
 function regionStyle(position: Face['position']): CSSProperties {
@@ -78,7 +96,7 @@ function regionStyle(position: Face['position']): CSSProperties {
       class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       :class="lineSelectionClasses[lineSelectionState(index)]"
       :style="regionStyle(line.position)"
-      :aria-label="`Select line ${index + 1}: ${line.text}`"
+      :aria-label="lineLabel(line, index)"
       :aria-pressed="index === selectedLineIndex"
       @click.stop="emit('selectLine', index)"
     />

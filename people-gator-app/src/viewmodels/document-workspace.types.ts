@@ -51,3 +51,8 @@ export type TranscriptionLine = {
   position: { left: number; top: number; width: number; height: number }
   entities?: TranscriptionEntitySpan[]
 }
+
+/** Whether a line carries a span linked to the identity, matched by ID rather than text. */
+export function lineMentionsEntity(line: TranscriptionLine | undefined, entityId: string) {
+  return line?.entities?.some((span) => span.entity_id === entityId) ?? false
+}
