@@ -19,35 +19,35 @@ const exactTime = computed(() => {
 </script>
 
 <template>
-  <section aria-labelledby="person-last-change" class="mt-4 border-t pt-3">
-    <h3 id="person-last-change" class="text-muted-foreground">Last change</h3>
-    <template v-if="modified">
-      <p class="font-mono text-lg">
+  <dl aria-label="Last change" class="mt-4 grid content-start gap-3 border-t pt-3">
+    <div class="min-w-0">
+      <dt class="text-muted-foreground">Last change</dt>
+      <dd v-if="modified" class="font-mono text-lg">
         <time :datetime="props.processing.touchedAt ?? undefined" :title="exactTime">{{
           modified
         }}</time>
-      </p>
-      <span class="sr-only">Exact time: {{ exactTime }}</span>
-      <dl class="mt-3 grid gap-3">
-        <div class="min-w-0">
-          <dt class="text-muted-foreground">Modified by</dt>
-          <dd class="break-words font-mono" :title="props.processing.userId ?? undefined">
-            {{ props.processing.userLabel || 'Unknown user' }}
-          </dd>
-        </div>
-        <div class="min-w-0">
-          <dt class="text-muted-foreground">API key</dt>
-          <dd class="break-words font-mono" :title="props.processing.apiKeyId ?? undefined">
-            {{ props.processing.apiKeyLabel || 'No API key' }}
-          </dd>
-        </div>
-      </dl>
+        <span class="sr-only">, exact time {{ exactTime }}</span>
+      </dd>
+      <dd v-else>
+        <span class="font-mono text-lg">Not recorded</span>
+        <span class="mt-1 block text-xs text-muted-foreground">
+          Older records may not have change information.
+        </span>
+      </dd>
+    </div>
+    <template v-if="modified">
+      <div class="min-w-0">
+        <dt class="text-muted-foreground">Modified by</dt>
+        <dd class="break-words font-mono" :title="props.processing.userId ?? undefined">
+          {{ props.processing.userLabel || 'Unknown user' }}
+        </dd>
+      </div>
+      <div class="min-w-0">
+        <dt class="text-muted-foreground">API key</dt>
+        <dd class="break-words font-mono" :title="props.processing.apiKeyId ?? undefined">
+          {{ props.processing.apiKeyLabel || 'No API key' }}
+        </dd>
+      </div>
     </template>
-    <template v-else>
-      <p class="font-mono text-lg">Not recorded</p>
-      <p class="mt-1 text-xs text-muted-foreground">
-        Older records may not have change information.
-      </p>
-    </template>
-  </section>
+  </dl>
 </template>
