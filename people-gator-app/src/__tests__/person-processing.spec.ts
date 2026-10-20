@@ -111,8 +111,6 @@ describe('person processing information', () => {
   it('keeps historical processing unknown without substituting the record owner', async () => {
     const app = harness()
     await flushPromises()
-    expect(app.wrapper.text()).not.toContain('No processing recorded')
-    await app.wrapper.get('button[aria-label="Show processing information"]').trigger('click')
     expect(app.wrapper.text()).toContain('No processing recorded')
     expect(app.wrapper.find('time').exists()).toBe(false)
     expect(mocks.users).not.toHaveBeenCalled()
@@ -124,7 +122,6 @@ describe('person processing information', () => {
     mocks.entity.mockResolvedValue({ data: processed })
     const app = harness()
     await flushPromises()
-    await app.wrapper.get('button[aria-label="Show processing information"]').trigger('click')
     expect(app.wrapper.get('time').attributes('datetime')).toBe(processed.last_touched_at)
     expect(app.wrapper.text()).toContain('Pipeline account')
     expect(app.wrapper.text()).toContain('Archive importer (archive-ingest)')
@@ -151,7 +148,6 @@ describe('person processing information', () => {
   it('refreshes pipeline updates and falls back to IDs if actor lookups fail', async () => {
     const app = harness()
     await flushPromises()
-    await app.wrapper.get('button[aria-label="Show processing information"]').trigger('click')
     mocks.entity.mockResolvedValue({ data: processed })
     mocks.users.mockRejectedValue(new Error('unavailable'))
     mocks.keys.mockRejectedValue(new Error('unavailable'))
@@ -165,8 +161,6 @@ describe('person processing information', () => {
     mocks.entity.mockResolvedValue({ data: { ...historical, entity_id: 'historical-person' } })
     app.personId.value = 'historical-person'
     await flushPromises()
-    expect(app.wrapper.text()).not.toContain('No processing recorded')
-    await app.wrapper.get('button[aria-label="Show processing information"]').trigger('click')
     expect(app.wrapper.text()).toContain('No processing recorded')
     expect(app.wrapper.text()).not.toContain('pipeline-user')
     app.cleanup()

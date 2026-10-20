@@ -1,18 +1,26 @@
 <script setup lang="ts">
+import EvidenceFilterControls from '@/components/custom/EvidenceFilterControls.vue'
+import EvidenceFilterTags from '@/components/custom/EvidenceFilterTags.vue'
+import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
+import CreationDetails from '@/components/custom/CreationDetails.vue'
+import {
+  useEvidenceFilters,
+  relatedEvidenceQuery,
+  queryValues,
+} from '@/viewmodels/evidence-filters'
 import { Image, ScanFace, UserRoundSearch } from '@lucide/vue'
 import { useDebounce } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import LinkStatePanel from '@/components/custom/LinkStatePanel.vue'
 import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import { Button } from '@/components/ui/button'
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
 import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails.vue'
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
-import PersonFaceCard from '@/components/custom/PersonFaceCard.vue'
+import PersonFacesPanel from '@/components/custom/PersonFacesPanel.vue'
 import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
 import PersonMentionItem from '@/components/custom/PersonMentionItem.vue'
 import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
@@ -22,11 +30,14 @@ import { usePersonDetail } from '@/viewmodels/person-detail'
 
 const route = useRoute()
 const router = useRouter()
+const evidence = useEvidenceFilters()
+const matchingFaceIds = computed(() => queryValues(route.query.origin_matched_face))
 const linkStates = useLinkStateFilter()
 const personId = computed(() => String(route.params.personId))
 
 const {
   entity,
+  missingMatchedFaces,
   faceError,
   mentionError,
   faceLoading,
@@ -56,19 +67,33 @@ const {
   refreshProcessing,
   updateIdentifiers,
   updateProfile,
-} = usePersonDetail(personId, linkStates)
+} = usePersonDetail(
+  personId,
+  linkStates,
+  evidence.params,
+  computed(() => !evidence.error.value),
+  matchingFaceIds,
+)
 
 const activeTab = computed(() => {
   if (route.query.tab === 'mentions') return 'mentions'
   if (route.query.tab === 'discover') return 'discover'
   return 'faces'
 })
-const personSearchTerm = ref('')
+const personSearchTerm = ref(
+  typeof route.query.discovery_text === 'string' ? route.query.discovery_text : '',
+)
 const debouncedPersonSearchTerm = useDebounce(personSearchTerm, 300)
-let searchSeeded = false
+let searchSeeded = typeof route.query.discovery_text === 'string'
 let lastSeededName = ''
 
 watch(personId, () => {
+  if (typeof route.query.discovery_text === 'string') {
+    personSearchTerm.value = route.query.discovery_text
+    searchSeeded = true
+    lastSeededName = ''
+    return
+  }
   const currentName = profile.value.name
   const canSeed = Boolean(currentName && currentName !== 'Unnamed person')
   personSearchTerm.value = canSeed ? currentName : ''
@@ -88,6 +113,18 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => route.query.discovery_text,
+  (text) => {
+    if (typeof text === 'string') personSearchTerm.value = text
+  },
+)
+
+watch(personSearchTerm, (text) => {
+  if (activeTab.value === 'discover')
+    void router.replace({ query: { ...route.query, discovery_text: text || undefined } })
+})
+
 const {
   assignFaces,
   assignmentStatus,
@@ -103,7 +140,8 @@ const {
   faceIds,
   faceEmbeddingModel,
   debouncedPersonSearchTerm,
-  computed(() => activeTab.value === 'discover'),
+  computed(() => activeTab.value === 'discover' && !evidence.error.value),
+  evidence.params,
 )
 
 function selectTab(tab: string | number) {
@@ -135,6 +173,13 @@ function selectTab(tab: string | number) {
       >
         <template #statistics>
           <EntityLinkStatistics :stats="entity?.entity_link_stats" />
+          <CreationDetails
+            v-if="entity"
+            :key="personId"
+            :record="entity"
+            label="Identity creation / import"
+            expanded
+          />
           <PersonProcessingDetails
             v-if="entity"
             :key="personId"
@@ -161,30 +206,21 @@ function selectTab(tab: string | number) {
           </TabsTrigger>
         </TabsList>
         <div class="mt-3">
-          <LinkStatePanel v-if="activeTab !== 'discover'" v-model="linkStates" />
+          <SearchFilterPanel label="Person evidence" filters-only
+            ><EvidenceFilterControls
+          /></SearchFilterPanel>
+          <EvidenceFilterTags />
+          <p v-if="missingMatchedFaces" role="status">
+            A matching face is unavailable or outside the current evidence filters. Broaden evidence
+            or return to the originating search.
+          </p>
         </div>
 
         <TabsContent
           value="faces"
-          class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+          class="grid grid-cols-2 gap-3 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         >
-          <div v-for="face in faces" :key="face.id">
-            <RouterLink
-              :to="{
-                name: 'document-page',
-                params: {
-                  libraryId: face.library,
-                  documentId: face.documentId,
-                  pageId: face.pageId,
-                },
-                query: { person: face.id, ...(linkStates.length && { link_state: linkStates }) },
-              }"
-              class="group"
-            >
-              <PersonFaceCard :face="face" :person-name="profile.name" />
-            </RouterLink>
-            <VerifyEntityLink v-bind="face" :id="face.id" kind="face" />
-          </div>
+          <PersonFacesPanel :key="personId" :faces="faces" :person-name="profile.name" />
           <PersonFaceCardSkeleton v-if="faceLoading" />
           <div class="col-span-full text-sm">
             <p v-if="faceError" role="alert">
@@ -195,8 +231,8 @@ function selectTab(tab: string | number) {
               {{ entity?.entity_link_stats?.faces?.total ?? faceCount }} faces
             </p>
             <p v-if="!faceError && !faceLoading && !faces.length">
-              No faces match the selected link states
-              <Button variant="link" @click="linkStates = []">Reset</Button>
+              No faces match the evidence filters.
+              <Button variant="link" @click="evidence.clear()">Broaden evidence</Button>
             </p>
             <Button
               v-if="hasMoreFaces"
@@ -211,6 +247,7 @@ function selectTab(tab: string | number) {
         <TabsContent value="mentions" class="divide-y">
           <div v-for="mention in mentions" :key="mention.id">
             <RouterLink
+              v-if="mention.pageId"
               :to="{
                 name: 'document-page',
                 params: {
@@ -219,6 +256,7 @@ function selectTab(tab: string | number) {
                   pageId: mention.pageId,
                 },
                 query: {
+                  ...relatedEvidenceQuery(route),
                   selectedPerson: personId,
                   ...(linkStates.length && { link_state: linkStates }),
                 },
@@ -227,6 +265,15 @@ function selectTab(tab: string | number) {
             >
               <PersonMentionItem :mention="mention" />
             </RouterLink>
+            <p v-if="!mention.pageId">
+              {{ mention.excerpt }} ·
+              {{ mention.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
+            </p>
+            <CreationDetails
+              v-if="mention.metadata"
+              :record="mention.metadata"
+              label="Mention creation / import"
+            />
             <VerifyEntityLink v-bind="mention" :id="mention.id" kind="mention" />
           </div>
           <PersonMentionItemSkeleton v-if="mentionLoading" />
@@ -240,8 +287,8 @@ function selectTab(tab: string | number) {
               {{ entity?.entity_link_stats?.mentions?.total ?? mentionCount }} mentions
             </p>
             <p v-if="!mentionError && !mentionLoading && !mentions.length">
-              No mentions match the selected link states
-              <Button variant="link" @click="linkStates = []">Reset</Button>
+              No mentions match the evidence filters.
+              <Button variant="link" @click="evidence.clear()">Broaden evidence</Button>
             </p>
             <Button
               v-if="hasMoreMentions"

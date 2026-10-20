@@ -1,4 +1,5 @@
 import type { LinkMetadata } from '@/lib/entity-links'
+import type { FaceResponse, TextMentionResponse } from '@/client'
 import type { BoundingBox } from '@/client'
 
 export type PersonProfile = {
@@ -22,6 +23,9 @@ export type PersonIdentifiers = {
 }
 
 export type PersonFace = LinkMetadata & {
+  metadata?: FaceResponse
+  sourceId?: string
+  sourceLoading?: boolean
   id: string
   portrait: string
   portraitLoading: boolean
@@ -34,6 +38,9 @@ export type PersonFace = LinkMetadata & {
 }
 
 export type PersonMention = LinkMetadata & {
+  metadata?: TextMentionResponse
+  sourceId?: string
+  sourceLoading?: boolean
   id: string
   excerpt: string
   matchedText: string
@@ -58,6 +65,7 @@ export type PersonDiscoveryFace = {
 }
 
 export type PersonDiscoveryCandidate = {
+  matchedFaceIds?: string[]
   id: string
   name: string
   shortDescription: string

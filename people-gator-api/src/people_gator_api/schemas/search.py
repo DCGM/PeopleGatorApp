@@ -125,6 +125,7 @@ class GenericSearchRequest[F: BaseModel](GenericListRequest):
 
 
 class FoundEntity(EntityResponse, FoundItemBase):
+    matched_detection_ids: list[uuid.UUID] = Field(default_factory=list, description="Actual face-similarity witnesses for this result; never an arbitrary portrait.")
     """A single result from a nearest-neighbour search over an annotation collection."""
 
 

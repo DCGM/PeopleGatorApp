@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import Panzoom from '@panzoom/panzoom'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
 
 import App from '../App.vue'
@@ -10,6 +10,7 @@ import DocumentPageOverlay from '../components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
 import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
+import { readEvidenceFilters } from '@/viewmodels/evidence-filters'
 
 const documentWorkspaceMock = vi.hoisted(() => ({
   faces: [] as Array<Record<string, unknown>>,
@@ -88,6 +89,7 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     assignmentStatus: ref('idle'),
     createAndAssign: vi.fn<() => void>(),
     error: ref(null),
+    annotationsLoading: ref(false),
     faces: ref([]),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
@@ -96,13 +98,14 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     pageDimensions: ref({ width: 210, height: 297 }),
     pageImageLoading: ref(false),
     pageImageReady: ref(false),
-    annotationsLoading: ref(false),
     pageImageUrl: ref(''),
     similarPeople: ref(documentWorkspaceMock.similarPeople),
     similarPeopleLoading: ref(false),
     transcription: ref(documentWorkspaceMock.transcription),
   }),
 }))
+
+enableAutoUnmount(afterEach)
 
 describe('App', () => {
   it('keeps the logo when the optional top bar title is omitted', () => {
@@ -112,6 +115,46 @@ describe('App', () => {
     expect(logo.attributes('stroke-width')).toBe('1')
     expect(wrapper.get('nav').text()).not.toContain('People Gator')
   })
+
+  it.each(['00000000-0000-4000-8000-000000000002', undefined])(
+    'uses normal People navigation with the current key selection: %s',
+    async (currentKey) => {
+      const originalKey = '00000000-0000-4000-8000-000000000001'
+      await router.push({
+        name: 'person-detail',
+        params: { personId: 'irena' },
+        query: {
+          origin_return: `/people?q=Irena&evidence_key=${originalKey}`,
+          evidence_key: originalKey,
+          evidence_library: 'preview-mzk',
+        },
+      })
+      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      await router.push({ query: { ...router.currentRoute.value.query, evidence_key: currentKey } })
+      await flushPromises()
+      const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
+      expect(
+        wrapper
+          .get('[aria-label="Breadcrumb"]')
+          .findAll('a')
+          .map((link) => link.text()),
+      ).toEqual(['PeopleGator', 'People', 'irena'])
+      expect(crumb.attributes('href')).not.toContain('origin_return')
+      expect(wrapper.text()).not.toContain('Back to ')
+      await crumb.trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('people-search')
+      expect(readEvidenceFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
+        currentKey ? [currentKey] : [],
+      )
+      expect(readEvidenceFilters(router.currentRoute.value.query).libraries).toEqual([
+        'preview-mzk',
+      ])
+      expect(router.currentRoute.value.query).not.toHaveProperty('origin_return')
+      expect(router.currentRoute.value.query.q).toBeUndefined()
+      wrapper.unmount()
+    },
+  )
 
   it('renders floating document controls inside the viewer', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
@@ -139,6 +182,37 @@ describe('App', () => {
     expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(false)
   })
 
+  it('restores top-level sidebar tabs without keeping face assignment controls in Activity or Statistics', async () => {
+    await router.push(
+      '/libraries/library/documents/document/pages/page?panel=activity&candidate_text=Ada&origin_text=Irena',
+    )
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+    const sidebar = wrapper.get('.workspace-sidebar')
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Activity')
+    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(false)
+    expect(sidebar.find('input').exists()).toBe(false)
+    expect(sidebar.find('details').exists()).toBe(false)
+
+    await router.push({ query: { ...router.currentRoute.value.query, panel: 'statistics' } })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
+    expect(sidebar.text()).toContain('Whole document')
+    expect(sidebar.find('details').exists()).toBe(false)
+    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(false)
+
+    await router.push({ query: { ...router.currentRoute.value.query, panel: undefined } })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Faces')
+    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(true)
+    expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
+    expect(router.currentRoute.value.query.origin_text).toBe('Irena')
+    await router.push({ path: router.currentRoute.value.path, hash: '#link-statistics' })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
+    wrapper.unmount()
+  })
+
   it('links breadcrumbs to scoped scan lists and preserves scope when searching', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
@@ -152,11 +226,14 @@ describe('App', () => {
       'Page page',
     ])
     expect(crumbs[0]!.attributes('href')).toBe('/scans')
-    expect(crumbs[1]!.attributes('href')).toBe('/scans?library=library')
+    expect(crumbs[1]!.attributes('href')).toContain('library=library')
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'library', document: 'document' })
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      document: 'document',
+    })
     expect(wrapper.get('h1').text()).toBe('Document pages')
     await wrapper
       .get('input[placeholder="Search a person, page or document…"]')
@@ -169,7 +246,11 @@ describe('App', () => {
     })
     await wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'library' })
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      evidence_library: ['library'],
+      origin_text: 'archives',
+    })
     expect(
       wrapper.get('input[placeholder="Search a person, page or document…"]').element,
     ).toHaveProperty('value', '')
@@ -404,7 +485,7 @@ describe('Scans and Documents navigation', () => {
     expect(document.title).toBe('Documents | People Gator')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBeUndefined()
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans?library=mzk')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('library=mzk')
     expect(
       wrapper
         .get('[aria-label="Breadcrumb"]')
@@ -442,9 +523,11 @@ describe('Scans and Documents navigation', () => {
     await router.push('/documents?library=a&library=b')
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
-      '/documents?library=a&library=b',
+      '/documents?evidence_library=a&evidence_library=b&library=a&library=b',
     )
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain(
+      'evidence_library=a&evidence_library=b',
+    )
     expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
       'PeopleGator',
       'Documents',

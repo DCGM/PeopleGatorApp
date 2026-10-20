@@ -123,7 +123,23 @@ class APIKey(Base):
     )
 
 
-class Entity(Base):
+class RecordedCreation:
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"))
+    created_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"))
+
+
+class AnnotationMetadata(RecordedCreation):
+    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True)
+    last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True)
+
+
+class Entity(RecordedCreation, Base):
     """A canonical real-world entity."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("entities")
@@ -322,11 +338,12 @@ class Image(Source):
     __mapper_args__ = {"polymorphic_identity": "image"}  # noqa: RUF012
 
 
-class TextMention(Base):
+class TextMention(AnnotationMetadata, Base):
     """A textual occurrence with mandatory provenance and optional resolution."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("text_mentions")
-    __table_args__ = (*link_constraints("text_mentions"),
+    __table_args__ = (*link_constraints("text_mentions"), CheckConstraint(
+        "(last_touched_at IS NULL AND last_touched_by_user_id IS NULL AND last_touched_by_api_key_id IS NULL) OR (last_touched_at IS NOT NULL AND last_touched_by_user_id IS NOT NULL)", name="ck_pg_demo_text_mentions_touch"),
         Index(
             INDEX_NAME_FORMAT.format("text_mentions_mention_trgm"),
             "mention_normalized",
@@ -360,11 +377,12 @@ class TextMention(Base):
     entity: Mapped[Entity | None] = relationship(back_populates="text_mentions")
 
 
-class ImageOccurrence(Base):
+class ImageOccurrence(AnnotationMetadata, Base):
     """An image-region occurrence and polymorphic root for face detections."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("image_occurrences")
-    __table_args__ = link_constraints("image_occurrences")
+    __table_args__ = (*link_constraints("image_occurrences"), CheckConstraint(
+        "(last_touched_at IS NULL AND last_touched_by_user_id IS NULL AND last_touched_by_api_key_id IS NULL) OR (last_touched_at IS NOT NULL AND last_touched_by_user_id IS NOT NULL)", name="ck_pg_demo_image_occurrences_touch"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

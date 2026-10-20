@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useRoute, useRouter } from 'vue-router'
+import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import FaceSelectionControl from './FaceSelectionControl.vue'
+import SelectedFaceActions from './SelectedFaceActions.vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
 import {
   Check,
@@ -9,7 +13,6 @@ import {
   UserRoundX,
   UserRoundSearch,
 } from '@lucide/vue'
-import type { AcceptableValue } from 'reka-ui'
 import { computed, ref, watch } from 'vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -21,8 +24,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 
+const route = useRoute()
+const router = useRouter()
 const props = defineProps<{
   faces: PersonDiscoveryFace[]
   people: PersonDiscoveryCandidate[]
@@ -49,7 +54,24 @@ const selectedPersonIds = ref<Set<string>>(new Set())
 const selectionAnchorId = ref<string | null>(null)
 const personSelectionAnchorId = ref<string | null>(null)
 type FaceFilter = 'all' | 'unassigned' | 'assigned'
-const faceFilter = ref<FaceFilter>('all')
+const fallbackFaceFilter = ref<FaceFilter>('all')
+const faceFilter = computed({
+  get: () => {
+    const value = route?.query.discovery_assignment
+    return value === 'unassigned' || value === 'assigned'
+      ? value
+      : route
+        ? 'all'
+        : fallbackFaceFilter.value
+  },
+  set: (value: FaceFilter) => {
+    fallbackFaceFilter.value = value
+    if (route)
+      void router.push({
+        query: { ...route.query, discovery_assignment: value === 'all' ? undefined : value },
+      })
+  },
+})
 const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unassigned', label: 'Unassigned' },
@@ -62,10 +84,6 @@ const visibleFaces = computed(() =>
     return true
   }),
 )
-const unassignedFaceCount = computed(
-  () => props.faces.filter((face) => !face.assignedEntityId).length,
-)
-const assignedFaceCount = computed(() => props.faces.length - unassignedFaceCount.value)
 const selectedFaces = computed(() =>
   props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
 )
@@ -175,12 +193,6 @@ function assignSelectedFaces() {
   )
 }
 
-function updateFaceFilter(value: AcceptableValue | AcceptableValue[]) {
-  if (faceFilterOptions.some((option) => option.value === value)) {
-    faceFilter.value = value as FaceFilter
-  }
-}
-
 watch(
   () => props.faces.map((face) => face.id),
   (availableFaceIds) => {
@@ -239,69 +251,39 @@ function initials(name: string) {
         <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
       </div>
 
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
-        :model-value="faceFilter"
-        class="mt-4 w-full sm:w-auto"
-        aria-label="Filter similar faces by assignment"
-        @update:model-value="updateFaceFilter"
-      >
-        <ToggleGroupItem
-          v-for="option in faceFilterOptions"
-          :key="option.value"
-          :value="option.value"
-          class="min-w-0 px-3 text-xs"
-          :aria-label="option.label"
-        >
-          <span class="truncate">{{ option.label }}</span>
-          <code>
-            {{
-              option.value === 'all'
-                ? props.faces.length
-                : option.value === 'unassigned'
-                  ? unassignedFaceCount
-                  : assignedFaceCount
-            }}
-          </code>
-        </ToggleGroupItem>
-      </ToggleGroup>
+      <SearchFilterPanel label="Discovery faces" filters-only class="mt-4">
+        <FilterSingleSelect
+          v-model="faceFilter"
+          label="Discovery assignment"
+          :options="faceFilterOptions"
+        />
+      </SearchFilterPanel>
 
-      <div
+      <SelectedFaceActions
         v-if="selectedFaces.length"
-        class="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-4xl flex-col gap-3 border border-accent bg-card p-3 shadow-lg sm:flex-row sm:items-center sm:justify-between"
-        role="toolbar"
-        aria-label="Selected face actions"
+        :count="selectedFaces.length"
+        :busy="props.assigningFaces"
+        @clear="clearFaceSelection"
       >
-        <div class="min-w-0">
-          <p class="font-semibold">
-            {{ selectedFaces.length }} {{ selectedFaces.length === 1 ? 'face' : 'faces' }} selected
-          </p>
-          <p class="text-xs text-muted-foreground">
-            <template v-if="selectedReassignmentCount">
-              {{ selectedReassignmentCount }} will be reassigned from another person.
-            </template>
-            <template v-else>
-              Click faces to add them; use the checkboxes to remove them or Shift-select a range.
-            </template>
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="outline" @click="clearFaceSelection">
-            Clear
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            :disabled="props.assigningFaces"
-            @click="assignSelectedFaces"
+        <template #description>
+          <template v-if="selectedReassignmentCount"
+            >{{ selectedReassignmentCount }} will be reassigned from another person.</template
           >
-            <LinkIcon aria-hidden="true" />
-            {{ props.assigningFaces ? 'Assigning…' : `Assign to ${props.currentName}` }}
-          </Button>
-        </div>
-      </div>
+          <template v-else
+            >Click faces to add them; use the checkboxes to remove them or Shift-select a
+            range.</template
+          >
+        </template>
+        <Button
+          type="button"
+          size="sm"
+          :disabled="props.assigningFaces"
+          @click="assignSelectedFaces"
+        >
+          <LinkIcon aria-hidden="true" />
+          {{ props.assigningFaces ? 'Assigning…' : `Assign to ${props.currentName}` }}
+        </Button>
+      </SelectedFaceActions>
 
       <div
         v-if="visibleFaces.length"
@@ -327,7 +309,7 @@ function initials(name: string) {
                 documentId: face.documentId,
                 pageId: face.pageId,
               },
-              query: { person: face.id },
+              query: relatedEvidenceQuery(route, { person: face.id, origin_matched_face: face.id }),
             }"
             class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             :aria-label="`Open face ${face.id} on its source document`"
@@ -362,32 +344,21 @@ function initials(name: string) {
               </template>
             </LoadableImage>
           </ItemMedia>
-          <button
-            type="button"
-            data-face-selection-target="control"
-            class="absolute right-3 top-3 z-20 flex size-7 items-center justify-center rounded-sm border-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :class="
-              selectedFaceIds.has(face.id)
-                ? 'border-accent bg-accent text-accent-foreground'
-                : 'border-border bg-card text-muted-foreground hover:border-accent hover:text-primary'
-            "
-            :aria-label="`${selectedFaceIds.has(face.id) ? 'Remove' : 'Select'} face ${face.id}${
-              selectedFaceIds.has(face.id) ? ' from assignment' : ' for assignment'
-            }`"
-            :aria-pressed="selectedFaceIds.has(face.id)"
-            @click="toggleFaceSelection(face.id, $event)"
-          >
-            <Check v-if="selectedFaceIds.has(face.id)" class="size-4" aria-hidden="true" />
-            <span
-              v-else
-              class="size-2 rounded-full border border-current"
-              aria-hidden="true"
-            ></span>
-          </button>
+          <FaceSelectionControl
+            :face-id="face.id"
+            :selected="selectedFaceIds.has(face.id)"
+            :disabled="props.assigningFaces"
+            purpose="assignment"
+            @toggle="toggleFaceSelection(face.id, $event)"
+          />
           <ItemContent class="min-w-0 flex-none gap-0 overflow-hidden px-0">
             <p
               class="flex min-w-0 items-center gap-1 text-sm"
-              :class="face.assignedEntityId ? 'text-emerald-700' : 'text-muted-foreground'"
+              :class="
+                face.assignedEntityId
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-muted-foreground'
+              "
             >
               <LinkIcon v-if="face.assignedEntityId" class="size-4 shrink-0" aria-hidden="true" />
               <UserRoundX v-else class="size-4 shrink-0" aria-hidden="true" />
@@ -397,6 +368,17 @@ function initials(name: string) {
               >
                 {{ face.assignedEntityName || face.assignedEntityId || 'Unassigned' }}
               </b>
+              <RouterLink
+                v-if="face.assignedEntityId"
+                :to="{
+                  name: 'person-detail',
+                  params: { personId: face.assignedEntityId },
+                  query: relatedEvidenceQuery(route, { origin_matched_face: face.id }),
+                }"
+                class="relative z-20"
+                :aria-label="`Open matching person ${face.assignedEntityName || face.assignedEntityId}`"
+                >Profile</RouterLink
+              >
               <code class="ml-auto shrink-0 text-sm text-muted-foreground">
                 sim {{ face.score }}%
               </code>
@@ -501,7 +483,15 @@ function initials(name: string) {
         <div v-for="person in props.people" :key="person.id" class="group relative min-w-0">
           <RouterLink
             v-if="!selectedPersonIds.size"
-            :to="{ name: 'person-detail', params: { personId: person.id } }"
+            :to="{
+              name: 'person-detail',
+              params: { personId: person.id },
+              query: relatedEvidenceQuery(route, {
+                origin_matched_face: person.matchedFaceIds?.length
+                  ? person.matchedFaceIds
+                  : undefined,
+              }),
+            }"
             class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :aria-label="`Open ${person.name}`"
           />

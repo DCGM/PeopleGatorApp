@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import EvidenceFilterControls from './EvidenceFilterControls.vue'
+import EvidenceFilterTags from './EvidenceFilterTags.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
 import type { EntityLinkState } from '@/client'
 import { linkStateVisuals } from '@/lib/entity-links'
@@ -10,7 +12,6 @@ import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { emptyPeopleFilters, type PeopleProcessingFilters } from '@/viewmodels/people-filters'
 
 import SearchFilterPanel from './SearchFilterPanel.vue'
-import ActiveFilters from './ActiveFilters.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import type { AssignmentFilter } from '@/viewmodels/assignment'
 
@@ -20,12 +21,24 @@ defineProps<{
   filterError?: string
 }>()
 
-const emit = defineEmits<{ clearFilters: [] }>()
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
 const filters = defineModel<PeopleProcessingFilters>('processingFilters', {
   default: emptyPeopleFilters,
 })
+function field<K extends keyof PeopleProcessingFilters>(key: K) {
+  return computed({
+    get: () => filters.value[key],
+    set: (value: PeopleProcessingFilters[K]) => {
+      filters.value = { ...filters.value, [key]: value }
+    },
+  })
+}
+const documentIds = field('documentIds'),
+  touchedFrom = field('touchedFrom'),
+  touchedTo = field('touchedTo'),
+  userIds = field('userIds'),
+  apiKeyIds = field('apiKeyIds')
 const documentSearch = ref('')
 const userSearch = ref('')
 const apiKeySearch = ref('')
@@ -48,18 +61,18 @@ const active = computed(() => {
     chips.push({
       key: 'touchedFrom',
       value: filters.value.touchedFrom,
-      label: `From ${filters.value.touchedFrom.replace('T', ' ')}`,
+      label: `Person record from ${filters.value.touchedFrom.replace('T', ' ')}`,
     })
   if (filters.value.touchedTo)
     chips.push({
       key: 'touchedTo',
       value: filters.value.touchedTo,
-      label: `To ${filters.value.touchedTo.replace('T', ' ')}`,
+      label: `Person record to ${filters.value.touchedTo.replace('T', ' ')}`,
     })
   for (const [key, prefix, labels] of [
     ['documentIds', 'Document', documents.labels.value],
-    ['userIds', 'User', users.labels.value],
-    ['apiKeyIds', 'API key', apiKeys.labels.value],
+    ['userIds', 'Person record user', users.labels.value],
+    ['apiKeyIds', 'Person record API key', apiKeys.labels.value],
   ] as const) {
     for (const id of filters.value[key])
       chips.push({ key, value: id, label: `${prefix}: ${labels[id] ?? id}` })
@@ -84,9 +97,6 @@ function removeFilter(key: keyof PeopleProcessingFilters | 'linkState', value: s
   if (key === 'touchedFrom' || key === 'touchedTo') filters.value = { ...filters.value, [key]: '' }
   else filters.value = { ...filters.value, [key]: filters.value[key].filter((id) => id !== value) }
 }
-function clearFilters() {
-  emit('clearFilters')
-}
 </script>
 
 <template>
@@ -108,7 +118,7 @@ function clearFilters() {
     />
     <EntityLinkStateFilter v-model="linkStates" />
     <FilterMultiSelect
-      v-model="filters.documentIds"
+      v-model="documentIds"
       v-model:search="documentSearch"
       label="Documents"
       :options="documents.options.value"
@@ -121,21 +131,21 @@ function clearFilters() {
       @retry="documents.retry()"
     />
     <FilterDateTimePicker
-      v-model="filters.touchedFrom"
-      label="Last processed from"
+      v-model="touchedFrom"
+      label="Person record from"
       :invalid="!!filterError"
       class="flex-none max-w-full"
     />
     <FilterDateTimePicker
-      v-model="filters.touchedTo"
-      label="Last processed to"
+      v-model="touchedTo"
+      label="Person record to"
       :invalid="!!filterError"
       class="flex-none max-w-full"
     />
     <FilterMultiSelect
-      v-model="filters.userIds"
+      v-model="userIds"
       v-model:search="userSearch"
-      label="Users"
+      label="Person record users"
       :options="users.options.value"
       :is-loading="users.isLoading.value"
       :error="users.error.value"
@@ -146,9 +156,9 @@ function clearFilters() {
       @retry="users.retry()"
     />
     <FilterMultiSelect
-      v-model="filters.apiKeyIds"
+      v-model="apiKeyIds"
       v-model:search="apiKeySearch"
-      label="API keys"
+      label="Person record API keys"
       :options="apiKeys.options.value"
       :is-loading="apiKeys.isLoading.value"
       :error="apiKeys.error.value"
@@ -158,13 +168,15 @@ function clearFilters() {
       @load-more="apiKeys.loadMore()"
       @retry="apiKeys.retry()"
     />
+    <EvidenceFilterControls hide-state hide-documents />
   </SearchFilterPanel>
   <p v-if="filterError" role="alert">{{ filterError }}</p>
-  <ActiveFilters
-    :filters="active"
-    @remove="
+  <EvidenceFilterTags
+    hide-state
+    hide-documents
+    :additional-filters="active"
+    @remove-additional="
       (chip) => removeFilter(chip.key as keyof PeopleProcessingFilters | 'linkState', chip.value)
     "
-    @clear="clearFilters"
   />
 </template>

@@ -1,47 +1,117 @@
 <script setup lang="ts">
-import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ChevronRight } from '@lucide/vue'
-
-import LoadableImage from '@/components/custom/LoadableImage.vue'
+import { linkStateVisuals, linkTooltip } from '@/lib/entity-links'
+import AnnotationLastChange from './AnnotationLastChange.vue'
+import FaceSelectionControl from './FaceSelectionControl.vue'
+import LoadableImage from './LoadableImage.vue'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
+import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Item } from '@/components/ui/item'
 
 const props = defineProps<{
   face: PersonFace
   personName: string
+  selectable?: boolean
+  selected?: boolean
+  selectionEnabled?: boolean
+  busy?: boolean
 }>()
+defineEmits<{ toggle: [event: MouseEvent]; add: [event: MouseEvent] }>()
+const route = useRoute()
+const assignment = computed(() => linkStateVisuals[props.face.linkState ?? 'unassigned'])
+const assignmentTextClasses = computed(() =>
+  assignment.value.classes.split(' ').filter((name) => name.split(':').pop()?.startsWith('text-')),
+)
+const sourceTarget = computed(() =>
+  props.face.pageId
+    ? {
+        name: 'document-page',
+        params: {
+          libraryId: props.face.library,
+          documentId: props.face.documentId,
+          pageId: props.face.pageId,
+        },
+        query: relatedEvidenceQuery(route, { person: props.face.id }),
+      }
+    : undefined,
+)
 </script>
 
 <template>
-  <Card
-    class="h-full gap-2 overflow-hidden rounded-none border-0 bg-transparent py-0 text-muted-foreground shadow-none transition-transform group-hover:text-primary group-focus:text-primary"
+  <Item
+    class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
+    :class="selected && 'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'"
+    data-person-face-card
   >
-    <CardHeader class="relative gap-0 px-0">
+    <button
+      v-if="selectionEnabled"
+      type="button"
+      class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      :disabled="busy"
+      :aria-label="selected ? `Face ${face.id} is selected` : `Add face ${face.id} to selection`"
+      @click="$emit('add', $event)"
+    ></button>
+    <FaceSelectionControl
+      v-if="selectable"
+      :face-id="face.id"
+      :selected="Boolean(selected)"
+      :disabled="busy"
+      @toggle="$emit('toggle', $event)"
+    />
+    <component
+      :is="sourceTarget && !selectionEnabled ? 'RouterLink' : 'div'"
+      :to="!selectionEnabled ? sourceTarget : undefined"
+      class="group block min-w-0 space-y-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      :aria-label="
+        sourceTarget && !selectionEnabled
+          ? `Open ${personName} face on its source document`
+          : undefined
+      "
+    >
       <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
         <LoadableImage
-          :src="props.face.portrait"
-          :loading="props.face.portraitLoading"
-          :alt="`${props.personName} detection in ${props.face.documentId}`"
+          :src="face.portrait"
+          :loading="face.portraitLoading"
+          :alt="`${personName} face`"
           class="size-full"
-          image-class="object-cover grayscale duration-300 ease-out group-hover:scale-105 group-focus:scale-102"
+          image-class="object-cover grayscale duration-300 ease-out group-hover/face:scale-105 group-focus-within/face:scale-102"
         />
       </AspectRatio>
-    </CardHeader>
-    <CardContent class="min-w-0 px-0">
-      <small class="block truncate">
-        <span class="font-bold text-secondary">{{ props.face.library }} · </span>
-        {{ props.face.pageLabel }}
-      </small>
-      <EntityLinkStateBadge v-bind="face" class="mt-2" />
-    </CardContent>
-    <CardFooter class="gap-1 px-0">
-      <small class="flex-1 truncate font-heading">{{ props.face.id }}</small>
-      <small class="whitespace-nowrap text-secondary">{{ props.face.confidence }}%</small>
-      <ChevronRight
-        class="size-4 shrink-0 transition-all duration-200 group-hover:translate-x-1 group-focus:-translate-x-1"
-        aria-hidden="true"
-      />
-    </CardFooter>
-  </Card>
+      <p
+        class="flex min-w-0 items-center gap-1 text-sm"
+        :class="assignmentTextClasses"
+        :title="linkTooltip(face)"
+        :aria-label="linkTooltip(face)"
+        data-face-assignment
+      >
+        <component :is="assignment.icon" class="size-4 shrink-0" aria-hidden="true" />
+        <b class="min-w-0 flex-1 truncate">{{ assignment.label }}</b>
+        <code
+          class="ml-auto shrink-0 text-sm text-muted-foreground"
+          :title="`Detection confidence: ${face.confidence}%`"
+          >conf {{ face.confidence }}%</code
+        >
+      </p>
+      <div class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground" data-face-source>
+        <span class="min-w-0 flex-1 truncate" :title="`${face.library} · ${face.documentId}`">
+          <b class="text-secondary">{{ face.library }}</b> · {{ face.documentId }}
+        </span>
+        <ChevronRight
+          v-if="sourceTarget"
+          class="size-4 shrink-0 transition-transform group-hover/face:translate-x-1"
+          aria-hidden="true"
+        />
+      </div>
+    </component>
+    <AnnotationLastChange
+      :touched-at="face.metadata?.last_touched_at"
+      :user-id="face.metadata?.last_touched_by_user_id"
+    />
+    <p v-if="!face.pageId" class="text-xs text-muted-foreground" role="status">
+      {{ face.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
+    </p>
+  </Item>
 </template>

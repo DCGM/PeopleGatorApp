@@ -84,6 +84,7 @@ async def _fetch_text_mention_spans_for_page(
     database: DatabaseDependency,
     page: PageResponse,
     entity_link_state: list[EntityLinkState] | MissingType = MISSING,
+    filter_: TextMentionListFilter | None = None,
 ) -> list[TextMentionSpanModel]:
     """Match the page's text mentions against its stored OCR layout."""
     try:
@@ -94,6 +95,7 @@ async def _fetch_text_mention_spans_for_page(
             document_id=page.document_id,
             page_id=page.page_id,
             entity_link_state=entity_link_state,
+            **({"filter_": filter_} if filter_ is not None else {}),
         )
     except SourceResolutionError as exc:
         raise_api_error(exc.status_code, exc.code, exc.message)
@@ -444,7 +446,7 @@ async def get_text_mention_spans_by_id_route(
     page = await database.sources.get_page(page_source_id)
     if page is None:
         raise_api_error(404, "not_found", "Page not found")
-    return await _fetch_text_mention_spans_for_page(database, page, filter_.entity_link_state)
+    return await _fetch_text_mention_spans_for_page(database, page, filter_.entity_link_state, filter_)
 
 
 @router.delete(

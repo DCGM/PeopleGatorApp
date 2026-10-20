@@ -13,7 +13,7 @@ const props = defineProps<{
 
 defineEmits<{ refresh: [] }>()
 
-const expanded = ref(false)
+const expanded = ref(true)
 
 const timestamp = computed(() => {
   if (!props.processing.touchedAt) return null

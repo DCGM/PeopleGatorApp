@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from '@/viewmodels/evidence-filters'
 import { useQuery } from '@tanstack/vue-query'
 import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -33,11 +34,16 @@ export function usePageLayoutQuery(sourceId: MaybeRefOrGetter<string>) {
   })
 }
 
-export async function fetchPageMentionSpans(sourceId: string, signal?: AbortSignal, states: EntityLinkState[] = []) {
+export async function fetchPageMentionSpans(
+  sourceId: string,
+  signal?: AbortSignal,
+  states: EntityLinkState[] = [],
+  evidence: EvidenceQuery = {},
+) {
   try {
     return await responseData(
       getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet({
-        query: { 'filter.entity_link_state': states.length ? states : undefined },
+        query: { ...evidence, 'filter.entity_link_state': states.length ? states : undefined },
         path: { page_source_id: sourceId },
         signal,
         throwOnError: true,
@@ -49,10 +55,18 @@ export async function fetchPageMentionSpans(sourceId: string, signal?: AbortSign
   }
 }
 
-export function usePageMentionSpansQuery(sourceId: MaybeRefOrGetter<string>, states: MaybeRefOrGetter<EntityLinkState[]> = []) {
+export function usePageMentionSpansQuery(
+  sourceId: MaybeRefOrGetter<string>,
+  states: MaybeRefOrGetter<EntityLinkState[]> = [],
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+) {
   return useQuery({
-    queryKey: computed(() => queryKeys.pages.mentionSpans(toValue(sourceId), toValue(states))),
-    queryFn: ({ signal }) => fetchPageMentionSpans(toValue(sourceId), signal, toValue(states)),
+    queryKey: computed(() => [
+      ...queryKeys.pages.mentionSpans(toValue(sourceId), toValue(states)),
+      toValue(evidence),
+    ]),
+    queryFn: ({ signal }) =>
+      fetchPageMentionSpans(toValue(sourceId), signal, toValue(states), toValue(evidence)),
     enabled: computed(() => Boolean(toValue(sourceId))),
   })
 }

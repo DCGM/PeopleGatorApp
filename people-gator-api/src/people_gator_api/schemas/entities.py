@@ -30,6 +30,9 @@ from people_gator_api.schemas.missing import MISSING, MissingType
 MAX_ENTITY_BATCH_SIZE = settings.batch.max_entity_batch_size
 
 
+from .creation import CreationMetadata
+
+
 class EntityCreateRequest(BaseModel):
     """Request body for creating a new entity."""
 
@@ -111,7 +114,7 @@ type EntityBatchPatchRequest = Annotated[
 ]
 
 
-class EntityResponse(BaseModel):
+class EntityResponse(CreationMetadata):
     """A single entity record."""
 
     entity_id: uuid.UUID = Field(description="The unique identifier of the entity.")

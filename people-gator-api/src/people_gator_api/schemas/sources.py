@@ -670,6 +670,7 @@ class SourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter)
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
             **self.processing_values(),
+            **self.evidence_values(),
             source_type=self.source_type,
             url=self.url,
             source_id=self.source_id,
@@ -737,6 +738,7 @@ class PageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
             **self.processing_values(),
+            **self.evidence_values(),
             source_type=[SourceKind.page],
             url=self.url,
             library=self.library,
@@ -789,6 +791,7 @@ class DocumentListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilte
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
             **self.processing_values(),
+            **self.evidence_values(),
             has_unassigned_faces=self.has_unassigned_faces,
             source_type=[SourceKind.document],
             url=self.url,
@@ -829,6 +832,7 @@ class ImageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
             **self.processing_values(),
+            **self.evidence_values(),
             source_type=[SourceKind.image],
             url=self.url,
             source_id=self.source_id,

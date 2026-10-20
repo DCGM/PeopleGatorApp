@@ -42,7 +42,7 @@ from people_gator_api.persistence.postgres.utils import (
     mention_filters,
 )
 
-from .touch import touch_entities, touch_sources, lock_annotation_graph
+from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
 
 class PostgresTextMentionRepository(TextMentionRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -104,8 +104,10 @@ class PostgresTextMentionRepository(TextMentionRepository):
         )
 
     @staticmethod
-    def _new(payload: TextMentionCreateRequest) -> TextMention:
+    def _new(payload: TextMentionCreateRequest, context: GenericActor) -> TextMention:
         return TextMention(
+            **creation_values(context),
+            **touch_values(context),
             mention=payload.name,
             context=payload.context,
             entity_id=payload.entity_id,
@@ -138,7 +140,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             [item.entity_id for item in payloads],
             "mention entity",
         )
-        mentions = [self._new(payload) for payload in payloads]
+        mentions = [self._new(payload, context) for payload in payloads]
         self._session.add_all(mentions)
         await touch_entities(self._session, [item.entity_id for item in payloads], context)
         await touch_sources(self._session, [item.source_id for item in payloads], context)
@@ -195,6 +197,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
                     touched.update([mention.entity_id, values[0]])
                     sources.add(mention.source_id)
                     apply_link(mention, values)
+                    apply_touch(mention, context)
         await touch_entities(self._session, touched, context)
         await touch_sources(self._session, sources, context)
         await commit(self._session, "mention patch violates a persistence constraint")

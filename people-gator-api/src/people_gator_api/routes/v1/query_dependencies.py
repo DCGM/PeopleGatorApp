@@ -166,6 +166,12 @@ def search_query_dependency(
 
 
 def entity_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(EntityListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(EntityListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(EntityListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(EntityListFilter, "entity_link_state", "filter")] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
@@ -211,6 +217,12 @@ def entity_list_filter_dependency(
 ) -> EntityListFilter:
     return _filter(
         EntityListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         entity_link_state=entity_link_state,
         entity_id=entity_id,
         entity_type=entity_type,
@@ -231,6 +243,13 @@ def entity_list_filter_dependency(
 
 
 def face_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(FaceListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_source_id", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "document_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(FaceListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(FaceListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(FaceListFilter, "entity_link_state", "filter")] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
@@ -247,6 +266,13 @@ def face_list_filter_dependency(
 ) -> FaceListFilter:
     return _filter(
         FaceListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        document_source_id=document_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         entity_link_state=entity_link_state,
         entity_id=entity_id,
         source_id=source_id,
@@ -255,6 +281,13 @@ def face_list_filter_dependency(
 
 
 def text_mention_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(TextMentionListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_source_id", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "document_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(TextMentionListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(TextMentionListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(TextMentionListFilter, "entity_link_state", "filter")] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
@@ -267,6 +300,13 @@ def text_mention_list_filter_dependency(
 ) -> TextMentionListFilter:
     return _filter(
         TextMentionListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        document_source_id=document_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         entity_link_state=entity_link_state,
         entity_id=entity_id,
         source_id=source_id,
@@ -306,6 +346,13 @@ def user_list_filter_dependency(
 
 
 def source_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(SourceListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_source_id", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "document_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(SourceListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(SourceListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(SourceListFilter, "entity_link_state", "filter")] = None,
     source_type: Annotated[
         list[SourceKind] | None,
@@ -338,6 +385,13 @@ def source_list_filter_dependency(
 ) -> SourceListFilter:
     return _filter(
         SourceListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        document_source_id=document_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         last_touched_from=last_touched_from,
         last_touched_to=last_touched_to,
         last_touched_by_user_id=last_touched_by_user_id,
@@ -354,6 +408,13 @@ def source_list_filter_dependency(
 
 
 def page_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(PageListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_source_id", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "document_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(PageListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(PageListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(PageListFilter, "entity_link_state", "filter")] = None,
     url: Annotated[
         list[AnyUrl] | None,
@@ -406,6 +467,13 @@ def page_list_filter_dependency(
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        document_source_id=document_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         last_touched_from=last_touched_from,
         last_touched_to=last_touched_to,
         last_touched_by_user_id=last_touched_by_user_id,
@@ -427,6 +495,13 @@ def page_list_filter_dependency(
 
 
 def document_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(DocumentListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_source_id", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "document_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(DocumentListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(DocumentListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(DocumentListFilter, "entity_link_state", "filter")] = None,
     url: Annotated[
         list[AnyUrl] | None,
@@ -464,6 +539,13 @@ def document_list_filter_dependency(
 ) -> DocumentListFilter:
     return _filter(
         DocumentListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        document_source_id=document_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         last_touched_from=last_touched_from,
         last_touched_to=last_touched_to,
         last_touched_by_user_id=last_touched_by_user_id,
@@ -482,6 +564,13 @@ def document_list_filter_dependency(
 
 
 def image_list_filter_dependency(
+    evidence_library: Annotated[list[str] | None, _model_parameter(ImageListFilter, "evidence_library", "filter")] = None,
+    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_source_id", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "document_source_id", "filter")] = None,
+    evidence_touched_from: Annotated[datetime | None, _model_parameter(ImageListFilter, "evidence_touched_from", "filter")] = None,
+    evidence_touched_to: Annotated[datetime | None, _model_parameter(ImageListFilter, "evidence_touched_to", "filter")] = None,
+    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_touched_by_user_id", "filter")] = None,
+    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(ImageListFilter, "entity_link_state", "filter")] = None,
     url: Annotated[
         list[AnyUrl] | None,
@@ -510,6 +599,13 @@ def image_list_filter_dependency(
 ) -> ImageListFilter:
     return _filter(
         ImageListFilter,
+        evidence_library=evidence_library,
+        evidence_source_id=evidence_source_id,
+        document_source_id=document_source_id,
+        evidence_touched_from=evidence_touched_from,
+        evidence_touched_to=evidence_touched_to,
+        evidence_touched_by_user_id=evidence_touched_by_user_id,
+        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
         last_touched_from=last_touched_from,
         last_touched_to=last_touched_to,
         last_touched_by_user_id=last_touched_by_user_id,

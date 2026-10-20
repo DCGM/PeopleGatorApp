@@ -13,7 +13,7 @@ import {
   type ListFacesRouteApiV1FacesGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
-import { initialCursor, nextCursor, withCursor } from '@/query/cursor'
+import { initialCursor, nextCursor, withCursor, useFirstPageOnFilterChange } from '@/query/cursor'
 import { queryKeys } from '@/query/keys'
 
 export type FaceListParams = NonNullable<ListFacesRouteApiV1FacesGetData['query']>
@@ -60,8 +60,10 @@ export function useFaceListQuery(
   params?: MaybeRefOrGetter<FaceListParams | undefined>,
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
+  const key = computed(() => queryKeys.faces.infinite(toValue(params)))
+  useFirstPageOnFilterChange(key)
   return useInfiniteQuery({
-    queryKey: computed(() => queryKeys.faces.infinite(toValue(params))),
+    queryKey: key,
     queryFn: ({ pageParam, signal }) => fetchFaces(withCursor(toValue(params), pageParam), signal),
     initialPageParam: computed(() => initialCursor(params)),
     getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
@@ -83,7 +85,10 @@ export function useCreateFaceMutation() {
     mutationFn: (body: FaceCreateRequest) =>
       responseData(
         createFaceRouteApiV1FacesPost({
-          body: { ...body, ...(body.entity_id && { entity_link_state: 'manual' }) },
+          body: {
+            ...body,
+            ...(body.entity_id && { entity_link_state: 'manual' }),
+          },
           throwOnError: true,
         }),
       ),
@@ -192,6 +197,50 @@ export function useAssignFacesMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.images.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
       ])
+    },
+  })
+}
+
+export function useReviewFacesMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      detectionIds,
+      action,
+    }: {
+      detectionIds: string[]
+      action: 'verify' | 'unassign'
+    }) => {
+      const faces = await responseData(
+        patchFaceBatchRouteApiV1FacesBatchPatch({
+          body: [...new Set(detectionIds)].map((detection_id) => ({
+            detection_id,
+            ...(action === 'verify'
+              ? { entity_link_state: 'verified' as const }
+              : { entity_id: null, entity_link_state: null }),
+          })),
+          throwOnError: true,
+        }),
+      )
+      for (const face of faces) {
+        if (face) queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
+      }
+      if (faces.some((face) => face === null))
+        throw new Error('Some selected faces are no longer available.')
+      return faces
+    },
+    onSettled: async () => {
+      await Promise.all(
+        [
+          queryKeys.faces.all,
+          queryKeys.entities.all,
+          queryKeys.pages.all,
+          queryKeys.documents.all,
+          queryKeys.sources.all,
+          queryKeys.images.all,
+          queryKeys.search.all,
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      )
     },
   })
 }

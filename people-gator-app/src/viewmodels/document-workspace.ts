@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from './evidence-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -24,10 +25,7 @@ import { useObjectUrl, useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
 import { useEntitySearchQuery, type EntitySearchRecord } from '@/query/search'
 import { useTextMentionListQuery } from '@/query/text-mentions'
-import {
-  candidateSearchParams,
-  type CandidateBrowseMode,
-} from '@/viewmodels/similar-people'
+import { candidateSearchParams, type CandidateBrowseMode } from '@/viewmodels/similar-people'
 
 function percentage(value: number) {
   return Math.round((value <= 1 ? value * 100 : value) * 10) / 10
@@ -130,14 +128,21 @@ export function useDocumentWorkspace(
   candidateTerm: MaybeRefOrGetter<string>,
   candidateBrowseMode: MaybeRefOrGetter<CandidateBrowseMode> = 'page',
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidenceValid: MaybeRefOrGetter<boolean> = true,
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
-  const hasPage = computed(() => Boolean(sourceId.value))
+  const hasPage = computed(() => Boolean(sourceId.value) && toValue(evidenceValid))
   const layoutQuery = usePageLayoutQuery(sourceId)
-  const spanQuery = usePageMentionSpansQuery(sourceId, linkStates)
+  const spanQuery = usePageMentionSpansQuery(sourceId, linkStates, evidence)
   const faceQuery = useFaceListQuery(
-    computed(() => ({ 'filter.source_id': [sourceId.value], 'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined, limit: 100 })),
+    computed(() => ({
+      ...toValue(evidence),
+      'filter.source_id': [sourceId.value],
+      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      limit: 100,
+    })),
     hasPage,
   )
   const faceRecords = computed(() =>
@@ -145,7 +150,9 @@ export function useDocumentWorkspace(
   )
   const onPageEntityQuery = useEntityListQuery(
     computed(() => ({
-      'filter.source_id': [sourceId.value], 'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      ...toValue(evidence),
+      'filter.source_id': [sourceId.value],
+      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
     })),
     hasPage,
@@ -154,16 +161,25 @@ export function useDocumentWorkspace(
     (onPageEntityQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
   const mentionQuery = useTextMentionListQuery(
-    computed(() => ({ 'filter.source_id': [sourceId.value], 'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined, limit: 100 })),
+    computed(() => ({
+      ...toValue(evidence),
+      'filter.source_id': [sourceId.value],
+      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      limit: 100,
+    })),
     hasPage,
   )
   const mentions = computed(() =>
     (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
   for (const query of [faceQuery, mentionQuery, onPageEntityQuery]) {
-    watch(() => [query.data.value, query.hasNextPage.value, query.isFetchingNextPage.value], () => {
-      if (query.hasNextPage.value && !query.isFetchingNextPage.value && !query.isError.value) void query.fetchNextPage()
-    })
+    watch(
+      () => [query.data.value, query.hasNextPage.value, query.isFetchingNextPage.value],
+      () => {
+        if (query.hasNextPage.value && !query.isFetchingNextPage.value && !query.isError.value)
+          void query.fetchNextPage()
+      },
+    )
   }
   const layoutDimensions = computed(() => {
     const size = layoutQuery.data.value?.page_size
@@ -173,15 +189,22 @@ export function useDocumentWorkspace(
   // dimensions when OCR is absent, so request the original in that case.
   const pageImageQuery = usePageImageQuery(
     sourceId,
-    computed(() => layoutDimensions.value ? 1024 : undefined),
+    computed(() => (layoutDimensions.value ? 1024 : undefined)),
     computed(() => !layoutQuery.isPending.value),
   )
   const pageImageUrl = useObjectUrl(computed(() => pageImageQuery.data.value))
   const imageDimensions = ref<{ width: number; height: number } | null>(null)
-  watch([sourceId, () => pageImageQuery.data.value], () => { imageDimensions.value = null }, { flush: 'sync' })
+  watch(
+    [sourceId, () => pageImageQuery.data.value],
+    () => {
+      imageDimensions.value = null
+    },
+    { flush: 'sync' },
+  )
   function pageImageLoaded(event: Event) {
     const image = event.target as HTMLImageElement
-    if (image.src !== pageImageUrl.value || image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+    if (image.src !== pageImageUrl.value || image.naturalWidth <= 0 || image.naturalHeight <= 0)
+      return
     imageDimensions.value = { width: image.naturalWidth, height: image.naturalHeight }
   }
   const annotationDimensions = computed(() => layoutDimensions.value ?? imageDimensions.value)
@@ -221,6 +244,7 @@ export function useDocumentWorkspace(
       return {
         ...linkMetadata(face),
         id: face.detection_id,
+        sourceId: face.source_id,
         embeddingModel: face.embeddings?.[0],
         personId: face.entity_id ?? null,
         name: person?.name || 'Unknown person',
@@ -257,8 +281,8 @@ export function useDocumentWorkspace(
   )
   const searchEnabled = computed(() => Boolean(searchParams.value))
   const candidateSearchQuery = useEntitySearchQuery(
-    computed(() => searchParams.value ?? { limit: 0 }),
-    searchEnabled,
+    computed(() => ({ ...(searchParams.value ?? { limit: 0 }), ...toValue(evidence) })),
+    computed(() => searchEnabled.value && toValue(evidenceValid)),
   )
   const candidateMatches = computed(() =>
     (candidateSearchQuery.data.value?.pages ?? []).flatMap((page) => page.items),
@@ -301,6 +325,10 @@ export function useDocumentWorkspace(
             : matchingScore
       return {
         id: entity.entity_id,
+        sourceId: resultMode.value === 'page' ? sourceId.value : undefined,
+        referenceFaceId: toValue(selectedFaceId) ?? undefined,
+        candidateMode: resultMode.value,
+        candidateText: textTerm.value || undefined,
         name: entity.name || 'Unnamed person',
         shortDescription: entity.short_description || undefined,
         score: matchingScore === undefined ? undefined : percentage(matchingScore),
@@ -324,7 +352,9 @@ export function useDocumentWorkspace(
         ],
         wikidataId: entity.wikidata_id || undefined,
         nlcrAuthorityId: entity.nlcr_authority_id || undefined,
-        faceId: faces.value.find((face) => face.personId === entity.entity_id)?.id,
+        faceId:
+          ('matched_detection_ids' in entity ? entity.matched_detection_ids?.[0] : undefined) ??
+          faces.value.find((face) => face.personId === entity.entity_id)?.id,
         entityKey: entitySpan ? transcriptionEntityKey(entitySpan) : undefined,
         entityLineIndex: entityLineIndex >= 0 ? entityLineIndex : undefined,
       }
@@ -394,7 +424,9 @@ export function useDocumentWorkspace(
     ),
     loadMore,
     page: pageQuery.data,
-    annotationsLoading: computed(() => faceQuery.isPending.value || spanQuery.isPending.value || faceQuery.hasNextPage.value),
+    annotationsLoading: computed(
+      () => faceQuery.isPending.value || spanQuery.isPending.value || faceQuery.hasNextPage.value,
+    ),
     pageDimensions: computed(() => annotationDimensions.value ?? { height: 297, width: 210 }),
     pageImageLoaded,
     pageImageReady: computed(() => imageDimensions.value !== null),
@@ -403,7 +435,9 @@ export function useDocumentWorkspace(
     similarPeopleLoading: computed(
       () =>
         (resultMode.value === 'page' && onPageEntityQuery.isPending.value) ||
-        (resultMode.value !== 'page' && searchEnabled.value && candidateSearchQuery.isPending.value),
+        (resultMode.value !== 'page' &&
+          searchEnabled.value &&
+          candidateSearchQuery.isPending.value),
     ),
     similarPeople,
     transcription,

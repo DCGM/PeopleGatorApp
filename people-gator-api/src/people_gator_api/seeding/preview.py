@@ -374,6 +374,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     upload_page = await database.sources.get_page(pages["media-upload-1"])
     if upload_page is None:
         raise ValueError("Media upload preview page is missing")
+    activity_page = next(item for item in PAGES if item.key == "provenance-a-1")
+    activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -383,6 +385,49 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Compare the standard state text colors without state backgrounds.
+            "linked-face-states": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
+                "link_state": ["automatic", "manual", "verified"],
+            }, doseq=True),
+            "document-pages-without-annotations": "/documents?" + urlencode({
+                "q": "Příběhy archivářů",
+            }),
+            "annotation-editor-filters": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
+                "evidence_user": actors["importer"].user_id,
+                "evidence_key": registered_keys["importer"],
+            }),
+            # Open Irena's scan, then search for Ada as an assignment candidate
+            # outside that page. Opening a result must not invent evidence scope.
+            "scan-assignment-search": "/scans?" + urlencode({
+                "library": activity_document.library,
+                "document": activity_document.document_id,
+            }),
+            # Follow Irena into a profile, change/clear annotation filters, then
+            # use the normal People breadcrumb. It forwards the current choices.
+            "shared-filter-navigation": "/people?" + urlencode({
+                "q": "Irena",
+                "evidence_key": registered_keys["importer"],
+            }),
+            # Presentation examples reuse linked synthetic records and media.
+            # Adding entry points never rewrites reviewer edits or checkpoints.
+            # Mixed-state faces exercise green-outline Verify/red-outline Unassign;
+            # this entry point changes no persisted evidence on retained previews.
+            # Compare Faces/Discover library + document rows and plain editor names.
+            # Seeded importer/reviewer labels remain usable before the user tab exists.
+            "person-face-style-comparison": f"/people/{manifest.entities['provenance-review']}?tab=discover",
+            "person-face-review": f"/people/{manifest.entities['provenance-review']}",
+            "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
+                "origin_matched_face": manifest.faces["provenance-authority"],
+                "origin_text": "Irena",
+            }),
+            "page-statistics": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}?panel=statistics"
+            ),
+            "page-activity": (
+                f"/libraries/{activity_document.library}/documents/{activity_document.document_id}"
+                f"/pages/{activity_page.page_id}?panel=activity"
+            ),
             # Reuse the maintained review records and local media: page 1 has
             # automatic/manual evidence; page 2 has verified/unassigned evidence.
             # These links add a toolbar scenario without rewriting reviewed data.

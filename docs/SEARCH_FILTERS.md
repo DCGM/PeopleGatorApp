@@ -98,3 +98,87 @@ viewmodel URL parsing and controls together. Test AND/OR combinations, empty or
 invalid inputs, evidence scope and cursor reset. Follow the shared layout rules
 in [AGENTS.md](../AGENTS.md) and extend the preview fixtures. A UI control must
 represent a working server criterion.
+
+## Shared evidence navigation (#31)
+
+Documents, scan search, people search and person details expose one shared set
+of annotation criteria. Page workspaces apply and forward those URL criteria
+without an additional filter panel above the scan. Its sidebar Activity tab
+lists the current page’s faces and mentions by local edit day or last user.
+Selecting a group applies inclusive annotation-day bounds or an annotation-user
+criterion; groups retain the complete source collection so selections can be
+broadened. Unknown historical metadata remains explicit and is not a time/user
+filter. Other shared criteria remain editable in a related list/profile. The existing compact scan toolbar
+continues to control annotation link state. Their names, OR selections, inclusive time
+bounds and AND combination match the API fields documented in
+[annotation processing](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md#annotation-criteria-versus-resource-processing-31).
+Documents/people return resources containing matching evidence. Profiles return
+that person's matching faces/mentions with filtered counts alongside overall
+statistics. Every condition must match the same annotation, including document,
+state and actor; results cannot combine unrelated annotations.
+
+| Browser URL | API criterion / scope |
+| --- | --- |
+| `link_state` | `filter.entity_link_state` |
+| `evidence_library` | `filter.evidence_library` |
+| `evidence_document` | `filter.document_source_id`: internal registered document source UUID |
+| `evidence_source` | `filter.evidence_source_id`: exact source UUID |
+| `evidence_from`, `evidence_to` | `filter.evidence_touched_from/to`: annotation edit time, timezone required |
+| `evidence_user`, `evidence_key` | `filter.evidence_touched_by_user_id/api_key_id`: annotation's last actor |
+| People `document` | Legacy internal document selection; mapped to active shared evidence on navigation |
+| Scan `library`, `document` | Resource library/archive UUID; opening a scan does not add an annotation-source filter |
+| `touched_from/to`, `touched_by`, `api_key` | Current person/source processing, **never** annotation edits |
+| `origin_person_*`, `origin_source_*` | Resource-specific processing context; never applied as annotation edits |
+| `origin_text` | Name/alias/source search signal; never literal text filtering of face images |
+| `origin_matched_face`, `origin_reference_face` | Actual matching detection / reference face signals |
+| Legacy `origin_return` | Ignored by breadcrumbs and omitted from related navigation |
+| `tab` | Faces (default), mentions or discover; incoming assigned-mentions searches open Mentions |
+| `discovery_assignment`, `discovery_text`, `candidate_mode`, `candidate_text` | View-specific discovery/candidate choices, retained as origin context on related navigation |
+
+Related links copy the current shared selections and keep resource-specific
+criteria separate. Source metadata is not rendered as removable origin tags.
+Opening a document's scan list uses library/archive scope and shows all
+registered pages by default, including pages without faces or mentions. Document
+heading, +more and page links copy only the selected annotation criteria;
+ordinary document browsing does not add an evidence-presence restriction.
+Opening a scan preserves explicitly selected evidence filters without adding
+`evidence_source` for the opened page. The workspace already constrains its
+annotations to that page; database assignment searches can still find people
+whose evidence is elsewhere. Explicit evidence-source selections remain effective.
+Profiles use the normal **PeopleGator → People → person ID** breadcrumb. The
+People link forwards the profile's current shared filters, including edits and
+removals. It does not restore a saved source URL or old filter selections.
+Shared criteria populate the actual filter controls and their removable
+active-filter tags. Changes carry forward on the next related link.
+Each view is reproducible from its URL, including copied links and browser
+Back/Forward. Destination queries start at their own first page; source cursors
+never travel across resources. Removing a filter tag changes controls, URL and
+server results. A single Clear all filters action per panel and profile broadening preserve unrelated
+search context; clearing text remains a separate action. Invalid copied
+annotation bounds/UUIDs show recoverable criteria and block evidence
+requests until corrected/removed. Missing matched detections and unavailable
+source pages are reported without blocking identity details. Missing option
+labels fall back to identifiers without exposing credentials.
+
+Face-similarity entity results include `matched_detection_ids`; profile links
+retain these actual witnesses. They are loaded within the fixed person and
+current evidence scope, independently of the first evidence page. Person face
+cards use compact assignment/confidence, library/document and last-change/editor
+rows. Identity creation/import time and actor remain separately labeled in the
+profile statistics; owner, verifier and last editor are independent.
+
+PostgreSQL implements the persisted annotation metadata and shared filters. The
+optional Weaviate adapter explicitly rejects unsupported annotation edit filters.
+
+The scan pane has top-level Faces, Activity and Statistics tabs. Activity and
+Statistics replace the entire pane content and scroll within its remaining height;
+face selection and candidate settings survive tab switches. Statistics presents
+page/document totals with explicit state labels and has no disclosure. The legacy
+`#link-statistics` URL opens Statistics too.
+
+Page sidebar URLs use `panel=activity` or `panel=statistics` (default `face`) and
+`activity_group=user` (default local day). Day boundaries use consecutive local
+midnights, including daylight-saving changes; the upper bound is inclusive at
+23:59:59.999999 local time, preserving database microsecond precision. Group entries show their own recorded annotation edit
+time, rather than the page/document processing timestamp. Activity time/user
+chips can be removed independently and clearing them retains other criteria.

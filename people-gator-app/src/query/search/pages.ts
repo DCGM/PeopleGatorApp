@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from '@/viewmodels/evidence-filters'
 import { useInfiniteQuery, type InfiniteData, type QueryKey } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -22,9 +23,8 @@ import {
 export type PageSearchParams = NonNullable<SearchPagesGetApiV1SearchPagesGetData['query']>
 export type PageSearchRecord = PageResponse | FoundPage
 
-export type PageResultsParams = {
+export type PageResultsParams = EvidenceQuery & {
   query: string
-  'filter.entity_link_state'?: EntityLinkState[]
   'filter.library'?: string[]
   'filter.document_id'?: string[]
   'filter.has_entities'?: boolean
@@ -78,7 +78,10 @@ export function usePageSearchQuery(
  * Infinite page results for the document search screen. A blank query browses
  * pages; a text query uses ranked page search.
  */
-export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>) {
+export function usePageResultsQuery(
+  params: MaybeRefOrGetter<PageResultsParams>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
   return useInfiniteQuery<
     PageResultsPage,
     Error,
@@ -89,7 +92,9 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
     queryKey: computed(() => {
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
+      const { query: _query, ...rest } = resolvedParams
       const keyParams = {
+        ...rest,
         ...(resolvedParams['filter.library'] && {
           'filter.library': resolvedParams['filter.library'],
         }),
@@ -114,7 +119,9 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
       const pageSize = searchPageSize(resolvedParams.limit)
+      const { query: _query, ...rest } = resolvedParams
       const filters = {
+        ...rest,
         ...(resolvedParams['filter.library'] && {
           'filter.library': resolvedParams['filter.library'],
         }),
@@ -147,6 +154,7 @@ export function usePageResultsQuery(params: MaybeRefOrGetter<PageResultsParams>)
     initialPageParam: computed(() => toValue(params).cursor ?? null),
     getNextPageParam: (lastPage, _pages, lastPageParam) =>
       lastPage.nextPage === lastPageParam ? null : lastPage.nextPage,
+    enabled: computed(() => toValue(enabled)),
     staleTime: SEARCH_CACHE_TIME,
     gcTime: SEARCH_GC_TIME,
     refetchOnWindowFocus: false,

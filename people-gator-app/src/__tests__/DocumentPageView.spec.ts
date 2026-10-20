@@ -99,7 +99,14 @@ async function settleFocus() {
   await flushPromises()
 }
 async function mountView() {
-  const wrapper = shallowMount(DocumentPageView)
+  const wrapper = shallowMount(DocumentPageView, {
+    global: {
+      stubs: {
+        Tabs: { template: '<div><slot /></div>' },
+        TabsContent: { template: '<div><slot /></div>' },
+      },
+    },
+  })
   await settleFocus()
   return wrapper
 }

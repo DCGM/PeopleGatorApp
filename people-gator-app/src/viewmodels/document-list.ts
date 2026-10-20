@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from './evidence-filters'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntityLinkState, DocumentResponse, PageResponse } from '@/client'
@@ -20,15 +21,17 @@ export function useDocumentList(
   search: MaybeRefOrGetter<string>,
   filters: MaybeRefOrGetter<DocumentFilters>,
   pageSize = 12,
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidenceValid: MaybeRefOrGetter<boolean> = true,
 ) {
   const filterError = computed(() => documentFilterError(toValue(filters)))
   const query = useDocumentResultsQuery(
     computed(() => ({
       query: toValue(search),
-      filters: documentFiltersQuery(toValue(filters)),
+      filters: { ...documentFiltersQuery(toValue(filters)), ...toValue(evidence) },
       limit: pageSize,
     })),
-    computed(() => !filterError.value),
+    computed(() => !filterError.value && toValue(evidenceValid)),
   )
   return {
     documents: computed(() => uniqueSources<DocumentResponse>(query.data.value?.pages)),
@@ -47,12 +50,14 @@ export function useDocumentGroup(
   document: MaybeRefOrGetter<DocumentResponse>,
   pageSize = 4,
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
 ) {
   const query = usePageListQuery(
     computed(() => ({
       'filter.library': [toValue(document).library],
       'filter.document_id': [toValue(document).document_id],
       ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
+      ...toValue(evidence),
       limit: Math.min(pageSize, 4),
       return_total_count: true,
     })),
@@ -64,7 +69,7 @@ export function useDocumentGroup(
       limit: 0,
       return_total_count: true,
     })),
-    computed(() => toValue(linkStates).length > 0),
+    computed(() => Object.keys(toValue(evidence)).length > 0 || toValue(linkStates).length > 0),
   )
   const pages = computed(() =>
     uniqueSources<PageResponse>(query.data.value?.pages.slice(0, 1)).slice(0, 4),
@@ -73,7 +78,7 @@ export function useDocumentGroup(
     cards: usePageCards(pages),
     totalCount: computed(
       () =>
-        (toValue(linkStates).length
+        (Object.keys(toValue(evidence)).length || toValue(linkStates).length
           ? registeredCount.data.value?.pages[0]?.total_count
           : query.data.value?.pages[0]?.total_count) ?? null,
     ),

@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from './evidence-filters'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { EntityLinkState, PageResponse } from '@/client'
 
@@ -13,6 +14,8 @@ export function useDocumentSearch(
   pageSize = 12,
   scope: MaybeRefOrGetter<{ library?: string; documentId?: string }> = {},
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidenceValid: MaybeRefOrGetter<boolean> = true,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const contentFilter = computed(() => pageContentFilter(toValue(filter)))
@@ -25,9 +28,11 @@ export function useDocumentSearch(
         ...(library && { 'filter.library': [library] }),
         ...(documentId && { 'filter.document_id': [documentId] }),
         ...contentFilter.value,
+        ...toValue(evidence),
         limit: pageSize,
       }
     }),
+    evidenceValid,
   )
 
   const pages = computed(() => {

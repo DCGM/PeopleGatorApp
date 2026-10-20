@@ -42,6 +42,7 @@ from people_gator_api.schemas.search import (
 )
 from people_gator_api.persistence.postgres.models import (
     Alias,
+    Face,
     Entity,
     ImageOccurrence,
     TextMention,
@@ -64,7 +65,9 @@ from people_gator_api.persistence.postgres.utils import (
     fuse_scores,
 )
 
-from .touch import touch_values, touch_sources, lock_annotation_graph
+from people_gator_api.schemas.faces import FaceListFilter
+from .utils import face_filters
+from .touch import creation_values, touch_values, touch_sources, lock_annotation_graph
 
 class PostgresEntityRepository(EntityRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -131,6 +134,7 @@ class PostgresEntityRepository(EntityRepository):
         entity = Entity(
             user_id=context.user_id,
             **touch_values(context),
+            **creation_values(context),
             kind=payload.entity_type.value,
             name=payload.name,
             description=missing_to_none(payload.description),
@@ -268,7 +272,7 @@ class PostgresEntityRepository(EntityRepository):
                         ImageOccurrence.entity_id.in_(source_entity_ids),
                         ImageOccurrence.occurrence_type == "face",
                     )
-                    .values(entity_id=target_entity_id, entity_link_state="manual", entity_link_verified_by_user_id=None, entity_link_verified_at=None)
+                    .values(**touch_values(context), entity_id=target_entity_id, entity_link_state="manual", entity_link_verified_by_user_id=None, entity_link_verified_at=None)
                 ),
             )
             mention_result = type_cast(
@@ -276,7 +280,7 @@ class PostgresEntityRepository(EntityRepository):
                 await self._session.execute(
                     update(TextMention)
                     .where(TextMention.entity_id.in_(source_entity_ids))
-                    .values(entity_id=target_entity_id, entity_link_state="manual", entity_link_verified_by_user_id=None, entity_link_verified_at=None)
+                    .values(**touch_values(context), entity_id=target_entity_id, entity_link_state="manual", entity_link_verified_by_user_id=None, entity_link_verified_at=None)
                 ),
             )
             await self._session.execute(
@@ -315,12 +319,12 @@ class PostgresEntityRepository(EntityRepository):
         await self._session.execute(
             update(ImageOccurrence)
             .where(ImageOccurrence.entity_id.in_(unique))
-            .values(entity_id=None, entity_link_state=None, entity_link_verified_by_user_id=None, entity_link_verified_at=None)
+            .values(**touch_values(context), entity_id=None, entity_link_state=None, entity_link_verified_by_user_id=None, entity_link_verified_at=None)
         )
         await self._session.execute(
             update(TextMention)
             .where(TextMention.entity_id.in_(unique))
-            .values(entity_id=None, entity_link_state=None, entity_link_verified_by_user_id=None, entity_link_verified_at=None)
+            .values(**touch_values(context), entity_id=None, entity_link_state=None, entity_link_verified_by_user_id=None, entity_link_verified_at=None)
         )
         result = type_cast(
             CursorResult[Any],
@@ -381,6 +385,15 @@ class PostgresEntityRepository(EntityRepository):
                     collected.setdefault(item_id, []).append(value)
         return aggregate_scores(collected, query.query.score_aggregation)
 
+    @staticmethod
+    def _matching_face_filters(query):
+        values = missing_to_none(query.filter_)
+        if values is None:
+            return []
+        fields = {name: getattr(values, name) for name in FaceListFilter.model_fields
+                  if name != "entity_id" and hasattr(values, name)}
+        return face_filters(FaceListFilter.model_validate(fields))
+
     async def _face_scores(
         self, query: SearchEntitiesRequest, filters: Sequence[ColumnElement[bool]]
     ) -> dict[uuid.UUID, float]:
@@ -392,7 +405,7 @@ class PostgresEntityRepository(EntityRepository):
             target=Entity,
             face_ids=face_ids,
             model_stub=query.query.face_embedding_model,
-            filters=filters,
+            filters=[*filters, *self._matching_face_filters(query)],
             exclude_reference_faces=query.query.exclude_reference_face_id,
             aggregation=query.query.score_aggregation,
         )
@@ -412,12 +425,25 @@ class PostgresEntityRepository(EntityRepository):
             cursor_fingerprint(query),
         )
         entities = await self._load_many([item[0] for item in page])
+        witnesses: dict[uuid.UUID, list[uuid.UUID]] = {}
+        if not is_missing(query.query.face_id) and entities:
+            scores = await search_face_scores(
+                session=self._session, target=Face, face_ids=query.query.face_id,
+                model_stub=query.query.face_embedding_model,
+                filters=[Face.entity_id.in_(entities), *self._matching_face_filters(query)],
+                exclude_reference_faces=query.query.exclude_reference_face_id,
+                aggregation=query.query.score_aggregation,
+            )
+            owners = dict((await self._session.execute(select(Face.id, Face.entity_id).select_from(Face).where(Face.id.in_(scores)))).all())
+            for detection_id in sorted(scores, key=lambda key: (-scores[key], key.int)):
+                witnesses.setdefault(owners[detection_id], []).append(detection_id)
         items = [
             FoundEntity(
                 **entity_response(entities[item_id]).model_dump(),
                 score=score,
                 text_score=text_score,
                 face_score=face_score,
+                matched_detection_ids=witnesses.get(item_id, [])[:8],
             )
             for item_id, score, text_score, face_score in page
         ]

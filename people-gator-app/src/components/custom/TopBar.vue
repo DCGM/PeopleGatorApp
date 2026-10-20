@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
@@ -25,17 +26,40 @@ const breadcrumbs = computed(() => {
       to: { name: 'document-search' } as RouteLocationRaw,
     },
   ]
+  if (route.name === 'person-detail') {
+    items.push({
+      label: 'People',
+      to: { name: 'people-search', query: relatedEvidenceQuery(route) },
+    })
+    items.push({
+      label: String(route.params.personId),
+      to: { path: route.path, query: route.query },
+    })
+    return items
+  }
   if (route.name === 'document-list') {
-    items.push({ label: 'Documents', to: { name: 'document-list' } })
+    items.push({
+      label: 'Documents',
+      to: { name: 'document-list', query: relatedEvidenceQuery(route) },
+    })
     if (typeof library === 'string') {
-      items.push({ label: library, to: { name: 'document-list', query: { library } } })
+      items.push({
+        label: library,
+        to: { name: 'document-list', query: relatedEvidenceQuery(route, { library }) },
+      })
     }
     return items
   }
   if (typeof library === 'string') {
-    items.push({ label: library, to: { name: 'document-search', query: { library } } })
+    items.push({
+      label: library,
+      to: { name: 'document-search', query: relatedEvidenceQuery(route, { library }) },
+    })
     if (typeof document === 'string') {
-      items.push({ label: document, to: { name: 'document-search', query: { library, document } } })
+      items.push({
+        label: document,
+        to: { name: 'document-search', query: relatedEvidenceQuery(route, { library, document }) },
+      })
     }
     if (route.name === 'document-page') {
       items.push({
@@ -44,7 +68,10 @@ const breadcrumbs = computed(() => {
       })
     }
   } else if (route.name === 'people-search' || route.name === 'person-detail') {
-    items.push({ label: 'People', to: { name: 'people-search' } })
+    items.push({
+      label: 'People',
+      to: { name: 'people-search', query: relatedEvidenceQuery(route) },
+    })
     if (route.name === 'person-detail') {
       items.push({
         label: String(route.params.personId),
@@ -61,6 +88,7 @@ const isScanRoute = computed(
 const scansLink = computed(() => ({
   name: 'document-search',
   query: {
+    ...relatedEvidenceQuery(route),
     ...Object.fromEntries(
       ['library', 'document', 'q', 'assignment'].flatMap((key) =>
         typeof route.query[key] === 'string' ? [[key, route.query[key]]] : [],
@@ -143,7 +171,10 @@ const isPeopleRoute = computed(
         <RouterLink
           :to="{
             name: 'document-list',
-            query: route.query.library ? { library: route.query.library } : {},
+            query: relatedEvidenceQuery(
+              route,
+              route.query.library ? { library: route.query.library } : {},
+            ),
           }"
           aria-label="Documents"
           :aria-current="route.name === 'document-list' ? 'page' : undefined"
@@ -161,7 +192,7 @@ const isPeopleRoute = computed(
         </RouterLink>
 
         <RouterLink
-          :to="{ name: 'people-search' }"
+          :to="{ name: 'people-search', query: relatedEvidenceQuery(route) }"
           aria-label="People"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
           :class="

@@ -1,3 +1,4 @@
+import type { EvidenceQuery } from './evidence-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -44,6 +45,7 @@ export function usePersonDiscovery(
   referenceFaceModel: MaybeRefOrGetter<string | null>,
   nameQuery: MaybeRefOrGetter<string>,
   enabled: MaybeRefOrGetter<boolean>,
+  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
 ) {
   const faceIds = computed(() => [...new Set(toValue(referenceFaceIds))])
   const hasFaceSignal = computed(
@@ -53,6 +55,7 @@ export function usePersonDiscovery(
 
   const faceSearchQuery = useFaceSearchQuery(
     computed(() => ({
+      ...toValue(evidence),
       'query.face_id': faceIds.value,
       'query.face_embedding_model': toValue(referenceFaceModel) ?? undefined,
       limit: DISCOVERY_LIMIT,
@@ -156,9 +159,10 @@ export function usePersonDiscovery(
     }),
   )
 
-  const entitySearchParams = computed(() =>
-    personDiscoverySignals(faceIds.value, toValue(referenceFaceModel), toValue(nameQuery)),
-  )
+  const entitySearchParams = computed(() => ({
+    ...personDiscoverySignals(faceIds.value, toValue(referenceFaceModel), toValue(nameQuery)),
+    ...toValue(evidence),
+  }))
   const canSearchPeople = computed(
     () => toValue(enabled) && (hasFaceSignal.value || Boolean(toValue(nameQuery).trim())),
   )
@@ -184,7 +188,12 @@ export function usePersonDiscovery(
   })
   const candidatePortraitIds = computed(() =>
     entityMatches.value.map(
-      (_entity, index) => candidateFaceQueries.value[index]?.data?.items[0]?.detection_id ?? '',
+      (entity, index) =>
+        entity.matched_detection_ids?.[0] ??
+        (entity.face_score == null
+          ? candidateFaceQueries.value[index]?.data?.items[0]?.detection_id
+          : '') ??
+        '',
     ),
   )
   const candidateCropQueries = useQueries({
@@ -214,6 +223,7 @@ export function usePersonDiscovery(
       const portraitFaceId = candidatePortraitIds.value[index] ?? ''
       return {
         id: entity.entity_id,
+        matchedFaceIds: entity.matched_detection_ids ?? [],
         name: entity.name || 'Unnamed person',
         shortDescription: entity.short_description || '',
         aliases: entity.aliases ?? [],

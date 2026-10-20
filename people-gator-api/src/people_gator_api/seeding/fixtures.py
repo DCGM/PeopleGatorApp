@@ -22,6 +22,8 @@ class Person:
 
 
 PEOPLE = (
+    Person("provenance-review", "Irena Evidence", (),
+           "Synthetic imported identity with separately edited annotations in two libraries.", "importer"),
     Person(
         "link-ada",
         "Ada Review",
@@ -96,6 +98,8 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("provenance-a", "preview-mzk", "Annotation review ledger"),
+    Document("provenance-b", "preview-nlk", "Annotation review correspondence"),
     Document("focus", "preview-mzk", "Viewport focus practice"),
     Document("issue8-direct", "preview-nlk", "Direct annotation ledger"),
     Document("issue8-search", "preview-mzk", "Příběhy archivářů"),
@@ -154,6 +158,14 @@ class Page:
 
 
 PAGES = (
+    Page("provenance-a-1", "provenance-a", 1,
+        (Face("provenance-auto", "provenance-review", 0, 1),
+         Face("provenance-authority", "provenance-review", 1, 1, "verified")),
+        (Mention("provenance-mention-auto", "provenance-review", "Irena Evidence imported this catalogue."),)),
+    Page("provenance-b-1", "provenance-b", 1,
+        (Face("provenance-manual", "provenance-review", 0, 1, "manual"),
+         Face("provenance-unknown", "provenance-review", 1, 1)),
+        (Mention("provenance-mention-verified", "provenance-review", "Irena Evidence verified this correspondence.", "verified"),)),
     Page("focus-1", "focus", 1,
         (Face("focus-upper", "ada", 0, 0, box=(70, 220, 160, 190)),
          Face("focus-lower", "ada", 1, 0, box=(560, 760, 160, 190)),

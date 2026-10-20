@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
 import { computed } from 'vue'
 import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
 import { useDocumentFilters } from '@/viewmodels/document-filters'
+const evidence = useEvidenceFilters()
 const { searchTerm, filters } = useDocumentFilters()
 const {
   documents,
@@ -16,7 +18,13 @@ const {
   isFetchingNextPage,
   loadMore,
   retry,
-} = useDocumentList(searchTerm, filters)
+} = useDocumentList(
+  searchTerm,
+  filters,
+  12,
+  evidence.params,
+  computed(() => !evidence.error.value),
+)
 const filtered = computed(
   () =>
     searchTerm.value.trim() ||

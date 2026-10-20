@@ -72,3 +72,16 @@ async def touch_sources(
     ))
     if surviving:
         await session.execute(update(Source).where(Source.id.in_(surviving)).values(**touch_values(context)))
+
+
+def creation_values(context: GenericActor) -> dict:
+    return {
+        "created_at": datetime.now(timezone.utc),
+        "created_by_user_id": context.user_id,
+        "created_by_api_key_id": getattr(context, "api_key_id", None),
+    }
+
+
+def apply_touch(annotation, context: GenericActor) -> None:
+    for name, value in touch_values(context).items():
+        setattr(annotation, name, value)

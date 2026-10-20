@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  useEvidenceFilters,
+  relatedEvidenceQuery,
+  sharedEvidenceUrl,
+} from '@/viewmodels/evidence-filters'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch } from 'vue'
@@ -13,6 +18,7 @@ import { normalizePageContentFilter } from '@/viewmodels/assignment'
 const linkStates = useLinkStateFilter()
 const route = useRoute()
 const router = useRouter()
+const evidence = useEvidenceFilters()
 
 const scope = computed(() => ({
   library: typeof route.query.library === 'string' ? route.query.library : undefined,
@@ -23,7 +29,15 @@ const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const assignment = ref(normalizePageContentFilter(route.query.assignment))
 const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
-  useDocumentSearch(searchTerm, assignment, resultsPerPage, scope, linkStates)
+  useDocumentSearch(
+    searchTerm,
+    assignment,
+    resultsPerPage,
+    scope,
+    linkStates,
+    evidence.params,
+    computed(() => !evidence.error.value),
+  )
 
 watch(
   () => route.query,
@@ -37,6 +51,12 @@ function updateSearch() {
   void router.replace({
     name: 'document-search',
     query: {
+      ...route.query,
+      page: undefined,
+      cursor: undefined,
+      q: undefined,
+      assignment: undefined,
+      ...sharedEvidenceUrl(route.query),
       ...(linkStates.value.length && { link_state: linkStates.value }),
       ...(scope.value.library && { library: scope.value.library }),
       ...(scope.value.documentId && { document: scope.value.documentId }),
@@ -46,12 +66,8 @@ function updateSearch() {
   })
 }
 function removeScope(key: 'library' | 'document') {
-  void router.push({ query: { ...route.query, [key]: undefined } })
-}
-function clearFilters() {
   void router.push({
-    name: 'document-search',
-    query: searchTerm.value ? { q: searchTerm.value } : {},
+    query: { ...route.query, page: undefined, cursor: undefined, [key]: undefined },
   })
 }
 </script>
@@ -79,7 +95,6 @@ function clearFilters() {
       :library="scope.library"
       :document-id="scope.documentId"
       @remove-scope="removeScope"
-      @clear-filters="clearFilters"
       :result-count="resultCount"
       :has-more-results="hasNextPage"
       @update:search-term="updateSearch()"
@@ -95,7 +110,7 @@ function clearFilters() {
           class="group"
           :to="{
             name: 'document-page',
-            query: { link_state: linkStates.length ? linkStates : undefined },
+            query: relatedEvidenceQuery(route),
             params: {
               libraryId: result.library,
               documentId: result.documentId,

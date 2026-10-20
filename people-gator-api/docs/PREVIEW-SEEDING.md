@@ -51,6 +51,7 @@ This does not automatically seed the actual staging environment.
 | Faces only | Emil Dvorak and the A. Novak duplicate candidate |
 | Mentions only | Nora Svoboda across Research notes and Correspondence |
 | No evidence | Lenka Vesela, ready for manual linking |
+| Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
 | Identity discovery and merging | Open Ada Novak's Discover tab; A. Novak has nearby vectors |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
@@ -160,9 +161,8 @@ server timestamp. Existing fixtures and checkpoints are retained; reruns leave
 review edits and verification metadata intact.
 
 Open the document from Documents, try the scan's Link state controls and its
-collapsed **Link statistics** section below the face gallery in the right panel
-(below the gallery on mobile). It shows **This page** and **Whole document** counts
-without covering the scan. The CLI prints a `link-statistics` link to page 2,
+**Statistics** tab at the top of the scan pane (below the scan on mobile). It shows **This page** and **Whole document** counts
+without covering the scan. The CLI prints a `page-statistics` link to page 2; the older `link-statistics` fragment remains supported,
 where the page's verified/unassigned counts can be compared with all four states
 across the document. Then follow Ada Review to the shared Faces /
 Mentions filter. All includes unassigned annotations; selecting all three states
@@ -302,6 +302,92 @@ derivative refresh, layout replacement and twice-run preservation. Slow success,
 S3 denial, SDK timeout, pool saturation and same-page synchronization are covered
 by gated regression tests, not by introducing failures into preview data. See
 [media concurrency](MEDIA-UPLOAD-CONCURRENCY.md) for the isolated HTTP diagnostic.
+
+## Shared annotation filters and edits (#31)
+
+The `document-pages-without-annotations` example finds **Příběhy archivářů**.
+Open its heading or +more link to browse all six registered pages, including
+its page without faces or mentions. Navigation adds only the document's library
+and archive ID; it does not invent annotation criteria. Explicit modification
+user/key/date and link-state selections still carry through and narrow results.
+The repository test paginates all six pages and checks that selecting the importer
+reduces the list to four annotated pages. Twice-run preservation retains the
+unannotated page and its source/processing metadata.
+
+The `scan-assignment-search` example opens scans for Irena's annotation review ledger.
+Open its page, select a face and search for **Ada Novak** in the assignment panel.
+Ada has evidence elsewhere and must remain available as a database candidate:
+opening the scan must not silently add an evidence-source filter. Explicitly
+selected annotation filters still apply. Repository coverage checks candidate
+lookup, reassignment, local media and twice-run preservation of the review edit.
+
+The `shared-filter-navigation` example searches for Irena with the importer API
+key selected. Open her profile, change that key or clear it, then use the normal
+**People** breadcrumb. The destination must use the current filters rather than
+restore the original key. Profiles use the standard breadcrumb hierarchy; no
+custom source/return breadcrumb is shown, including for older URLs containing
+`origin_return`. Seed tests check real key-filtered people/faces, changed-key
+empty results, clearing and twice-run preservation of annotation metadata.
+
+The `annotation-editor-filters` example opens Irena's profile with the importer
+user and API key selected together, showing the three faces last changed by
+that actor/key and excluding the separately verified face.
+
+Search for **Irena Evidence**. This checkpointed synthetic identity has faces
+and mentions in two libraries. **Annotation review ledger** (`preview-mzk`) has
+an importer-created face and a reviewer-verified face; **Annotation review
+correspondence** (`preview-nlk`) has a manual face and a verified mention.
+Select a modification user, API key, date bound or document to follow the same
+annotation criteria through Documents, People, profiles and scans. Combining
+criteria from different annotations must not produce a match.
+
+Creation/import times and actors remain separate from annotation changes and
+person/document processing. The seed uses real actor contexts and actual server
+event times. Reruns preserve recorded creation, edits, assignments and checkpoints.
+Internal fixture keys are stable for retained preview compatibility. Integration
+coverage checks equivalent repository matches, unchanged times on rerun and
+identical verification, plus upgrades from the previously deployed revision.
+
+The `page-activity` example opens the annotation review ledger directly with
+`panel=activity`. Its two faces and one mention have two importer edits and one
+later reviewer verification. In the scan sidebar, choose Activity, then By user:
+selecting Preview reviewer shows the reviewer-verified face. By day groups the
+recorded annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
+Faces, Activity and Statistics share the top-level pane navigation; Activity uses
+the full remaining pane height and scrolls independently of the scan. The seed's activity link is additive and
+does not rewrite reviewed fixture data.
+
+
+The `linked-face-states` entry point opens Irena Evidence with Automatic, Manual
+and Verified link states selected. The compact assignment row uses text colors from the same
+shared palette as annotation badges elsewhere: blue for Automatic, amber for
+Manual, green for Verified, and muted for Unassigned, with the standard light/dark
+variants. State rows have no background tint. Face selection keeps its separate highlight. This scenario reuses the
+existing linked faces and local media; its repository test checks the URL state
+filter against actual detections, resolves their media and preserves them on rerun.
+
+The `person-evidence-cards` entry point shows all four Irena Evidence faces,
+including three assignment states, libraries and importer/reviewer attribution.
+Faces uses the same compact card spacing, shape and library color as Discover:
+the first row below the photo is assignment icon/state plus `conf` (detection
+confidence), followed by library plus truncated document ID and last-change/user rows. Cards do not show
+raw detection/page IDs, matching labels, image status badges or reserved
+empty details blocks. Source links still open the correct page with its face
+selected, and verification attribution remains available on the assignment row.
+Editor names are plain text; a TODO in `AnnotationLastChange.vue` defers user links
+until the user tab exists.
+The additive `person-face-style-comparison` entry point opens the same identity's
+Discover tab; switch to Faces to compare the card presentation and select faces
+for verification/unassignment. Verify selected uses a green outline; Unassign
+selected uses a red outline, with the same behavior in light/dark themes.
+Existing source identities, records/media and
+review edits are reused. The normal **People** breadcrumb forwards the current
+shared evidence filters; it does not restore a saved source URL. Shared evidence criteria populate the
+actual controls, while resource-specific processing and search settings remain
+separate. These entry points reuse existing
+stable records/media and never reset checkpoints or reviewer edits. Integration
+coverage resolves every source/media link, checks attributed annotation records
+and page/document statistics through repositories, and verifies an unchanged rerun.
 
 ### Scan editor viewport focus (issue #34)
 

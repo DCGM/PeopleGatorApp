@@ -179,6 +179,15 @@ def _ref(obj: _StoredObject, name: str, required: bool = False) -> uuid.UUID | N
     return result
 
 
+def _require_postgres_for_evidence(f, *, allow_document_scope=False):
+    if f is not None and not is_missing(f) and any(
+        not is_missing(getattr(f, field)) for field in (
+            "evidence_library", "evidence_source_id", "evidence_touched_from", "evidence_touched_to",
+            "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
+            *(() if allow_document_scope else ("document_source_id",)))):
+        raise NotImplementedError("Annotation edit filters require PostgreSQL")
+
+
 def _props(
     model: BaseModel, exclude: set[str] | None = None
 ) -> dict[str, WeaviateField]:
@@ -796,6 +805,7 @@ class WeaviateEntityRepository(EntityRepository):
         )
         if not is_missing(query.filter_) and (not is_missing(query.filter_.entity_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.entity_id))
+        _require_postgres_for_evidence(query.filter_, allow_document_scope=True)
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -1074,6 +1084,7 @@ class WeaviateSourceRepository(SourceRepository):
         )
         if not is_missing(query.filter_) and (not is_missing(query.filter_.source_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.source_id))
+        _require_postgres_for_evidence(query.filter_)
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -1281,6 +1292,7 @@ class WeaviateFaceRepository(FaceRepository):
         return None if o is None else _parse_face(o)
 
     def filters(self, f: FaceListFilter | MissingType | None) -> list[FilterReturn]:
+        _require_postgres_for_evidence(f)
         if f is None or is_missing(f):
             return []
         r: list[FilterReturn] = []
@@ -1406,6 +1418,7 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         return None if o is None else _parse_mention(o)
 
     async def list(self, query: TextMentionListRequest) -> TextMentionListResponse:
+        _require_postgres_for_evidence(query.filter_)
         fs = (
             []
             if is_missing(query.filter_)
@@ -1603,6 +1616,7 @@ async def _basic_search[F: FoundItemBase](
         filters = WeaviateFaceRepository(client).filters(q.filter_)
     elif n == ENTITY_COLLECTION and q.filter_ is not None:
         f = q.filter_
+        _require_postgres_for_evidence(f, allow_document_scope=True)
         filters = _direct(
             f,
             {

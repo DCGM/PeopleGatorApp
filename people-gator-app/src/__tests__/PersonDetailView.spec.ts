@@ -81,8 +81,19 @@ describe('PersonDetailView', () => {
 
     const wrapper = mount(PersonDetailView, {
       global: {
-        plugins: [router], stubs: { RouterLink: RouterLinkStub, VerifyEntityLink: true } },
+        plugins: [router],
+        stubs: {
+          RouterLink: RouterLinkStub,
+          VerifyEntityLink: true,
+          PersonFacesPanel: true,
+          EvidenceFilterControls: true,
+          EvidenceFilterTags: true,
+        },
+      },
     })
+    expect(
+      wrapper.get('[aria-label="Person evidence panel"]').element.closest('template'),
+    ).toBeNull()
     const mentionLink = wrapper.findAllComponents(RouterLinkStub).find((link) => {
       const target = link.props('to')
       return typeof target !== 'string' && target?.name === 'document-page'
@@ -90,13 +101,17 @@ describe('PersonDetailView', () => {
 
     const stats = wrapper.get('aside[aria-label="Person statistics"]')
     expect(stats.text()).toContain('Last processed')
-    expect(stats.text()).not.toContain('No processing recorded')
-    await stats.get('button[aria-label="Show processing information"]').trigger('click')
     expect(stats.text()).toContain('No processing recorded')
+    expect(stats.get('details').attributes('open')).toBeDefined()
+    expect(
+      stats.get('button[aria-label="Hide processing information"]').attributes('aria-expanded'),
+    ).toBe('true')
+    await stats.get('button[aria-label="Hide processing information"]').trigger('click')
+    expect(stats.text()).not.toContain('No processing recorded')
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
-      query: { selectedPerson: 'person-ada' },
+      query: expect.objectContaining({ selectedPerson: 'person-ada' }),
     })
   })
 })

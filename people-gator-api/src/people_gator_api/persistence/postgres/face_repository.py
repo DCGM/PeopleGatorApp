@@ -63,7 +63,7 @@ from people_gator_api.persistence.postgres.utils import (
     validate_face_embeddings,
 )
 
-from .touch import touch_entities, touch_sources, lock_annotation_graph
+from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
 
 class PostgresFaceRepository(FaceRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -120,6 +120,8 @@ class PostgresFaceRepository(FaceRepository):
     def _new(payload: FaceCreateRequest, context: GenericActor) -> Face:
         embeddings = missing_to_none(payload.embeddings)
         face = Face(
+            **creation_values(context),
+            **touch_values(context),
             source_id=payload.source_id,
             entity_id=missing_to_none(payload.entity_id),
             entity_link_state=create_link_state(payload),
@@ -265,6 +267,7 @@ class PostgresFaceRepository(FaceRepository):
             if embeddings_changed:
                 self._apply_embeddings(face, command)
             if link_changed or embeddings_changed:
+                apply_touch(face, context)
                 touched.update([old_entity_id, face.entity_id])
                 sources.add(face.source_id)
         await touch_entities(self._session, touched, context)

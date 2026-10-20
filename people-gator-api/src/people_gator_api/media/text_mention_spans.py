@@ -65,6 +65,7 @@ async def get_text_mention_spans(
     document_id: uuid.UUID,
     page_id: uuid.UUID,
     entity_link_state: list[EntityLinkState] | MissingType = MISSING,
+    filter_: TextMentionListFilter | None = None,
 ) -> list[TextMentionSpanModel]:
     """Return fuzzy, word-aligned spans for a page's stored text mentions."""
     layout = await get_page_layout(
@@ -72,7 +73,7 @@ async def get_text_mention_spans(
         document_id,
         page_id,
     )
-    mentions = await _fetch_text_mentions(database, page_source_id, entity_link_state)
+    mentions = await _fetch_text_mentions(database, page_source_id, entity_link_state, filter_)
     return _match_text_mention_spans(layout, mentions)
 
 
@@ -80,6 +81,7 @@ async def _fetch_text_mentions(
     database: Database,
     page_source_id: uuid.UUID,
     entity_link_state: list[EntityLinkState] | MissingType = MISSING,
+    filter_: TextMentionListFilter | None = None,
 ) -> list[_TextMentionText]:
     """Fetch every text mention linked to the requested page source."""
     mentions: list[_TextMentionText] = []
@@ -87,7 +89,7 @@ async def _fetch_text_mentions(
     while True:
         response = await database.text_mentions.list(
             TextMentionListRequest(
-                filter_=TextMentionListFilter(source_id=[page_source_id], entity_link_state=entity_link_state),
+                filter_=(filter_.model_copy(update={"source_id": [page_source_id]}) if filter_ is not None else TextMentionListFilter(source_id=[page_source_id], entity_link_state=entity_link_state)),
                 limit=_TEXT_MENTION_PAGE_SIZE,
                 cursor=cursor,
             )

@@ -40,8 +40,8 @@ controls use the browser's local timezone. Filter changes select a new query
 cache entry and start from its first page. Individual chips and Clear all filters
 remove filters while preserving the text query.
 
-Person details include a collapsed Last processed row in the statistics sidebar.
-Expand it to see the timestamp in the browser's local timezone (including seconds
+Person details include an expanded Last processed row in the statistics sidebar.
+It shows the timestamp in the browser's local timezone (including seconds
 and timezone), the last user's display name,
 and the API-key name/identifier when present. Hovering the timestamp shows its
 original UTC value; actor labels expose their IDs on hover and fall back to IDs
@@ -61,3 +61,34 @@ Then run from `people-gator-app`:
 ```sh
 npm run openapi-ts -- --input /tmp/people-gator-openapi.json
 ```
+
+## Annotation criteria versus resource processing (#31)
+
+All entity, source projection, face and text-mention list/search filters now
+share these evidence criteria (prefix with `filter.` over HTTP):
+
+| Field | Meaning |
+| --- | --- |
+| `entity_link_state` | OR of Automatic, Manual, Verified assignment states |
+| `evidence_library` | Library of the annotation's direct document/page source |
+| `document_source_id` | Internal registered document source UUID, including its direct evidence and pages in the same library/document |
+| `evidence_source_id` | Exact annotation source UUIDs |
+| `evidence_touched_from`, `evidence_touched_to` | Inclusive, timezone-aware annotation-change bounds, normalized to UTC |
+| `evidence_touched_by_user_id`, `evidence_touched_by_api_key_id` | Last annotation editor / registered key, independent of owner and verifier |
+
+Different fields combine with AND; repeated values with OR. The same annotation
+must satisfy every evidence criterion. Documents match containing annotations;
+entities match assigned annotations; face/mention collections return those
+annotations. Filtering and counts precede pagination; cursors include all criteria.
+An explicit assigned-faces/mentions choice requires a matching annotation of that
+kind. Null historical times cannot satisfy edit bounds/actors. Empty selections
+are omitted; malformed/inverted/naive time bounds return 422.
+
+Unprefixed `last_touched_*` still describes the selected **resource** (person or
+source processing). It never becomes an annotation bound when navigating.
+New records capture server creation/ingestion time and actor separately from
+annotation edits; detector execution time is not inferred. Historical creation
+and change metadata remain null when not recorded. Material annotation changes,
+including merges/unassignments/embedding edits, update annotation time and actor.
+Identical writes and reads do not. JWT changes clear previous API-key attribution.
+Creation/import attribution stays unchanged when an annotation is reviewed.

@@ -70,7 +70,7 @@ function clear() {
           <label :for="timeId">Time (local)</label>
           <Input
             :id="timeId"
-            :model-value="time"
+            :model-value="time.replace(/(\.\d{3})\d+$/, '$1')"
             type="time"
             step="0.001"
             :disabled="!date"

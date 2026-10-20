@@ -110,9 +110,9 @@ describe('people filter controls and URL restoration', () => {
     await flushPromises()
     expect(wrapper.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="API keys"]').exists()).toBe(true)
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.find('button[aria-label="Person record users"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Person record API keys"]').exists()).toBe(true)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
@@ -131,7 +131,7 @@ describe('people filter controls and URL restoration', () => {
     await flushPromises()
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Users"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Person record users"]').exists()).toBe(true)
     desktopViewport.value = false
     await flushPromises()
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(false)
@@ -148,10 +148,10 @@ describe('people filter controls and URL restoration', () => {
       touched_by: 'user-1',
       api_key: 'api-key-1',
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
     expect(wrapper.text()).toContain('Document: document One')
-    expect(wrapper.text()).toContain('User: user One')
-    expect(wrapper.text()).toContain('API key: api-key One')
+    expect(wrapper.text()).toContain('Person record user: user One')
+    expect(wrapper.text()).toContain('Person record API key: api-key One')
     const remove = wrapper
       .findAll('button')
       .find((button) => button.attributes('aria-label') === 'Remove Document: document One')!
@@ -185,7 +185,7 @@ describe('people filter controls and URL restoration', () => {
       query: { touched_by: 'user-2', touched_to: '2026-01-02T12:00:00Z' },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('User: user Two')
+    expect(wrapper.text()).toContain('Person record user: user Two')
     expect(wrapper.findAllComponents(FilterDateTimePicker)[1]!.get('button').text()).not.toContain(
       'Pick date and time',
     )
@@ -240,7 +240,7 @@ describe('people filter controls and URL restoration', () => {
   })
   it('keeps server search results selectable by keyboard and supports removing selections', async () => {
     const { wrapper, router } = await mountedView()
-    const trigger = wrapper.get('button[aria-label="Users"]')
+    const trigger = wrapper.get('button[aria-label="Person record users"]')
     await trigger.trigger('click')
     await flushPromises()
     const search = body().get<HTMLInputElement>('input[role="combobox"]')
@@ -268,11 +268,11 @@ describe('people filter controls and URL restoration', () => {
     })
     const controls = wrapper.get('[aria-label="Search people filter controls"]')
     expect(controls.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
-    for (const label of ['Documents', 'Users', 'API keys'])
+    for (const label of ['Documents', 'Person record users', 'Person record API keys'])
       expect(controls.find(`button[aria-label="${label}"]`).exists()).toBe(true)
     expect(wrapper.find('[data-slot="collapsible-trigger"]').exists()).toBe(false)
     expect(wrapper.get('[aria-label="Active filters"]').text()).toContain('Assigned faces')
-    await wrapper.get('button[aria-label="Remove User: user One"]').trigger('click')
+    await wrapper.get('button[aria-label="Remove Person record user: user One"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()
     expect(router.currentRoute.value.query.assignment).toBe('faces')
@@ -284,8 +284,39 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-03T12:00:00Z',
       touched_to: '2026-01-01T12:00:00Z',
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
     expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
+    wrapper.unmount()
+  })
+  it('has one clear-all action for resource/evidence filters and preserves originating search context', async () => {
+    const { wrapper, router } = await mountedView({
+      q: 'Irena',
+      touched_from: '2026-01-01T00:00:00Z',
+      link_state: 'verified',
+      evidence_key: '00000000-0000-4000-8000-000000000001',
+      origin_text: 'archive',
+      origin_return: '/documents?q=archive',
+      origin_source_touched_from: '2025-01-01T00:00:00Z',
+    })
+    expect(
+      wrapper.findAll('button').filter((button) => button.text() === 'Clear all filters'),
+    ).toHaveLength(1)
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Clear all filters')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({
+      q: 'Irena',
+      origin_text: 'archive',
+      origin_return: '/documents?q=archive',
+      origin_source_touched_from: '2025-01-01T00:00:00Z',
+    })
+    expect(
+      wrapper.findAll('button').filter((button) => button.text() === 'Clear all filters'),
+    ).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('Origin ·')
+    expect(wrapper.text()).not.toContain('Return to originating view')
     wrapper.unmount()
   })
 })

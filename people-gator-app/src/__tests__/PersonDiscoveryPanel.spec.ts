@@ -151,7 +151,7 @@ describe('PersonDiscoveryPanel', () => {
     expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-face-match' },
-      query: { person: 'face-match' },
+      query: { person: 'face-match', origin_matched_face: 'face-match' },
     })
   })
 
@@ -202,6 +202,7 @@ describe('PersonDiscoveryPanel', () => {
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
       name: 'person-detail',
       params: { personId: 'ada-king' },
+      query: {},
     })
     expect(wrapper.text()).toContain('Face')
     expect(wrapper.text()).toContain('Name')
