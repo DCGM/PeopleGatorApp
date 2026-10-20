@@ -389,6 +389,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "linked-face-states": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "link_state": ["automatic", "manual", "verified"],
             }, doseq=True),
+            # Ada Review's sidebar shows automatic/verified counts beside a zero
+            # manual count and her recorded last change (#43).
+            "person-last-change": f"/people/{manifest.entities['link-ada']}",
             "document-pages-without-annotations": "/documents?" + urlencode({
                 "q": "Příběhy archivářů",
             }),

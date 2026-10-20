@@ -1887,3 +1887,23 @@ async def test_viewport_focus_targets_and_repeated_occurrences(seed_target):
     assert stored.entity_id == result.entities["lenka"]
     assert stored == reviewed
     assert (await database.entities.get(result.entities["lenka"])).last_touched_at == reviewed_person.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_person_last_change_example_shows_mixed_annotation_states(seed_target):
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    example = urlsplit(seed.filter_examples['person-last-change'])
+    assert example.path == f"/people/{seed.entities['link-ada']}"
+    person = await db.entities.get(seed.entities['link-ada'])
+    stats = person.entity_link_stats
+    for counts in (stats.faces, stats.mentions):
+        assert counts.automatic == 1 and counts.manual == 0 and counts.verified == 1
+        assert counts.total == 2
+    assert person.last_touched_at is not None
+    editor = await db.users.get(person.last_touched_by_user_id)
+    assert editor.display_name
+    for _ in range(2):
+        rerun = await preview.seed_preview(db, filesystem)
+        assert rerun.filter_examples['person-last-change'] == seed.filter_examples['person-last-change']
+        assert await db.entities.get(seed.entities['link-ada']) == person
