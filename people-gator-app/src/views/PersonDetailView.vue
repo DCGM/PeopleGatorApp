@@ -218,14 +218,9 @@ function selectTab(tab: string | number) {
 
         <TabsContent
           value="faces"
-          class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+          class="grid grid-cols-2 gap-3 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         >
-          <PersonFacesPanel
-            :key="personId"
-            :faces="faces"
-            :person-name="profile.name"
-            :matching-face-ids="matchingFaceIds"
-          />
+          <PersonFacesPanel :key="personId" :faces="faces" :person-name="profile.name" />
           <PersonFaceCardSkeleton v-if="faceLoading" />
           <div class="col-span-full text-sm">
             <p v-if="faceError" role="alert">

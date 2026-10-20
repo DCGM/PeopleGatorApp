@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import { ChevronRight } from '@lucide/vue'
+import { linkStateVisuals, linkTooltip } from '@/lib/entity-links'
 import AnnotationLastChange from './AnnotationLastChange.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import LoadableImage from './LoadableImage.vue'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
 import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Item } from '@/components/ui/item'
 
 const props = defineProps<{
   face: PersonFace
   personName: string
-  matching?: boolean
   selectable?: boolean
   selected?: boolean
   selectionEnabled?: boolean
@@ -22,10 +21,7 @@ const props = defineProps<{
 }>()
 defineEmits<{ toggle: [event: MouseEvent]; add: [event: MouseEvent] }>()
 const route = useRoute()
-const source = computed(
-  () =>
-    `${props.face.library} · ${props.face.documentId} · ${props.face.pageId || 'Page unavailable'}`,
-)
+const assignment = computed(() => linkStateVisuals[props.face.linkState ?? 'unassigned'])
 const sourceTarget = computed(() =>
   props.face.pageId
     ? {
@@ -42,9 +38,9 @@ const sourceTarget = computed(() =>
 </script>
 
 <template>
-  <Card
-    class="relative min-w-0 gap-0 overflow-hidden py-0"
-    :class="selected && 'border-secondary bg-secondary/20'"
+  <Item
+    class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
+    :class="selected && 'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'"
     data-person-face-card
   >
     <button
@@ -65,56 +61,54 @@ const sourceTarget = computed(() =>
     <component
       :is="sourceTarget && !selectionEnabled ? 'RouterLink' : 'div'"
       :to="!selectionEnabled ? sourceTarget : undefined"
-      class="group block min-w-0"
+      class="group block min-w-0 space-y-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      :aria-label="
+        sourceTarget && !selectionEnabled
+          ? `Open ${personName} face on its source document`
+          : undefined
+      "
     >
-      <div class="relative">
-        <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
-          <LoadableImage
-            :src="face.portrait"
-            :loading="face.portraitLoading"
-            :alt="`${personName} detection in ${face.documentId}`"
-            class="size-full"
-            image-class="object-cover grayscale duration-300 ease-out group-hover:scale-105"
-          />
-        </AspectRatio>
-        <Badge
-          v-if="matching"
-          class="absolute left-2 top-2 max-w-[calc(100%-4rem)]"
-          variant="secondary"
-          >Matching detection</Badge
+      <AspectRatio :ratio="1" class="overflow-hidden bg-muted">
+        <LoadableImage
+          :src="face.portrait"
+          :loading="face.portraitLoading"
+          :alt="`${personName} face`"
+          class="size-full"
+          image-class="object-cover grayscale duration-300 ease-out group-hover/face:scale-105 group-focus-within/face:scale-102"
+        />
+      </AspectRatio>
+      <p
+        class="flex min-w-0 items-center gap-1 text-sm"
+        :class="face.linkState ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'"
+        :title="linkTooltip(face)"
+        :aria-label="linkTooltip(face)"
+        data-face-assignment
+      >
+        <component :is="assignment.icon" class="size-4 shrink-0" aria-hidden="true" />
+        <b class="min-w-0 flex-1 truncate">{{ assignment.label }}</b>
+        <code
+          class="ml-auto shrink-0 text-sm text-muted-foreground"
+          :title="`Detection confidence: ${face.confidence}%`"
+          >conf {{ face.confidence }}%</code
         >
-        <EntityLinkStateBadge
-          v-bind="face"
-          :focusable="false"
-          class="absolute bottom-2 right-2 max-w-[calc(100%-1rem)]"
+      </p>
+      <div class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground" data-face-source>
+        <b class="min-w-0 flex-1 truncate text-secondary" :title="face.library">{{
+          face.library
+        }}</b>
+        <ChevronRight
+          v-if="sourceTarget"
+          class="size-4 shrink-0 transition-transform group-hover/face:translate-x-1"
+          aria-hidden="true"
         />
       </div>
-      <CardContent class="px-3 pt-3">
-        <small
-          class="block h-20 overflow-y-auto break-words leading-4 [overflow-wrap:anywhere]"
-          :title="source"
-          data-face-source
-          >{{ source }}</small
-        >
-        <small class="mt-2 flex min-w-0 items-baseline justify-between gap-2 text-muted-foreground">
-          <span class="min-w-0 truncate" :title="`Detection ID: ${face.id}`">{{ face.id }}</span>
-          <span class="shrink-0" :title="`Detection confidence: ${face.confidence}%`"
-            >{{ face.confidence }}%</span
-          >
-        </small>
-      </CardContent>
     </component>
-    <CardFooter class="block px-3 pb-3 pt-2">
-      <AnnotationLastChange
-        :touched-at="face.metadata?.last_touched_at"
-        :user-id="face.metadata?.last_touched_by_user_id"
-        class="h-10"
-      />
-      <div class="mt-2 h-6 overflow-y-auto">
-        <p v-if="!face.pageId" class="text-xs text-muted-foreground" role="status">
-          {{ face.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
-        </p>
-      </div>
-    </CardFooter>
-  </Card>
+    <AnnotationLastChange
+      :touched-at="face.metadata?.last_touched_at"
+      :user-id="face.metadata?.last_touched_by_user_id"
+    />
+    <p v-if="!face.pageId" class="text-xs text-muted-foreground" role="status">
+      {{ face.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
+    </p>
+  </Item>
 </template>

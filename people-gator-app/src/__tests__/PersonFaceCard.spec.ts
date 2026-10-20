@@ -27,7 +27,7 @@ const face: PersonFace = {
 }
 
 describe('person evidence cards', () => {
-  it('keeps the complete source together, overlays status and separates editor/source links with retained scope', async () => {
+  it('shows compact assignment, library and editor rows while retaining source navigation and verification attribution', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -42,16 +42,22 @@ describe('person evidence cards', () => {
     })
     await router.push('/people/person?evidence_origin=authority&origin_text=Irena')
     const wrapper = mount(PersonFaceCard, {
-      props: { face, personName: 'Irena', matching: true },
+      props: {
+        face: { ...face, verifiedBy: 'verifier', verifiedAt: '2026-10-20T09:00:00Z' },
+        personName: 'Irena',
+      },
       global: { plugins: [router], stubs: { VerifyEntityLink: true } },
     })
-    expect(wrapper.get('[data-face-source]').text()).toBe(
-      'preview-library · document-identifier · page-identifier',
+    expect(wrapper.get('[data-face-source]').text()).toBe('preview-library')
+    expect(wrapper.get('[data-face-assignment]').text()).toBe('Verifiedconf 99%')
+    expect(wrapper.get('[data-face-assignment]').attributes('aria-label')).toContain(
+      'Verified by verifier',
     )
-    expect(wrapper.get('[data-face-status-badge]').attributes('class')).toContain(
-      'bottom-2 right-2',
-    )
-    expect(wrapper.text()).toContain('Matching detection')
+    expect(wrapper.text()).not.toContain('Matching detection')
+    expect(wrapper.text()).not.toContain('document-identifier')
+    expect(wrapper.text()).not.toContain('page-identifier')
+    expect(wrapper.text()).not.toContain('Detection ID')
+    expect(wrapper.find('[data-face-status-badge]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Last changed')
     expect(wrapper.text()).toContain('Preview reviewer')
     expect(wrapper.find('details').exists()).toBe(false)

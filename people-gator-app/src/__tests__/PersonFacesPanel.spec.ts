@@ -50,7 +50,7 @@ async function render() {
   await router.push('/people/person')
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   const wrapper = mount(PersonFacesPanel, {
-    props: { faces, personName: 'Irena', matchingFaceIds: [] },
+    props: { faces, personName: 'Irena' },
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
   })
   cleanup.push(() => {

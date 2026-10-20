@@ -1591,6 +1591,9 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
     seed = await preview.seed_preview(db, filesystem)
     cards = urlsplit(seed.filter_examples['person-evidence-cards'])
     person_id = seed.entities['provenance-review']
+    comparison = urlsplit(seed.filter_examples['person-face-style-comparison'])
+    assert comparison.path == cards.path
+    assert parse_qs(comparison.query) == {'tab': ['discover']}
     assert cards.path == f'/people/{person_id}'
     assert parse_qs(cards.query) == {
         'origin_matched_face': [str(seed.faces['provenance-authority'])],
@@ -1604,6 +1607,7 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
         seed.users['importer'], seed.users['reviewer'],
     }
     for face in faces:
+        assert face.confidence is not None and 0 <= face.confidence <= 1
         assert face.last_touched_at is not None
         page = await db.sources.get_page(face.source_id)
         assert page is not None and page.library and page.document_id and page.page_id

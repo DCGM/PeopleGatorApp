@@ -337,12 +337,19 @@ does not rewrite reviewed fixture data.
 
 
 The `person-evidence-cards` entry point shows all four Irena Evidence faces,
-including a matching-detection overlay, three assignment states, two complete
-library/document/page references and the importer/reviewer attribution. The
-cards have equal dimensions, a bottom-right status overlay and an always-visible
-last-change row; editor links open people search filtered by that annotation
-editor. Detection origin is retained in data/filtering but has no disclosure on
-the card. The top-bar **Back to People search · “Irena”** link restores the saved
+including three assignment states, libraries and importer/reviewer attribution.
+Faces uses the same compact card spacing, shape and library color as Discover:
+the first row below the photo is assignment icon/state plus `conf` (detection
+confidence), followed by the library and last-change/user rows. Cards do not show
+raw detection/document/page IDs, matching labels, image status badges or reserved
+empty details blocks. Source links still open the correct page with its face
+selected, and verification attribution remains available on the assignment row.
+Editor links open people search filtered by that annotation editor.
+The additive `person-face-style-comparison` entry point opens the same identity's
+Discover tab; switch to Faces to compare the card presentation and select faces
+for verification/unassignment. Existing source identities, records/media and
+review edits are reused. Detection origin is retained in data/filtering but has
+no disclosure on the card. The top-bar **Back to People search · “Irena”** link restores the saved
 search; raw origin metadata is not rendered as filter tags. Shared evidence
 criteria populate the actual controls, while resource-specific processing and
 search settings stay in their saved return URL. These entry points reuse existing

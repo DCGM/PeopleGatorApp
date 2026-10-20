@@ -8,7 +8,7 @@ import SelectedFaceActions from './SelectedFaceActions.vue'
 import { useCanAnnotate } from '@/composables/can-annotate'
 import { useReviewFacesMutation } from '@/query/faces'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
-const props = defineProps<{ faces: PersonFace[]; personName: string; matchingFaceIds: string[] }>()
+const props = defineProps<{ faces: PersonFace[]; personName: string }>()
 const allowed = useCanAnnotate()
 const mutation = useReviewFacesMutation()
 const route = useRoute()
@@ -71,7 +71,7 @@ watch(
 </script>
 <template>
   <div
-    class="col-span-full grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+    class="col-span-full grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
     :class="selected.length > 0 && 'pb-40 sm:pb-24'"
   >
     <p v-if="allowed && faces.length" class="col-span-full text-sm text-muted-foreground">
@@ -90,7 +90,6 @@ watch(
       :key="face.id"
       :face="face"
       :person-name="personName"
-      :matching="matchingFaceIds.includes(face.id)"
       :selectable="allowed"
       :selected="selectedIds.has(face.id)"
       :selection-enabled="selected.length > 0"

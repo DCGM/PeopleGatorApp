@@ -401,6 +401,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Adding entry points never rewrites reviewer edits or checkpoints.
             # Existing mixed-state faces exercise bulk verification/unassignment;
             # this entry point changes no persisted evidence on retained previews.
+            # Compare the compact Faces and Discover cards on the same identity.
+            "person-face-style-comparison": f"/people/{manifest.entities['provenance-review']}?tab=discover",
             "person-face-review": f"/people/{manifest.entities['provenance-review']}",
             "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "origin_matched_face": manifest.faces["provenance-authority"],
