@@ -7,7 +7,6 @@ import {
   evidenceUrlError,
   readEvidenceFilters,
   relatedEvidenceQuery,
-  returnLocation,
 } from '@/viewmodels/evidence-filters'
 const doc = '00000000-0000-4000-8000-000000000001'
 const actor = '00000000-0000-4000-8000-000000000002'
@@ -61,14 +60,18 @@ describe('shared annotation filters and scoped navigation', () => {
     expect(fromDocument).not.toHaveProperty('q')
     expect(fromDocument).not.toHaveProperty('cursor')
     expect(fromDocument.origin_text).toBe('Irena')
-    expect(String(fromDocument.origin_return)).not.toContain('cursor')
+    expect(fromDocument).not.toHaveProperty('origin_return')
     const fromPerson = relatedEvidenceQuery({
       name: 'person-detail',
       path: '/people/irena',
-      query: { ...fromDocument, evidence_origin: 'automatic' },
+      query: {
+        ...fromDocument,
+        evidence_origin: 'automatic',
+        origin_return: '/documents?evidence_origin=authority',
+      },
     }) as LocationQuery
     expect(fromPerson.evidence_origin).toEqual(['automatic'])
-    expect(fromPerson.origin_return).toBe(fromDocument.origin_return)
+    expect(fromPerson).not.toHaveProperty('origin_return')
     expect(
       evidenceFiltersQuery(readEvidenceFilters(fromPerson))['filter.evidence_touched_by_user_id'],
     ).toEqual([actor])
@@ -95,7 +98,7 @@ describe('shared annotation filters and scoped navigation', () => {
       'filter.evidence_touched_by_user_id',
     )
   })
-  it('defines recoverable invalid bounds, selections and internal return links', () => {
+  it('defines recoverable invalid bounds and selections', () => {
     expect(evidenceUrlError({ ...shared, evidence_from: 'not-a-date' })).toContain(
       'Invalid annotation date',
     )
@@ -104,7 +107,5 @@ describe('shared annotation filters and scoped navigation', () => {
     )
     expect(evidenceUrlError({ evidence_user: 'missing' })).toContain('Invalid evidence identifier')
     expect(evidenceUrlError({ evidence_origin: 'verified' })).toContain('Invalid evidence origin')
-    expect(returnLocation({ origin_return: '//example.invalid' })).toBeUndefined()
-    expect(returnLocation({ origin_return: '/people?q=Irena' })).toBe('/people?q=Irena')
   })
 })

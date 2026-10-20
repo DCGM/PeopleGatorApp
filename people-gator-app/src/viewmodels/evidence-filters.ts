@@ -156,7 +156,7 @@ export function useEvidenceFilters() {
 }
 
 // Resource-specific predicates travel as explicitly scoped context. They are never
-// reinterpreted as annotation edits. The return path is internal and cursor-free.
+// reinterpreted as annotation edits. Related views use normal application navigation.
 export function relatedEvidenceQuery(
   route: Pick<RouteLocationNormalizedLoaded, 'name' | 'query' | 'path'> | undefined,
   extra: LocationQueryRaw = {},
@@ -165,18 +165,7 @@ export function relatedEvidenceQuery(
   const query = route.query
   const result: LocationQueryRaw = { ...sharedEvidenceUrl(query) }
   for (const [key, value] of Object.entries(query))
-    if (key.startsWith('origin_')) result[key] = value
-  if (!result.origin_return) {
-    const clean = Object.fromEntries(Object.entries(query).filter(([key]) => key !== 'cursor'))
-    result.origin_return =
-      route.path +
-      (Object.keys(clean).length
-        ? '?' +
-          new URLSearchParams(
-            Object.entries(clean).flatMap(([k, v]) => queryValues(v).map((x) => [k, x])),
-          ).toString()
-        : '')
-  }
+    if (key.startsWith('origin_') && key !== 'origin_return') result[key] = value
   if (typeof query.q === 'string' && query.q) result.origin_text = query.q
   const scope =
     route.name === 'people-search'
@@ -209,13 +198,4 @@ export function relatedEvidenceQuery(
     result.evidence_library = queryValues(query.library)
   if (route.name === 'people-search' && query.assignment === 'mentions') result.tab = 'mentions'
   return { ...result, ...extra }
-}
-export function returnLocation(query: LocationQuery): string | undefined {
-  const path = query.origin_return
-  return typeof path === 'string' &&
-    path.startsWith('/') &&
-    !path.startsWith('//') &&
-    !path.includes(String.fromCharCode(92))
-    ? path
-    : undefined
 }

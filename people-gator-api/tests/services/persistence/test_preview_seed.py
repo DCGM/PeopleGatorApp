@@ -1597,7 +1597,7 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
     assert cards.path == f'/people/{person_id}'
     assert parse_qs(cards.query) == {
         'origin_matched_face': [str(seed.faces['provenance-authority'])],
-        'origin_text': ['Irena'], 'origin_return': ['/people?q=Irena'],
+        'origin_text': ['Irena'],
     }
     faces = (await db.faces.list(FaceListRequest(
         limit=100, filter_=FaceListFilter(entity_id=[person_id]),
@@ -1630,6 +1630,42 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
     assert rerun == seed
     for face in faces:
         assert await db.faces.get(face.detection_id) == face
+
+
+@pytest.mark.asyncio
+async def test_shared_filter_navigation_uses_current_annotation_key(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    example = urlsplit(seed.filter_examples['shared-filter-navigation'])
+    query = parse_qs(example.query)
+    assert example.path == '/people'
+    assert query == {'q': ['Irena'], 'evidence_key': [str(seed.api_keys['importer'])]}
+    people = await db.entities.search(SearchEntitiesRequest(limit=100,
+        query=QueryBase(text=query['q']),
+        filter_=EntityListFilter(evidence_touched_by_api_key_id=query['evidence_key']),
+    ))
+    assert [person.entity_id for person in people.items] == [seed.entities['provenance-review']]
+    faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        entity_id=[people.items[0].entity_id], evidence_touched_by_api_key_id=query['evidence_key'],
+    )))
+    assert seed.faces['provenance-auto'] in {face.detection_id for face in faces.items}
+    changed = await db.entities.search(SearchEntitiesRequest(limit=100,
+        query=QueryBase(text=query['q']),
+        filter_=EntityListFilter(evidence_touched_by_api_key_id=[seed.api_keys['ocr']]),
+    ))
+    assert not changed.items
+    cleared = await db.faces.list(FaceListRequest(limit=100,
+        filter_=FaceListFilter(entity_id=[seed.entities['provenance-review']]),
+    ))
+    assert len(cleared.items) > len(faces.items)
+    before = {face.detection_id: face for face in cleared.items}
+    for _ in range(2):
+        rerun = await preview.seed_preview(db, filesystem)
+        assert rerun.filter_examples['shared-filter-navigation'] == seed.filter_examples['shared-filter-navigation']
+        for detection_id, face in before.items():
+            assert await db.faces.get(detection_id) == face
 
 
 @pytest.mark.asyncio

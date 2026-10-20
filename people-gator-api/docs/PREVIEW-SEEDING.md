@@ -312,6 +312,14 @@ opening the scan must not silently add an evidence-source filter. Explicitly
 selected annotation filters still apply. Repository coverage checks candidate
 lookup, reassignment, local media and twice-run preservation of the review edit.
 
+The `shared-filter-navigation` example searches for Irena with the importer API
+key selected. Open her profile, change that key or clear it, then use the normal
+**People** breadcrumb. The destination must use the current filters rather than
+restore the original key. Profiles use the standard breadcrumb hierarchy; no
+custom source/return breadcrumb is shown, including for older URLs containing
+`origin_return`. Seed tests check real key-filtered people/faces, changed-key
+empty results, clearing and twice-run preservation of annotation metadata.
+
 Search for **Irena Evidence**. This new, checkpointed synthetic identity was
 imported from a synthetic authority; its reference is deliberately under
 `preview.invalid`. Its faces in **Evidence provenance ledger** (`preview-mzk`)
@@ -359,10 +367,11 @@ for verification/unassignment. Verify selected uses a green outline; Unassign
 selected uses a red outline, with the same behavior in light/dark themes.
 Existing source identities, records/media and
 review edits are reused. Detection origin is retained in data/filtering but has
-no disclosure on the card. The top-bar **Back to People search · “Irena”** link restores the saved
-search; raw origin metadata is not rendered as filter tags. Shared evidence
-criteria populate the actual controls, while resource-specific processing and
-search settings stay in their saved return URL. These entry points reuse existing
+no disclosure on the card. The normal **People** breadcrumb forwards the current
+shared evidence filters; it does not restore a saved source URL. Raw origin
+metadata is not rendered as filter tags. Shared evidence criteria populate the
+actual controls, while resource-specific processing and search settings remain
+separate. These entry points reuse existing
 stable records/media and never reset checkpoints or reviewer edits. Integration
 coverage resolves every source/media link, checks attributed annotation records
 and page/document statistics through repositories, and verifies an unchanged rerun.

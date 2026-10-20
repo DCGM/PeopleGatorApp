@@ -10,6 +10,7 @@ import DocumentPageOverlay from '../components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
 import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
+import { readEvidenceFilters } from '@/viewmodels/evidence-filters'
 
 const documentWorkspaceMock = vi.hoisted(() => ({
   faces: [] as Array<Record<string, unknown>>,
@@ -114,40 +115,45 @@ describe('App', () => {
     expect(wrapper.get('nav').text()).not.toContain('People Gator')
   })
 
-  it('replaces the generic People breadcrumb with the saved source view and its actual selections', async () => {
-    const saved =
-      '/people?q=Irena&link_state=verified&evidence_library=preview-mzk&touched_from=2025-01-01T00:00:00Z'
-    await router.push({
-      name: 'person-detail',
-      params: { personId: 'irena' },
-      query: {
-        origin_return: saved,
-        origin_text: 'Irena',
-        link_state: 'verified',
-        evidence_library: 'preview-mzk',
-      },
-    })
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
-    const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
-    expect(crumb.text()).toBe('Back to People search · “Irena”')
-    expect(crumb.attributes('href')).toBe(saved)
-    expect(wrapper.text()).not.toContain('Origin ·')
-    await crumb.trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.name).toBe('people-search')
-    expect(router.currentRoute.value.query).toEqual({
-      q: 'Irena',
-      link_state: 'verified',
-      evidence_library: 'preview-mzk',
-      touched_from: '2025-01-01T00:00:00Z',
-    })
-    await router.push({
-      name: 'person-detail',
-      params: { personId: 'irena' },
-      query: { origin_return: '/libraries/preview-mzk/documents/doc/pages/page?panel=activity' },
-    })
-    expect(wrapper.get('[aria-label="Breadcrumb"]').text()).toContain('Back to Source scan')
-  })
+  it.each(['00000000-0000-4000-8000-000000000002', undefined])(
+    'uses normal People navigation with the current key selection: %s',
+    async (currentKey) => {
+      const originalKey = '00000000-0000-4000-8000-000000000001'
+      await router.push({
+        name: 'person-detail',
+        params: { personId: 'irena' },
+        query: {
+          origin_return: `/people?q=Irena&evidence_key=${originalKey}`,
+          evidence_key: originalKey,
+          evidence_library: 'preview-mzk',
+        },
+      })
+      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      await router.push({ query: { ...router.currentRoute.value.query, evidence_key: currentKey } })
+      await flushPromises()
+      const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
+      expect(
+        wrapper
+          .get('[aria-label="Breadcrumb"]')
+          .findAll('a')
+          .map((link) => link.text()),
+      ).toEqual(['PeopleGator', 'People', 'irena'])
+      expect(crumb.attributes('href')).not.toContain('origin_return')
+      expect(wrapper.text()).not.toContain('Back to ')
+      await crumb.trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('people-search')
+      expect(readEvidenceFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
+        currentKey ? [currentKey] : [],
+      )
+      expect(readEvidenceFilters(router.currentRoute.value.query).libraries).toEqual([
+        'preview-mzk',
+      ])
+      expect(router.currentRoute.value.query).not.toHaveProperty('origin_return')
+      expect(router.currentRoute.value.query.q).toBeUndefined()
+      wrapper.unmount()
+    },
+  )
 
   it('renders floating document controls inside the viewer', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
@@ -226,7 +232,6 @@ describe('App', () => {
     expect(router.currentRoute.value.query).toEqual({
       library: 'library',
       document: 'document',
-      origin_return: '/libraries/library/documents/document/pages/page',
     })
     expect(wrapper.get('h1').text()).toBe('Document pages')
     await wrapper
@@ -236,7 +241,6 @@ describe('App', () => {
     expect(router.currentRoute.value.query).toEqual({
       library: 'library',
       document: 'document',
-      origin_return: '/libraries/library/documents/document/pages/page',
       q: 'archives',
     })
     await wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!.trigger('click')
@@ -244,7 +248,6 @@ describe('App', () => {
     expect(router.currentRoute.value.query).toEqual({
       library: 'library',
       evidence_library: ['library'],
-      origin_return: '/libraries/library/documents/document/pages/page',
       origin_text: 'archives',
     })
     expect(
@@ -491,7 +494,7 @@ describe('Scans and Documents navigation', () => {
     await router.push('/libraries/mzk/documents/album/pages/scan')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
-      '/scans?origin_return=/libraries/mzk/documents/album/pages/scan&library=mzk&document=album',
+      '/scans?library=mzk&document=album',
     )
     wrapper.unmount()
   })
@@ -519,7 +522,7 @@ describe('Scans and Documents navigation', () => {
     await router.push('/documents?library=a&library=b')
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
-      '/documents?evidence_library=a&evidence_library=b&origin_return=/documents?library=a%26library=b&library=a&library=b',
+      '/documents?evidence_library=a&evidence_library=b&library=a&library=b',
     )
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain(
       'evidence_library=a&evidence_library=b',

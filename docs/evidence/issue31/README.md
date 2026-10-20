@@ -6,13 +6,15 @@ shown. Desktop viewport: **1440 × 900 CSS pixels**. Mobile viewport:
 **390 × 844 CSS pixels**. Screenshots capture the full page at those viewport
 widths; their image heights vary with content. `*-expanded-mobile.png` shows the
 below-640px Collapsible opened in list/profile/discovery panels; unsuffixed mobile states show collapsed filters.
+The navigation review section below identifies current captures; older profile
+captures with named return breadcrumbs are retained as historical evidence.
 
 | Capture | State |
 | --- | --- |
 | `people-*` | Shared evidence filters in people search; origin text retained |
 | `documents-*` | Documents containing the same Verified, Authority evidence; separate document processing bound |
 | `scans-*` | Matching registered page scope and preserved processing context |
-| `profile-*` | One matching face of four overall, with one clear-all action, active evidence controls and a named return breadcrumb |
+| Original `profile-*` | Historical filtered-profile captures; superseded by `profile-standard-breadcrumb-*` and `profile-expanded-current-filters-*` |
 | `provenance-*` | Recorded identity provenance and compact face last-change attribution |
 | `mentions-empty-*` | Accessible Mentions tab, filtered zero and recovery |
 | `activity-time-*`, `activity-user-*` | Sidebar Activity tab groups faces/mentions by annotation edit day or last user; clicking groups filters the scan |
@@ -26,11 +28,11 @@ Executed browser checks in Chromium at both widths:
 
 - People → profile → source page → profile, and Documents → matching scans →
   source page → profile retain active evidence criteria and correct scope.
-- Source processing bounds remain in the saved return URL; shared annotation criteria populate the actual profile controls. Raw origin metadata is not rendered as chips.
+- Source processing bounds stay separate from annotation criteria, which populate the actual profile controls. Raw origin metadata is not rendered as chips.
 - The scan workspace has no added filter panel/tags; it keeps the existing compact toolbar, with shared criteria applied and forwarded through its URL.
 - Reload, Back/Forward and direct URLs reproduce the selections/results.
 - Individual evidence-tag removal updates the URL; one clear-all button is
-  rendered alongside active criteria and preserves originating text/return URL.
+  rendered alongside active criteria and preserves unrelated search context.
 - Mobile filter toggles start collapsed, expose `aria-expanded`, open via Enter
   and retain selected tags while collapsed. Expanded controls remain usable.
 - Discovery assignment changes are serialized separately from annotation states.
@@ -49,8 +51,8 @@ PR #37 review follow-up captures also check top-level pane tabs, independently
 scrollable Activity in a 1440 × 450 CSS viewport, copied Activity/Statistics URLs,
 keyboard tab activation and equal card dimensions at both standard widths.
 Cards now use the compact Discover presentation; source navigation still
-selects the correct face without rendering raw IDs or matching labels. The source breadcrumb retains enough mobile width to be
-readable. Authorized users can select faces to verify their links using the API's actual `scopes` JWT
+selects the correct face without rendering raw IDs or matching labels. Profiles now use the normal People breadcrumb hierarchy.
+Authorized users can select faces to verify their links using the API's actual `scopes` JWT
 claim. Editor names are plain text pending a future user tab. The full
 people/profile/scan and documents/scan/profile journeys were repeated after
 removing origin chips; browser checks report no JavaScript errors or horizontal
@@ -106,3 +108,32 @@ standard viewport sizes show the requested colors in light/dark. Chromium
 checks confirmed text/border colors, a 1px outline, keyboard focus, hover,
 selection/Clear behavior and action-panel bounds, with no overflow or JavaScript
 errors. Standard Button focus and disabled behavior remain in place.
+
+## Navigation review fixes
+
+`scan-assignment-navigation-*` shows Ada Novak as a database assignment candidate
+after opening Irena's scan from scan search. Opening the result adds no implicit
+evidence-source criterion. The browser checked the real search request as well
+as the rendered candidate; existing explicit shared filters remain supported by
+the navigation regression tests.
+
+`profile-standard-breadcrumb-*` and `profile-standard-breadcrumb-dark-*` show the
+normal PeopleGator → People → person ID hierarchy after changing the annotation
+API key from the importer to the OCR linker. There is no custom source/return
+breadcrumb. `people-updated-filters-*` shows the current OCR key applied after
+keyboard activation of the People breadcrumb. Browser checks also covered
+removing the key, Back/reload, and ignoring an old `origin_return` URL containing
+the original key.
+
+`profile-expanded-current-filters-*` includes the open mobile settings state;
+`mentions-current-filters-*` shows the corresponding Mentions empty state. Compact
+Faces/Discover, selected-face and expanded-identity captures were refreshed with
+normal breadcrumbs in both viewport sizes, including light/dark card states.
+
+These captures use the actual running application and an isolated, migrated,
+twice-seeded PostgreSQL database with disposable local media. Desktop viewport:
+**1440 × 900 CSS pixels**; mobile: **390 × 844 CSS pixels**. Full-page captures
+retain those CSS widths. Checks passed in Chromium with no JavaScript errors or
+horizontal overflow. The profile was also checked/captured in dark mode. The
+earlier filtered-profile screenshots with named return breadcrumbs are historical
+and are superseded by these navigation captures.

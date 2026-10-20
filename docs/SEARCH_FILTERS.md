@@ -129,28 +129,29 @@ state and actor; results cannot combine unrelated annotations.
 | People `document` | Legacy internal document selection; mapped to active shared evidence on navigation |
 | Scan `library`, `document` | Resource library/archive UUID; opening a scan does not add an annotation-source filter |
 | `touched_from/to`, `touched_by`, `api_key` | Current person/source processing, **never** annotation edits |
-| `origin_person_*`, `origin_source_*` | Source resource criteria retained for the saved return journey; never applied as annotation edits |
+| `origin_person_*`, `origin_source_*` | Resource-specific processing context; never applied as annotation edits |
 | `origin_text` | Name/alias/source search signal; never literal text filtering of face images |
 | `origin_matched_face`, `origin_reference_face` | Actual matching detection / reference face signals |
-| `origin_return` | Internal cursor-free source URL; the profile top-bar return link restores its selections |
+| Legacy `origin_return` | Ignored by breadcrumbs and omitted from related navigation |
 | `tab` | Faces (default), mentions or discover; incoming assigned-mentions searches open Mentions |
 | `discovery_assignment`, `discovery_text`, `candidate_mode`, `candidate_text` | View-specific discovery/candidate choices, retained as origin context on related navigation |
 
-Related links copy the current shared selections and scope resource-specific
-criteria for the saved return journey. Source metadata is not rendered as removable origin tags.
+Related links copy the current shared selections and keep resource-specific
+criteria separate. Source metadata is not rendered as removable origin tags.
 Opening a scan preserves explicitly selected evidence filters without adding
 `evidence_source` for the opened page. The workspace already constrains its
 annotations to that page; database assignment searches can still find people
 whose evidence is elsewhere. Explicit evidence-source selections remain effective.
-On a profile, the generic People breadcrumb becomes a named, clickable **Back to
-People search**, **Back to Documents** or **Back to Source scan** link, including
-the saved search text when available. Shared criteria populate the actual filter
-controls and their removable active-filter tags. Changes carry forward on the next related link.
+Profiles use the normal **PeopleGator → People → person ID** breadcrumb. The
+People link forwards the profile's current shared filters, including edits and
+removals. It does not restore a saved source URL or old filter selections.
+Shared criteria populate the actual filter controls and their removable
+active-filter tags. Changes carry forward on the next related link.
 Each view is reproducible from its URL, including copied links and browser
 Back/Forward. Destination queries start at their own first page; source cursors
 never travel across resources. Removing a filter tag changes controls, URL and
-server results. A single Clear all filters action per panel and profile broadening preserve origin
-text and the return URL; clearing text remains a separate action. Invalid copied
+server results. A single Clear all filters action per panel and profile broadening preserve unrelated
+search context; clearing text remains a separate action. Invalid copied
 annotation bounds/origins/UUIDs show recoverable criteria and block evidence
 requests until corrected/removed. Missing matched detections and unavailable
 source pages are reported without blocking identity details. Missing option
@@ -182,5 +183,4 @@ Page sidebar URLs use `panel=activity` or `panel=statistics` (default `face`) an
 midnights, including daylight-saving changes; the upper bound is inclusive at
 23:59:59.999999 local time, preserving database microsecond precision. Group entries show their own recorded annotation edit
 time, rather than the page/document processing timestamp. Activity time/user
-chips can be removed independently and clearing them retains other criteria and
-the return journey.
+chips can be removed independently and clearing them retains other criteria.

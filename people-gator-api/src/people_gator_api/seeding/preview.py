@@ -403,6 +403,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "library": activity_document.library,
                 "document": activity_document.document_id,
             }),
+            # Follow Irena into a profile, change/clear annotation filters, then
+            # use the normal People breadcrumb. It forwards the current choices.
+            "shared-filter-navigation": "/people?" + urlencode({
+                "q": "Irena",
+                "evidence_key": registered_keys["importer"],
+            }),
             # Presentation examples reuse linked synthetic records and media.
             # Adding entry points never rewrites reviewer edits or checkpoints.
             # Mixed-state faces exercise green-outline Verify/red-outline Unassign;
@@ -414,7 +420,6 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "origin_matched_face": manifest.faces["provenance-authority"],
                 "origin_text": "Irena",
-                "origin_return": "/people?q=Irena",
             }),
             "page-statistics": (
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
