@@ -5,8 +5,15 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PersonFacesPanel from '@/components/custom/PersonFacesPanel.vue'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
-const api = vi.hoisted(() => ({ patch: vi.fn(), scopes: ['people-gator:annotate'] }))
-vi.mock('@/client', () => ({ patchFaceBatchRouteApiV1FacesBatchPatch: api.patch }))
+const api = vi.hoisted(() => ({
+  patch: vi.fn(),
+  portrait: vi.fn(),
+  scopes: ['people-gator:annotate'],
+}))
+vi.mock('@/client', () => ({
+  patchFaceBatchRouteApiV1FacesBatchPatch: api.patch,
+  patchEntityRouteApiV1EntitiesEntityIdPatch: api.portrait,
+}))
 vi.mock('@/query/client', () => ({
   getAccessToken: async () => `header.${btoa(JSON.stringify({ scopes: api.scopes }))}.sig`,
 }))
@@ -33,6 +40,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.scopes = ['people-gator:annotate']
   api.patch.mockResolvedValue({ data: [] })
+  api.portrait.mockResolvedValue({
+    data: { entity_id: 'person', thumbnail_face_id: 'f0', thumbnail_mode: 'manual' },
+  })
 })
 async function render() {
   const router = createRouter({
@@ -50,7 +60,7 @@ async function render() {
   await router.push('/people/person')
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   const wrapper = mount(PersonFacesPanel, {
-    props: { faces, personName: 'Irena' },
+    props: { faces, personName: 'Irena', personId: 'person' },
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
   })
   cleanup.push(() => {
@@ -177,5 +187,69 @@ describe('assigned face selection and review', () => {
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('Could not update all')
     expect(invalidate).toHaveBeenCalled()
+  })
+  it('sets exactly one selected face as portrait and refreshes identity views', async () => {
+    const { wrapper, queryClient } = await render()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    await wrapper.get('[aria-label="Select face f0 for review"]').trigger('click')
+    const portraitButton = () =>
+      wrapper.findAll('button').find((button) => button.text() === 'Use as portrait')!
+    expect(portraitButton().exists()).toBe(true)
+    await wrapper.get('[aria-label="Add face f1 to selection"]').trigger('click')
+    expect(portraitButton()).toBeUndefined()
+    await wrapper.get('[aria-label="Remove face f1 from review"]').trigger('click')
+    await portraitButton().trigger('click')
+    await flushPromises()
+    expect(api.portrait.mock.lastCall?.[0]).toMatchObject({
+      path: { entity_id: 'person' },
+      body: { thumbnail_face_id: 'f0' },
+    })
+    expect(api.patch).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="status"]').text()).toBe('Portrait saved.')
+    expect(queryClient.getQueryData(['entities', 'detail', 'person'])).toMatchObject({
+      thumbnail_face_id: 'f0',
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['entities', 'list'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['search'] })
+    await wrapper.setProps({ thumbnailFaceId: 'f0', thumbnailMode: 'manual' })
+    expect(
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Current portrait')!
+        .attributes('disabled'),
+    ).toBeDefined()
+  })
+
+  it('blocks competing actions during portrait saving and retains the selection on failure', async () => {
+    const { wrapper } = await render()
+    await wrapper.get('[aria-label="Select face f0 for review"]').trigger('click')
+    let reject!: (error: Error) => void
+    api.portrait.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail
+        }),
+    )
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Use as portrait')!
+      .trigger('click')
+    await flushPromises()
+    expect(
+      wrapper
+        .get('[role="toolbar"]')
+        .findAll('button')
+        .every((button) => button.attributes('disabled') !== undefined),
+    ).toBe(true)
+    reject(new Error('Try again'))
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Try again')
+    expect(wrapper.get('[role="toolbar"]').text()).toContain('1 face selected')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Use as portrait')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="status"]').text()).toBe('Portrait saved.')
   })
 })

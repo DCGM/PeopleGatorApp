@@ -1995,6 +1995,7 @@ async def test_canonical_portraits_media_and_review_preservation(seed_target):
     linked = (await database.faces.list(FaceListRequest(limit=100,
         filter_=FaceListFilter(entity_id=[manual.entity_id])))).items
     assert manual.thumbnail_mode == 'manual'
+    assert urlsplit(first.filter_examples['person-portrait-toolbar']).path == f'/people/{manual.entity_id}'
     assert manual.thumbnail_face_id == linked[-1].detection_id
     assert manual.thumbnail_face_id != linked[0].detection_id
     selected_face = await database.faces.get(manual.thumbnail_face_id)

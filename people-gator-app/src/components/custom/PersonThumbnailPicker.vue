@@ -7,7 +7,6 @@ import { useFaceListQuery } from '@/query/faces'
 import { usePatchEntityMutation } from '@/query/entities'
 
 const titleId = useId()
-const descriptionId = useId()
 
 const props = defineProps<{
   personId: string
@@ -50,36 +49,28 @@ async function save(faceId: string | null) {
       align="start"
       class="flex max-h-[80dvh] w-[min(30rem,calc(100vw-2rem))] flex-col gap-4 overflow-y-auto"
       :aria-labelledby="titleId"
-      :aria-describedby="descriptionId"
     >
       <div>
         <h3 :id="titleId">Portrait for {{ props.name }}</h3>
-        <p :id="descriptionId" class="text-sm text-muted-foreground">
-          Choose a linked face, or let automatic selection keep a stable portrait. Evidence filters
-          do not limit these choices.
-        </p>
       </div>
       <p class="text-sm" role="status">
-        Current selection: {{ props.mode === 'manual' ? 'Manual' : 'Automatic'
-        }}{{ props.selectedFaceId ? '' : ' · No linked face' }}
+        {{ props.mode === 'manual' ? 'Manual portrait' : 'Automatic portrait' }}
       </p>
       <Button
         variant="outline"
         :disabled="selection.isPending.value || props.mode !== 'manual'"
         @click="save(null)"
-        >Use automatic selection</Button
+        >Use automatic</Button
       >
       <p v-if="selection.isError.value" role="alert" class="text-sm text-destructive">
-        Could not confirm the portrait change. Please try again.
+        Save not confirmed. Try again.
       </p>
       <p v-if="query.isPending.value" role="status">Loading linked faces…</p>
       <div v-else-if="query.isError.value" role="alert">
         <p>Could not load linked faces.</p>
         <Button variant="outline" @click="query.refetch()">Retry linked faces</Button>
       </div>
-      <p v-else-if="!faces.length">
-        No linked faces yet. A portrait will be selected automatically when a face is linked.
-      </p>
+      <p v-else-if="!faces.length">No linked faces yet.</p>
       <div v-else class="flex flex-wrap gap-3">
         <Button
           v-for="(face, index) in faces"
@@ -106,7 +97,7 @@ async function save(faceId: string | null) {
       >
       <p v-if="selection.isPending.value" role="status">Saving portrait…</p>
       <Button variant="ghost" :disabled="selection.isPending.value" @click="open = false"
-        >Close portrait choices</Button
+        >Close</Button
       >
     </PopoverContent>
   </Popover>

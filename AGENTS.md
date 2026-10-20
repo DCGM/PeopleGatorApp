@@ -129,3 +129,9 @@ screen's filter semantics.
   mobile settings are collapsed and never overflow the parent. Hide the entire
   area when no filters are active.
 - Keep keyboard navigation, standard focus states, and light/dark themes usable.
+
+# Keep UI simple
+
+Use short, familiar labels. Avoid verbose explanations, redundant status text and
+instructions that repeat obvious controls. Add helper text only when needed for
+a decision or error recovery, and keep it to one short sentence.

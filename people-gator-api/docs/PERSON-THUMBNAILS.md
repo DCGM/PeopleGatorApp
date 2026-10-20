@@ -7,6 +7,10 @@ Clients load the saved reference through authenticated
 `GET /api/v1/faces/{thumbnail_face_id}/aligned_crop`; failed media requests use
 initials. Media failures do not change the saved choice.
 
+In a person's evidence grid, select one face and choose **Use as portrait** in
+its bottom action bar. **Change portrait** in the header also provides selection
+and **Use automatic** reset.
+
 PATCH `/api/v1/entities/{entity_id}` and `/api/v1/entities:batch` accept:
 
 - Omitted `thumbnail_face_id`: preserve the current choice and policy.

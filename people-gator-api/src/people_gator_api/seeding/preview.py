@@ -434,6 +434,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         api_keys=registered_keys,
         filter_examples={
             "person-portrait-selection": f"/people/{manifest.entities['provenance-review']}",
+            # Select one existing linked evidence card, then Use as portrait in
+            # the compact bottom bar; no need to page through another chooser.
+            "person-portrait-toolbar": f"/people/{manifest.entities['provenance-review']}",
 
             # Compare the standard state text colors without state backgrounds.
             "linked-face-states": f"/people/{manifest.entities['provenance-review']}?" + urlencode({

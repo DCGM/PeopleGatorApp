@@ -12,11 +12,9 @@ vi.mock('@/client', async (original) => ({
 }))
 
 beforeEach(() => {
-  mocks.list
-    .mockReset()
-    .mockResolvedValue({
-      data: { items: [{ detection_id: 'other-face' }], limit: 24, cursor: null },
-    })
+  mocks.list.mockReset().mockResolvedValue({
+    data: { items: [{ detection_id: 'other-face' }], limit: 24, cursor: null },
+  })
   mocks.patch.mockReset()
 })
 
@@ -62,22 +60,20 @@ describe('portrait selection', () => {
   })
 
   it('resets using explicit null and keeps failures recoverable without changing saved props', async () => {
-    mocks.patch
-      .mockRejectedValueOnce(new Error('save failed'))
-      .mockResolvedValueOnce({
-        data: {
-          entity_id: 'ada',
-          thumbnail_face_id: 'automatic-face',
-          thumbnail_mode: 'automatic',
-        },
-      })
+    mocks.patch.mockRejectedValueOnce(new Error('save failed')).mockResolvedValueOnce({
+      data: {
+        entity_id: 'ada',
+        thumbnail_face_id: 'automatic-face',
+        thumbnail_mode: 'automatic',
+      },
+    })
     const { wrapper, content, queryClient } = await openPicker()
     const reset = () =>
-      content.findAll('button').find((button) => button.text() === 'Use automatic selection')!
+      content.findAll('button').find((button) => button.text() === 'Use automatic')!
     await reset().trigger('click')
     await flushPromises()
     expect(mocks.patch.mock.lastCall?.[0].body).toEqual({ thumbnail_face_id: null })
-    expect(content.get('[role="alert"]').text()).toContain('Could not confirm the portrait change')
+    expect(content.get('[role="alert"]').text()).toContain('Save not confirmed')
     expect(wrapper.props('selectedFaceId')).toBe('saved-face')
     expect(queryClient.getQueryData(queryKeys.entities.detail('ada'))).toBeUndefined()
     await reset().trigger('click')
