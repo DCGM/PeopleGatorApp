@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button'
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
 import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails.vue'
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
-import PersonFaceCard from '@/components/custom/PersonFaceCard.vue'
+import PersonFacesPanel from '@/components/custom/PersonFacesPanel.vue'
 import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
 import PersonMentionItem from '@/components/custom/PersonMentionItem.vue'
 import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
@@ -220,12 +220,11 @@ function selectTab(tab: string | number) {
           value="faces"
           class="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         >
-          <PersonFaceCard
-            v-for="face in faces"
-            :key="face.id"
-            :face="face"
+          <PersonFacesPanel
+            :key="personId"
+            :faces="faces"
             :person-name="profile.name"
-            :matching="matchingFaceIds.includes(face.id)"
+            :matching-face-ids="matchingFaceIds"
           />
           <PersonFaceCardSkeleton v-if="faceLoading" />
           <div class="col-span-full text-sm">

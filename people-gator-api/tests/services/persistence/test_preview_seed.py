@@ -1624,3 +1624,46 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
     assert rerun == seed
     for face in faces:
         assert await db.faces.get(face.detection_id) == face
+
+
+@pytest.mark.asyncio
+async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rerun(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter, FacePatchBatchItem
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    person_id = seed.entities['provenance-review']
+    assert seed.filter_examples['person-face-review'] == f'/people/{person_id}'
+    person = await db.entities.get(person_id)
+    assert person.provenance.origin.value == 'authority'
+    assert person.created_at is not None and person.last_touched_at is not None
+    actor = GenericActor(user_id=seed.users['reviewer'])
+    automatic = await db.faces.get(seed.faces['provenance-auto'])
+    manual = await db.faces.get(seed.faces['provenance-manual'])
+    updated = await db.faces.patch_batch([
+        FacePatchBatchItem(detection_id=automatic.detection_id, entity_link_state='verified'),
+        FacePatchBatchItem(detection_id=manual.detection_id, entity_id=None, entity_link_state=None),
+    ], actor)
+    verified, unassigned = updated
+    reviewed_person = await db.entities.get(person_id)
+    assert reviewed_person.created_at == person.created_at
+    assert reviewed_person.provenance == person.provenance
+    assert verified.entity_id == person_id and verified.entity_link_state.value == 'verified'
+    assert unassigned.entity_id is None and unassigned.entity_link_state is None
+    assert verified.last_touched_by_user_id == actor.user_id
+    assert unassigned.last_touched_by_user_id == actor.user_id
+    assert verified.provenance == automatic.provenance
+    assert unassigned.provenance == manual.provenance
+    for _ in range(2):
+        rerun = await preview.seed_preview(db, filesystem)
+        assert rerun.filter_examples['person-face-review'] == seed.filter_examples['person-face-review']
+        assert await db.faces.get(verified.detection_id) == verified
+        assert await db.faces.get(unassigned.detection_id) == unassigned
+        assert await db.entities.get(person_id) == reviewed_person
+    linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person_id])))
+    assert verified.detection_id in {face.detection_id for face in linked.items}
+    assert unassigned.detection_id not in {face.detection_id for face in linked.items}
+    for face in updated:
+        page = await db.sources.get_page(face.source_id)
+        image = await get_page_image(page.library, page.document_id, page.page_id)
+        assert image.content

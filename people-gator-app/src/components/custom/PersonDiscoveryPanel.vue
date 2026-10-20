@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import FaceSelectionControl from './FaceSelectionControl.vue'
+import SelectedFaceActions from './SelectedFaceActions.vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
 import {
   Check,
@@ -257,40 +259,31 @@ function initials(name: string) {
         />
       </SearchFilterPanel>
 
-      <div
+      <SelectedFaceActions
         v-if="selectedFaces.length"
-        class="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-4xl flex-col gap-3 border border-accent bg-card p-3 shadow-lg sm:flex-row sm:items-center sm:justify-between"
-        role="toolbar"
-        aria-label="Selected face actions"
+        :count="selectedFaces.length"
+        :busy="props.assigningFaces"
+        @clear="clearFaceSelection"
       >
-        <div class="min-w-0">
-          <p class="font-semibold">
-            {{ selectedFaces.length }} {{ selectedFaces.length === 1 ? 'face' : 'faces' }} selected
-          </p>
-          <p class="text-xs text-muted-foreground">
-            <template v-if="selectedReassignmentCount">
-              {{ selectedReassignmentCount }} will be reassigned from another person.
-            </template>
-            <template v-else>
-              Click faces to add them; use the checkboxes to remove them or Shift-select a range.
-            </template>
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="outline" @click="clearFaceSelection">
-            Clear
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            :disabled="props.assigningFaces"
-            @click="assignSelectedFaces"
+        <template #description>
+          <template v-if="selectedReassignmentCount"
+            >{{ selectedReassignmentCount }} will be reassigned from another person.</template
           >
-            <LinkIcon aria-hidden="true" />
-            {{ props.assigningFaces ? 'Assigning…' : `Assign to ${props.currentName}` }}
-          </Button>
-        </div>
-      </div>
+          <template v-else
+            >Click faces to add them; use the checkboxes to remove them or Shift-select a
+            range.</template
+          >
+        </template>
+        <Button
+          type="button"
+          size="sm"
+          :disabled="props.assigningFaces"
+          @click="assignSelectedFaces"
+        >
+          <LinkIcon aria-hidden="true" />
+          {{ props.assigningFaces ? 'Assigning…' : `Assign to ${props.currentName}` }}
+        </Button>
+      </SelectedFaceActions>
 
       <div
         v-if="visibleFaces.length"
@@ -351,28 +344,13 @@ function initials(name: string) {
               </template>
             </LoadableImage>
           </ItemMedia>
-          <button
-            type="button"
-            data-face-selection-target="control"
-            class="absolute right-3 top-3 z-20 flex size-7 items-center justify-center rounded-sm border-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :class="
-              selectedFaceIds.has(face.id)
-                ? 'border-accent bg-accent text-accent-foreground'
-                : 'border-border bg-card text-muted-foreground hover:border-accent hover:text-primary'
-            "
-            :aria-label="`${selectedFaceIds.has(face.id) ? 'Remove' : 'Select'} face ${face.id}${
-              selectedFaceIds.has(face.id) ? ' from assignment' : ' for assignment'
-            }`"
-            :aria-pressed="selectedFaceIds.has(face.id)"
-            @click="toggleFaceSelection(face.id, $event)"
-          >
-            <Check v-if="selectedFaceIds.has(face.id)" class="size-4" aria-hidden="true" />
-            <span
-              v-else
-              class="size-2 rounded-full border border-current"
-              aria-hidden="true"
-            ></span>
-          </button>
+          <FaceSelectionControl
+            :face-id="face.id"
+            :selected="selectedFaceIds.has(face.id)"
+            :disabled="props.assigningFaces"
+            purpose="assignment"
+            @toggle="toggleFaceSelection(face.id, $event)"
+          />
           <ItemContent class="min-w-0 flex-none gap-0 overflow-hidden px-0">
             <p
               class="flex min-w-0 items-center gap-1 text-sm"

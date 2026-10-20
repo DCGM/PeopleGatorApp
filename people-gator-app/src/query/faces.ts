@@ -202,3 +202,47 @@ export function useAssignFacesMutation() {
     },
   })
 }
+
+export function useReviewFacesMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      detectionIds,
+      action,
+    }: {
+      detectionIds: string[]
+      action: 'verify' | 'unassign'
+    }) => {
+      const faces = await responseData(
+        patchFaceBatchRouteApiV1FacesBatchPatch({
+          body: [...new Set(detectionIds)].map((detection_id) => ({
+            detection_id,
+            ...(action === 'verify'
+              ? { entity_link_state: 'verified' as const }
+              : { entity_id: null, entity_link_state: null }),
+          })),
+          throwOnError: true,
+        }),
+      )
+      for (const face of faces) {
+        if (face) queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
+      }
+      if (faces.some((face) => face === null))
+        throw new Error('Some selected faces are no longer available.')
+      return faces
+    },
+    onSettled: async () => {
+      await Promise.all(
+        [
+          queryKeys.faces.all,
+          queryKeys.entities.all,
+          queryKeys.pages.all,
+          queryKeys.documents.all,
+          queryKeys.sources.all,
+          queryKeys.images.all,
+          queryKeys.search.all,
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      )
+    },
+  })
+}

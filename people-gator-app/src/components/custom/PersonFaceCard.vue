@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import AnnotationLastChange from './AnnotationLastChange.vue'
-import VerifyEntityLink from './VerifyEntityLink.vue'
+import FaceSelectionControl from './FaceSelectionControl.vue'
 import LoadableImage from './LoadableImage.vue'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
 import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
@@ -15,7 +15,12 @@ const props = defineProps<{
   face: PersonFace
   personName: string
   matching?: boolean
+  selectable?: boolean
+  selected?: boolean
+  selectionEnabled?: boolean
+  busy?: boolean
 }>()
+defineEmits<{ toggle: [event: MouseEvent]; add: [event: MouseEvent] }>()
 const route = useRoute()
 const source = computed(
   () =>
@@ -37,10 +42,29 @@ const sourceTarget = computed(() =>
 </script>
 
 <template>
-  <Card class="min-w-0 gap-0 overflow-hidden py-0" data-person-face-card>
+  <Card
+    class="relative min-w-0 gap-0 overflow-hidden py-0"
+    :class="selected && 'border-secondary bg-secondary/20'"
+    data-person-face-card
+  >
+    <button
+      v-if="selectionEnabled"
+      type="button"
+      class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      :disabled="busy"
+      :aria-label="selected ? `Face ${face.id} is selected` : `Add face ${face.id} to selection`"
+      @click="$emit('add', $event)"
+    ></button>
+    <FaceSelectionControl
+      v-if="selectable"
+      :face-id="face.id"
+      :selected="Boolean(selected)"
+      :disabled="busy"
+      @toggle="$emit('toggle', $event)"
+    />
     <component
-      :is="sourceTarget ? 'RouterLink' : 'div'"
-      :to="sourceTarget"
+      :is="sourceTarget && !selectionEnabled ? 'RouterLink' : 'div'"
+      :to="!selectionEnabled ? sourceTarget : undefined"
       class="group block min-w-0"
     >
       <div class="relative">
@@ -55,7 +79,7 @@ const sourceTarget = computed(() =>
         </AspectRatio>
         <Badge
           v-if="matching"
-          class="absolute left-2 top-2 max-w-[calc(100%-1rem)]"
+          class="absolute left-2 top-2 max-w-[calc(100%-4rem)]"
           variant="secondary"
           >Matching detection</Badge
         >
@@ -86,16 +110,10 @@ const sourceTarget = computed(() =>
         :user-id="face.metadata?.last_touched_by_user_id"
         class="h-10"
       />
-      <div class="mt-2 h-16 overflow-y-auto">
+      <div class="mt-2 h-6 overflow-y-auto">
         <p v-if="!face.pageId" class="text-xs text-muted-foreground" role="status">
           {{ face.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
         </p>
-        <VerifyEntityLink
-          v-if="face.linkState !== 'verified'"
-          v-bind="face"
-          :id="face.id"
-          kind="face"
-        />
       </div>
     </CardFooter>
   </Card>

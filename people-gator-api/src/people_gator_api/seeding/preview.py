@@ -399,6 +399,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             # Presentation examples reuse linked synthetic records and media.
             # Adding entry points never rewrites reviewer edits or checkpoints.
+            # Existing mixed-state faces exercise bulk verification/unassignment;
+            # this entry point changes no persisted evidence on retained previews.
+            "person-face-review": f"/people/{manifest.entities['provenance-review']}",
             "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "origin_matched_face": manifest.faces["provenance-authority"],
                 "origin_text": "Irena",

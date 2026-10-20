@@ -51,6 +51,7 @@ This does not automatically seed the actual staging environment.
 | Faces only | Emil Dvorak and the A. Novak duplicate candidate |
 | Mentions only | Nora Svoboda across Research notes and Correspondence |
 | No evidence | Lenka Vesela, ready for manual linking |
+| Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
 | Identity discovery and merging | Open Ada Novak's Discover tab; A. Novak has nearby vectors |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
