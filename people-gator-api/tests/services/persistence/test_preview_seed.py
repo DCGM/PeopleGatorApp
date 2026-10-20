@@ -1482,8 +1482,10 @@ async def test_viewport_focus_targets_and_repeated_occurrences(seed_target):
         lower.detection_id, FacePatchRequest(entity_id=result.entities["lenka"]),
         GenericActor(user_id=result.users["reviewer"]),
     )
+    reviewed_person = await database.entities.get(result.entities["lenka"])
     repeated = await preview.seed_preview(database, filesystem)
     assert repeated.faces == result.faces and repeated.mentions == result.mentions
     stored = await database.faces.get(lower.detection_id)
     assert stored.entity_id == result.entities["lenka"]
-    assert stored.last_touched_at == reviewed.last_touched_at
+    assert stored == reviewed
+    assert (await database.entities.get(result.entities["lenka"])).last_touched_at == reviewed_person.last_touched_at
