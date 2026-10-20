@@ -133,6 +133,7 @@ function routeLineIndex(value: unknown) {
 function syncRoute() {
   const line = transcription.value[selectedLineIndex.value]
   void router.replace({
+    hash: route.hash,
     query: {
       ...route.query,
       candidate_text: candidateTerm.value || undefined,
@@ -474,12 +475,15 @@ onBeforeUnmount(() => {
       :model-value="
         route.query.panel === 'activity' || route.query.panel === 'statistics'
           ? route.query.panel
-          : 'face'
+          : route.hash === '#link-statistics'
+            ? 'statistics'
+            : 'face'
       "
       @update:model-value="
         (value) =>
           router.push({
             query: { ...route.query, panel: value === 'face' ? undefined : value },
+            hash: '',
           })
       "
     >

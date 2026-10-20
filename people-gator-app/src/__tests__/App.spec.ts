@@ -88,6 +88,7 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     assignmentStatus: ref('idle'),
     createAndAssign: vi.fn<() => void>(),
     error: ref(null),
+    annotationsLoading: ref(false),
     faces: ref([]),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
@@ -199,6 +200,9 @@ describe('App', () => {
     expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(true)
     expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
     expect(router.currentRoute.value.query.origin_text).toBe('Irena')
+    await router.push({ path: router.currentRoute.value.path, hash: '#link-statistics' })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
     wrapper.unmount()
   })
 
