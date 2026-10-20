@@ -137,6 +137,34 @@ describe('App', () => {
     expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(false)
   })
 
+  it('restores top-level sidebar tabs without keeping face assignment controls in Activity or Statistics', async () => {
+    await router.push(
+      '/libraries/library/documents/document/pages/page?panel=activity&candidate_text=Ada&origin_text=Irena',
+    )
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+    const sidebar = wrapper.get('.workspace-sidebar')
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Activity')
+    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(false)
+    expect(sidebar.find('input').exists()).toBe(false)
+    expect(sidebar.find('details').exists()).toBe(false)
+
+    await router.push({ query: { ...router.currentRoute.value.query, panel: 'statistics' } })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
+    expect(sidebar.text()).toContain('Whole document')
+    expect(sidebar.find('details').exists()).toBe(false)
+    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(false)
+
+    await router.push({ query: { ...router.currentRoute.value.query, panel: undefined } })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Faces')
+    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(true)
+    expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
+    expect(router.currentRoute.value.query.origin_text).toBe('Irena')
+    wrapper.unmount()
+  })
+
   it('links breadcrumbs to scoped scan lists and preserves scope when searching', async () => {
     await router.push('/libraries/library/documents/document/pages/page')
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })

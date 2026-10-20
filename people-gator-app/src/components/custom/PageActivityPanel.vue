@@ -81,10 +81,7 @@ function clear() {
 }
 </script>
 <template>
-  <section
-    class="max-h-[min(50dvh,23rem)] min-w-0 space-y-3 overflow-y-auto p-5"
-    aria-label="Page annotation activity"
-  >
+  <section class="min-w-0 space-y-4 p-5" aria-label="Page annotation activity">
     <h3>Annotation activity</h3>
     <p>
       <small

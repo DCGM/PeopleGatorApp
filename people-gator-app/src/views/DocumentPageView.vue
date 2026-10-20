@@ -9,7 +9,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
-import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
+import PageStatisticsPanel from '@/components/custom/PageStatisticsPanel.vue'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
@@ -276,11 +276,12 @@ function updatePageBounds() {
 }
 
 function handleNavigationKeydown(event: KeyboardEvent) {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+    return
   if (
     event.target instanceof HTMLElement &&
     (event.target.isContentEditable ||
-      ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName))
+      event.target.closest('input, select, textarea, button, a, [role=tablist]'))
   )
     return
   const navigate = {
@@ -468,53 +469,37 @@ onBeforeUnmount(() => {
       />
     </section>
 
-    <FaceGallery
-      class="workspace-galery"
-      :faces="faces"
-      :selected-face-id="selectedFace?.id ?? null"
-      :loading="isLoading"
-      @reset-filters="linkStates = []"
-      @select="selectFace"
-    />
-
     <Tabs
-      class="workspace-current min-w-0 border-t bg-background"
-      :model-value="route.query.panel === 'activity' ? 'activity' : 'face'"
+      class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
+      :model-value="
+        route.query.panel === 'activity' || route.query.panel === 'statistics'
+          ? route.query.panel
+          : 'face'
+      "
       @update:model-value="
         (value) =>
           router.push({
-            query: { ...route.query, panel: value === 'activity' ? 'activity' : undefined },
+            query: { ...route.query, panel: value === 'face' ? undefined : value },
           })
       "
     >
-      <TabsList aria-label="Page sidebar" class="mx-5 mt-3"
-        ><TabsTrigger value="face">Face</TabsTrigger
-        ><TabsTrigger value="activity">Activity</TabsTrigger></TabsList
-      >
-      <TabsContent value="face">
-        <details id="link-statistics" class="border-b text-xs" @keydown.stop>
-          <summary
-            class="cursor-pointer px-5 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            Link statistics
-          </summary>
-          <div class="max-h-52 overflow-y-auto px-5 pb-4">
-            <p class="break-all text-muted-foreground">{{ page?.library }} · {{ page?.page_id }}</p>
-            <p class="my-2 font-semibold">This page</p>
-            <EntityLinkStatistics v-if="page" :stats="page.entity_link_stats" unassigned />
-            <p class="my-2 font-semibold">Whole document</p>
-            <p v-if="documentQuery.isPending.value" role="status">Loading statistics…</p>
-            <p v-else-if="documentQuery.error.value" role="alert">
-              Could not load document statistics.
-              <button class="underline" @click="documentQuery.refetch()">Retry</button>
-            </p>
-            <EntityLinkStatistics
-              v-else-if="documentQuery.data.value"
-              :stats="documentQuery.data.value.entity_link_stats"
-              unassigned
-            />
-          </div>
-        </details>
+      <div class="shrink-0 border-b p-3">
+        <TabsList aria-label="Page sidebar" class="w-full">
+          <TabsTrigger value="face">Faces</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="statistics">Statistics</TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
+        <FaceGallery
+          class="shrink-0 border-l-0"
+          :faces="faces"
+          :selected-face-id="selectedFace?.id ?? null"
+          :loading="isLoading"
+          @reset-filters="linkStates = []"
+          @select="selectFace"
+        />
+
         <CurrentFacePanel
           class="p-5"
           :face="selectedFace ?? null"
@@ -530,35 +515,46 @@ onBeforeUnmount(() => {
             kind="face"
           />
         </CurrentFacePanel>
+        <SimilarPeopleSearch
+          :key="candidateSearchResetKey"
+          ref="similarPeopleSearch"
+          v-model="candidateTerm"
+          v-model:result-mode="candidateBrowseMode"
+          class="shrink-0 px-5 pb-5"
+          :selected-face="selectedFace ?? null"
+        />
+        <SimilarPeopleResults
+          class="min-h-80 shrink-0 px-5 pb-5 lg:min-h-64 lg:flex-1"
+          :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []"
+          :loading="
+            isLoading ||
+            similarPeopleLoading ||
+            candidateTerm.trim() !== debouncedCandidateTerm.trim()
+          "
+          :has-next-page="hasNextPage"
+          :is-fetching-next-page="isFetchingNextPage"
+          :selected-face="selectedFace ?? null"
+          :viewed-person-id="selectedPersonId"
+          :assignment-pending="assignmentStatus === 'pending'"
+          :search-term="`${candidateBrowseMode}:${candidateTerm}`"
+          @load-more="loadMore()"
+          @preview="previewSimilarPerson"
+          @assign="assignSimilarPerson"
+        />
       </TabsContent>
-      <TabsContent value="activity"
-        ><PageActivityPanel v-if="page" :source-id="page.source_id"
-      /></TabsContent>
+      <TabsContent value="activity" class="mt-0 min-h-0 overflow-y-auto">
+        <PageActivityPanel v-if="page" :source-id="page.source_id" />
+      </TabsContent>
+      <TabsContent value="statistics" class="mt-0 min-h-0 overflow-y-auto">
+        <PageStatisticsPanel
+          :page="page"
+          :document="documentQuery.data.value"
+          :loading="documentQuery.isPending.value"
+          :error="Boolean(documentQuery.error.value)"
+          @retry="documentQuery.refetch()"
+        />
+      </TabsContent>
     </Tabs>
-    <SimilarPeopleSearch
-      :key="candidateSearchResetKey"
-      ref="similarPeopleSearch"
-      v-model="candidateTerm"
-      v-model:result-mode="candidateBrowseMode"
-      class="workspace-search bg-background px-5 pb-5"
-      :selected-face="selectedFace ?? null"
-    />
-    <SimilarPeopleResults
-      class="workspace-results min-h-0 bg-background px-5 pb-5"
-      :people="candidateTerm.trim() === debouncedCandidateTerm.trim() ? similarPeople : []"
-      :loading="
-        isLoading || similarPeopleLoading || candidateTerm.trim() !== debouncedCandidateTerm.trim()
-      "
-      :has-next-page="hasNextPage"
-      :is-fetching-next-page="isFetchingNextPage"
-      :selected-face="selectedFace ?? null"
-      :viewed-person-id="selectedPersonId"
-      :assignment-pending="assignmentStatus === 'pending'"
-      :search-term="`${candidateBrowseMode}:${candidateTerm}`"
-      @load-more="loadMore()"
-      @preview="previewSimilarPerson"
-      @assign="assignSimilarPerson"
-    />
   </main>
 </template>
 
@@ -567,7 +563,7 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: calc(100vh - 3.25rem);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(28rem, calc(78dvh - 14rem)) auto auto auto minmax(24rem, 60dvh);
+  grid-template-rows: auto minmax(28rem, calc(78dvh - 14rem)) minmax(36rem, 85dvh);
 }
 
 .workspace-viewer {
@@ -575,22 +571,9 @@ onBeforeUnmount(() => {
   grid-row: 2;
 }
 
-.workspace-galery {
+.workspace-sidebar {
   grid-column: 1;
   grid-row: 3;
-}
-
-.workspace-current {
-  grid-row: 4;
-}
-
-.workspace-search {
-  grid-row: 5;
-}
-
-.workspace-results {
-  grid-row: 6;
-  overflow: hidden;
 }
 
 .workspace-teleprompter {
@@ -622,18 +605,12 @@ onBeforeUnmount(() => {
   .workspace-grid {
     height: calc(100vh - 3.25rem);
     grid-template-columns: minmax(0, 1fr) 25rem;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .workspace-viewer {
     grid-column: 1;
-    grid-row: 2 / 5;
-  }
-
-  .workspace-galery {
-    min-height: 12rem;
-    grid-column: 2;
-    grid-row: 1;
+    grid-row: 2;
   }
 
   .workspace-teleprompter {
@@ -642,23 +619,11 @@ onBeforeUnmount(() => {
     height: auto;
   }
 
-  .workspace-current,
-  .workspace-search,
-  .workspace-results {
+  .workspace-sidebar {
     grid-column: 2;
+    grid-row: 1 / 3;
     border-left-width: 1px;
-  }
-
-  .workspace-current {
-    grid-row: 2;
-  }
-
-  .workspace-search {
-    grid-row: 3;
-  }
-
-  .workspace-results {
-    grid-row: 4;
+    border-top-width: 0;
   }
 }
 
@@ -669,22 +634,16 @@ onBeforeUnmount(() => {
 
   .workspace-viewer {
     grid-column: 2;
-    grid-row: 1 / 5;
+    grid-row: 1 / 3;
   }
 
-  .workspace-galery {
-    grid-column: 3;
-  }
-
-  .workspace-current,
-  .workspace-search,
-  .workspace-results {
+  .workspace-sidebar {
     grid-column: 3;
   }
 
   .workspace-teleprompter {
     grid-column: 1;
-    grid-row: 1 / 5;
+    grid-row: 1 / 3;
     border-right-width: 1px;
     border-bottom-width: 0;
   }
