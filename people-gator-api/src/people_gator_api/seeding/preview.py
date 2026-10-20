@@ -397,6 +397,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Open Irena's scan, then search for Ada as an assignment candidate
+            # outside that page. Opening a result must not invent evidence scope.
+            "scan-assignment-search": "/scans?" + urlencode({
+                "library": activity_document.library,
+                "document": activity_document.document_id,
+            }),
             # Presentation examples reuse linked synthetic records and media.
             # Adding entry points never rewrites reviewer edits or checkpoints.
             # Mixed-state faces exercise green-outline Verify/red-outline Unassign;

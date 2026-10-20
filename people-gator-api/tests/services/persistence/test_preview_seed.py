@@ -1633,6 +1633,40 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
 
 
 @pytest.mark.asyncio
+async def test_scan_assignment_search_finds_people_elsewhere_and_preserves_review(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    query = parse_qs(urlsplit(seed.filter_examples['scan-assignment-search']).query)
+    assert set(query) == {'library', 'document'}
+    pages = await db.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
+        library=query['library'], document_id=query['document'],
+    )))
+    assert [page.source_id for page in pages.items] == [seed.pages['provenance-a-1']]
+    source_id = pages.items[0].source_id
+    on_page = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        source_id=[source_id],
+    )))
+    assert seed.entities['ada'] not in {face.entity_id for face in on_page.items}
+    candidates = await db.entities.search(SearchEntitiesRequest(
+        query=QueryBase(text=['Ada Novak']), limit=100,
+    ))
+    assert seed.entities['ada'] in {person.entity_id for person in candidates.items}
+    edited = await db.faces.patch(seed.faces['provenance-auto'], FacePatchRequest(
+        entity_id=seed.entities['ada'], entity_link_state='manual',
+    ), GenericActor(user_id=seed.users['reviewer']))
+    assert edited.source_id == source_id and edited.entity_id == seed.entities['ada']
+    for _ in range(2):
+        rerun = await preview.seed_preview(db, filesystem)
+        assert rerun.filter_examples['scan-assignment-search'] == seed.filter_examples['scan-assignment-search']
+        assert await db.faces.get(edited.detection_id) == edited
+    page = pages.items[0]
+    image = await get_page_image(page.library, page.document_id, page.page_id)
+    assert image.content
+
+
+@pytest.mark.asyncio
 async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rerun(seed_target):
     from people_gator_api.schemas.faces import FaceListFilter, FacePatchBatchItem
 

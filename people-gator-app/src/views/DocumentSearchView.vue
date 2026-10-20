@@ -110,7 +110,7 @@ function removeScope(key: 'library' | 'document') {
           class="group"
           :to="{
             name: 'document-page',
-            query: relatedEvidenceQuery(route, { evidence_source: [result.sourceId] }),
+            query: relatedEvidenceQuery(route),
             params: {
               libraryId: result.library,
               documentId: result.documentId,

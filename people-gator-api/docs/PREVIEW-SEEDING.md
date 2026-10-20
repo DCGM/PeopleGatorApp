@@ -305,6 +305,13 @@ by gated regression tests, not by introducing failures into preview data. See
 
 ## Evidence provenance and annotation edits (#31)
 
+The `scan-assignment-search` example opens scans for Irena's provenance ledger.
+Open its page, select a face and search for **Ada Novak** in the assignment panel.
+Ada has evidence elsewhere and must remain available as a database candidate:
+opening the scan must not silently add an evidence-source filter. Explicitly
+selected annotation filters still apply. Repository coverage checks candidate
+lookup, reassignment, local media and twice-run preservation of the review edit.
+
 Search for **Irena Evidence**. This new, checkpointed synthetic identity was
 imported from a synthetic authority; its reference is deliberately under
 `preview.invalid`. Its faces in **Evidence provenance ledger** (`preview-mzk`)

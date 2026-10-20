@@ -127,7 +127,7 @@ state and actor; results cannot combine unrelated annotations.
 | `evidence_from`, `evidence_to` | `filter.evidence_touched_from/to`: annotation edit time, timezone required |
 | `evidence_user`, `evidence_key` | `filter.evidence_touched_by_user_id/api_key_id`: annotation's last actor |
 | People `document` | Legacy internal document selection; mapped to active shared evidence on navigation |
-| Scan `library`, `document` | Resource library/archive UUID; opening a scan also retains its exact source |
+| Scan `library`, `document` | Resource library/archive UUID; opening a scan does not add an annotation-source filter |
 | `touched_from/to`, `touched_by`, `api_key` | Current person/source processing, **never** annotation edits |
 | `origin_person_*`, `origin_source_*` | Source resource criteria retained for the saved return journey; never applied as annotation edits |
 | `origin_text` | Name/alias/source search signal; never literal text filtering of face images |
@@ -138,6 +138,10 @@ state and actor; results cannot combine unrelated annotations.
 
 Related links copy the current shared selections and scope resource-specific
 criteria for the saved return journey. Source metadata is not rendered as removable origin tags.
+Opening a scan preserves explicitly selected evidence filters without adding
+`evidence_source` for the opened page. The workspace already constrains its
+annotations to that page; database assignment searches can still find people
+whose evidence is elsewhere. Explicit evidence-source selections remain effective.
 On a profile, the generic People breadcrumb becomes a named, clickable **Back to
 People search**, **Back to Documents** or **Back to Source scan** link, including
 the saved search text when available. Shared criteria populate the actual filter
