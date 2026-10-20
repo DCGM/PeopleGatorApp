@@ -16,7 +16,7 @@ below-640px Collapsible opened in list/profile/discovery panels; unsuffixed mobi
 | `provenance-*` | Recorded identity provenance and compact face last-change attribution |
 | `mentions-empty-*` | Accessible Mentions tab, filtered zero and recovery |
 | `activity-time-*`, `activity-user-*` | Sidebar Activity tab groups faces/mentions by annotation edit day or last user; clicking groups filters the scan |
-| `cards-*`, `cards-detail-*` | Compact cards: assignment icon/state and confidence below the photo, colored library row and adjacent change/user rows; linked source/editor navigation |
+| `cards-*`, `cards-detail-*` | Compact cards: assignment icon/state and confidence below the photo, colored library/document row and adjacent change/user rows; source navigation and plain editor names |
 | `statistics-*` | Dedicated Statistics tab with page/document totals, no disclosure |
 | `page-*` | Same annotation highlighted in its source workspace; URL criteria retained without a filter panel |
 | `discovery-*` | Assigned-elsewhere discovery choice, independent of assigned-evidence state |
@@ -51,7 +51,7 @@ keyboard tab activation and equal card dimensions at both standard widths.
 Cards now use the compact Discover presentation; source navigation still
 selects the correct face without rendering raw IDs or matching labels. The source breadcrumb retains enough mobile width to be
 readable. Authorized users can select faces to verify their links using the API's actual `scopes` JWT
-claim. Editor links navigate to an active annotation-user filter. The full
+claim. Editor names are plain text pending a future user tab. The full
 people/profile/scan and documents/scan/profile journeys were repeated after
 removing origin chips; browser checks report no JavaScript errors or horizontal
 overflow. All captures use disposable migrated PostgreSQL/local storage.
@@ -82,14 +82,20 @@ The compact-card revision adds `compact-faces-{light,dark}-*`,
 CSS viewport dimensions. Faces and Discover use the same square corners,
 8px padding, grid gaps, library color and theme-aware assignment text. Faces
 shows its state icon/label and `conf` detection confidence directly below the
-photo, then library, last-change time and linked editor. Fixed-height source and
-footer blocks, image status badges, matching-detection labels and visible raw
-IDs are removed. Loading skeletons follow the same compact structure.
+photo, then library plus truncated document ID, last-change time and plain editor name. Fixed-height source and
+footer blocks, image status badges, matching-detection labels and visible detection/page IDs are removed. Loading skeletons follow the same compact structure.
 
 Chromium checks passed in light/dark at both widths: assignment precedes library;
-change/user starts within 8px of the library; card heights are equal; library
-colors, padding and corner styles match Discover; visible card text contains no
-UUIDs; Space/Shift selection, Clear and source-link restoration still work.
+change/user starts within 8px of the library/document row; card heights are equal; library
+colors, padding and corner styles match Discover; visible card text omits detection IDs; Space/Shift selection, Clear and source-link restoration still work.
 Selection and filtered profile screenshots were refreshed from this revision.
 No horizontal overflow or browser JavaScript errors occurred. Earlier before
 captures remain available in commit `a9f5022` for comparison.
+
+
+Editor-name follow-up: annotation editors render as plain truncated text with
+full-name tooltips, with no link or underline. A source TODO defers linking to
+the editor's user tab until that tab is implemented. The source row now includes
+library plus a truncated document ID, matching the Discover row layout; its
+full reference remains available in a tooltip. Desktop/mobile light/dark and
+selected/filtered screenshots were refreshed for this revision.
