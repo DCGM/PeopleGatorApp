@@ -46,11 +46,18 @@ function faceSelectionState(face: Face): keyof typeof faceSelectionClasses {
 
 const lineSelectionClasses = {
   selected: 'z-10 border-accent bg-accent/20 ring-1 ring-background/75',
+  mentioned: 'border-orange-500 bg-orange-500/15',
   default: 'border-transparent hover:border-accent/70 hover:bg-accent/10',
 } as const
 
 function lineSelectionState(index: number): keyof typeof lineSelectionClasses {
-  return index === props.selectedLineIndex ? 'selected' : 'default'
+  if (index === props.selectedLineIndex) return 'selected'
+  if (
+    props.selectedPersonId !== null &&
+    props.transcription[index]?.entities?.some((entity) => entity.entity_id === props.selectedPersonId)
+  )
+    return 'mentioned'
+  return 'default'
 }
 
 function regionStyle(position: Face['position']): CSSProperties {

@@ -2,8 +2,71 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
+import type { TranscriptionEntitySpan } from '@/viewmodels/document-workspace.types'
 
 describe('DocumentPageOverlay', () => {
+  it('highlights every linked mention by identity and gives the current line precedence', async () => {
+    const position = { left: 10, top: 10, width: 20, height: 5 }
+    const span = (entity_id?: string): TranscriptionEntitySpan => ({
+      entity_id,
+      label: 'person',
+      text: 'Ada',
+      line_id: 'line',
+      start_index: 0,
+      end_index: 3,
+    })
+    const wrapper = mount(DocumentPageOverlay, {
+      props: {
+        pageBounds: { left: 0, top: 0, width: 500, height: 800 },
+        transcription: [
+          { id: 'selected', text: 'Ada', position, entities: [span('person-1')] },
+          { id: 'mention-1', text: 'Ada', position, entities: [span('person-1')] },
+          { id: 'mention-2', text: 'Ada', position, entities: [span('person-2'), span('person-1')] },
+          { id: 'other-person', text: 'Ada', position, entities: [span('person-2')] },
+          { id: 'unlinked', text: 'Ada', position, entities: [span()] },
+          { id: 'no-spans', text: 'Ada', position },
+          { id: 'empty-spans', text: 'Ada', position, entities: [] },
+        ],
+        faces: [],
+        selectedLineIndex: 0,
+        selectedFaceId: null,
+        selectedPersonId: 'person-1',
+        selectedCandidateFaceId: null,
+      },
+    })
+    const lines = wrapper.findAll('[data-region-type="line"]')
+    expect(lines[0]!.classes()).toContain('border-accent')
+    expect(lines[0]!.classes()).not.toContain('border-orange-500')
+    for (const line of lines.slice(1, 3)) {
+      expect(line.classes()).toContain('border-orange-500')
+      expect(line.classes()).toContain('bg-orange-500/15')
+    }
+    for (const line of lines.slice(3)) {
+      expect(line.classes()).toContain('border-transparent')
+      expect(line.classes()).toContain('hover:border-accent/70')
+      expect(line.classes()).not.toContain('border-orange-500')
+    }
+
+    await lines[1]!.trigger('click')
+    expect(wrapper.emitted('selectLine')).toEqual([[1]])
+    await wrapper.setProps({ selectedLineIndex: 1 })
+    expect(lines[0]!.classes()).toContain('border-orange-500')
+    expect(lines[1]!.classes()).toContain('border-accent')
+    expect(lines[1]!.classes()).not.toContain('border-orange-500')
+    expect(lines[1]!.attributes('aria-pressed')).toBe('true')
+
+    await wrapper.setProps({ selectedPersonId: 'person-2' })
+    expect(lines[0]!.classes()).toContain('border-transparent')
+    expect(lines[2]!.classes()).toContain('border-orange-500')
+    expect(lines[3]!.classes()).toContain('border-orange-500')
+
+    await wrapper.setProps({ selectedPersonId: null })
+    for (const [index, line] of lines.entries()) {
+      expect(line.classes()).toContain(index === 1 ? 'border-accent' : 'border-transparent')
+      expect(line.classes()).not.toContain('border-orange-500')
+    }
+  })
+
   it('uses transformed page bounds without scaling borders or badge content', async () => {
     const wrapper = mount(DocumentPageOverlay, {
       props: {
