@@ -466,3 +466,22 @@ timestamps are not reset on rerun, so a long-lived preview normally shows the
 date form; edit Ada's short description to see the relative form and the
 updated editor without reloading. No seed records or API contracts changed.
 
+
+### Saved person portraits (#35)
+
+Open `filter_examples.person-portrait-selection` (Irena Evidence). Her initial
+manual portrait is the last UUID among her four synthetic linked faces, so it
+differs from the first listed face. **Change portrait** shows the complete linked
+set; choose another or use **Use automatic selection**, then change evidence
+filters, reload, and compare People search, Discover people, and scan assignment
+candidates. The portrait remains canonical while evidence cards show their own
+faces. Ada Novak demonstrates a persisted automatic portrait; Nora Letters has
+no face and uses initials. All media comes from the existing local fixtures.
+
+The `person-portrait-v1` manifest upgrade is additive and checkpointed. It preserves
+existing manual choices, records the expected automatic choice and touch time
+before applying the one-time reviewer selection, and never rewrites later choices
+(including automatic resets). Recovery after a failed checkpoint compares those
+preconditions before writing, so an intervening review is preserved. Deleted or
+reassigned candidate faces are skipped. Existing entity/source/annotation keys,
+UUIDs and checkpoints remain intact. PostgreSQL is required for saved portraits.

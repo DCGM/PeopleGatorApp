@@ -1790,11 +1790,11 @@ async def test_creation_and_reviews_survive_metadata_cleanup_upgrade(seed_target
         await connection.run_sync(upgrade_retained_preview)
     await validate_postgres_schema(engine)
     assert await db.faces.get(before_face.detection_id) == before_face
-    assert await db.entities.get(before_person.entity_id) == before_person
+    assert (await db.entities.get(before_person.entity_id)).model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'}) == before_person.model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'})
     for _ in range(2):
         assert await preview.seed_preview(db, filesystem) == seed
         assert await db.faces.get(before_face.detection_id) == before_face
-        assert await db.entities.get(before_person.entity_id) == before_person
+        assert (await db.entities.get(before_person.entity_id)).model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'}) == before_person.model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'})
 
 
 @pytest.mark.asyncio
@@ -1984,3 +1984,61 @@ async def test_page_gallery_lists_every_registered_page_in_stable_batches(seed_t
         assert await preview.seed_preview(database, filesystem) == seed
         again = await _all_document_pages(database, spec.library, spec.document_id, 12)
         assert [item.source_id for batch in again for item in batch.items] == ordered
+
+
+@pytest.mark.asyncio
+async def test_canonical_portraits_media_and_review_preservation(seed_target):
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    manual = await database.entities.get(first.entities['provenance-review'])
+    from people_gator_api.schemas.faces import FaceListFilter
+    linked = (await database.faces.list(FaceListRequest(limit=100,
+        filter_=FaceListFilter(entity_id=[manual.entity_id])))).items
+    assert manual.thumbnail_mode == 'manual'
+    assert manual.thumbnail_face_id == linked[-1].detection_id
+    assert manual.thumbnail_face_id != linked[0].detection_id
+    selected_face = await database.faces.get(manual.thumbnail_face_id)
+    source = await database.sources.lookup(GenericSourceLookupRequest(source_id=selected_face.source_id))
+    crop = await get_aligned_face_crop(first.users['reviewer'], selected_face, source, max_width=256)
+    assert crop.content
+    automatic = await database.entities.get(first.entities['ada'])
+    assert automatic.thumbnail_mode == 'automatic' and automatic.thumbnail_face_id
+    empty = await database.entities.get(first.entities['nora'])
+    assert empty.thumbnail_mode == 'automatic' and empty.thumbnail_face_id is None
+    # An explicit reset is a review choice and must survive reseeding unchanged.
+    actor = GenericActor(user_id=first.users['reviewer'])
+    reset = await database.entities.patch(manual.entity_id, EntityPatchRequest(thumbnail_face_id=None), actor)
+    assert await preview.seed_preview(database, filesystem) == first
+    assert await database.entities.get(manual.entity_id) == reset
+    selected = await database.entities.patch(manual.entity_id, EntityPatchRequest(thumbnail_face_id=linked[0].detection_id), actor)
+    await preview.seed_preview(database, filesystem)
+    assert await database.entities.get(manual.entity_id) == selected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('intervening_review', [False, True])
+async def test_portrait_upgrade_checkpoint_recovery_preserves_review(seed_target, monkeypatch, intervening_review):
+    database, filesystem, _ = seed_target
+    original = filesystem.write_bytes
+    failed = False
+    async def interrupt(key, content):
+        nonlocal failed
+        if key == preview.MANIFEST_KEY:
+            manifest = preview.SeedManifest.model_validate_json(content)
+            upgrade = manifest.thumbnail_upgrades.get('person-portrait-v1')
+            if upgrade is not None and upgrade.complete and not failed:
+                failed = True
+                raise OSError('portrait checkpoint interrupted')
+        await original(key, content)
+    monkeypatch.setattr(filesystem, 'write_bytes', interrupt)
+    with pytest.raises(OSError, match='portrait checkpoint'):
+        await preview.seed_preview(database, filesystem)
+    saved = preview.SeedManifest.model_validate_json(await filesystem.read_bytes(preview.MANIFEST_KEY))
+    person_id = saved.entities['provenance-review']
+    person = await database.entities.get(person_id)
+    assert person.thumbnail_mode == 'manual'
+    if intervening_review:
+        person = await database.entities.patch(person_id, EntityPatchRequest(thumbnail_face_id=None),
+            GenericActor(user_id=person.user_id))
+    await preview.seed_preview(database, filesystem)
+    assert await database.entities.get(person_id) == person
