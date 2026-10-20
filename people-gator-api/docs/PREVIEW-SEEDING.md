@@ -475,7 +475,7 @@ differs from the first listed face. **Change portrait** shows the complete linke
 set; choose another or use **Use automatic selection**, then change evidence
 filters, reload, and compare People search, Discover people, and scan assignment
 candidates. The portrait remains canonical while evidence cards show their own
-faces. Ada Novak demonstrates a persisted automatic portrait; Nora Letters has
+faces. Ada Novak demonstrates a persisted automatic portrait; Nora Svoboda has
 no face and uses initials. All media comes from the existing local fixtures.
 
 The `person-portrait-v1` manifest upgrade is additive and checkpointed. It preserves
