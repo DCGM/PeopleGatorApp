@@ -1,6 +1,6 @@
 # Issue #35 browser evidence
 
-Captured from the actual application at frontend revision `4ea7668`, using the
+Captured from the actual application at frontend revision `ab1fecc`, using the
 isolated, migrated PostgreSQL preview seed and its local synthetic media.
 Desktop viewports are **1440 × 900** CSS pixels; mobile viewports are
 **390 × 844** CSS pixels. The failure screenshots use controlled browser request
@@ -9,6 +9,9 @@ Dark-mode captures enable the application's existing `.dark` theme.
 
 Executed Chromium checks:
 
+- Select a single evidence face and save it with **Use as portrait** in the
+  bottom bar using the keyboard. Verify pending actions are disabled, a failed
+  save retains the selection, retry succeeds, and the saved face shows **Current portrait**.
 - Open the chooser with Enter, select with Space, close with Escape, and check
   focus returns to the trigger. Choose a linked face, reload, and reset to automatic.
 - Exclude the selected face with the verified-evidence filter and verify its
@@ -27,6 +30,18 @@ The screenshot data was changed through authenticated API/UI operations to
 exercise manual selection, reset and failure recovery. See the
 [portrait contract](../../../people-gator-api/docs/PERSON-THUMBNAILS.md) and
 [preview guide](../../../people-gator-api/docs/PREVIEW-SEEDING.md).
+
+## Use as portrait in the selected-face action bar
+
+| Desktop — 1440 × 900 | Mobile — 390 × 844 |
+| --- | --- |
+| ![Use as portrait in the selected-face action bar, desktop](evidence-toolbar-desktop.png) | ![Use as portrait in the selected-face action bar, mobile](evidence-toolbar-mobile.png) |
+
+## Selected-face bar with a recoverable save error
+
+| Desktop — 1440 × 900 | Mobile — 390 × 844 |
+| --- | --- |
+| ![Selected-face bar with a recoverable save error, desktop](toolbar-save-error-desktop.png) | ![Selected-face bar with a recoverable save error, mobile](toolbar-save-error-mobile.png) |
 
 ## Profile portrait with the selected face excluded by the verified-evidence filter
 
