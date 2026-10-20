@@ -53,6 +53,8 @@ export function useFaceAlignedCropQuery(
     queryFn: ({ signal }) => fetchFaceAlignedCrop(toValue(detectionId), toValue(maxWidth), signal),
     enabled: computed(() => Boolean(toValue(detectionId))),
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 60 * 60_000,
+    retry: false,
   })
 }
 
@@ -232,7 +234,8 @@ export function useReviewFacesMutation() {
     onSettled: async () => {
       await Promise.all(
         [
-          queryKeys.faces.all,
+          queryKeys.faces.lists(),
+          queryKeys.faces.details(),
           queryKeys.entities.all,
           queryKeys.pages.all,
           queryKeys.documents.all,

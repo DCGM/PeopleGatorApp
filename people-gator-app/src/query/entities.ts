@@ -119,7 +119,8 @@ export function usePatchEntityMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.images.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.pages.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.faces.details() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })
     },
   })

@@ -129,6 +129,7 @@ watch(
       <PersonPortrait
         :name="draft.name"
         :face-id="props.thumbnailFaceId"
+        large-initials
         class="size-24 shrink-0 border bg-card sm:size-28"
       />
 

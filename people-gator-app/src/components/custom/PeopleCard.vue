@@ -17,7 +17,12 @@ const props = defineProps<{
     class="h-full w-full min-w-0 flex-row items-center gap-4 overflow-hidden rounded-none bg-transparent p-4 text-muted-foreground shadow-none outline-none transition-colors group-hover:bg-card group-hover:text-primary group-focus-visible:bg-card group-focus:text-primary sm:gap-6"
   >
     <CardHeader class="size-20 shrink-0 px-0">
-      <PersonPortrait :name="props.name" :face-id="props.thumbnailFaceId" class="size-20" />
+      <PersonPortrait
+        :name="props.name"
+        :face-id="props.thumbnailFaceId"
+        large-initials
+        class="size-20"
+      />
     </CardHeader>
     <CardContent class="min-w-0 flex-1 px-0">
       <h3 class="block max-w-full truncate" :title="props.name">
