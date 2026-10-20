@@ -73,16 +73,16 @@ async function review(action: 'verify' | 'unassign') {
 }
 async function useAsPortrait() {
   const face = selected.value[0]
-  if (busy.value || !allowed.value || selected.value.length !== 1 || !face || currentPortrait.value)
-    return
+  if (busy.value || !allowed.value || selected.value.length !== 1 || !face) return
   feedback.value = ''
   failed.value = false
+  const automatic = currentPortrait.value
   try {
     await portraitMutation.mutateAsync({
       entityId: props.personId,
-      body: { thumbnail_face_id: face.id },
+      body: { thumbnail_face_id: automatic ? null : face.id },
     })
-    feedback.value = 'Portrait saved.'
+    feedback.value = automatic ? 'Automatic portrait.' : 'Portrait saved.'
   } catch {
     failed.value = true
     feedback.value = 'Save not confirmed. Try again.'
@@ -125,6 +125,7 @@ watch(
       :key="face.id"
       :face="face"
       :person-name="personName"
+      :portrait="face.id === thumbnailFaceId"
       :selectable="allowed"
       :selected="selectedIds.has(face.id)"
       :selection-enabled="selected.length > 0"
@@ -146,13 +147,13 @@ watch(
         type="button"
         size="sm"
         variant="outline"
-        :disabled="busy || currentPortrait"
+        :disabled="busy"
         @click="useAsPortrait"
         ><Image aria-hidden="true" />{{
           portraitMutation.isPending.value
             ? 'Saving…'
             : currentPortrait
-              ? 'Current portrait'
+              ? 'Use automatic'
               : 'Use as portrait'
         }}</Button
       >

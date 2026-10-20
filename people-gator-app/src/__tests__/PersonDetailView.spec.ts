@@ -83,7 +83,6 @@ describe('PersonDetailView', () => {
         stubs: {
           RouterLink: RouterLinkStub,
           PersonPortrait: true,
-          PersonThumbnailPicker: true,
           VerifyEntityLink: true,
           PersonFacesPanel: true,
           EvidenceFilterControls: true,

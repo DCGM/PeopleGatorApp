@@ -6,7 +6,6 @@ import ContentEditable from '@/components/custom/ContentEditable.vue'
 import EditableActions from '@/components/custom/EditableActions.vue'
 import type { PersonIdentifiers, PersonProfile } from '@/viewmodels/person-detail.types'
 import PersonPortrait from './PersonPortrait.vue'
-import PersonThumbnailPicker from './PersonThumbnailPicker.vue'
 import { Button } from '@/components/ui/button'
 
 type EditableField = keyof PersonProfile | keyof PersonIdentifiers
@@ -16,7 +15,6 @@ const props = defineProps<{
   modelValue: PersonProfile
   personId: string
   thumbnailFaceId?: string | null
-  thumbnailMode?: 'automatic' | 'manual'
   faceCount: number
   mentionCount: number
   libraryCount: number
@@ -128,19 +126,11 @@ watch(
 <template>
   <header class="border-b pb-8">
     <div class="flex flex-col gap-6 sm:flex-row sm:items-start">
-      <div class="flex shrink-0 flex-col items-start gap-3">
-        <PersonPortrait
-          :name="draft.name"
-          :face-id="props.thumbnailFaceId"
-          class="size-24 border bg-card sm:size-28"
-        />
-        <PersonThumbnailPicker
-          :person-id="props.personId"
-          :name="draft.name"
-          :selected-face-id="props.thumbnailFaceId"
-          :mode="props.thumbnailMode"
-        />
-      </div>
+      <PersonPortrait
+        :name="draft.name"
+        :face-id="props.thumbnailFaceId"
+        class="size-24 shrink-0 border bg-card sm:size-28"
+      />
 
       <div class="min-w-0 flex-1">
         <small class="font-semibold uppercase text-secondary"

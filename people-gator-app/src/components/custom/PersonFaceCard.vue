@@ -10,6 +10,7 @@ import type { PersonFace } from '@/viewmodels/person-detail.types'
 import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Item } from '@/components/ui/item'
+import { Badge } from '@/components/ui/badge'
 
 const props = defineProps<{
   face: PersonFace
@@ -18,6 +19,7 @@ const props = defineProps<{
   selected?: boolean
   selectionEnabled?: boolean
   busy?: boolean
+  portrait?: boolean
 }>()
 defineEmits<{ toggle: [event: MouseEvent]; add: [event: MouseEvent] }>()
 const route = useRoute()
@@ -46,6 +48,13 @@ const sourceTarget = computed(() =>
     :class="selected && 'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'"
     data-person-face-card
   >
+    <Badge
+      v-if="portrait"
+      variant="outline"
+      class="pointer-events-none absolute left-2 top-2 z-20"
+      data-person-portrait
+      >Portrait</Badge
+    >
     <button
       v-if="selectionEnabled"
       type="button"

@@ -212,12 +212,20 @@ describe('assigned face selection and review', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['entities', 'list'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['search'] })
     await wrapper.setProps({ thumbnailFaceId: 'f0', thumbnailMode: 'manual' })
-    expect(
-      wrapper
-        .findAll('button')
-        .find((button) => button.text() === 'Current portrait')!
-        .attributes('disabled'),
-    ).toBeDefined()
+    expect(wrapper.findAll('[data-person-portrait]')).toHaveLength(1)
+    api.portrait.mockResolvedValueOnce({
+      data: { entity_id: 'person', thumbnail_face_id: 'f0', thumbnail_mode: 'automatic' },
+    })
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Use automatic')!
+      .trigger('click')
+    await flushPromises()
+    expect(api.portrait.mock.lastCall?.[0].body).toEqual({ thumbnail_face_id: null })
+    expect(wrapper.get('[role="status"]').text()).toBe('Automatic portrait.')
+    expect(queryClient.getQueryData(['entities', 'detail', 'person'])).toMatchObject({
+      thumbnail_mode: 'automatic',
+    })
   })
 
   it('blocks competing actions during portrait saving and retains the selection on failure', async () => {

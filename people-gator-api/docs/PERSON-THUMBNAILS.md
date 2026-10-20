@@ -8,8 +8,8 @@ Clients load the saved reference through authenticated
 initials. Media failures do not change the saved choice.
 
 In a person's evidence grid, select one face and choose **Use as portrait** in
-its bottom action bar. **Change portrait** in the header also provides selection
-and **Use automatic** reset.
+its bottom action bar. To reset, select the face marked **Portrait** and choose
+**Use automatic** in the same bar.
 
 PATCH `/api/v1/entities/{entity_id}` and `/api/v1/entities:batch` accept:
 

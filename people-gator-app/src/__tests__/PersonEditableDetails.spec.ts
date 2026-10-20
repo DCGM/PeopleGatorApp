@@ -6,7 +6,7 @@ import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue
 describe('PersonEditableDetails', () => {
   it('edits identity authority IDs in the person header', async () => {
     const wrapper = mount(PersonEditableDetails, {
-      global: { stubs: { PersonPortrait: true, PersonThumbnailPicker: true } },
+      global: { stubs: { PersonPortrait: true } },
       props: {
         modelValue: {
           name: 'Ada Lovelace',

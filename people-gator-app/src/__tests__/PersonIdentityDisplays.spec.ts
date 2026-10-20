@@ -7,7 +7,7 @@ import SimilarPersonItem from '@/components/custom/SimilarPersonItem.vue'
 
 const canonicalFace = 'saved-face-outside-current-evidence'
 const global = {
-  stubs: { PersonPortrait: true, PersonThumbnailPicker: true, RouterLink: RouterLinkStub },
+  stubs: { PersonPortrait: true, RouterLink: RouterLinkStub },
 }
 
 describe('person identity portraits', () => {
@@ -23,7 +23,6 @@ describe('person identity portraits', () => {
           modelValue: { name: 'Ada', shortDescription: '', article: '', aliases: [] },
           personId: 'ada',
           thumbnailFaceId: canonicalFace,
-          thumbnailMode: 'manual',
           faceCount: 3,
           mentionCount: 1,
           libraryCount: 1,
