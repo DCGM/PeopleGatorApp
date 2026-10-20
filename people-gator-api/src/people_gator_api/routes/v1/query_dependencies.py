@@ -6,7 +6,6 @@ convention: search inputs use ``query.<field>``, filters use
 """
 
 import uuid
-from people_gator_api.schemas.provenance import EvidenceOrigin
 from datetime import datetime
 from typing import Annotated, Any
 
@@ -167,7 +166,6 @@ def search_query_dependency(
 
 
 def entity_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(EntityListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(EntityListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_source_id", "filter")] = None,
     evidence_touched_from: Annotated[datetime | None, _model_parameter(EntityListFilter, "evidence_touched_from", "filter")] = None,
@@ -219,7 +217,6 @@ def entity_list_filter_dependency(
 ) -> EntityListFilter:
     return _filter(
         EntityListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         evidence_touched_from=evidence_touched_from,
@@ -246,7 +243,6 @@ def entity_list_filter_dependency(
 
 
 def face_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(FaceListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(FaceListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_source_id", "filter")] = None,
     document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "document_source_id", "filter")] = None,
@@ -270,7 +266,6 @@ def face_list_filter_dependency(
 ) -> FaceListFilter:
     return _filter(
         FaceListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         document_source_id=document_source_id,
@@ -286,7 +281,6 @@ def face_list_filter_dependency(
 
 
 def text_mention_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(TextMentionListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(TextMentionListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_source_id", "filter")] = None,
     document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "document_source_id", "filter")] = None,
@@ -306,7 +300,6 @@ def text_mention_list_filter_dependency(
 ) -> TextMentionListFilter:
     return _filter(
         TextMentionListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         document_source_id=document_source_id,
@@ -353,7 +346,6 @@ def user_list_filter_dependency(
 
 
 def source_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(SourceListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(SourceListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_source_id", "filter")] = None,
     document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "document_source_id", "filter")] = None,
@@ -393,7 +385,6 @@ def source_list_filter_dependency(
 ) -> SourceListFilter:
     return _filter(
         SourceListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         document_source_id=document_source_id,
@@ -417,7 +408,6 @@ def source_list_filter_dependency(
 
 
 def page_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(PageListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(PageListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_source_id", "filter")] = None,
     document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "document_source_id", "filter")] = None,
@@ -477,7 +467,6 @@ def page_list_filter_dependency(
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         document_source_id=document_source_id,
@@ -506,7 +495,6 @@ def page_list_filter_dependency(
 
 
 def document_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(DocumentListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(DocumentListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_source_id", "filter")] = None,
     document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "document_source_id", "filter")] = None,
@@ -551,7 +539,6 @@ def document_list_filter_dependency(
 ) -> DocumentListFilter:
     return _filter(
         DocumentListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         document_source_id=document_source_id,
@@ -577,7 +564,6 @@ def document_list_filter_dependency(
 
 
 def image_list_filter_dependency(
-    evidence_origin: Annotated[list[EvidenceOrigin] | None, _model_parameter(ImageListFilter, "evidence_origin", "filter")] = None,
     evidence_library: Annotated[list[str] | None, _model_parameter(ImageListFilter, "evidence_library", "filter")] = None,
     evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_source_id", "filter")] = None,
     document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "document_source_id", "filter")] = None,
@@ -613,7 +599,6 @@ def image_list_filter_dependency(
 ) -> ImageListFilter:
     return _filter(
         ImageListFilter,
-        evidence_origin=evidence_origin,
         evidence_library=evidence_library,
         evidence_source_id=evidence_source_id,
         document_source_id=document_source_id,

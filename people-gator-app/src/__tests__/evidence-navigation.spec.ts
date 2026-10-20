@@ -57,7 +57,7 @@ describe('copied profile URLs and evidence requests', () => {
       Promise.resolve({
         data: {
           items: [],
-          total_count: [query['filter.evidence_origin']].flat().includes('manual') ? 0 : 2,
+          total_count: [query['filter.evidence_touched_by_api_key_id']].flat().includes(two) ? 0 : 2,
           limit: 100,
           cursor: query.return_total_count && !query.cursor ? 'next' : null,
         },
@@ -71,7 +71,7 @@ describe('copied profile URLs and evidence requests', () => {
       routes: [{ path: '/people/:personId', name: 'person-detail', component: Harness }],
     })
     await router.push(
-      `/people/${one}?link_state=manual&link_state=verified&evidence_origin=authority&evidence_document=${two}&evidence_user=${one}&origin_person_touched_from=2020-01-01T00:00:00Z&origin_text=Irena`,
+      `/people/${one}?link_state=manual&link_state=verified&evidence_key=${one}&evidence_document=${two}&evidence_user=${one}&origin_person_touched_from=2020-01-01T00:00:00Z&origin_text=Irena`,
     )
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     const wrapper = mount(Harness, {
@@ -83,7 +83,7 @@ describe('copied profile URLs and evidence requests', () => {
     expect(evidenceRequests().slice(-1)[0]).toMatchObject({
       'filter.entity_id': [one],
       'filter.entity_link_state': ['manual', 'verified'],
-      'filter.evidence_origin': ['authority'],
+      'filter.evidence_touched_by_api_key_id': [one],
       'filter.document_source_id': [two],
       'filter.evidence_touched_by_user_id': [one],
       cursor: null,
@@ -96,7 +96,7 @@ describe('copied profile URLs and evidence requests', () => {
     await flushPromises()
     expect(evidenceRequests().slice(-1)[0]?.cursor).toBe('next')
     const original = router.currentRoute.value.fullPath
-    await router.push({ query: { ...router.currentRoute.value.query, evidence_origin: 'manual' } })
+    await router.push({ query: { ...router.currentRoute.value.query, evidence_key: two } })
     await flushPromises()
     expect(evidenceRequests().slice(-1)[0]?.cursor).toBeNull()
     expect(wrapper.text()).toContain('0 matching of 7 faces')
@@ -109,7 +109,7 @@ describe('copied profile URLs and evidence requests', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('0 matching of 7 faces')
     const destination = relatedEvidenceQuery(router.currentRoute.value)
-    expect(destination.evidence_origin).toEqual(['manual'])
+    expect(destination.evidence_key).toEqual([two])
     expect(destination.origin_person_touched_from).toBe('2020-01-01T00:00:00Z')
     await router.push({ name: 'person-detail', params: { personId: two }, query: destination })
     await flushPromises()

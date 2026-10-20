@@ -387,7 +387,6 @@ export function useDocumentWorkspace(
 
   async function createAndAssign(detectionId: string, name: string, shortDescription?: string) {
     const entity = await createEntity.mutateAsync({
-      provenance: { origin: 'manual' },
       entity_type: 'person',
       name,
       short_description: shortDescription || null,

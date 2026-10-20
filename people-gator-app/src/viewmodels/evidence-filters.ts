@@ -6,7 +6,6 @@ import {
   type LocationQueryRaw,
   type RouteLocationNormalizedLoaded,
 } from 'vue-router'
-import type { EvidenceOrigin } from '@/client'
 import type { FaceListParams } from '@/query/faces'
 import { parseLinkStates } from '@/lib/entity-links'
 import { localTimeToUtc, utcToLocalTime, processingFilterError } from './people-filters'
@@ -23,15 +22,8 @@ export function queryValues(value: LocationQuery[string] | undefined) {
 }
 const ids = (value: LocationQuery[string] | undefined) =>
   queryValues(value).filter((v) => uuid.test(v))
-export const originOptions: { id: EvidenceOrigin; label: string }[] = [
-  { id: 'automatic', label: 'Automatic' },
-  { id: 'manual', label: 'Manual' },
-  { id: 'authority', label: 'Authority' },
-  { id: 'unknown', label: 'Unknown / not recorded' },
-]
 export const evidenceKeys = [
   'link_state',
-  'evidence_origin',
   'evidence_library',
   'evidence_document',
   'evidence_source',
@@ -43,9 +35,6 @@ export const evidenceKeys = [
 export function readEvidenceFilters(query: LocationQuery) {
   return {
     states: parseLinkStates(query.link_state),
-    origins: queryValues(query.evidence_origin).filter((v): v is EvidenceOrigin =>
-      originOptions.some((o) => o.id === v),
-    ),
     libraries: queryValues(query.evidence_library),
     documentIds: ids(query.evidence_document),
     sourceIds: ids(query.evidence_source),
@@ -59,7 +48,6 @@ export type EvidenceFilters = ReturnType<typeof readEvidenceFilters>
 export type EvidenceQuery = Pick<
   FaceListParams,
   | 'filter.entity_link_state'
-  | 'filter.evidence_origin'
   | 'filter.evidence_library'
   | 'filter.document_source_id'
   | 'filter.evidence_source_id'
@@ -74,7 +62,6 @@ export function evidenceFilterError(value: EvidenceFilters) {
 export function evidenceFiltersQuery(f: EvidenceFilters): EvidenceQuery {
   return {
     ...(f.states.length && { 'filter.entity_link_state': f.states }),
-    ...(f.origins.length && { 'filter.evidence_origin': f.origins }),
     ...(f.libraries.length && { 'filter.evidence_library': f.libraries }),
     ...(f.documentIds.length && { 'filter.document_source_id': f.documentIds }),
     ...(f.sourceIds.length && { 'filter.evidence_source_id': f.sourceIds }),
@@ -87,7 +74,6 @@ export function evidenceFiltersQuery(f: EvidenceFilters): EvidenceQuery {
 export function evidenceFiltersUrl(f: EvidenceFilters): LocationQueryRaw {
   return {
     link_state: f.states.length ? f.states : undefined,
-    evidence_origin: f.origins.length ? f.origins : undefined,
     evidence_library: f.libraries.length ? f.libraries : undefined,
     evidence_document: f.documentIds.length ? f.documentIds : undefined,
     evidence_source: f.sourceIds.length ? f.sourceIds : undefined,
@@ -116,12 +102,6 @@ export function evidenceUrlError(query: LocationQuery): string | undefined {
     if (queryValues(query[key]).some((value) => !uuid.test(value)))
       return 'Invalid evidence identifier in this link. Remove or correct the criterion.'
   }
-  if (
-    queryValues(query.evidence_origin).some(
-      (value) => !originOptions.some((option) => option.id === value),
-    )
-  )
-    return 'Invalid evidence origin in this link. Remove or correct the criterion.'
   return evidenceFilterError(readEvidenceFilters(query))
 }
 

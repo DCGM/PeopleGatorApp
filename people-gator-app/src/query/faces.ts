@@ -87,7 +87,6 @@ export function useCreateFaceMutation() {
         createFaceRouteApiV1FacesPost({
           body: {
             ...body,
-            provenance: body.provenance ?? { origin: 'manual' },
             ...(body.entity_id && { entity_link_state: 'manual' }),
           },
           throwOnError: true,
@@ -117,7 +116,6 @@ export function useCreateFacesMutation() {
         createFaceBatchRouteApiV1FacesBatchPost({
           body: body.map((item) => ({
             ...item,
-            provenance: item.provenance ?? { origin: 'manual' },
             ...(item.entity_id && { entity_link_state: 'manual' as const }),
           })),
           throwOnError: true,

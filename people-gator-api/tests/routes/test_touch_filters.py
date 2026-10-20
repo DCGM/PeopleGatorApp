@@ -41,7 +41,6 @@ def test_invalid_touch_ranges_return_validation_error(path, params):
     {'filter.evidence_touched_from': '2026-01-02T00:00:00Z', 'filter.evidence_touched_to': '2026-01-01T00:00:00Z'},
     {'filter.evidence_touched_from': '2026-01-01T00:00:00'},
     {'filter.evidence_touched_to': 'not-a-date'},
-    {'filter.evidence_origin': 'unrecorded-spelling'},
 ])
 def test_shared_annotation_bounds_are_validated_on_every_resource(path, params):
     app = FastAPI()

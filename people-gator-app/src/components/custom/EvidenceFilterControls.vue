@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useEvidenceFilters, originOptions } from '@/viewmodels/evidence-filters'
+import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
 import type { EvidenceFilters } from '@/viewmodels/evidence-filters'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import FilterMultiSelect from './FilterMultiSelect.vue'
@@ -17,7 +17,6 @@ function field<K extends keyof EvidenceFilters>(key: K) {
   })
 }
 const states = field('states'),
-  origins = field('origins'),
   from = field('touchedFrom'),
   to = field('touchedTo')
 const selections = {
@@ -30,8 +29,7 @@ const opened = ref<Record<string, boolean>>({})
 const librarySearch = ref(''),
   documentSearch = ref(''),
   userSearch = ref(''),
-  apiKeySearch = ref(''),
-  originSearch = ref('')
+  apiKeySearch = ref('')
 const lookups = [
   {
     key: 'libraries' as const,
@@ -58,20 +56,9 @@ const lookups = [
     options: usePeopleFilterOptions('api-key', apiKeySearch, () => !!opened.value.apiKeyIds),
   },
 ]
-const filteredOrigins = computed(() =>
-  originOptions.filter((o) => o.label.toLowerCase().includes(originSearch.value.toLowerCase())),
-)
 </script>
 <template>
   <EntityLinkStateFilter v-if="!hideState" v-model="states" />
-  <FilterMultiSelect
-    :model-value="origins"
-    @update:model-value="origins = $event as EvidenceFilters['origins']"
-    v-model:search="originSearch"
-    label="Evidence origin"
-    :options="filteredOrigins"
-    class="max-w-full flex-none"
-  />
   <template v-for="lookup in lookups" :key="lookup.key">
     <FilterMultiSelect
       v-if="!hideDocuments || lookup.key !== 'documentIds'"

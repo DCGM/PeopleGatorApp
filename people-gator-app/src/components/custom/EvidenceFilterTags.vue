@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useEvidenceFilters, originOptions, evidenceKeys } from '@/viewmodels/evidence-filters'
+import { useEvidenceFilters, evidenceKeys } from '@/viewmodels/evidence-filters'
 import type { EvidenceFilters } from '@/viewmodels/evidence-filters'
 import { linkStateVisuals } from '@/lib/entity-links'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
@@ -22,13 +22,11 @@ const documents = usePeopleFilterOptions('document', empty, false),
 const tags = computed(() => {
   const f = filters.value
   const labels: Record<string, Record<string, string>> = {
-    origins: Object.fromEntries(originOptions.map((o) => [o.id, o.label])),
     documentIds: documents.labels.value,
     userIds: users.labels.value,
     apiKeyIds: keys.labels.value,
   }
   const prefixes: Record<string, string> = {
-    origins: 'Evidence origin',
     libraries: 'Evidence library',
     documentIds: 'Evidence document',
     sourceIds: 'Evidence source',

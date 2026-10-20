@@ -293,7 +293,7 @@ describe('people filter controls and URL restoration', () => {
       q: 'Irena',
       touched_from: '2026-01-01T00:00:00Z',
       link_state: 'verified',
-      evidence_origin: 'authority',
+      evidence_key: '00000000-0000-4000-8000-000000000001',
       origin_text: 'archive',
       origin_return: '/documents?q=archive',
       origin_source_touched_from: '2025-01-01T00:00:00Z',

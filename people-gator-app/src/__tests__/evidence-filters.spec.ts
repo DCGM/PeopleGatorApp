@@ -12,7 +12,6 @@ const doc = '00000000-0000-4000-8000-000000000001'
 const actor = '00000000-0000-4000-8000-000000000002'
 const shared: LocationQuery = {
   link_state: ['verified', 'manual'],
-  evidence_origin: ['authority', 'manual'],
   evidence_document: doc,
   evidence_library: 'preview-mzk',
   evidence_user: actor,
@@ -66,11 +65,11 @@ describe('shared annotation filters and scoped navigation', () => {
       path: '/people/irena',
       query: {
         ...fromDocument,
-        evidence_origin: 'automatic',
-        origin_return: '/documents?evidence_origin=authority',
+        evidence_key: actor,
+        origin_return: '/documents?evidence_key=old',
       },
     }) as LocationQuery
-    expect(fromPerson.evidence_origin).toEqual(['automatic'])
+    expect(fromPerson.evidence_key).toEqual([actor])
     expect(fromPerson).not.toHaveProperty('origin_return')
     expect(
       evidenceFiltersQuery(readEvidenceFilters(fromPerson))['filter.evidence_touched_by_user_id'],
@@ -106,6 +105,5 @@ describe('shared annotation filters and scoped navigation', () => {
       'before or equal',
     )
     expect(evidenceUrlError({ evidence_user: 'missing' })).toContain('Invalid evidence identifier')
-    expect(evidenceUrlError({ evidence_origin: 'verified' })).toContain('Invalid evidence origin')
   })
 })

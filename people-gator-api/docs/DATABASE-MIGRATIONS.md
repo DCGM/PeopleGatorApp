@@ -97,3 +97,10 @@ unchanged by `--adopt-bootstrap`; normal migrations advance it to the new head.
 This includes upgrading revision `d34a021b0004` to the source processing and
 document search migrations. The resulting schema is validated before the same
 transaction commits. Unknown or conflicting revision histories still fail.
+
+The annotation metadata upgrade (`d34a021b0008`) preserves recorded creation and
+last-change times, actors, assignments and all record identities while dropping
+the unused classification JSON payload. Previously deployed revision
+`d34a021b0007` upgrades normally; no preview reset or reseeding of existing
+records is needed. Downgrading restores nullable columns without fabricating
+removed values.

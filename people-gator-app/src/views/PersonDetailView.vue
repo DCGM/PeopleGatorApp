@@ -2,7 +2,7 @@
 import EvidenceFilterControls from '@/components/custom/EvidenceFilterControls.vue'
 import EvidenceFilterTags from '@/components/custom/EvidenceFilterTags.vue'
 import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
-import ProvenanceDetails from '@/components/custom/ProvenanceDetails.vue'
+import CreationDetails from '@/components/custom/CreationDetails.vue'
 import {
   useEvidenceFilters,
   relatedEvidenceQuery,
@@ -173,7 +173,7 @@ function selectTab(tab: string | number) {
       >
         <template #statistics>
           <EntityLinkStatistics :stats="entity?.entity_link_stats" />
-          <ProvenanceDetails
+          <CreationDetails
             v-if="entity"
             :key="personId"
             :record="entity"
@@ -269,10 +269,10 @@ function selectTab(tab: string | number) {
               {{ mention.excerpt }} ·
               {{ mention.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
             </p>
-            <ProvenanceDetails
+            <CreationDetails
               v-if="mention.metadata"
               :record="mention.metadata"
-              label="Mention origin"
+              label="Mention creation / import"
             />
             <VerifyEntityLink v-bind="mention" :id="mention.id" kind="mention" />
           </div>

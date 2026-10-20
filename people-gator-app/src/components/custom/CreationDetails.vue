@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { EntityResponse, FaceResponse, TextMentionResponse } from '@/client'
-import { originOptions } from '@/viewmodels/evidence-filters'
-const props = defineProps<{
+defineProps<{
   record: EntityResponse | FaceResponse | TextMentionResponse
   label: string
   expanded?: boolean
@@ -12,25 +11,7 @@ function format(value: string | null | undefined) {
 </script>
 <template>
   <details :open="expanded" class="max-w-full break-words">
-    <summary>
-      {{ label }}:
-      {{
-        originOptions.find((o) => o.id === props.record.provenance?.origin)?.label ??
-        'Unknown / not recorded'
-      }}
-    </summary>
-    <p v-if="record.provenance?.source_name">Source: {{ record.provenance.source_name }}</p>
-    <p v-if="record.provenance?.reference_id">
-      Reference:
-      <a
-        v-if="record.provenance.reference_url"
-        :href="record.provenance.reference_url"
-        target="_blank"
-        rel="noopener noreferrer"
-        >{{ record.provenance.reference_id }}</a
-      >
-      <span v-else>{{ record.provenance.reference_id }} (link not recorded)</span>
-    </p>
+    <summary>{{ label }}</summary>
     <p>Recorded creation / ingestion: {{ format(record.created_at) }}</p>
     <p>Creation / import actor: {{ record.created_by_user_id ?? 'Not recorded' }}</p>
     <p>

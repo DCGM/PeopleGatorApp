@@ -31,7 +31,7 @@ def document_sources(ids):
 
 
 EVIDENCE_FIELDS = (
-    "entity_link_state", "evidence_origin", "evidence_library", "evidence_source_id", "document_source_id",
+    "entity_link_state", "evidence_library", "evidence_source_id", "document_source_id",
     "evidence_touched_from", "evidence_touched_to", "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
 )
 
@@ -47,9 +47,6 @@ def annotation_conditions(model, values):
         value = missing_to_none(getattr(values, field))
         if value is not None:
             conditions.append(column.in_(value))
-    origins = missing_to_none(values.evidence_origin)
-    if origins is not None:
-        conditions.append(func.coalesce(model.provenance["origin"].astext, "unknown").in_(origins))
     for field, op in (("evidence_touched_from", model.last_touched_at.__ge__),
                       ("evidence_touched_to", model.last_touched_at.__le__)):
         value = missing_to_none(getattr(values, field))

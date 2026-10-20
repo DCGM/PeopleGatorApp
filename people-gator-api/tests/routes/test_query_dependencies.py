@@ -90,7 +90,7 @@ LIST_FILTERS["/documents"].add("has_unassigned_faces")
 
 for path, fields in LIST_FILTERS.items():
     if path != "/users":
-        fields.update({"evidence_origin", "evidence_library", "evidence_source_id", "document_source_id",
+        fields.update({"evidence_library", "evidence_source_id", "document_source_id",
                        "evidence_touched_from", "evidence_touched_to", "evidence_touched_by_user_id", "evidence_touched_by_api_key_id"})
 
 SEARCH_FILTERS = {

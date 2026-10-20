@@ -134,7 +134,7 @@ class PostgresEntityRepository(EntityRepository):
         entity = Entity(
             user_id=context.user_id,
             **touch_values(context),
-            **creation_values(payload, context),
+            **creation_values(context),
             kind=payload.entity_type.value,
             name=payload.name,
             description=missing_to_none(payload.description),

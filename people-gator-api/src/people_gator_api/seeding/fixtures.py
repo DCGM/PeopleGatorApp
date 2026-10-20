@@ -23,7 +23,7 @@ class Person:
 
 PEOPLE = (
     Person("provenance-review", "Irena Evidence", (),
-           "Synthetic authority import with separately edited annotations in two libraries.", "importer"),
+           "Synthetic imported identity with separately edited annotations in two libraries.", "importer"),
     Person(
         "link-ada",
         "Ada Review",
@@ -98,8 +98,8 @@ class Document:
 
 
 DOCUMENTS = (
-    Document("provenance-a", "preview-mzk", "Evidence provenance ledger"),
-    Document("provenance-b", "preview-nlk", "Evidence provenance correspondence"),
+    Document("provenance-a", "preview-mzk", "Annotation review ledger"),
+    Document("provenance-b", "preview-nlk", "Annotation review correspondence"),
     Document("issue8-direct", "preview-nlk", "Direct annotation ledger"),
     Document("issue8-search", "preview-mzk", "Příběhy archivářů"),
     Document("issue8-mirror", "preview-nlk", "Search isolation mirror", "issue8-search"),
@@ -130,7 +130,6 @@ class Face:
     group: int
     state: str = "automatic"
     embedded: bool = True
-    origin: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -139,7 +138,6 @@ class Mention:
     person: str
     text: str
     state: str | None = "automatic"
-    origin: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -158,13 +156,13 @@ class Page:
 
 PAGES = (
     Page("provenance-a-1", "provenance-a", 1,
-        (Face("provenance-auto", "provenance-review", 0, 1, origin="automatic"),
-         Face("provenance-authority", "provenance-review", 1, 1, "verified", origin="authority")),
-        (Mention("provenance-mention-auto", "provenance-review", "Irena Evidence imported this catalogue.", origin="automatic"),)),
+        (Face("provenance-auto", "provenance-review", 0, 1),
+         Face("provenance-authority", "provenance-review", 1, 1, "verified")),
+        (Mention("provenance-mention-auto", "provenance-review", "Irena Evidence imported this catalogue."),)),
     Page("provenance-b-1", "provenance-b", 1,
-        (Face("provenance-manual", "provenance-review", 0, 1, "manual", origin="manual"),
+        (Face("provenance-manual", "provenance-review", 0, 1, "manual"),
          Face("provenance-unknown", "provenance-review", 1, 1)),
-        (Mention("provenance-mention-verified", "provenance-review", "Irena Evidence verified this correspondence.", "verified", origin="manual"),)),
+        (Mention("provenance-mention-verified", "provenance-review", "Irena Evidence verified this correspondence.", "verified"),)),
     Page("issue8-untouched", "issue8-search", 1),
     *(Page(f"issue8-search-{i}", "issue8-search", i,
         (Face(f"issue8-face-{i}", "ada", 0, 0, "verified" if i == 6 else "automatic", embedded=False),),

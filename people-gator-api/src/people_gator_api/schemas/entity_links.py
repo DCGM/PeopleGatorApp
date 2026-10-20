@@ -2,14 +2,14 @@
 
 from datetime import datetime, timezone
 from pydantic import AwareDatetime
-from .provenance import ProvenanceCreate, ProvenanceResponse, EvidenceOrigin
+from .creation import CreationMetadata
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from .enums import EntityLinkState
 from .missing import MISSING, MissingType, is_missing
 
 
-class EntityLinkCreate(ProvenanceCreate):
+class EntityLinkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     entity_link_state: EntityLinkState | MissingType = MISSING
 
@@ -27,7 +27,7 @@ class EntityLinkPatch(BaseModel):
     entity_link_state: EntityLinkState | None | MissingType = MISSING
 
 
-class EntityLinkResponse(ProvenanceResponse):
+class EntityLinkResponse(CreationMetadata):
     last_touched_at: AwareDatetime | None = None
     last_touched_by_user_id: uuid.UUID | None = None
     last_touched_by_api_key_id: uuid.UUID | None = None
@@ -37,7 +37,6 @@ class EntityLinkResponse(ProvenanceResponse):
 
 
 class EntityLinkFilter(BaseModel):
-    evidence_origin: list[EvidenceOrigin] | MissingType = MISSING
     evidence_library: list[str] | MissingType = MISSING
     evidence_source_id: list[uuid.UUID] | MissingType = MISSING
     document_source_id: list[uuid.UUID] | MissingType = Field(
@@ -62,7 +61,7 @@ class EntityLinkFilter(BaseModel):
             raise ValueError("evidence_touched_from must be before or equal to evidence_touched_to")
         return self
 
-    @field_validator("evidence_origin", "evidence_library", "evidence_source_id", "document_source_id",
+    @field_validator("evidence_library", "evidence_source_id", "document_source_id",
                      "evidence_touched_by_user_id", "evidence_touched_by_api_key_id")
     @classmethod
     def normalize_evidence_values(cls, value):

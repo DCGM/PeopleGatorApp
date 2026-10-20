@@ -1454,7 +1454,7 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
 
 
 @pytest.mark.asyncio
-async def test_provenance_annotation_filter_parity_and_rerun_preservation(seed_target):
+async def test_annotation_filter_parity_and_creation_preservation(seed_target):
     from people_gator_api.schemas.faces import FaceListFilter
     from people_gator_api.schemas.mentions import TextMentionListFilter
     from people_gator_api.schemas.sources import DocumentListFilter
@@ -1464,18 +1464,15 @@ async def test_provenance_annotation_filter_parity_and_rerun_preservation(seed_t
     result = await preview.seed_preview(database, filesystem)
     person = result.entities['provenance-review']
     authority = await database.faces.get(result.faces['provenance-authority'])
-    assert authority.provenance.origin == 'authority'
-    assert authority.provenance.reference_url
     assert authority.entity_link_state == EntityLinkState.verified
     assert authority.created_by_api_key_id == result.api_keys['importer']
     assert authority.last_touched_by_user_id == result.users['reviewer']
     assert authority.last_touched_by_api_key_id is None
     assert authority.last_touched_at > authority.created_at
     identity = await database.entities.get(person)
-    assert identity.provenance.origin == 'authority'
     assert identity.created_at < authority.last_touched_at
 
-    criteria = dict(evidence_origin=['authority'], entity_link_state=['manual', 'verified'],
+    criteria = dict(entity_link_state=['manual', 'verified'],
                     evidence_library=['preview-mzk'], document_source_id=[result.documents['provenance-a']],
                     evidence_touched_by_user_id=[result.users['reviewer']],
                     evidence_touched_from=authority.last_touched_at,
@@ -1488,11 +1485,11 @@ async def test_provenance_annotation_filter_parity_and_rerun_preservation(seed_t
     docs = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(**criteria), return_total_count=True))
     assert [d.source_id for d in docs.items] == [result.documents['provenance-a']]
     # Manual evidence is in the other document: unrelated witnesses cannot combine.
-    impossible = {**criteria, 'evidence_origin': ['manual'], 'entity_link_state': ['manual']}
+    impossible = {**criteria, 'entity_link_state': ['manual']}
     assert not (await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(**impossible)))).items
     assert not (await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(**impossible)))).items
     mentions = await database.text_mentions.list(TextMentionListRequest(limit=100, filter_=TextMentionListFilter(
-        entity_id=[person], evidence_origin=['manual'], evidence_touched_by_user_id=[result.users['reviewer']]), return_total_count=True))
+        entity_id=[person], evidence_touched_by_user_id=[result.users['reviewer']]), return_total_count=True))
     assert [m.mention_id for m in mentions.items] == [result.mentions['provenance-mention-verified']]
     before = authority.model_dump()
     await preview.seed_preview(database, filesystem)
@@ -1506,7 +1503,8 @@ async def test_provenance_annotation_filter_parity_and_rerun_preservation(seed_t
     changed = await database.faces.patch(automatic.detection_id, FacePatchRequest(entity_link_state='manual'), reviewer)
     assert changed.last_touched_by_api_key_id is None
     assert changed.last_touched_at > automatic.last_touched_at
-    assert changed.provenance == automatic.provenance
+    assert changed.created_at == automatic.created_at
+    assert changed.created_by_api_key_id == automatic.created_by_api_key_id
 
 
 @pytest.mark.asyncio
@@ -1528,10 +1526,9 @@ async def test_annotation_metadata_migration_keeps_historical_unknown(seed_targe
     await validate_postgres_schema(engine)
     face = await db.faces.get(detection_id)
     assert face.entity_link_state.value == 'verified'
-    assert face.provenance.origin.value == 'unknown'
     assert face.last_touched_at is None and face.created_at is None
     matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
-        detection_id=[detection_id], evidence_origin=['unknown'])))
+        detection_id=[detection_id])))
     assert [item.detection_id for item in matches.items] == [detection_id]
     matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
         detection_id=[detection_id], evidence_touched_from='2000-01-01T00:00:00Z')))
@@ -1549,7 +1546,7 @@ async def test_evidence_pagination_counts_and_similarity_witnesses(seed_target):
     ids, cursor = [], None
     while True:
         page = await db.faces.list(FaceListRequest(limit=1, return_total_count=True, cursor=cursor,
-            filter_=FaceListFilter(entity_id=[person], evidence_origin=['automatic', 'manual', 'authority', 'unknown'])))
+            filter_=FaceListFilter(entity_id=[person])))
         assert page.total_count == 4
         assert all(face.entity_id == person for face in page.items)
         ids.extend(face.detection_id for face in page.items)
@@ -1559,7 +1556,7 @@ async def test_evidence_pagination_counts_and_similarity_witnesses(seed_target):
     assert len(ids) == len(set(ids)) == 4
     found = await db.entities.search(SearchEntitiesRequest(limit=100, query=QueryBase(
         face_id=[seed.faces['provenance-auto']], face_embedding_model=MODEL),
-        filter_=EntityListFilter(evidence_origin=['authority'])))
+        filter_=EntityListFilter(evidence_touched_by_user_id=[seed.users['reviewer']], document_source_id=[seed.documents['provenance-a']])))
     assert [item.entity_id for item in found.items] == [person]
     assert found.items[0].matched_detection_ids == [seed.faces['provenance-authority']]
 
@@ -1711,7 +1708,6 @@ async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rer
     person_id = seed.entities['provenance-review']
     assert seed.filter_examples['person-face-review'] == f'/people/{person_id}'
     person = await db.entities.get(person_id)
-    assert person.provenance.origin.value == 'authority'
     assert person.created_at is not None and person.last_touched_at is not None
     actor = GenericActor(user_id=seed.users['reviewer'])
     automatic = await db.faces.get(seed.faces['provenance-auto'])
@@ -1726,13 +1722,13 @@ async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rer
     verified, unassigned = updated
     reviewed_person = await db.entities.get(person_id)
     assert reviewed_person.created_at == person.created_at
-    assert reviewed_person.provenance == person.provenance
+    assert reviewed_person.created_by_user_id == person.created_by_user_id
     assert verified.entity_id == person_id and verified.entity_link_state.value == 'verified'
     assert unassigned.entity_id is None and unassigned.entity_link_state is None
     assert verified.last_touched_by_user_id == actor.user_id
     assert unassigned.last_touched_by_user_id == actor.user_id
-    assert verified.provenance == automatic.provenance
-    assert unassigned.provenance == manual.provenance
+    assert verified.created_at == automatic.created_at
+    assert unassigned.created_at == manual.created_at
     for _ in range(2):
         rerun = await preview.seed_preview(db, filesystem)
         assert rerun.filter_examples['person-face-review'] == seed.filter_examples['person-face-review']
@@ -1746,3 +1742,63 @@ async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rer
         page = await db.sources.get_page(face.source_id)
         image = await get_page_image(page.library, page.document_id, page.page_id)
         assert image.content
+
+
+@pytest.mark.asyncio
+async def test_creation_and_reviews_survive_metadata_cleanup_upgrade(seed_target):
+    from sqlalchemy import inspect
+
+    db, filesystem, engine = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    before_face = await db.faces.get(seed.faces['provenance-authority'])
+    before_person = await db.entities.get(seed.entities['provenance-review'])
+    await db.faces._session.rollback()
+    async with engine.begin() as connection:
+        def upgrade_retained_preview(sync):
+            config = migration_config()
+            config.attributes['connection'] = sync
+            command.downgrade(config, 'd34a021b0007')
+            for table in ('pg_demo_entities', 'pg_demo_image_occurrences', 'pg_demo_text_mentions'):
+                sync.execute(text(f"UPDATE {table} SET provenance = '{{\"discarded\": true}}'::jsonb"))
+            command.upgrade(config, 'head')
+            command.upgrade(config, 'head')
+            inspector = inspect(sync)
+            for table in ('pg_demo_entities', 'pg_demo_image_occurrences', 'pg_demo_text_mentions'):
+                columns = {item['name'] for item in inspector.get_columns(table)}
+                assert columns >= {'created_at', 'created_by_user_id', 'created_by_api_key_id'}
+                assert not columns & {'provenance'}
+        await connection.run_sync(upgrade_retained_preview)
+    await validate_postgres_schema(engine)
+    assert await db.faces.get(before_face.detection_id) == before_face
+    assert await db.entities.get(before_person.entity_id) == before_person
+    for _ in range(2):
+        assert await preview.seed_preview(db, filesystem) == seed
+        assert await db.faces.get(before_face.detection_id) == before_face
+        assert await db.entities.get(before_person.entity_id) == before_person
+
+
+@pytest.mark.asyncio
+async def test_annotation_editor_example_uses_same_user_and_key_and_preserves_creation(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    example = urlsplit(seed.filter_examples['annotation-editor-filters'])
+    query = parse_qs(example.query)
+    assert example.path == f"/people/{seed.entities['provenance-review']}"
+    assert query == {
+        'evidence_user': [str(seed.users['importer'])],
+        'evidence_key': [str(seed.api_keys['importer'])],
+    }
+    matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        entity_id=[seed.entities['provenance-review']],
+        evidence_touched_by_user_id=query['evidence_user'],
+        evidence_touched_by_api_key_id=query['evidence_key'],
+    )))
+    assert {face.detection_id for face in matches.items} == {
+        seed.faces['provenance-auto'], seed.faces['provenance-manual'], seed.faces['provenance-unknown'],
+    }
+    for _ in range(2):
+        assert await preview.seed_preview(db, filesystem) == seed
+        for face in matches.items:
+            assert await db.faces.get(face.detection_id) == face

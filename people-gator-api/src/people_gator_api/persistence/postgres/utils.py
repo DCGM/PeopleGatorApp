@@ -589,13 +589,13 @@ def search_page(
 
 from .entity_link_queries import evidence_predicate, load_link_stats, annotation_conditions, EVIDENCE_FIELDS
 
-def provenance_values(record) -> dict:
-    return {"provenance": record.provenance or {}, "created_at": record.created_at,
+def creation_metadata(record) -> dict:
+    return {"created_at": record.created_at,
             "created_by_user_id": record.created_by_user_id, "created_by_api_key_id": record.created_by_api_key_id}
 
 
 def annotation_values(record) -> dict:
-    return {**provenance_values(record), "last_touched_at": record.last_touched_at,
+    return {**creation_metadata(record), "last_touched_at": record.last_touched_at,
             "last_touched_by_user_id": record.last_touched_by_user_id,
             "last_touched_by_api_key_id": record.last_touched_by_api_key_id}
 
@@ -606,7 +606,7 @@ def entity_response(entity: Entity) -> EntityResponse:
             f"entity {entity.id} does not satisfy the persistence contract"
         )
     return EntityResponse(
-        **provenance_values(entity),
+        **creation_metadata(entity),
         entity_id=entity.id,
         entity_link_stats=getattr(entity, "_entity_link_stats", None) or {},
         user_id=entity.user_id,

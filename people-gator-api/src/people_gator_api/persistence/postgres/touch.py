@@ -74,9 +74,8 @@ async def touch_sources(
         await session.execute(update(Source).where(Source.id.in_(surviving)).values(**touch_values(context)))
 
 
-def creation_values(payload, context: GenericActor) -> dict:
+def creation_values(context: GenericActor) -> dict:
     return {
-        "provenance": payload.provenance.model_dump(mode="json"),
         "created_at": datetime.now(timezone.utc),
         "created_by_user_id": context.user_id,
         "created_by_api_key_id": getattr(context, "api_key_id", None),

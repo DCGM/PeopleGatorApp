@@ -167,7 +167,6 @@ export type DocumentResponse = {
  * Request body for creating a new entity.
  */
 export type EntityCreateRequest = {
-    provenance?: Provenance;
     /**
      * The type of the entity. Immutable after creation.
      */
@@ -290,10 +289,6 @@ export type EntityLinkStats = {
  * Lists of criteria in each field are combined using logical OR.
  */
 export type EntityListFilter = {
-    /**
-     * Evidence Origin
-     */
-    evidence_origin?: Array<EvidenceOrigin>;
     /**
      * Evidence Library
      */
@@ -608,7 +603,6 @@ export type EntityPatchRequest = {
  * A single entity record.
  */
 export type EntityResponse = {
-    provenance?: Provenance;
     /**
      * Created At
      */
@@ -696,17 +690,11 @@ export type EntityResponse = {
 export type EntityType = 'person';
 
 /**
- * EvidenceOrigin
- */
-export type EvidenceOrigin = 'automatic' | 'manual' | 'authority' | 'unknown';
-
-/**
  * FaceCreateRequest
  *
  * Request body for ingesting a face detection.
  */
 export type FaceCreateRequest = {
-    provenance?: Provenance;
     /**
      * Entity Link State
      */
@@ -867,7 +855,6 @@ export type FacePatchRequest = {
  * A single face detection record.
  */
 export type FaceResponse = {
-    provenance?: Provenance;
     /**
      * Created At
      */
@@ -1075,7 +1062,6 @@ export type FoundEntity = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
-    provenance?: Provenance;
     /**
      * Created At
      */
@@ -1185,7 +1171,6 @@ export type FoundFace = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
-    provenance?: Provenance;
     /**
      * Created At
      */
@@ -2009,25 +1994,6 @@ export type PageResponse = {
 };
 
 /**
- * Provenance
- */
-export type Provenance = {
-    origin?: EvidenceOrigin;
-    /**
-     * Source Name
-     */
-    source_name?: string | null;
-    /**
-     * Reference Id
-     */
-    reference_id?: string | null;
-    /**
-     * Reference Url
-     */
-    reference_url?: string | null;
-};
-
-/**
  * RefreshTokenRequest
  *
  * Request model for refresh token endpoint.
@@ -2173,7 +2139,6 @@ export type TextLineModel = {
  * Request body for recording an entity name found in a source.
  */
 export type TextMentionCreateRequest = {
-    provenance?: Provenance;
     /**
      * Entity Link State
      */
@@ -2276,7 +2241,6 @@ export type TextMentionPatchRequest = {
  * A single mention of an entity name in a text source.
  */
 export type TextMentionResponse = {
-    provenance?: Provenance;
     /**
      * Created At
      */
@@ -2341,7 +2305,6 @@ export type TextMentionResponse = {
  * ``end_character`` is exclusive.
  */
 export type TextMentionSpanModel = {
-    provenance?: Provenance;
     /**
      * Created At
      */
@@ -2627,10 +2590,6 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -2821,10 +2780,6 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -2954,10 +2909,6 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          * How independently ranked modality result lists are fused.
          */
         'query.score_fusion'?: ScoreFusion;
-        /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
         /**
          * Filter.Evidence Library
          */
@@ -3161,10 +3112,6 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -3341,10 +3288,6 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
         /**
          * Filter.Evidence Library
          */
@@ -3739,10 +3682,6 @@ export type ListFacesRouteApiV1FacesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -4120,10 +4059,6 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -4421,10 +4356,6 @@ export type ListSourcesRouteApiV1SourcesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -4654,10 +4585,6 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
         /**
          * Filter.Evidence Library
          */
@@ -4959,10 +4886,6 @@ export type ListPagesRouteApiV1PagesGetData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
         /**
          * Filter.Evidence Library
          */
@@ -5415,10 +5338,6 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
     };
     query?: {
         /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
-        /**
          * Filter.Evidence Library
          */
         'filter.evidence_library'?: Array<string> | null;
@@ -5494,10 +5413,6 @@ export type ListImagesRouteApiV1ImagesGetData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Filter.Evidence Origin
-         */
-        'filter.evidence_origin'?: Array<EvidenceOrigin> | null;
         /**
          * Filter.Evidence Library
          */

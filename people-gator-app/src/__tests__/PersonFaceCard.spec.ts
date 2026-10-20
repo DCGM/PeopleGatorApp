@@ -40,7 +40,7 @@ describe('person evidence cards', () => {
         },
       ],
     })
-    await router.push('/people/person?evidence_origin=authority&origin_text=Irena')
+    await router.push('/people/person?evidence_key=00000000-0000-4000-8000-000000000001&origin_text=Irena')
     const wrapper = mount(PersonFaceCard, {
       props: {
         face: { ...face, verifiedBy: 'verifier', verifiedAt: '2026-10-20T09:00:00Z' },
@@ -61,7 +61,7 @@ describe('person evidence cards', () => {
     expect(wrapper.text()).toContain('Preview reviewer')
     expect(wrapper.find('details').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Detection origin')
-    expect(wrapper.get('a').attributes('href')).toContain('evidence_origin=authority')
+    expect(wrapper.get('a').attributes('href')).toContain('evidence_key=00000000-0000-4000-8000-000000000001')
     expect(wrapper.get('a').attributes('href')).toContain('person=detection')
     expect(wrapper.find('a a').exists()).toBe(false)
     const editor = wrapper.get('[title="Evidence changed by Preview reviewer"]')

@@ -120,7 +120,7 @@ class PostgresFaceRepository(FaceRepository):
     def _new(payload: FaceCreateRequest, context: GenericActor) -> Face:
         embeddings = missing_to_none(payload.embeddings)
         face = Face(
-            **creation_values(payload, context),
+            **creation_values(context),
             **touch_values(context),
             source_id=payload.source_id,
             entity_id=missing_to_none(payload.entity_id),

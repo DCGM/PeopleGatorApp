@@ -106,7 +106,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
     @staticmethod
     def _new(payload: TextMentionCreateRequest, context: GenericActor) -> TextMention:
         return TextMention(
-            **creation_values(payload, context),
+            **creation_values(context),
             **touch_values(context),
             mention=payload.name,
             context=payload.context,

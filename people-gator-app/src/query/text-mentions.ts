@@ -63,7 +63,6 @@ export function useCreateTextMentionMutation() {
         createTextMentionRouteApiV1TextMentionsPost({
           body: {
             ...body,
-            provenance: body.provenance ?? { origin: 'manual' },
             entity_link_state: 'manual',
           },
           throwOnError: true,
@@ -93,7 +92,6 @@ export function useCreateTextMentionsMutation() {
         createTextMentionBatchRouteApiV1TextMentionsBatchPost({
           body: body.map((item) => ({
             ...item,
-            provenance: item.provenance ?? { origin: 'manual' },
             entity_link_state: 'manual',
           })),
           throwOnError: true,

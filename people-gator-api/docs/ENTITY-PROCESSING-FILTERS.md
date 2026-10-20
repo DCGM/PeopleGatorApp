@@ -40,8 +40,8 @@ controls use the browser's local timezone. Filter changes select a new query
 cache entry and start from its first page. Individual chips and Clear all filters
 remove filters while preserving the text query.
 
-Person details include a collapsed Last processed row in the statistics sidebar.
-Expand it to see the timestamp in the browser's local timezone (including seconds
+Person details include an expanded Last processed row in the statistics sidebar.
+It shows the timestamp in the browser's local timezone (including seconds
 and timezone), the last user's display name,
 and the API-key name/identifier when present. Hovering the timestamp shows its
 original UTC value; actor labels expose their IDs on hover and fall back to IDs
@@ -70,7 +70,6 @@ share these evidence criteria (prefix with `filter.` over HTTP):
 | Field | Meaning |
 | --- | --- |
 | `entity_link_state` | OR of Automatic, Manual, Verified assignment states |
-| `evidence_origin` | OR of recorded `automatic`, `manual`, `authority`, `unknown` creation/import origins |
 | `evidence_library` | Library of the annotation's direct document/page source |
 | `document_source_id` | Internal registered document source UUID, including its direct evidence and pages in the same library/document |
 | `evidence_source_id` | Exact annotation source UUIDs |
@@ -87,10 +86,9 @@ are omitted; malformed/inverted/naive time bounds return 422.
 
 Unprefixed `last_touched_*` still describes the selected **resource** (person or
 source processing). It never becomes an annotation bound when navigating.
-`provenance` is immutable creation metadata with an explicit origin and optional
-source name, HTTP(S) reference and reference ID. Authority origin requires all
-three reference fields. New records capture server creation/ingestion time and
-actor; detector execution time is not inferred. Existing records remain unknown.
-Material annotation changes, including merges/unassignments/embedding edits,
-update annotation time and actor. Identical writes and reads do not. JWT changes
-clear previous API-key attribution. Verification changes state, not origin.
+New records capture server creation/ingestion time and actor separately from
+annotation edits; detector execution time is not inferred. Historical creation
+and change metadata remain null when not recorded. Material annotation changes,
+including merges/unassignments/embedding edits, update annotation time and actor.
+Identical writes and reads do not. JWT changes clear previous API-key attribution.
+Creation/import attribution stays unchanged when an annotation is reviewed.

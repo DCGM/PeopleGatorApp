@@ -123,8 +123,7 @@ class APIKey(Base):
     )
 
 
-class RecordedProvenance:
-    provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+class RecordedCreation:
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"))
@@ -132,7 +131,7 @@ class RecordedProvenance:
         ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"))
 
 
-class AnnotationMetadata(RecordedProvenance):
+class AnnotationMetadata(RecordedCreation):
     last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_touched_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("users.id"), ondelete="RESTRICT"), index=True)
@@ -140,7 +139,7 @@ class AnnotationMetadata(RecordedProvenance):
         ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True)
 
 
-class Entity(RecordedProvenance, Base):
+class Entity(RecordedCreation, Base):
     """A canonical real-world entity."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("entities")

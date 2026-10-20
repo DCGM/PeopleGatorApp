@@ -303,9 +303,9 @@ S3 denial, SDK timeout, pool saturation and same-page synchronization are covere
 by gated regression tests, not by introducing failures into preview data. See
 [media concurrency](MEDIA-UPLOAD-CONCURRENCY.md) for the isolated HTTP diagnostic.
 
-## Evidence provenance and annotation edits (#31)
+## Shared annotation filters and edits (#31)
 
-The `scan-assignment-search` example opens scans for Irena's provenance ledger.
+The `scan-assignment-search` example opens scans for Irena's annotation review ledger.
 Open its page, select a face and search for **Ada Novak** in the assignment panel.
 Ada has evidence elsewhere and must remain available as a database candidate:
 opening the scan must not silently add an evidence-source filter. Explicitly
@@ -320,31 +320,29 @@ custom source/return breadcrumb is shown, including for older URLs containing
 `origin_return`. Seed tests check real key-filtered people/faces, changed-key
 empty results, clearing and twice-run preservation of annotation metadata.
 
-Search for **Irena Evidence**. This new, checkpointed synthetic identity was
-imported from a synthetic authority; its reference is deliberately under
-`preview.invalid`. Its faces in **Evidence provenance ledger** (`preview-mzk`)
-have Automatic and Authority origins. The authority face has a Verified link:
-verification preserves its origin and original importer/API key, while the
-annotation's last editor is the reviewer without an API key. **Evidence
-provenance correspondence** (`preview-nlk`) contains Manual and Unknown origins
-and a separately verified mention. Existing fixtures retain unknown historical
-origins; the seed does not infer provenance from identifiers or link states.
+The `annotation-editor-filters` example opens Irena's profile with the importer
+user and API key selected together, showing the three faces last changed by
+that actor/key and excluding the separately verified face.
 
-Select Authority origin + Manual/Verified link states + `preview-mzk` to explore
-the same evidence through Documents, People, a profile and its source page.
-Selecting Manual origin in that document must return no match; the manual face
-in the other library cannot satisfy part of the predicate. Annotation edit dates
-and actors are distinct from identity creation and person/document processing.
-The seed uses real actor contexts and records actual server event times; it does
-not fabricate fixed historical timestamps. New fixture keys are additive and
-reruns preserve provenance, edits, attribution and checkpoints. Integration
-coverage asserts equivalent repository matches and unchanged annotation times
-on rerun and identical verification.
+Search for **Irena Evidence**. This checkpointed synthetic identity has faces
+and mentions in two libraries. **Annotation review ledger** (`preview-mzk`) has
+an importer-created face and a reviewer-verified face; **Annotation review
+correspondence** (`preview-nlk`) has a manual face and a verified mention.
+Select a modification user, API key, date bound or document to follow the same
+annotation criteria through Documents, People, profiles and scans. Combining
+criteria from different annotations must not produce a match.
 
-The `page-activity` example opens the provenance ledger directly with
+Creation/import times and actors remain separate from annotation changes and
+person/document processing. The seed uses real actor contexts and actual server
+event times. Reruns preserve recorded creation, edits, assignments and checkpoints.
+Internal fixture keys are stable for retained preview compatibility. Integration
+coverage checks equivalent repository matches, unchanged times on rerun and
+identical verification, plus upgrades from the previously deployed revision.
+
+The `page-activity` example opens the annotation review ledger directly with
 `panel=activity`. Its two faces and one mention have two importer edits and one
 later reviewer verification. In the scan sidebar, choose Activity, then By user:
-selecting Preview reviewer shows the verified authority face. By day groups the
+selecting Preview reviewer shows the reviewer-verified face. By day groups the
 recorded annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
 Faces, Activity and Statistics share the top-level pane navigation; Activity uses
 the full remaining pane height and scrolls independently of the scan. The seed's activity link is additive and
@@ -366,10 +364,8 @@ Discover tab; switch to Faces to compare the card presentation and select faces
 for verification/unassignment. Verify selected uses a green outline; Unassign
 selected uses a red outline, with the same behavior in light/dark themes.
 Existing source identities, records/media and
-review edits are reused. Detection origin is retained in data/filtering but has
-no disclosure on the card. The normal **People** breadcrumb forwards the current
-shared evidence filters; it does not restore a saved source URL. Raw origin
-metadata is not rendered as filter tags. Shared evidence criteria populate the
+review edits are reused. The normal **People** breadcrumb forwards the current
+shared evidence filters; it does not restore a saved source URL. Shared evidence criteria populate the
 actual controls, while resource-specific processing and search settings remain
 separate. These entry points reuse existing
 stable records/media and never reset checkpoints or reviewer edits. Integration

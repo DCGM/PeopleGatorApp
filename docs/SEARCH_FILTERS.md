@@ -120,7 +120,6 @@ state and actor; results cannot combine unrelated annotations.
 | Browser URL | API criterion / scope |
 | --- | --- |
 | `link_state` | `filter.entity_link_state` |
-| `evidence_origin` | `filter.evidence_origin`: automatic/manual/authority/unknown, independent of link state |
 | `evidence_library` | `filter.evidence_library` |
 | `evidence_document` | `filter.document_source_id`: internal registered document source UUID |
 | `evidence_source` | `filter.evidence_source_id`: exact source UUID |
@@ -152,25 +151,20 @@ Back/Forward. Destination queries start at their own first page; source cursors
 never travel across resources. Removing a filter tag changes controls, URL and
 server results. A single Clear all filters action per panel and profile broadening preserve unrelated
 search context; clearing text remains a separate action. Invalid copied
-annotation bounds/origins/UUIDs show recoverable criteria and block evidence
+annotation bounds/UUIDs show recoverable criteria and block evidence
 requests until corrected/removed. Missing matched detections and unavailable
 source pages are reported without blocking identity details. Missing option
 labels fall back to identifiers without exposing credentials.
 
 Face-similarity entity results include `matched_detection_ids`; profile links
 retain these actual witnesses. They are loaded within the fixed person and
-current evidence scope, independently of the first evidence page. Verification
-metadata and actions remain available. Person face cards keep complete library/document/page references together with
-wrapping, overlay status at bottom right and matching detection at top left, and
-show compact last-change attribution with a linked editor and relative time/date.
-Detection IDs/confidence remain available; detection-origin disclosures are removed.
-Identity creation provenance remains in the profile statistics; owner, verifier and last editor are independent.
+current evidence scope, independently of the first evidence page. Person face
+cards use compact assignment/confidence, library/document and last-change/editor
+rows. Identity creation/import time and actor remain separately labeled in the
+profile statistics; owner, verifier and last editor are independent.
 
-PostgreSQL implements these persisted metadata and shared filters. The optional
-Weaviate adapter explicitly rejects the new provenance/edit filter groups and
-recorded provenance ingestion; it must not silently return unfiltered results.
-No authority crawler or historical audit log is introduced. Synthetic authority
-references use `preview.invalid`; no external authority data is fetched.
+PostgreSQL implements the persisted annotation metadata and shared filters. The
+optional Weaviate adapter explicitly rejects unsupported annotation edit filters.
 
 The scan pane has top-level Faces, Activity and Statistics tabs. Activity and
 Statistics replace the entire pane content and scroll within its remaining height;

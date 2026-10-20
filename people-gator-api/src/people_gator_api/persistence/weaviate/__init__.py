@@ -182,10 +182,10 @@ def _ref(obj: _StoredObject, name: str, required: bool = False) -> uuid.UUID | N
 def _require_postgres_for_evidence(f, *, allow_document_scope=False):
     if f is not None and not is_missing(f) and any(
         not is_missing(getattr(f, field)) for field in (
-            "evidence_origin", "evidence_library", "evidence_source_id", "evidence_touched_from", "evidence_touched_to",
+            "evidence_library", "evidence_source_id", "evidence_touched_from", "evidence_touched_to",
             "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
             *(() if allow_document_scope else ("document_source_id",)))):
-        raise NotImplementedError("Recorded annotation provenance/edit filters require PostgreSQL")
+        raise NotImplementedError("Annotation edit filters require PostgreSQL")
 
 
 def _props(
@@ -196,10 +196,6 @@ def _props(
     Pydantic omits MISSING fields and converts enums, URLs, and UUIDs to strings.
     Keeping this conversion at the boundary avoids leaking untyped client data.
     """
-    if hasattr(model, "provenance"):
-        if model.provenance.model_dump(exclude_defaults=True):
-            raise NotImplementedError("Recorded creation provenance requires PostgreSQL")
-        exclude = (exclude or set()) | {"provenance"}
     return model.model_dump(mode="json", exclude=exclude, exclude_unset=True)
 
 
