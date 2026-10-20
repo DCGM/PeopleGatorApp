@@ -76,11 +76,12 @@ async def test_selection_reset_response_parity_noops_and_later_faces(portraits):
     assert automatic.thumbnail_face_id == first.detection_id
     second = await face(r, r.person.entity_id)
     assert (await get(r)).thumbnail_face_id == first.detection_id
-    manual = await choose(r, second.detection_id)
-    assert manual.thumbnail_face_id == second.detection_id
+    manual_id = max(first.detection_id, second.detection_id)
+    manual = await choose(r, manual_id)
+    assert manual.thumbnail_face_id == manual_id
     assert manual.thumbnail_mode == "manual"
     assert manual.last_touched_by_user_id == r.actor.user_id
-    for patch in (EntityPatchRequest(), EntityPatchRequest(thumbnail_face_id=second.detection_id)):
+    for patch in (EntityPatchRequest(), EntityPatchRequest(thumbnail_face_id=manual_id)):
         unchanged = await r.db.entities.patch(r.person.entity_id, patch, r.actor)
         assert unchanged == manual
     assert await get(r) == manual  # reads preserve timestamp and mode
@@ -88,7 +89,15 @@ async def test_selection_reset_response_parity_noops_and_later_faces(portraits):
     listed = await r.db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(entity_type=["person"])))
     searched = await r.db.entities.search(SearchEntitiesRequest(query=QueryBase(text=["Ada"]), limit=100))
     for item in (next(x for x in listed.items if x.entity_id == r.person.entity_id), searched.items[0]):
-        assert item.thumbnail_face_id == second.detection_id and item.thumbnail_mode == "manual"
+        assert item.thumbnail_face_id == manual_id and item.thumbnail_mode == "manual"
+    from people_gator_api.schemas.faces import FaceListRequest, FaceListFilter
+    first_page = await r.db.faces.list(FaceListRequest(limit=1,
+        filter_=FaceListFilter(entity_id=[r.person.entity_id])))
+    assert manual_id not in {f.detection_id for f in first_page.items}
+    filtered = await r.db.faces.list(FaceListRequest(limit=100,
+        filter_=FaceListFilter(entity_id=[r.person.entity_id], entity_link_state=["verified"])))
+    assert not filtered.items
+    assert await get(r) == manual
     # Independent session models a reload/restart, with no face-list request.
     async with r.sessions() as session:
         assert await postgres_database(session).entities.get(r.person.entity_id) == manual
