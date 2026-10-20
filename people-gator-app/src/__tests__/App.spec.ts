@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import Panzoom from '@panzoom/panzoom'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
 
 import App from '../App.vue'
@@ -101,6 +101,8 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     transcription: ref(documentWorkspaceMock.transcription),
   }),
 }))
+
+enableAutoUnmount(afterEach)
 
 describe('App', () => {
   it('keeps the logo when the optional top bar title is omitted', () => {
