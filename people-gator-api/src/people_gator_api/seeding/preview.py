@@ -445,6 +445,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}?"
                 + urlencode({"link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
+            "viewport-focus": (
+                f"/libraries/{next(item.library for item in DOCUMENTS if item.key == 'focus')}"
+                f"/documents/{next(item.document_id for item in DOCUMENTS if item.key == 'focus')}"
+                f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
+            ),
             "media-upload": (
                 f"/libraries/{upload_page.library}/documents/{upload_page.document_id}"
                 f"/pages/{upload_page.page_id}"

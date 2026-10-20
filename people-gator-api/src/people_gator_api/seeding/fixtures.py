@@ -100,6 +100,7 @@ class Document:
 DOCUMENTS = (
     Document("provenance-a", "preview-mzk", "Annotation review ledger"),
     Document("provenance-b", "preview-nlk", "Annotation review correspondence"),
+    Document("focus", "preview-mzk", "Viewport focus practice"),
     Document("issue8-direct", "preview-nlk", "Direct annotation ledger"),
     Document("issue8-search", "preview-mzk", "Příběhy archivářů"),
     Document("issue8-mirror", "preview-nlk", "Search isolation mirror", "issue8-search"),
@@ -130,6 +131,7 @@ class Face:
     group: int
     state: str = "automatic"
     embedded: bool = True
+    box: tuple[int, int, int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +140,7 @@ class Mention:
     person: str
     text: str
     state: str | None = "automatic"
+    y: int | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +166,12 @@ PAGES = (
         (Face("provenance-manual", "provenance-review", 0, 1, "manual"),
          Face("provenance-unknown", "provenance-review", 1, 1)),
         (Mention("provenance-mention-verified", "provenance-review", "Irena Evidence verified this correspondence.", "verified"),)),
+    Page("focus-1", "focus", 1,
+        (Face("focus-upper", "ada", 0, 0, box=(70, 220, 160, 190)),
+         Face("focus-lower", "ada", 1, 0, box=(560, 760, 160, 190)),
+         Face("focus-tiny", None, 2, 2, box=(700, 260, 16, 19))),
+        (Mention("focus-name-upper", "ada", "Ada Novak catalogued this portrait.", y=460),
+         Mention("focus-name-lower", "ada", "Ada Novak returned to review the collection.", y=1000))),
     Page("issue8-untouched", "issue8-search", 1),
     *(Page(f"issue8-search-{i}", "issue8-search", i,
         (Face(f"issue8-face-{i}", "ada", 0, 0, "verified" if i == 6 else "automatic", embedded=False),),

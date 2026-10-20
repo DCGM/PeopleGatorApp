@@ -429,6 +429,7 @@ export function useDocumentWorkspace(
     ),
     pageDimensions: computed(() => annotationDimensions.value ?? { height: 297, width: 210 }),
     pageImageLoaded,
+    pageImageReady: computed(() => imageDimensions.value !== null),
     pageImageLoading: pageImageQuery.isPending,
     pageImageUrl,
     similarPeopleLoading: computed(
