@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
@@ -184,6 +185,9 @@ export function usePageImageQuery(
     queryFn: ({ signal }) => fetchPageImage(toValue(sourceId), toValue(width), signal),
     enabled: computed(() => Boolean(toValue(sourceId)) && toValue(enabled)),
     staleTime: Number.POSITIVE_INFINITY,
+    // A registered page without stored media is a definite state, not a transient failure.
+    retry: (failures, error) =>
+      !(isAxiosError(error) && error.response?.status === 404) && failures < 3,
   })
 }
 
