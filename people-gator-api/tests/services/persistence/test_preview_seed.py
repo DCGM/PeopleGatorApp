@@ -29,7 +29,7 @@ from people_gator_api.schemas.entities import (
     EntityPatchRequest,
 )
 from people_gator_api.schemas.faces import FaceListRequest, FacePatchRequest
-from people_gator_api.schemas.mentions import TextMentionListRequest
+from people_gator_api.schemas.mentions import TextMentionListRequest, TextMentionPatchRequest
 from people_gator_api.schemas.sources import (
     DocumentListRequest,
     DocumentLookupRequest,
@@ -1854,6 +1854,43 @@ async def test_document_navigation_keeps_unannotated_pages_and_explicit_filters(
     for _ in range(2):
         assert await preview.seed_preview(db, filesystem) == seed
         assert await db.sources.get_page(untouched.source_id) == untouched
+
+
+@pytest.mark.asyncio
+async def test_person_mention_highlights_reuse_linked_lines_and_preserve_review(seed_target):
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["focus-1"])
+    example = urlsplit(result.filter_examples["person-mention-highlights"])
+    assert example.path == (
+        f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
+    )
+    assert parse_qs(example.query) == {"selectedPerson": [str(result.entities["ada"])]}
+
+    async def mention_lines():
+        spans = await get_text_mention_spans(
+            database, page.source_id, library=page.library,
+            document_id=page.document_id, page_id=page.page_id,
+        )
+        layout = await get_page_layout(page.library, page.document_id, page.page_id)
+        lines = {line.id: line for region in layout.regions for line in region.lines}
+        matching = {span.start_line_id for span in spans if span.entity_id == result.entities["ada"]}
+        assert matching <= lines.keys()
+        assert all("Ada Novak" in lines[line_id].transcription for line_id in matching)
+        return matching
+
+    assert await mention_lines() == {"focus-name-upper", "focus-name-lower"}
+    reviewed = await database.text_mentions.patch(
+        result.mentions["focus-name-lower"],
+        TextMentionPatchRequest(entity_id=result.entities["lenka"]),
+        GenericActor(user_id=result.users["reviewer"]),
+    )
+    reviewed_person = await database.entities.get(result.entities["lenka"])
+    assert await preview.seed_preview(database, filesystem) == result
+    # The remaining Ada record still resolves both occurrences of her name.
+    assert await mention_lines() == {"focus-name-upper", "focus-name-lower"}
+    assert await database.text_mentions.get(reviewed.mention_id) == reviewed
+    assert await database.entities.get(result.entities["lenka"]) == reviewed_person
 
 
 @pytest.mark.asyncio
