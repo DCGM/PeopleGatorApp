@@ -127,10 +127,22 @@ def validate_schema(
         """)).all())
         if not required <= installed:
             raise SchemaValidationError("Missing or disabled person thumbnail lifecycle triggers")
-        checks = {c["name"] for c in inspect(connection).get_check_constraints("pg_demo_entities")}
-        if not {"ck_pg_demo_entities_thumbnail_mode", "ck_pg_demo_entities_manual_thumbnail",
-                "ck_pg_demo_entities_person_thumbnail"} <= checks:
-            raise SchemaValidationError("Missing person thumbnail consistency constraints")
+        checks = {c["name"]: c["sqltext"] for c in inspect(connection).get_check_constraints("pg_demo_entities")}
+        # PostgreSQL rewrites IN to ANY/ARRAY and inserts varchar/text casts.
+        # Compare the canonical expressions, not just names, so weakened checks
+        # cannot pass startup validation under an otherwise current revision.
+        expected_checks = {
+            "ck_pg_demo_entities_thumbnail_mode": "thumbnail_mode = ANY (ARRAY['automatic', 'manual'])",
+            "ck_pg_demo_entities_manual_thumbnail": "thumbnail_mode <> 'manual' OR thumbnail_face_id IS NOT NULL",
+            "ck_pg_demo_entities_person_thumbnail": "kind = 'person' OR (thumbnail_face_id IS NULL AND thumbnail_mode = 'automatic')",
+        }
+        def normalized_check(value: str) -> str:
+            for cast in ("::character varying", "::text[]", "::text"):
+                value = value.replace(cast, "")
+            return "".join(value.lower().split()).replace("(", "").replace(")", "")
+        for name, expected in expected_checks.items():
+            if name not in checks or normalized_check(checks[name]) != normalized_check(expected):
+                raise SchemaValidationError(f"Missing or incompatible person thumbnail consistency constraint: {name}")
 
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.

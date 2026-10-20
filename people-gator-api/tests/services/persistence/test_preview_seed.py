@@ -28,7 +28,7 @@ from people_gator_api.schemas.entities import (
     EntityListRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.faces import FaceListRequest, FacePatchRequest
+from people_gator_api.schemas.faces import FaceCreateRequest, FaceListRequest, FacePatchRequest
 from people_gator_api.schemas.mentions import TextMentionListRequest
 from people_gator_api.schemas.sources import (
     DocumentListRequest,
@@ -1995,7 +1995,7 @@ async def test_canonical_portraits_media_and_review_preservation(seed_target):
     linked = (await database.faces.list(FaceListRequest(limit=100,
         filter_=FaceListFilter(entity_id=[manual.entity_id])))).items
     assert manual.thumbnail_mode == 'manual'
-    assert urlsplit(first.filter_examples['person-portrait-toolbar']).path == f'/people/{manual.entity_id}'
+    assert urlsplit(first.filter_examples['person-portrait-selection']).path == f'/people/{manual.entity_id}'
     assert manual.thumbnail_face_id == linked[-1].detection_id
     assert manual.thumbnail_face_id != linked[0].detection_id
     selected_face = await database.faces.get(manual.thumbnail_face_id)
@@ -2004,6 +2004,18 @@ async def test_canonical_portraits_media_and_review_preservation(seed_target):
     assert crop.content
     automatic = await database.entities.get(first.entities['ada'])
     assert automatic.thumbnail_mode == 'automatic' and automatic.thumbnail_face_id
+    # A later assignment and an identity edit preserve the saved automatic face.
+    actor = GenericActor(user_id=first.users['reviewer'])
+    new_face = FaceCreateRequest(source_id=selected_face.source_id,
+        entity_id=automatic.entity_id, confidence=selected_face.confidence,
+        bounding_box=selected_face.bounding_box, keypoints=selected_face.keypoints)
+    await database.faces.create(new_face, actor)
+    edited = await database.entities.patch(automatic.entity_id,
+        EntityPatchRequest(description="Reviewed automatic portrait"), actor)
+    assert edited.thumbnail_face_id == automatic.thumbnail_face_id
+    assert edited.thumbnail_mode == 'automatic'
+    await preview.seed_preview(database, filesystem)
+    assert await database.entities.get(automatic.entity_id) == edited
     empty = await database.entities.get(first.entities['nora'])
     assert empty.thumbnail_mode == 'automatic' and empty.thumbnail_face_id is None
     # An explicit reset is a review choice and must survive reseeding unchanged.

@@ -512,7 +512,7 @@ export type EntityPatchBatchItem = {
     /**
      * Thumbnail Face Id
      *
-     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null resets to automatic selection from all linked faces.
+     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null returns to automatic mode. The first assigned face is saved and kept while linked, including on later assignments and identity edits. Resetting a manual choice selects the lowest currently linked face UUID; resetting automatic mode preserves its saved choice.
      */
     thumbnail_face_id?: string | null;
     /**
@@ -568,7 +568,7 @@ export type EntityPatchRequest = {
     /**
      * Thumbnail Face Id
      *
-     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null resets to automatic selection from all linked faces.
+     * Person portrait selection: omit to preserve; a linked face UUID selects it manually; null returns to automatic mode. The first assigned face is saved and kept while linked, including on later assignments and identity edits. Resetting a manual choice selects the lowest currently linked face UUID; resetting automatic mode preserves its saved choice.
      */
     thumbnail_face_id?: string | null;
     /**

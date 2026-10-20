@@ -472,11 +472,13 @@ updated editor without reloading. No seed records or API contracts changed.
 Open `filter_examples.person-portrait-selection` (Irena Evidence). Her initial
 manual portrait is the last UUID among her four synthetic linked faces, so it
 differs from the first listed face. Select one face in the evidence grid, then
-choose **Use as portrait** in the bottom bar (`person-portrait-toolbar`).
+choose **Use as portrait** in the bottom bar (`person-portrait-selection`).
 Select the face marked **Portrait** and choose **Use automatic** to reset. Change evidence
 filters, reload, and compare People search, Discover people, and scan assignment
 candidates. The portrait remains canonical while evidence cards show their own
-faces. Ada Novak demonstrates a persisted automatic portrait; Nora Svoboda has
+faces. Ada Novak demonstrates a persisted automatic portrait: the first assigned
+face stays selected through later assignments, identity edits and reseeding while
+linked. Nora Svoboda has
 no face and uses initials. All media comes from the existing local fixtures.
 
 The `person-portrait-v1` manifest upgrade is additive and checkpointed. It preserves

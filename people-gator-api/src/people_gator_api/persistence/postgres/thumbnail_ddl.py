@@ -43,11 +43,16 @@ THUMBNAIL_DDL = (
     """CREATE OR REPLACE FUNCTION pg_demo_thumbnail_face_insert() RETURNS trigger
     LANGUAGE plpgsql AS $$ BEGIN
         PERFORM pg_demo_repair_thumbnail(io.entity_id)
-        FROM pg_demo_image_occurrences io WHERE io.id = NEW.id;
-        RETURN NEW;
+        FROM (SELECT DISTINCT io.entity_id
+              FROM inserted_faces f JOIN pg_demo_image_occurrences io ON io.id = f.id
+              JOIN pg_demo_entities e ON e.id = io.entity_id
+              WHERE e.kind = 'person' AND e.thumbnail_face_id IS NULL
+              ORDER BY io.entity_id) io;
+        RETURN NULL;
     END $$""",
     """CREATE OR REPLACE TRIGGER thumbnail_face_insert AFTER INSERT ON pg_demo_faces
-    FOR EACH ROW EXECUTE FUNCTION pg_demo_thumbnail_face_insert()""",
+    REFERENCING NEW TABLE AS inserted_faces
+    FOR EACH STATEMENT EXECUTE FUNCTION pg_demo_thumbnail_face_insert()""",
     """CREATE OR REPLACE FUNCTION pg_demo_thumbnail_reassignment() RETURNS trigger
     LANGUAGE plpgsql AS $$ BEGIN
         IF OLD.entity_id IS DISTINCT FROM NEW.entity_id THEN

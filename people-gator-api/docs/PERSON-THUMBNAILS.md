@@ -27,14 +27,18 @@ its last-change metadata. A mode change is a real edit even if the image is the
 same. User/API-key attribution follows existing entity mutation rules.
 
 Eligibility means an existing face linked to that person, regardless of evidence
-link state, pagination or evidence filters. On migration or when a choice is
-missing/invalid, choose the lowest eligible UUID. Once valid, an automatic choice
-survives later additions. There is no image-quality service or storage probe in
+link state, pagination or evidence filters. The first assigned face becomes the
+saved automatic portrait. Later assignments, identity edits and merges keep that
+choice while it remains linked; automatic mode does not continuously rank faces.
+For historical records, simultaneous batch assignments, an empty merge target,
+a manual reset or an invalidated choice, the lowest eligible UUID breaks ties
+over the available faces. These fallback choices are saved too. A reset already
+in automatic mode preserves the saved choice. There is no image-quality service or storage probe in
 this policy. A face can be eligible even when its media is temporarily unavailable.
 
 Annotation graph mutations and thumbnail PATCH share the existing transaction
 advisory lock, followed by row locks. Triggers validate ownership, fill an empty
-choice on face insertion, repair both owners on reassignment/unlink, and repair
+choice once per distinct owner in a face-insert statement, repair both owners on reassignment/unlink, and repair
 references during face/source cascade deletion. A face foreign key, policy checks
 and lifecycle triggers also protect direct database writes. A valid target choice
 survives merge; an empty target resolves over the complete merged face set by UUID.

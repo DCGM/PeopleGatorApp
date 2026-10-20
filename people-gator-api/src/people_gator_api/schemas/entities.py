@@ -76,7 +76,7 @@ class EntityPatchRequest(BaseModel):
 
     thumbnail_face_id: uuid.UUID | None | MissingType = Field(
         default=MISSING,
-        description="Person portrait selection: omit to preserve; a linked face UUID selects it manually; null resets to automatic selection from all linked faces.",
+        description="Person portrait selection: omit to preserve; a linked face UUID selects it manually; null returns to automatic mode. The first assigned face is saved and kept while linked, including on later assignments and identity edits. Resetting a manual choice selects the lowest currently linked face UUID; resetting automatic mode preserves its saved choice.",
     )
 
     name: str | MissingType = Field(default=MISSING, description="The name of the entity.")

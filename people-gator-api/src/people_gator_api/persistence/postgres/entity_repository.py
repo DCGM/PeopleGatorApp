@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from people_gator_api.persistence.contracts import (
     EntityRepository,
@@ -223,10 +224,9 @@ class PostgresEntityRepository(EntityRepository):
                         raise ValueError("thumbnail must be an existing face linked to this person")
                     selections[entity.id] = (face_id, "manual")
                 elif entity.thumbnail_mode == "manual":
-                    automatic_id = await self._session.scalar(
-                        select(Face.id).where(Face.entity_id == entity.id).order_by(Face.id).limit(1)
-                    )
-                    selections[entity.id] = (automatic_id, "automatic")
+                    # The database owns automatic resolution. Reload all saved
+                    # references together after flushing the trigger's results.
+                    selections[entity.id] = (None, "automatic")
             for command in commands:
                 entity = entities.get(command.entity_id)
                 if entity is None:
@@ -239,6 +239,17 @@ class PostgresEntityRepository(EntityRepository):
                 if changed:
                     for name, value in touch_values(context).items():
                         setattr(entity, name, value)
+            if selections:
+                await self._session.flush()
+                rows = await self._session.execute(
+                    select(Entity.id, Entity.thumbnail_face_id, Entity.thumbnail_mode)
+                    .where(Entity.id.in_(selections))
+                )
+                # Trigger-written values must also be current in the ORM without
+                # marking them dirty or issuing one refresh per entity.
+                for entity_id, face_id, mode in rows:
+                    set_committed_value(entities[entity_id], "thumbnail_face_id", face_id)
+                    set_committed_value(entities[entity_id], "thumbnail_mode", mode)
             await commit(self._session, "entity patch violates a persistence constraint")
         except Exception:
             await self._session.rollback()

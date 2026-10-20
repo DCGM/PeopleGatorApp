@@ -54,13 +54,22 @@ async def portraits(migrated_postgres):
                               person=entities[0], other=entities[1], organization=organization, page=page)
 
 
-async def face(r, owner):
-    return await r.db.faces.create(FaceCreateRequest(
-        source_id=r.page.source_id, entity_id=owner, confidence=0.9,
-        bounding_box=BoundingBox(x=0, y=0, width=100, height=100),
-        keypoints=[Keypoint(type=kind, x=20 + i * 10, y=20 + i * 10)
-                   for i, kind in enumerate(FaceKeypointType)],
-    ), r.actor)
+async def face(r, owner, detection_id=None):
+    from unittest.mock import patch
+    from people_gator_api.persistence.postgres.face_repository import PostgresFaceRepository
+    original = PostgresFaceRepository._new
+    def build(payload, context):
+        result = original(payload, context)
+        if detection_id is not None:
+            result.id = detection_id
+        return result
+    with patch.object(PostgresFaceRepository, "_new", side_effect=build):
+        return await r.db.faces.create(FaceCreateRequest(
+            source_id=r.page.source_id, entity_id=owner, confidence=0.9,
+            bounding_box=BoundingBox(x=0, y=0, width=100, height=100),
+            keypoints=[Keypoint(type=kind, x=20 + i * 10, y=20 + i * 10)
+                       for i, kind in enumerate(FaceKeypointType)],
+        ), r.actor)
 
 
 async def get(r, person=None):
@@ -219,3 +228,89 @@ async def test_populated_upgrade_preserves_history_and_is_repeatable(portraits, 
     after = await get(r)
     assert after == before
     assert await r.db.faces.get(first.detection_id) == detection
+
+
+@pytest.mark.asyncio
+async def test_first_assignment_survives_lower_ids_identity_edits_and_merge(portraits):
+    r = portraits
+    first = await face(r, r.person.entity_id, uuid.UUID(int=100))
+    later = await face(r, r.person.entity_id, uuid.UUID(int=50))
+    source = await face(r, r.other.entity_id, uuid.UUID(int=1))
+    assert (await get(r)).thumbnail_face_id == first.detection_id
+    renamed = await r.db.entities.patch(r.person.entity_id, EntityPatchRequest(name="Renamed"), r.actor)
+    assert renamed.thumbnail_face_id == first.detection_id
+    assert (await choose(r, None)) == renamed
+    merged = await r.db.entities.merge(r.person.entity_id, r.other.entity_id, context=r.actor)
+    assert merged.merged_entity.thumbnail_face_id == first.detection_id
+    assert merged.merged_entity.thumbnail_mode == "automatic"
+    # Only losing the saved face permits automatic replacement. The fallback
+    # is persisted and survives independent sessions and another automatic reset.
+    await r.db.faces.delete(first.detection_id, context=r.actor)
+    recovered = await get(r)
+    assert recovered.thumbnail_face_id == source.detection_id
+    assert recovered.thumbnail_face_id != later.detection_id
+    assert await choose(r, None) == recovered
+    async with r.sessions() as session:
+        assert await postgres_database(session).entities.get(r.person.entity_id) == recovered
+
+
+@pytest.mark.asyncio
+async def test_batch_reset_returns_database_resolved_choices(portraits):
+    r = portraits
+    own = [await face(r, r.person.entity_id) for _ in range(2)]
+    other = [await face(r, r.other.entity_id) for _ in range(2)]
+    await choose(r, max(f.detection_id for f in own))
+    await choose(r, max(f.detection_id for f in other), r.other)
+    result = await r.db.entities.patch_batch([
+        EntityPatchBatchItem(entity_id=person.entity_id, thumbnail_face_id=None)
+        for person in (r.person, r.other)
+    ], r.actor)
+    for person, faces in zip(result, (own, other)):
+        assert person.thumbnail_mode == "automatic"
+        assert person.thumbnail_face_id == min(f.detection_id for f in faces)
+        assert person == await r.db.entities.get(person.entity_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("constraint", [
+    "ck_pg_demo_entities_thumbnail_mode", "ck_pg_demo_entities_manual_thumbnail",
+    "ck_pg_demo_entities_person_thumbnail",
+])
+async def test_schema_validation_rejects_weakened_thumbnail_checks(migrated_postgres, constraint):
+    from people_gator_api.persistence.postgres.schema import SchemaValidationError
+    async with migrated_postgres.begin() as connection:
+        await connection.execute(text(f"ALTER TABLE pg_demo_entities DROP CONSTRAINT {constraint}"))
+        await connection.execute(text(f"ALTER TABLE pg_demo_entities ADD CONSTRAINT {constraint} CHECK (true)"))
+    with pytest.raises(SchemaValidationError, match="thumbnail consistency constraint"):
+        await validate_postgres_schema(migrated_postgres)
+
+
+@pytest.mark.asyncio
+async def test_bulk_face_insert_repairs_each_owner_once(portraits):
+    from people_gator_api.persistence.postgres.face_repository import PostgresFaceRepository
+    r = portraits
+    original = await face(r, r.person.entity_id)
+    await r.db.faces.patch(original.detection_id, FacePatchRequest(entity_id=None), r.actor)
+    # Count entity UPDATE attempts separately from actual row modifications.
+    # Row triggers would invoke repair once per face, even for valid choices.
+    await r.session.execute(text("CREATE TEMP TABLE repair_calls (id integer)"))
+    await r.session.execute(text("""CREATE FUNCTION count_portrait_updates() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN INSERT INTO repair_calls VALUES (1); RETURN NULL; END $$"""))
+    await r.session.execute(text("""CREATE TRIGGER count_portrait_updates AFTER UPDATE ON pg_demo_entities
+        FOR EACH STATEMENT EXECUTE FUNCTION count_portrait_updates()"""))
+    request = FaceCreateRequest(source_id=original.source_id, confidence=original.confidence,
+        bounding_box=original.bounding_box, keypoints=original.keypoints)
+    payloads = [request.model_copy(update={"entity_id": owner.entity_id})
+                for owner in (r.person, r.other) for _ in range(10)]
+    # Exercise the actual ORM insertion strategy without unrelated touch UPDATEs.
+    # Some drivers use executemany: owners already filled by an earlier statement
+    # must be skipped too, rather than paying another repair UPDATE per face.
+    rows = [PostgresFaceRepository._new(payload, r.actor) for payload in payloads]
+    r.session.add_all(rows)
+    await r.session.flush()
+    assert await r.session.scalar(text("SELECT count(*) FROM repair_calls")) == 2
+    await r.session.commit()
+    for owner in (r.person, r.other):
+        selected = (await get(r, owner)).thumbnail_face_id
+        assert selected is not None
+        assert (await r.db.faces.get(selected)).entity_id == owner.entity_id
