@@ -157,9 +157,8 @@ server timestamp. Existing fixtures and checkpoints are retained; reruns leave
 review edits and verification metadata intact.
 
 Open the document from Documents, try the scan's Link state controls and its
-collapsed **Link statistics** section below the face gallery in the right panel
-(below the gallery on mobile). It shows **This page** and **Whole document** counts
-without covering the scan. The CLI prints a `link-statistics` link to page 2,
+**Statistics** tab at the top of the scan pane (below the scan on mobile). It shows **This page** and **Whole document** counts
+without covering the scan. The CLI prints a `page-statistics` link to page 2; the older `link-statistics` fragment remains supported,
 where the page's verified/unassigned counts can be compared with all four states
 across the document. Then follow Ada Review to the shared Faces /
 Mentions filter. All includes unassigned annotations; selecting all three states
@@ -327,6 +326,22 @@ The `page-activity` example opens the provenance ledger directly with
 `panel=activity`. Its two faces and one mention have two importer edits and one
 later reviewer verification. In the scan sidebar, choose Activity, then By user:
 selecting Preview reviewer shows the verified authority face. By day groups the
-recorded annotation edits in browser local time. The default Face tab and scan
-canvas retain their compact layout. The seed's activity link is additive and
+recorded annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
+Faces, Activity and Statistics share the top-level pane navigation; Activity uses
+the full remaining pane height and scrolls independently of the scan. The seed's activity link is additive and
 does not rewrite reviewed fixture data.
+
+
+The `person-evidence-cards` entry point shows all four Irena Evidence faces,
+including a matching-detection overlay, three assignment states, two complete
+library/document/page references and the importer/reviewer attribution. The
+cards have equal dimensions, a bottom-right status overlay and an always-visible
+last-change row; editor links open people search filtered by that annotation
+editor. Detection origin is retained in data/filtering but has no disclosure on
+the card. The top-bar **Back to People search · “Irena”** link restores the saved
+search; raw origin metadata is not rendered as filter tags. Shared evidence
+criteria populate the actual controls, while resource-specific processing and
+search settings stay in their saved return URL. These entry points reuse existing
+stable records/media and never reset checkpoints or reviewer edits. Integration
+coverage resolves every source/media link, checks attributed annotation records
+and page/document statistics through repositories, and verifies an unchanged rerun.

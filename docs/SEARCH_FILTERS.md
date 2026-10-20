@@ -129,15 +129,19 @@ state and actor; results cannot combine unrelated annotations.
 | People `document` | Legacy internal document selection; mapped to active shared evidence on navigation |
 | Scan `library`, `document` | Resource library/archive UUID; opening a scan also retains its exact source |
 | `touched_from/to`, `touched_by`, `api_key` | Current person/source processing, **never** annotation edits |
-| `origin_person_*`, `origin_source_*` | Visible originating resource criteria retained with their original meaning |
+| `origin_person_*`, `origin_source_*` | Source resource criteria retained for the saved return journey; never applied as annotation edits |
 | `origin_text` | Name/alias/source search signal; never literal text filtering of face images |
 | `origin_matched_face`, `origin_reference_face` | Actual matching detection / reference face signals |
-| `origin_return` | Internal cursor-free originating URL; Return restores the original search |
+| `origin_return` | Internal cursor-free source URL; the profile top-bar return link restores its selections |
 | `tab` | Faces (default), mentions or discover; incoming assigned-mentions searches open Mentions |
 | `discovery_assignment`, `discovery_text`, `candidate_mode`, `candidate_text` | View-specific discovery/candidate choices, retained as origin context on related navigation |
 
 Related links copy the current shared selections and scope resource-specific
-criteria as origin context. Changes carry forward on the next related link.
+criteria for the saved return journey. Source metadata is not rendered as removable origin tags.
+On a profile, the generic People breadcrumb becomes a named, clickable **Back to
+People search**, **Back to Documents** or **Back to Source scan** link, including
+the saved search text when available. Shared criteria populate the actual filter
+controls and their removable active-filter tags. Changes carry forward on the next related link.
 Each view is reproducible from its URL, including copied links and browser
 Back/Forward. Destination queries start at their own first page; source cursors
 never travel across resources. Removing a filter tag changes controls, URL and
@@ -151,9 +155,11 @@ labels fall back to identifiers without exposing credentials.
 Face-similarity entity results include `matched_detection_ids`; profile links
 retain these actual witnesses. They are loaded within the fixed person and
 current evidence scope, independently of the first evidence page. Verification
-metadata and actions remain available. Provenance details identify detection
-confidence separately from similarity and show recorded creation and annotation
-edit attribution; owner, verifier and last editor are independent.
+metadata and actions remain available. Person face cards keep complete library/document/page references together with
+wrapping, overlay status at bottom right and matching detection at top left, and
+show compact last-change attribution with a linked editor and relative time/date.
+Detection IDs/confidence remain available; detection-origin disclosures are removed.
+Identity creation provenance remains in the profile statistics; owner, verifier and last editor are independent.
 
 PostgreSQL implements these persisted metadata and shared filters. The optional
 Weaviate adapter explicitly rejects the new provenance/edit filter groups and
@@ -161,7 +167,13 @@ recorded provenance ingestion; it must not silently return unfiltered results.
 No authority crawler or historical audit log is introduced. Synthetic authority
 references use `preview.invalid`; no external authority data is fetched.
 
-Page sidebar URLs use `panel=activity` (default `face`) and
+The scan pane has top-level Faces, Activity and Statistics tabs. Activity and
+Statistics replace the entire pane content and scroll within its remaining height;
+face selection and candidate settings survive tab switches. Statistics presents
+page/document totals with explicit state labels and has no disclosure. The legacy
+`#link-statistics` URL opens Statistics too.
+
+Page sidebar URLs use `panel=activity` or `panel=statistics` (default `face`) and
 `activity_group=user` (default local day). Day boundaries use consecutive local
 midnights, including daylight-saving changes; the upper bound is inclusive at
 23:59:59.999999 local time, preserving database microsecond precision. Group entries show their own recorded annotation edit

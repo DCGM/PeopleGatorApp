@@ -397,6 +397,17 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Presentation examples reuse linked synthetic records and media.
+            # Adding entry points never rewrites reviewer edits or checkpoints.
+            "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
+                "origin_matched_face": manifest.faces["provenance-authority"],
+                "origin_text": "Irena",
+                "origin_return": "/people?q=Irena",
+            }),
+            "page-statistics": (
+                f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
+                f"/pages/{statistics_page.page_id}?panel=statistics"
+            ),
             "page-activity": (
                 f"/libraries/{activity_document.library}/documents/{activity_document.document_id}"
                 f"/pages/{activity_page.page_id}?panel=activity"

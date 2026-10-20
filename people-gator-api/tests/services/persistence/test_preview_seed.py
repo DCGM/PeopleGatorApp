@@ -1581,3 +1581,46 @@ async def test_page_activity_example_distinguishes_annotation_editors(seed_targe
     assert all(item.last_touched_at for item in edits)
     reviewer_faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[page_id], evidence_touched_by_user_id=[seed.users['reviewer']])))
     assert [item.detection_id for item in reviewer_faces.items] == [seed.faces['provenance-authority']]
+
+
+@pytest.mark.asyncio
+async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_media(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    cards = urlsplit(seed.filter_examples['person-evidence-cards'])
+    person_id = seed.entities['provenance-review']
+    assert cards.path == f'/people/{person_id}'
+    assert parse_qs(cards.query) == {
+        'origin_matched_face': [str(seed.faces['provenance-authority'])],
+        'origin_text': ['Irena'], 'origin_return': ['/people?q=Irena'],
+    }
+    faces = (await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(entity_id=[person_id]),
+    ))).items
+    assert {face.entity_link_state.value for face in faces} == {'automatic', 'manual', 'verified'}
+    assert {face.last_touched_by_user_id for face in faces} == {
+        seed.users['importer'], seed.users['reviewer'],
+    }
+    for face in faces:
+        assert face.last_touched_at is not None
+        page = await db.sources.get_page(face.source_id)
+        assert page is not None and page.library and page.document_id and page.page_id
+        image = await get_page_image(page.library, page.document_id, page.page_id)
+        with Image.open(io.BytesIO(image.content)) as scan:
+            assert scan.size == (800, 1100)
+
+    statistics = urlsplit(seed.filter_examples['page-statistics'])
+    page = await db.sources.get_page(seed.pages['links-2'])
+    document = await db.sources.get_document(seed.documents['link-states'])
+    assert statistics.path == f'/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}'
+    assert parse_qs(statistics.query) == {'panel': ['statistics']}
+    assert page.entity_link_stats.faces.verified == 1
+    assert page.entity_link_stats.faces.unassigned == 1
+    assert document.entity_link_stats.faces.total == 4
+    assert document.entity_link_stats.mentions.total == 4
+    rerun = await preview.seed_preview(db, filesystem)
+    assert rerun == seed
+    for face in faces:
+        assert await db.faces.get(face.detection_id) == face
