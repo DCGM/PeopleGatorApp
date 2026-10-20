@@ -36,6 +36,7 @@ from people_gator_api.schemas.sources import (
     GenericSourceLookupRequest,
     PageListFilter,
     PageListRequest,
+    PageLookupRequest,
 )
 from people_gator_api.schemas.search import (
     QueryBase,
@@ -46,6 +47,8 @@ from people_gator_api.seeding import preview
 from people_gator_api.seeding.fixtures import (
     DOCUMENTS,
     MODEL,
+    PAGE_GALLERY_MISSING_MEDIA,
+    PAGE_GALLERY_PAGES,
     PAGES,
     SECOND_MODEL,
     Person,
@@ -86,7 +89,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (9, 28, 16)
-    assert len(result.documents) == 16 and len(result.pages) == 27
+    assert len(result.documents) == 17 and len(result.pages) == 41
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -171,6 +174,8 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
         }
 
     for page in PAGES:
+        if not page.has_image:
+            continue  # Missing-media navigation is covered by the page gallery test.
         document = next(item for item in DOCUMENTS if item.key == page.document)
         content = await get_page_image(
             document.library, document.document_id, page.page_id
@@ -1887,3 +1892,75 @@ async def test_viewport_focus_targets_and_repeated_occurrences(seed_target):
     assert stored.entity_id == result.entities["lenka"]
     assert stored == reviewed
     assert (await database.entities.get(result.entities["lenka"])).last_touched_at == reviewed_person.last_touched_at
+
+
+async def _all_document_pages(database, library, document_id, batch_size):
+    pages, cursor = [], None
+    while True:
+        result = await database.sources.list_pages(PageListRequest(
+            limit=batch_size, cursor=cursor, return_total_count=True,
+            filter_=PageListFilter(library=[library], document_id=[document_id]),
+        ))
+        pages.append(result)
+        cursor = result.cursor
+        if cursor is None:
+            return pages
+
+
+@pytest.mark.asyncio
+async def test_page_gallery_lists_every_registered_page_in_stable_batches(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    spec = next(item for item in DOCUMENTS if item.key == "page-gallery")
+    expected = {seed.pages[f"page-gallery-{i}"] for i in range(1, PAGE_GALLERY_PAGES + 1)}
+    # The frontend requests 12 pages per batch; the fixture needs a second one.
+    batches = await _all_document_pages(database, spec.library, spec.document_id, 12)
+    assert [len(batch.items) for batch in batches] == [12, PAGE_GALLERY_PAGES - 12]
+    assert {batch.total_count for batch in batches} == {PAGE_GALLERY_PAGES}
+    ordered = [item.source_id for batch in batches for item in batch.items]
+    assert len(ordered) == len(set(ordered)) and set(ordered) == expected
+    assert all(item.library == spec.library and item.document_id == spec.document_id
+               for batch in batches for item in batch.items)
+    # The documented order is the stable source-key order, repeated across reads.
+    assert ordered == sorted(ordered)
+    smaller = await _all_document_pages(database, spec.library, spec.document_id, 5)
+    assert [item.source_id for batch in smaller for item in batch.items] == ordered
+
+    # Every page with media has a usable gallery thumbnail; the missing-media
+    # page stays registered and navigable while its image resolves to 404.
+    for i in range(1, PAGE_GALLERY_PAGES + 1):
+        page = await database.sources.get_page(seed.pages[f"page-gallery-{i}"])
+        if i == PAGE_GALLERY_MISSING_MEDIA:
+            with pytest.raises(SourceResolutionError) as missing:
+                await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+            assert missing.value.status_code == 404
+            continue
+        thumbnail = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+        with Image.open(io.BytesIO(thumbnail.content)) as image:
+            assert image.width <= 256
+
+    link = urlsplit(seed.filter_examples["document-page-gallery"])
+    target = next(item.page_id for item in PAGES if item.key == "page-gallery-13")
+    assert link.path == f"/libraries/{spec.library}/documents/{spec.document_id}/pages/{target}"
+    assert await database.sources.lookup_page(PageLookupRequest(
+        library=spec.library, document_id=spec.document_id, page_id=target,
+    )) is not None
+
+    # Annotation filters narrow evidence on the scan, never its gallery.
+    filtered = urlsplit(seed.filter_examples["document-page-gallery-filtered"])
+    search = next(item for item in DOCUMENTS if item.key == "issue8-search")
+    assert filtered.path.startswith(f"/libraries/{search.library}/documents/{search.document_id}/pages/")
+    importer = parse_qs(filtered.query)["evidence_user"]
+    assert importer == [str(seed.users["importer"])]
+    scope = PageListFilter(library=[search.library], document_id=[search.document_id])
+    narrowed = await database.sources.list_pages(PageListRequest(
+        limit=100, return_total_count=True,
+        filter_=scope.model_copy(update={"evidence_touched_by_user_id": [seed.users["importer"]]}),
+    ))
+    unfiltered = await _all_document_pages(database, search.library, search.document_id, 12)
+    assert narrowed.total_count == 4 and unfiltered[0].total_count == 6
+
+    for _ in range(2):
+        assert await preview.seed_preview(database, filesystem) == seed
+        again = await _all_document_pages(database, spec.library, spec.document_id, 12)
+        assert [item.source_id for batch in again for item in batch.items] == ordered
