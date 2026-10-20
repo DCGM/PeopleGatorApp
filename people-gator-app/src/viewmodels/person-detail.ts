@@ -303,8 +303,6 @@ export function usePersonDetail(
     libraryCount: computed(() => new Set(faces.value.map((face) => face.library)).size),
     mentionCount: computed(() => mentionQuery.data.value?.pages[0]?.total_count ?? 0),
     mentions,
-    portrait: computed(() => faces.value[0]?.portrait ?? ''),
-    portraitLoading: computed(() => faces.value[0]?.portraitLoading ?? false),
     profile,
     processing,
     updateProfile,

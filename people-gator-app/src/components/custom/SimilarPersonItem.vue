@@ -16,7 +16,7 @@ import type {
   SimilarPersonCandidate,
   SimilarPersonMatchSource,
 } from '@/viewmodels/similar-people.types'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import PersonPortrait from './PersonPortrait.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,14 +42,6 @@ const emit = defineEmits<{
   preview: [person: SimilarPersonCandidate]
   assign: [person: SimilarPersonCandidate]
 }>()
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part.charAt(0))
-    .join('')
-    .slice(0, 2)
-}
 
 function wikidataHref(value: string) {
   return /^https?:\/\//i.test(value) ? value : `https://www.wikidata.org/wiki/${value}`
@@ -93,15 +85,7 @@ function formatTextScore(score: number) {
     ></button>
 
     <ItemMedia class="self-start">
-      <Avatar class="size-15">
-        <AvatarImage
-          v-if="person.portrait"
-          :src="person.portrait"
-          :alt="person.name"
-          class="object-cover grayscale"
-        />
-        <AvatarFallback class="font-serif">{{ initials(person.name) }}</AvatarFallback>
-      </Avatar>
+      <PersonPortrait :name="person.name" :face-id="person.thumbnailFaceId" class="size-15" />
     </ItemMedia>
     <ItemActions
       v-if="person.matchSources?.length"

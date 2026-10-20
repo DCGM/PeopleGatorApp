@@ -8,7 +8,7 @@ import type {
   PersonDiscoveryFace,
 } from '@/viewmodels/person-detail.types'
 import { fetchEntity, useMergeEntitiesMutation } from '@/query/entities'
-import { fetchFaceAlignedCrop, fetchFaces, useAssignFacesMutation } from '@/query/faces'
+import { fetchFaceAlignedCrop, useAssignFacesMutation } from '@/query/faces'
 import { queryKeys } from '@/query/keys'
 import { fetchPage } from '@/query/media'
 import { useObjectUrlMap } from '@/composables/object-url'
@@ -175,64 +175,15 @@ export function usePersonDiscovery(
       ),
   )
 
-  const candidateFaceQueries = useQueries({
-    queries: computed(() =>
-      entityMatches.value.map((entity) => ({
-        queryKey: queryKeys.faces.list({ 'filter.entity_id': [entity.entity_id], limit: 1 }),
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          fetchFaces({ 'filter.entity_id': [entity.entity_id], limit: 1 }, signal),
-        staleTime: Number.POSITIVE_INFINITY,
-        gcTime: DISCOVERY_GC_TIME,
-      })),
-    ),
-  })
-  const candidatePortraitIds = computed(() =>
-    entityMatches.value.map(
-      (entity, index) =>
-        entity.matched_detection_ids?.[0] ??
-        (entity.face_score == null
-          ? candidateFaceQueries.value[index]?.data?.items[0]?.detection_id
-          : '') ??
-        '',
-    ),
-  )
-  const candidateCropQueries = useQueries({
-    queries: computed(() =>
-      candidatePortraitIds.value.map((faceId) => ({
-        queryKey: queryKeys.faces.alignedCrop(faceId, 160),
-        queryFn: ({ signal }: { signal: AbortSignal }) => fetchFaceAlignedCrop(faceId, 160, signal),
-        enabled: Boolean(faceId),
-        staleTime: Number.POSITIVE_INFINITY,
-        gcTime: DISCOVERY_GC_TIME,
-        retry: false,
-      })),
-    ),
-  })
-  const candidateCropBlobs = computed(() => {
-    const blobs = new Map<string, Blob>()
-    candidatePortraitIds.value.forEach((faceId, index) => {
-      const blob = candidateCropQueries.value[index]?.data
-      if (faceId && blob instanceof Blob) blobs.set(faceId, blob)
-    })
-    return blobs
-  })
-  const candidateCropUrls = useObjectUrlMap(candidateCropBlobs)
-
   const similarPeople = computed<PersonDiscoveryCandidate[]>(() =>
-    entityMatches.value.map((entity, index) => {
-      const portraitFaceId = candidatePortraitIds.value[index] ?? ''
+    entityMatches.value.map((entity) => {
       return {
         id: entity.entity_id,
         matchedFaceIds: entity.matched_detection_ids ?? [],
         name: entity.name || 'Unnamed person',
         shortDescription: entity.short_description || '',
         aliases: entity.aliases ?? [],
-        portrait: candidateCropUrls.value.get(portraitFaceId) ?? '',
-        portraitLoading:
-          (candidateFaceQueries.value[index]?.isPending ?? false) ||
-          (Boolean(portraitFaceId) &&
-            !candidateCropUrls.value.has(portraitFaceId) &&
-            (candidateCropQueries.value[index]?.isPending ?? false)),
+        thumbnailFaceId: entity.thumbnail_face_id,
       }
     }),
   )

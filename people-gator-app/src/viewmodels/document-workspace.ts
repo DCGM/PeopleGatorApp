@@ -330,6 +330,7 @@ export function useDocumentWorkspace(
         candidateMode: resultMode.value,
         candidateText: textTerm.value || undefined,
         name: entity.name || 'Unnamed person',
+        thumbnailFaceId: entity.thumbnail_face_id,
         shortDescription: entity.short_description || undefined,
         score: matchingScore === undefined ? undefined : percentage(matchingScore),
         nerMentions,

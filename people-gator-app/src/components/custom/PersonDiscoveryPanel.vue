@@ -15,6 +15,7 @@ import {
 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
+import PersonPortrait from './PersonPortrait.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import type {
   PersonDiscoveryCandidate,
@@ -225,14 +226,6 @@ watch(
     if (succeeded) clearPersonSelection()
   },
 )
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part.charAt(0))
-    .join('')
-    .slice(0, 2)
-}
 </script>
 
 <template>
@@ -531,21 +524,11 @@ function initials(name: string) {
                 aria-hidden="true"
               ></span>
             </button>
-            <div class="size-16 shrink-0 border bg-muted">
-              <LoadableImage
-                :src="person.portrait"
-                :loading="person.portraitLoading"
-                :alt="person.name"
-                class="size-full"
-                image-class="object-cover grayscale"
-              >
-                <template #fallback>
-                  <span class="flex size-full items-center justify-center font-serif">
-                    {{ initials(person.name) }}
-                  </span>
-                </template>
-              </LoadableImage>
-            </div>
+            <PersonPortrait
+              :name="person.name"
+              :face-id="person.thumbnailFaceId"
+              class="size-16 shrink-0"
+            />
             <div class="min-w-0 flex-1">
               <h4 class="truncate" :title="person.name">{{ person.name }}</h4>
               <p v-if="person.shortDescription" class="line-clamp-2 text-sm text-muted-foreground">

@@ -110,7 +110,12 @@ const {
             }),
           }"
         >
-          <PeopleCard :name="person.name" :faces="person.faces" :names="person.names" />
+          <PeopleCard
+            :thumbnail-face-id="person.thumbnailFaceId"
+            :name="person.name"
+            :faces="person.faces"
+            :names="person.names"
+          />
         </RouterLink>
         <PeopleCardSkeleton
           v-for="index in isLoading || isFetchingNextPage ? 3 : 0"

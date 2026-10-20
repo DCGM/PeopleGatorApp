@@ -59,8 +59,6 @@ const {
   libraryCount,
   mentionCount,
   mentions,
-  portrait,
-  portraitLoading,
   profile,
   processing,
   updateIdentifiers,
@@ -159,8 +157,8 @@ function selectTab(tab: string | number) {
       <PersonEditableDetails
         :model-value="profile"
         :person-id="personId"
-        :portrait="portrait"
-        :portrait-loading="portraitLoading"
+        :thumbnail-face-id="entity?.thumbnail_face_id"
+        :thumbnail-mode="entity?.thumbnail_mode"
         :face-count="entity?.entity_link_stats?.faces?.total ?? faceCount"
         :mention-count="entity?.entity_link_stats?.mentions?.total ?? mentionCount"
         :library-count="libraryCount"
