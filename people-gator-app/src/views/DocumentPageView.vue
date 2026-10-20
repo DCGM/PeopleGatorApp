@@ -77,6 +77,7 @@ const {
   loadMore,
   pageDimensions,
   pageImageLoading,
+  pageImageError,
   pageImageLoaded,
   pageImageReady,
   pageImageUrl,
@@ -538,7 +539,7 @@ onBeforeUnmount(() => {
           >
             <template #fallback>
               <div class="flex size-full items-center justify-center text-muted-foreground">
-                <span v-if="error">Could not load scan</span><span v-else>Loading scan…</span>
+                <span v-if="error || pageImageError">Could not load scan</span><span v-else>Loading scan…</span>
               </div>
             </template>
           </LoadableImage>

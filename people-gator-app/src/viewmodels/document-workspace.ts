@@ -431,6 +431,7 @@ export function useDocumentWorkspace(
     pageImageLoaded,
     pageImageReady: computed(() => imageDimensions.value !== null),
     pageImageLoading: pageImageQuery.isPending,
+    pageImageError: computed(() => Boolean(pageImageQuery.error.value)),
     pageImageUrl,
     similarPeopleLoading: computed(
       () =>
