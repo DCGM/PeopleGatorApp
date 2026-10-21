@@ -17,7 +17,6 @@ export type ActivityOrder = {
   /** Annotation last-change time within each group. */
   items: SortDirection
 }
-export const DEFAULT_ACTIVITY_ORDER: ActivityOrder = { groups: 'desc', items: 'desc' }
 
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
 

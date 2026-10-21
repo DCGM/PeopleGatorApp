@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import SortSelect from './SortSelect.vue'
 import { directionLabel, type SortDirection } from '@/lib/sorting'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ActiveFilters from './ActiveFilters.vue'
@@ -42,8 +42,8 @@ const orderStrategies = computed(() => {
     })),
   )
 })
-function selectOrder(value: unknown) {
-  const [groups, items] = String(value).split(':')
+function selectOrder(value: string) {
+  const [groups, items] = value.split(':')
   if (!['asc', 'desc'].includes(groups!) || !['asc', 'desc'].includes(items!)) return
   void router.push({
     query: {
@@ -145,19 +145,13 @@ function clear() {
         ><TabsTrigger value="user">By user</TabsTrigger></TabsList
       >
     </Tabs>
-    <Select :model-value="`${order.groups}:${order.items}`" @update:model-value="selectOrder">
-      <SelectTrigger aria-label="Sort activity" size="sm" class="min-w-0 max-w-full">
-        <span class="min-w-0 truncate">Sort: {{ orderLabel(order.groups, order.items) }}</span>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem
-          v-for="strategy in orderStrategies"
-          :key="strategy.value"
-          :value="strategy.value"
-          >{{ strategy.label }}</SelectItem
-        >
-      </SelectContent>
-    </Select>
+    <SortSelect
+      :model-value="`${order.groups}:${order.items}`"
+      :strategies="orderStrategies"
+      label="Sort activity"
+      size="sm"
+      @update:model-value="selectOrder"
+    />
     <ActiveFilters
       clear-label="Clear activity filters"
       :filters="tags"

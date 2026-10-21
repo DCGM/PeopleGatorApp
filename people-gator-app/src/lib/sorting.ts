@@ -122,17 +122,6 @@ export function listSortParams<Field extends string>(
     : { sort: state.field as Exclude<Field, 'relevance'>, sort_direction: state.direction }
 }
 
-/** Keep only URL sort values that can travel to another list with the same meaning. */
-export function compatibleSortUrl(
-  query: LocationQuery,
-  keys: SortUrlKeys,
-  options: readonly SortOption[],
-): LocationQueryRaw {
-  const field = query[keys.field]
-  if (!options.some((option) => option.value === field)) return {}
-  return { [keys.field]: field, [keys.direction]: query[keys.direction] ?? undefined }
-}
-
 /**
  * Route-backed sort for one list. Options may change with context, such as
  * Relevance appearing only while a search query is active. An explicit choice
