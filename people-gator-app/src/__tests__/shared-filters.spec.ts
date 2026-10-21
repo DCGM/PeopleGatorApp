@@ -37,6 +37,8 @@ describe('time conversion', () => {
     )
     expect(localTimeToUtc('')).toBeUndefined()
     expect(utcToLocalTime('not-a-date')).toBe('')
+    expect(utcToLocalTime('2026-02-30T00:00:00Z')).toBe('')
+    expect(utcToLocalTime('2026-01-01T24:00:00Z')).toBe('')
     expect(utcToLocalTime('2026-01-02T12:00')).toBe('')
   })
 })

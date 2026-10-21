@@ -9,7 +9,7 @@ import ActiveFilters from './ActiveFilters.vue'
 import { useSharedFilters } from '@/viewmodels/shared-filters'
 import { activityGroups, localDayBounds, usePageActivity } from '@/viewmodels/page-activity'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
-const props = defineProps<{ sourceId: string }>()
+const props = defineProps<{ sourceId: string; hideFilterTags?: boolean }>()
 const route = useRoute(),
   router = useRouter()
 const { items, loading, error, retry } = usePageActivity(() => props.sourceId)
@@ -153,6 +153,7 @@ function clear() {
       @update:model-value="selectOrder"
     />
     <ActiveFilters
+      v-if="!hideFilterTags"
       clear-label="Clear activity filters"
       :filters="tags"
       @remove="remove"

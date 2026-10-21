@@ -81,15 +81,17 @@ const open = computed({
         /></Button>
       </CollapsibleTrigger>
     </div>
-    <CollapsibleTrigger v-else-if="!desktop" as-child>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        :aria-label="mobileOpen ? 'Hide filters' : 'Show filters'"
-        ><SlidersHorizontal aria-hidden="true"
-      /></Button>
-    </CollapsibleTrigger>
+    <div v-else-if="!desktop" class="flex basis-full">
+      <CollapsibleTrigger as-child>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          :aria-label="mobileOpen ? 'Hide filters' : 'Show filters'"
+          ><SlidersHorizontal aria-hidden="true"
+        /></Button>
+      </CollapsibleTrigger>
+    </div>
     <CollapsibleContent
       v-if="hasFilters"
       class="filter-controls contents"
