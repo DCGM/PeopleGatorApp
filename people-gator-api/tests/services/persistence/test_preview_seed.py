@@ -2153,3 +2153,24 @@ async def test_portrait_upgrade_checkpoint_recovery_preserves_review(seed_target
     # Rolled-back seed code rejects unknown identity-manifest keys.
     identity = json.loads(await filesystem.read_bytes(preview.MANIFEST_KEY))
     assert set(identity) == {'entities', 'faces', 'mentions'}
+
+
+@pytest.mark.asyncio
+async def test_legacy_portrait_upgrade_state_moves_out_of_identity_manifest(seed_target, tmp_path):
+    database, filesystem, _ = seed_target
+    await preview.seed_preview(database, filesystem)
+    # Early #35 previews kept upgrade state inside the identity manifest.
+    identity = json.loads(await filesystem.read_bytes(preview.MANIFEST_KEY))
+    upgrades = json.loads(await filesystem.read_bytes(preview.UPGRADES_KEY))
+    identity['thumbnail_upgrades'] = upgrades['thumbnail']
+    await filesystem.write_bytes(preview.MANIFEST_KEY, json.dumps(identity).encode())
+    (tmp_path / preview.UPGRADES_KEY).unlink()
+    person_id = uuid.UUID(identity['entities']['provenance-review'])
+    reset = await database.entities.patch(person_id, EntityPatchRequest(thumbnail_face_id=None),
+        GenericActor(user_id=(await database.entities.get(person_id)).user_id))
+    await preview.seed_preview(database, filesystem)
+    # The completed upgrade is not repeated over the later reviewer reset.
+    assert await database.entities.get(person_id) == reset
+    assert set(json.loads(await filesystem.read_bytes(preview.MANIFEST_KEY))) == {'entities', 'faces', 'mentions'}
+    moved = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
+    assert moved.thumbnail['person-portrait-v1'].complete

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from uuid import UUID
 from urllib.parse import urlencode
@@ -117,9 +118,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     if database.api_keys is None:
         raise ValueError("Preview seeding requires the API-key registry (PostgreSQL)")
     raw = await _read_optional(filesystem, MANIFEST_KEY)
-    manifest = (
-        SeedManifest.model_validate_json(raw) if raw is not None else SeedManifest()
-    )
+    identity = json.loads(raw) if raw is not None else {}
+    # Early #35 previews stored portrait upgrade state in the identity manifest.
+    legacy_upgrades = identity.pop("thumbnail_upgrades", None)
+    manifest = SeedManifest.model_validate(identity)
 
     raw = await _read_optional(filesystem, UPGRADES_KEY)
     upgrades = (
@@ -135,6 +137,13 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         await filesystem.write_bytes(
             UPGRADES_KEY, upgrades.model_dump_json(indent=2).encode()
         )
+
+    if legacy_upgrades is not None:
+        # Save the moved state before removing it from the identity manifest.
+        if raw is None:
+            upgrades = SeedUpgrades(thumbnail=legacy_upgrades)
+            await checkpoint_upgrades()
+        await checkpoint()
 
     actors: dict[str, AuthContext] = {}
     registered_keys: dict[str, UUID] = {}
