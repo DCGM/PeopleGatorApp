@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from pydantic import AnyUrl, BaseModel
 
 from people_gator_api.schemas.common import (
@@ -19,6 +19,7 @@ from people_gator_api.schemas.common import (
     ListFilterBase,
 )
 from people_gator_api.schemas.entities import EntityListFilter
+from people_gator_api.schemas.entity_links import LEGACY_FILTER_REPLACEMENTS, SharedFilter
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
     EntityType,
@@ -178,14 +179,43 @@ def search_query_dependency(
         raise_api_error(422, "invalid_search", str(exc))
 
 
+def shared_filter_dependency(
+    request: Request,
+    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(SharedFilter, "entity_link_state", "filter")] = None,
+    library: Annotated[list[str] | None, _model_parameter(SharedFilter, "library", "filter")] = None,
+    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "document_source_id", "filter")] = None,
+    page_source_ids: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "page_source_id", "filter")] = None,
+    last_touched_from: Annotated[datetime | None, _model_parameter(SharedFilter, "last_touched_from", "filter")] = None,
+    last_touched_to: Annotated[datetime | None, _model_parameter(SharedFilter, "last_touched_to", "filter")] = None,
+    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "last_touched_by_user_id", "filter")] = None,
+    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SharedFilter, "last_touched_by_api_key_id", "filter")] = None,
+) -> dict[str, object]:
+    """Parse the canonical criteria shared by every source/annotation/entity list.
+
+    Removed ``filter.evidence_*`` parameters are rejected rather than ignored, so
+    an old client cannot silently receive broader or differently scoped results.
+    """
+    for name, replacement in LEGACY_FILTER_REPLACEMENTS.items():
+        if f"filter.{name}" in request.query_params:
+            raise_api_error(
+                422,
+                "unsupported_filter",
+                f"filter.{name} was removed; use {replacement}, which describes the filtered record itself",
+            )
+    return {
+        "entity_link_state": entity_link_state,
+        "library": library,
+        "document_source_id": document_source_id,
+        "page_source_id": page_source_ids,
+        "last_touched_from": last_touched_from,
+        "last_touched_to": last_touched_to,
+        "last_touched_by_user_id": last_touched_by_user_id,
+        "last_touched_by_api_key_id": last_touched_by_api_key_id,
+    }
+
+
 def entity_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(EntityListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(EntityListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(EntityListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(EntityListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(EntityListFilter, "entity_id", "filter"),
@@ -222,28 +252,12 @@ def entity_list_filter_dependency(
         bool | None,
         _model_parameter(EntityListFilter, "has_detections", "filter"),
     ] = None,
-    last_touched_from: Annotated[datetime | None, _model_parameter(EntityListFilter, "last_touched_from", "filter")] = None,
-    last_touched_to: Annotated[datetime | None, _model_parameter(EntityListFilter, "last_touched_to", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "document_source_id", "filter")] = None,
-    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "last_touched_by_user_id", "filter")] = None,
-    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(EntityListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> EntityListFilter:
     return _filter(
         EntityListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        entity_link_state=entity_link_state,
+        **shared,
         entity_id=entity_id,
         entity_type=entity_type,
-        last_touched_from=last_touched_from,
-        last_touched_to=last_touched_to,
-        document_source_id=document_source_id,
-        last_touched_by_user_id=last_touched_by_user_id,
-        last_touched_by_api_key_id=last_touched_by_api_key_id,
 
         wikidata_id=wikidata_id,
         nlcr_authority_id=nlcr_authority_id,
@@ -256,14 +270,7 @@ def entity_list_filter_dependency(
 
 
 def face_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(FaceListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_source_id", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "document_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(FaceListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(FaceListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(FaceListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(FaceListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(FaceListFilter, "entity_id", "filter"),
@@ -279,14 +286,7 @@ def face_list_filter_dependency(
 ) -> FaceListFilter:
     return _filter(
         FaceListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        document_source_id=document_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        entity_link_state=entity_link_state,
+        **shared,
         entity_id=entity_id,
         source_id=source_id,
         detection_id=detection_id,
@@ -294,14 +294,7 @@ def face_list_filter_dependency(
 
 
 def text_mention_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(TextMentionListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_source_id", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "document_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(TextMentionListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(TextMentionListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(TextMentionListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(TextMentionListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(TextMentionListFilter, "entity_id", "filter"),
@@ -317,14 +310,7 @@ def text_mention_list_filter_dependency(
 ) -> TextMentionListFilter:
     return _filter(
         TextMentionListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        document_source_id=document_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        entity_link_state=entity_link_state,
+        **shared,
         entity_id=entity_id,
         source_id=source_id,
         name=name,
@@ -364,14 +350,7 @@ def user_list_filter_dependency(
 
 
 def source_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(SourceListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_source_id", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "document_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(SourceListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(SourceListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(SourceListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     source_type: Annotated[
         list[SourceKind] | None,
         _model_parameter(SourceListFilter, "source_type", "filter"),
@@ -396,26 +375,11 @@ def source_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(SourceListFilter, "mention_id", "filter"),
     ] = None,
-    last_touched_from: Annotated[datetime | None, _model_parameter(SourceListFilter, "last_touched_from", "filter")] = None,
-    last_touched_to: Annotated[datetime | None, _model_parameter(SourceListFilter, "last_touched_to", "filter")] = None,
-    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "last_touched_by_user_id", "filter")] = None,
-    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(SourceListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> SourceListFilter:
     return _filter(
         SourceListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        document_source_id=document_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        last_touched_from=last_touched_from,
-        last_touched_to=last_touched_to,
-        last_touched_by_user_id=last_touched_by_user_id,
-        last_touched_by_api_key_id=last_touched_by_api_key_id,
+        **shared,
 
-        entity_link_state=entity_link_state,
         source_type=source_type,
         url=url,
         source_id=source_id,
@@ -426,21 +390,10 @@ def source_list_filter_dependency(
 
 
 def page_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(PageListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_source_id", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "document_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(PageListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(PageListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(PageListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     url: Annotated[
         list[AnyUrl] | None,
         _model_parameter(PageListFilter, "url", "filter"),
-    ] = None,
-    library: Annotated[
-        list[str] | None,
-        _model_parameter(PageListFilter, "library", "filter"),
     ] = None,
     document_id: Annotated[
         list[uuid.UUID] | None,
@@ -478,28 +431,12 @@ def page_list_filter_dependency(
         bool | None,
         _model_parameter(PageListFilter, "has_entities", "filter"),
     ] = None,
-    last_touched_from: Annotated[datetime | None, _model_parameter(PageListFilter, "last_touched_from", "filter")] = None,
-    last_touched_to: Annotated[datetime | None, _model_parameter(PageListFilter, "last_touched_to", "filter")] = None,
-    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "last_touched_by_user_id", "filter")] = None,
-    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(PageListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> PageListFilter:
     return _filter(
         PageListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        document_source_id=document_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        last_touched_from=last_touched_from,
-        last_touched_to=last_touched_to,
-        last_touched_by_user_id=last_touched_by_user_id,
-        last_touched_by_api_key_id=last_touched_by_api_key_id,
+        **shared,
 
-        entity_link_state=entity_link_state,
         url=url,
-        library=library,
         document_id=document_id,
         page_id=page_id,
         source_id=source_id,
@@ -513,21 +450,10 @@ def page_list_filter_dependency(
 
 
 def document_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(DocumentListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_source_id", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "document_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(DocumentListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(DocumentListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(DocumentListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     url: Annotated[
         list[AnyUrl] | None,
         _model_parameter(DocumentListFilter, "url", "filter"),
-    ] = None,
-    library: Annotated[
-        list[str] | None,
-        _model_parameter(DocumentListFilter, "library", "filter"),
     ] = None,
     document_id: Annotated[
         list[uuid.UUID] | None,
@@ -549,30 +475,14 @@ def document_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(DocumentListFilter, "mention_id", "filter"),
     ] = None,
-    last_touched_from: Annotated[datetime | None, _model_parameter(DocumentListFilter, "last_touched_from", "filter")] = None,
-    last_touched_to: Annotated[datetime | None, _model_parameter(DocumentListFilter, "last_touched_to", "filter")] = None,
-    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "last_touched_by_user_id", "filter")] = None,
-    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(DocumentListFilter, "last_touched_by_api_key_id", "filter")] = None,
     has_unassigned_faces: Annotated[bool | None, _model_parameter(DocumentListFilter, "has_unassigned_faces", "filter")] = None,
 ) -> DocumentListFilter:
     return _filter(
         DocumentListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        document_source_id=document_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        last_touched_from=last_touched_from,
-        last_touched_to=last_touched_to,
-        last_touched_by_user_id=last_touched_by_user_id,
-        last_touched_by_api_key_id=last_touched_by_api_key_id,
+        **shared,
         has_unassigned_faces=has_unassigned_faces,
 
-        entity_link_state=entity_link_state,
         url=url,
-        library=library,
         document_id=document_id,
         source_id=source_id,
         entity_id=entity_id,
@@ -582,14 +492,7 @@ def document_list_filter_dependency(
 
 
 def image_list_filter_dependency(
-    evidence_library: Annotated[list[str] | None, _model_parameter(ImageListFilter, "evidence_library", "filter")] = None,
-    evidence_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_source_id", "filter")] = None,
-    document_source_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "document_source_id", "filter")] = None,
-    evidence_touched_from: Annotated[datetime | None, _model_parameter(ImageListFilter, "evidence_touched_from", "filter")] = None,
-    evidence_touched_to: Annotated[datetime | None, _model_parameter(ImageListFilter, "evidence_touched_to", "filter")] = None,
-    evidence_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_touched_by_user_id", "filter")] = None,
-    evidence_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "evidence_touched_by_api_key_id", "filter")] = None,
-    entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(ImageListFilter, "entity_link_state", "filter")] = None,
+    shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     url: Annotated[
         list[AnyUrl] | None,
         _model_parameter(ImageListFilter, "url", "filter"),
@@ -610,26 +513,11 @@ def image_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(ImageListFilter, "mention_id", "filter"),
     ] = None,
-    last_touched_from: Annotated[datetime | None, _model_parameter(ImageListFilter, "last_touched_from", "filter")] = None,
-    last_touched_to: Annotated[datetime | None, _model_parameter(ImageListFilter, "last_touched_to", "filter")] = None,
-    last_touched_by_user_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "last_touched_by_user_id", "filter")] = None,
-    last_touched_by_api_key_id: Annotated[list[uuid.UUID] | None, _model_parameter(ImageListFilter, "last_touched_by_api_key_id", "filter")] = None,
 ) -> ImageListFilter:
     return _filter(
         ImageListFilter,
-        evidence_library=evidence_library,
-        evidence_source_id=evidence_source_id,
-        document_source_id=document_source_id,
-        evidence_touched_from=evidence_touched_from,
-        evidence_touched_to=evidence_touched_to,
-        evidence_touched_by_user_id=evidence_touched_by_user_id,
-        evidence_touched_by_api_key_id=evidence_touched_by_api_key_id,
-        last_touched_from=last_touched_from,
-        last_touched_to=last_touched_to,
-        last_touched_by_user_id=last_touched_by_user_id,
-        last_touched_by_api_key_id=last_touched_by_api_key_id,
+        **shared,
 
-        entity_link_state=entity_link_state,
         url=url,
         source_id=source_id,
         entity_id=entity_id,

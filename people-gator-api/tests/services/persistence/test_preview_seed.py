@@ -89,9 +89,9 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (10, 32, 22)
-    assert len(result.documents) == 19 and len(result.pages) == 45
-    assert len(result.users) == 3 and len(result.api_keys) == 2
+    assert await counts(database) == (12, 33, 23)
+    assert len(result.documents) == 21 and len(result.pages) == 48
+    assert len(result.users) == 4 and len(result.api_keys) == 3
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
     assert demo["document"] == [str(result.documents["album"])]
@@ -128,9 +128,9 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     for filters, expected in (
         (
             EntityListFilter(has_detections=True, has_mentions=False),
-            {"emil", "ada-candidate"},
+            {"emil", "ada-candidate", "shared-hana"},
         ),
-        (EntityListFilter(has_detections=False, has_mentions=True), {"nora"}),
+        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo"}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
         (
             EntityListFilter(document_source_id=[result.documents["album"]]),
@@ -240,7 +240,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (10, 32, 22)
+    assert await counts(database) == (12, 33, 23)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -262,7 +262,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (11, 32, 22)
+    assert await counts(database) == (13, 33, 23)
 
 
 @pytest.mark.asyncio
@@ -286,8 +286,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 10 and len(result.faces) == 32
-    assert await counts(database) == (10, 32, 22)
+    assert len(result.entities) == 12 and len(result.faces) == 33
+    assert await counts(database) == (12, 33, 23)
 
 
 @pytest.mark.asyncio
@@ -307,7 +307,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (9, 31, 21)
+    assert await counts(database) == (11, 32, 22)
 
 
 @pytest.mark.asyncio
@@ -1478,24 +1478,31 @@ async def test_annotation_filter_parity_and_creation_preservation(seed_target):
     identity = await database.entities.get(person)
     assert identity.created_at < authority.last_touched_at
 
-    criteria = dict(entity_link_state=['manual', 'verified'],
-                    evidence_library=['preview-mzk'], document_source_id=[result.documents['provenance-a']],
-                    evidence_touched_by_user_id=[result.users['reviewer']],
-                    evidence_touched_from=authority.last_touched_at,
-                    evidence_touched_to=authority.last_touched_at)
+    scope = dict(entity_link_state=['manual', 'verified'],
+                 library=['preview-mzk'], document_source_id=[result.documents['provenance-a']])
+    # Faces: the same scope plus each face's own latest change.
+    criteria = dict(scope, last_touched_by_user_id=[result.users['reviewer']],
+                    last_touched_from=authority.last_touched_at,
+                    last_touched_to=authority.last_touched_at)
     faces = await database.faces.list(FaceListRequest(filter_=FaceListFilter(entity_id=[person], **criteria), limit=1, return_total_count=True))
     assert [f.detection_id for f in faces.items] == [authority.detection_id]
     assert faces.total_count == 1 and faces.cursor is None
-    entities = await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(**criteria), return_total_count=True))
+    # People/documents: the same scope through a linked annotation; their own
+    # latest change, not the face's, satisfies the modification criteria.
+    entities = await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(**scope), return_total_count=True))
+    assert person in [e.entity_id for e in entities.items]
+    own = dict(scope, last_touched_by_user_id=[identity.last_touched_by_user_id],
+               last_touched_from=identity.last_touched_at, last_touched_to=identity.last_touched_at)
+    entities = await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(**own)))
     assert [e.entity_id for e in entities.items] == [person]
-    docs = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(**criteria), return_total_count=True))
+    docs = await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(**scope), return_total_count=True))
     assert [d.source_id for d in docs.items] == [result.documents['provenance-a']]
     # Manual evidence is in the other document: unrelated witnesses cannot combine.
-    impossible = {**criteria, 'entity_link_state': ['manual']}
-    assert not (await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(**impossible)))).items
+    impossible = {**scope, 'entity_link_state': ['manual']}
+    assert person not in [e.entity_id for e in (await database.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(**impossible)))).items]
     assert not (await database.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(**impossible)))).items
     mentions = await database.text_mentions.list(TextMentionListRequest(limit=100, filter_=TextMentionListFilter(
-        entity_id=[person], evidence_touched_by_user_id=[result.users['reviewer']]), return_total_count=True))
+        entity_id=[person], last_touched_by_user_id=[result.users['reviewer']]), return_total_count=True))
     assert [m.mention_id for m in mentions.items] == [result.mentions['provenance-mention-verified']]
     before = authority.model_dump()
     await preview.seed_preview(database, filesystem)
@@ -1537,7 +1544,7 @@ async def test_annotation_metadata_migration_keeps_historical_unknown(seed_targe
         detection_id=[detection_id])))
     assert [item.detection_id for item in matches.items] == [detection_id]
     matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
-        detection_id=[detection_id], evidence_touched_from='2000-01-01T00:00:00Z')))
+        detection_id=[detection_id], last_touched_from='2000-01-01T00:00:00Z')))
     assert not matches.items
     await preview.seed_preview(db, filesystem)
     assert (await db.faces.get(detection_id)).last_touched_at is None
@@ -1562,7 +1569,7 @@ async def test_evidence_pagination_counts_and_similarity_witnesses(seed_target):
     assert len(ids) == len(set(ids)) == 4
     found = await db.entities.search(SearchEntitiesRequest(limit=100, query=QueryBase(
         face_id=[seed.faces['provenance-auto']], face_embedding_model=MODEL),
-        filter_=EntityListFilter(evidence_touched_by_user_id=[seed.users['reviewer']], document_source_id=[seed.documents['provenance-a']])))
+        filter_=EntityListFilter(library=['preview-mzk'], document_source_id=[seed.documents['provenance-a']])))
     assert [item.entity_id for item in found.items] == [person]
     assert found.items[0].matched_detection_ids == [seed.faces['provenance-authority']]
 
@@ -1582,7 +1589,7 @@ async def test_page_activity_example_distinguishes_annotation_editors(seed_targe
     assert sum(item.last_touched_by_user_id == seed.users['importer'] for item in edits) == 2
     assert sum(item.last_touched_by_user_id == seed.users['reviewer'] for item in edits) == 1
     assert all(item.last_touched_at for item in edits)
-    reviewer_faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[page_id], evidence_touched_by_user_id=[seed.users['reviewer']])))
+    reviewer_faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[page_id], last_touched_by_user_id=[seed.users['reviewer']])))
     assert [item.detection_id for item in reviewer_faces.items] == [seed.faces['provenance-authority']]
 
 
@@ -1600,7 +1607,6 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
     assert cards.path == f'/people/{person_id}'
     assert parse_qs(cards.query) == {
         'origin_matched_face': [str(seed.faces['provenance-authority'])],
-        'origin_text': ['Irena'],
     }
     faces = (await db.faces.list(FaceListRequest(
         limit=100, filter_=FaceListFilter(entity_id=[person_id]),
@@ -1659,19 +1665,22 @@ async def test_shared_filter_navigation_uses_current_annotation_key(seed_target)
     example = urlsplit(seed.filter_examples['shared-filter-navigation'])
     query = parse_qs(example.query)
     assert example.path == '/people'
-    assert query == {'q': ['Irena'], 'evidence_key': [str(seed.api_keys['importer'])]}
+    assert query == {'q': ['Irena'], 'library': ['preview-mzk']}
     people = await db.entities.search(SearchEntitiesRequest(limit=100,
         query=QueryBase(text=query['q']),
-        filter_=EntityListFilter(evidence_touched_by_api_key_id=query['evidence_key']),
+        filter_=EntityListFilter(library=query['library']),
     ))
     assert [person.entity_id for person in people.items] == [seed.entities['provenance-review']]
+    # The profile applies the same library scope to her faces.
     faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
-        entity_id=[people.items[0].entity_id], evidence_touched_by_api_key_id=query['evidence_key'],
+        entity_id=[people.items[0].entity_id], library=query['library'],
     )))
-    assert seed.faces['provenance-auto'] in {face.detection_id for face in faces.items}
+    assert {face.detection_id for face in faces.items} == {
+        seed.faces['provenance-auto'], seed.faces['provenance-authority'],
+    }
     changed = await db.entities.search(SearchEntitiesRequest(limit=100,
         query=QueryBase(text=query['q']),
-        filter_=EntityListFilter(evidence_touched_by_api_key_id=[seed.api_keys['ocr']]),
+        filter_=EntityListFilter(library=['preview-absent']),
     ))
     assert not changed.items
     cleared = await db.faces.list(FaceListRequest(limit=100,
@@ -1693,9 +1702,10 @@ async def test_scan_assignment_search_finds_people_elsewhere_and_preserves_revie
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
     query = parse_qs(urlsplit(seed.filter_examples['scan-assignment-search']).query)
-    assert set(query) == {'library', 'document'}
+    # Canonical document scope: the internal registered document UUID.
+    assert query == {'document': [str(seed.documents['provenance-a'])]}
     pages = await db.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
-        library=query['library'], document_id=query['document'],
+        document_source_id=query['document'],
     )))
     assert [page.source_id for page in pages.items] == [seed.pages['provenance-a-1']]
     source_id = pages.items[0].source_id
@@ -1808,13 +1818,13 @@ async def test_annotation_editor_example_uses_same_user_and_key_and_preserves_cr
     query = parse_qs(example.query)
     assert example.path == f"/people/{seed.entities['provenance-review']}"
     assert query == {
-        'evidence_user': [str(seed.users['importer'])],
-        'evidence_key': [str(seed.api_keys['importer'])],
+        'touched_by': [str(seed.users['importer'])],
+        'api_key': [str(seed.api_keys['importer'])],
     }
     matches = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
         entity_id=[seed.entities['provenance-review']],
-        evidence_touched_by_user_id=query['evidence_user'],
-        evidence_touched_by_api_key_id=query['evidence_key'],
+        last_touched_by_user_id=query['touched_by'],
+        last_touched_by_api_key_id=query['api_key'],
     )))
     assert {face.detection_id for face in matches.items} == {
         seed.faces['provenance-auto'], seed.faces['provenance-manual'], seed.faces['provenance-unknown'],
@@ -1847,10 +1857,11 @@ async def test_document_navigation_keeps_unannotated_pages_and_explicit_filters(
     untouched = next(page for page in pages if page.source_id == seed.pages['issue8-untouched'])
     assert untouched.entity_link_stats.faces.total == 0
     assert untouched.entity_link_stats.mentions.total == 0
+    # A page's own latest change: the importer's faces, before OCR/review edits.
     filtered = await db.sources.list_pages(PageListRequest(limit=100,
         return_total_count=True, filter_=PageListFilter(**scope,
-            evidence_touched_by_user_id=[seed.users['importer']])))
-    assert filtered.total_count == 4
+            last_touched_by_user_id=[seed.users['importer']])))
+    assert filtered.total_count == 3
     assert untouched.source_id not in {page.source_id for page in filtered.items}
     for _ in range(2):
         assert await preview.seed_preview(db, filesystem) == seed
@@ -2066,15 +2077,15 @@ async def test_page_gallery_lists_every_registered_page_in_stable_batches(seed_t
     filtered = urlsplit(seed.filter_examples["document-page-gallery-filtered"])
     search = next(item for item in DOCUMENTS if item.key == "issue8-search")
     assert filtered.path.startswith(f"/libraries/{search.library}/documents/{search.document_id}/pages/")
-    importer = parse_qs(filtered.query)["evidence_user"]
+    importer = parse_qs(filtered.query)["touched_by"]
     assert importer == [str(seed.users["importer"])]
-    scope = PageListFilter(library=[search.library], document_id=[search.document_id])
     narrowed = await database.sources.list_pages(PageListRequest(
         limit=100, return_total_count=True,
-        filter_=scope.model_copy(update={"evidence_touched_by_user_id": [seed.users["importer"]]}),
+        filter_=PageListFilter(library=[search.library], document_id=[search.document_id],
+                               last_touched_by_user_id=[seed.users["importer"]]),
     ))
     unfiltered = await _all_document_pages(database, search.library, search.document_id, 12)
-    assert narrowed.total_count == 4 and unfiltered[0].total_count == 6
+    assert narrowed.total_count == 3 and unfiltered[0].total_count == 6
 
     for _ in range(2):
         assert await preview.seed_preview(database, filesystem) == seed
@@ -2266,12 +2277,10 @@ async def test_default_documents_landing_has_linked_media_and_preserves_reviews(
     assert album.name == "Portrait album"
     scans = urlsplit(seed.filter_examples["default-documents-scans"])
     assert scans.path == "/scans"
-    assert parse_qs(scans.query) == {
-        "library": [album.library], "document": [str(album.document_id)],
-    }
+    assert parse_qs(scans.query) == {"document": [str(album.source_id)]}
     pages = await database.sources.list_pages(PageListRequest(
         limit=4, return_total_count=True,
-        filter_=PageListFilter(library=[album.library], document_id=[album.document_id]),
+        filter_=PageListFilter(document_source_id=[album.source_id]),
     ))
     assert {page.source_id for page in pages.items} == {
         seed.pages["album-1"], seed.pages["album-2"],
@@ -2308,3 +2317,86 @@ async def test_default_documents_landing_has_linked_media_and_preserves_reviews(
             page.library, page.document_id, page.page_id, max_width=256,
         )
         assert thumbnail.content == thumbnails[page.source_id]
+
+
+@pytest.mark.asyncio
+async def test_shared_filter_scenario_transfers_own_latest_changes(seed_target):
+    """#52: one curator selection finds each view's own latest change."""
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.schemas.sources import DocumentListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    curator = seed.users["curator"]
+    key = seed.api_keys["curator"]
+    ivo, hana = seed.entities["shared-ivo"], seed.entities["shared-hana"]
+    ledger, mirror = seed.documents["shared-ledger"], seed.documents["shared-mirror"]
+
+    def query(name):
+        return parse_qs(urlsplit(seed.filter_examples[name]).query)
+
+    assert query("shared-filters-documents") == {"touched_by": [str(curator)]}
+    assert query("shared-filters-people") == {"touched_by": [str(curator)]}
+    documents = await db.sources.list_documents(DocumentListRequest(limit=100, filter_=DocumentListFilter(
+        last_touched_by_user_id=[curator])))
+    assert [item.source_id for item in documents.items] == [ledger]
+    people = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        last_touched_by_user_id=[curator])))
+    assert {item.entity_id for item in people.items} == {ivo, hana}
+    # Hana's own record was the curator's; her linked face remains the reviewer's.
+    hana_record = await db.entities.get(hana)
+    face = await db.faces.get(seed.faces["shared-hana-face"])
+    assert hana_record.last_touched_by_user_id == curator and hana_record.last_touched_by_api_key_id is None
+    assert face.last_touched_by_user_id == seed.users["reviewer"]
+    assert query("shared-filters-api-key") == {"touched_by": [str(curator)], "api_key": [str(key)]}
+    keyed = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        last_touched_by_user_id=[curator], last_touched_by_api_key_id=[key])))
+    assert [item.entity_id for item in keyed.items] == [ivo]
+    profile = urlsplit(seed.filter_examples["shared-filters-person-faces"])
+    assert profile.path == f"/people/{hana}"
+    faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        entity_id=[hana], last_touched_by_user_id=[curator])))
+    assert not faces.items
+    # Document scope uses the internal UUID; the same archive ID elsewhere has no links.
+    assert query("shared-filters-scope") == {"document": [str(ledger)]}
+    scoped = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        document_source_id=[ledger])))
+    assert {item.entity_id for item in scoped.items} == {ivo, hana}
+    assert not (await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        document_source_id=[mirror])))).items
+    pages = await db.sources.list_pages(PageListRequest(limit=100, filter_=PageListFilter(
+        library=["preview-nlk"], document_source_id=[mirror])))
+    assert [item.source_id for item in pages.items] == [seed.pages["shared-mirror-1"]]
+
+    # Reruns keep the edit once; a later review edit is never overwritten.
+    edited = await db.entities.patch(hana, EntityPatchRequest(short_description="Reviewed"),
+                                     GenericActor(user_id=seed.users["reviewer"]))
+    for _ in range(2):
+        assert await preview.seed_preview(db, filesystem) == seed
+        assert await db.entities.get(hana) == edited
+        assert await db.faces.get(face.detection_id) == face
+
+
+@pytest.mark.asyncio
+async def test_shared_filter_edit_recovers_from_interrupted_checkpoint(seed_target, monkeypatch):
+    """An edit written before its completion checkpoint is not repeated."""
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    hana = seed.entities["shared-hana"]
+    applied = await db.entities.get(hana)
+    upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
+    upgrades.record_edits["shared-filters-own-edit-v1"].complete = False
+    await filesystem.write_bytes(preview.UPGRADES_KEY, upgrades.model_dump_json().encode())
+    patches = []
+    original = db.entities.patch
+
+    async def recording_patch(*args, **kwargs):
+        patches.append(args[0])
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(db.entities, "patch", recording_patch)
+    assert await preview.seed_preview(db, filesystem) == seed
+    assert hana not in patches
+    assert await db.entities.get(hana) == applied
+    upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
+    assert upgrades.record_edits["shared-filters-own-edit-v1"].complete
