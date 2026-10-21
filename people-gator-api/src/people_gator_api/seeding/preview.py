@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from uuid import UUID
 from urllib.parse import urlencode
 
 from botocore.exceptions import ClientError
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, AwareDatetime
 
 from people_gator_api.filesystem.contracts import Filesystem
 from people_gator_api.media.page_image import page_image_key
@@ -18,6 +19,7 @@ from people_gator_api.persistence.contracts import Database
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
+    EntityPatchRequest,
     EntityListRequest,
     EntityResponse,
 )
@@ -44,6 +46,22 @@ from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAG
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
+# Upgrade state lives beside the identity manifest. Older seed code rejects
+# unknown manifest keys, so a rollback must never find new fields there.
+UPGRADES_KEY = "peoplegator_api/preview-seed-upgrades.json"
+
+
+class ThumbnailUpgrade(BaseModel):
+    expected_face_id: UUID | None
+    expected_touched_at: AwareDatetime | None
+    selected_face_id: UUID
+    complete: bool = False
+
+
+class SeedUpgrades(BaseModel):
+    # Ignore state written by newer code after a rollback.
+    model_config = ConfigDict(extra="ignore")
+    thumbnail: dict[str, ThumbnailUpgrade] = Field(default_factory=dict)
 
 
 class SeedManifest(BaseModel):
@@ -100,14 +118,32 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     if database.api_keys is None:
         raise ValueError("Preview seeding requires the API-key registry (PostgreSQL)")
     raw = await _read_optional(filesystem, MANIFEST_KEY)
-    manifest = (
-        SeedManifest.model_validate_json(raw) if raw is not None else SeedManifest()
+    identity = json.loads(raw) if raw is not None else {}
+    # Early #35 previews stored portrait upgrade state in the identity manifest.
+    legacy_upgrades = identity.pop("thumbnail_upgrades", None)
+    manifest = SeedManifest.model_validate(identity)
+
+    raw = await _read_optional(filesystem, UPGRADES_KEY)
+    upgrades = (
+        SeedUpgrades.model_validate_json(raw) if raw is not None else SeedUpgrades()
     )
 
     async def checkpoint() -> None:
         await filesystem.write_bytes(
             MANIFEST_KEY, manifest.model_dump_json(indent=2).encode()
         )
+
+    async def checkpoint_upgrades() -> None:
+        await filesystem.write_bytes(
+            UPGRADES_KEY, upgrades.model_dump_json(indent=2).encode()
+        )
+
+    if legacy_upgrades is not None:
+        # Save the moved state before removing it from the identity manifest.
+        if raw is None:
+            upgrades = SeedUpgrades(thumbnail=legacy_upgrades)
+            await checkpoint_upgrades()
+        await checkpoint()
 
     actors: dict[str, AuthContext] = {}
     registered_keys: dict[str, UUID] = {}
@@ -362,6 +398,43 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         await checkpoint()
     if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
         active_mentions[key] = manifest.mentions[key]
+    # Explicit, checkpointed additive upgrade for #35. Use existing synthetic
+    # linked media; preserve manual choices and every choice after this upgrade.
+    # Record the precondition BEFORE writing, so an interrupted checkpoint cannot
+    # undo a subsequent review edit or turn a reviewer reset back into manual.
+    upgrade_key = "person-portrait-v1"
+    person_id = active_entities.get("provenance-review")
+    person = await database.entities.get(person_id) if person_id else None
+    if person is not None:
+        upgrade = upgrades.thumbnail.get(upgrade_key)
+        if upgrade is None:
+            choices = (await database.faces.list(FaceListRequest(
+                filter_=FaceListFilter(entity_id=[person_id]), limit=100,
+            ))).items
+            seeded_ids = {active_faces.get(key) for key in (
+                "provenance-auto", "provenance-authority", "provenance-manual", "provenance-unknown",
+            )}
+            candidates = sorted(face.detection_id for face in choices if face.detection_id in seeded_ids)
+            if len(candidates) >= 2:
+                upgrade = ThumbnailUpgrade(
+                    expected_face_id=person.thumbnail_face_id,
+                    expected_touched_at=person.last_touched_at,
+                    selected_face_id=candidates[-1],
+                    complete=person.thumbnail_mode == "manual",
+                )
+                upgrades.thumbnail[upgrade_key] = upgrade
+                await checkpoint_upgrades()
+        if upgrade is not None and not upgrade.complete:
+            candidate = await database.faces.get(upgrade.selected_face_id)
+            if (person.thumbnail_mode == "automatic"
+                    and person.thumbnail_face_id == upgrade.expected_face_id
+                    and person.last_touched_at == upgrade.expected_touched_at
+                    and candidate is not None and candidate.entity_id == person_id):
+                await database.entities.patch(person_id, EntityPatchRequest(
+                    thumbnail_face_id=upgrade.selected_face_id,
+                ), actors["reviewer"])
+            upgrade.complete = True
+            await checkpoint_upgrades()
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
@@ -392,6 +465,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Select one existing linked evidence card, then Use as portrait in
+            # the compact bottom bar. Select the marked portrait to reset.
+            "person-portrait-selection": f"/people/{manifest.entities['provenance-review']}",
+
             # Compare the standard state text colors without state backgrounds.
             "linked-face-states": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "link_state": ["automatic", "manual", "verified"],

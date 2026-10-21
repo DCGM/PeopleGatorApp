@@ -66,7 +66,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: 'anna-novakova',
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.findAll('[data-slot="item"]')[1]!.classes()).toContain('border-accent')
@@ -82,7 +82,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
@@ -113,7 +113,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     const name = wrapper.get('h4 > span')
@@ -129,7 +129,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     if (wrapper.find('button[aria-label="Show filters"]').exists())
@@ -157,7 +157,7 @@ describe('SimilarPeoplePanel', () => {
         viewedPersonId: null,
         loading: true,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     const results = wrapper.get('[aria-live="polite"][aria-busy="true"]')
@@ -172,7 +172,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: assignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
@@ -208,7 +208,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.findAll('button').some((button) => button.text() === 'Load more people')).toBe(
@@ -223,7 +223,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     await wrapper
@@ -242,7 +242,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: null,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.findAll('button').some((button) => button.text() === 'Assign')).toBe(false)
@@ -257,7 +257,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     await wrapper
@@ -299,7 +299,7 @@ describe('SimilarPeoplePanel', () => {
         viewedPersonId: null,
         hasNextPage: true,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     const loadMore = wrapper
@@ -340,7 +340,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.find('[data-slot="scroll-area-viewport"]').exists()).toBe(true)
@@ -406,7 +406,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     try {
@@ -452,7 +452,7 @@ describe('SimilarPeoplePanel', () => {
         selectedFace: unassignedFace,
         viewedPersonId: null,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     try {

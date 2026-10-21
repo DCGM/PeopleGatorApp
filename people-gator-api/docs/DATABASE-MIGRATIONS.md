@@ -104,3 +104,14 @@ the unused classification JSON payload. Previously deployed revision
 `d34a021b0007` upgrades normally; no preview reset or reseeding of existing
 records is needed. Downgrading restores nullable columns without fabricating
 removed values.
+
+The person-portrait migration (`d34a021b0009`) adds a nullable face reference and
+an automatic/manual policy. Historical people receive the lowest linked face UUID
+(or no thumbnail), always in automatic mode. It preserves identities, annotations,
+verification and all creation/processing metadata; it does not access media or
+external services. Foreign keys, checks and triggers maintain ownership through
+reassignment and cascade deletion. Run the normal migrate/check commands before
+starting this application revision; bootstrap alone cannot upgrade retained tables.
+Back up the retained database and matching storage first. Downgrade discards
+portrait preferences but preserves people and evidence. See
+[person portraits](PERSON-THUMBNAILS.md) for PATCH, selection and lifecycle details.

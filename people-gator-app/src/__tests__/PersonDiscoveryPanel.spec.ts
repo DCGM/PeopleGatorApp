@@ -42,7 +42,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 2,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.text()).toContain('93%')
@@ -71,7 +71,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     await wrapper.get('[aria-label="Select face face-1 for assignment"]').trigger('click')
@@ -93,7 +93,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     await wrapper.get('[aria-label="Select face face-1 for assignment"]').trigger('click')
@@ -115,7 +115,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(
@@ -145,7 +145,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
@@ -168,7 +168,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     const status = wrapper.get('p.text-emerald-700')
@@ -196,7 +196,7 @@ describe('PersonDiscoveryPanel', () => {
         referenceFaceCount: 1,
         searchTerm: 'Ada Lovelace',
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
@@ -223,7 +223,7 @@ describe('PersonDiscoveryPanel', () => {
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
-      global: { stubs: { RouterLink: RouterLinkStub } },
+      global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
     await wrapper.get('[aria-label="Select Ada King for merge"]').trigger('click')

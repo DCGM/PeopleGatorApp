@@ -49,10 +49,12 @@ export function useFaceAlignedCropQuery(
   maxWidth?: MaybeRefOrGetter<number | undefined>,
 ) {
   return useQuery({
-    queryKey: computed(() => queryKeys.faces.alignedCrop(toValue(detectionId), toValue(maxWidth))),
+    queryKey: computed(() => queryKeys.faceCrops.aligned(toValue(detectionId), toValue(maxWidth))),
     queryFn: ({ signal }) => fetchFaceAlignedCrop(toValue(detectionId), toValue(maxWidth), signal),
     enabled: computed(() => Boolean(toValue(detectionId))),
     staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 60 * 60_000,
+    retry: false,
   })
 }
 

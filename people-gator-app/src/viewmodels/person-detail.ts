@@ -164,7 +164,7 @@ export function usePersonDetail(
   const alignedCropQueries = useQueries({
     queries: computed(() =>
       detectionIds.value.map((detectionId) => ({
-        queryKey: queryKeys.faces.alignedCrop(detectionId, 256),
+        queryKey: queryKeys.faceCrops.aligned(detectionId, 256),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
           fetchFaceAlignedCrop(detectionId, 256, signal),
         staleTime: Number.POSITIVE_INFINITY,
@@ -303,8 +303,12 @@ export function usePersonDetail(
     libraryCount: computed(() => new Set(faces.value.map((face) => face.library)).size),
     mentionCount: computed(() => mentionQuery.data.value?.pages[0]?.total_count ?? 0),
     mentions,
-    portrait: computed(() => faces.value[0]?.portrait ?? ''),
-    portraitLoading: computed(() => faces.value[0]?.portraitLoading ?? false),
+    // Weaviate stores no portrait; PostgreSQL leaves none only without linked
+    // faces. Fall back to the first loaded face once the entity is known.
+    portraitFaceId: computed(() => {
+      const entity = entityQuery.data.value
+      return entity ? (entity.thumbnail_face_id ?? faceRecords.value[0]?.detection_id) : undefined
+    }),
     profile,
     processing,
     updateProfile,

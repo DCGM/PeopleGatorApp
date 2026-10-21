@@ -29,8 +29,7 @@ vi.mock('@/viewmodels/person-detail', () => ({
         pageLabel: '1',
       },
     ]),
-    portrait: ref(''),
-    portraitLoading: ref(false),
+    portraitFaceId: ref(undefined),
     profile: ref({
       name: 'Ada Lovelace',
       shortDescription: '',
@@ -82,6 +81,7 @@ describe('PersonDetailView', () => {
         plugins: [router],
         stubs: {
           RouterLink: RouterLinkStub,
+          PersonPortrait: true,
           VerifyEntityLink: true,
           PersonFacesPanel: true,
           EvidenceFilterControls: true,

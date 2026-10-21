@@ -144,6 +144,9 @@ class Entity(RecordedCreation, Base):
 
     __tablename__ = TABLE_NAME_FORMAT.format("entities")
     __table_args__ = (
+        CheckConstraint("thumbnail_mode IN ('automatic', 'manual')", name="ck_pg_demo_entities_thumbnail_mode"),
+        CheckConstraint("thumbnail_mode <> 'manual' OR thumbnail_face_id IS NOT NULL", name="ck_pg_demo_entities_manual_thumbnail"),
+        CheckConstraint("kind = 'person' OR (thumbnail_face_id IS NULL AND thumbnail_mode = 'automatic')", name="ck_pg_demo_entities_person_thumbnail"),
         Index(
             INDEX_NAME_FORMAT.format("entities_name_trgm"),
             "name_normalized",
@@ -170,6 +173,11 @@ class Entity(RecordedCreation, Base):
     last_touched_by_api_key_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True
     )
+    thumbnail_face_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(TABLE_NAME_FORMAT.format("faces.id"), name="fk_pg_demo_entities_thumbnail_face",
+                   ondelete="SET NULL", use_alter=True), index=True,
+    )
+    thumbnail_mode: Mapped[str] = mapped_column(String(16), nullable=False, server_default="automatic")
     kind: Mapped[str | None] = mapped_column(String(64), index=True)
     name: Mapped[str | None] = mapped_column(Text)
     name_normalized: Mapped[str | None] = mapped_column(
@@ -521,3 +529,20 @@ for table in (TextMention.__table__, ImageOccurrence.__table__):
         f"CREATE OR REPLACE TRIGGER clear_entity_link BEFORE UPDATE OF entity_id ON {table.name} "
         "FOR EACH ROW EXECUTE FUNCTION pg_demo_clear_entity_link()"
     ))
+
+# Bootstrap installs the same invariants as the thumbnail migration. Alembic
+# carries its own frozen definitions so future changes cannot rewrite history.
+from .thumbnail_ddl import THUMBNAIL_DDL
+
+
+def _thumbnail_schema_present(ddl, target, connection, **kwargs):
+    from sqlalchemy import inspect
+    # create_all against a retained pre-migration store cannot add columns.
+    # Leave that store untouched for the explicit migration/adoption command.
+    return "thumbnail_face_id" in {
+        column["name"] for column in inspect(connection).get_columns(Entity.__tablename__)
+    }
+
+
+for statement in THUMBNAIL_DDL:
+    event.listen(Base.metadata, "after_create", DDL(statement).execute_if(callable_=_thumbnail_schema_present))

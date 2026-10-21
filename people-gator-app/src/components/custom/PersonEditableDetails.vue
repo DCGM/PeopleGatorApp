@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Plus, Trash2 } from '@lucide/vue'
-import { computed, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
 import EditableActions from '@/components/custom/EditableActions.vue'
 import type { PersonIdentifiers, PersonProfile } from '@/viewmodels/person-detail.types'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import PersonPortrait from './PersonPortrait.vue'
 import { Button } from '@/components/ui/button'
 
 type EditableField = keyof PersonProfile | keyof PersonIdentifiers
@@ -14,8 +14,7 @@ type ProfileTextField = Exclude<keyof PersonProfile, 'aliases'>
 const props = defineProps<{
   modelValue: PersonProfile
   personId: string
-  portrait: string
-  portraitLoading?: boolean
+  thumbnailFaceId?: string | null
   faceCount: number
   mentionCount: number
   libraryCount: number
@@ -50,13 +49,6 @@ function isProfileTextField(field: EditableField): field is ProfileTextField {
 function wikidataHref(value: string) {
   return /^https?:\/\//i.test(value) ? value : `https://www.wikidata.org/wiki/${value}`
 }
-
-const initials = computed(() =>
-  draft.name
-    .split(' ')
-    .map((part) => part.charAt(0))
-    .join(''),
-)
 
 function nameFromId(id: string) {
   return id
@@ -134,15 +126,12 @@ watch(
 <template>
   <header class="border-b pb-8">
     <div class="flex flex-col gap-6 sm:flex-row sm:items-start">
-      <Avatar class="size-24 shrink-0 border bg-card sm:size-28">
-        <AvatarImage
-          :src="props.portrait"
-          :alt="draft.name"
-          :loading="props.portraitLoading"
-          class="grayscale"
-        />
-        <AvatarFallback class="font-serif text-2xl">{{ initials }}</AvatarFallback>
-      </Avatar>
+      <PersonPortrait
+        :name="draft.name"
+        :face-id="props.thumbnailFaceId"
+        large-initials
+        class="size-24 shrink-0 border bg-card sm:size-28"
+      />
 
       <div class="min-w-0 flex-1">
         <small class="font-semibold uppercase text-secondary"

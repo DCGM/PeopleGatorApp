@@ -70,6 +70,5 @@ export type PersonDiscoveryCandidate = {
   name: string
   shortDescription: string
   aliases: string[]
-  portrait: string
-  portraitLoading: boolean
+  thumbnailFaceId?: string | null
 }

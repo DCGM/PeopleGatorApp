@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Self
+from typing import Annotated, Self, Literal
 from datetime import timezone
 
 from pydantic import (
@@ -74,6 +74,11 @@ type EntityBatchCreateRequest = Annotated[
 class EntityPatchRequest(BaseModel):
     """Request body for patching an existing entity."""
 
+    thumbnail_face_id: uuid.UUID | None | MissingType = Field(
+        default=MISSING,
+        description="Person portrait selection: omit to preserve; a linked face UUID selects it manually; null returns to automatic mode. The first assigned face is saved and kept while linked, including on later assignments and identity edits. Resetting a manual choice selects the lowest currently linked face UUID; resetting automatic mode preserves its saved choice.",
+    )
+
     name: str | MissingType = Field(default=MISSING, description="The name of the entity.")
     aliases: list[str] | MissingType = Field(
         default=MISSING, description="Alternative names or aliases for the entity."
@@ -139,6 +144,13 @@ class EntityResponse(CreationMetadata):
         description="The unique identifier of the user who created or owns the entity."
     )
 
+
+    thumbnail_face_id: uuid.UUID | None = Field(
+        default=None, description="Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.",
+    )
+    thumbnail_mode: Literal["automatic", "manual"] = Field(
+        default="automatic", description="Selection policy. Automatic with a null thumbnail_face_id means no thumbnail. Non-person entities always have automatic/null.",
+    )
 
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     last_touched_at: AwareDatetime | None = None

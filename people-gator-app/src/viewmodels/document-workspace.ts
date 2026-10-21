@@ -215,7 +215,7 @@ export function useDocumentWorkspace(
   const alignedCropQueries = useQueries({
     queries: computed(() =>
       faceIds.value.map((detectionId) => ({
-        queryKey: queryKeys.faces.alignedCrop(detectionId, 256),
+        queryKey: queryKeys.faceCrops.aligned(detectionId, 256),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
           fetchFaceAlignedCrop(detectionId, 256, signal),
         staleTime: Number.POSITIVE_INFINITY,
@@ -321,6 +321,9 @@ export function useDocumentWorkspace(
           : matchingScore > 1
             ? matchingScore / 100
             : matchingScore
+      const faceId =
+        ('matched_detection_ids' in entity ? entity.matched_detection_ids?.[0] : undefined) ??
+        faces.value.find((face) => face.personId === entity.entity_id)?.id
       return {
         id: entity.entity_id,
         sourceId: resultMode.value === 'page' ? sourceId.value : undefined,
@@ -328,6 +331,8 @@ export function useDocumentWorkspace(
         candidateMode: resultMode.value,
         candidateText: textTerm.value || undefined,
         name: entity.name || 'Unnamed person',
+        // Stores without persisted portraits (Weaviate) show the related face.
+        thumbnailFaceId: entity.thumbnail_face_id ?? faceId,
         shortDescription: entity.short_description || undefined,
         score: matchingScore === undefined ? undefined : percentage(matchingScore),
         nerMentions,
@@ -350,9 +355,7 @@ export function useDocumentWorkspace(
         ],
         wikidataId: entity.wikidata_id || undefined,
         nlcrAuthorityId: entity.nlcr_authority_id || undefined,
-        faceId:
-          ('matched_detection_ids' in entity ? entity.matched_detection_ids?.[0] : undefined) ??
-          faces.value.find((face) => face.personId === entity.entity_id)?.id,
+        faceId,
         entityKey: entitySpan ? transcriptionEntityKey(entitySpan) : undefined,
         entityLineIndex: entityLineIndex >= 0 ? entityLineIndex : undefined,
       }

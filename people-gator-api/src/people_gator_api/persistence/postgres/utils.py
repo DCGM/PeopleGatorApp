@@ -608,6 +608,8 @@ def entity_response(entity: Entity) -> EntityResponse:
     return EntityResponse(
         **creation_metadata(entity),
         entity_id=entity.id,
+        thumbnail_face_id=entity.thumbnail_face_id,
+        thumbnail_mode=entity.thumbnail_mode or "automatic",
         entity_link_stats=getattr(entity, "_entity_link_stats", None) or {},
         user_id=entity.user_id,
         last_touched_at=entity.last_touched_at,

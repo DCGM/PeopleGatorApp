@@ -92,6 +92,9 @@ reviewer (including merged people and deleted evidence) stay removed; their save
 IDs act as tombstones, and the CLI prints links only for surviving records. Keep
 the database and seed checkpoint together; to create a completely fresh dataset,
 use a fresh database and storage pair.
+Explicit upgrades of existing seed records (such as the person portrait upgrade)
+checkpoint their state in `peoplegator_api/preview-seed-upgrades.json`, so seed
+code from an earlier commit can still read the identity checkpoint after a rollback.
 Repository lookups recover entities/faces/mentions created just before a failed
 checkpoint; a corrupt checkpoint is rejected rather than silently discarded.
 Run only one seeder per database/storage pair at a time; the deployment utility
@@ -495,3 +498,25 @@ timestamps are not reset on rerun, so a long-lived preview normally shows the
 date form; edit Ada's short description to see the relative form and the
 updated editor without reloading. No seed records or API contracts changed.
 
+
+### Saved person portraits (#35)
+
+Open `filter_examples.person-portrait-selection` (Irena Evidence). Her initial
+manual portrait is the last UUID among her four synthetic linked faces, so it
+differs from the first listed face. Select one face in the evidence grid, then
+choose **Use as portrait** in the bottom bar (`person-portrait-selection`).
+Select the face marked **Portrait** and choose **Use automatic** to reset. Change evidence
+filters, reload, and compare People search, Discover people, and scan assignment
+candidates. The portrait remains canonical while evidence cards show their own
+faces. Ada Novak demonstrates a persisted automatic portrait: the first assigned
+face stays selected through later assignments, identity edits and reseeding while
+linked. Nora Svoboda has
+no face and uses initials. All media comes from the existing local fixtures.
+
+The `person-portrait-v1` manifest upgrade is additive and checkpointed. It preserves
+existing manual choices, records the expected automatic choice and touch time
+before applying the one-time reviewer selection, and never rewrites later choices
+(including automatic resets). Recovery after a failed checkpoint compares those
+preconditions before writing, so an intervening review is preserved. Deleted or
+reassigned candidate faces are skipped. Existing entity/source/annotation keys,
+UUIDs and checkpoints remain intact. PostgreSQL is required for saved portraits.

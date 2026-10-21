@@ -6,6 +6,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from alembic import command
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -237,7 +238,7 @@ async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
     await validate_postgres_schema(engine)
     async with engine.connect() as connection:
         assert await connection.scalar(text("SELECT name FROM pg_demo_entities")) == "Historical identity"
-        assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == "d34a021b0008"
+        assert await connection.scalar(text("SELECT version_num FROM alembic_version")) == ScriptDirectory.from_config(migration_config()).get_current_head()
     await database_cli.migrate_database(adopt_bootstrap=True)
 
 
