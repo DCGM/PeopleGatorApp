@@ -27,10 +27,82 @@ Reference vectors are already stored; this search does not require an inference
 service. Large reference sets use bounded representative/candidate retrieval as
 documented in the [persistence guide](../people-gator-api/src/people_gator_api/persistence/README.md).
 
-Ordinary lists sort UUID ascending. Responses contain `items`, `limit`, `cursor`
-and nullable `total_count`. Reuse a cursor only with the same inputs; changing a
-query or filter restarts pagination. Lists default to 50 items, searches to 20.
+Without `sort`, ordinary lists sort UUID ascending. See [Sorting](#sorting).
+Responses contain `items`, `limit`, `cursor` and nullable `total_count`. Reuse a
+cursor only with the same inputs; changing a query, filter or sort restarts
+pagination. Lists default to 50 items, searches to 20.
 `limit=0` returns no items/cursor and can request a count.
+
+## Sorting
+
+Every browsable list accepts `sort` (a resource-allowlisted field, never a
+column name) and `sort_direction` (`asc`/`desc`, requires `sort`). Unknown fields
+or directions, Relevance on an ordinary list and `sort_direction` alone return
+422. A field without a direction uses its natural one: descending for
+relevance, times and counts, otherwise ascending. The order applies to the
+complete matching set **before** pagination and `total_count` is unaffected.
+
+Semantics shared by every resource:
+
+- Text compares lowercased, unaccented text in Unicode code-point order, then the
+  exact recorded text, so `Ada`/`ADA`/`Áda` sort together but stay distinct.
+- Counts compare numerically, times chronologically and IDs by UUID value.
+- Assignment state orders `verified`, `manual`, `automatic`, then unassigned.
+- Unknown values (no name, no edit time, no source context, unassigned) sort
+  last in **both** directions.
+- The canonical UUID ascending is the final tie-breaker; an ID sort may be
+  descending and is its own tie-breaker.
+- PostgreSQL list cursors carry every key value and are bound to the query,
+  filters, field and direction. Rows whose sortable value changes between pages
+  can move across the boundary; no snapshot is promised.
+- Searches sort their **complete ranked candidate set** before paging. Face
+  similarity is bounded (200 HNSW neighbours per representative reference face,
+  at most 8 representatives); people/document/page text retrieval keeps about
+  200 candidates per term and signal. A non-relevance sort orders that whole
+  set; it is not an exhaustive corpus-wide similarity scan. Discover shows the
+  first 40 results of the sorted set.
+- Weaviate keeps only the default orders and rejects explicit sorts (501).
+
+| Collection (endpoint) | Fields | API default | UI default |
+| --- | --- | --- | --- |
+| People browse/search, Discover people, scan candidates (`/entities`, `/search-entities`) | `relevance` (search), `name`, `last_touched_at`, `created_at`, `entity_id` | UUID / relevance | Name A–Z; Relevance while a query or face signal exists |
+| Documents (`/documents`, `/search-documents`) | `relevance` (search), `name`, `library` (then archive ID), `document_id`, `page_count` (registered pages with the same library/archive ID), `last_touched_at` (document processing) | UUID / relevance | Name A–Z (unnamed last); Relevance while searching |
+| Scans (`/pages`, `/search-pages`) | `relevance` (search), `library` (then document, page ID), `document_id` (then page ID), `page_id`, `last_touched_at` | UUID / relevance | Library A–Z; Relevance while searching |
+| Document page gallery and document previews (`/pages`) | `page_id`, `last_touched_at` | UUID | Page ID ascending. No physical page sequence is recorded; page IDs are never shown as page numbers |
+| Person faces, scan page faces, Discover similar faces (`/faces`, `/search-faces`) | `relevance` (similarity, search), `last_touched_at`, `link_state`, `confidence`, `source` (library, document, page), `detection_id` | UUID / relevance | Face ID; Similarity in Discover. Scan page faces omit Source |
+| Person mentions, group occurrences (`/text-mentions`) | `text`, `last_touched_at`, `link_state`, `source`, `mention_id` | UUID | Text A–Z |
+| Exact appearance groups (`/text-mention-groups`) | `text`, `count`, `last_touched_at` (latest edit in the group) | Text A–Z | Text A–Z; groups and occurrences sort independently |
+| Scan Activity (client grouping of the page's complete collection) | Day groups newest/oldest, user groups by label A–Z/Z–A; edits newest/oldest | — | Newest day / user A–Z; newest edit. Unknown day/user groups and unknown times stay last |
+
+Fixed-order exceptions: filter option lists (users, API keys, libraries,
+documents) keep their predictable label order; static navigation, statistics
+and batch-mutation responses are not browsable result lists.
+
+`GET /text-mention-groups` takes the mention filters and returns `name`,
+`occurrence_count` and `last_touched_at` for every exact recorded text in the
+complete filtered set, never normalizing spelling, case, accents or punctuation.
+`filter.name` on `/text-mentions` selects one group's occurrences.
+
+Browser URLs keep one independent choice per panel, omitting defaults:
+
+| Panel | URL keys |
+| --- | --- |
+| People, Documents, Scans | `sort`, `dir` |
+| Person faces / scan page faces | `face_sort`, `face_dir` |
+| Person mentions and group occurrences | `mention_sort`, `mention_dir`; `mention_view=groups` |
+| Exact appearance groups | `group_sort`, `group_dir` |
+| Discover similar faces / people | `similar_sort`, `similar_dir` / `people_sort`, `people_dir` |
+| Scan gallery / candidates | `gallery_sort`, `gallery_dir` / `candidate_sort`, `candidate_dir` |
+| Activity | `activity_order`, `activity_items` |
+
+Sort values are part of each query key, so a new order starts at the first page.
+Invalid or inapplicable values recover to the panel default with truthful
+controls; an explicit choice that remains applicable survives switching between
+browse and search. Filter tag removal and **Clear all filters** keep search and
+sort. Related navigation to another resource carries no sort or cursor; links to
+another page of the same document keep the workspace's face, gallery and
+candidate orders. Profile witnesses from an originating face search are pinned
+first and labelled **Match**; the remaining faces follow the selected order.
 
 ## Filter reference
 
