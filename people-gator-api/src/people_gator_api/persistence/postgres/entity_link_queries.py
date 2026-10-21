@@ -30,37 +30,66 @@ def document_sources(ids):
     )
 
 
-EVIDENCE_FIELDS = (
-    "entity_link_state", "evidence_library", "evidence_source_id", "document_source_id",
-    "evidence_touched_from", "evidence_touched_to", "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
-)
+def library_sources(libraries):
+    return union_all(
+        select(Page.__table__.c.id).where(Page.__table__.c.library.in_(libraries)),
+        select(Document.__table__.c.id).where(Document.__table__.c.library.in_(libraries)),
+    )
 
 
-def annotation_conditions(model, values):
-    """Portable annotation criteria shared by lists, counts and related-resource queries."""
+def page_parent_documents(ids):
+    document = Document.__table__
+    page = Page.__table__
+    return select(document.c.id).select_from(document.join(
+        page,
+        (document.c.library == page.c.library) & (document.c.document_id == page.c.document_id),
+    )).where(page.c.id.in_(ids))
+
+
+SCOPE_FIELDS = ("library", "document_source_id", "page_source_id")
+LINK_FIELDS = ("entity_link_state", *SCOPE_FIELDS)
+
+
+def scope_conditions(source_id, values):
+    """Membership of a source in the selected library, document and page scope."""
     from people_gator_api.schemas.missing import missing_to_none
     conditions = []
-    for field, column in (("entity_link_state", model.entity_link_state),
-                          ("evidence_source_id", model.source_id),
-                          ("evidence_touched_by_user_id", model.last_touched_by_user_id),
-                          ("evidence_touched_by_api_key_id", model.last_touched_by_api_key_id)):
+    libraries = missing_to_none(values.library)
+    if libraries is not None:
+        conditions.append(source_id.in_(library_sources(libraries)))
+    documents = missing_to_none(values.document_source_id)
+    if documents is not None:
+        conditions.append(source_id.in_(document_sources(documents)))
+    pages = missing_to_none(values.page_source_id)
+    if pages is not None:
+        conditions.append(source_id.in_(pages))
+    return conditions
+
+
+def touch_conditions(model, values):
+    """The latest recorded change of the filtered record itself."""
+    from people_gator_api.schemas.missing import missing_to_none
+    conditions = []
+    for field, column in (("last_touched_by_user_id", model.last_touched_by_user_id),
+                          ("last_touched_by_api_key_id", model.last_touched_by_api_key_id)):
         value = missing_to_none(getattr(values, field))
         if value is not None:
             conditions.append(column.in_(value))
-    for field, op in (("evidence_touched_from", model.last_touched_at.__ge__),
-                      ("evidence_touched_to", model.last_touched_at.__le__)):
+    for field, op in (("last_touched_from", model.last_touched_at.__ge__),
+                      ("last_touched_to", model.last_touched_at.__le__)):
         value = missing_to_none(getattr(values, field))
         if value is not None:
             conditions.append(op(value))
-    documents = missing_to_none(values.document_source_id)
-    if documents is not None:
-        conditions.append(model.source_id.in_(document_sources(documents)))
-    libraries = missing_to_none(values.evidence_library)
-    if libraries is not None:
-        conditions.append(model.source_id.in_(union_all(
-            select(Page.__table__.c.id).where(Page.__table__.c.library.in_(libraries)),
-            select(Document.__table__.c.id).where(Document.__table__.c.library.in_(libraries)),
-        )))
+    return conditions
+
+
+def annotation_conditions(model, values):
+    """Link state and source scope of one face/mention annotation."""
+    from people_gator_api.schemas.missing import missing_to_none
+    conditions = scope_conditions(model.source_id, values)
+    states = missing_to_none(values.entity_link_state)
+    if states is not None:
+        conditions.append(model.entity_link_state.in_(states))
     return conditions
 
 
@@ -72,17 +101,11 @@ def evidence_predicate(filter_values, *, entity=False):
     """
     from people_gator_api.schemas.missing import missing_to_none
 
-    states = missing_to_none(filter_values.entity_link_state)
     face_ids = missing_to_none(filter_values.detection_id)
     mention_ids = missing_to_none(filter_values.mention_id)
     scope = source_scope()
     source_ids = (
         missing_to_none(getattr(filter_values, "source_id", None)) if entity else None
-    )
-    document_ids = (
-        missing_to_none(getattr(filter_values, "document_source_id", None))
-        if entity
-        else None
     )
     entity_ids = missing_to_none(filter_values.entity_id) if not entity else None
     predicates = []
@@ -95,8 +118,6 @@ def evidence_predicate(filter_values, *, entity=False):
             conditions.append(model.entity_id.is_not(None))
             if source_ids is not None:
                 conditions.append(model.source_id.in_(source_ids))
-            if document_ids is not None:
-                conditions.append(model.source_id.in_(document_sources(document_ids)))
         else:
             conditions.append(
                 exists(
@@ -111,8 +132,6 @@ def evidence_predicate(filter_values, *, entity=False):
             )
             if entity_ids is not None:
                 conditions.append(model.entity_id.in_(entity_ids))
-        if states is not None:
-            conditions.append(model.entity_link_state.in_(states))
         if ids is not None:
             conditions.append(model.id.in_(ids))
         selection = select(model.entity_id).where(*conditions)

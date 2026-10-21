@@ -88,6 +88,12 @@ PEOPLE = (
         "Synthetic sorting subject with varied confidence, states and mention spellings.",
         "importer",
     ),
+    # Issue #52: one person linked by the curator's key, and one whose own
+    # record the curator edits after a reviewer linked her face.
+    Person("shared-ivo", "Ivo Ledger", (),
+           "Synthetic person linked by the preview curator's API key.", "curator"),
+    Person("shared-hana", "Hana Ledger", (),
+           "Synthetic person whose own record the curator edited after a reviewer's face link.", "reviewer"),
 )
 
 
@@ -132,6 +138,9 @@ DOCUMENTS = (
     # Accent/case name variants and uneven page counts across two libraries (#33).
     Document("sorting-ledger", "preview-nlk", "Řádková ledger"),
     Document("sorting-notes", "preview-mzk", "radkova notes"),
+    # Shared filters (#52): the same archive ID in a second, unannotated library.
+    Document("shared-ledger", "preview-mzk", "Shared filter ledger"),
+    Document("shared-mirror", "preview-nlk", "Shared filter mirror", "shared-ledger"),
 )
 
 
@@ -346,6 +355,13 @@ PAGES = (
     Page("sorting-notes-1", "sorting-notes", 1,
          mentions=(Mention("sorting-unaccented", "sorting", "Marta Radkova copied these notes.", recorded="Marta Radkova"),
                    Mention("sorting-exact-3", "sorting", "Marta Řádková reviewed the copy."))),
+    # Shared filters (#52): the reviewer's face precedes the curator's mention,
+    # so the document's latest change is the curator's.
+    Page("shared-ledger-1", "shared-ledger", 1,
+         (Face("shared-hana-face", "shared-hana", 0, 5, embedded=False),)),
+    Page("shared-ledger-2", "shared-ledger", 2,
+         mentions=(Mention("shared-ivo-mention", "shared-ivo", "Ivo Ledger recorded the shared filter ledger."),)),
+    Page("shared-mirror-1", "shared-mirror", 1),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

@@ -1,4 +1,4 @@
-from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, EntityLinkFilter
+from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, SharedFilter
 """Pydantic schemas for text mention endpoints."""
 
 import uuid
@@ -73,7 +73,7 @@ class TextMentionResponse(EntityLinkResponse):
     source_id: uuid.UUID
 
 
-class TextMentionListFilter(ListFilterBase, EntityLinkFilter):
+class TextMentionListFilter(ListFilterBase, SharedFilter):
     """Filter criteria for listing text mentions.
     Every field is optional and can be used to narrow down the results.
     Filter fields are combined using logical AND.

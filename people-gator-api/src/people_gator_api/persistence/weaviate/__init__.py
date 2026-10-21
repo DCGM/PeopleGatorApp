@@ -179,13 +179,18 @@ def _ref(obj: _StoredObject, name: str, required: bool = False) -> uuid.UUID | N
     return result
 
 
-def _require_postgres_for_evidence(f, *, allow_document_scope=False):
+_ANNOTATION_ONLY_POSTGRES = (
+    "library", "document_source_id", "page_source_id", "last_touched_from",
+    "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id",
+)
+
+
+def _require_postgres_for(f, fields):
+    """Reject shared scope/modification criteria this adapter cannot evaluate."""
     if f is not None and not is_missing(f) and any(
-        not is_missing(getattr(f, field)) for field in (
-            "evidence_library", "evidence_source_id", "evidence_touched_from", "evidence_touched_to",
-            "evidence_touched_by_user_id", "evidence_touched_by_api_key_id",
-            *(() if allow_document_scope else ("document_source_id",)))):
-        raise NotImplementedError("Annotation edit filters require PostgreSQL")
+        not is_missing(getattr(f, field)) for field in fields
+    ):
+        raise NotImplementedError("Shared source scope and modification filters require PostgreSQL")
 
 
 def _props(
@@ -827,7 +832,7 @@ class WeaviateEntityRepository(EntityRepository):
         )
         if not is_missing(query.filter_) and (not is_missing(query.filter_.entity_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.entity_id))
-        _require_postgres_for_evidence(query.filter_, allow_document_scope=True)
+        _require_postgres_for(query.filter_, ("library", "page_source_id"))
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -1112,7 +1117,7 @@ class WeaviateSourceRepository(SourceRepository):
         )
         if not is_missing(query.filter_) and (not is_missing(query.filter_.source_id)):
             fs.append(Filter.by_id().contains_any(query.filter_.source_id))
-        _require_postgres_for_evidence(query.filter_)
+        _require_postgres_for(query.filter_, ("document_source_id", "page_source_id"))
         f = missing_to_none(query.filter_)
         if f is not None and any(
             not is_missing(getattr(f, field))
@@ -1322,7 +1327,7 @@ class WeaviateFaceRepository(FaceRepository):
         return None if o is None else _parse_face(o)
 
     def filters(self, f: FaceListFilter | MissingType | None) -> list[FilterReturn]:
-        _require_postgres_for_evidence(f)
+        _require_postgres_for(f, _ANNOTATION_ONLY_POSTGRES)
         if f is None or is_missing(f):
             return []
         r: list[FilterReturn] = []
@@ -1451,7 +1456,7 @@ class WeaviateTextMentionRepository(TextMentionRepository):
 
     async def list(self, query: TextMentionListRequest) -> TextMentionListResponse:
         _require_default_sort(query)
-        _require_postgres_for_evidence(query.filter_)
+        _require_postgres_for(query.filter_, _ANNOTATION_ONLY_POSTGRES)
         if not is_missing(query.filter_) and not is_missing(query.filter_.name):
             raise NotImplementedError(
                 "exact text-mention name filtering is not supported by the Weaviate backend"
@@ -1653,7 +1658,7 @@ async def _basic_search[F: FoundItemBase](
         filters = WeaviateFaceRepository(client).filters(q.filter_)
     elif n == ENTITY_COLLECTION and q.filter_ is not None:
         f = q.filter_
-        _require_postgres_for_evidence(f, allow_document_scope=True)
+        _require_postgres_for(f, ("library", "page_source_id"))
         filters = _direct(
             f,
             {
