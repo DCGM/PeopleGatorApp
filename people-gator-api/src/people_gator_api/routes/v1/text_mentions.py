@@ -6,6 +6,8 @@ from fastapi import APIRouter, status
 
 from people_gator_api.schemas.mentions import (
     TextMentionCreateRequest,
+    TextMentionGroupListRequest,
+    TextMentionGroupListResponse,
     TextMentionListRequest,
     TextMentionListResponse,
     TextMentionPatchRequest,
@@ -14,8 +16,11 @@ from people_gator_api.schemas.mentions import (
     TextMentionsBatchPatchRequest,
 )
 from people_gator_api.routes.v1.query_dependencies import (
+    DEFAULT_SORT,
     ListRequestDependency,
+    TextMentionGroupSortDependency,
     TextMentionListFilterDependency,
+    TextMentionSortDependency,
 )
 from people_gator_api.services.auth_service import (
     AdminActorDependency,
@@ -36,6 +41,7 @@ async def list_text_mentions_route(
     user: BrowseActorDependency,
     filter: TextMentionListFilterDependency,
     list_request: ListRequestDependency,
+    sort: TextMentionSortDependency = DEFAULT_SORT,
 ) -> TextMentionListResponse:
     del user
     try:
@@ -45,8 +51,39 @@ async def list_text_mentions_route(
                 limit=list_request.limit,
                 return_total_count=list_request.return_total_count,
                 cursor=list_request.cursor,
+                sort=sort.sort,
+                sort_direction=sort.sort_direction,
             )
         )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
+    except ValueError as exc:
+        raise_api_error(422, "invalid_query", str(exc))
+
+
+@router.get("/text-mention-groups", response_model=TextMentionGroupListResponse)
+async def list_text_mention_groups_route(
+    database: DatabaseDependency,
+    user: BrowseActorDependency,
+    filter: TextMentionListFilterDependency,
+    list_request: ListRequestDependency,
+    sort: TextMentionGroupSortDependency = DEFAULT_SORT,
+) -> TextMentionGroupListResponse:
+    """Group the complete filtered mention set by exact recorded text."""
+    del user
+    try:
+        return await database.text_mentions.list_groups(
+            TextMentionGroupListRequest(
+                filter_=filter,
+                limit=list_request.limit,
+                return_total_count=list_request.return_total_count,
+                cursor=list_request.cursor,
+                sort=sort.sort,
+                sort_direction=sort.sort_direction,
+            )
+        )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_query", str(exc))
 

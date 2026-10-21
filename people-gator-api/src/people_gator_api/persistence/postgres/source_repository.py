@@ -65,10 +65,7 @@ from people_gator_api.persistence.postgres.utils import (
     aggregate_scores,
     search_face_scores,
     commit,
-    validate_cursor,
     cursor_fingerprint,
-    decode_cursor,
-    next_cursor,
     fuse_scores,
     entity_text_candidates,
     search_page,
@@ -80,6 +77,33 @@ from people_gator_api.persistence.postgres.utils import (
 SOURCE_TEXT_CANDIDATE_LIMIT = 200
 
 
+def document_page_count() -> ColumnElement[int]:
+    """Registered pages sharing the document's library/archive identity."""
+    pages = Page.__table__.alias("counted_pages")
+    documents = Document.__table__.c
+    return (
+        select(func.count())
+        .select_from(pages)
+        .where(pages.c.library == documents.library, pages.c.document_id == documents.document_id)
+        .scalar_subquery()
+    )
+
+
+from people_gator_api.schemas.sorting import RELEVANCE, SortDirection
+from .sorting import (
+    Builders,
+    SortKey,
+    SortSpec,
+    after_predicate,
+    build_spec,
+    decode_keyset,
+    keyset_page,
+    normalized_text,
+    order_by,
+    sort_columns,
+    sort_ranked,
+    text_keys,
+)
 from .touch import touch_entities, touch_sources, source_touch_ids, lock_annotation_graph
 from people_gator_api.schemas.common import GenericActor
 
@@ -148,16 +172,59 @@ class PostgresSourceRepository(SourceRepository):
         await load_link_stats(self._session, [source] if source is not None else [])
         return source_response(source) if source is not None else None
 
+    @staticmethod
+    def _sort_spec(
+        model: type[Page] | type[Document] | None,
+        field: str | None,
+        direction: SortDirection,
+    ) -> SortSpec:
+        # Table columns keep the polymorphic source query to a single FROM.
+        page, document = Page.__table__.c, Document.__table__.c
+        builders: Builders = {}
+        if model is Page:
+            builders = {
+                "library": lambda desc: [
+                    *text_keys(normalized_text(page.library), page.library, desc),
+                    SortKey(page.document_id, "uuid", desc),
+                    SortKey(page.page_id, "uuid", desc),
+                ],
+                "document_id": lambda desc: [
+                    SortKey(page.document_id, "uuid", desc),
+                    SortKey(page.page_id, "uuid", desc),
+                ],
+                "page_id": lambda desc: [SortKey(page.page_id, "uuid", desc)],
+                "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
+            }
+        elif model is Document:
+            builders = {
+                "name": lambda desc: text_keys(document.name_normalized, document.name, desc),
+                "library": lambda desc: [
+                    *text_keys(normalized_text(document.library), document.library, desc),
+                    SortKey(document.document_id, "uuid", desc),
+                ],
+                "document_id": lambda desc: [SortKey(document.document_id, "uuid", desc)],
+                "page_count": lambda desc: [SortKey(document_page_count(), "number", desc)],
+                "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
+            }
+        return build_spec(field, direction, Source.id, builders, "source_id")
+
+    @staticmethod
+    def _sorted_model(query: GenericSourceListRequest) -> type[Page] | type[Document] | None:
+        if query.sort is None:
+            return None
+        values = missing_to_none(query.filter_)
+        kinds = missing_to_none(values.source_type) if values is not None else None
+        if kinds == [SourceKind.page]:
+            return Page
+        if kinds == [SourceKind.document]:
+            return Document
+        raise ValueError("sorting requires a page or document list")
+
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
         filters = source_filters(query.filter_)
         fingerprint = cursor_fingerprint(query)
-        cursor_id = decode_cursor(query.cursor, fingerprint)
-        if cursor_id is not None:
-            valid = await self._session.scalar(select(exists().select_from(self._source).where(
-                Source.id == cursor_id, *filters,
-            )))
-            if not valid:
-                raise ValueError("cursor is not valid for this query")
+        spec = self._sort_spec(self._sorted_model(query), *query.effective_sort())
+        after = decode_keyset(query.cursor, spec, fingerprint)
         total = None
         if query.return_total_count:
             total = (
@@ -171,17 +238,16 @@ class PostgresSourceRepository(SourceRepository):
         if query.limit == 0:
             return GenericSourceListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
-        if cursor_id is not None:
-            page_filters.append(Source.id > cursor_id)
-        rows = list(
-            await self._session.scalars(
-                select(self._source)
-                .where(*page_filters)
-                .order_by(Source.id)
-                .limit(query.limit + 1)
-            )
+        if after is not None:
+            page_filters.append(after_predicate(spec, after))
+        result = await self._session.execute(
+            select(self._source, *sort_columns(spec))
+            .where(*page_filters)
+            .order_by(*order_by(spec))
+            .limit(query.limit + 1)
         )
-        page, cursor = next_cursor(rows, query.limit, Source.id, fingerprint)
+        rows = [(row[0], tuple(row[1:])) for row in result.all()]
+        page, cursor = keyset_page(rows, query.limit, spec, fingerprint)
         await load_link_stats(self._session, page)
         return GenericSourceListResponse(
             items=[source_response(row) for row in page],
@@ -455,6 +521,15 @@ class PostgresSourceRepository(SourceRepository):
             await self._source_text_scores(model, query, filters),
             await self._source_face_scores(model, query, filters),
         )
+        field, direction = query.effective_sort()
+        spec = None if field == RELEVANCE else self._sort_spec(model, field, direction)
+        values: dict[uuid.UUID, tuple[object, ...]] = {}
+        if spec is not None and ranked:
+            rows = await self._session.execute(
+                select(model.id, *sort_columns(spec)).where(model.id.in_([item[0] for item in ranked]))
+            )
+            values = {row[0]: tuple(row[1:]) for row in rows.all()}
+        ranked = sort_ranked(ranked, spec, direction, values)
         page, cursor = search_page(
             ranked,
             query.cursor,

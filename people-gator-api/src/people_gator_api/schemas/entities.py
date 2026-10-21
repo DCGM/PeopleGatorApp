@@ -15,6 +15,7 @@ from pydantic import (
 )
 from people_gator_api.schemas.entity_links import EntityLinkFilter, EntityLinkStats
 from people_gator_api.settings import settings
+from people_gator_api.schemas.sorting import EntitySortField, SortableRequest
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
@@ -230,7 +231,7 @@ class EntityListFilter(ListFilterBase, EntityLinkFilter):
         return self
 
 
-class EntityListRequest(GenericListRequest):
+class EntityListRequest(GenericListRequest, SortableRequest[EntitySortField]):
     """Request body for listing entities with optional filters."""
 
     filter_: EntityListFilter | MissingType = Field(

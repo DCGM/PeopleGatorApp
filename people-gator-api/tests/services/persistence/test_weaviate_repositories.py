@@ -331,3 +331,14 @@ async def test_state_only_mention_patch_is_atomic_preserves_identity_and_verific
     assert reassigned.entity_link_state == EntityLinkState.manual
     assert reassigned.entity_link_verified_at is None
     assert reassigned.name == verified.name and reassigned.source_id == source_id
+
+
+@pytest.mark.asyncio
+async def test_explicit_sort_is_rejected_not_ignored() -> None:
+    from people_gator_api.schemas.search import QueryBase, SearchEntitiesRequest
+
+    repository = WeaviateEntityRepository(_client(_collection()))
+    with pytest.raises(NotImplementedError, match="sorting"):
+        await repository.list(query=EntityListRequest(limit=1, sort="name"))
+    with pytest.raises(NotImplementedError, match="sorting"):
+        await repository.search(SearchEntitiesRequest(limit=1, query=QueryBase(text=["Ada"]), sort="name"))

@@ -5,6 +5,7 @@ import uuid
 from pydantic import BaseModel, Field, field_validator
 from people_gator_api.schemas.enums import FaceKeypointType
 from people_gator_api.settings import settings
+from people_gator_api.schemas.sorting import FaceSortField, SortableRequest
 from people_gator_api.schemas.common import (
     Keypoint,
     BoundingBox,
@@ -160,7 +161,7 @@ class FaceListFilter(ListFilterBase, EntityLinkFilter):
     )
 
 
-class FaceListRequest(GenericListRequest):
+class FaceListRequest(GenericListRequest, SortableRequest[FaceSortField]):
     """Request body for listing faces with optional filters."""
 
     filter_: FaceListFilter | MissingType = Field(

@@ -3,6 +3,11 @@
 from fastapi import APIRouter
 
 from people_gator_api.routes.v1.query_dependencies import (
+    DEFAULT_SORT,
+    DocumentSearchSortDependency,
+    EntitySearchSortDependency,
+    FaceSearchSortDependency,
+    PageSearchSortDependency,
     DocumentListFilterDependency,
     EntityListFilterDependency,
     FaceListFilterDependency,
@@ -35,6 +40,7 @@ async def search_entities_get(
     query: SearchQueryDependency,
     filter: EntityListFilterDependency,
     list_request: SearchListRequestDependency,
+    sort: EntitySearchSortDependency = DEFAULT_SORT,
 ) -> SearchEntitiesResultListResponse:
     del user
     try:
@@ -44,8 +50,12 @@ async def search_entities_get(
             limit=list_request.limit,
             return_total_count=list_request.return_total_count,
             cursor=list_request.cursor,
+            sort=sort.sort,
+            sort_direction=sort.sort_direction,
         )
         return await database.entities.search(request)
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))
 
@@ -57,6 +67,7 @@ async def search_faces_get(
     query: SearchQueryDependency,
     filter: FaceListFilterDependency,
     list_request: SearchListRequestDependency,
+    sort: FaceSearchSortDependency = DEFAULT_SORT,
 ) -> SearchFacesResultListResponse:
     del user
     try:
@@ -66,8 +77,12 @@ async def search_faces_get(
             limit=list_request.limit,
             return_total_count=list_request.return_total_count,
             cursor=list_request.cursor,
+            sort=sort.sort,
+            sort_direction=sort.sort_direction,
         )
         return await database.faces.search(request)
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))
 
@@ -79,6 +94,7 @@ async def search_pages_get(
     query: SearchQueryDependency,
     filter: PageListFilterDependency,
     list_request: SearchListRequestDependency,
+    sort: PageSearchSortDependency = DEFAULT_SORT,
 ) -> SearchPagesResultListResponse:
     del user
     try:
@@ -88,6 +104,8 @@ async def search_pages_get(
             limit=list_request.limit,
             return_total_count=list_request.return_total_count,
             cursor=list_request.cursor,
+            sort=sort.sort,
+            sort_direction=sort.sort_direction,
         )
         return await database.sources.search_pages(request)
     except NotImplementedError as exc:
@@ -103,6 +121,7 @@ async def search_documents_get(
     query: SearchQueryDependency,
     filter: DocumentListFilterDependency,
     list_request: SearchListRequestDependency,
+    sort: DocumentSearchSortDependency = DEFAULT_SORT,
 ) -> SearchDocumentsResultListResponse:
     del user
     try:
@@ -112,6 +131,8 @@ async def search_documents_get(
             limit=list_request.limit,
             return_total_count=list_request.return_total_count,
             cursor=list_request.cursor,
+            sort=sort.sort,
+            sort_direction=sort.sort_direction,
         )
         return await database.sources.search_documents(request)
     except NotImplementedError as exc:

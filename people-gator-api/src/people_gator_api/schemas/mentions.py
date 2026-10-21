@@ -3,10 +3,11 @@ from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPa
 
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 from typing import Annotated
 
 from people_gator_api.settings import settings
+from people_gator_api.schemas.sorting import SortableRequest, TextMentionGroupSortField, TextMentionSortField
 from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
@@ -82,9 +83,13 @@ class TextMentionListFilter(ListFilterBase, EntityLinkFilter):
         default=MISSING, description="Filter by entity IDs."
     )
     source_id: list[uuid.UUID] | MissingType = Field(default=MISSING, description="Filter by source IDs.")
+    name: list[str] | MissingType = Field(
+        default=MISSING,
+        description="Exact recorded mention text; spelling, case, accents and punctuation must match.",
+    )
 
 
-class TextMentionListRequest(GenericListRequest):
+class TextMentionListRequest(GenericListRequest, SortableRequest[TextMentionSortField]):
     """Request body for listing text mentions."""
     filter_: TextMentionListFilter | MissingType = Field(default=MISSING)
 
@@ -93,6 +98,28 @@ class TextMentionListResponse(GenericListResponse[TextMentionResponse]):
     """A paginated list of text mentions."""
 
     items: list[TextMentionResponse]
+
+
+class TextMentionGroup(BaseModel):
+    """Every matching mention with exactly the same recorded text."""
+
+    name: str = Field(description="Exact recorded mention text; never normalized.")
+    occurrence_count: int = Field(ge=1, description="Matching occurrences in the complete filtered set.")
+    last_touched_at: AwareDatetime | None = Field(
+        default=None, description="Latest annotation edit among the group's matching occurrences."
+    )
+
+
+class TextMentionGroupListRequest(GenericListRequest, SortableRequest[TextMentionGroupSortField]):
+    """Group the complete filtered mention set by exact recorded text.
+
+    The default order is text ascending. Exact text is the canonical tie-breaker.
+    """
+
+    filter_: TextMentionListFilter | MissingType = Field(default=MISSING)
+
+
+TextMentionGroupListResponse = GenericListResponse[TextMentionGroup]
 
 
 __all__ = [
@@ -106,4 +133,7 @@ __all__ = [
     "TextMentionListFilter",
     "TextMentionListRequest",
     "TextMentionListResponse",
+    "TextMentionGroup",
+    "TextMentionGroupListRequest",
+    "TextMentionGroupListResponse",
 ]

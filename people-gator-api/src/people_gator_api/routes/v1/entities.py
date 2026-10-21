@@ -20,7 +20,9 @@ from people_gator_api.schemas.entities import (
     EntityResponse,
 )
 from people_gator_api.routes.v1.query_dependencies import (
+    DEFAULT_SORT,
     EntityListFilterDependency,
+    EntityListSortDependency,
     ListRequestDependency,
 )
 from people_gator_api.services.auth_service import (
@@ -41,6 +43,7 @@ async def list_entities_route(
     user: BrowseActorDependency,
     filter: EntityListFilterDependency,
     list_request: ListRequestDependency,
+    sort: EntityListSortDependency = DEFAULT_SORT,
 ) -> EntityListResponse:
     del user
     try:
@@ -50,8 +53,12 @@ async def list_entities_route(
                 limit=list_request.limit,
                 return_total_count=list_request.return_total_count,
                 cursor=list_request.cursor,
+                sort=sort.sort,
+                sort_direction=sort.sort_direction,
             )
         )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_query", str(exc))
 
