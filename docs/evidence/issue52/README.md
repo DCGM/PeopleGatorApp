@@ -27,6 +27,20 @@ embedding/OCR service or real collection data was used.
   dropped with a visible notice rather than changing meaning.
 - Light/dark rendering and zero uncaught browser errors in both main journeys.
 
+## Validation
+
+- `people-gator-app`: `npm run type-check`, `npm run test:unit -- --run`
+  (224 passed) and `npm run build` passed.
+- `people-gator-api`: `uv run --locked pytest tests` with disposable
+  `PEOPLE_GATOR_POSTGRES_TEST_URL` and a fresh `PEOPLE_GATOR_SCHEMA_TEST_URL`:
+  518 passed, one optional Weaviate integration skipped because no disposable
+  Weaviate server was configured. PostgreSQL migration and seed tests executed.
+- Real CLI order: database migrate → seed → seed → database check, all passed
+  on disposable PostgreSQL and local storage. Reruns against the retained local
+  preview also passed after the final seed-link update.
+- Focused scope and seed regression checks passed, including page-scoped
+  unassigned faces, own-record actors and interrupted checkpoint recovery.
+
 ## Captures
 
 ### Documents — shared modifier
@@ -96,4 +110,3 @@ embedding/OCR service or real collection data was used.
 ![People/entities: search and active tags remain visible at 390 × 844](people-collapsed-mobile.png)
 
 ![Scans: search and active tags remain visible at 390 × 844](scans-collapsed-mobile.png)
-
