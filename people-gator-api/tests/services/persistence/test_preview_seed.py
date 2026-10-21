@@ -2174,3 +2174,73 @@ async def test_legacy_portrait_upgrade_state_moves_out_of_identity_manifest(seed
     assert set(json.loads(await filesystem.read_bytes(preview.MANIFEST_KEY))) == {'entities', 'faces', 'mentions'}
     moved = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
     assert moved.thumbnail['person-portrait-v1'].complete
+
+
+@pytest.mark.asyncio
+async def test_default_documents_landing_has_linked_media_and_preserves_reviews(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    assert seed.filter_examples["default-documents"] == "/"
+
+    async def landing_documents():
+        # Match the unfiltered landing list, including its 12-document batches.
+        documents, cursor = [], None
+        while True:
+            batch = await database.sources.list_documents(DocumentListRequest(
+                limit=12, cursor=cursor, return_total_count=True,
+            ))
+            documents.extend(batch.items)
+            cursor = batch.cursor
+            if cursor is None:
+                assert len(documents) == batch.total_count
+                return documents
+
+    documents = await landing_documents()
+    assert len({item.source_id for item in documents}) == len(documents)
+    assert {item.source_id for item in documents} == set(seed.documents.values())
+    album = next(item for item in documents if item.source_id == seed.documents["album"])
+    assert album.name == "Portrait album"
+    scans = urlsplit(seed.filter_examples["default-documents-scans"])
+    assert scans.path == "/scans"
+    assert parse_qs(scans.query) == {
+        "library": [album.library], "document": [str(album.document_id)],
+    }
+    pages = await database.sources.list_pages(PageListRequest(
+        limit=4, return_total_count=True,
+        filter_=PageListFilter(library=[album.library], document_id=[album.document_id]),
+    ))
+    assert {page.source_id for page in pages.items} == {
+        seed.pages["album-1"], seed.pages["album-2"],
+    }
+    assert pages.total_count == 2
+    thumbnails = {}
+    for page in pages.items:
+        assert await database.sources.lookup_page(PageLookupRequest(
+            library=album.library, document_id=album.document_id, page_id=page.page_id,
+        )) == page
+        thumbnail = await get_page_image(
+            page.library, page.document_id, page.page_id, max_width=256,
+        )
+        with Image.open(io.BytesIO(thumbnail.content)) as image:
+            assert image.width == 256 and image.height > 0
+        thumbnails[page.source_id] = thumbnail.content
+
+    reviewed = await database.faces.patch(
+        seed.faces["unassigned-ada"],
+        FacePatchRequest(entity_id=seed.entities["lenka"]),
+        GenericActor(user_id=seed.users["reviewer"]),
+    )
+    before_documents = await landing_documents()
+    before_pages = [await database.sources.get_page(page.source_id) for page in pages.items]
+    manifest = await filesystem.read_bytes(preview.MANIFEST_KEY)
+    repeated = await preview.seed_preview(database, filesystem)
+    assert repeated == seed
+    assert await landing_documents() == before_documents
+    assert await database.faces.get(reviewed.detection_id) == reviewed
+    assert await filesystem.read_bytes(preview.MANIFEST_KEY) == manifest
+    for page in before_pages:
+        assert await database.sources.get_page(page.source_id) == page
+        thumbnail = await get_page_image(
+            page.library, page.document_id, page.page_id, max_width=256,
+        )
+        assert thumbnail.content == thumbnails[page.source_id]
