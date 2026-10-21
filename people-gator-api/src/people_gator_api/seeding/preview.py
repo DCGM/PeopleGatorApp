@@ -465,6 +465,13 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Root entry demonstrates the Documents landing view with the existing
+            # linked album/media. These entry points require no persisted upgrade.
+            "default-documents": "/",
+            "default-documents-scans": "/scans?" + urlencode({
+                "library": next(item.library for item in DOCUMENTS if item.key == "album"),
+                "document": next(item.document_id for item in DOCUMENTS if item.key == "album"),
+            }),
             # Select one existing linked evidence card, then Use as portrait in
             # the compact bottom bar. Select the marked portrait to reset.
             "person-portrait-selection": f"/people/{manifest.entities['provenance-review']}",
