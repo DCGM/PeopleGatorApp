@@ -552,3 +552,31 @@ under new keys, and existing records, reviews and timestamps are untouched.
 Integration tests check confidence/state order, exact groups and counts,
 paged occurrences, accent-folded document names, page-count order, sorted
 similarity candidates and rerun preservation of a reviewer unassignment.
+
+
+## Transferable source and modification filters (#52)
+
+The `shared-filters-*` report links demonstrate one configuration across views:
+
+1. Open `shared-filters-documents`: **Modified by: Preview curator** finds
+   **Shared filter ledger**. Use the top-level People navigation; the same
+   selection finds **Ivo Ledger** and **Hana Ledger** by their own latest edits.
+2. Add **Modified via key: preview-curator** (or open `shared-filters-api-key`).
+   Ivo remains; Hana's own curator edit used bearer authentication, without a key.
+   Remove the key tag and switch back to Documents; the removal travels too.
+3. Open `shared-filters-person-faces` (Hana). Her identity matches the curator,
+   while her reviewer-edited face is absent under the same selection. Remove
+   the modifier tag to show it. Compare Ivo's curator-linked faces and mentions.
+4. Select the ledger in **Documents**, then a page in **Pages**. **Shared filter mirror** in `preview-nlk`
+   reuses the ledger's archive UUID but has separate internal source identities
+   and an unannotated page that remains browsable in Scans. Library/document/page
+   scope must not leak across it.
+5. Copy/reload a filtered URL, use Back/Forward, and expand/collapse mobile filters.
+   Controls, tags and API predicates restore the same effective configuration.
+
+New fixtures and the `shared-filters-own-edit-v1` upgrade use stable keys. Before
+editing Hana once, the manifest records her expected touch time; recovery checks
+it and the reviewer actor. Reruns preserve intervening reviewer changes, evidence
+assignments and modification times, even after an interrupted checkpoint.
+Integration coverage checks own entity versus annotation actors, key distinctions,
+source isolation, unannotated pages, counts, reruns and interrupted recovery.
