@@ -1,6 +1,7 @@
 """Exercise the preview dataset against migrated PostgreSQL and real local media."""
 
 import io
+import json
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
@@ -2131,9 +2132,8 @@ async def test_portrait_upgrade_checkpoint_recovery_preserves_review(seed_target
     failed = False
     async def interrupt(key, content):
         nonlocal failed
-        if key == preview.MANIFEST_KEY:
-            manifest = preview.SeedManifest.model_validate_json(content)
-            upgrade = manifest.thumbnail_upgrades.get('person-portrait-v1')
+        if key == preview.UPGRADES_KEY:
+            upgrade = preview.SeedUpgrades.model_validate_json(content).thumbnail.get('person-portrait-v1')
             if upgrade is not None and upgrade.complete and not failed:
                 failed = True
                 raise OSError('portrait checkpoint interrupted')
@@ -2150,3 +2150,6 @@ async def test_portrait_upgrade_checkpoint_recovery_preserves_review(seed_target
             GenericActor(user_id=person.user_id))
     await preview.seed_preview(database, filesystem)
     assert await database.entities.get(person_id) == person
+    # Rolled-back seed code rejects unknown identity-manifest keys.
+    identity = json.loads(await filesystem.read_bytes(preview.MANIFEST_KEY))
+    assert set(identity) == {'entities', 'faces', 'mentions'}

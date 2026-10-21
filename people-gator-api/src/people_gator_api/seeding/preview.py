@@ -45,6 +45,9 @@ from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAG
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
+# Upgrade state lives beside the identity manifest. Older seed code rejects
+# unknown manifest keys, so a rollback must never find new fields there.
+UPGRADES_KEY = "peoplegator_api/preview-seed-upgrades.json"
 
 
 class ThumbnailUpgrade(BaseModel):
@@ -54,9 +57,14 @@ class ThumbnailUpgrade(BaseModel):
     complete: bool = False
 
 
+class SeedUpgrades(BaseModel):
+    # Ignore state written by newer code after a rollback.
+    model_config = ConfigDict(extra="ignore")
+    thumbnail: dict[str, ThumbnailUpgrade] = Field(default_factory=dict)
+
+
 class SeedManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    thumbnail_upgrades: dict[str, ThumbnailUpgrade] = Field(default_factory=dict)
     entities: dict[str, UUID] = Field(default_factory=dict)
     faces: dict[str, UUID] = Field(default_factory=dict)
     mentions: dict[str, UUID] = Field(default_factory=dict)
@@ -113,9 +121,19 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         SeedManifest.model_validate_json(raw) if raw is not None else SeedManifest()
     )
 
+    raw = await _read_optional(filesystem, UPGRADES_KEY)
+    upgrades = (
+        SeedUpgrades.model_validate_json(raw) if raw is not None else SeedUpgrades()
+    )
+
     async def checkpoint() -> None:
         await filesystem.write_bytes(
             MANIFEST_KEY, manifest.model_dump_json(indent=2).encode()
+        )
+
+    async def checkpoint_upgrades() -> None:
+        await filesystem.write_bytes(
+            UPGRADES_KEY, upgrades.model_dump_json(indent=2).encode()
         )
 
     actors: dict[str, AuthContext] = {}
@@ -379,7 +397,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     person_id = active_entities.get("provenance-review")
     person = await database.entities.get(person_id) if person_id else None
     if person is not None:
-        upgrade = manifest.thumbnail_upgrades.get(upgrade_key)
+        upgrade = upgrades.thumbnail.get(upgrade_key)
         if upgrade is None:
             choices = (await database.faces.list(FaceListRequest(
                 filter_=FaceListFilter(entity_id=[person_id]), limit=100,
@@ -395,8 +413,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     selected_face_id=candidates[-1],
                     complete=person.thumbnail_mode == "manual",
                 )
-                manifest.thumbnail_upgrades[upgrade_key] = upgrade
-                await checkpoint()
+                upgrades.thumbnail[upgrade_key] = upgrade
+                await checkpoint_upgrades()
         if upgrade is not None and not upgrade.complete:
             candidate = await database.faces.get(upgrade.selected_face_id)
             if (person.thumbnail_mode == "automatic"
@@ -407,7 +425,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     thumbnail_face_id=upgrade.selected_face_id,
                 ), actors["reviewer"])
             upgrade.complete = True
-            await checkpoint()
+            await checkpoint_upgrades()
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")

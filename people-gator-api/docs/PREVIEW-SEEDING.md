@@ -92,6 +92,9 @@ reviewer (including merged people and deleted evidence) stay removed; their save
 IDs act as tombstones, and the CLI prints links only for surviving records. Keep
 the database and seed checkpoint together; to create a completely fresh dataset,
 use a fresh database and storage pair.
+Explicit upgrades of existing seed records (such as the person portrait upgrade)
+checkpoint their state in `peoplegator_api/preview-seed-upgrades.json`, so seed
+code from an earlier commit can still read the identity checkpoint after a rollback.
 Repository lookups recover entities/faces/mentions created just before a failed
 checkpoint; a corrupt checkpoint is rejected rather than silently discarded.
 Run only one seeder per database/storage pair at a time; the deployment utility
