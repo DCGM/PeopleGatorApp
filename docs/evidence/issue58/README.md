@@ -27,3 +27,7 @@ Automated component tests additionally cover assignment/merge selection, source
 removal/reset and error retry; query tests check cursor/cache reset when changing
 or revisiting source choices and entity IDs. Browser captures supplement those
 checks and do not assert visual equivalence to the unavailable reported dataset.
+
+The [numerical reproduction](numerical-reproduction.md) records actual before/after
+HTTP results for both endpoints using the reviewed main scoring/routes and the
+synthetic zero-vector fixture.
