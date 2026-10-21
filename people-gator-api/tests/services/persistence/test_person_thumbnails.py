@@ -317,6 +317,37 @@ async def test_bulk_face_insert_repairs_each_owner_once(portraits):
 
 
 @pytest.mark.asyncio
+async def test_schema_validation_rejects_regrouped_thumbnail_check(migrated_postgres):
+    from people_gator_api.persistence.postgres.schema import SchemaValidationError
+    name = "ck_pg_demo_entities_person_thumbnail"
+    async with migrated_postgres.begin() as connection:
+        await connection.execute(text(f"ALTER TABLE pg_demo_entities DROP CONSTRAINT {name}"))
+        # Same tokens as the expected check; only the boolean grouping differs.
+        await connection.execute(text(f"""ALTER TABLE pg_demo_entities ADD CONSTRAINT {name}
+            CHECK ((kind = 'person' OR thumbnail_face_id IS NULL) AND thumbnail_mode = 'automatic')"""))
+    with pytest.raises(SchemaValidationError, match="thumbnail consistency constraint"):
+        await validate_postgres_schema(migrated_postgres)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("drift, message", [
+    # The current function body with the previous row-level trigger.
+    (("DROP TRIGGER thumbnail_face_insert ON pg_demo_faces",
+      """CREATE TRIGGER thumbnail_face_insert AFTER INSERT ON pg_demo_faces
+         FOR EACH ROW EXECUTE FUNCTION pg_demo_thumbnail_face_insert()"""), "lifecycle trigger"),
+    (("""CREATE OR REPLACE FUNCTION pg_demo_repair_thumbnail(owner_id uuid) RETURNS void
+         LANGUAGE plpgsql AS $$ BEGIN NULL; END $$""",), "thumbnail function"),
+])
+async def test_schema_validation_rejects_drifted_thumbnail_triggers(migrated_postgres, drift, message):
+    from people_gator_api.persistence.postgres.schema import SchemaValidationError
+    async with migrated_postgres.begin() as connection:
+        for statement in drift:
+            await connection.execute(text(statement))
+    with pytest.raises(SchemaValidationError, match=message):
+        await validate_postgres_schema(migrated_postgres)
+
+
+@pytest.mark.asyncio
 async def test_merge_preserves_manual_choice_made_after_session_cached_target(portraits):
     from people_gator_api.persistence.postgres.models import Entity
     r = portraits

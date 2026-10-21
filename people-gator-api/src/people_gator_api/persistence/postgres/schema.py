@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import warnings
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from people_gator_api.persistence.postgres.models import (
     INDEX_NAME_PREFIX,
     TABLE_NAME_PREFIX,
 )
+from people_gator_api.persistence.postgres.thumbnail_ddl import THUMBNAIL_DDL
 
 logger = logging.getLogger(__name__)
 
@@ -113,36 +115,7 @@ def validate_schema(
             raise SchemaValidationError("Missing or incompatible source touch consistency constraint")
 
     if "thumbnail_face_id" in expected_metadata.tables["pg_demo_entities"].c:
-        required = {
-            ("pg_demo_entities", "select_thumbnail"),
-            ("pg_demo_faces", "thumbnail_face_insert"),
-            ("pg_demo_image_occurrences", "thumbnail_reassignment"),
-        }
-        installed = set(connection.execute(text("""
-            SELECT c.relname, t.tgname FROM pg_trigger t
-            JOIN pg_class c ON c.oid = t.tgrelid
-            WHERE c.oid IN (to_regclass('pg_demo_entities'), to_regclass('pg_demo_faces'),
-                            to_regclass('pg_demo_image_occurrences'))
-              AND NOT t.tgisinternal AND t.tgenabled IN ('O', 'A')
-        """)).all())
-        if not required <= installed:
-            raise SchemaValidationError("Missing or disabled person thumbnail lifecycle triggers")
-        checks = {c["name"]: c["sqltext"] for c in inspect(connection).get_check_constraints("pg_demo_entities")}
-        # PostgreSQL rewrites IN to ANY/ARRAY and inserts varchar/text casts.
-        # Compare the canonical expressions, not just names, so weakened checks
-        # cannot pass startup validation under an otherwise current revision.
-        expected_checks = {
-            "ck_pg_demo_entities_thumbnail_mode": "thumbnail_mode = ANY (ARRAY['automatic', 'manual'])",
-            "ck_pg_demo_entities_manual_thumbnail": "thumbnail_mode <> 'manual' OR thumbnail_face_id IS NOT NULL",
-            "ck_pg_demo_entities_person_thumbnail": "kind = 'person' OR (thumbnail_face_id IS NULL AND thumbnail_mode = 'automatic')",
-        }
-        def normalized_check(value: str) -> str:
-            for cast in ("::character varying", "::text[]", "::text"):
-                value = value.replace(cast, "")
-            return "".join(value.lower().split()).replace("(", "").replace(")", "")
-        for name, expected in expected_checks.items():
-            if name not in checks or normalized_check(checks[name]) != normalized_check(expected):
-                raise SchemaValidationError(f"Missing or incompatible person thumbnail consistency constraint: {name}")
+        _validate_thumbnail_invariants(connection)
 
     # Alembic reports unsupported generated-column changes as warnings. Treat
     # these as failures rather than accepting a mismatched generated expression.
@@ -157,6 +130,78 @@ def validate_schema(
             f"Database schema differs from application models: {differences!r}. "
             + "Apply a reviewed migration before starting the API."
         )
+
+
+def _canonical_sql(value: str) -> str:
+    # Reflection qualifies objects outside search_path and DDL may use OR REPLACE.
+    value = re.sub(r"\b\w+\.(?=pg_demo_)", "", value.replace("OR REPLACE ", ""))
+    return " ".join(value.split())
+
+
+def _validate_thumbnail_invariants(connection: Connection) -> None:
+    """Compare portrait triggers, functions and checks with the current DDL.
+
+    Names alone are insufficient: a trigger with the wrong level or timing, or
+    a function body from another revision, fails only when data changes.
+    """
+    expected_triggers: dict[str, str] = {}
+    expected_functions: dict[str, str] = {}
+    for statement in THUMBNAIL_DDL:
+        if function := re.match(r"CREATE OR REPLACE FUNCTION (\w+)\(.*?\$\$(.*)\$\$", statement, re.S):
+            expected_functions[function[1]] = _canonical_sql(function[2])
+        else:
+            trigger = re.match(r"CREATE OR REPLACE TRIGGER (\w+)", statement)
+            assert trigger is not None
+            expected_triggers[trigger[1]] = _canonical_sql(statement)
+
+    triggers = dict(connection.execute(text("""
+        SELECT t.tgname, pg_get_triggerdef(t.oid) FROM pg_trigger t
+        WHERE t.tgrelid IN (to_regclass('pg_demo_entities'), to_regclass('pg_demo_faces'),
+                            to_regclass('pg_demo_image_occurrences'))
+          AND t.tgname = ANY(:names) AND NOT t.tgisinternal AND t.tgenabled IN ('O', 'A')
+    """), {"names": list(expected_triggers)}).all())
+    for name, expected in expected_triggers.items():
+        if name not in triggers:
+            raise SchemaValidationError(f"Missing or disabled person thumbnail lifecycle trigger: {name}")
+        if _canonical_sql(triggers[name]) != expected:
+            raise SchemaValidationError(f"Incompatible person thumbnail lifecycle trigger: {name}")
+
+    functions: dict[str, list[str]] = {}
+    for name, source in connection.execute(text("""
+        SELECT p.proname, p.prosrc FROM pg_proc p
+        WHERE p.proname = ANY(:names) AND pg_function_is_visible(p.oid)
+    """), {"names": list(expected_functions)}).all():
+        functions.setdefault(name, []).append(_canonical_sql(source))
+    for name, expected in expected_functions.items():
+        if functions.get(name) != [expected]:
+            raise SchemaValidationError(f"Missing or incompatible person thumbnail function: {name}")
+
+    # PostgreSQL rewrites IN to ANY/ARRAY, inserts casts and parenthesizes every
+    # operand. Drop casts and parentheses around bare names only; the remaining
+    # parentheses keep boolean grouping, so regrouped checks do not compare equal.
+    def normalized_check(value: str) -> str:
+        for cast in ("::character varying", "::text[]", "::text"):
+            value = value.replace(cast, "")
+        value = re.sub(r"\((\w+)\)", r"\1", value)
+        return "".join(value.lower().split())
+
+    # The inspector reflects pretty-printed checks; request PostgreSQL's fully
+    # parenthesized form so grouping is explicit and stable.
+    checks = dict(connection.execute(text("""
+        SELECT conname, pg_get_constraintdef(oid, false) FROM pg_constraint
+        WHERE conrelid = to_regclass('pg_demo_entities') AND contype = 'c'
+    """)).all())
+    expected_checks = {
+        "ck_pg_demo_entities_thumbnail_mode":
+            "(thumbnail_mode = ANY ((ARRAY['automatic', 'manual'])))",
+        "ck_pg_demo_entities_manual_thumbnail":
+            "((thumbnail_mode <> 'manual') OR (thumbnail_face_id IS NOT NULL))",
+        "ck_pg_demo_entities_person_thumbnail":
+            "((kind = 'person') OR ((thumbnail_face_id IS NULL) AND (thumbnail_mode = 'automatic')))",
+    }
+    for name, expected in expected_checks.items():
+        if name not in checks or normalized_check(checks[name]) != normalized_check(f"CHECK ({expected})"):
+            raise SchemaValidationError(f"Missing or incompatible person thumbnail consistency constraint: {name}")
 
 
 async def wait_for_postgres(
