@@ -290,7 +290,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                         source_id=source.source_id,
                         bounding_box=face_box(face),
                         keypoints=face_keypoints(face),
-                        confidence=0.97,
+                        confidence=face.confidence,
                         embeddings=[
                             FaceEmbedding(
                                 model_identifier=model,
@@ -327,18 +327,19 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             if mention.person not in active_entities:
                 continue
             person = people[mention.person]
+            recorded = mention.recorded or person.name
             record = next(
                 (
                     item
                     for item in saved_mentions
-                    if item.name == person.name and item.context == mention.text
+                    if item.name == recorded and item.context == mention.text
                 ),
                 None,
             )
             if record is None:
                 record = await database.text_mentions.create(
                     TextMentionCreateRequest(
-                        name=person.name,
+                        name=recorded,
                         entity_link_state=EntityLinkState.manual if mention.state == "manual" else EntityLinkState.automatic,
                         context=mention.text,
                         entity_id=manifest.entities[person.key],
@@ -455,6 +456,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
     )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
+    sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
+    sorting_person = manifest.entities.get("sorting")
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     return SeedResult(
         entities=active_entities,
@@ -570,6 +573,26 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}#link-statistics"
             ),
+            # Issue #33: every list sorts its complete result set before paging.
+            "sorting-documents": "/documents?sort=page_count",
+            "sorting-document-names": "/documents?" + urlencode({"q": "radkova", "sort": "name"}),
+            "sorting-people": "/people?sort=last_touched_at",
+            "sorting-scans": "/scans?" + urlencode({
+                "library": sorting_document.library,
+                "document": sorting_document.document_id,
+                "sort": "page_id", "dir": "desc",
+            }),
+            **({
+                "sorting-faces": f"/people/{sorting_person}?" + urlencode({
+                    "face_sort": "confidence", "face_dir": "desc",
+                }),
+                "sorting-mention-groups": f"/people/{sorting_person}?" + urlencode({
+                    "tab": "mentions", "mention_view": "groups", "group_sort": "count",
+                }),
+                "sorting-similar-faces": f"/people/{sorting_person}?" + urlencode({
+                    "tab": "discover", "similar_sort": "confidence",
+                }),
+            } if sorting_person else {}),
             "document-search": "/documents?q=pribehy",
             "document-preview-remainder": "/documents?q=pribehy&library=preview-mzk",
             "compact-document-filters": "/documents?" + urlencode({

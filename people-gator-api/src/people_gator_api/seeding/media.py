@@ -79,7 +79,7 @@ def page_image(page: Page, document: Document) -> bytes:
         box = face_box(face)
         x, y = box.x, box.y
         colors = ("#e6bd99", "#c99d80", "#efd3b8", "#bfa58c")
-        draw.ellipse((x, y, x + box.width, y + box.height), fill=colors[face.group])
+        draw.ellipse((x, y, x + box.width, y + box.height), fill=colors[face.group % len(colors)])
         if face.box is not None:
             for point in face_keypoints(face)[:2]:
                 radius = max(1, box.width / 32)
