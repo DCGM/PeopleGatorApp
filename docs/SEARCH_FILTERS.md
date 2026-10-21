@@ -61,7 +61,9 @@ Semantics shared by every resource:
   200 candidates per term and signal. A non-relevance sort orders that whole
   set; it is not an exhaustive corpus-wide similarity scan. Discover shows the
   first 40 results of the sorted set.
-- Weaviate keeps only the default orders and rejects explicit sorts (501).
+- Weaviate keeps only the default orders. It accepts an explicit request for
+  identity ascending (lists) or relevance descending (searches) and rejects
+  other sorts (501). It also rejects exact text-mention `filter.name` (501).
 
 | Collection (endpoint) | Fields | API default | UI default |
 | --- | --- | --- | --- |

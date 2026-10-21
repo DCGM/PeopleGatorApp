@@ -342,3 +342,32 @@ async def test_explicit_sort_is_rejected_not_ignored() -> None:
         await repository.list(query=EntityListRequest(limit=1, sort="name"))
     with pytest.raises(NotImplementedError, match="sorting"):
         await repository.search(SearchEntitiesRequest(limit=1, query=QueryBase(text=["Ada"]), sort="name"))
+
+
+@pytest.mark.asyncio
+async def test_identity_ascending_sort_is_the_default_order() -> None:
+    from people_gator_api.schemas.faces import FaceListRequest
+
+    collection = _collection()
+    collection.query.fetch_objects.return_value = SimpleNamespace(objects=[])
+    entities = WeaviateEntityRepository(_client(collection))
+    await entities.list(query=EntityListRequest(limit=1, sort="entity_id"))
+    await WeaviateFaceRepository(_client(collection)).list(
+        query=FaceListRequest(limit=1, sort="detection_id", sort_direction="asc")
+    )
+    await WeaviateTextMentionRepository(_client(collection)).list(
+        query=TextMentionListRequest(limit=1, sort="mention_id")
+    )
+    with pytest.raises(NotImplementedError, match="sorting"):
+        await entities.list(query=EntityListRequest(limit=1, sort="entity_id", sort_direction="desc"))
+
+
+@pytest.mark.asyncio
+async def test_exact_mention_name_filter_is_rejected_not_ignored() -> None:
+    from people_gator_api.schemas.mentions import TextMentionListFilter
+
+    repository = WeaviateTextMentionRepository(_client(_collection()))
+    with pytest.raises(NotImplementedError, match="name"):
+        await repository.list(
+            query=TextMentionListRequest(limit=1, filter_=TextMentionListFilter(name=["Ada"]))
+        )
