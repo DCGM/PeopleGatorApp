@@ -117,6 +117,11 @@ export type DocumentLibraryOption = {
     library: string;
 };
 
+/**
+ * DocumentListSortField
+ */
+export type DocumentListSortField = 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
+
 export type DocumentName = string;
 
 /**
@@ -160,6 +165,11 @@ export type DocumentResponse = {
      */
     name?: string | null;
 };
+
+/**
+ * DocumentSortField
+ */
+export type DocumentSortField = 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
 
 /**
  * EntityCreateRequest
@@ -404,6 +414,11 @@ export type EntityListFilter = {
      */
     last_touched_by_api_key_id?: Array<string>;
 };
+
+/**
+ * EntityListSortField
+ */
+export type EntityListSortField = 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityMergeBatchRequest
@@ -707,6 +722,11 @@ export type EntityResponse = {
 };
 
 /**
+ * EntitySortField
+ */
+export type EntitySortField = 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+
+/**
  * EntityType
  *
  * Entity type discriminator for normalized identity classes.
@@ -777,6 +797,11 @@ export type FaceCreateRequest = {
  * Types of keypoints for face detection.
  */
 export type FaceKeypointType = 'left_eye' | 'right_eye' | 'nose' | 'left_mouth_corner' | 'right_mouth_corner';
+
+/**
+ * FaceListSortField
+ */
+export type FaceListSortField = 'detection_id' | 'last_touched_at' | 'link_state' | 'confidence' | 'source';
 
 /**
  * FaceModelListResponse
@@ -971,6 +996,11 @@ export type FaceResponse = {
      */
     embeddings?: Array<string>;
 };
+
+/**
+ * FaceSortField
+ */
+export type FaceSortField = 'relevance' | 'detection_id' | 'last_touched_at' | 'link_state' | 'confidence' | 'source';
 
 /**
  * FileUploadResponse
@@ -1697,6 +1727,34 @@ export type GenericListResponseSourceResponseBase = {
 };
 
 /**
+ * GenericListResponse[TextMentionGroup]
+ */
+export type GenericListResponseTextMentionGroup = {
+    /**
+     * Items
+     */
+    items: Array<TextMentionGroup>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
  * GenericListResponse[UserFilterOption]
  */
 export type GenericListResponseUserFilterOption = {
@@ -1988,6 +2046,11 @@ export type PageLayoutModel = {
 };
 
 /**
+ * PageListSortField
+ */
+export type PageListSortField = 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+
+/**
  * PageResponse
  *
  * A page with its archive identity.
@@ -2028,6 +2091,11 @@ export type PageResponse = {
      */
     page_id: string;
 };
+
+/**
+ * PageSortField
+ */
+export type PageSortField = 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
 
 /**
  * RefreshTokenRequest
@@ -2098,6 +2166,11 @@ export type ScoreAggregation = 'min' | 'max' | 'average';
  * How scores from different modalities are fused into a single entity score.
  */
 export type ScoreFusion = 'rrf';
+
+/**
+ * SortDirection
+ */
+export type SortDirection = 'asc' | 'desc';
 
 /**
  * SourceKind
@@ -2204,6 +2277,37 @@ export type TextMentionCreateRequest = {
      */
     source_id: string;
 };
+
+/**
+ * TextMentionGroup
+ *
+ * Every matching mention with exactly the same recorded text.
+ */
+export type TextMentionGroup = {
+    /**
+     * Name
+     *
+     * Exact recorded mention text; never normalized.
+     */
+    name: string;
+    /**
+     * Occurrence Count
+     *
+     * Matching occurrences in the complete filtered set.
+     */
+    occurrence_count: number;
+    /**
+     * Last Touched At
+     *
+     * Latest annotation edit among the group's matching occurrences.
+     */
+    last_touched_at?: string | null;
+};
+
+/**
+ * TextMentionGroupSortField
+ */
+export type TextMentionGroupSortField = 'text' | 'count' | 'last_touched_at';
 
 /**
  * TextMentionListResponse
@@ -2331,6 +2435,11 @@ export type TextMentionResponse = {
      */
     source_id: string;
 };
+
+/**
+ * TextMentionSortField
+ */
+export type TextMentionSortField = 'text' | 'mention_id' | 'last_touched_at' | 'link_state' | 'source';
 
 /**
  * TextMentionSpanModel
@@ -2757,6 +2866,18 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: EntitySortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/search-entities';
 };
@@ -2887,6 +3008,18 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: FaceSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/search-faces';
 };
@@ -3089,6 +3222,18 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: PageSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/search-pages';
 };
@@ -3273,6 +3418,18 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: DocumentSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/search-documents';
 };
@@ -3456,6 +3613,18 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: EntityListSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/entities';
 };
@@ -3789,6 +3958,18 @@ export type ListFacesRouteApiV1FacesGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: FaceListSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/faces';
 };
@@ -4143,6 +4324,12 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
          */
         'filter.source_id'?: Array<string> | null;
         /**
+         * Filter.Name
+         *
+         * Exact recorded mention text; spelling, case, accents and punctuation must match.
+         */
+        'filter.name'?: Array<string> | null;
+        /**
          * Limit
          *
          * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
@@ -4160,6 +4347,18 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: TextMentionSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/text-mentions';
 };
@@ -4206,6 +4405,116 @@ export type CreateTextMentionRouteApiV1TextMentionsPostResponses = {
 };
 
 export type CreateTextMentionRouteApiV1TextMentionsPostResponse = CreateTextMentionRouteApiV1TextMentionsPostResponses[keyof CreateTextMentionRouteApiV1TextMentionsPostResponses];
+
+export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Evidence Library
+         */
+        'filter.evidence_library'?: Array<string> | null;
+        /**
+         * Filter.Evidence Source Id
+         */
+        'filter.evidence_source_id'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched From
+         */
+        'filter.evidence_touched_from'?: string | null;
+        /**
+         * Filter.Evidence Touched To
+         */
+        'filter.evidence_touched_to'?: string | null;
+        /**
+         * Filter.Evidence Touched By User Id
+         */
+        'filter.evidence_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Evidence Touched By Api Key Id
+         */
+        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Entity Id
+         *
+         * Filter by entity IDs.
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         *
+         * Filter by source IDs.
+         */
+        'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Name
+         *
+         * Exact recorded mention text; spelling, case, accents and punctuation must match.
+         */
+        'filter.name'?: Array<string> | null;
+        /**
+         * Limit
+         *
+         * The maximum number of items to return. 0 can be used to gettotal_count only and no actual items.
+         */
+        limit?: number;
+        /**
+         * Return Total Count
+         *
+         * Whether to count all records matching the filter, independently of the cursor and limit.
+         */
+        return_total_count?: boolean;
+        /**
+         * Cursor
+         *
+         * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
+         */
+        cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: TextMentionGroupSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
+    };
+    url: '/api/v1/text-mention-groups';
+};
+
+export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetError = ListTextMentionGroupsRouteApiV1TextMentionGroupsGetErrors[keyof ListTextMentionGroupsRouteApiV1TextMentionGroupsGetErrors];
+
+export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseTextMentionGroup;
+};
+
+export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponse = ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponses[keyof ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponses];
 
 export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData = {
     /**
@@ -4747,6 +5056,18 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: DocumentListSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/documents';
 };
@@ -5066,6 +5387,18 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Opaque exclusive cursor returned by the preceding request. It is backend-defined and valid only with the same query inputs.
          */
         cursor?: string | null;
+        /**
+         * Sort
+         *
+         * Sort field. Ordinary lists default to canonical identity ascending; searches default to relevance descending. Unknown values sort last.
+         */
+        sort?: PageListSortField | null;
+        /**
+         * Sort Direction
+         *
+         * Sort direction; requires sort. Defaults to descending for relevance, times and counts and ascending otherwise.
+         */
+        sort_direction?: SortDirection | null;
     };
     url: '/api/v1/pages';
 };
@@ -5421,6 +5754,12 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
          * Filter by source IDs.
          */
         'filter.source_id'?: Array<string> | null;
+        /**
+         * Filter.Name
+         *
+         * Exact recorded mention text; spelling, case, accents and punctuation must match.
+         */
+        'filter.name'?: Array<string> | null;
     };
     url: '/api/v1/pages/{page_source_id}/text-mentions-spans';
 };

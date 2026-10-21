@@ -61,8 +61,9 @@ GET `/api/v1/search-entities`, `/search-faces`, `/search-pages` and
 `/search-documents` accept namespaced query/filter parameters. Text and selected
 reference-face vectors rank candidates independently, aggregate within each
 modality and combine ranks with RRF. Results use higher-is-better scores and UUID
-tie-breaking. Ordinary lists use UUID order. Opaque cursors belong to their
-original query/filter inputs. See [Search filters](SEARCH_FILTERS.md).
+tie-breaking. Ordinary lists use UUID order unless a resource-allowlisted
+`sort`/`sort_direction` is supplied. Opaque cursors belong to their original
+query/filter/sort inputs. See [Search filters](SEARCH_FILTERS.md).
 
 Faces and text mentions have mandatory source provenance and optional identity
 assignment. Assigned links have an `automatic`, `manual` or `verified` state;

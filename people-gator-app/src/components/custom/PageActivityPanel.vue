@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import SortSelect from './SortSelect.vue'
+import { directionLabel, type SortDirection } from '@/lib/sorting'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ActiveFilters from './ActiveFilters.vue'
 import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
@@ -15,7 +17,43 @@ const { filters } = useEvidenceFilters()
 const userSearch = ref('')
 const users = usePeopleFilterOptions('user', userSearch)
 const mode = computed(() => (route.query.activity_group === 'user' ? 'user' : 'time'))
-const groups = computed(() => activityGroups(items.value, mode.value))
+// Group and item order are independent, shareable URL choices.
+function direction(value: unknown, fallback: SortDirection): SortDirection {
+  return value === 'asc' || value === 'desc' ? value : fallback
+}
+const groupDefault = computed<SortDirection>(() => (mode.value === 'user' ? 'asc' : 'desc'))
+const order = computed(() => ({
+  groups: direction(route.query.activity_order, groupDefault.value),
+  items: direction(route.query.activity_items, 'desc'),
+}))
+const groupKind = computed(() => (mode.value === 'user' ? 'text' : 'time'))
+// One select combines the group order and the edit order within groups.
+function orderLabel(groups: SortDirection, items: SortDirection) {
+  const name = mode.value === 'user' ? 'Users' : 'Days'
+  return `${name} ${directionLabel(groupKind.value, groups).toLowerCase()} · Edits ${directionLabel('time', items).toLowerCase()}`
+}
+const orderStrategies = computed(() => {
+  const groupOrders: SortDirection[] =
+    groupDefault.value === 'asc' ? ['asc', 'desc'] : ['desc', 'asc']
+  return groupOrders.flatMap((groups) =>
+    (['desc', 'asc'] as const).map((items) => ({
+      value: `${groups}:${items}`,
+      label: orderLabel(groups, items),
+    })),
+  )
+})
+function selectOrder(value: string) {
+  const [groups, items] = value.split(':')
+  if (!['asc', 'desc'].includes(groups!) || !['asc', 'desc'].includes(items!)) return
+  void router.push({
+    query: {
+      ...route.query,
+      activity_order: groups === groupDefault.value ? undefined : groups,
+      activity_items: items === 'desc' ? undefined : items,
+    },
+  })
+}
+const groups = computed(() => activityGroups(items.value, mode.value, order.value, label))
 const tags = computed(() => [
   ...(['touchedFrom', 'touchedTo'] as const).flatMap((key) =>
     filters.value[key]
@@ -94,7 +132,11 @@ function clear() {
       @update:model-value="
         (value) =>
           router.push({
-            query: { ...route.query, activity_group: value === 'user' ? 'user' : undefined },
+            query: {
+              ...route.query,
+              activity_group: value === 'user' ? 'user' : undefined,
+              activity_order: undefined,
+            },
           })
       "
     >
@@ -103,6 +145,13 @@ function clear() {
         ><TabsTrigger value="user">By user</TabsTrigger></TabsList
       >
     </Tabs>
+    <SortSelect
+      :model-value="`${order.groups}:${order.items}`"
+      :strategies="orderStrategies"
+      label="Sort activity"
+      size="sm"
+      @update:model-value="selectOrder"
+    />
     <ActiveFilters
       clear-label="Clear activity filters"
       :filters="tags"

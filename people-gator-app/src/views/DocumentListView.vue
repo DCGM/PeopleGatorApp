@@ -6,8 +6,20 @@ import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
 import { useDocumentFilters } from '@/viewmodels/document-filters'
+import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
+import {
+  DOCUMENT_BROWSE_DEFAULT,
+  DOCUMENT_SORTS,
+  RELEVANCE,
+  scoredOptions,
+} from '@/viewmodels/sort-options'
 const evidence = useEvidenceFilters()
 const { searchTerm, filters } = useDocumentFilters()
+const searching = computed(() => Boolean(searchTerm.value.trim()))
+const sortOptions = computed(() => scoredOptions(DOCUMENT_SORTS, searching.value))
+const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
+  searching.value ? RELEVANCE : DOCUMENT_BROWSE_DEFAULT,
+)
 const {
   documents,
   resultCount,
@@ -24,6 +36,7 @@ const {
   12,
   evidence.params,
   computed(() => !evidence.error.value),
+  sort,
 )
 const filtered = computed(
   () =>
@@ -44,6 +57,8 @@ const filtered = computed(
     <DocumentListSearchBar
       v-model:search-term="searchTerm"
       v-model:filters="filters"
+      v-model:sort="sort"
+      :sort-options="sortOptions"
       :result-count="resultCount"
       :filter-error="filterError"
     />

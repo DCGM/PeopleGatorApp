@@ -7,10 +7,15 @@ import ActiveFilters from './ActiveFilters.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import SortControl from './SortControl.vue'
+import type { EntitySortField } from '@/client'
+import type { SortOption, SortState } from '@/lib/sorting'
 
 const props = defineProps<{
   selectedFace: Face | null
+  sortOptions?: SortOption<EntitySortField>[]
 }>()
+const sort = defineModel<SortState<EntitySortField>>('sort')
 
 const query = defineModel<string>({ default: '' })
 const resultMode = defineModel<CandidateBrowseMode>('resultMode', { default: 'page' })
@@ -50,7 +55,6 @@ const active = computed(() =>
       class="mt-2"
       label="Search people"
       placeholder="Search by name or alias"
-      :hide-filters="!!query.trim()"
       :disabled="!props.selectedFace"
     >
       <ToggleGroup
@@ -72,6 +76,13 @@ const active = computed(() =>
           >Similar faces</ToggleGroupItem
         >
       </ToggleGroup>
+      <SortControl
+        v-if="sort && sortOptions"
+        v-model="sort"
+        :options="sortOptions"
+        label="Sort candidates"
+        size="sm"
+      />
     </SearchFilterPanel>
     <ActiveFilters :filters="active" @remove="resultMode = 'page'" @clear="resultMode = 'page'" />
     <p

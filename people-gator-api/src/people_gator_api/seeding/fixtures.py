@@ -80,6 +80,14 @@ PEOPLE = (
         "Synthetic duplicate candidate: similar vectors make it discoverable from Ada Novak.",
         "importer",
     ),
+    # Issue #33: sortable evidence with exact recorded-text mention variants.
+    Person(
+        "sorting",
+        "Marta Řádková",
+        ("M. Řádková",),
+        "Synthetic sorting subject with varied confidence, states and mention spellings.",
+        "importer",
+    ),
 )
 
 
@@ -121,6 +129,9 @@ DOCUMENTS = (
     ),
     Document("issue10-media", "preview-mzk", "Media upload sandbox"),
     Document("page-gallery", "preview-mzk", "Page gallery navigation"),
+    # Accent/case name variants and uneven page counts across two libraries (#33).
+    Document("sorting-ledger", "preview-nlk", "Řádková ledger"),
+    Document("sorting-notes", "preview-mzk", "radkova notes"),
 )
 
 
@@ -133,6 +144,7 @@ class Face:
     state: str = "automatic"
     embedded: bool = True
     box: tuple[int, int, int, int] | None = None
+    confidence: float = 0.97
 
 
 @dataclass(frozen=True)
@@ -142,6 +154,8 @@ class Mention:
     text: str
     state: str | None = "automatic"
     y: int | None = None
+    # Exact recorded text when it differs from the person's name; never normalized.
+    recorded: str | None = None
 
 
 @dataclass(frozen=True)
@@ -317,6 +331,21 @@ PAGES = (
            has_layout=i != PAGE_GALLERY_MISSING_MEDIA,
            has_image=i != PAGE_GALLERY_MISSING_MEDIA)
       for i in range(1, PAGE_GALLERY_PAGES + 1)),
+    # Sorting scenario (#33): three ledger pages (one evidence-free) and one note.
+    Page("sorting-ledger-1", "sorting-ledger", 1,
+         (Face("sorting-manual", "sorting", 0, 4, "manual", confidence=0.62),
+          Face("sorting-automatic", "sorting", 1, 4, confidence=0.88)),
+         (Mention("sorting-exact-1", "sorting", "Marta Řádková opened the ledger.", "manual"),
+          Mention("sorting-initial", "sorting", "M. Řádková signed the first entry.", recorded="M. Řádková"))),
+    Page("sorting-ledger-2", "sorting-ledger", 2,
+         (Face("sorting-verified", "sorting", 0, 4, "verified", confidence=0.75),
+          Face("sorting-similar", None, 1, 4, confidence=0.91)),
+         (Mention("sorting-upper", "sorting", "MARTA ŘÁDKOVÁ appears in the heading.", recorded="MARTA ŘÁDKOVÁ"),
+          Mention("sorting-exact-2", "sorting", "Marta Řádková closed the ledger."))),
+    Page("sorting-ledger-3", "sorting-ledger", 3),
+    Page("sorting-notes-1", "sorting-notes", 1,
+         mentions=(Mention("sorting-unaccented", "sorting", "Marta Radkova copied these notes.", recorded="Marta Radkova"),
+                   Mention("sorting-exact-3", "sorting", "Marta Řádková reviewed the copy."))),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

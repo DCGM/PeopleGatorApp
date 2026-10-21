@@ -1,5 +1,6 @@
 """Pydantic schemas for search and search endpoints."""
 
+from enum import StrEnum
 from typing import Self
 import uuid
 from pydantic import (
@@ -10,6 +11,13 @@ from pydantic import (
 )
 from people_gator_api.schemas.entities import EntityListFilter, EntityResponse
 from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
+from people_gator_api.schemas.sorting import (
+    DocumentSortField,
+    EntitySortField,
+    FaceSortField,
+    PageSortField,
+    SortableRequest,
+)
 from people_gator_api.schemas.enums import (
     DEFAULT_FACE_EMBEDDING_MODEL,
     ScoreAggregation,
@@ -98,7 +106,7 @@ class QueryBase(BaseModel):
         return self
 
 
-class GenericSearchRequest[F: BaseModel](GenericListRequest):
+class GenericSearchRequest[F: BaseModel, S: StrEnum](GenericListRequest, SortableRequest[S]):
     """Backend-neutral multimodal search request.
 
     Each modality ranks candidates independently after score aggregation. RRF
@@ -118,6 +126,10 @@ class GenericSearchRequest[F: BaseModel](GenericListRequest):
         description="Optional filter to apply to the search results.",
     )
 
+    @classmethod
+    def is_search(cls) -> bool:
+        return True
+
 
 # ---------------------------------------------------------------------------
 # Entity search result type
@@ -134,7 +146,7 @@ SearchEntitiesResultListResponse = GenericListResponse[FoundEntity]
 
 
 """Request type for entity search."""
-SearchEntitiesRequest = GenericSearchRequest[EntityListFilter]
+SearchEntitiesRequest = GenericSearchRequest[EntityListFilter, EntitySortField]
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +163,7 @@ SearchFacesResultListResponse = GenericListResponse[FoundFace]
 
 
 """Request type for face similarity search."""
-SearchFacesRequest = GenericSearchRequest[FaceListFilter]
+SearchFacesRequest = GenericSearchRequest[FaceListFilter, FaceSortField]
 
 # ---------------------------------------------------------------------------
 # Page similarity search
@@ -167,7 +179,7 @@ SearchPagesResultListResponse = GenericListResponse[FoundPage]
 
 
 """Request type for page similarity search."""
-SearchPagesRequest = GenericSearchRequest[PageListFilter]
+SearchPagesRequest = GenericSearchRequest[PageListFilter, PageSortField]
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +196,7 @@ SearchDocumentsResultListResponse = GenericListResponse[FoundDocument]
 
 
 """Request type for document similarity search."""
-SearchDocumentsRequest = GenericSearchRequest[DocumentListFilter]
+SearchDocumentsRequest = GenericSearchRequest[DocumentListFilter, DocumentSortField]
 
 
 __all__ = [

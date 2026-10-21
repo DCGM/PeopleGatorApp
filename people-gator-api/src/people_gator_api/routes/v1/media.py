@@ -13,7 +13,10 @@ from people_gator_api.media.page_layout import get_page_layout, put_page_layout
 from people_gator_api.media.text_mention_spans import get_text_mention_spans
 from people_gator_api.persistence.contracts import CreateResult
 from people_gator_api.routes.v1.query_dependencies import (
+    DEFAULT_SORT,
     DocumentListFilterDependency,
+    DocumentListSortDependency,
+    PageListSortDependency,
     ImageListFilterDependency,
     ListRequestDependency,
     PageListFilterDependency,
@@ -112,6 +115,7 @@ async def list_documents_route(
     user: BrowseActorDependency,
     filter: DocumentListFilterDependency,
     list_request: ListRequestDependency,
+    sort: DocumentListSortDependency = DEFAULT_SORT,
 ) -> DocumentListResponse:
     try:
         return await database.sources.list_documents(
@@ -120,6 +124,8 @@ async def list_documents_route(
                 limit=list_request.limit,
                 return_total_count=list_request.return_total_count,
                 cursor=list_request.cursor,
+                sort=sort.sort,
+                sort_direction=sort.sort_direction,
             )
         )
     except NotImplementedError as exc:
@@ -228,6 +234,7 @@ async def list_pages_route(
     user: BrowseActorDependency,
     filter: PageListFilterDependency,
     list_request: ListRequestDependency,
+    sort: PageListSortDependency = DEFAULT_SORT,
 ) -> PageListResponse:
     try:
         return await database.sources.list_pages(
@@ -236,6 +243,8 @@ async def list_pages_route(
                 limit=list_request.limit,
                 return_total_count=list_request.return_total_count,
                 cursor=list_request.cursor,
+                sort=sort.sort,
+                sort_direction=sort.sort_direction,
             )
         )
     except NotImplementedError as exc:

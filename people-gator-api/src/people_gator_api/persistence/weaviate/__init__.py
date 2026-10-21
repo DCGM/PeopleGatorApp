@@ -308,6 +308,27 @@ def _encode(i: uuid.UUID, f: str) -> str:
     )
 
 
+# Fields naming the Weaviate object UUID, which ``after`` cursors already follow.
+_IDENTITY_SORT_FIELDS = frozenset({"entity_id", "detection_id", "mention_id"})
+
+
+def _require_default_sort(query: object) -> None:
+    """Weaviate keeps only the default orders; other explicit sorts are rejected.
+
+    Lists follow canonical identity ascending and searches relevance descending,
+    so explicitly requesting either is the same order and is accepted.
+    """
+    if getattr(query, "sort", None) is None:
+        return
+    field, direction = getattr(query, "effective_sort")()
+    if getattr(type(query), "is_search", lambda: False)():
+        if (field, direction) == ("relevance", "desc"):
+            return
+    elif field in _IDENTITY_SORT_FIELDS and direction == "asc":
+        return
+    raise NotImplementedError("sorting is not supported by the Weaviate backend")
+
+
 def _decode(c: str | None, f: str) -> uuid.UUID | None:
     if c is None:
         return None
@@ -795,6 +816,7 @@ class WeaviateEntityRepository(EntityRepository):
         return result
 
     async def list(self, query: EntityListRequest) -> EntityListResponse:
+        _require_default_sort(query)
         fs = _direct(
             query.filter_,
             {
@@ -994,6 +1016,7 @@ class WeaviateEntityRepository(EntityRepository):
     async def search(
         self, query: SearchEntitiesRequest
     ) -> SearchEntitiesResultListResponse:
+        _require_default_sort(query)
         return await _basic_search(
             self._client,
             ENTITY_COLLECTION,
@@ -1072,6 +1095,7 @@ class WeaviateSourceRepository(SourceRepository):
         return result
 
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
+        _require_default_sort(query)
         if not is_missing(query.filter_) and any(not is_missing(getattr(query.filter_, name)) for name in (
             "last_touched_from", "last_touched_to", "last_touched_by_user_id", "last_touched_by_api_key_id", "has_unassigned_faces",
         )):
@@ -1166,6 +1190,7 @@ class WeaviateSourceRepository(SourceRepository):
     async def search_documents(
         self, query: SearchDocumentsRequest
     ) -> SearchDocumentsResultListResponse:
+        _require_default_sort(query)
         return await self._search_sources(
             query, SourceKind.document, FoundDocument, SearchDocumentsResultListResponse
         )
@@ -1173,6 +1198,7 @@ class WeaviateSourceRepository(SourceRepository):
     async def search_pages(
         self, query: SearchPagesRequest
     ) -> SearchPagesResultListResponse:
+        _require_default_sort(query)
         return await self._search_sources(
             query, SourceKind.page, FoundPage, SearchPagesResultListResponse
         )
@@ -1315,6 +1341,7 @@ class WeaviateFaceRepository(FaceRepository):
         return r
 
     async def list(self, query: FaceListRequest) -> FaceListResponse:
+        _require_default_sort(query)
         return await _page(
             self._client,
             FACE_COLLECTION,
@@ -1400,6 +1427,7 @@ class WeaviateFaceRepository(FaceRepository):
         )
 
     async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
+        _require_default_sort(query)
         return await _basic_search(
             self._client,
             FACE_COLLECTION,
@@ -1422,7 +1450,12 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         return None if o is None else _parse_mention(o)
 
     async def list(self, query: TextMentionListRequest) -> TextMentionListResponse:
+        _require_default_sort(query)
         _require_postgres_for_evidence(query.filter_)
+        if not is_missing(query.filter_) and not is_missing(query.filter_.name):
+            raise NotImplementedError(
+                "exact text-mention name filtering is not supported by the Weaviate backend"
+            )
         fs = (
             []
             if is_missing(query.filter_)

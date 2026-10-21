@@ -23,6 +23,8 @@ export type PersonIdentifiers = {
 }
 
 export type PersonFace = LinkMetadata & {
+  /** A witness from the originating search, pinned first and labelled. */
+  matched?: boolean
   metadata?: FaceResponse
   sourceId?: string
   sourceLoading?: boolean

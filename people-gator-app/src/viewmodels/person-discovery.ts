@@ -2,7 +2,9 @@ import type { EvidenceQuery } from './evidence-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-import type { PageResponse } from '@/client'
+import type { EntitySortField, FaceSortField, PageResponse } from '@/client'
+import { sortParams, type SortState } from '@/lib/sorting'
+import { RELEVANCE } from '@/viewmodels/sort-options'
 import type {
   PersonDiscoveryCandidate,
   PersonDiscoveryFace,
@@ -46,6 +48,8 @@ export function usePersonDiscovery(
   nameQuery: MaybeRefOrGetter<string>,
   enabled: MaybeRefOrGetter<boolean>,
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = RELEVANCE,
+  peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
 ) {
   const faceIds = computed(() => [...new Set(toValue(referenceFaceIds))])
   const hasFaceSignal = computed(
@@ -58,6 +62,7 @@ export function usePersonDiscovery(
       ...toValue(evidence),
       'query.face_id': faceIds.value,
       'query.face_embedding_model': toValue(referenceFaceModel) ?? undefined,
+      ...sortParams(toValue(faceSort)),
       limit: DISCOVERY_LIMIT,
     })),
     canSearchFaces,
@@ -162,6 +167,7 @@ export function usePersonDiscovery(
   const entitySearchParams = computed(() => ({
     ...personDiscoverySignals(faceIds.value, toValue(referenceFaceModel), toValue(nameQuery)),
     ...toValue(evidence),
+    ...sortParams(toValue(peopleSort)),
   }))
   const canSearchPeople = computed(
     () => toValue(enabled) && (hasFaceSignal.value || Boolean(toValue(nameQuery).trim())),

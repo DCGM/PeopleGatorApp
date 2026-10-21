@@ -319,10 +319,10 @@ view inside the strip. Selecting an item pushes the canonical page URL, so
 reload and Back/Forward restore it. Evidence, link-state and workspace settings
 are kept. Face, person and line selections are dropped, and pan/zoom resets.
 
-Pages appear in the page list API's stable order (internal source key), 12 per
-request. The order is the same across reloads and cursors, but it is **not** the
+Pages appear in archive page-ID order by default, or by last change through the
+strip's **Sort pages** control (#33), 12 per request. Neither order is the
 physical page sequence: the archive does not record page numbers, so the gallery
-shows no ordinal. The gallery loads further batches until the current page
+shows no ordinal and its UUID labels are not page numbers. The gallery loads further batches until the current page
 appears. After that it loads when the strip's end is reached or **More pages**
 is activated. Evidence filters never apply to the gallery.
 
@@ -521,3 +521,34 @@ before applying the one-time reviewer selection, and never rewrites later choice
 preconditions before writing, so an intervening review is preserved. Deleted or
 reassigned candidate faces are skipped. Existing entity/source/annotation keys,
 UUIDs and checkpoints remain intact. PostgreSQL is required for saved portraits.
+
+
+## Sorting and exact-appearance mentions (#33)
+
+The `sorting` person (**Marta Řádková**) and two documents add a small,
+self-contained sorting scenario with stable keys only:
+
+| Fixture | Demonstrates |
+| --- | --- |
+| `sorting-ledger` (`preview-nlk`, "Řádková ledger", 3 pages, one evidence-free) and `sorting-notes` (`preview-mzk`, "radkova notes", 1 page) | Accent/case-insensitive name order ("Ř" folds to "r"), library order, uneven page counts and the most pages in `preview-nlk` |
+| Faces `sorting-manual` (0.62), `sorting-automatic` (0.88, automatic), `sorting-verified` (0.75) and unassigned `sorting-similar` (0.91) | Confidence, assignment-state (verified, manual, automatic, unassigned last) and source order; a similar unassigned face in Discover |
+| Mentions recorded as "Marta Řádková" (×3), "M. Řádková", "MARTA ŘÁDKOVÁ" and "Marta Radkova" | Exact appearance groups that never merge spelling, case or accent variants, with full counts |
+
+Explore the seed report's `sorting-*` links: `sorting-documents` (Documents by
+page count), `sorting-document-names` (search with an explicit name order),
+`sorting-people`, `sorting-scans` (one document's pages by page ID descending),
+`sorting-faces` (Marta's faces by confidence), `sorting-mention-groups`
+(Mentions → Exact appearance by occurrence count; expand a group to see its
+occurrences, sorted independently) and `sorting-similar-faces` (Discover). Choose
+a strategy (field and direction, such as *Pages · Highest first*) in a panel's
+single **Sort** select, reload, copy the link and use Back/Forward; each panel
+keeps its own choice. Seeded edit times are recorded by
+the repositories and are not reset on rerun; the preview has no historical
+unknown times, so integration tests cover unknown-last ordering with disposable
+records.
+
+The upgrade is additive: new people, sources, faces and mentions are checkpointed
+under new keys, and existing records, reviews and timestamps are untouched.
+Integration tests check confidence/state order, exact groups and counts,
+paged occurrences, accent-folded document names, page-count order, sorted
+similarity candidates and rerun preservation of a reviewer unassignment.

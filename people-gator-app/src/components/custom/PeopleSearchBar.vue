@@ -2,7 +2,9 @@
 import EvidenceFilterControls from './EvidenceFilterControls.vue'
 import EvidenceFilterTags from './EvidenceFilterTags.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
-import type { EntityLinkState } from '@/client'
+import type { EntityLinkState, EntitySortField } from '@/client'
+import SortControl from './SortControl.vue'
+import type { SortOption, SortState } from '@/lib/sorting'
 import { linkStateVisuals } from '@/lib/entity-links'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import { computed, ref } from 'vue'
@@ -19,7 +21,9 @@ defineProps<{
   resultCount: number
   hasMoreResults?: boolean
   filterError?: string
+  sortOptions?: SortOption<EntitySortField>[]
 }>()
+const sort = defineModel<SortState<EntitySortField>>('sort')
 
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
@@ -169,6 +173,7 @@ function removeFilter(key: keyof PeopleProcessingFilters | 'linkState', value: s
       @retry="apiKeys.retry()"
     />
     <EvidenceFilterControls hide-state hide-documents />
+    <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
   </SearchFilterPanel>
   <p v-if="filterError" role="alert">{{ filterError }}</p>
   <EvidenceFilterTags

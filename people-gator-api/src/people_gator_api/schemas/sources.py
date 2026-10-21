@@ -22,6 +22,13 @@ from people_gator_api.schemas.common import (
     ListFilterBase,
 )
 from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.sorting import (
+    DocumentSortField,
+    PageSortField,
+    SortDirection,
+    SortableRequest,
+    default_direction,
+)
 from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 
 
@@ -882,14 +889,14 @@ class SourceListRequest(GenericListRequest):
     )
 
 
-class PageListRequest(GenericListRequest):
+class PageListRequest(GenericListRequest, SortableRequest[PageSortField]):
     filter_: PageListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing pages."
     )
 
 
-class DocumentListRequest(GenericListRequest):
+class DocumentListRequest(GenericListRequest, SortableRequest[DocumentSortField]):
     filter_: DocumentListFilter | MissingType = Field(
         default=MISSING,
         description="Filter for listing documents."
@@ -908,6 +915,16 @@ class GenericSourceListRequest(GenericListRequest):
         default=MISSING,
         description="Filter for listing generic sources."
     )
+    sort: DocumentSortField | PageSortField | None = Field(
+        default=None,
+        description="Validated resource-specific sort carried from a page or document list request.",
+    )
+    sort_direction: SortDirection | None = None
+
+    def effective_sort(self) -> tuple[str | None, SortDirection]:
+        if self.sort is None:
+            return None, SortDirection.ASC
+        return str(self.sort), self.sort_direction or default_direction(str(self.sort))
 
 
 def to_generic_list_request(
@@ -925,11 +942,14 @@ def to_generic_list_request(
     else:
         source_type = None
 
+    sort = getattr(request, "sort", None)
     return GenericSourceListRequest(
         filter_=to_generic_list_filter(request.filter_, source_type),
         limit=request.limit,
         return_total_count=request.return_total_count,
         cursor=request.cursor,
+        sort=sort,
+        sort_direction=getattr(request, "sort_direction", None),
     )
 
 

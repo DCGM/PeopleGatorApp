@@ -9,6 +9,7 @@ import { computed, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import {
   searchEntitiesGetApiV1SearchEntitiesGet,
   type EntityResponse,
+  type EntitySortField,
   type FoundEntity,
   type SearchEntitiesGetApiV1SearchEntitiesGetData,
 } from '@/client'
@@ -16,6 +17,7 @@ import type { ProcessingQueryParams } from '@/viewmodels/people-filters'
 import { responseData } from '@/query/api'
 import { fetchEntities } from '@/query/entities'
 import { queryKeys } from '@/query/keys'
+import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
 import {
   cursorResultPage,
   SEARCH_CACHE_TIME,
@@ -34,6 +36,7 @@ export type EntityResultsParams = {
   hasMentions?: boolean
   processingFilters?: ProcessingQueryParams
   limit?: number
+  sort?: SortState<EntitySortField>
 }
 
 type EntitySearchPage = InfiniteResultPage<FoundEntity, string | null>
@@ -102,6 +105,7 @@ export function useEntityResultsQuery(
       limit: searchPageSize(resolvedParams.limit),
       return_total_count: true,
       cursor: resolvedParams.cursor,
+      ...(resolvedParams.sort && sortParams(resolvedParams.sort)),
     }
     return query
       ? queryKeys.search.infiniteEntities({ ...keyParams, 'query.text': [query] })
@@ -147,6 +151,7 @@ export function useEntityResultsQuery(
             'filter.has_mentions': resolvedParams.hasMentions,
             limit: pageSize,
             return_total_count: true,
+            ...(resolvedParams.sort && sortParams(resolvedParams.sort)),
           },
           pageParam,
           pageSize,
@@ -162,6 +167,7 @@ export function useEntityResultsQuery(
           limit: pageSize,
           return_total_count: true,
           cursor: pageParam,
+          ...(resolvedParams.sort && listSortParams(resolvedParams.sort)),
         },
         signal,
       )

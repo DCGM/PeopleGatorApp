@@ -10,11 +10,26 @@ repository.
 
 ## Shared behavior
 
-Ordinary list operations order records by UUID ascending. Search operations
-order by final score descending and UUID ascending. Cursors are opaque strings,
-exclusive, backend-defined, and valid only with the same query inputs.
-`total_count`, when requested, counts all filter matches before cursor and
-limit.
+Without an explicit sort, ordinary list operations order records by UUID
+ascending and search operations by final score descending and UUID ascending.
+Requests may name one allowlisted resource sort field and direction
+(`schemas/sorting.py`); see [Sorting](../../../../docs/SEARCH_FILTERS.md#sorting).
+Sorting applies to the complete matching set (or, for searches, the complete
+bounded candidate set) before pagination. Unknown values sort last in both
+directions and the canonical UUID ascending breaks ties. Backends that cannot
+honour a requested sort raise `NotImplementedError`; Weaviate rejects every
+explicit sort except search relevance descending and does not group mentions.
+Cursors are opaque strings, exclusive, backend-defined, and valid only with the
+same query inputs including sort. PostgreSQL list cursors carry every sort-key
+value of the last row (keyset), so continuation does not require that row to
+still exist; edits to a sortable value can move a row across the boundary and
+no snapshot is promised. `total_count`, when requested, counts all filter
+matches before cursor and limit and is independent of sort.
+
+`TextMentionRepository.list_groups` groups the complete filtered mention set by
+exact recorded text (no case, accent or punctuation normalization) with full
+occurrence counts and the latest annotation edit. `filter.name` selects one
+group's occurrences.
 
 Different filter fields use logical AND. Values inside one filter list use
 logical OR. Empty filter lists are invalid.

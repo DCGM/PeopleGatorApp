@@ -14,6 +14,13 @@ import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { useDocumentSearch } from '@/viewmodels/document-search'
 import { normalizePageContentFilter } from '@/viewmodels/assignment'
+import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
+import {
+  PAGE_BROWSE_DEFAULT,
+  PAGE_SORTS,
+  RELEVANCE,
+  scoredOptions,
+} from '@/viewmodels/sort-options'
 
 const linkStates = useLinkStateFilter()
 const route = useRoute()
@@ -28,6 +35,11 @@ const scope = computed(() => ({
 const resultsPerPage = 12
 const searchTerm = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const assignment = ref(normalizePageContentFilter(route.query.assignment))
+const searching = computed(() => Boolean(searchTerm.value.trim()))
+const sortOptions = computed(() => scoredOptions(PAGE_SORTS, searching.value))
+const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
+  searching.value ? RELEVANCE : PAGE_BROWSE_DEFAULT,
+)
 const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
   useDocumentSearch(
     searchTerm,
@@ -37,6 +49,7 @@ const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resu
     linkStates,
     evidence.params,
     computed(() => !evidence.error.value),
+    sort,
   )
 
 watch(
@@ -92,6 +105,8 @@ function removeScope(key: 'library' | 'document') {
       v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
+      v-model:sort="sort"
+      :sort-options="sortOptions"
       :library="scope.library"
       :document-id="scope.documentId"
       @remove-scope="removeScope"

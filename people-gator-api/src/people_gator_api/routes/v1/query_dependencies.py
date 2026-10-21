@@ -6,7 +6,9 @@ convention: search inputs use ``query.<field>``, filters use
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated, Any
 
 from fastapi import Depends, Query
@@ -28,6 +30,17 @@ from people_gator_api.schemas.enums import (
 from people_gator_api.schemas.faces import FaceListFilter
 from people_gator_api.schemas.mentions import TextMentionListFilter
 from people_gator_api.schemas.search import QueryBase
+from people_gator_api.schemas.sorting import (
+    RELEVANCE,
+    DocumentSortField,
+    EntitySortField,
+    FaceSortField,
+    PageSortField,
+    SortDirection,
+    SortableRequest,
+    TextMentionGroupSortField,
+    TextMentionSortField,
+)
 from people_gator_api.schemas.sources import (
     DocumentListFilter,
     ImageListFilter,
@@ -297,6 +310,10 @@ def text_mention_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(TextMentionListFilter, "source_id", "filter"),
     ] = None,
+    name: Annotated[
+        list[str] | None,
+        _model_parameter(TextMentionListFilter, "name", "filter"),
+    ] = None,
 ) -> TextMentionListFilter:
     return _filter(
         TextMentionListFilter,
@@ -310,6 +327,7 @@ def text_mention_list_filter_dependency(
         entity_link_state=entity_link_state,
         entity_id=entity_id,
         source_id=source_id,
+        name=name,
     )
 
 
@@ -620,6 +638,60 @@ def image_list_filter_dependency(
     )
 
 
+@dataclass(frozen=True)
+class SortParameters:
+    """Validated by the resource request schema; None keeps its default order."""
+
+    sort: str | None = None
+    sort_direction: SortDirection | None = None
+
+
+DEFAULT_SORT = SortParameters()
+
+
+def _list_fields(fields: type[StrEnum], name: str) -> type[StrEnum]:
+    """The fields of a list endpoint: relevance requires a search score."""
+    return StrEnum(name, {item.name: item.value for item in fields if item.value != RELEVANCE})
+
+
+def _sort_dependency(fields: type[StrEnum]):
+    def dependency(
+        sort: Annotated[
+            fields | None,  # type: ignore[valid-type]
+            Query(description=SortableRequest.model_fields["sort"].description),
+        ] = None,
+        sort_direction: Annotated[
+            SortDirection | None,
+            Query(description=SortableRequest.model_fields["sort_direction"].description),
+        ] = None,
+    ) -> SortParameters:
+        return SortParameters(
+            sort=sort.value if sort is not None else None,
+            sort_direction=sort_direction,
+        )
+
+    return dependency
+
+
+EntityListSortField = _list_fields(EntitySortField, "EntityListSortField")
+DocumentListSortField = _list_fields(DocumentSortField, "DocumentListSortField")
+PageListSortField = _list_fields(PageSortField, "PageListSortField")
+FaceListSortField = _list_fields(FaceSortField, "FaceListSortField")
+
+EntityListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(EntityListSortField))]
+EntitySearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(EntitySortField))]
+DocumentListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(DocumentListSortField))]
+DocumentSearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(DocumentSortField))]
+PageListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(PageListSortField))]
+PageSearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(PageSortField))]
+FaceListSortDependency = Annotated[SortParameters, Depends(_sort_dependency(FaceListSortField))]
+FaceSearchSortDependency = Annotated[SortParameters, Depends(_sort_dependency(FaceSortField))]
+TextMentionSortDependency = Annotated[SortParameters, Depends(_sort_dependency(TextMentionSortField))]
+TextMentionGroupSortDependency = Annotated[
+    SortParameters, Depends(_sort_dependency(TextMentionGroupSortField))
+]
+
+
 ListRequestDependency = Annotated[
     GenericListRequest,
     Depends(list_request_dependency),
@@ -664,6 +736,18 @@ ImageListFilterDependency = Annotated[
 
 
 __all__ = [
+    "DEFAULT_SORT",
+    "DocumentListSortDependency",
+    "DocumentSearchSortDependency",
+    "EntityListSortDependency",
+    "EntitySearchSortDependency",
+    "FaceListSortDependency",
+    "FaceSearchSortDependency",
+    "PageListSortDependency",
+    "PageSearchSortDependency",
+    "SortParameters",
+    "TextMentionGroupSortDependency",
+    "TextMentionSortDependency",
     "DocumentListFilterDependency",
     "EntityListFilterDependency",
     "FaceListFilterDependency",

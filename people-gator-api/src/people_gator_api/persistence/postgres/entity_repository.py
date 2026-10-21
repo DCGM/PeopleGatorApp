@@ -51,10 +51,7 @@ from people_gator_api.persistence.postgres.models import (
 )
 from people_gator_api.persistence.postgres.utils import (
     cursor_fingerprint,
-    decode_cursor,
     search_page,
-    validate_cursor,
-    next_cursor,
     entity_text_candidates,
     entity_filters,
     entity_response,
@@ -68,6 +65,20 @@ from people_gator_api.persistence.postgres.utils import (
 
 from people_gator_api.schemas.faces import FaceListFilter
 from .utils import face_filters
+from people_gator_api.schemas.sorting import RELEVANCE, SortDirection
+from .sorting import (
+    Builders,
+    SortKey,
+    SortSpec,
+    after_predicate,
+    build_spec,
+    decode_keyset,
+    keyset_page,
+    order_by,
+    sort_columns,
+    sort_ranked,
+    text_keys,
+)
 from .touch import creation_values, touch_values, touch_sources, lock_annotation_graph
 
 class PostgresEntityRepository(EntityRepository):
@@ -90,11 +101,20 @@ class PostgresEntityRepository(EntityRepository):
         entity = (await self._load_many([entity_id])).get(entity_id)
         return entity_response(entity) if entity is not None else None
 
+    @staticmethod
+    def _sort_spec(field: str | None, direction: SortDirection) -> SortSpec:
+        builders: Builders = {
+            "name": lambda desc: text_keys(Entity.name_normalized, Entity.name, desc),
+            "last_touched_at": lambda desc: [SortKey(Entity.last_touched_at, "datetime", desc)],
+            "created_at": lambda desc: [SortKey(Entity.created_at, "datetime", desc)],
+        }
+        return build_spec(field, direction, Entity.id, builders, "entity_id")
+
     async def list(self, query: EntityListRequest) -> EntityListResponse:
         filters = entity_filters(query.filter_)
         fingerprint = cursor_fingerprint(query)
-        cursor_id = decode_cursor(query.cursor, fingerprint)
-        await validate_cursor(self._session, Entity, cursor_id, filters)
+        spec = self._sort_spec(*query.effective_sort())
+        after = decode_keyset(query.cursor, spec, fingerprint)
         total = None
         if query.return_total_count:
             total = (
@@ -106,23 +126,18 @@ class PostgresEntityRepository(EntityRepository):
         if query.limit == 0:
             return EntityListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
-        if cursor_id is not None:
-            page_filters.append(Entity.id > cursor_id)
-        rows = list(
-            (
-                await self._session.scalars(
-                    select(Entity)
-                    .where(*page_filters)
-                    .options(selectinload(Entity.aliases))
-                    .order_by(Entity.id)
-                    .limit(query.limit + 1)
-                    .execution_options(populate_existing=True)
-                )
-            )
-            .unique()
-            .all()
+        if after is not None:
+            page_filters.append(after_predicate(spec, after))
+        result = await self._session.execute(
+            select(Entity, *sort_columns(spec))
+            .where(*page_filters)
+            .options(selectinload(Entity.aliases))
+            .order_by(*order_by(spec))
+            .limit(query.limit + 1)
+            .execution_options(populate_existing=True)
         )
-        page, cursor = next_cursor(rows, query.limit, Entity.id, fingerprint)
+        rows = [(row[0], tuple(row[1:])) for row in result.all()]
+        page, cursor = keyset_page(rows, query.limit, spec, fingerprint)
         await load_link_stats(self._session, page, entities=True)
         return EntityListResponse(
             items=[entity_response(row) for row in page],
@@ -477,6 +492,15 @@ class PostgresEntityRepository(EntityRepository):
             await self._text_scores(query, filters),
             await self._face_scores(query, filters),
         )
+        field, direction = query.effective_sort()
+        spec = None if field == RELEVANCE else self._sort_spec(field, direction)
+        values: dict[uuid.UUID, tuple[object, ...]] = {}
+        if spec is not None and ranked:
+            rows = await self._session.execute(
+                select(Entity.id, *sort_columns(spec)).where(Entity.id.in_([item[0] for item in ranked]))
+            )
+            values = {row[0]: tuple(row[1:]) for row in rows.all()}
+        ranked = sort_ranked(ranked, spec, direction, values)
         page, cursor = search_page(
             ranked,
             query.cursor,

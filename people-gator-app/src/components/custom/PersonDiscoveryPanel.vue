@@ -26,6 +26,9 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
 import FilterSingleSelect from './FilterSingleSelect.vue'
+import SortControl from './SortControl.vue'
+import type { EntitySortField, FaceSortField } from '@/client'
+import type { SortOption, SortState } from '@/lib/sorting'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,9 +44,13 @@ const props = defineProps<{
   loadingFaces?: boolean
   loadingPeople?: boolean
   error?: unknown
+  faceSortOptions?: SortOption<FaceSortField>[]
+  peopleSortOptions?: SortOption<EntitySortField>[]
 }>()
 
 const searchTerm = defineModel<string>('searchTerm', { default: '' })
+const faceSort = defineModel<SortState<FaceSortField>>('faceSort')
+const peopleSort = defineModel<SortState<EntitySortField>>('peopleSort')
 
 const emit = defineEmits<{
   assignFaces: [faceIds: string[]]
@@ -250,6 +257,12 @@ watch(
           label="Discovery assignment"
           :options="faceFilterOptions"
         />
+        <SortControl
+          v-if="faceSort && props.faceSortOptions"
+          v-model="faceSort"
+          :options="props.faceSortOptions"
+          label="Sort similar faces"
+        />
       </SearchFilterPanel>
 
       <SelectedFaceActions
@@ -425,7 +438,14 @@ watch(
           v-model="searchTerm"
           label="Name or alias signal"
           placeholder="Search by name or alias"
-        />
+        >
+          <SortControl
+            v-if="peopleSort && props.peopleSortOptions"
+            v-model="peopleSort"
+            :options="props.peopleSortOptions"
+            label="Sort similar people"
+          />
+        </SearchFilterPanel>
       </div>
 
       <div

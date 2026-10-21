@@ -2,12 +2,7 @@
 import EvidenceFilterControls from '@/components/custom/EvidenceFilterControls.vue'
 import EvidenceFilterTags from '@/components/custom/EvidenceFilterTags.vue'
 import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
-import CreationDetails from '@/components/custom/CreationDetails.vue'
-import {
-  useEvidenceFilters,
-  relatedEvidenceQuery,
-  queryValues,
-} from '@/viewmodels/evidence-filters'
+import { useEvidenceFilters, queryValues } from '@/viewmodels/evidence-filters'
 import { Image, ScanFace, UserRoundSearch } from '@lucide/vue'
 import { useDebounce } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
@@ -15,14 +10,33 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
-import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import { Button } from '@/components/ui/button'
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
 import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails.vue'
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
 import PersonFacesPanel from '@/components/custom/PersonFacesPanel.vue'
 import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
-import PersonMentionItem from '@/components/custom/PersonMentionItem.vue'
+import PersonMentionEntry from '@/components/custom/PersonMentionEntry.vue'
+import PersonMentionGroups from '@/components/custom/PersonMentionGroups.vue'
+import SortControl from '@/components/custom/SortControl.vue'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useRouteSort } from '@/lib/sorting'
+import {
+  DISCOVERY_FACE_SORT_KEYS,
+  FACE_DEFAULT,
+  FACE_SORT_KEYS,
+  FACE_SORTS,
+  MENTION_DEFAULT,
+  MENTION_GROUP_DEFAULT,
+  MENTION_GROUP_SORT_KEYS,
+  MENTION_GROUP_SORTS,
+  MENTION_SORT_KEYS,
+  MENTION_SORTS,
+  PEOPLE_SORTS,
+  RELEVANCE,
+  SIMILAR_PEOPLE_SORT_KEYS,
+  scoredOptions,
+} from '@/viewmodels/sort-options'
 import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { usePersonDiscovery } from '@/viewmodels/person-discovery'
@@ -34,6 +48,21 @@ const evidence = useEvidenceFilters()
 const matchingFaceIds = computed(() => queryValues(route.query.origin_matched_face))
 const linkStates = useLinkStateFilter()
 const personId = computed(() => String(route.params.personId))
+
+// Each tab and Discover list keeps an independent, shareable order.
+const faceSortOptions = scoredOptions(FACE_SORTS, false)
+const faceSort = useRouteSort(FACE_SORT_KEYS, faceSortOptions, FACE_DEFAULT)
+const mentionSort = useRouteSort(MENTION_SORT_KEYS, MENTION_SORTS, MENTION_DEFAULT)
+const groupSort = useRouteSort(MENTION_GROUP_SORT_KEYS, MENTION_GROUP_SORTS, MENTION_GROUP_DEFAULT)
+const similarFaceSort = useRouteSort(DISCOVERY_FACE_SORT_KEYS, FACE_SORTS, RELEVANCE)
+const similarPeopleSort = useRouteSort(SIMILAR_PEOPLE_SORT_KEYS, PEOPLE_SORTS, RELEVANCE)
+const mentionView = computed<'flat' | 'groups'>({
+  get: () => (route.query.mention_view === 'groups' ? 'groups' : 'flat'),
+  set: (value) =>
+    void router.push({
+      query: { ...route.query, mention_view: value === 'groups' ? 'groups' : undefined },
+    }),
+})
 
 const {
   entity,
@@ -58,6 +87,7 @@ const {
   identifiers,
   libraryCount,
   mentionCount,
+  mentionFilters,
   mentions,
   portraitFaceId,
   profile,
@@ -70,6 +100,9 @@ const {
   evidence.params,
   computed(() => !evidence.error.value),
   matchingFaceIds,
+  faceSort,
+  mentionSort,
+  computed(() => mentionView.value === 'flat'),
 )
 
 const activeTab = computed(() => {
@@ -139,6 +172,8 @@ const {
   debouncedPersonSearchTerm,
   computed(() => activeTab.value === 'discover' && !evidence.error.value),
   evidence.params,
+  similarFaceSort,
+  similarPeopleSort,
 )
 
 function selectTab(tab: string | number) {
@@ -203,6 +238,9 @@ function selectTab(tab: string | number) {
           value="faces"
           class="grid grid-cols-2 gap-3 pt-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         >
+          <div class="col-span-full flex flex-wrap gap-2">
+            <SortControl v-model="faceSort" :options="faceSortOptions" label="Sort faces" />
+          </div>
           <PersonFacesPanel
             :key="personId"
             :faces="faces"
@@ -234,65 +272,80 @@ function selectTab(tab: string | number) {
           </div>
         </TabsContent>
 
-        <TabsContent value="mentions" class="divide-y">
-          <div v-for="mention in mentions" :key="mention.id">
-            <RouterLink
-              v-if="mention.pageId"
-              :to="{
-                name: 'document-page',
-                params: {
-                  libraryId: mention.library,
-                  documentId: mention.documentId,
-                  pageId: mention.pageId,
-                },
-                query: {
-                  ...relatedEvidenceQuery(route),
-                  selectedPerson: personId,
-                  ...(linkStates.length && { link_state: linkStates }),
-                },
-              }"
-              class="group block py-6 outline-none"
-            >
-              <PersonMentionItem :mention="mention" />
-            </RouterLink>
-            <p v-if="!mention.pageId">
-              {{ mention.excerpt }} ·
-              {{ mention.sourceLoading ? 'Loading source page…' : 'Source page unavailable.' }}
-            </p>
-            <CreationDetails
-              v-if="mention.metadata"
-              :record="mention.metadata"
-              label="Mention creation / import"
-            />
-            <VerifyEntityLink v-bind="mention" :id="mention.id" kind="mention" />
-          </div>
-          <PersonMentionItemSkeleton v-if="mentionLoading" />
-          <div class="py-3 text-sm">
-            <p v-if="mentionError" role="alert">
-              Could not load mentions.
-              <Button variant="link" @click="retryMentions()">Retry</Button>
-            </p>
-            <p v-else-if="!mentionLoading">
-              Showing {{ mentionCount }} of
-              {{ entity?.entity_link_stats?.mentions?.total ?? mentionCount }} mentions
-            </p>
-            <p v-if="!mentionError && !mentionLoading && !mentions.length">
-              No mentions match the evidence filters.
-              <Button variant="link" @click="evidence.clear()">Broaden evidence</Button>
-            </p>
-            <Button
-              v-if="hasMoreMentions"
+        <TabsContent value="mentions">
+          <div class="flex flex-wrap items-center gap-2 pt-6">
+            <ToggleGroup
+              type="single"
               variant="outline"
-              :disabled="loadingMoreMentions"
-              @click="loadMoreMentions()"
-              >Load more mentions</Button
+              :model-value="mentionView"
+              aria-label="Mention view"
+              @update:model-value="(value) => value && (mentionView = value as 'flat' | 'groups')"
             >
+              <ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+              <ToggleGroupItem value="groups">Exact appearance</ToggleGroupItem>
+            </ToggleGroup>
+            <SortControl
+              v-if="mentionView === 'groups'"
+              v-model="groupSort"
+              :options="MENTION_GROUP_SORTS"
+              label="Sort groups"
+            />
+            <SortControl
+              v-model="mentionSort"
+              :options="MENTION_SORTS"
+              :label="mentionView === 'groups' ? 'Sort occurrences' : 'Sort mentions'"
+            />
+          </div>
+          <PersonMentionGroups
+            v-if="mentionView === 'groups'"
+            :filters="mentionFilters"
+            :group-sort="groupSort"
+            :occurrence-sort="mentionSort"
+            :person-id="personId"
+            :link-states="linkStates"
+            :enabled="!evidence.error.value"
+            @broaden="evidence.clear()"
+          />
+          <div v-else class="divide-y">
+            <PersonMentionEntry
+              v-for="mention in mentions"
+              :key="mention.id"
+              :mention="mention"
+              :person-id="personId"
+              :link-states="linkStates"
+            />
+            <PersonMentionItemSkeleton v-if="mentionLoading" />
+            <div class="py-3 text-sm">
+              <p v-if="mentionError" role="alert">
+                Could not load mentions.
+                <Button variant="link" @click="retryMentions()">Retry</Button>
+              </p>
+              <p v-else-if="!mentionLoading">
+                Showing {{ mentionCount }} of
+                {{ entity?.entity_link_stats?.mentions?.total ?? mentionCount }} mentions
+              </p>
+              <p v-if="!mentionError && !mentionLoading && !mentions.length">
+                No mentions match the evidence filters.
+                <Button variant="link" @click="evidence.clear()">Broaden evidence</Button>
+              </p>
+              <Button
+                v-if="hasMoreMentions"
+                variant="outline"
+                :disabled="loadingMoreMentions"
+                @click="loadMoreMentions()"
+                >Load more mentions</Button
+              >
+            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="discover">
           <PersonDiscoveryPanel
             v-model:search-term="personSearchTerm"
+            v-model:face-sort="similarFaceSort"
+            v-model:people-sort="similarPeopleSort"
+            :face-sort-options="FACE_SORTS"
+            :people-sort-options="PEOPLE_SORTS"
             :faces="similarFaces"
             :people="similarPeople"
             :current-name="profile.name"

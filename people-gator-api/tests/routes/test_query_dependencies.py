@@ -15,6 +15,8 @@ from people_gator_api.routes.v1.query_dependencies import (
 
 
 PAGINATION_PARAMETERS = {"limit", "return_total_count", "cursor"}
+SORT_PARAMETERS = {"sort", "sort_direction"}
+SORTABLE_LISTS = {"/entities", "/faces", "/text-mentions", "/documents", "/pages"}
 QUERY_PARAMETERS = {
     "query.text",
     "query.face_id",
@@ -38,7 +40,7 @@ LIST_FILTERS = {
         "last_touched_by_user_id", "last_touched_by_api_key_id",
     },
     "/faces": {"entity_id", "source_id", "detection_id"},
-    "/text-mentions": {"entity_id", "source_id"},
+    "/text-mentions": {"entity_id", "source_id", "name"},
     "/users": {
         "display_name",
         "is_active",
@@ -125,6 +127,7 @@ def test_list_endpoints_expose_namespaced_filters(
         *(f"filter.{field}" for field in fields),
         *({"filter.entity_link_state"} if path != "/users" else set()),
         *PAGINATION_PARAMETERS,
+        *(SORT_PARAMETERS if path in SORTABLE_LISTS else set()),
     }
 
 
@@ -139,7 +142,34 @@ def test_search_endpoints_expose_query_filter_and_pagination_groups(
         *(f"filter.{field}" for field in fields),
         *({"filter.entity_link_state"} if path != "/users" else set()),
         *PAGINATION_PARAMETERS,
+        *SORT_PARAMETERS,
     }
+
+
+def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
+    paths = cast(dict[str, Any], openapi["paths"])
+    parameters = cast(list[dict[str, Any]], paths[f"/api/v1{path}"]["get"]["parameters"])
+    schema = next(item for item in parameters if item["name"] == "sort")["schema"]
+    reference = next(option["$ref"] for option in schema["anyOf"] if "$ref" in option)
+    component = openapi["components"]["schemas"][reference.rsplit("/", 1)[-1]]
+    return cast(list[str], component["enum"])
+
+
+@pytest.mark.parametrize(("path", "values"), [
+    ("/entities", ["name", "entity_id", "last_touched_at", "created_at"]),
+    ("/search-entities", ["relevance", "name", "entity_id", "last_touched_at", "created_at"]),
+    ("/documents", ["name", "document_id", "library", "page_count", "last_touched_at"]),
+    ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "last_touched_at"]),
+    ("/pages", ["library", "document_id", "page_id", "last_touched_at"]),
+    ("/search-pages", ["relevance", "library", "document_id", "page_id", "last_touched_at"]),
+    ("/faces", ["detection_id", "last_touched_at", "link_state", "confidence", "source"]),
+    ("/search-faces", ["relevance", "detection_id", "last_touched_at", "link_state", "confidence", "source"]),
+    ("/text-mentions", ["text", "mention_id", "last_touched_at", "link_state", "source"]),
+    ("/text-mention-groups", ["text", "count", "last_touched_at"]),
+])
+def test_sort_fields_are_resource_allowlists(openapi: dict[str, Any], path: str, values: list[str]) -> None:
+    """Relevance is offered only where a search score exists."""
+    assert _sort_values(openapi, path) == values
 
 
 def test_dependencies_parse_dotted_parameters_into_typed_models() -> None:
@@ -242,3 +272,29 @@ def test_source_processing_query_validation_before_repository_access(path, param
     def endpoint(filter=Depends(dependency)):
         return {'valid': True}
     assert TestClient(app).get(path, params=parameters).status_code == 422
+
+
+def test_sort_parameters_reject_fields_outside_the_allowlist() -> None:
+    from people_gator_api.routes.v1.query_dependencies import (
+        EntityListSortDependency,
+        EntitySearchSortDependency,
+    )
+
+    app = FastAPI()
+
+    async def _list(sort: EntityListSortDependency) -> dict[str, object]:
+        return {"sort": sort.sort, "direction": sort.sort_direction}
+
+    async def _search(sort: EntitySearchSortDependency) -> dict[str, object]:
+        return {"sort": sort.sort, "direction": sort.sort_direction}
+
+    app.get("/list")(_list)
+    app.get("/search")(_search)
+    client = TestClient(app)
+    assert client.get("/list", params={"sort": "name", "sort_direction": "desc"}).json() == {
+        "sort": "name", "direction": "desc"}
+    assert client.get("/list").json() == {"sort": None, "direction": None}
+    assert client.get("/list", params={"sort": "relevance"}).status_code == 422
+    assert client.get("/list", params={"sort": "pg_demo_entities.id"}).status_code == 422
+    assert client.get("/list", params={"sort": "name", "sort_direction": "up"}).status_code == 422
+    assert client.get("/search", params={"sort": "relevance"}).json()["sort"] == "relevance"

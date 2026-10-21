@@ -5,11 +5,13 @@ The adapter binds every repository in :class:`Database` to one request-scoped
 SQLAlchemy source hierarchy and the entity, face, mention, alias, embedding,
 and user tables; no ORM type crosses the persistence boundary.
 
-Ordinary lists use deterministic UUID keyset pagination. Their opaque cursor is
-a URL-safe base64 JSON token containing the last UUID and a fingerprint of the
-request without its cursor, which rejects malformed tokens and reuse with
-different filters or options. Search cursors use the same envelope and point to
-an item in the deterministic score/UUID ranking.
+Ordinary lists use deterministic keyset pagination over the requested
+allowlisted sort keys and the UUID tie-breaker (see ``sorting.py``). Their
+opaque cursor is a URL-safe base64 JSON token containing the last row's key
+values and a fingerprint of the request without its cursor, which rejects
+malformed tokens and reuse with different filters, sort or options. Search
+cursors use a similar envelope and point to an item in the deterministic
+ranking of the complete, sorted candidate set.
 
 Text search uses PostgreSQL ``pg_trgm`` similarity. Face search reduces large
 reference sets to a fixed number of weighted k-means representatives,
@@ -775,6 +777,9 @@ def mention_filters(
     source_ids = missing_to_none(filter_values.source_id)
     if source_ids is not None:
         filters.append(TextMention.source_id.in_(source_ids))
+    names = missing_to_none(filter_values.name)
+    if names is not None:
+        filters.append(TextMention.mention.in_(names))
     return filters
 
 

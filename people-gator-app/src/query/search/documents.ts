@@ -10,7 +10,8 @@ import {
   searchDocumentsGetApiV1SearchDocumentsGet,
   type SearchDocumentsGetApiV1SearchDocumentsGetData,
 } from '@/client'
-import type { DocumentResponse } from '@/client'
+import type { DocumentResponse, DocumentSortField } from '@/client'
+import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
 import { fetchDocuments, type DocumentListParams } from '@/query/media'
 import { responseData } from '@/query/api'
 import { queryKeys } from '@/query/keys'
@@ -49,7 +50,12 @@ export function useDocumentSearchQuery(
 }
 
 export function useDocumentResultsQuery(
-  params: MaybeRefOrGetter<{ query: string; filters: DocumentListParams; limit?: number }>,
+  params: MaybeRefOrGetter<{
+    query: string
+    filters: DocumentListParams
+    limit?: number
+    sort?: SortState<DocumentSortField>
+  }>,
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
   const client = useQueryClient()
@@ -59,13 +65,23 @@ export function useDocumentResultsQuery(
     limit: toValue(params).limit ?? 12,
     return_total_count: true,
   }))
+  // Relevance requires a score; it is never sent to the ordinary list.
+  const listSort = computed(() => {
+    const sort = toValue(params).sort
+    return sort ? listSortParams(sort) : {}
+  })
+  const searchSort = computed(() => {
+    const sort = toValue(params).sort
+    return sort ? sortParams(sort) : {}
+  })
   const key = computed(() =>
     toValue(params).query.trim()
       ? queryKeys.search.infiniteDocuments({
           ...apiParams.value,
+          ...searchSort.value,
           'query.text': [toValue(params).query.trim()],
         })
-      : queryKeys.documents.infinite(apiParams.value),
+      : queryKeys.documents.infinite({ ...apiParams.value, ...listSort.value }),
   )
   watch(
     () => JSON.stringify(key.value),
@@ -90,8 +106,11 @@ export function useDocumentResultsQuery(
       const pagination = { ...apiParams.value, cursor: pageParam }
       return cursorResultPage(
         query
-          ? await fetchDocumentSearch({ ...pagination, 'query.text': [query] }, signal)
-          : await fetchDocuments(pagination, signal),
+          ? await fetchDocumentSearch(
+              { ...pagination, ...searchSort.value, 'query.text': [query] },
+              signal,
+            )
+          : await fetchDocuments({ ...pagination, ...listSort.value }, signal),
       )
     },
     initialPageParam: null,

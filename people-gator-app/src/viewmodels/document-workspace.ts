@@ -3,8 +3,12 @@ import { useQueries } from '@tanstack/vue-query'
 import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
 import { linkMetadata } from '@/lib/entity-links'
+import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
+import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import {
   type EntityLinkState,
+  type EntitySortField,
+  type FaceSortField,
   type BoundingBox,
   type EntityType,
   type PageLayoutModel,
@@ -130,6 +134,8 @@ export function useDocumentWorkspace(
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
+  faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,
+  candidateSort?: MaybeRefOrGetter<SortState<EntitySortField> | undefined>,
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
@@ -141,6 +147,7 @@ export function useDocumentWorkspace(
       ...toValue(evidence),
       'filter.source_id': [sourceId.value],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      ...listSortParams(toValue(faceSort)),
       limit: 100,
     })),
     hasPage,
@@ -148,11 +155,13 @@ export function useDocumentWorkspace(
   const faceRecords = computed(() =>
     (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
+  const candidateOrder = computed(() => toValue(candidateSort))
   const onPageEntityQuery = useEntityListQuery(
     computed(() => ({
       ...toValue(evidence),
       'filter.source_id': [sourceId.value],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      ...(candidateOrder.value && listSortParams(candidateOrder.value)),
       limit: 100,
     })),
     hasPage,
@@ -281,7 +290,11 @@ export function useDocumentWorkspace(
   )
   const searchEnabled = computed(() => Boolean(searchParams.value))
   const candidateSearchQuery = useEntitySearchQuery(
-    computed(() => ({ ...(searchParams.value ?? { limit: 0 }), ...toValue(evidence) })),
+    computed(() => ({
+      ...(searchParams.value ?? { limit: 0 }),
+      ...toValue(evidence),
+      ...(candidateOrder.value && sortParams(candidateOrder.value)),
+    })),
     computed(() => searchEnabled.value && toValue(evidenceValid)),
   )
   const candidateMatches = computed(() =>

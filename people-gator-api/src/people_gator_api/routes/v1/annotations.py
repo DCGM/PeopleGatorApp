@@ -17,7 +17,9 @@ from people_gator_api.schemas.faces import (
 )
 from people_gator_api.schemas.sources import GenericSourceLookupRequest
 from people_gator_api.routes.v1.query_dependencies import (
+    DEFAULT_SORT,
     FaceListFilterDependency,
+    FaceListSortDependency,
     ListRequestDependency,
 )
 from people_gator_api.services.auth_service import (
@@ -41,6 +43,7 @@ async def list_faces_route(
     user: BrowseActorDependency,
     filter: FaceListFilterDependency,
     list_request: ListRequestDependency,
+    sort: FaceListSortDependency = DEFAULT_SORT,
 ) -> FaceListResponse:
     del user
     try:
@@ -50,8 +53,12 @@ async def list_faces_route(
                 limit=list_request.limit,
                 return_total_count=list_request.return_total_count,
                 cursor=list_request.cursor,
+                sort=sort.sort,
+                sort_direction=sort.sort_direction,
             )
         )
+    except NotImplementedError as exc:
+        raise_api_error(501, "unsupported_operation", str(exc))
     except ValueError as exc:
         raise_api_error(422, "invalid_query", str(exc))
 

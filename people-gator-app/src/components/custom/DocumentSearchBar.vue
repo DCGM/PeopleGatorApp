@@ -2,7 +2,9 @@
 import EvidenceFilterControls from './EvidenceFilterControls.vue'
 import EvidenceFilterTags from './EvidenceFilterTags.vue'
 import EntityLinkStateFilter from './EntityLinkStateFilter.vue'
-import type { EntityLinkState } from '@/client'
+import type { EntityLinkState, PageSortField } from '@/client'
+import SortControl from './SortControl.vue'
+import type { SortOption, SortState } from '@/lib/sorting'
 const linkStates = defineModel<EntityLinkState[]>('linkStates', { default: () => [] })
 import { computed } from 'vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
@@ -16,7 +18,9 @@ const props = defineProps<{
   documentId?: string
   resultCount: number
   hasMoreResults?: boolean
+  sortOptions?: SortOption<PageSortField>[]
 }>()
+const sort = defineModel<SortState<PageSortField>>('sort')
 
 const emit = defineEmits<{ removeScope: [key: 'library' | 'document'] }>()
 const searchTerm = defineModel<string>('searchTerm', { required: true })
@@ -67,6 +71,7 @@ function remove(chip: { key: string; value: string }) {
         { value: 'mentions', label: 'Contains mentions' },
       ]"
     />
+    <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
   </SearchFilterPanel>
   <EvidenceFilterTags hide-state :additional-filters="active" @remove-additional="remove" />
 </template>

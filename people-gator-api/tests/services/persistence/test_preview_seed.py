@@ -89,8 +89,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (9, 28, 16)
-    assert len(result.documents) == 17 and len(result.pages) == 41
+    assert await counts(database) == (10, 32, 22)
+    assert len(result.documents) == 19 and len(result.pages) == 45
     assert len(result.users) == 3 and len(result.api_keys) == 2
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -240,7 +240,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (9, 28, 16)
+    assert await counts(database) == (10, 32, 22)
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -262,7 +262,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (10, 28, 16)
+    assert await counts(database) == (11, 32, 22)
 
 
 @pytest.mark.asyncio
@@ -286,8 +286,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 9 and len(result.faces) == 28
-    assert await counts(database) == (9, 28, 16)
+    assert len(result.entities) == 10 and len(result.faces) == 32
+    assert await counts(database) == (10, 32, 22)
 
 
 @pytest.mark.asyncio
@@ -307,7 +307,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (8, 27, 15)
+    assert await counts(database) == (9, 31, 21)
 
 
 @pytest.mark.asyncio
@@ -2174,6 +2174,70 @@ async def test_legacy_portrait_upgrade_state_moves_out_of_identity_manifest(seed
     assert set(json.loads(await filesystem.read_bytes(preview.MANIFEST_KEY))) == {'entities', 'faces', 'mentions'}
     moved = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
     assert moved.thumbnail['person-portrait-v1'].complete
+
+
+@pytest.mark.asyncio
+async def test_sorting_scenario_orders_groups_and_survives_reruns(seed_target):
+    """Issue #33: the preview demonstrates sorting through repositories, not counts."""
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.schemas.mentions import TextMentionGroupListRequest, TextMentionListFilter
+    from people_gator_api.schemas.sources import DocumentListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    person = seed.entities["sorting"]
+    for key in ("sorting-documents", "sorting-people", "sorting-scans", "sorting-faces",
+                "sorting-mention-groups", "sorting-similar-faces", "sorting-document-names"):
+        assert key in seed.filter_examples
+    assert parse_qs(urlsplit(seed.filter_examples["sorting-mention-groups"]).query) == {
+        "tab": ["mentions"], "mention_view": ["groups"], "group_sort": ["count"]}
+
+    # Faces sort by confidence across pages; unassigned similar evidence stays separate.
+    faces = await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(entity_id=[person]), sort="confidence", sort_direction="desc"))
+    assert [face.confidence for face in faces.items] == [0.88, 0.75, 0.62]
+    states = await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(entity_id=[person]), sort="link_state"))
+    assert [face.entity_link_state.value for face in states.items] == ["verified", "manual", "automatic"]
+
+    # Exact recorded text stays distinct; counts cover every matching occurrence.
+    groups = await db.text_mentions.list_groups(TextMentionGroupListRequest(
+        limit=10, return_total_count=True, filter_=TextMentionListFilter(entity_id=[person]),
+        sort="count"))
+    assert [(group.name, group.occurrence_count) for group in groups.items] == [
+        ("Marta Řádková", 3), ("M. Řádková", 1), ("MARTA ŘÁDKOVÁ", 1), ("Marta Radkova", 1)]
+    occurrences = await db.text_mentions.list(TextMentionListRequest(
+        limit=1, return_total_count=True, sort="source",
+        filter_=TextMentionListFilter(entity_id=[person], name=["Marta Řádková"])))
+    assert occurrences.total_count == 3 and occurrences.cursor
+
+    # Accent/case name variants sort adjacently; uneven page counts tie-break by ID.
+    documents = await db.sources.list_documents(DocumentListRequest(
+        limit=10, sort="name", filter_=DocumentListFilter(document_id=[
+            next(item.document_id for item in DOCUMENTS if item.key == key)
+            for key in ("sorting-ledger", "sorting-notes")])))
+    # "Ř" folds to "r", so the accented ledger precedes "notes" instead of following "z".
+    assert [item.name for item in documents.items] == ["Řádková ledger", "radkova notes"]
+    pages = await db.sources.list_documents(DocumentListRequest(
+        limit=100, sort="page_count", filter_=DocumentListFilter(library=["preview-nlk"])))
+    assert pages.items[0].document_id == next(
+        item.document_id for item in DOCUMENTS if item.key == "sorting-ledger")
+
+    # Similar-face discovery sorts its bounded candidate set, not only a loaded page.
+    similar = await db.faces.search(SearchFacesRequest(
+        limit=100, query=QueryBase(face_id=[seed.faces["sorting-manual"]], face_embedding_model=MODEL),
+        sort="confidence", sort_direction="desc"))
+    confidences = [face.confidence for face in similar.items]
+    assert confidences == sorted(confidences, reverse=True)
+    assert seed.faces["sorting-similar"] in {face.detection_id for face in similar.items}
+
+    # Reviewer edits and checkpointed identities survive a rerun.
+    reviewed = await db.faces.patch(seed.faces["sorting-automatic"],
+                                    FacePatchRequest(entity_id=None), GenericActor(user_id=seed.users["reviewer"]))
+    again = await preview.seed_preview(db, filesystem)
+    assert again.faces == seed.faces and again.mentions == seed.mentions
+    stored = await db.faces.get(seed.faces["sorting-automatic"])
+    assert stored.entity_id is None and stored.last_touched_at == reviewed.last_touched_at
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,15 @@
 """Backend-neutral persistence behavior for PostgreSQL and Weaviate.
 
-Repository methods are asynchronous and operate on API schemas only. Ordinary
-list results are ordered by object UUID ascending; search results are ordered by
-score descending and UUID ascending. Cursors are opaque backend-defined strings
-and exclusive. An unknown cursor or a cursor produced by different query inputs
-is invalid.
+Repository methods are asynchronous and operate on API schemas only. Without
+an explicit sort, ordinary list results are ordered by object UUID ascending and
+search results by score descending and UUID ascending. Requests may name one
+allowlisted resource sort field and direction (``schemas.sorting``); the order
+applies to the complete matching (or bounded search-candidate) set before
+pagination, places unknown values last in both directions and ends with the
+canonical UUID ascending. A backend that cannot honour a requested sort raises
+NotImplementedError instead of silently ignoring it. Cursors are opaque
+backend-defined strings and exclusive. An unknown cursor or a cursor produced by
+different query inputs, including a different sort, is invalid.
 
 Filter fields are combined with logical AND and values inside a filter list with
 logical OR. Empty filter lists are invalid. When requested, total_count counts
@@ -118,6 +123,8 @@ from people_gator_api.schemas.mentions import (
     TextMentionPatchRequest,
     TextMentionPatchBatchItem,
     TextMentionListRequest,
+    TextMentionGroupListRequest,
+    TextMentionGroupListResponse,
     TextMentionListResponse,
     TextMentionResponse,
 )
@@ -922,6 +929,19 @@ class TextMentionRepository(ABC):
         :return: The list of text mentions matching the query.
         :rtype: TextMentionListResponse
         """
+
+    async def list_groups(
+        self, query: TextMentionGroupListRequest
+    ) -> TextMentionGroupListResponse:
+        """
+        Group the complete filtered mention set by exact recorded text.
+
+        Text is never normalized for grouping: spelling, case, accents and
+        punctuation variants form separate groups. Counts cover every matching
+        occurrence regardless of pagination. Backends without grouping support
+        raise NotImplementedError rather than approximating it.
+        """
+        raise NotImplementedError("mention grouping is not supported by this backend")
 
     @abstractmethod
     async def create(

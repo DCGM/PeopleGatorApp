@@ -23,6 +23,9 @@ from people_gator_api.schemas.mentions import (
     TextMentionPatchBatchItem,
     TextMentionPatchRequest,
     TextMentionResponse,
+    TextMentionGroup,
+    TextMentionGroupListRequest,
+    TextMentionGroupListResponse,
 )
 from people_gator_api.persistence.postgres.models import (
     Entity,
@@ -34,14 +37,26 @@ from people_gator_api.persistence.postgres.models import (
 from people_gator_api.persistence.postgres.utils import (
     commit,
     ensure_ids,
-    validate_cursor,
     cursor_fingerprint,
-    decode_cursor,
-    next_cursor,
     mention_response,
     mention_filters,
 )
 
+from people_gator_api.schemas.sorting import SortDirection
+from .sorting import (
+    Builders,
+    SortKey,
+    SortSpec,
+    after_predicate,
+    annotation_builders,
+    build_spec,
+    decode_keyset,
+    keyset_page,
+    order_by,
+    sort_columns,
+    with_sort_joins,
+    text_keys,
+)
 from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
 
 class PostgresTextMentionRepository(TextMentionRepository):
@@ -64,11 +79,19 @@ class PostgresTextMentionRepository(TextMentionRepository):
         mention = (await self._load_many([mention_id])).get(mention_id)
         return mention_response(mention) if mention is not None else None
 
+    @staticmethod
+    def _sort_spec(field: str | None, direction: SortDirection) -> SortSpec:
+        builders: Builders = {
+            **annotation_builders(TextMention),
+            "text": lambda desc: text_keys(TextMention.mention_normalized, TextMention.mention, desc),
+        }
+        return build_spec(field, direction, TextMention.id, builders, "mention_id")
+
     async def list(self, query: TextMentionListRequest) -> TextMentionListResponse:
         filters = mention_filters(query.filter_)
         fingerprint = cursor_fingerprint(query)
-        cursor_id = decode_cursor(query.cursor, fingerprint)
-        await validate_cursor(self._session, TextMention, cursor_id, filters)
+        spec = self._sort_spec(*query.effective_sort())
+        after = decode_keyset(query.cursor, spec, fingerprint)
         total = None
         if query.return_total_count:
             total = (
@@ -80,27 +103,76 @@ class PostgresTextMentionRepository(TextMentionRepository):
         if query.limit == 0:
             return TextMentionListResponse(items=[], limit=0, total_count=total)
         page_filters = [*filters]
-        if cursor_id is not None:
-            page_filters.append(TextMention.id > cursor_id)
-        rows = list(
-            await self._session.scalars(
-                select(TextMention)
-                .where(*page_filters)
-                .order_by(TextMention.id)
-                .limit(query.limit + 1)
-            )
+        if after is not None:
+            page_filters.append(after_predicate(spec, after))
+        result = await self._session.execute(
+            with_sort_joins(select(TextMention, *sort_columns(spec)), spec)
+            .where(*page_filters)
+            .order_by(*order_by(spec))
+            .limit(query.limit + 1)
         )
-        page, cursor = next_cursor(
-            rows,
-            query.limit,
-            TextMention.id,
-            fingerprint,
-        )
+        rows = [(row[0], tuple(row[1:])) for row in result.all()]
+        page, cursor = keyset_page(rows, query.limit, spec, fingerprint)
         return TextMentionListResponse(
             items=[mention_response(row) for row in page],
             limit=query.limit,
             total_count=total,
             cursor=cursor,
+        )
+
+    async def list_groups(self, query: TextMentionGroupListRequest) -> TextMentionGroupListResponse:
+        filters = mention_filters(query.filter_)
+        fingerprint = cursor_fingerprint(query)
+        grouped = (
+            select(
+                TextMention.mention.label("name"),
+                func.min(TextMention.mention_normalized).label("name_normalized"),
+                func.count(TextMention.id).label("occurrence_count"),
+                func.max(TextMention.last_touched_at).label("last_touched_at"),
+            )
+            .where(*filters)
+            .group_by(TextMention.mention)
+            .subquery("mention_groups")
+        )
+        field, direction = query.effective_sort()
+        descending = direction == SortDirection.DESC
+        builders: Builders = {
+            "text": lambda desc: [SortKey(grouped.c.name_normalized.collate("C"), "text", desc)],
+            "count": lambda desc: [SortKey(grouped.c.occurrence_count, "number", desc)],
+            "last_touched_at": lambda desc: [SortKey(grouped.c.last_touched_at, "datetime", desc)],
+        }
+        keys = builders[field](descending) if field is not None else builders["text"](False)
+        # Exact recorded text identifies a group and is its canonical tie-breaker.
+        exact_descending = descending if field in (None, "text") else False
+        spec = SortSpec(
+            f"{field or 'default'}:{direction.value}",
+            (*keys, SortKey(grouped.c.name.collate("C"), "text", exact_descending)),
+        )
+        after = decode_keyset(query.cursor, spec, fingerprint)
+        total = None
+        if query.return_total_count:
+            total = await self._session.scalar(select(func.count()).select_from(grouped)) or 0
+        if query.limit == 0:
+            return TextMentionGroupListResponse(items=[], limit=0, total_count=total)
+        statement = select(grouped, *sort_columns(spec)).order_by(*order_by(spec)).limit(query.limit + 1)
+        if after is not None:
+            statement = statement.where(after_predicate(spec, after))
+        result = await self._session.execute(statement)
+        width = len(grouped.c)
+        rows = [
+            (
+                TextMentionGroup(
+                    name=row.name,
+                    occurrence_count=row.occurrence_count,
+                    last_touched_at=row.last_touched_at,
+                ),
+                tuple(row[width:]),
+            )
+            for row in result.all()
+        ]
+        page, cursor = keyset_page(rows, query.limit, spec, fingerprint)
+        return TextMentionGroupListResponse(
+            items=page, limit=query.limit, total_count=total, cursor=cursor
         )
 
     @staticmethod

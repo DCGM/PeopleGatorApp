@@ -89,4 +89,30 @@ describe('page annotation activity', () => {
     expect(router.currentRoute.value.query.origin_return).toBe('/people?q=Irena')
     wrapper.unmount()
   })
+  it('combines day and edit order in one select', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: PageActivityPanel }],
+    })
+    await router.push({ path: '/', query: { panel: 'activity' } })
+    const wrapper = mount(PageActivityPanel, {
+      props: { sourceId: 'page' },
+      global: { plugins: [router] },
+    })
+    await flushPromises()
+    expect(wrapper.get('[aria-label="Sort activity"]').text()).toContain(
+      'Days newest first · Edits newest first',
+    )
+    expect(wrapper.findAll('button[aria-label*="order:"]')).toHaveLength(0)
+    wrapper.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', 'asc:asc')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({
+      activity_order: 'asc',
+      activity_items: 'asc',
+    })
+    expect(wrapper.get('[aria-label="Sort activity"]').text()).toContain(
+      'Days oldest first · Edits oldest first',
+    )
+    wrapper.unmount()
+  })
 })

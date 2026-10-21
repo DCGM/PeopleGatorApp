@@ -11,8 +11,16 @@ import FilterSingleSelect from './FilterSingleSelect.vue'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { type DocumentFilters } from '@/viewmodels/document-filters'
 import { linkStateVisuals } from '@/lib/entity-links'
+import type { DocumentSortField } from '@/client'
+import SortControl from './SortControl.vue'
+import type { SortOption, SortState } from '@/lib/sorting'
 
-defineProps<{ resultCount: number; filterError?: string }>()
+defineProps<{
+  resultCount: number
+  filterError?: string
+  sortOptions?: SortOption<DocumentSortField>[]
+}>()
+const sort = defineModel<SortState<DocumentSortField>>('sort')
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const filters = defineModel<DocumentFilters>('filters', { required: true })
 function field<K extends keyof DocumentFilters>(key: K) {
@@ -149,6 +157,7 @@ function remove(chip: ActiveFilter) {
       @load-more="apiKeys.loadMore()"
       @retry="apiKeys.retry()"
     />
+    <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
   </SearchFilterPanel>
   <p v-if="filterError" role="alert">{{ filterError }}</p>
   <EvidenceFilterTags hide-state :additional-filters="active" @remove-additional="remove" />
