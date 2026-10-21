@@ -23,7 +23,7 @@ const breadcrumbs = computed(() => {
   const items = [
     {
       label: 'PeopleGator',
-      to: { name: 'document-search' } as RouteLocationRaw,
+      to: { name: 'document-list' } as RouteLocationRaw,
     },
   ]
   if (route.name === 'person-detail') {
@@ -109,7 +109,7 @@ const isPeopleRoute = computed(
   >
     <div class="flex shrink-0 items-center gap-2">
       <RouterLink
-        :to="{ name: 'document-search' }"
+        :to="{ name: 'document-list' }"
         aria-label="PeopleGator"
         class="z-20 flex size-12 shrink-0 items-center justify-center bg-background"
       >
