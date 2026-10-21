@@ -34,6 +34,7 @@ import base64
 import binascii
 import hashlib
 import json
+import math
 import uuid
 from asyncio import to_thread
 from collections.abc import Iterable, Sequence
@@ -138,6 +139,11 @@ def cosine_distance(embedding: object, query_vector: object) -> ColumnElement[fl
     return type_cast(Any, embedding).cosine_distance(query_vector)
 
 
+def usable_cosine_vector(vector: Sequence[float]) -> bool:
+    """A finite, nonzero vector is required for defined cosine similarity."""
+    return bool(vector) and all(math.isfinite(value) for value in vector) and math.hypot(*vector) > 0
+
+
 @dataclass(frozen=True)
 class FaceQueryRepresentative:
     query_id: uuid.UUID
@@ -158,6 +164,8 @@ async def representative_face_vectors(
     distribution for average aggregation.
     """
     items = list(vectors.items())
+    if any(not usable_cosine_vector(vector) for _, vector in items):
+        raise ValueError("reference face has an unusable cosine embedding")
     if len(items) <= FACE_SEARCH_REPRESENTATIVE_LIMIT:
         return [
             FaceQueryRepresentative(query_id, vector, 1) for query_id, vector in items
@@ -325,7 +333,7 @@ def face_score_query(
     nearest = face_target_select(
         target,
         target_id.label("candidate_id"),
-    ).where(*filters, model_filter)
+    ).where(*filters, model_filter, candidate_distance.between(0.0, 2.0))
     if excluded_face_ids:
         nearest = nearest.where(Face.id.not_in(excluded_face_ids))
     nearest = (
@@ -351,6 +359,10 @@ def face_score_query(
     per_representative = per_representative.where(
         *filters,
         model_filter,
+        # PostgreSQL orders NaN above finite values; max(1 - NaN) otherwise
+        # poisons an entity even when another linked face has a useful match.
+        # Exclude undefined distances rather than inventing a similarity score.
+        distance.between(0.0, 2.0),
         target_id.in_(select(candidates.c.candidate_id)),
     )
     if excluded_face_ids:
@@ -943,6 +955,9 @@ async def reference_vectors(
         message = f"reference face does not exist or lacks embedding '{model_stub}': "
         message += str(missing[0])
         raise ValueError(message)
+    for face_id, vector in vectors.items():
+        if not usable_cosine_vector(vector):
+            raise ValueError(f"reference face has an unusable cosine embedding '{model_stub}': {face_id}")
     return vectors, model.embedding_dim
 
 
