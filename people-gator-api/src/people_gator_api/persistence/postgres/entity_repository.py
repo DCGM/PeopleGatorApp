@@ -289,6 +289,9 @@ class PostgresEntityRepository(EntityRepository):
                         .order_by(Entity.id)
                         .with_for_update()
                         .options(selectinload(Entity.aliases))
+                        # Locked rows must reflect committed portrait state, not
+                        # objects cached earlier in this session.
+                        .execution_options(populate_existing=True)
                     )
                 ).all()
             }

@@ -33,12 +33,18 @@ THUMBNAIL_DDL = (
     """CREATE OR REPLACE FUNCTION pg_demo_repair_thumbnail(owner_id uuid) RETURNS void
     LANGUAGE plpgsql AS $$ BEGIN
         UPDATE pg_demo_entities e SET thumbnail_face_id = NULL, thumbnail_mode = 'automatic'
-        WHERE e.id = owner_id AND e.kind = 'person' AND (
-            e.thumbnail_face_id IS NULL OR NOT EXISTS (
+        WHERE e.id = owner_id AND e.kind = 'person' AND CASE
+            -- Skip owners already resolved: row-level reassignment calls this
+            -- once per moved face, and an empty owner stays without a portrait.
+            WHEN e.thumbnail_face_id IS NULL THEN EXISTS (
+                SELECT 1 FROM pg_demo_faces f JOIN pg_demo_image_occurrences io ON io.id = f.id
+                WHERE io.entity_id = e.id
+            )
+            ELSE NOT EXISTS (
                 SELECT 1 FROM pg_demo_faces f JOIN pg_demo_image_occurrences io ON io.id = f.id
                 WHERE f.id = e.thumbnail_face_id AND io.entity_id = e.id
             )
-        );
+        END;
     END $$""",
     """CREATE OR REPLACE FUNCTION pg_demo_thumbnail_face_insert() RETURNS trigger
     LANGUAGE plpgsql AS $$ BEGIN

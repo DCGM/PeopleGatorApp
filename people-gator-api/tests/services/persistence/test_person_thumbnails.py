@@ -314,3 +314,42 @@ async def test_bulk_face_insert_repairs_each_owner_once(portraits):
         selected = (await get(r, owner)).thumbnail_face_id
         assert selected is not None
         assert (await r.db.faces.get(selected)).entity_id == owner.entity_id
+
+
+@pytest.mark.asyncio
+async def test_merge_preserves_manual_choice_made_after_session_cached_target(portraits):
+    from people_gator_api.persistence.postgres.models import Entity
+    r = portraits
+    # Keep a strong reference: the identity map retains this portrait-less state.
+    stale = await r.session.get(Entity, r.person.entity_id)
+    assert stale is not None and stale.thumbnail_face_id is None
+    await r.session.commit()
+    async with r.sessions() as session:
+        other = SimpleNamespace(**{**vars(r), "db": postgres_database(session)})
+        await face(other, r.person.entity_id, uuid.UUID(int=10))
+        chosen = await face(other, r.person.entity_id, uuid.UUID(int=20))
+        await face(other, r.other.entity_id, uuid.UUID(int=5))
+        await choose(other, chosen.detection_id)
+    result = await r.db.entities.merge(r.person.entity_id, r.other.entity_id, context=r.actor)
+    assert result.merged_entity.thumbnail_face_id == chosen.detection_id
+    assert result.merged_entity.thumbnail_mode == "manual"
+
+
+@pytest.mark.asyncio
+async def test_bulk_reassignment_rewrites_emptied_owner_once(portraits):
+    r = portraits
+    target = await face(r, r.person.entity_id)
+    await choose(r, target.detection_id)
+    for _ in range(5):
+        await face(r, r.other.entity_id)
+    await r.session.execute(text("CREATE TEMP TABLE portrait_writes (id uuid)"))
+    await r.session.execute(text("""CREATE FUNCTION count_portrait_writes() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN INSERT INTO portrait_writes VALUES (OLD.id); RETURN NULL; END $$"""))
+    await r.session.execute(text("""CREATE TRIGGER count_portrait_writes AFTER UPDATE ON pg_demo_entities
+        FOR EACH ROW EXECUTE FUNCTION count_portrait_writes()"""))
+    # The merge moves every source face in one UPDATE; row triggers repair both
+    # owners per face. The emptied source is written once, the valid target never.
+    await r.db.entities.merge(r.person.entity_id, r.other.entity_id, context=r.actor)
+    writes = dict((await r.session.execute(text(
+        "SELECT id, count(*) FROM portrait_writes GROUP BY id"))).all())
+    assert writes.get(r.other.entity_id) == 1
