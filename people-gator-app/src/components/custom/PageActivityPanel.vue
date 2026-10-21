@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide } from '@lucide/vue'
+import { directionLabel, type SortDirection } from '@/lib/sorting'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ActiveFilters from './ActiveFilters.vue'
 import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
@@ -15,7 +17,25 @@ const { filters } = useEvidenceFilters()
 const userSearch = ref('')
 const users = usePeopleFilterOptions('user', userSearch)
 const mode = computed(() => (route.query.activity_group === 'user' ? 'user' : 'time'))
-const groups = computed(() => activityGroups(items.value, mode.value))
+// Group and item order are independent, shareable URL choices.
+function direction(value: unknown, fallback: SortDirection): SortDirection {
+  return value === 'asc' || value === 'desc' ? value : fallback
+}
+const groupDefault = computed<SortDirection>(() => (mode.value === 'user' ? 'asc' : 'desc'))
+const order = computed(() => ({
+  groups: direction(route.query.activity_order, groupDefault.value),
+  items: direction(route.query.activity_items, 'desc'),
+}))
+const groupKind = computed(() => (mode.value === 'user' ? 'text' : 'time'))
+function flip(
+  key: 'activity_order' | 'activity_items',
+  current: SortDirection,
+  fallback: SortDirection,
+) {
+  const next = current === 'asc' ? 'desc' : 'asc'
+  void router.push({ query: { ...route.query, [key]: next === fallback ? undefined : next } })
+}
+const groups = computed(() => activityGroups(items.value, mode.value, order.value, label))
 const tags = computed(() => [
   ...(['touchedFrom', 'touchedTo'] as const).flatMap((key) =>
     filters.value[key]
@@ -94,7 +114,11 @@ function clear() {
       @update:model-value="
         (value) =>
           router.push({
-            query: { ...route.query, activity_group: value === 'user' ? 'user' : undefined },
+            query: {
+              ...route.query,
+              activity_group: value === 'user' ? 'user' : undefined,
+              activity_order: undefined,
+            },
           })
       "
     >
@@ -103,6 +127,30 @@ function clear() {
         ><TabsTrigger value="user">By user</TabsTrigger></TabsList
       >
     </Tabs>
+    <div class="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        :aria-label="`${mode === 'user' ? 'User' : 'Day'} order: ${directionLabel(groupKind, order.groups)}. Change to ${directionLabel(groupKind, order.groups === 'asc' ? 'desc' : 'asc')}`"
+        @click="flip('activity_order', order.groups, groupDefault)"
+      >
+        <ArrowUpNarrowWide v-if="order.groups === 'asc'" aria-hidden="true" />
+        <ArrowDownWideNarrow v-else aria-hidden="true" />
+        {{ mode === 'user' ? 'Users' : 'Days' }}: {{ directionLabel(groupKind, order.groups) }}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        :aria-label="`Edit order: ${directionLabel('time', order.items)}. Change to ${directionLabel('time', order.items === 'asc' ? 'desc' : 'asc')}`"
+        @click="flip('activity_items', order.items, 'desc')"
+      >
+        <ArrowUpNarrowWide v-if="order.items === 'asc'" aria-hidden="true" />
+        <ArrowDownWideNarrow v-else aria-hidden="true" />
+        Edits: {{ directionLabel('time', order.items) }}
+      </Button>
+    </div>
     <ActiveFilters
       clear-label="Clear activity filters"
       :filters="tags"

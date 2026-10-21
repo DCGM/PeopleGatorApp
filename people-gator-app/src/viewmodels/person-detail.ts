@@ -3,7 +3,7 @@ import { useQueries } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 
 import { linkMetadata } from '@/lib/entity-links'
-import type { EntityLinkState, PageResponse } from '@/client'
+import type { EntityLinkState, FaceSortField, PageResponse, TextMentionSortField } from '@/client'
 import type {
   PersonIdentifiers,
   PersonFace,
@@ -18,6 +18,9 @@ import { useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
 import { useTextMentionListQuery } from '@/query/text-mentions'
+import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
+import { FACE_DEFAULT, MENTION_DEFAULT } from '@/viewmodels/sort-options'
+import { useMentionViews } from '@/viewmodels/person-mentions'
 
 function percentage(value: number) {
   return Math.round(value <= 1 ? value * 100 : value)
@@ -31,6 +34,9 @@ export function usePersonDetail(
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
   matchedFaceIds: MaybeRefOrGetter<string[]> = [],
+  faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,
+  mentionSort: MaybeRefOrGetter<SortState<TextMentionSortField>> = MENTION_DEFAULT,
+  mentionsEnabled: MaybeRefOrGetter<boolean> = true,
 ) {
   const entityQuery = useEntityQuery(personId)
   const patchEntity = usePatchEntityMutation()
@@ -52,11 +58,19 @@ export function usePersonDetail(
   }))
 
   const hasPerson = computed(() => Boolean(toValue(personId)))
+  // The same evidence scope serves the flat list, the exact-appearance groups
+  // and each group's occurrences, so counts and members always agree.
+  const mentionFilters = computed(() => ({
+    ...toValue(evidence),
+    'filter.entity_id': [toValue(personId)],
+    'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+  }))
   const faceQuery = useFaceListQuery(
     computed(() => ({
       ...toValue(evidence),
       'filter.entity_id': [toValue(personId)],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      ...listSortParams(toValue(faceSort)),
       limit: 100,
       return_total_count: true,
     })),
@@ -64,13 +78,16 @@ export function usePersonDetail(
   )
   const mentionQuery = useTextMentionListQuery(
     computed(() => ({
-      ...toValue(evidence),
-      'filter.entity_id': [toValue(personId)],
-      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
+      ...mentionFilters.value,
+      ...sortParams(toValue(mentionSort)),
       limit: 100,
       return_total_count: true,
     })),
-    computed(() => hasPerson.value && toValue(evidenceValid)),
+    computed(() => hasPerson.value && toValue(evidenceValid) && toValue(mentionsEnabled)),
+  )
+  const mentionTotal = useTextMentionListQuery(
+    computed(() => ({ ...mentionFilters.value, limit: 0, return_total_count: true })),
+    computed(() => hasPerson.value && toValue(evidenceValid) && !toValue(mentionsEnabled)),
   )
 
   const matchedFaces = useFaceListQuery(
@@ -81,6 +98,16 @@ export function usePersonDetail(
       limit: 100,
     })),
     computed(() => hasPerson.value && toValue(evidenceValid) && toValue(matchedFaceIds).length > 0),
+  )
+  // Witnesses from the originating search are pinned first and labelled; the
+  // remaining faces follow the selected order.
+  const matchedIds = computed(
+    () =>
+      new Set(
+        (matchedFaces.data.value?.pages ?? [])
+          .flatMap((page) => page.items)
+          .map((face) => face.detection_id),
+      ),
   )
   const faceRecords = computed(() => [
     ...new Map(
@@ -111,12 +138,7 @@ export function usePersonDetail(
   const mentionRecords = computed(() =>
     (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
-  const sourceIds = computed(() => [
-    ...new Set([
-      ...faceRecords.value.map((face) => face.source_id),
-      ...mentionRecords.value.map((mention) => mention.source_id),
-    ]),
-  ])
+  const sourceIds = computed(() => [...new Set(faceRecords.value.map((face) => face.source_id))])
 
   const pageQueries = useQueries({
     queries: computed(() =>
@@ -203,6 +225,7 @@ export function usePersonDetail(
       return [
         {
           ...linkMetadata(face),
+          matched: matchedIds.value.has(face.detection_id),
           metadata: face,
           sourceId: face.source_id,
           sourceLoading:
@@ -224,28 +247,7 @@ export function usePersonDetail(
     }),
   )
 
-  const mentions = computed<PersonMention[]>(() =>
-    mentionRecords.value.flatMap((mention) => {
-      const page = pages.value.get(mention.source_id)
-      return [
-        {
-          ...linkMetadata(mention),
-          metadata: mention,
-          sourceId: mention.source_id,
-          sourceLoading:
-            pageQueries.value[sourceIds.value.indexOf(mention.source_id)]?.isPending ?? false,
-          id: mention.mention_id,
-          excerpt: mention.context || mention.name,
-          matchedText: mention.name,
-          library: page?.library ?? 'Source unavailable',
-          documentId: page?.document_id ?? mention.source_id,
-          documentTitle: page?.document_id ?? mention.source_id,
-          pageId: page?.page_id ?? '',
-          pageLabel: page?.page_id ?? '',
-        },
-      ]
-    }),
-  )
+  const mentions = useMentionViews(mentionRecords)
 
   function updateProfile(nextProfile: PersonProfile) {
     patchEntity.mutate({
@@ -301,7 +303,12 @@ export function usePersonDetail(
         entityQuery.isPending.value || faceQuery.isPending.value || mentionQuery.isPending.value,
     ),
     libraryCount: computed(() => new Set(faces.value.map((face) => face.library)).size),
-    mentionCount: computed(() => mentionQuery.data.value?.pages[0]?.total_count ?? 0),
+    mentionCount: computed(
+      () =>
+        (toValue(mentionsEnabled) ? mentionQuery : mentionTotal).data.value?.pages[0]
+          ?.total_count ?? 0,
+    ),
+    mentionFilters,
     mentions,
     // Weaviate stores no portrait; PostgreSQL leaves none only without linked
     // faces. Fall back to the first loaded face once the entity is known.

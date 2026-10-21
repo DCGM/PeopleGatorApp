@@ -14,6 +14,13 @@ import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/viewmodels/people-search'
 import { readPeopleFilters, peopleFiltersUrl } from '@/viewmodels/people-filters'
 import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
+import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
+import {
+  PEOPLE_BROWSE_DEFAULT,
+  PEOPLE_SORTS,
+  RELEVANCE,
+  scoredOptions,
+} from '@/viewmodels/sort-options'
 
 const linkStates = useLinkStateFilter()
 const route = useRoute()
@@ -56,6 +63,12 @@ const processingFilters = computed({
   },
 })
 
+const searching = computed(() => Boolean(searchTerm.value.trim()))
+const sortOptions = computed(() => scoredOptions(PEOPLE_SORTS, searching.value))
+const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
+  searching.value ? RELEVANCE : PEOPLE_BROWSE_DEFAULT,
+)
+
 const {
   error,
   filterError,
@@ -73,6 +86,7 @@ const {
   linkStates,
   evidence.params,
   computed(() => !evidence.error.value),
+  sort,
 )
 </script>
 
@@ -88,6 +102,8 @@ const {
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
       v-model:processing-filters="processingFilters"
+      v-model:sort="sort"
+      :sort-options="sortOptions"
       :filter-error="filterError"
       :result-count="resultCount"
     />

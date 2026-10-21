@@ -5,8 +5,10 @@ import {
   createTextMentionRouteApiV1TextMentionsPost,
   createTextMentionBatchRouteApiV1TextMentionsBatchPost,
   getTextMentionRouteApiV1TextMentionsMentionIdGet,
+  listTextMentionGroupsRouteApiV1TextMentionGroupsGet,
   listTextMentionsRouteApiV1TextMentionsGet,
   patchTextMentionRouteApiV1TextMentionsMentionIdPatch,
+  type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData,
   type ListTextMentionsRouteApiV1TextMentionsGetData,
   type TextMentionCreateRequest,
 } from '@/client'
@@ -35,6 +37,37 @@ export function useTextMentionListQuery(
     queryFn: ({ pageParam, signal }) =>
       fetchTextMentions(withCursor(toValue(params), pageParam), signal),
     initialPageParam: computed(() => initialCursor(params)),
+    getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
+    enabled: computed(() => toValue(enabled)),
+  })
+}
+
+export type TextMentionGroupParams = NonNullable<
+  ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData['query']
+>
+
+export function fetchTextMentionGroups(params?: TextMentionGroupParams, signal?: AbortSignal) {
+  return responseData(
+    listTextMentionGroupsRouteApiV1TextMentionGroupsGet({
+      query: params,
+      signal,
+      throwOnError: true,
+    }),
+  )
+}
+
+/** Exact recorded-text groups over the complete filtered mention set. */
+export function useTextMentionGroupsQuery(
+  params?: MaybeRefOrGetter<TextMentionGroupParams | undefined>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  const key = computed(() => queryKeys.textMentions.groups(toValue(params)))
+  useFirstPageOnFilterChange(key)
+  return useInfiniteQuery({
+    queryKey: key,
+    queryFn: ({ pageParam, signal }) =>
+      fetchTextMentionGroups(withCursor(toValue(params), pageParam), signal),
+    initialPageParam: null as string | null,
     getNextPageParam: (lastPage, _pages, lastPageParam) => nextCursor(lastPage, lastPageParam),
     enabled: computed(() => toValue(enabled)),
   })

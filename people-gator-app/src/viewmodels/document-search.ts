@@ -1,6 +1,7 @@
 import type { EvidenceQuery } from './evidence-filters'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import type { EntityLinkState, PageResponse } from '@/client'
+import type { EntityLinkState, PageResponse, PageSortField } from '@/client'
+import type { SortState } from '@/lib/sorting'
 
 import { pageContentFilter, type PageContentFilter } from '@/viewmodels/assignment'
 import { usePageResultsQuery } from '@/query/search'
@@ -16,6 +17,7 @@ export function useDocumentSearch(
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
+  sort?: MaybeRefOrGetter<SortState<PageSortField>>,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const contentFilter = computed(() => pageContentFilter(toValue(filter)))
@@ -30,6 +32,7 @@ export function useDocumentSearch(
         ...contentFilter.value,
         ...toValue(evidence),
         limit: pageSize,
+        sort: sort && toValue(sort),
       }
     }),
     evidenceValid,

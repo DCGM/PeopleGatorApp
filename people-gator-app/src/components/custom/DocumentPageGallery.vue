@@ -8,6 +8,9 @@ import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { PageGalleryItem } from '@/viewmodels/document-page-gallery'
+import type { PageSortField } from '@/client'
+import SortControl from './SortControl.vue'
+import type { SortOption, SortState } from '@/lib/sorting'
 
 const props = defineProps<{
   items: PageGalleryItem[]
@@ -17,7 +20,9 @@ const props = defineProps<{
   hasNextPage?: boolean
   isFetchingNextPage?: boolean
   location: (item: PageGalleryItem) => RouteLocationRaw
+  sortOptions?: SortOption<PageSortField>[]
 }>()
+const sort = defineModel<SortState<PageSortField>>('sort')
 
 const emit = defineEmits<{
   'load-more': []
@@ -73,9 +78,18 @@ useIntersectionObserver(sentinel, ([entry]) => {
             · {{ props.totalCount }} {{ props.totalCount === 1 ? 'page' : 'pages' }}
           </span>
         </h2>
-        <p id="document-pages-order" class="text-xs text-muted-foreground">
-          Stable stored order, not physical page sequence
-        </p>
+        <div class="flex flex-wrap items-center gap-2">
+          <p id="document-pages-order" class="text-xs text-muted-foreground">
+            Page IDs are not page numbers
+          </p>
+          <SortControl
+            v-if="sort && sortOptions"
+            v-model="sort"
+            :options="sortOptions"
+            label="Sort pages"
+            size="sm"
+          />
+        </div>
       </div>
       <div v-if="props.error" class="flex flex-wrap items-center gap-2 py-3" role="alert">
         <p class="text-sm text-destructive">Could not load document pages.</p>

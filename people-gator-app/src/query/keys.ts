@@ -38,6 +38,8 @@ export const queryKeys = {
     list: (params?: QueryParams) => ['text-mentions', 'list', params ?? {}] as const,
     infinite: (params?: QueryParams) =>
       ['text-mentions', 'list', 'infinite', params ?? {}] as const,
+    // Groups live under text-mentions so every mention mutation refreshes them.
+    groups: (params?: QueryParams) => ['text-mentions', 'groups', params ?? {}] as const,
     detail: (mentionId: string) => ['text-mentions', 'detail', mentionId] as const,
   },
   sources: {

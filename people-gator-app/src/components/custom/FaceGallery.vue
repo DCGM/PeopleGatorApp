@@ -9,12 +9,17 @@ import type { Face, FaceStatus } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import SortControl from './SortControl.vue'
+import type { FaceSortField } from '@/client'
+import type { SortOption, SortState } from '@/lib/sorting'
 
 const props = defineProps<{
   faces: Face[]
   selectedFaceId: string | null
   loading?: boolean
+  sortOptions?: SortOption<FaceSortField>[]
 }>()
+const sort = defineModel<SortState<FaceSortField>>('sort')
 
 const emit = defineEmits<{
   'reset-filters': []
@@ -104,6 +109,13 @@ watch([() => props.selectedFaceId, faceFilter], scrollSelectedThumbnailIntoView,
             <span class="font-mono opacity-70">{{ faceFilterCount(option.value) }}</span>
           </ToggleGroupItem>
         </ToggleGroup>
+        <SortControl
+          v-if="sort && sortOptions"
+          v-model="sort"
+          :options="sortOptions"
+          label="Sort page faces"
+          size="sm"
+        />
       </div>
 
       <ScrollArea type="always" orientation="horizontal" class="mt-4 w-full">

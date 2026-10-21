@@ -152,6 +152,7 @@ describe('document search and bounded groups', () => {
           query: {
             'filter.library': [library],
             'filter.document_id': ['shared'],
+            sort: 'page_id',
             limit: 4,
             return_total_count: true,
             cursor: null,
@@ -298,6 +299,7 @@ describe('document search and bounded groups', () => {
       'filter.library': ['a'],
       'filter.document_id': ['shared'],
       'filter.entity_link_state': ['verified'],
+      sort: 'page_id',
       limit: 4,
       return_total_count: true,
       cursor: null,

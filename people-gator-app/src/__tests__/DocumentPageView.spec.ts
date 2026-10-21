@@ -191,7 +191,10 @@ describe('document page gallery navigation', () => {
     const wrapper = await mountView()
     const [library, document, page] = mocks.gallery.mock.calls[0]!
     expect([library.value, document.value, page.value]).toEqual(['lib', 'doc', 'one'])
-    expect(mocks.gallery.mock.calls[0]).toHaveLength(3)
+    // Only the route document and the gallery's own order; no evidence filters.
+    const [, , , , order] = mocks.gallery.mock.calls[0]!
+    expect(mocks.gallery.mock.calls[0]).toHaveLength(5)
+    expect(order.value).toEqual({ field: 'page_id', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
     route.query = { person: 'a', line: 'l2', link_state: 'manual' }
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({

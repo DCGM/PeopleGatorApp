@@ -1,7 +1,8 @@
 import type { EvidenceQuery } from './evidence-filters'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-import type { EntityLinkState, DocumentResponse, PageResponse } from '@/client'
+import type { EntityLinkState, DocumentResponse, DocumentSortField, PageResponse } from '@/client'
+import type { SortState } from '@/lib/sorting'
 import { usePageListQuery } from '@/query/media'
 import { useDocumentResultsQuery } from '@/query/search/documents'
 import { documentFiltersQuery, documentFilterError, type DocumentFilters } from './document-filters'
@@ -23,6 +24,7 @@ export function useDocumentList(
   pageSize = 12,
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
+  sort?: MaybeRefOrGetter<SortState<DocumentSortField>>,
 ) {
   const filterError = computed(() => documentFilterError(toValue(filters)))
   const query = useDocumentResultsQuery(
@@ -30,6 +32,7 @@ export function useDocumentList(
       query: toValue(search),
       filters: { ...documentFiltersQuery(toValue(filters)), ...toValue(evidence) },
       limit: pageSize,
+      sort: sort && toValue(sort),
     })),
     computed(() => !filterError.value && toValue(evidenceValid)),
   )
@@ -58,6 +61,8 @@ export function useDocumentGroup(
       'filter.document_id': [toValue(document).document_id],
       ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
       ...toValue(evidence),
+      // The same archive page-ID order as the scan list and gallery for this document.
+      sort: 'page_id' as const,
       limit: Math.min(pageSize, 4),
       return_total_count: true,
     })),

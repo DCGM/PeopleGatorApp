@@ -48,13 +48,13 @@ const sourceTarget = computed(() =>
     :class="selected && 'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'"
     data-person-face-card
   >
-    <Badge
-      v-if="portrait"
-      variant="outline"
-      class="pointer-events-none absolute left-2 top-2 z-20"
-      data-person-portrait
-      >Portrait</Badge
+    <div
+      v-if="portrait || face.matched"
+      class="pointer-events-none absolute left-2 top-2 z-20 flex flex-wrap gap-1"
     >
+      <Badge v-if="portrait" variant="outline" data-person-portrait>Portrait</Badge>
+      <Badge v-if="face.matched" variant="outline" data-person-match>Match</Badge>
+    </div>
     <button
       v-if="selectionEnabled"
       type="button"

@@ -7,10 +7,12 @@ import {
   type EntityLinkState,
   type FoundPage,
   type PageResponse,
+  type PageSortField,
   type SearchPagesGetApiV1SearchPagesGetData,
 } from '@/client'
 import { responseData } from '@/query/api'
 import { queryKeys } from '@/query/keys'
+import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
 import { fetchPages } from '@/query/media'
 import {
   cursorResultPage,
@@ -32,6 +34,7 @@ export type PageResultsParams = EvidenceQuery & {
   'filter.has_mentions'?: boolean
   cursor?: string | null
   limit?: number
+  sort?: SortState<PageSortField>
 }
 
 type PageResultsPage = InfiniteResultPage<PageSearchRecord, string | null>
@@ -92,9 +95,10 @@ export function usePageResultsQuery(
     queryKey: computed(() => {
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
-      const { query: _query, ...rest } = resolvedParams
+      const { query: _query, sort, ...rest } = resolvedParams
       const keyParams = {
         ...rest,
+        ...(sort && (query || sort.field !== 'relevance') && sortParams(sort)),
         ...(resolvedParams['filter.library'] && {
           'filter.library': resolvedParams['filter.library'],
         }),
@@ -119,7 +123,7 @@ export function usePageResultsQuery(
       const resolvedParams = toValue(params)
       const query = resolvedParams.query.trim()
       const pageSize = searchPageSize(resolvedParams.limit)
-      const { query: _query, ...rest } = resolvedParams
+      const { query: _query, sort, ...rest } = resolvedParams
       const filters = {
         ...rest,
         ...(resolvedParams['filter.library'] && {
@@ -138,15 +142,23 @@ export function usePageResultsQuery(
 
       if (query) {
         return fetchPageSearchPage(
-          { 'query.text': [query], ...filters, limit: pageSize, return_total_count: true },
+          {
+            'query.text': [query],
+            ...filters,
+            ...(sort && sortParams(sort)),
+            limit: pageSize,
+            return_total_count: true,
+          },
           pageParam,
           pageSize,
           signal,
         )
       }
 
+      // Relevance requires a score; it is never sent to the ordinary list.
+      const listSort = sort ? listSortParams(sort) : {}
       const response = await fetchPages(
-        { ...filters, limit: pageSize, return_total_count: true, cursor: pageParam },
+        { ...filters, ...listSort, limit: pageSize, return_total_count: true, cursor: pageParam },
         signal,
       )
       return cursorResultPage(response)

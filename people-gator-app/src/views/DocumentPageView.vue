@@ -30,7 +30,22 @@ import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
+import { useRouteSort } from '@/lib/sorting'
 import {
+  CANDIDATE_SORT_KEYS,
+  FACE_DEFAULT,
+  FACE_SORT_KEYS,
+  GALLERY_DEFAULT,
+  GALLERY_SORT_KEYS,
+  GALLERY_SORTS,
+  PEOPLE_BROWSE_DEFAULT,
+  PEOPLE_SORTS,
+  RELEVANCE,
+  WORKSPACE_FACE_SORTS,
+  scoredOptions,
+} from '@/viewmodels/sort-options'
+import {
+  PAGE_GALLERY_BATCH_SIZE,
   pageGalleryQuery,
   useDocumentPageGallery,
   type PageGalleryItem,
@@ -63,6 +78,16 @@ const candidateBrowseMode = ref<CandidateBrowseMode>(
 )
 const candidateSearchResetKey = ref(0)
 const debouncedCandidateTerm = useDebounce(candidateTerm, 250)
+// Faces, gallery pages and candidates keep independent, shareable orders.
+const faceSort = useRouteSort(FACE_SORT_KEYS, WORKSPACE_FACE_SORTS, FACE_DEFAULT)
+const gallerySort = useRouteSort(GALLERY_SORT_KEYS, GALLERY_SORTS, GALLERY_DEFAULT)
+const candidateScored = computed(
+  () => Boolean(debouncedCandidateTerm.value.trim()) || candidateBrowseMode.value === 'face',
+)
+const candidateSortOptions = computed(() => scoredOptions(PEOPLE_SORTS, candidateScored.value))
+const candidateSort = useRouteSort(CANDIDATE_SORT_KEYS, candidateSortOptions, () =>
+  candidateScored.value ? RELEVANCE : PEOPLE_BROWSE_DEFAULT,
+)
 const {
   page,
   annotationsLoading,
@@ -95,9 +120,17 @@ const {
   linkStates,
   evidence.params,
   computed(() => !evidence.error.value),
+  faceSort,
+  candidateSort,
 )
 
-const gallery = useDocumentPageGallery(libraryId, documentId, pageId)
+const gallery = useDocumentPageGallery(
+  libraryId,
+  documentId,
+  pageId,
+  PAGE_GALLERY_BATCH_SIZE,
+  gallerySort,
+)
 function galleryLocation(item: PageGalleryItem) {
   return {
     name: 'document-page',
@@ -568,6 +601,8 @@ onBeforeUnmount(() => {
       :has-next-page="gallery.hasNextPage.value"
       :is-fetching-next-page="gallery.isFetchingNextPage.value"
       :location="galleryLocation"
+      v-model:sort="gallerySort"
+      :sort-options="GALLERY_SORTS"
       @load-more="gallery.loadMore()"
       @retry="gallery.retry()"
     />
@@ -599,6 +634,8 @@ onBeforeUnmount(() => {
       <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
         <FaceGallery
           class="shrink-0 border-l-0"
+          v-model:sort="faceSort"
+          :sort-options="WORKSPACE_FACE_SORTS"
           :faces="faces"
           :selected-face-id="selectedFace?.id ?? null"
           :loading="isLoading"
@@ -626,6 +663,8 @@ onBeforeUnmount(() => {
           ref="similarPeopleSearch"
           v-model="candidateTerm"
           v-model:result-mode="candidateBrowseMode"
+          v-model:sort="candidateSort"
+          :sort-options="candidateSortOptions"
           class="shrink-0 px-5 pb-5"
           :selected-face="selectedFace ?? null"
         />

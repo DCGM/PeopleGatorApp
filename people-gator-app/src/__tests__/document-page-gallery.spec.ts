@@ -82,6 +82,9 @@ describe('document page gallery', () => {
     expect(mocks.listPages.mock.calls[0]![0].query).toEqual({
       'filter.library': [LIBRARY],
       'filter.document_id': [DOCUMENT],
+      // Archive page IDs are an explicit order, never presented as page numbers.
+      sort: 'page_id',
+      sort_direction: 'asc',
       limit: 2,
       return_total_count: true,
       cursor: null,

@@ -2,6 +2,7 @@ import { computed, toValue, watchEffect, type MaybeRefOrGetter } from 'vue'
 import { useFaceListQuery } from '@/query/faces'
 import { useTextMentionListQuery } from '@/query/text-mentions'
 import { utcToLocalTime } from './people-filters'
+import type { SortDirection } from '@/lib/sorting'
 
 export type PageActivityItem = {
   id: string
@@ -10,20 +11,50 @@ export type PageActivityItem = {
   touchedAt: string | null
   userId: string | null
 }
-export function activityGroups(items: PageActivityItem[], mode: 'time' | 'user') {
+export type ActivityOrder = {
+  /** Days compare chronologically; users compare by their displayed label. */
+  groups: SortDirection
+  /** Annotation last-change time within each group. */
+  items: SortDirection
+}
+export const DEFAULT_ACTIVITY_ORDER: ActivityOrder = { groups: 'desc', items: 'desc' }
+
+const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+
+/**
+ * Group the complete page collection by local day or last editor. Unknown
+ * metadata forms an explicit group and unknown times stay last in both directions.
+ */
+export function activityGroups(
+  items: PageActivityItem[],
+  mode: 'time' | 'user',
+  order: ActivityOrder = { groups: mode === 'user' ? 'asc' : 'desc', items: 'desc' },
+  label: (key: string) => string = (key) => key,
+) {
   const groups = new Map<string, PageActivityItem[]>()
   for (const item of items) {
     const key =
       mode === 'user' ? (item.userId ?? '') : (utcToLocalTime(item.touchedAt).split('T')[0] ?? '')
     groups.set(key, [...(groups.get(key) ?? []), item])
   }
+  const groupSign = order.groups === 'asc' ? 1 : -1
+  const itemSign = order.items === 'asc' ? 1 : -1
   return [...groups]
-    .sort(([a], [b]) => (a ? (b ? b.localeCompare(a) : -1) : 1))
+    .sort(([a], [b]) => {
+      if (!a || !b) return a ? -1 : b ? 1 : 0
+      const compared =
+        mode === 'user'
+          ? collator.compare(label(a), label(b)) || a.localeCompare(b)
+          : a.localeCompare(b)
+      return groupSign * compared
+    })
     .map(([key, records]) => ({
       key,
-      records: records.sort(
-        (a, b) => (b.touchedAt ?? '').localeCompare(a.touchedAt ?? '') || a.id.localeCompare(b.id),
-      ),
+      records: records.sort((a, b) => {
+        if (!a.touchedAt || !b.touchedAt)
+          return a.touchedAt ? -1 : b.touchedAt ? 1 : a.id.localeCompare(b.id)
+        return itemSign * a.touchedAt.localeCompare(b.touchedAt) || a.id.localeCompare(b.id)
+      }),
       faces: records.filter((item) => item.kind === 'face').length,
       mentions: records.filter((item) => item.kind === 'mention').length,
     }))

@@ -1,5 +1,6 @@
 import type { EvidenceQuery } from './evidence-filters'
-import type { EntityLinkState } from '@/client'
+import type { EntityLinkState, EntitySortField } from '@/client'
+import type { SortState } from '@/lib/sorting'
 import {
   emptyPeopleFilters,
   peopleFiltersQuery,
@@ -35,6 +36,7 @@ export function usePeopleSearch(
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
+  sort?: MaybeRefOrGetter<SortState<EntitySortField>>,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentEntityFilter(toValue(filter)))
@@ -49,6 +51,7 @@ export function usePeopleSearch(
         ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
       },
       limit: pageSize,
+      sort: sort && toValue(sort),
     })),
     computed(() => !filterError.value && toValue(evidenceValid)),
   )

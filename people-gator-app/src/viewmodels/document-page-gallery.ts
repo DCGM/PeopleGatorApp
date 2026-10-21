@@ -2,7 +2,9 @@ import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import type { LocationQuery } from 'vue-router'
 
-import type { PageResponse } from '@/client'
+import type { PageResponse, PageSortField } from '@/client'
+import { listSortParams, type SortState } from '@/lib/sorting'
+import { GALLERY_DEFAULT } from '@/viewmodels/sort-options'
 import { useObjectUrlMap } from '@/composables/object-url'
 import { fetchPageImage, usePageListQuery } from '@/query/media'
 import { queryKeys } from '@/query/keys'
@@ -40,21 +42,23 @@ export function pageGalleryQuery(query: LocationQuery): LocationQuery {
 }
 
 /**
- * Registered pages of exactly one library/document, in the API's stable list
- * order (internal source key). That order is stable across reloads and
- * cursors, but it is not the physical page sequence, which is not recorded.
- * Evidence filters deliberately do not apply: every registered page stays reachable.
+ * Registered pages of exactly one library/document in the selected API order:
+ * archive page ID (default) or last change. Neither is the physical page
+ * sequence, which is not recorded. Evidence filters deliberately do not apply:
+ * every registered page stays reachable.
  */
 export function useDocumentPageGallery(
   library: MaybeRefOrGetter<string>,
   documentId: MaybeRefOrGetter<string>,
   currentPageId: MaybeRefOrGetter<string>,
   batchSize = PAGE_GALLERY_BATCH_SIZE,
+  sort: MaybeRefOrGetter<SortState<PageSortField>> = GALLERY_DEFAULT,
 ) {
   const query = usePageListQuery(
     computed(() => ({
       'filter.library': [toValue(library)],
       'filter.document_id': [toValue(documentId)],
+      ...listSortParams(toValue(sort)),
       limit: batchSize,
       return_total_count: true,
     })),
