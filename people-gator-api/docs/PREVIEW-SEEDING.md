@@ -45,6 +45,7 @@ This does not automatically seed the actual staging environment.
 
 | Scenario | Example |
 | --- | --- |
+| Default Documents landing | Open `default-documents` (the application root): Documents is current, with named document groups and linked page thumbnails. Find **Portrait album**, open a page, then use the PeopleGator logo or first breadcrumb to return. `default-documents-scans` opens the same album in explicit Scan search. |
 | Mobile filtering | Open the printed mobile-filters link on a narrow viewport; only search and the sliders toggle show until expanded |
 | Identity editing and aliases | Ada Novak, alias A. Novak; six people in total |
 | Faces and mentions together | Ada Novak across Portrait album and Research notes |

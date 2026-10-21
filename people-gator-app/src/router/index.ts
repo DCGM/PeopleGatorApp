@@ -9,7 +9,7 @@ import PersonDetailView from '@/views/PersonDetailView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', redirect: { name: 'document-search' } },
+    { path: '/', redirect: { name: 'document-list' } },
     {
       path: '/scans',
       name: 'document-search',
@@ -40,7 +40,7 @@ const router = createRouter({
       component: PersonDetailView,
       meta: { title: 'Person detail' },
     },
-    { path: '/:pathMatch(.*)*', redirect: { name: 'document-search' } },
+    { path: '/:pathMatch(.*)*', redirect: { name: 'document-list' } },
   ],
 })
 
