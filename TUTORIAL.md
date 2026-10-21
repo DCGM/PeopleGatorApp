@@ -26,7 +26,8 @@ V této ukázce není nutné přihlášení ani registrace. Dostupnost úprav z�
 oprávněních daného prostředí; sloučení osob vyžaduje oprávnění správce.
 
 Screenshoty ukazují syntetická data, například Ada Novak a knihovnu
-`preview-mzk`. Postupy jsou stejné i pro dokumenty v živé ukázce.
+`preview-mzk`. Jde o záběry z počítače (1440 × 900 CSS px). Postupy jsou stejné
+i pro dokumenty v živé ukázce.
 
 Začít můžete na [připravené anotované stránce](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b):
 
@@ -49,27 +50,19 @@ Začít můžete na [připravené anotované stránce](https://live-preview.peop
 
 Hledání dokumentu podle názvu.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png) | ![Hledání dokumentu podle názvu. / Search for a document by title. — mobile](docs/images/tutorial/01-document-search-mobile.png) |
+![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png)
 
 Stránky vybraného dokumentu.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png) | ![Stránky vybraného dokumentu. / Pages of the selected document. — mobile](docs/images/tutorial/03-document-pages-mobile.png) |
+![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png)
 
 Hledání osoby podle jména.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png) | ![Hledání osoby podle jména. / Search for a person by name. — mobile](docs/images/tutorial/04-person-search-mobile.png) |
+![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png)
 
 Sken, označené tváře a textové zmínky.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png) | ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — mobile](docs/images/tutorial/08-scan-and-mentions-mobile.png) |
+![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png)
 
 ### 3. Filtrování výsledků
 
@@ -86,15 +79,9 @@ Text vymažete samostatným křížkem v hledání. Pokud výsledky chybí, nejp
 zkontrolujte aktivní štítky. Filtry se mezi obrazovkami zatím nepřenášejí vždy
 jednotně; po přechodu zkontrolujte jejich nastavení.
 
-Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená.
+Hledání s aktivním filtrem knihovny.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — desktop](docs/images/tutorial/02-active-filters-desktop.png) | ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — mobile](docs/images/tutorial/02-active-filters-mobile.png) |
-
-Rozbalená nastavení na mobilu:
-
-![Rozbalené filtry / Expanded filters — mobile 390 × 844 CSS px](docs/images/tutorial/02-filters-expanded-mobile.png)
+![Hledání s aktivním filtrem knihovny. / Search with an active library filter. — desktop](docs/images/tutorial/02-active-filters-desktop.png)
 
 ### 4. Přiřazení tváře k osobě
 
@@ -114,33 +101,23 @@ výše uvedené akce popisují ovládání tváří, nikoli editor textových ú
 
 Výběr osoby a tlačítko Assign.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png) | ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — mobile](docs/images/tutorial/13-link-candidate-mobile.png) |
+![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png)
 
 Ruční přeřazení tváře k jiné osobě.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png) | ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — mobile](docs/images/tutorial/09-reassignment-mobile.png) |
+![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png)
 
 Po Unlink zůstane tvář nepřiřazená.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png) | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — mobile](docs/images/tutorial/12-unassigned-mobile.png) |
+![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png)
 
 Vytvoření nové osoby pomocí New → Save a její přiřazená tvář.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png) | ![Nový profil / New profile — mobile](docs/images/tutorial/19-new-profile-mobile.png) |
+![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png)
 
 Výsledek najdete v záložce Faces nového profilu.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png) | ![Vytvořený profil / Created profile — mobile](docs/images/tutorial/20-new-profile-result-mobile.png) |
+![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png)
 
 ### 5. Dohledání podobných tváří
 
@@ -155,9 +132,7 @@ skóre podobnosti je návrh, nikoli potvrzení totožnosti.
 
 Výběr podobné tváře a přiřazení k otevřené osobě.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png) | ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — mobile](docs/images/tutorial/16-discover-assignment-mobile.png) |
+![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png)
 
 ### 6. Sloučení duplicitních osob
 
@@ -176,15 +151,11 @@ zruší; po kontrole je můžete znovu ověřit.
 
 Vybraná duplicita a cílová osoba v tlačítku Merge into.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png) | ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — mobile](docs/images/tutorial/17-merge-selection-mobile.png) |
+![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png)
 
 Tváře zachovaného profilu po sloučení.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png) | ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — mobile](docs/images/tutorial/18-merge-result-mobile.png) |
+![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png)
 
 ### 7. Ověření a oprava přiřazení
 
@@ -209,27 +180,19 @@ ověřit. Po chybové hlášce zkontrolujte obnovený výsledek před opakován�
 
 Stavy přiřazení na profilu osoby.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png) | ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — mobile](docs/images/tutorial/05-person-states-mobile.png) |
+![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png)
 
 Výběr tváře a hromadné Verify selected.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png) | ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — mobile](docs/images/tutorial/06-batch-verification-mobile.png) |
+![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png)
 
 Ověřené přiřazení s autorem a časem.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png) | ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — mobile](docs/images/tutorial/11-verified-link-mobile.png) |
+![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png)
 
 Ověření textové zmínky v Mentions.
 
-| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
-| --- | --- |
-| ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png) | ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — mobile](docs/images/tutorial/14-mention-verification-mobile.png) |
+![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png)
 
 ### Další obrázky
 
@@ -260,7 +223,8 @@ This demo requires no login or registration. Editing depends on the permissions
 available in that environment; merging people requires administrator permission.
 
 Screenshots use synthetic data, such as Ada Novak and the `preview-mzk` library.
-The same workflows apply to the documents in the live demo.
+The images show the desktop view (1440 × 900 CSS px). The same workflows apply
+to the documents in the live demo.
 
 Start with the [prepared annotated page](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b):
 
@@ -282,27 +246,19 @@ Start with the [prepared annotated page](https://live-preview.peoplegator.dev/li
 
 Search for a document by title.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png) | ![Hledání dokumentu podle názvu. / Search for a document by title. — mobile](docs/images/tutorial/01-document-search-mobile.png) |
+![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png)
 
 Pages of the selected document.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png) | ![Stránky vybraného dokumentu. / Pages of the selected document. — mobile](docs/images/tutorial/03-document-pages-mobile.png) |
+![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png)
 
 Search for a person by name.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png) | ![Hledání osoby podle jména. / Search for a person by name. — mobile](docs/images/tutorial/04-person-search-mobile.png) |
+![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png)
 
 Scan, marked faces and text mentions.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png) | ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — mobile](docs/images/tutorial/08-scan-and-mentions-mobile.png) |
+![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png)
 
 ### 3. Filter results
 
@@ -319,15 +275,9 @@ Clear the text separately with the X inside search. If results are missing,
 check the active tags first. Filters are not yet transferred consistently
 between screens; check their settings after navigating.
 
-Search with an active library filter; mobile settings are collapsed.
+Search with an active library filter.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — desktop](docs/images/tutorial/02-active-filters-desktop.png) | ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — mobile](docs/images/tutorial/02-active-filters-mobile.png) |
-
-Expanded mobile settings:
-
-![Rozbalené filtry / Expanded filters — mobile 390 × 844 CSS px](docs/images/tutorial/02-filters-expanded-mobile.png)
+![Hledání s aktivním filtrem knihovny. / Search with an active library filter. — desktop](docs/images/tutorial/02-active-filters-desktop.png)
 
 ### 4. Link a face to a person
 
@@ -347,33 +297,23 @@ the actions above describe face controls rather than a text-span editor.
 
 Choose a person and use Assign.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png) | ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — mobile](docs/images/tutorial/13-link-candidate-mobile.png) |
+![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png)
 
 Manually reassign a face to another person.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png) | ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — mobile](docs/images/tutorial/09-reassignment-mobile.png) |
+![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png)
 
 After Unlink, the face remains unassigned.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png) | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — mobile](docs/images/tutorial/12-unassigned-mobile.png) |
+![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png)
 
 Create a new person with New → Save and inspect its linked face.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png) | ![Nový profil / New profile — mobile](docs/images/tutorial/19-new-profile-mobile.png) |
+![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png)
 
 The result appears in the new profile's Faces tab.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png) | ![Vytvořený profil / Created profile — mobile](docs/images/tutorial/20-new-profile-result-mobile.png) |
+![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png)
 
 ### 5. Find similar faces
 
@@ -388,9 +328,7 @@ the similarity score is a suggestion, not proof of identity.
 
 Select a similar face and assign it to the open person.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png) | ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — mobile](docs/images/tutorial/16-discover-assignment-mobile.png) |
+![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png)
 
 ### 6. Merge duplicate people
 
@@ -409,15 +347,11 @@ you can verify them again after review.
 
 Selected duplicate and destination in the Merge into button.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png) | ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — mobile](docs/images/tutorial/17-merge-selection-mobile.png) |
+![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png)
 
 Faces on the retained profile after merging.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png) | ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — mobile](docs/images/tutorial/18-merge-result-mobile.png) |
+![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png)
 
 ### 7. Verify and correct assignments
 
@@ -443,27 +377,19 @@ repeating the action.
 
 Assignment states on a person profile.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png) | ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — mobile](docs/images/tutorial/05-person-states-mobile.png) |
+![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png)
 
 Face selection and batch Verify selected.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png) | ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — mobile](docs/images/tutorial/06-batch-verification-mobile.png) |
+![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png)
 
 Verified assignment with its actor and timestamp.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png) | ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — mobile](docs/images/tutorial/11-verified-link-mobile.png) |
+![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png)
 
 Verify a text mention in Mentions.
 
-| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
-| --- | --- |
-| ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png) | ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — mobile](docs/images/tutorial/14-mention-verification-mobile.png) |
+![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png)
 
 ### More screenshots
 

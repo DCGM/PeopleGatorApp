@@ -10,7 +10,7 @@
 - Desktop: **1440 × 900** CSS pixels. Mobile: **390 × 844** CSS pixels. Device scale factor: 1; light theme; English UI; `en-GB` locale; `Europe/Prague` timezone.
 - Fresh isolated PostgreSQL 16/pgvector database and disposable local storage, initialized with the real migration → seed → seed → schema-check CLI sequence.
 - Synthetic examples only: Příběhy archivářů, Viewport focus practice, Irena Evidence, Ada Novak, A. Novak and Ada Review. The live `svkhk`/`knav` collections were neither captured nor modified.
-- Both tutorial languages reuse these images of the same English UI.
+- Both tutorial languages use the desktop captures of the same English UI. Paired desktop/mobile captures remain here as PR evidence.
 
 ## Reproduce the examples
 
