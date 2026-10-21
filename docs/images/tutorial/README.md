@@ -32,6 +32,7 @@ Use disposable data for these mutations. Repeating the seed intentionally preser
 - Face reassignment to Lenka and correction to Ada produced Manual links. Individual verification produced Verified with actor/time; unlink kept the detection and removed its identity; linking again produced Manual.
 - Two selected Irena faces were verified together; both responses included the verification actor/time, the selection cleared and the UI reported **2 faces verified.**
 - Text-mention verification produced Verified.
+- Clicking the scan overlay selected the unassigned face. **New → Save** created **Tutorial Example** and linked the face as Manual. **Unassign selected** on that profile removed its identity link while retaining the detection.
 - Discover assigned the selected unassigned face to Ada.
 - Merge retained Ada, moved A. Novak's face to Ada as Manual, and removed A. Novak's source identity (subsequent lookup returned 404). This source candidate has no text mentions; mention-moving semantics were checked against the repository implementation, rather than claimed as a browser-tested merge of mentions.
 - Mutation results were checked through authenticated API reads/responses after the UI action completed. No uncaught JavaScript errors or page-level horizontal overflow occurred during the main captured journeys.
@@ -149,6 +150,18 @@ Click an image to inspect its full-size version.
 | Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
 | --- | --- |
 | ![Zachovaný profil po sloučení / Retained profile after merge — desktop](18-merge-result-desktop.png) | ![Zachovaný profil po sloučení / Retained profile after merge — mobile](18-merge-result-mobile.png) |
+
+### Nový profil / New profile
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Nový profil / New profile — desktop](19-new-profile-desktop.png) | ![Nový profil / New profile — mobile](19-new-profile-mobile.png) |
+
+### Vytvořený profil / Created profile
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Vytvořený profil / Created profile — desktop](20-new-profile-result-desktop.png) | ![Vytvořený profil / Created profile — mobile](20-new-profile-result-mobile.png) |
 
 ### Rozbalené filtry / Expanded filters
 

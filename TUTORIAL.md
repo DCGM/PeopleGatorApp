@@ -105,7 +105,8 @@ Na skenu vyberte tvář a v panelu **Faces** zkontrolujte její přiřazení:
 - **Reassign** umožní vybrat jinou osobu a potvrdit změnu u kandidáta tlačítkem
   **Reassign**.
 - **Unlink** zruší přiřazení, ale zachová detekci tváře.
-- **New** umožní zadat jméno, případně krátký popis, a vytvořit přiřazený profil.
+- **New** umožní zadat jméno, případně krátký popis. Tlačítkem **Save**
+  vytvoříte profil a přiřadíte k němu vybranou tvář; **Cancel** úpravu zruší.
 
 Po uložení zkontrolujte jméno a stav u vybrané tváře. Kliknutím na jméno
 otevřete profil. Textové zmínky lze prohlížet a ověřovat v **Mentions**;
@@ -128,6 +129,18 @@ Po Unlink zůstane tvář nepřiřazená.
 | Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
 | --- | --- |
 | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png) | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — mobile](docs/images/tutorial/12-unassigned-mobile.png) |
+
+Vytvoření nové osoby pomocí New → Save a její přiřazená tvář.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png) | ![Nový profil / New profile — mobile](docs/images/tutorial/19-new-profile-mobile.png) |
+
+Výsledek najdete v záložce Faces nového profilu.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png) | ![Vytvořený profil / Created profile — mobile](docs/images/tutorial/20-new-profile-result-mobile.png) |
 
 ### 5. Dohledání podobných tváří
 
@@ -325,8 +338,8 @@ Select a face on the scan and inspect its assignment in the **Faces** panel:
 - **Reassign** lets you select another person and confirm with **Reassign**
   on the candidate.
 - **Unlink** removes the assignment while keeping the face detection.
-- **New** lets you enter a name, optionally a short description, and create
-  a linked profile.
+- **New** lets you enter a name and optionally a short description. **Save**
+  creates the profile and links the selected face; **Cancel** discards the edit.
 
 After saving, check the selected face's name and state. Click the name to open
 the profile. Text mentions can be inspected and verified in **Mentions**;
@@ -349,6 +362,18 @@ After Unlink, the face remains unassigned.
 | Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
 | --- | --- |
 | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png) | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — mobile](docs/images/tutorial/12-unassigned-mobile.png) |
+
+Create a new person with New → Save and inspect its linked face.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png) | ![Nový profil / New profile — mobile](docs/images/tutorial/19-new-profile-mobile.png) |
+
+The result appears in the new profile's Faces tab.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png) | ![Vytvořený profil / Created profile — mobile](docs/images/tutorial/20-new-profile-result-mobile.png) |
 
 ### 5. Find similar faces
 
