@@ -1,4 +1,4 @@
-# PeopleGator — stručný návod / quick tutorial
+# PeopleGator — uživatelský návod / user tutorial
 
 [Česky](#cesky) · [English](#english)
 
@@ -6,11 +6,27 @@
 
 ## Česky
 
+Ve sdílené živé ukázce máme zpracováno **7 dokumentů**.
+Pro vyzkoušení můžete otevřít následující dokumenty přímo v aplikaci:
+
+| Knihovna | Dokument |
+| --- | --- |
+| svkhk | [6c50c29e-1994-46e6-b2ac-0289006fb764](https://live-preview.peoplegator.dev/scans?library=svkhk&document=6c50c29e-1994-46e6-b2ac-0289006fb764) |
+| knav | [2e31b2f2-7936-4234-bede-a6a2f9c452b5](https://live-preview.peoplegator.dev/scans?library=knav&document=2e31b2f2-7936-4234-bede-a6a2f9c452b5) |
+| svkhk | [6c466752-a299-4bde-a8b0-92a560976826](https://live-preview.peoplegator.dev/scans?library=svkhk&document=6c466752-a299-4bde-a8b0-92a560976826) |
+| svkhk | [1faae15d-13ed-4ca5-ac61-6a085a48de33](https://live-preview.peoplegator.dev/scans?library=svkhk&document=1faae15d-13ed-4ca5-ac61-6a085a48de33) |
+| svkhk | [e5acee37-b093-41aa-9656-d7477f8c2730](https://live-preview.peoplegator.dev/scans?library=svkhk&document=e5acee37-b093-41aa-9656-d7477f8c2730) |
+| knav | [3aa8d947-24a8-40b0-981c-a3b9cea401e6](https://live-preview.peoplegator.dev/scans?library=knav&document=3aa8d947-24a8-40b0-981c-a3b9cea401e6) |
+| knav | [b67494e1-4eb3-4ecd-bc99-405721f778e9](https://live-preview.peoplegator.dev/scans?library=knav&document=b67494e1-4eb3-4ecd-bc99-405721f778e9) |
+
 ### 1. Otevření aplikace
 
 Otevřete [živou ukázku PeopleGator](https://live-preview.peoplegator.dev).
 V této ukázce není nutné přihlášení ani registrace. Dostupnost úprav závisí na
 oprávněních daného prostředí; sloučení osob vyžaduje oprávnění správce.
+
+Screenshoty ukazují syntetická data, například Ada Novak a knihovnu
+`preview-mzk`. Postupy jsou stejné i pro dokumenty v živé ukázce.
 
 Začít můžete na [připravené anotované stránce](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b):
 
@@ -31,6 +47,30 @@ Začít můžete na [připravené anotované stránce](https://live-preview.peop
   v přepisu vyberete anotaci. Další stránky dokumentu otevřete v pásu
   **Document pages** pod skenem.
 
+Hledání dokumentu podle názvu.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png) | ![Hledání dokumentu podle názvu. / Search for a document by title. — mobile](docs/images/tutorial/01-document-search-mobile.png) |
+
+Stránky vybraného dokumentu.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png) | ![Stránky vybraného dokumentu. / Pages of the selected document. — mobile](docs/images/tutorial/03-document-pages-mobile.png) |
+
+Hledání osoby podle jména.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png) | ![Hledání osoby podle jména. / Search for a person by name. — mobile](docs/images/tutorial/04-person-search-mobile.png) |
+
+Sken, označené tváře a textové zmínky.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png) | ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — mobile](docs/images/tutorial/08-scan-and-mentions-mobile.png) |
+
 ### 3. Filtrování výsledků
 
 V **Documents** zkuste vybrat knihovnu `svkhk` v **Libraries**. V **People**
@@ -43,8 +83,18 @@ Na mobilu otevřete filtry tlačítkem s ikonou posuvníků vedle hledání.
 Aktivní filtry jsou zobrazené jako štítky pod panelem. Křížkem odstraníte
 jednotlivý filtr; **Clear all filters** zruší filtry a zachová hledaný text.
 Text vymažete samostatným křížkem v hledání. Pokud výsledky chybí, nejprve
-zkontrolujte aktivní štítky. Sjednocení filtrů a jejich přenosu mezi obrazovkami
-se řeší v [#52](https://github.com/DCGM/PeopleGatorApp/issues/52).
+zkontrolujte aktivní štítky. Filtry se mezi obrazovkami zatím nepřenášejí vždy
+jednotně; po přechodu zkontrolujte jejich nastavení.
+
+Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — desktop](docs/images/tutorial/02-active-filters-desktop.png) | ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — mobile](docs/images/tutorial/02-active-filters-mobile.png) |
+
+Rozbalená nastavení na mobilu:
+
+![Rozbalené filtry / Expanded filters — mobile 390 × 844 CSS px](docs/images/tutorial/02-filters-expanded-mobile.png)
 
 ### 4. Přiřazení tváře k osobě
 
@@ -61,6 +111,24 @@ Po uložení zkontrolujte jméno a stav u vybrané tváře. Kliknutím na jméno
 otevřete profil. Textové zmínky lze prohlížet a ověřovat v **Mentions**;
 výše uvedené akce popisují ovládání tváří, nikoli editor textových úseků.
 
+Výběr osoby a tlačítko Assign.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png) | ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — mobile](docs/images/tutorial/13-link-candidate-mobile.png) |
+
+Ruční přeřazení tváře k jiné osobě.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png) | ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — mobile](docs/images/tutorial/09-reassignment-mobile.png) |
+
+Po Unlink zůstane tvář nepřiřazená.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png) | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — mobile](docs/images/tutorial/12-unassigned-mobile.png) |
+
 ### 5. Dohledání podobných tváří
 
 V profilu osoby otevřete **Discover → Similar faces to review**. Osoba potřebuje
@@ -71,6 +139,12 @@ Nejprve otevřete náhled a porovnejte tvář v původním skenu. Potom vyberte
 vhodné tváře zaškrtávacími políčky a klikněte na **Assign to [jméno]**.
 Tváře přiřazené jinam se tím přeřadí. Výsledek zkontrolujte v **Faces**;
 skóre podobnosti je návrh, nikoli potvrzení totožnosti.
+
+Výběr podobné tváře a přiřazení k otevřené osobě.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png) | ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — mobile](docs/images/tutorial/16-discover-assignment-mobile.png) |
 
 ### 6. Sloučení duplicitních osob
 
@@ -84,6 +158,20 @@ profilu a odstraní vybrané původní záznamy osob. Zkontrolujte jméno cíle 
 kliknutím: akce se odesílá přímo, bez dalšího potvrzovacího dialogu a bez
 tlačítka pro vrácení sloučení. Po dokončení ověřte **Faces** a **Mentions**
 zachovaného profilu. Pro přiřazení jedné tváře použijte **Assign**, nikoli merge.
+Přesunutá přiřazení budou mít stav **Manual** a případné původní ověření se
+zruší; po kontrole je můžete znovu ověřit.
+
+Vybraná duplicita a cílová osoba v tlačítku Merge into.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png) | ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — mobile](docs/images/tutorial/17-merge-selection-mobile.png) |
+
+Tváře zachovaného profilu po sloučení.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png) | ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — mobile](docs/images/tutorial/18-merge-result-mobile.png) |
 
 ### 7. Ověření a oprava přiřazení
 
@@ -106,21 +194,60 @@ Pro hromadné ověření v **Faces** označte tváře a použijte
 Změna na jinou osobu vytváří ruční přiřazení, které můžete po kontrole znovu
 ověřit. Po chybové hlášce zkontrolujte obnovený výsledek před opakováním akce.
 
-### Rozšířená příručka
+Stavy přiřazení na profilu osoby.
 
-Toto je stručný textový návod. Úplnou příručku se screenshoty jednotlivých
-postupů pro počítač i mobil sleduje
-[#55](https://github.com/DCGM/PeopleGatorApp/issues/55).
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png) | ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — mobile](docs/images/tutorial/05-person-states-mobile.png) |
+
+Výběr tváře a hromadné Verify selected.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png) | ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — mobile](docs/images/tutorial/06-batch-verification-mobile.png) |
+
+Ověřené přiřazení s autorem a časem.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png) | ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — mobile](docs/images/tutorial/11-verified-link-mobile.png) |
+
+Ověření textové zmínky v Mentions.
+
+| Počítač — 1440 × 900 CSS px | Mobil — 390 × 844 CSS px |
+| --- | --- |
+| ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png) | ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — mobile](docs/images/tutorial/14-mention-verification-mobile.png) |
+
+### Další obrázky
+
+[Přehled všech screenshotů a ověřených postupů](docs/images/tutorial/README.md)
+obsahuje i stav před ověřením a výsledek hromadného ověření.
 
 <a id="english"></a>
 
 ## English
+
+The shared live demo contains **7 processed documents**.
+Use these links to open the following documents directly in the application:
+
+| Library | Document |
+| --- | --- |
+| svkhk | [6c50c29e-1994-46e6-b2ac-0289006fb764](https://live-preview.peoplegator.dev/scans?library=svkhk&document=6c50c29e-1994-46e6-b2ac-0289006fb764) |
+| knav | [2e31b2f2-7936-4234-bede-a6a2f9c452b5](https://live-preview.peoplegator.dev/scans?library=knav&document=2e31b2f2-7936-4234-bede-a6a2f9c452b5) |
+| svkhk | [6c466752-a299-4bde-a8b0-92a560976826](https://live-preview.peoplegator.dev/scans?library=svkhk&document=6c466752-a299-4bde-a8b0-92a560976826) |
+| svkhk | [1faae15d-13ed-4ca5-ac61-6a085a48de33](https://live-preview.peoplegator.dev/scans?library=svkhk&document=1faae15d-13ed-4ca5-ac61-6a085a48de33) |
+| svkhk | [e5acee37-b093-41aa-9656-d7477f8c2730](https://live-preview.peoplegator.dev/scans?library=svkhk&document=e5acee37-b093-41aa-9656-d7477f8c2730) |
+| knav | [3aa8d947-24a8-40b0-981c-a3b9cea401e6](https://live-preview.peoplegator.dev/scans?library=knav&document=3aa8d947-24a8-40b0-981c-a3b9cea401e6) |
+| knav | [b67494e1-4eb3-4ecd-bc99-405721f778e9](https://live-preview.peoplegator.dev/scans?library=knav&document=b67494e1-4eb3-4ecd-bc99-405721f778e9) |
 
 ### 1. Open the application
 
 Open the [PeopleGator live demo](https://live-preview.peoplegator.dev).
 This demo requires no login or registration. Editing depends on the permissions
 available in that environment; merging people requires administrator permission.
+
+Screenshots use synthetic data, such as Ada Novak and the `preview-mzk` library.
+The same workflows apply to the documents in the live demo.
 
 Start with the [prepared annotated page](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b):
 
@@ -140,6 +267,30 @@ Start with the [prepared annotated page](https://live-preview.peoplegator.dev/li
   Click a marked face or a name in the transcription to select an annotation.
   Open other pages using the **Document pages** strip below the scan.
 
+Search for a document by title.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png) | ![Hledání dokumentu podle názvu. / Search for a document by title. — mobile](docs/images/tutorial/01-document-search-mobile.png) |
+
+Pages of the selected document.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png) | ![Stránky vybraného dokumentu. / Pages of the selected document. — mobile](docs/images/tutorial/03-document-pages-mobile.png) |
+
+Search for a person by name.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png) | ![Hledání osoby podle jména. / Search for a person by name. — mobile](docs/images/tutorial/04-person-search-mobile.png) |
+
+Scan, marked faces and text mentions.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png) | ![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — mobile](docs/images/tutorial/08-scan-and-mentions-mobile.png) |
+
 ### 3. Filter results
 
 In **Documents**, try selecting `svkhk` under **Libraries**. In **People**, use
@@ -152,8 +303,18 @@ On mobile, open filters with the sliders button beside search. Active filters
 appear as tags below the panel. Remove one with its X button;
 **Clear all filters** removes filters while preserving the search text.
 Clear the text separately with the X inside search. If results are missing,
-check the active tags first. Consistent filters and their transfer between
-screens are tracked in [#52](https://github.com/DCGM/PeopleGatorApp/issues/52).
+check the active tags first. Filters are not yet transferred consistently
+between screens; check their settings after navigating.
+
+Search with an active library filter; mobile settings are collapsed.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — desktop](docs/images/tutorial/02-active-filters-desktop.png) | ![Hledání s aktivním filtrem knihovny; na mobilu jsou nastavení sbalená. / Search with an active library filter; mobile settings are collapsed. — mobile](docs/images/tutorial/02-active-filters-mobile.png) |
+
+Expanded mobile settings:
+
+![Rozbalené filtry / Expanded filters — mobile 390 × 844 CSS px](docs/images/tutorial/02-filters-expanded-mobile.png)
 
 ### 4. Link a face to a person
 
@@ -171,6 +332,24 @@ After saving, check the selected face's name and state. Click the name to open
 the profile. Text mentions can be inspected and verified in **Mentions**;
 the actions above describe face controls rather than a text-span editor.
 
+Choose a person and use Assign.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png) | ![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — mobile](docs/images/tutorial/13-link-candidate-mobile.png) |
+
+Manually reassign a face to another person.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png) | ![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — mobile](docs/images/tutorial/09-reassignment-mobile.png) |
+
+After Unlink, the face remains unassigned.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png) | ![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — mobile](docs/images/tutorial/12-unassigned-mobile.png) |
+
 ### 5. Find similar faces
 
 In a person's profile, open **Discover → Similar faces to review**. The person
@@ -181,6 +360,12 @@ First open a preview and compare the face in its source scan. Then select
 suitable faces with their checkboxes and click **Assign to [name]**.
 Faces linked elsewhere will be reassigned. Check the result in **Faces**;
 the similarity score is a suggestion, not proof of identity.
+
+Select a similar face and assign it to the open person.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png) | ![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — mobile](docs/images/tutorial/16-discover-assignment-mobile.png) |
 
 ### 6. Merge duplicate people
 
@@ -194,6 +379,20 @@ and deletes the selected source person records. Check the destination name
 before clicking: the action is submitted directly, with no additional
 confirmation dialog or undo button. Afterwards, check **Faces** and **Mentions**
 on the retained profile. Use **Assign** to link a single face rather than merge.
+Moved assignments become **Manual** and any previous verification is cleared;
+you can verify them again after review.
+
+Selected duplicate and destination in the Merge into button.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png) | ![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — mobile](docs/images/tutorial/17-merge-selection-mobile.png) |
+
+Faces on the retained profile after merging.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png) | ![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — mobile](docs/images/tutorial/18-merge-result-mobile.png) |
 
 ### 7. Verify and correct assignments
 
@@ -217,8 +416,31 @@ Changing to another person creates a manual assignment, which you can verify
 again after review. If an error appears, inspect the refreshed result before
 repeating the action.
 
-### Extended manual
+Assignment states on a person profile.
 
-This is a concise text tutorial. The complete manual with desktop and mobile
-workflow screenshots is tracked in
-[#55](https://github.com/DCGM/PeopleGatorApp/issues/55).
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png) | ![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — mobile](docs/images/tutorial/05-person-states-mobile.png) |
+
+Face selection and batch Verify selected.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png) | ![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — mobile](docs/images/tutorial/06-batch-verification-mobile.png) |
+
+Verified assignment with its actor and timestamp.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png) | ![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — mobile](docs/images/tutorial/11-verified-link-mobile.png) |
+
+Verify a text mention in Mentions.
+
+| Desktop — 1440 × 900 CSS px | Mobile — 390 × 844 CSS px |
+| --- | --- |
+| ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png) | ![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — mobile](docs/images/tutorial/14-mention-verification-mobile.png) |
+
+### More screenshots
+
+The [screenshot and checked-workflow index](docs/images/tutorial/README.md)
+also includes the state before verification and the batch-verification result.
