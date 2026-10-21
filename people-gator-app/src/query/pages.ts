@@ -1,4 +1,4 @@
-import type { EvidenceQuery } from '@/viewmodels/evidence-filters'
+import type { SharedQuery } from '@/viewmodels/shared-filters'
 import { useQuery } from '@tanstack/vue-query'
 import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -38,7 +38,7 @@ export async function fetchPageMentionSpans(
   sourceId: string,
   signal?: AbortSignal,
   states: EntityLinkState[] = [],
-  evidence: EvidenceQuery = {},
+  evidence: SharedQuery = {},
 ) {
   try {
     return await responseData(
@@ -58,7 +58,7 @@ export async function fetchPageMentionSpans(
 export function usePageMentionSpansQuery(
   sourceId: MaybeRefOrGetter<string>,
   states: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidence: MaybeRefOrGetter<SharedQuery> = {},
 ) {
   return useQuery({
     queryKey: computed(() => [

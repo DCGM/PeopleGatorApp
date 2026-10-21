@@ -1,4 +1,4 @@
-import type { EvidenceQuery } from './evidence-filters'
+import type { SharedQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 
@@ -31,7 +31,7 @@ const PERSON_DETAIL_GC_TIME = 60 * 60_000
 export function usePersonDetail(
   personId: MaybeRefOrGetter<string>,
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidence: MaybeRefOrGetter<SharedQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
   matchedFaceIds: MaybeRefOrGetter<string[]> = [],
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,

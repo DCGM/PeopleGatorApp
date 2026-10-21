@@ -1,13 +1,23 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
-import { computed, ref, type Ref } from 'vue'
+import { ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  processingFilterError,
-  readPeopleFilters,
-  utcToLocalTime,
-  type PeopleProcessingFilters,
-} from '@/viewmodels/people-filters'
+import { readSharedFilters, utcToLocalTime } from '@/viewmodels/shared-filters'
+
+// Option IDs are UUIDs: copied non-UUID selections are shown as invalid instead.
+const codes: Record<string, string> = {
+  document: 'd',
+  page: 'e',
+  user: 'a',
+  'api-key': 'b',
+  library: 'c',
+}
+const id = (kind: string, n: number) => `00000000-0000-4000-8000-00000000${codes[kind]}00${n}`
+const options = (kind: string) => [
+  { id: id(kind, 1), label: `${kind} One` },
+  { id: id(kind, 2), label: `${kind} Two` },
+]
+const labels = (kind: string) => Object.fromEntries(options(kind).map((o) => [o.id, o.label]))
 
 const desktopViewport = ref(true)
 vi.mock('@vueuse/core', async (importOriginal) => ({
@@ -19,12 +29,11 @@ beforeEach(() => {
 })
 
 vi.mock('@/query/people-filter-options', () => ({
+  useActorLabels: (kind: string) => ({ labels: ref(labels(kind)) }),
+  useSourceLabels: (kind: string) => ({ labels: ref(labels(kind)), missing: ref([]) }),
   usePeopleFilterOptions: (kind: string) => ({
-    options: ref([
-      { id: `${kind}-1`, label: `${kind} One` },
-      { id: `${kind}-2`, label: `${kind} Two` },
-    ]),
-    labels: ref({ [`${kind}-1`]: `${kind} One`, [`${kind}-2`]: `${kind} Two` }),
+    options: ref(options(kind)),
+    labels: ref(labels(kind)),
     isLoading: ref(false),
     error: ref(null),
     hasMore: ref(false),
@@ -34,14 +43,8 @@ vi.mock('@/query/people-filter-options', () => ({
   }),
 }))
 vi.mock('@/viewmodels/people-search', () => ({
-  usePeopleSearch: (
-    _term: unknown,
-    _assignment: unknown,
-    _pageSize: unknown,
-    filters: Ref<PeopleProcessingFilters>,
-  ) => ({
+  usePeopleSearch: () => ({
     error: ref(null),
-    filterError: computed(() => processingFilterError(filters.value)),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
     isLoading: ref(false),
@@ -94,9 +97,9 @@ describe('people filter controls and URL restoration', () => {
     const { wrapper, router } = await mountedView({
       q: 'Novak',
       assignment: 'faces',
-      document: 'document-1',
-      touched_by: 'user-1',
-      api_key: 'api-key-1',
+      document: id('document', 1),
+      touched_by: id('user', 1),
+      api_key: id('api-key', 1),
     })
     const search = wrapper.get<HTMLInputElement>('input[aria-label="Search people"]')
     const originalQuery = { ...router.currentRoute.value.query }
@@ -110,9 +113,9 @@ describe('people filter controls and URL restoration', () => {
     await flushPromises()
     expect(wrapper.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Person record users"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Person record API keys"]').exists()).toBe(true)
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
+    expect(wrapper.find('button[aria-label="Modified by"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Modified via key"]').exists()).toBe(true)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
     expect(toggle.find('svg.lucide-sliders-horizontal').exists()).toBe(true)
     await toggle.trigger('click')
@@ -124,14 +127,14 @@ describe('people filter controls and URL restoration', () => {
     await flushPromises()
     expect(router.currentRoute.value.query.q).toBe('Ada')
     expect(router.currentRoute.value.query.assignment).toBe(originalQuery.assignment)
-    expect(readPeopleFilters(router.currentRoute.value.query)).toEqual(
-      readPeopleFilters(originalQuery),
+    expect(readSharedFilters(router.currentRoute.value.query)).toEqual(
+      readSharedFilters(originalQuery),
     )
     desktopViewport.value = true
     await flushPromises()
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(true)
     expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="Person record users"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Modified by"]').exists()).toBe(true)
     desktopViewport.value = false
     await flushPromises()
     expect(wrapper.find('button[aria-label="Documents"]').exists()).toBe(false)
@@ -144,27 +147,42 @@ describe('people filter controls and URL restoration', () => {
       assignment: 'mentions',
       link_state: ['verified'],
       touched_from: '2026-01-02T12:00:00Z',
-      document: ['document-1', 'document-2'],
-      touched_by: 'user-1',
-      api_key: 'api-key-1',
+      document: [id('document', 1), id('document', 2)],
+      touched_by: id('user', 1),
+      api_key: id('api-key', 1),
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     expect(wrapper.text()).toContain('Document: document One')
-    expect(wrapper.text()).toContain('Person record user: user One')
-    expect(wrapper.text()).toContain('Person record API key: api-key One')
+    expect(wrapper.text()).toContain('Modified by: user One')
+    expect(wrapper.text()).toContain('Modified via key: api-key One')
     const remove = wrapper
       .findAll('button')
       .find((button) => button.attributes('aria-label') === 'Remove Document: document One')!
     await remove.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.document).toEqual(['document-2'])
-    expect(router.currentRoute.value.query.touched_by).toEqual(['user-1'])
+    expect(router.currentRoute.value.query.document).toEqual([id('document', 2)])
+    expect(router.currentRoute.value.query.touched_by).toEqual([id('user', 1)])
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Clear all filters')!
       .trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    wrapper.unmount()
+  })
+
+  it('preserves page scope when changing search and assignment', async () => {
+    const { wrapper, router } = await mountedView({ page: id('page', 1) })
+    await wrapper.get('input[aria-label="Search people"]').setValue('Ada')
+    await flushPromises()
+    expect(router.currentRoute.value.query.page).toBe(id('page', 1))
+    wrapper.findComponent({ name: 'PeopleSearchBar' }).vm.$emit('update:assignment', 'mentions')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({
+      page: id('page', 1),
+      assignment: 'mentions',
+      q: 'Ada',
+    })
     wrapper.unmount()
   })
 
@@ -179,13 +197,13 @@ describe('people filter controls and URL restoration', () => {
     await choices[0]!.trigger('click')
     await choices[1]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.document).toEqual(['document-1', 'document-2'])
+    expect(router.currentRoute.value.query.document).toEqual([id('document', 1), id('document', 2)])
     await router.push({
       name: 'people-search',
-      query: { touched_by: 'user-2', touched_to: '2026-01-02T12:00:00Z' },
+      query: { touched_by: id('user', 2), touched_to: '2026-01-02T12:00:00Z' },
     })
     await flushPromises()
-    expect(wrapper.text()).toContain('Person record user: user Two')
+    expect(wrapper.text()).toContain('Modified by: user Two')
     expect(wrapper.findAllComponents(FilterDateTimePicker)[1]!.get('button').text()).not.toContain(
       'Pick date and time',
     )
@@ -240,7 +258,7 @@ describe('people filter controls and URL restoration', () => {
   })
   it('keeps server search results selectable by keyboard and supports removing selections', async () => {
     const { wrapper, router } = await mountedView()
-    const trigger = wrapper.get('button[aria-label="Person record users"]')
+    const trigger = wrapper.get('button[aria-label="Modified by"]')
     await trigger.trigger('click')
     await flushPromises()
     const search = body().get<HTMLInputElement>('input[role="combobox"]')
@@ -263,16 +281,16 @@ describe('people filter controls and URL restoration', () => {
   it('keeps all desktop controls and badges visible with no collapse action', async () => {
     const { wrapper, router } = await mountedView({
       assignment: 'faces',
-      touched_by: 'user-1',
-      api_key: 'api-key-1',
+      touched_by: id('user', 1),
+      api_key: id('api-key', 1),
     })
     const controls = wrapper.get('[aria-label="Search people filter controls"]')
     expect(controls.get('button[aria-label="Assignment"]').text()).toContain('Assigned faces')
-    for (const label of ['Documents', 'Person record users', 'Person record API keys'])
+    for (const label of ['Libraries', 'Documents', 'Pages', 'Modified by', 'Modified via key'])
       expect(controls.find(`button[aria-label="${label}"]`).exists()).toBe(true)
     expect(wrapper.find('[data-slot="collapsible-trigger"]').exists()).toBe(false)
     expect(wrapper.get('[aria-label="Active filters"]').text()).toContain('Assigned faces')
-    await wrapper.get('button[aria-label="Remove Person record user: user One"]').trigger('click')
+    await wrapper.get('button[aria-label="Remove Modified by: user One"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()
     expect(router.currentRoute.value.query.assignment).toBe('faces')
@@ -284,20 +302,22 @@ describe('people filter controls and URL restoration', () => {
       touched_from: '2026-01-03T12:00:00Z',
       touched_to: '2026-01-01T12:00:00Z',
     })
-    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(4)
+    expect(wrapper.findAllComponents(FilterDateTimePicker)).toHaveLength(2)
     expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
     wrapper.unmount()
   })
-  it('has one clear-all action for resource/evidence filters and preserves originating search context', async () => {
+  it('has one clear-all action for shared and People-only filters and preserves search, sort and witnesses', async () => {
     const { wrapper, router } = await mountedView({
       q: 'Irena',
+      sort: 'name',
       touched_from: '2026-01-01T00:00:00Z',
       link_state: 'verified',
-      evidence_key: '00000000-0000-4000-8000-000000000001',
-      origin_text: 'archive',
-      origin_return: '/documents?q=archive',
-      origin_source_touched_from: '2025-01-01T00:00:00Z',
+      assignment: 'faces',
+      api_key: id('api-key', 1),
+      page: id('page', 1),
+      origin_matched_face: id('page', 2),
     })
+    expect(wrapper.text()).toContain('Page: page One')
     expect(
       wrapper.findAll('button').filter((button) => button.text() === 'Clear all filters'),
     ).toHaveLength(1)
@@ -308,9 +328,8 @@ describe('people filter controls and URL restoration', () => {
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({
       q: 'Irena',
-      origin_text: 'archive',
-      origin_return: '/documents?q=archive',
-      origin_source_touched_from: '2025-01-01T00:00:00Z',
+      sort: 'name',
+      origin_matched_face: id('page', 2),
     })
     expect(
       wrapper.findAll('button').filter((button) => button.text() === 'Clear all filters'),

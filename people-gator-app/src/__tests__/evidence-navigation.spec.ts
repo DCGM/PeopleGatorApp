@@ -17,17 +17,17 @@ vi.mock('@/client', () => ({
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
   getEntityRouteApiV1EntitiesEntityIdGet: api.entity,
 }))
-import { useEvidenceFilters, relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { useSharedFilters, relatedQuery } from '@/viewmodels/shared-filters'
 import { usePersonDetail } from '@/viewmodels/person-detail'
 const one = '00000000-0000-4000-8000-000000000001',
   two = '00000000-0000-4000-8000-000000000002'
 const Harness = defineComponent({
   setup() {
     const route = useRoute(),
-      evidence = useEvidenceFilters()
+      evidence = useSharedFilters()
     const detail = usePersonDetail(
       () => String(route.params.personId),
-      () => evidence.filters.value.states,
+      () => evidence.filters.value.linkStates,
       evidence.params,
       computed(() => !evidence.error.value),
     )
@@ -57,7 +57,7 @@ describe('copied profile URLs and evidence requests', () => {
       Promise.resolve({
         data: {
           items: [],
-          total_count: [query['filter.evidence_touched_by_api_key_id']].flat().includes(two) ? 0 : 2,
+          total_count: [query['filter.last_touched_by_api_key_id']].flat().includes(two) ? 0 : 2,
           limit: 100,
           cursor: query.return_total_count && !query.cursor ? 'next' : null,
         },
@@ -71,7 +71,7 @@ describe('copied profile URLs and evidence requests', () => {
       routes: [{ path: '/people/:personId', name: 'person-detail', component: Harness }],
     })
     await router.push(
-      `/people/${one}?link_state=manual&link_state=verified&evidence_key=${one}&evidence_document=${two}&evidence_user=${one}&origin_person_touched_from=2020-01-01T00:00:00Z&origin_text=Irena`,
+      `/people/${one}?link_state=manual&link_state=verified&api_key=${one}&document=${two}&touched_by=${one}&q=Irena`,
     )
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     const wrapper = mount(Harness, {
@@ -83,20 +83,21 @@ describe('copied profile URLs and evidence requests', () => {
     expect(evidenceRequests().slice(-1)[0]).toMatchObject({
       'filter.entity_id': [one],
       'filter.entity_link_state': ['manual', 'verified'],
-      'filter.evidence_touched_by_api_key_id': [one],
+      // The profile's faces apply the shared criteria to each face itself.
+      'filter.last_touched_by_api_key_id': [one],
       'filter.document_source_id': [two],
-      'filter.evidence_touched_by_user_id': [one],
+      'filter.last_touched_by_user_id': [one],
       cursor: null,
       return_total_count: true,
     })
-    expect(evidenceRequests().slice(-1)[0]).not.toHaveProperty('filter.last_touched_from')
-    expect(evidenceRequests().slice(-1)[0]).not.toHaveProperty('filter.evidence_touched_from')
+    expect(Object.keys(evidenceRequests().slice(-1)[0]!).some((key) => key.includes('evidence'))).toBe(false)
+    expect(evidenceRequests().slice(-1)[0]).not.toHaveProperty('query.text')
     expect(wrapper.text()).toContain('2 matching of 7 faces')
     await wrapper.get('button').trigger('click')
     await flushPromises()
     expect(evidenceRequests().slice(-1)[0]?.cursor).toBe('next')
     const original = router.currentRoute.value.fullPath
-    await router.push({ query: { ...router.currentRoute.value.query, evidence_key: two } })
+    await router.push({ query: { ...router.currentRoute.value.query, api_key: two } })
     await flushPromises()
     expect(evidenceRequests().slice(-1)[0]?.cursor).toBeNull()
     expect(wrapper.text()).toContain('0 matching of 7 faces')
@@ -108,9 +109,9 @@ describe('copied profile URLs and evidence requests', () => {
     router.forward()
     await flushPromises()
     expect(wrapper.text()).toContain('0 matching of 7 faces')
-    const destination = relatedEvidenceQuery(router.currentRoute.value)
-    expect(destination.evidence_key).toEqual([two])
-    expect(destination.origin_person_touched_from).toBe('2020-01-01T00:00:00Z')
+    const destination = relatedQuery(router.currentRoute.value)
+    expect(destination.api_key).toEqual([two])
+    expect(destination).not.toHaveProperty('q')
     await router.push({ name: 'person-detail', params: { personId: two }, query: destination })
     await flushPromises()
     expect(evidenceRequests().slice(-1)[0]?.['filter.entity_id']).toEqual([two])

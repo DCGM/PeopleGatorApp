@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useEvidenceFilters, relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
-import { useLinkStateFilter } from '@/composables/link-state-filter'
+import { computed } from 'vue'
+import { relatedQuery, useSharedFilters } from '@/viewmodels/shared-filters'
 
 import { useRoute, useRouter } from 'vue-router'
 import { UserRound } from '@lucide/vue'
@@ -12,7 +11,6 @@ import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/viewmodels/people-search'
-import { readPeopleFilters, peopleFiltersUrl } from '@/viewmodels/people-filters'
 import { normalizeAssignmentFilter } from '@/viewmodels/assignment'
 import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
 import {
@@ -22,14 +20,13 @@ import {
   scoredOptions,
 } from '@/viewmodels/sort-options'
 
-const linkStates = useLinkStateFilter()
 const route = useRoute()
 const router = useRouter()
-const evidence = useEvidenceFilters()
+const shared = useSharedFilters()
 
 const resultsPerPage = 12
 function updateQuery(changes: import('vue-router').LocationQueryRaw) {
-  void router.push({ query: { ...route.query, ...changes, page: undefined, cursor: undefined } })
+  void router.push({ query: { ...route.query, ...changes, cursor: undefined } })
 }
 const searchTerm = computed({
   get: () => (typeof route.query.q === 'string' ? route.query.q : ''),
@@ -40,29 +37,6 @@ const assignment = computed({
   set: (value) =>
     updateQuery({ assignment: value === 'all' ? undefined : value, filters: undefined }),
 })
-const processingState = ref(readPeopleFilters(route.query))
-watch(
-  () => route.query,
-  (query) => {
-    processingState.value = readPeopleFilters(query)
-  },
-)
-const processingFilters = computed({
-  get: () => processingState.value,
-  set: (value) => {
-    processingState.value = value
-    updateQuery({
-      touched_from: undefined,
-      touched_to: undefined,
-      touched_by: undefined,
-      api_key: undefined,
-      document: undefined,
-      evidence_document: undefined,
-      ...peopleFiltersUrl(value),
-    })
-  },
-})
-
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(PEOPLE_SORTS, searching.value))
 const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
@@ -71,7 +45,6 @@ const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
 
 const {
   error,
-  filterError,
   hasNextPage,
   isFetchingNextPage,
   isLoading,
@@ -82,10 +55,8 @@ const {
   searchTerm,
   assignment,
   resultsPerPage,
-  processingFilters,
-  linkStates,
-  evidence.params,
-  computed(() => !evidence.error.value),
+  shared.params,
+  computed(() => !shared.error.value),
   sort,
 )
 </script>
@@ -98,13 +69,10 @@ const {
     </header>
 
     <PeopleSearchBar
-      v-model:link-states="linkStates"
       v-model:search-term="searchTerm"
       v-model:assignment="assignment"
-      v-model:processing-filters="processingFilters"
       v-model:sort="sort"
       :sort-options="sortOptions"
-      :filter-error="filterError"
       :result-count="resultCount"
     />
 
@@ -120,10 +88,7 @@ const {
           :to="{
             name: 'person-detail',
             params: { personId: person.id },
-            query: relatedEvidenceQuery(route, {
-              origin_matched_face: undefined,
-              origin_reference_face: undefined,
-            }),
+            query: relatedQuery(route),
           }"
         >
           <PeopleCard

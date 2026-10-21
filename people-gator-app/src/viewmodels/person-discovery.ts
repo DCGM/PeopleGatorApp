@@ -1,4 +1,4 @@
-import type { EvidenceQuery } from './evidence-filters'
+import type { SharedQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -47,7 +47,7 @@ export function usePersonDiscovery(
   referenceFaceModel: MaybeRefOrGetter<string | null>,
   nameQuery: MaybeRefOrGetter<string>,
   enabled: MaybeRefOrGetter<boolean>,
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidence: MaybeRefOrGetter<SharedQuery> = {},
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = RELEVANCE,
   peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
 ) {

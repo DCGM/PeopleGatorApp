@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
+import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed } from 'vue'
 import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
@@ -13,8 +13,8 @@ import {
   RELEVANCE,
   scoredOptions,
 } from '@/viewmodels/sort-options'
-const evidence = useEvidenceFilters()
-const { searchTerm, filters } = useDocumentFilters()
+const shared = useSharedFilters()
+const { searchTerm, unassigned } = useDocumentFilters()
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(DOCUMENT_SORTS, searching.value))
 const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
@@ -23,7 +23,6 @@ const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
 const {
   documents,
   resultCount,
-  filterError,
   error,
   isLoading,
   hasNextPage,
@@ -32,18 +31,15 @@ const {
   retry,
 } = useDocumentList(
   searchTerm,
-  filters,
+  shared.params,
+  unassigned,
   12,
-  evidence.params,
-  computed(() => !evidence.error.value),
+  computed(() => !shared.error.value),
   sort,
 )
 const filtered = computed(
   () =>
-    searchTerm.value.trim() ||
-    Object.entries(filters.value).some(([key, value]) =>
-      Array.isArray(value) ? value.length : key === 'unassigned' ? value !== 'all' : !!value,
-    ),
+    searchTerm.value.trim() || unassigned.value !== 'all' || hasSharedFilters(shared.filters.value),
 )
 </script>
 
@@ -56,11 +52,10 @@ const filtered = computed(
     </header>
     <DocumentListSearchBar
       v-model:search-term="searchTerm"
-      v-model:filters="filters"
+      v-model:unassigned="unassigned"
       v-model:sort="sort"
       :sort-options="sortOptions"
       :result-count="resultCount"
-      :filter-error="filterError"
     />
     <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
       Search reports a bounded set of ranked document candidates.
@@ -88,7 +83,7 @@ const filtered = computed(
       <Button type="button" variant="outline" class="mt-2" @click="retry()">Retry documents</Button>
     </div>
     <p
-      v-else-if="!isLoading && !filterError && documents.length === 0"
+      v-else-if="!isLoading && !shared.error.value && documents.length === 0"
       class="py-10 text-center text-sm text-muted-foreground"
     >
       {{

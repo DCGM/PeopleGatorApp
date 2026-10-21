@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { legacyFilterNotice, migrateLegacyFilters } from '@/viewmodels/shared-filters'
 
 import DocumentPageView from '@/views/DocumentPageView.vue'
 import DocumentSearchView from '@/views/DocumentSearchView.vue'
@@ -44,7 +45,17 @@ const router = createRouter({
   ],
 })
 
+// Copied #31 links: rename same-meaning criteria, drop the rest visibly (#52).
+let keepNotice = false
 router.beforeEach((to) => {
+  const migrated = migrateLegacyFilters(to.name, to.query)
+  if (migrated) {
+    legacyFilterNotice.value = migrated.dropped
+    keepNotice = migrated.dropped.length > 0
+    return { ...to, query: migrated.query, replace: true }
+  }
+  if (keepNotice) keepNotice = false
+  else legacyFilterNotice.value = []
   document.title = `${String(to.meta.title ?? 'People Gator')} | People Gator`
 })
 

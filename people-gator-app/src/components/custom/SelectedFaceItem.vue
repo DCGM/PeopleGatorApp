@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { relatedQuery } from '@/viewmodels/shared-filters'
 const route = useRoute()
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import {
@@ -139,9 +139,8 @@ watch(() => props.face.id, cancelCreating)
           :to="{
             name: 'person-detail',
             params: { personId: face.personId },
-            query: relatedEvidenceQuery(route, {
+            query: relatedQuery(route, {
               origin_matched_face: face.id,
-              ...(face.sourceId && { evidence_source: [face.sourceId] }),
             }),
           }"
           class="flex min-w-0 w-full items-center gap-1 underline-offset-4 transition-transform group hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

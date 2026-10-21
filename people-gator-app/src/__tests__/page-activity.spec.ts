@@ -52,8 +52,7 @@ describe('page annotation activity', () => {
       path: '/',
       query: {
         panel: 'activity',
-        origin_text: 'Irena',
-        origin_return: '/people?q=Irena',
+        library: 'preview-mzk',
         link_state: 'verified',
       },
     })
@@ -66,13 +65,13 @@ describe('page annotation activity', () => {
       .find((button) => button.attributes('aria-label')?.startsWith('Filter day '))!
     await day.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.evidence_from).toBeDefined()
-    expect(router.currentRoute.value.query.evidence_to).toBeDefined()
+    expect(router.currentRoute.value.query.touched_from).toBeDefined()
+    expect(router.currentRoute.value.query.touched_to).toBeDefined()
     await router.push({ query: { ...router.currentRoute.value.query, activity_group: 'user' } })
     await flushPromises()
     await wrapper.get('button[aria-label="Filter user Preview reviewer"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.evidence_user).toEqual([user])
+    expect(router.currentRoute.value.query.touched_by).toEqual([user])
     expect(router.currentRoute.value.query.link_state).toEqual(['verified'])
     expect(wrapper.text()).toContain('User not recorded')
     expect(wrapper.text()).toContain('Historical face')
@@ -84,9 +83,9 @@ describe('page annotation activity', () => {
       .find((button) => button.text() === 'Clear activity filters')!
       .trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.evidence_user).toBeUndefined()
-    expect(router.currentRoute.value.query.evidence_from).toBeUndefined()
-    expect(router.currentRoute.value.query.origin_return).toBe('/people?q=Irena')
+    expect(router.currentRoute.value.query.touched_by).toBeUndefined()
+    expect(router.currentRoute.value.query.touched_from).toBeUndefined()
+    expect(router.currentRoute.value.query.library).toEqual(['preview-mzk'])
     wrapper.unmount()
   })
   it('combines day and edit order in one select', async () => {

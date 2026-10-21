@@ -55,6 +55,11 @@ const response = (items: unknown[], total_count = items.length, cursor: string |
   data: { items, total_count, cursor, limit: 12 },
 })
 const cleanups: Array<() => void> = []
+// Previews are scoped by the internal document UUID (`<library>-<archive id>` here).
+const lib = (query: Record<string, string[]>) =>
+  query['filter.document_source_id']?.[0]?.split('-')[0] ?? query['filter.library']![0]!
+const user = '00000000-0000-4000-8000-000000000002'
+const key = '00000000-0000-4000-8000-000000000001'
 
 async function render(url = '/documents') {
   const router = createRouter({
@@ -89,9 +94,7 @@ beforeEach(() => {
   api.search.mockResolvedValue(response([doc('a')]))
   api.documents.mockResolvedValue(response([doc('a'), doc('b', 'shared', null)]))
   api.pages.mockImplementation(({ query }) =>
-    Promise.resolve(
-      response([page(query['filter.library'][0], `${query['filter.library'][0]}-1`)]),
-    ),
+    Promise.resolve(response([page(lib(query), `${lib(query)}-1`)])),
   )
   api.image.mockRejectedValue(new Error('Missing thumbnail'))
   api.entities.mockResolvedValue(response([{ name: 'Ada' }, { name: 'Ada' }, { name: 'Grace' }]))
@@ -126,9 +129,7 @@ describe('document search and bounded groups', () => {
     ])
     for (const [index, library] of ['a', 'b'].entries()) {
       const link = wrapper.findAll('.document-link')[index]!
-      expect(link.attributes('href')).toBe(
-        `/scans?library=${library}&document=shared`,
-      )
+      expect(link.attributes('href')).toBe(`/scans?document=${library}-shared`)
       expect(link.get('p').text()).toBe(`${library} · shared`)
       expect(link.attributes('aria-label')).toContain(`in ${library}`)
     }
@@ -150,8 +151,7 @@ describe('document search and bounded groups', () => {
       expect(api.pages).toHaveBeenCalledWith(
         expect.objectContaining({
           query: {
-            'filter.library': [library],
-            'filter.document_id': ['shared'],
+            'filter.document_source_id': [`${library}-shared`],
             sort: 'page_id',
             limit: 4,
             return_total_count: true,
@@ -164,21 +164,29 @@ describe('document search and bounded groups', () => {
   it.each(['', '?library=a'])('opens all document pages without implicit annotation filters: %s', async (query) => {
     const { wrapper, router } = await render('/documents' + query)
     const firstLink = wrapper.get('.document-link')
-    expect(firstLink.attributes('href')).toBe('/scans?library=a&document=shared')
-    expect(wrapper.get('a.scan-card').attributes('href')).toBe('/libraries/a/documents/shared/pages/a-1')
+    expect(firstLink.attributes('href')).toBe(`/scans?${query ? 'library=a&' : ''}document=a-shared`)
+    expect(wrapper.get('a.scan-card').attributes('href')).toBe(
+      `/libraries/a/documents/shared/pages/a-1${query}`,
+    )
     await firstLink.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'a', document: 'shared' })
+    expect(router.currentRoute.value.query).toEqual({
+      ...(query && { library: ['a'] }),
+      document: 'a-shared',
+    })
   })
-  it('retains explicitly selected annotation filters in document and scan links', async () => {
-    const key = '00000000-0000-4000-8000-000000000001'
-    const { wrapper, router } = await render(`/documents?library=a&evidence_key=${key}&link_state=verified`)
-    expect(wrapper.get('a.scan-card').attributes('href')).toContain('evidence_key=' + key)
-    expect(wrapper.get('a.scan-card').attributes('href')).toContain('link_state=verified')
+  it('carries the shared configuration unchanged into document and scan links', async () => {
+    const { wrapper, router } = await render(`/documents?library=a&api_key=${key}&link_state=verified&unassigned=yes&q=Album`)
+    const scan = wrapper.get('a.scan-card').attributes('href')!
+    expect(scan).toContain('api_key=' + key)
+    expect(scan).toContain('link_state=verified')
+    // Documents-only choices and search text stay behind.
+    expect(scan).not.toContain('unassigned')
+    expect(scan).not.toContain('q=')
     await wrapper.get('.document-link').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({
-      library: 'a', document: 'shared', evidence_key: [key], link_state: ['verified'],
+      library: ['a'], document: 'a-shared', api_key: [key], link_state: ['verified'],
     })
   })
   it('loads at most four previews and paginates document results without following page cursors', async () => {
@@ -191,12 +199,10 @@ describe('document search and bounded groups', () => {
     )
     api.pages.mockImplementation(({ query }) =>
       Promise.resolve(
-        query['filter.library'][0] === 'c'
+        lib(query) === 'c'
           ? response([])
           : response(
-              Array.from({ length: 4 }, (_, i) =>
-                page(query['filter.library'][0], `${query['filter.library'][0]}-${i}`),
-              ),
+              Array.from({ length: 4 }, (_, i) => page(lib(query), `${lib(query)}-${i}`)),
               20,
               'unused-next',
             ),
@@ -206,9 +212,7 @@ describe('document search and bounded groups', () => {
     expect(wrapper.findAll('.scan-card')).toHaveLength(8)
     expect(wrapper.text()).toContain('20 registered pages')
     expect(wrapper.findAll('.more-pages').map((node) => node.text())).toEqual(['+16', '+16'])
-    expect(wrapper.get('.more-pages').attributes('href')).toBe(
-      '/scans?library=a&document=shared',
-    )
+    expect(wrapper.get('.more-pages').attributes('href')).toBe('/scans?document=a-shared')
     expect(wrapper.text()).not.toContain('Showing 4 of')
     expect(wrapper.find('button[aria-label^="Load more pages"]').exists()).toBe(false)
     await wrapper
@@ -224,7 +228,7 @@ describe('document search and bounded groups', () => {
   it('retries a failed group without hiding the other document', async () => {
     let resolvePages: (value: unknown) => void = () => {}
     api.pages.mockImplementation(({ query }) =>
-      query['filter.library'][0] === 'a'
+      lib(query) === 'a'
         ? new Promise((resolve) => {
             resolvePages = resolve
           })
@@ -275,9 +279,9 @@ describe('document search and bounded groups', () => {
       'docs-next',
     ])
   })
-  it('restores all URL filters, combines them in list/search, and keeps them separate from previews', async () => {
+  it('restores all URL filters, combines them in list/search, and applies shared ones to previews', async () => {
     const { wrapper, router } = await render(
-      '/documents?q=Ada&library=a&library=b&link_state=verified&unassigned=no&touched_from=2026-01-01T00:00:00Z&touched_by=user-1&api_key=key-1',
+      `/documents?q=Ada&library=a&library=b&link_state=verified&unassigned=no&touched_from=2026-01-01T00:00:00Z&touched_by=${user}&api_key=${key}`,
     )
     expect(api.documents).not.toHaveBeenCalled()
     expect(api.search).toHaveBeenLastCalledWith(
@@ -287,24 +291,27 @@ describe('document search and bounded groups', () => {
           'filter.library': ['a', 'b'],
           'filter.entity_link_state': ['verified'],
           'filter.has_unassigned_faces': false,
-          'filter.last_touched_by_user_id': ['user-1'],
-          'filter.last_touched_by_api_key_id': ['key-1'],
+          'filter.last_touched_by_user_id': [user],
+          'filter.last_touched_by_api_key_id': [key],
           'filter.last_touched_from': '2026-01-01T00:00:00.000Z',
           cursor: null,
           return_total_count: true,
         }),
       }),
     )
+    // Previews: this document's pages matching the same shared criteria; the
+    // Documents-only unassigned-faces choice does not restrict pages.
     expect(api.pages.mock.calls[0]![0].query).toEqual({
-      'filter.library': ['a'],
-      'filter.document_id': ['shared'],
+      'filter.document_source_id': ['a-shared'],
       'filter.entity_link_state': ['verified'],
+      'filter.last_touched_by_user_id': [user],
+      'filter.last_touched_by_api_key_id': [key],
+      'filter.last_touched_from': '2026-01-01T00:00:00.000Z',
       sort: 'page_id',
       limit: 4,
       return_total_count: true,
       cursor: null,
     })
-    expect(api.libraries).toHaveBeenCalled()
     await wrapper.get('button[aria-label="Remove Library: a"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.library).toEqual(['b'])
@@ -363,7 +370,10 @@ describe('document search and bounded groups', () => {
     const harness = mount(
       defineComponent({
         setup() {
-          search = useDocumentSearch('', 'all', 12, { library: 'a', documentId: 'shared' })
+          search = useDocumentSearch('', 'all', 12, {
+            'filter.library': ['a'],
+            'filter.document_id': ['shared'],
+          })
           return () => h('div')
         },
       }),
