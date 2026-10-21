@@ -15,7 +15,11 @@ vi.mock('@/client', () => ({
 }))
 vi.mock('@/query/media', () => ({ fetchDocuments: mocks.documents }))
 vi.mock('@/query/search/documents', () => ({ fetchDocumentSearch: mocks.searchDocuments }))
-import { usePeopleFilterOptions, type FilterOptionKind } from '@/query/people-filter-options'
+import {
+  useActorLabels,
+  usePeopleFilterOptions,
+  type FilterOptionKind,
+} from '@/query/people-filter-options'
 
 function harness(kind: FilterOptionKind) {
   const search = ref('')
@@ -85,5 +89,39 @@ describe('searchable filter options', () => {
     })
     expect(result.labels.value['internal-source']).toBe('mzk / archive-id')
     cleanup()
+  })
+})
+
+describe('copied actor labels', () => {
+  it('looks up every selected ID instead of depending on the first option page', async () => {
+    const selected = ref(['user-on-page-2', 'missing'])
+    mocks.users.mockImplementation(async ({ query }) => ({
+      data: {
+        items:
+          query.q === 'missing' ? [] : [{ user_id: query.q, display_name: 'Selected reviewer' }],
+        cursor: null,
+      },
+    }))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    let labels!: ReturnType<typeof useActorLabels>
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          labels = useActorLabels('user', selected)
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    )
+    await flushPromises()
+    expect(labels.labels.value).toEqual({ 'user-on-page-2': 'Selected reviewer' })
+    expect(mocks.users).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { q: 'user-on-page-2', limit: 1 } }),
+    )
+    selected.value = []
+    await flushPromises()
+    expect(labels.labels.value).toEqual({})
+    wrapper.unmount()
+    client.clear()
   })
 })

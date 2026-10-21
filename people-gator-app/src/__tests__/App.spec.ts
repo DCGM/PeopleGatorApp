@@ -228,6 +228,20 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('shows and removes shared scope in the page workspace without losing selection', async () => {
+    await router.push('/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a')
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+    const sidebar = wrapper.get('.workspace-sidebar')
+    await sidebar.get('button[aria-label="Remove Library: preview-mzk"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.library).toBeUndefined()
+    expect(router.currentRoute.value.query.link_state).toEqual(['manual'])
+    expect(router.currentRoute.value.query.person).toBe('face-a')
+    expect(sidebar.get('[aria-label="Active filters"]').text()).toContain('Link state: Manual')
+    wrapper.unmount()
+  })
+
   it('links breadcrumbs to scoped scan lists and preserves scope when searching', async () => {
     const archive = '00000000-0000-4000-8000-00000000000d'
     await router.push(`/libraries/library/documents/${archive}/pages/page`)

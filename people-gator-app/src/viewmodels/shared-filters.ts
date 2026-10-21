@@ -37,7 +37,22 @@ export function localTimeToUtc(value: string): string | undefined {
 }
 
 export function utcToLocalTime(value: unknown): string {
-  if (typeof value !== 'string' || !/T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return ''
+  if (typeof value !== 'string') return ''
+  const parts = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})$/i,
+  )
+  if (!parts) return ''
+  const [, year, month, day, hour, minute, second = '0'] = parts
+  const calendar = new Date(`${year}-${month}-${day}T00:00:00Z`)
+  if (
+    +year! < 1 ||
+    calendar.getUTCMonth() + 1 !== +month! ||
+    calendar.getUTCDate() !== +day! ||
+    +hour! > 23 ||
+    +minute! > 59 ||
+    +second > 59
+  )
+    return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -204,7 +219,15 @@ export function useSharedFilters() {
     error,
     params: computed(() => sharedFiltersQuery(filters.value)),
     clear: () => {
-      filters.value = emptySharedFilters()
+      state.value = emptySharedFilters()
+      void router.push({
+        query: {
+          ...route.query,
+          ...sharedFiltersUrl(state.value),
+          cursor: undefined,
+          page_cursor: undefined,
+        },
+      })
     },
   }
 }

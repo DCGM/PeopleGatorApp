@@ -98,7 +98,12 @@ const combined = computed(() => [
   ...(props.specificFilters ?? []).map((tag) => ({ ...tag, key: 'specific:' + tag.key })),
 ])
 function clearAll() {
-  const cleared = new Set<string>([...sharedKeys, ...(props.specificKeys ?? [])])
+  const cleared = new Set<string>([
+    ...sharedKeys,
+    ...(props.specificKeys ?? []),
+    'cursor',
+    'page_cursor',
+  ])
   void router.push({
     query: Object.fromEntries(Object.entries(route.query).filter(([key]) => !cleared.has(key))),
   })

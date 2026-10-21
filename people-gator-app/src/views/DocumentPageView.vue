@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import SharedFilterTags from '@/components/custom/SharedFilterTags.vue'
 import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useSharedFilters } from '@/viewmodels/shared-filters'
+import { useSharedFilters, hasSharedFilters, legacyFilterNotice } from '@/viewmodels/shared-filters'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
@@ -631,6 +632,12 @@ onBeforeUnmount(() => {
           <TabsTrigger value="statistics">Statistics</TabsTrigger>
         </TabsList>
       </div>
+      <div
+        v-if="hasSharedFilters(evidence.filters.value) || evidence.error.value || legacyFilterNotice.length"
+        class="shrink-0 px-3 pb-3"
+      >
+        <SharedFilterTags />
+      </div>
       <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
         <FaceGallery
           class="shrink-0 border-l-0"
@@ -688,7 +695,7 @@ onBeforeUnmount(() => {
         />
       </TabsContent>
       <TabsContent value="activity" class="mt-0 min-h-0 overflow-y-auto">
-        <PageActivityPanel v-if="page" :source-id="page.source_id" />
+        <PageActivityPanel v-if="page" :source-id="page.source_id" hide-filter-tags />
       </TabsContent>
       <TabsContent value="statistics" class="mt-0 min-h-0 overflow-y-auto">
         <PageStatisticsPanel
