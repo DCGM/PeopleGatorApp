@@ -48,7 +48,12 @@ vi.mock('@/viewmodels/person-detail', () => ({
   }),
 }))
 
+vi.mock('@/query/face-models', () => ({
+  useFaceModels: () => ({ data: ref({ items: [] }), error: ref(null), refetch: vi.fn() }),
+}))
+
 vi.mock('@/viewmodels/person-discovery', () => ({
+  DISCOVERY_ANNOTATIONS: ['faces', 'aliases', 'name'],
   usePersonDiscovery: () => ({
     assignFaces: vi.fn<() => void>(),
     assignmentStatus: ref('idle'),

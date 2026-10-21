@@ -180,3 +180,43 @@ describe('document result cursors', () => {
     queryClient.clear()
   })
 })
+
+it.each(['faces', 'entities'] as const)(
+  'restarts %s entity discovery after source or entity changes',
+  async (kind) => {
+    const params = ref({
+      'query.entity_id': 'person-a',
+      'query.entity_annotations': ['faces'] as Array<'faces' | 'name'>,
+      limit: 2,
+    })
+    const api = kind === 'faces' ? mocks.searchFaces : mocks.searchEntities
+    api.mockImplementation((...args: unknown[]) => {
+      const query = (args[0] as { query: Record<string, unknown> }).query
+      return Promise.resolve({
+        data: { items: [], total_count: 4, limit: 2, cursor: query.cursor ? null : 'next' },
+      })
+    })
+    let result!: ReturnType<typeof useFaceSearchQuery> | ReturnType<typeof useEntitySearchQuery>
+    const wrapper = mountQuery(() => {
+      result = kind === 'faces' ? useFaceSearchQuery(params) : useEntitySearchQuery(params)
+    })
+    await flushPromises()
+    await result.fetchNextPage()
+    expect(result.data.value?.pages).toHaveLength(2)
+    params.value = { ...params.value, 'query.entity_annotations': ['name'] }
+    await flushPromises()
+    expect(api.mock.lastCall?.[0]).toMatchObject({
+      query: { 'query.entity_id': 'person-a', 'query.entity_annotations': ['name'], cursor: null },
+    })
+    expect(result.data.value?.pages).toHaveLength(1)
+    params.value = { ...params.value, 'query.entity_annotations': ['faces'] }
+    await flushPromises()
+    expect(result.data.value?.pages).toHaveLength(1)
+    params.value = { ...params.value, 'query.entity_id': 'person-b' }
+    await flushPromises()
+    expect(api.mock.lastCall?.[0]).toMatchObject({
+      query: { 'query.entity_id': 'person-b', cursor: null },
+    })
+    wrapper.unmount()
+  },
+)

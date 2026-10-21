@@ -20,16 +20,19 @@ function face(id: string, score = 93): PersonDiscoveryFace {
 }
 
 describe('PersonDiscoveryPanel', () => {
-  it('builds a combined person search from face and name signals', () => {
-    expect(personDiscoverySignals(['face-1', 'face-2'], 'face-model', '  Ada Lovelace  ')).toEqual({
-      'query.text': ['Ada Lovelace'],
-      'query.face_id': ['face-1', 'face-2'],
+  it('builds compact entity queries with canonical annotation choices', () => {
+    expect(
+      personDiscoverySignals('person-1', 'face-model', '  Extra text  ', ['name', 'faces']),
+    ).toEqual({
+      'query.entity_id': 'person-1',
+      'query.entity_annotations': ['faces', 'name'],
+      'query.text': ['Extra text'],
       'query.face_embedding_model': 'face-model',
-      'filter.entity_type': ['person'],
       limit: 40,
     })
-    expect(personDiscoverySignals(['face-without-embedding'], null, '')).toEqual({
-      'filter.entity_type': ['person'],
+    expect(personDiscoverySignals('person-1', null, '')).toEqual({
+      'query.entity_id': 'person-1',
+      'query.entity_annotations': ['faces', 'aliases', 'name'],
       limit: 40,
     })
   })
@@ -186,6 +189,8 @@ describe('PersonDiscoveryPanel', () => {
           {
             id: 'ada-king',
             name: 'Ada King',
+            textMatch: true,
+            matchedFaceIds: ['matched-face'],
             shortDescription: 'Mathematician and writer',
             aliases: ['Augusta Ada King'],
             portrait: '',
@@ -202,10 +207,10 @@ describe('PersonDiscoveryPanel', () => {
     expect(wrapper.findAllComponents(RouterLinkStub)[0]!.props('to')).toEqual({
       name: 'person-detail',
       params: { personId: 'ada-king' },
-      query: {},
+      query: { origin_matched_face: ['matched-face'] },
     })
     expect(wrapper.text()).toContain('Face')
-    expect(wrapper.text()).toContain('Name')
+    expect(wrapper.findAll('[data-slot=badge]').map((badge) => badge.text())).toContain('Text')
   })
 
   it('selects people and emits their IDs for a batch merge', async () => {
@@ -241,4 +246,46 @@ describe('PersonDiscoveryPanel', () => {
     await wrapper.setProps({ mergeSucceeded: true })
     expect(wrapper.find('[aria-label="Selected person actions"]').exists()).toBe(false)
   })
+})
+
+it('removes reference tags, resets sources without clearing search, and retries errors', async () => {
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: {
+      faces: [],
+      people: [],
+      currentName: 'Zora',
+      referenceFaceCount: 15,
+      annotations: ['faces', 'name'],
+      searchTerm: 'extra signal',
+      error: new Error('invalid search'),
+    },
+    global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+  })
+  expect(wrapper.get('[aria-label="Active reference inputs"]').findAll('small')).toHaveLength(2)
+  await wrapper.get('[aria-label="Remove reference faces"]').trigger('click')
+  expect(wrapper.emitted('update:annotations')?.[0]).toEqual([['name']])
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'Clear filters')!
+    .trigger('click')
+  expect(wrapper.emitted('update:annotations')?.[1]).toEqual([['faces', 'aliases', 'name']])
+  expect(wrapper.emitted('update:searchTerm')).toBeUndefined()
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'Retry')!
+    .trigger('click')
+  expect(wrapper.emitted('retry')).toHaveLength(1)
+  await wrapper.setProps({ annotations: [], searchTerm: '', error: undefined })
+  expect(wrapper.text()).toContain('Choose a reference input or enter search text.')
+  expect(wrapper.find('[aria-label="Active reference inputs"]').exists()).toBe(false)
+})
+
+
+it('labels text-only matches without inventing cosine percentages', () => {
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: { faces: [{ ...face('text-face'), score: null }], people: [], currentName: 'Zora', referenceFaceCount: 15 },
+    global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+  })
+  expect(wrapper.text()).toContain('Text match')
+  expect(wrapper.text()).not.toContain('sim ')
 })

@@ -23,6 +23,7 @@ import {
   SEARCH_CACHE_TIME,
   SEARCH_GC_TIME,
   searchPageSize,
+  useRestartSearchPages,
   type InfiniteResultPage,
 } from '@/query/search/shared'
 
@@ -62,6 +63,8 @@ export function useEntitySearchQuery(
   params: MaybeRefOrGetter<EntitySearchParams>,
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
+  const queryKey = computed(() => queryKeys.search.infiniteEntities(toValue(params)))
+  useRestartSearchPages(queryKey)
   return useInfiniteQuery<
     EntitySearchPage,
     Error,
@@ -69,7 +72,7 @@ export function useEntitySearchQuery(
     QueryKey,
     string | null
   >({
-    queryKey: computed(() => queryKeys.search.infiniteEntities(toValue(params))),
+    queryKey,
     queryFn: ({ pageParam, signal }) => {
       const resolvedParams = toValue(params)
       return fetchEntitySearchPage(

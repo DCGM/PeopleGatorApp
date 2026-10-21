@@ -4,7 +4,9 @@ import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
+import FilterMultiSelect from './FilterMultiSelect.vue'
 import {
+  X,
   Check,
   ChevronRight,
   CircleUserRound,
@@ -27,7 +29,7 @@ import { Card } from '@/components/ui/card'
 import { Item, ItemContent, ItemMedia } from '@/components/ui/item'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import SortControl from './SortControl.vue'
-import type { EntitySortField, FaceSortField } from '@/client'
+import type { EntityAnnotation, EntitySortField, FaceSortField } from '@/client'
 import type { SortOption, SortState } from '@/lib/sorting'
 
 const route = useRoute()
@@ -37,6 +39,7 @@ const props = defineProps<{
   people: PersonDiscoveryCandidate[]
   currentName: string
   referenceFaceCount: number
+  modelOptions?: { value: string; label: string }[]
   assigningFaces?: boolean
   mergingPeople?: boolean
   mergeSucceeded?: boolean
@@ -49,10 +52,32 @@ const props = defineProps<{
 }>()
 
 const searchTerm = defineModel<string>('searchTerm', { default: '' })
+const annotations = defineModel<EntityAnnotation[]>('annotations', {
+  default: () => ['faces', 'aliases', 'name'],
+})
+const faceModel = defineModel<string>('faceModel', { default: '' })
+const inputSearch = ref('')
+const inputOptions = computed(() =>
+  [
+    { id: 'faces', label: 'Faces' },
+    { id: 'aliases', label: 'Aliases' },
+    { id: 'name', label: 'Name' },
+  ].filter((option) => option.label.toLowerCase().includes(inputSearch.value.toLowerCase())),
+)
+const selectedInputs = computed({
+  get: () => annotations.value,
+  set: (values: string[]) => {
+    annotations.value = values.filter((value): value is EntityAnnotation =>
+      ['faces', 'aliases', 'name'].includes(value),
+    )
+  },
+})
+const inputLabels = { faces: 'Faces', aliases: 'Aliases', name: 'Name' }
 const faceSort = defineModel<SortState<FaceSortField>>('faceSort')
 const peopleSort = defineModel<SortState<EntitySortField>>('peopleSort')
 
 const emit = defineEmits<{
+  retry: []
   assignFaces: [faceIds: string[]]
   mergePeople: [entityIds: string[]]
 }>()
@@ -237,15 +262,72 @@ watch(
 
 <template>
   <div class="space-y-10 pt-6">
+    <div>
+      <SearchFilterPanel
+        v-model="searchTerm"
+        label="Discovery search"
+        placeholder="Add search text"
+        :result-count="props.faces.length + props.people.length"
+      >
+        <FilterMultiSelect
+          v-model="selectedInputs"
+          v-model:search="inputSearch"
+          label="Reference inputs"
+          :options="inputOptions"
+        />
+        <FilterSingleSelect
+          v-if="props.modelOptions?.length"
+          v-model="faceModel"
+          label="Face model"
+          :options="props.modelOptions"
+        />
+      </SearchFilterPanel>
+      <div
+        v-if="annotations.length > 0 && annotations.length < 3"
+        class="mt-3 flex min-w-0 flex-wrap items-center gap-2"
+        aria-label="Active reference inputs"
+      >
+        <Badge
+          v-for="input in annotations"
+          :key="input"
+          as="small"
+          variant="outline"
+          class="max-w-full gap-1"
+        >
+          <span class="min-w-0 break-all">Reference: {{ inputLabels[input] }}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-full"
+            :aria-label="`Remove reference ${inputLabels[input].toLowerCase()}`"
+            @click="annotations = annotations.filter((item) => item !== input)"
+            ><X aria-hidden="true"
+          /></Button>
+        </Badge>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          @click="annotations = ['faces', 'aliases', 'name']"
+          >Clear filters</Button
+        >
+      </div>
+      <p v-if="!annotations.length && !searchTerm.trim()" role="status" class="mt-3">
+        Choose a reference input or enter search text.
+      </p>
+      <div v-if="props.error" role="alert" class="mt-3 flex flex-wrap items-center gap-2">
+        <p>Search failed. Choose other reference inputs or a face model, then retry.</p>
+        <Button type="button" variant="outline" size="sm" @click="emit('retry')">Retry</Button>
+      </div>
+    </div>
     <section aria-labelledby="similar-faces-heading">
       <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
           <small class="font-semibold uppercase text-secondary">Face similarity</small>
           <h3 id="similar-faces-heading">Similar faces to review</h3>
           <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Compared against {{ props.referenceFaceCount }} linked
-            {{ props.referenceFaceCount === 1 ? 'face' : 'faces' }} from {{ props.currentName }}.
-            Open a face to inspect it in its source document, or use the checkbox to assign it.
+            Matches from the selected reference inputs for {{ props.currentName }}.
           </p>
         </div>
         <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
@@ -386,7 +468,8 @@ watch(
                 >Profile</RouterLink
               >
               <code class="ml-auto shrink-0 text-sm text-muted-foreground">
-                sim {{ face.score }}%
+                <template v-if="face.score != null">sim {{ face.score }}%</template>
+                <template v-else>Text match</template>
               </code>
             </p>
           </ItemContent>
@@ -416,9 +499,6 @@ watch(
       >
         <Images class="mb-2 size-7" aria-hidden="true" />
         <p v-if="props.loadingFaces">Searching the archive for similar faces…</p>
-        <p v-else-if="props.referenceFaceCount === 0">
-          Link at least one face to this person before searching by appearance.
-        </p>
         <p v-else-if="props.faces.length">No faces match this assignment filter.</p>
         <p v-else>No similar face matches were found.</p>
       </div>
@@ -430,15 +510,10 @@ watch(
           <small class="font-semibold uppercase text-secondary">Identity similarity</small>
           <h3 id="similar-people-heading">Other similar people</h3>
           <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Face matches and the name query are combined to rank likely duplicate or related person
-            records.
+            Review possible duplicates before merging.
           </p>
         </div>
-        <SearchFilterPanel
-          v-model="searchTerm"
-          label="Name or alias signal"
-          placeholder="Search by name or alias"
-        >
+        <SearchFilterPanel label="Discovery people" filters-only>
           <SortControl
             v-if="peopleSort && props.peopleSortOptions"
             v-model="peopleSort"
@@ -558,8 +633,8 @@ watch(
                 {{ person.aliases.join(' · ') }}
               </p>
               <div class="mt-2 flex flex-wrap gap-1">
-                <Badge v-if="props.referenceFaceCount" variant="outline">Face</Badge>
-                <Badge v-if="searchTerm.trim()" variant="outline">Name</Badge>
+                <Badge v-if="person.matchedFaceIds?.length" variant="outline">Face</Badge>
+                <Badge v-if="person.textMatch" variant="outline">Text</Badge>
               </div>
             </div>
             <ChevronRight
@@ -577,13 +652,8 @@ watch(
       >
         <UserRoundSearch class="mb-2 size-7" aria-hidden="true" />
         <p v-if="props.loadingPeople">Searching for similar people…</p>
-        <p v-else>No other person records match these face and name signals.</p>
+        <p v-else>No other people match the selected inputs.</p>
       </div>
-
-      <p v-if="props.error" class="mt-4 text-sm text-destructive">
-        The discovery request, face assignment, or person merge could not be completed. Try again
-        shortly.
-      </p>
     </section>
   </div>
 </template>

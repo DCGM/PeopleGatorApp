@@ -2,7 +2,7 @@ import type { EvidenceQuery } from './evidence-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-import type { EntitySortField, FaceSortField, PageResponse } from '@/client'
+import type { EntityAnnotation, EntitySortField, FaceSortField, PageResponse } from '@/client'
 import { sortParams, type SortState } from '@/lib/sorting'
 import { RELEVANCE } from '@/viewmodels/sort-options'
 import type {
@@ -23,49 +23,53 @@ function percentage(value: number) {
   return Math.round(value <= 1 ? value * 100 : value)
 }
 
+export const DISCOVERY_ANNOTATIONS: EntityAnnotation[] = ['faces', 'aliases', 'name']
+
 export function personDiscoverySignals(
-  faceIds: string[],
+  entityId: string,
   faceEmbeddingModel: string | null,
-  nameQuery: string,
+  extraText: string,
+  annotations: EntityAnnotation[] = DISCOVERY_ANNOTATIONS,
 ) {
-  const name = nameQuery.trim()
+  const text = extraText.trim()
   return {
-    ...(name && { 'query.text': [name] }),
-    ...(faceIds.length &&
-      faceEmbeddingModel && {
-        'query.face_id': faceIds,
-        'query.face_embedding_model': faceEmbeddingModel,
-      }),
-    'filter.entity_type': ['person'] as Array<'person'>,
+    ...(annotations.length && {
+      'query.entity_id': entityId,
+      'query.entity_annotations': DISCOVERY_ANNOTATIONS.filter((item) =>
+        annotations.includes(item),
+      ),
+    }),
+    ...(text && { 'query.text': [text] }),
+    ...(faceEmbeddingModel && { 'query.face_embedding_model': faceEmbeddingModel }),
     limit: DISCOVERY_LIMIT,
   }
 }
 
 export function usePersonDiscovery(
   personId: MaybeRefOrGetter<string>,
-  referenceFaceIds: MaybeRefOrGetter<string[]>,
   referenceFaceModel: MaybeRefOrGetter<string | null>,
-  nameQuery: MaybeRefOrGetter<string>,
+  extraText: MaybeRefOrGetter<string>,
   enabled: MaybeRefOrGetter<boolean>,
   evidence: MaybeRefOrGetter<EvidenceQuery> = {},
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = RELEVANCE,
   peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
+  annotations: MaybeRefOrGetter<EntityAnnotation[]> = DISCOVERY_ANNOTATIONS,
 ) {
-  const faceIds = computed(() => [...new Set(toValue(referenceFaceIds))])
-  const hasFaceSignal = computed(
-    () => faceIds.value.length > 0 && Boolean(toValue(referenceFaceModel)),
+  const signals = computed(() =>
+    personDiscoverySignals(
+      toValue(personId),
+      toValue(referenceFaceModel),
+      toValue(extraText),
+      toValue(annotations),
+    ),
   )
-  const canSearchFaces = computed(() => toValue(enabled) && hasFaceSignal.value)
-
+  const canSearch = computed(
+    () =>
+      toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim())),
+  )
   const faceSearchQuery = useFaceSearchQuery(
-    computed(() => ({
-      ...toValue(evidence),
-      'query.face_id': faceIds.value,
-      'query.face_embedding_model': toValue(referenceFaceModel) ?? undefined,
-      ...sortParams(toValue(faceSort)),
-      limit: DISCOVERY_LIMIT,
-    })),
-    canSearchFaces,
+    computed(() => ({ ...toValue(evidence), ...signals.value, ...sortParams(toValue(faceSort)) })),
+    canSearch,
   )
 
   const faceMatches = computed(() =>
@@ -151,7 +155,7 @@ export function usePersonDiscovery(
         portraitLoading:
           !matchedCropUrls.value.has(face.detection_id) &&
           (matchedCropQueries.value[index]?.isPending ?? false),
-        score: percentage(face.face_score ?? face.score),
+        score: face.face_score == null ? null : percentage(face.face_score),
         assignedEntityId: face.entity_id ?? null,
         assignedEntityName: face.entity_id
           ? (assignedEntityNames.value.get(face.entity_id) ?? face.entity_id)
@@ -165,14 +169,12 @@ export function usePersonDiscovery(
   )
 
   const entitySearchParams = computed(() => ({
-    ...personDiscoverySignals(faceIds.value, toValue(referenceFaceModel), toValue(nameQuery)),
     ...toValue(evidence),
+    ...signals.value,
+    'filter.entity_type': ['person'] as Array<'person'>,
     ...sortParams(toValue(peopleSort)),
   }))
-  const canSearchPeople = computed(
-    () => toValue(enabled) && (hasFaceSignal.value || Boolean(toValue(nameQuery).trim())),
-  )
-  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearchPeople)
+  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearch)
   const entityMatches = computed(() =>
     (entitySearchQuery.data.value?.pages ?? [])
       .flatMap((page) => page.items)
@@ -186,6 +188,7 @@ export function usePersonDiscovery(
       return {
         id: entity.entity_id,
         matchedFaceIds: entity.matched_detection_ids ?? [],
+        textMatch: entity.text_score != null,
         name: entity.name || 'Unnamed person',
         shortDescription: entity.short_description || '',
         aliases: entity.aliases ?? [],
@@ -225,14 +228,17 @@ export function usePersonDiscovery(
     ),
     isLoadingFaces: computed(
       () =>
-        canSearchFaces.value &&
-        (faceSearchQuery.isPending.value || faceSearchQuery.isFetching.value),
+        canSearch.value && (faceSearchQuery.isPending.value || faceSearchQuery.isFetching.value),
     ),
     isLoadingPeople: computed(
       () =>
-        canSearchPeople.value &&
+        canSearch.value &&
         (entitySearchQuery.isPending.value || entitySearchQuery.isFetching.value),
     ),
+    retry: () => {
+      void faceSearchQuery.refetch()
+      void entitySearchQuery.refetch()
+    },
     similarFaces,
     similarPeople,
   }

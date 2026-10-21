@@ -57,7 +57,7 @@ export type PersonDiscoveryFace = {
   id: string
   portrait: string
   portraitLoading: boolean
-  score: number
+  score: number | null
   assignedEntityId: string | null
   assignedEntityName?: string
   library?: string
@@ -67,6 +67,7 @@ export type PersonDiscoveryFace = {
 }
 
 export type PersonDiscoveryCandidate = {
+  textMatch?: boolean
   matchedFaceIds?: string[]
   id: string
   name: string

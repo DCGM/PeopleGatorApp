@@ -1,3 +1,28 @@
+import { useQueryClient, type InfiniteData, type QueryKey } from '@tanstack/vue-query'
+import { toValue, watch, type MaybeRefOrGetter } from 'vue'
+
+/** Returning to a previous search selection starts with its first cached page. */
+export function useRestartSearchPages(key: MaybeRefOrGetter<QueryKey>) {
+  const client = useQueryClient()
+  watch(
+    () => JSON.stringify(toValue(key)),
+    () => {
+      const queryKey = toValue(key)
+      client.setQueryData<InfiniteData<unknown>>(
+        queryKey,
+        (cached) =>
+          cached && {
+            ...cached,
+            pages: cached.pages.slice(0, 1),
+            pageParams: cached.pageParams.slice(0, 1),
+          },
+        { updatedAt: client.getQueryState(queryKey)?.dataUpdatedAt },
+      )
+    },
+    { flush: 'sync' },
+  )
+}
+
 export type InfiniteResultPage<Item, PageParam = number> = {
   items: Item[]
   totalCount: number
