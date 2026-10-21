@@ -10,7 +10,7 @@ import DocumentPageOverlay from '../components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
 import TopBar from '../components/custom/TopBar.vue'
 import router from '../router'
-import { readEvidenceFilters } from '@/viewmodels/evidence-filters'
+import { readSharedFilters } from '@/viewmodels/shared-filters'
 
 const documentWorkspaceMock = vi.hoisted(() => ({
   faces: [] as Array<Record<string, unknown>>,
@@ -138,13 +138,13 @@ describe('App', () => {
         name: 'person-detail',
         params: { personId: 'irena' },
         query: {
-          origin_return: `/people?q=Irena&evidence_key=${originalKey}`,
-          evidence_key: originalKey,
-          evidence_library: 'preview-mzk',
+          origin_return: `/people?q=Irena&api_key=${originalKey}`,
+          api_key: originalKey,
+          library: 'preview-mzk',
         },
       })
       const wrapper = mount(TopBar, { global: { plugins: [router] } })
-      await router.push({ query: { ...router.currentRoute.value.query, evidence_key: currentKey } })
+      await router.push({ query: { ...router.currentRoute.value.query, api_key: currentKey } })
       await flushPromises()
       const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
       expect(
@@ -158,10 +158,10 @@ describe('App', () => {
       await crumb.trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('people-search')
-      expect(readEvidenceFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
+      expect(readSharedFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
         currentKey ? [currentKey] : [],
       )
-      expect(readEvidenceFilters(router.currentRoute.value.query).libraries).toEqual([
+      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual([
         'preview-mzk',
       ])
       expect(router.currentRoute.value.query).not.toHaveProperty('origin_return')
@@ -220,7 +220,8 @@ describe('App', () => {
     expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Faces')
     expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(true)
     expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
-    expect(router.currentRoute.value.query.origin_text).toBe('Irena')
+    // Never-applied origin text is dropped from copied links (#52).
+    expect(router.currentRoute.value.query).not.toHaveProperty('origin_text')
     await router.push({ path: router.currentRoute.value.path, hash: '#link-statistics' })
     await flushPromises()
     expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
@@ -228,7 +229,8 @@ describe('App', () => {
   })
 
   it('links breadcrumbs to scoped scan lists and preserves scope when searching', async () => {
-    await router.push('/libraries/library/documents/document/pages/page')
+    const archive = '00000000-0000-4000-8000-00000000000d'
+    await router.push(`/libraries/library/documents/${archive}/pages/page`)
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
 
@@ -236,7 +238,7 @@ describe('App', () => {
     expect(crumbs.map((crumb) => crumb.text())).toEqual([
       'PeopleGator',
       'library',
-      'document',
+      archive,
       'Page page',
     ])
     expect(crumbs[0]!.attributes('href')).toBe('/documents')
@@ -244,10 +246,7 @@ describe('App', () => {
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({
-      library: 'library',
-      document: 'document',
-    })
+    expect(router.currentRoute.value.query).toEqual({ library: 'library', archive_document: archive })
     expect(wrapper.get('h1').text()).toBe('Document pages')
     await wrapper
       .get('input[placeholder="Search a person, page or document…"]')
@@ -255,19 +254,15 @@ describe('App', () => {
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({
       library: 'library',
-      document: 'document',
+      archive_document: archive,
       q: 'archives',
     })
-    await wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!.trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({
-      library: 'library',
-      evidence_library: ['library'],
-      origin_text: 'archives',
-    })
     expect(
-      wrapper.get('input[placeholder="Search a person, page or document…"]').element,
-    ).toHaveProperty('value', '')
+      wrapper
+        .get('[aria-label="Breadcrumb"]')
+        .findAll('a')
+        .map((crumb) => crumb.text()),
+    ).toEqual(['PeopleGator', 'Scans'])
     wrapper.unmount()
   })
 
@@ -458,8 +453,8 @@ describe('App', () => {
     documentWorkspaceMock.transcription = []
   })
 
-  it('removes page-number navigation from document search', async () => {
-    await router.push('/scans?q=history&page=2')
+  it('preserves a page scope when editing scan search', async () => {
+    await router.push('/scans?q=history&page=00000000-0000-4000-8000-000000000007')
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
 
     expect(wrapper.find('[data-slot="pagination"]').exists()).toBe(false)
@@ -468,7 +463,7 @@ describe('App', () => {
       .setValue('archives')
     await flushPromises()
 
-    expect(router.currentRoute.value.query).toEqual({ q: 'archives' })
+    expect(router.currentRoute.value.query).toEqual({ q: 'archives', page: '00000000-0000-4000-8000-000000000007' })
   })
 
   it('defines all application pages', () => {
@@ -505,24 +500,24 @@ describe('Scans and Documents navigation', () => {
         .get('[aria-label="Breadcrumb"]')
         .findAll('a')
         .map((node) => node.text()),
-    ).toEqual(['PeopleGator', 'Documents', 'mzk'])
+    ).toEqual(['PeopleGator', 'Documents'])
     await router.push('/libraries/mzk/documents/album/pages/scan')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
-      '/scans?library=mzk&document=album',
-    )
+    // Top-level navigation adds no implicit scope for the opened page.
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
     wrapper.unmount()
   })
 
   it('removes scoped scan badges and clears filters atomically while preserving text', async () => {
-    await router.push('/scans?q=Ada&library=a&document=shared&assignment=faces&link_state=verified')
+    const doc = '00000000-0000-4000-8000-00000000000d'
+    await router.push(`/scans?q=Ada&library=a&document=${doc}&assignment=faces&link_state=verified`)
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
-    await wrapper.get('button[aria-label="Remove Document: shared"]').trigger('click')
+    await wrapper.get(`button[aria-label="Remove Document: ${doc}"]`).trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.library).toBe('a')
+    expect(router.currentRoute.value.query.library).toEqual(['a'])
     expect(router.currentRoute.value.query.document).toBeUndefined()
-    expect(router.currentRoute.value.query.link_state).toBe('verified')
+    expect(router.currentRoute.value.query.link_state).toEqual(['verified'])
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Clear all filters')!
@@ -537,11 +532,9 @@ describe('Scans and Documents navigation', () => {
     await router.push('/documents?library=a&library=b')
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
-      '/documents?evidence_library=a&evidence_library=b&library=a&library=b',
+      '/documents?library=a&library=b',
     )
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain(
-      'evidence_library=a&evidence_library=b',
-    )
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans?library=a&library=b')
     expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
       'PeopleGator',
       'Documents',
@@ -557,10 +550,9 @@ describe('Scans and Documents navigation', () => {
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('document-list')
       expect(router.currentRoute.value.path).toBe('/documents')
-      expect(router.currentRoute.value.query).toEqual({
-        library: 'preview-mzk',
-        evidence_key: 'selected',
-      })
+      // A removed annotation-key criterion cannot silently become the
+      // documents' own modification criterion.
+      expect(router.currentRoute.value.query).toEqual({ library: 'preview-mzk' })
       expect(router.currentRoute.value.hash).toBe('#results')
       expect(document.title).toBe('Documents | People Gator')
       expect(wrapper.get('h1').text()).toBe('Browse documents')
@@ -581,11 +573,12 @@ describe('Scans and Documents navigation', () => {
         control === 'logo'
           ? wrapper.get('a[aria-label="PeopleGator"]')
           : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
-      expect(home.attributes('href')).toBe('/documents')
+      const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
+      expect(home.attributes('href')).toBe(router.resolve({ name: 'document-list', query: expected }).href)
       await home.trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('document-list')
-      expect(router.currentRoute.value.query).toEqual({})
+      expect(router.currentRoute.value.query).toEqual(expected)
       expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
       wrapper.unmount()
     }
@@ -602,14 +595,14 @@ describe('Scans and Documents navigation', () => {
     expect(router.currentRoute.value.name).toBe(name)
     expect(router.currentRoute.value.path).toBe(path)
     expect(router.currentRoute.value.query).toEqual({
-      evidence_library: 'preview-mzk',
+      library: ['preview-mzk'],
       link_state: 'verified',
     })
     const wrapper = mount(TopBar, { global: { plugins: [router] } })
     await wrapper.get('a[aria-label="Scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('document-search')
-    expect(readEvidenceFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
-    expect(readEvidenceFilters(router.currentRoute.value.query).states).toEqual(['verified'])
+    expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
+    expect(readSharedFilters(router.currentRoute.value.query).linkStates).toEqual(['verified'])
   })
 })

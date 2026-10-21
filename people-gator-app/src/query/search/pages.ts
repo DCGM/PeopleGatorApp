@@ -1,4 +1,4 @@
-import type { EvidenceQuery } from '@/viewmodels/evidence-filters'
+import type { SharedQuery } from '@/viewmodels/shared-filters'
 import { useInfiniteQuery, type InfiniteData, type QueryKey } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -25,7 +25,7 @@ import {
 export type PageSearchParams = NonNullable<SearchPagesGetApiV1SearchPagesGetData['query']>
 export type PageSearchRecord = PageResponse | FoundPage
 
-export type PageResultsParams = EvidenceQuery & {
+export type PageResultsParams = SharedQuery & {
   query: string
   'filter.library'?: string[]
   'filter.document_id'?: string[]

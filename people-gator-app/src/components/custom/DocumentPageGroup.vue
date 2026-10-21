@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { useEvidenceFilters, relatedEvidenceQuery, sharedEvidenceUrl } from '@/viewmodels/evidence-filters'
+import { relatedQuery, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed } from 'vue'
 import { ArrowUpRight, ChevronRight } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
 import EntityLinkStatistics from './EntityLinkStatistics.vue'
-import { useLinkStateFilter } from '@/composables/link-state-filter'
 import type { DocumentResponse } from '@/client'
 import DocumentCard from '@/components/custom/DocumentCard.vue'
 import DocumentCardSkeleton from '@/components/custom/DocumentCardSkeleton.vue'
@@ -13,33 +12,24 @@ import { Button } from '@/components/ui/button'
 import { documentTitle, useDocumentGroup } from '@/viewmodels/document-list'
 
 const route = useRoute()
-const evidence = useEvidenceFilters()
-const linkStates = useLinkStateFilter()
+const shared = useSharedFilters()
 const props = defineProps<{ document: DocumentResponse }>()
-const { cards, totalCount, filteredCount, error, isLoading, retry } = useDocumentGroup(
+const { cards, narrowed, totalCount, filteredCount, error, isLoading, retry } = useDocumentGroup(
   () => props.document,
   4,
-  linkStates,
-  evidence.params,
+  shared.params,
 )
 const widePreviews = useMediaQuery('(min-width: 640px)')
 const visibleCards = computed(() => cards.value.slice(0, widePreviews.value ? 4 : 2))
 const remainingCount = computed(() =>
   Math.max(0, (filteredCount.value ?? 0) - visibleCards.value.length),
 )
-// Browsing a document already scopes pages by library/archive ID. Copy the
-// selected annotation criteria without inventing a requirement for evidence.
-const navigationQuery = computed(() =>
-  relatedEvidenceQuery(route, sharedEvidenceUrl(route.query)),
-)
+// The shared configuration travels unchanged; opening a scan adds no scope.
+const navigationQuery = computed(() => relatedQuery(route))
+// Its scans: this document's scope replaces the document selection.
 const documentLocation = computed(() => ({
   name: 'document-search',
-  query: {
-    ...navigationQuery.value,
-    library: props.document.library,
-    document: props.document.document_id,
-    ...(linkStates.value.length && { link_state: linkStates.value }),
-  },
+  query: relatedQuery(route, { document: props.document.source_id }),
 }))
 </script>
 
@@ -69,7 +59,7 @@ const documentLocation = computed(() => ({
         </p>
       </RouterLink>
       <p v-if="totalCount !== null" class="mt-1 text-sm text-muted-foreground">
-        <template v-if="linkStates.length">{{ filteredCount }} matching of </template
+        <template v-if="narrowed">{{ filteredCount }} matching of </template
         >{{ totalCount }} registered {{ totalCount === 1 ? 'page' : 'pages' }}
       </p>
       <p class="mt-2 text-sm text-muted-foreground">
@@ -127,7 +117,7 @@ const documentLocation = computed(() => ({
         <RouterLink
           class="more-pages"
           :to="documentLocation"
-          :aria-label="`View ${remainingCount} more ${linkStates.length ? 'matching' : 'registered'} pages of ${documentTitle(document)}`"
+          :aria-label="`View ${remainingCount} more ${narrowed ? 'matching' : 'registered'} pages of ${documentTitle(document)}`"
         >
           <span class="text-secondary">+{{ remainingCount }}</span
           ><ChevronRight
@@ -145,8 +135,8 @@ const documentLocation = computed(() => ({
         class="w-full basis-full py-4 text-sm text-muted-foreground"
       >
         {{
-          linkStates.length
-            ? 'No pages match the selected link states.'
+          narrowed
+            ? 'No pages match the filters.'
             : 'No pages have been registered for this document yet.'
         }}
       </p>

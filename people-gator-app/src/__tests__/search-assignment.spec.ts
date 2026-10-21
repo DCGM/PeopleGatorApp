@@ -111,9 +111,9 @@ describe('assignment search filters', () => {
 
   it('applies breadcrumb scope to browsing and ranked search', async () => {
     const term = ref('')
-    const scope = ref<{ library?: string; documentId?: string }>({
-      library: 'library',
-      documentId: 'document-1',
+    const scope = ref<import('@/viewmodels/shared-filters').SharedQuery>({
+      'filter.library': ['library'],
+      'filter.document_source_id': ['document-1'],
     })
     const wrapper = mountQuery(() => {
       useDocumentSearch(term, ref('all'), 12, scope)
@@ -122,7 +122,7 @@ describe('assignment search filters', () => {
     expect(mocks.fetchPages).toHaveBeenLastCalledWith(
       expect.objectContaining({
         'filter.library': ['library'],
-        'filter.document_id': ['document-1'],
+        'filter.document_source_id': ['document-1'],
       }),
       expect.any(AbortSignal),
     )
@@ -133,11 +133,11 @@ describe('assignment search filters', () => {
         query: expect.objectContaining({
           'query.text': ['Ada'],
           'filter.library': ['library'],
-          'filter.document_id': ['document-1'],
+          'filter.document_source_id': ['document-1'],
         }),
       }),
     )
-    scope.value = { library: 'other-library' }
+    scope.value = { 'filter.library': ['other-library'] }
     await flushPromises()
     const lastRequest = mocks.searchPages.mock.calls[
       mocks.searchPages.mock.calls.length - 1
@@ -145,7 +145,7 @@ describe('assignment search filters', () => {
       query: Record<string, unknown>
     }
     expect(lastRequest.query['filter.library']).toEqual(['other-library'])
-    expect(lastRequest.query['filter.document_id']).toBeUndefined()
+    expect(lastRequest.query['filter.document_source_id']).toBeUndefined()
     wrapper.unmount()
   })
 

@@ -4,7 +4,7 @@ import type { EntityLinkState } from '@/client'
 import CreationDetails from './CreationDetails.vue'
 import PersonMentionItem from './PersonMentionItem.vue'
 import VerifyEntityLink from './VerifyEntityLink.vue'
-import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { relatedQuery } from '@/viewmodels/shared-filters'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 
 defineProps<{ mention: PersonMention; personId: string; linkStates: EntityLinkState[] }>()
@@ -23,7 +23,7 @@ const route = useRoute()
           pageId: mention.pageId,
         },
         query: {
-          ...relatedEvidenceQuery(route),
+          ...relatedQuery(route),
           selectedPerson: personId,
           ...(linkStates.length && { link_state: linkStates }),
         },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { relatedQuery } from '@/viewmodels/shared-filters'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
@@ -16,20 +16,18 @@ import {
 const route = useRoute()
 
 const breadcrumbs = computed(() => {
-  const library =
-    typeof route.params.libraryId === 'string' ? route.params.libraryId : route.query.library
-  const document =
-    typeof route.params.documentId === 'string' ? route.params.documentId : route.query.document
+  const library = route.params.libraryId
+  const document = route.params.documentId
   const items = [
     {
       label: 'PeopleGator',
-      to: { name: 'document-list' } as RouteLocationRaw,
+      to: { name: 'document-list', query: relatedQuery(route) } as RouteLocationRaw,
     },
   ]
   if (route.name === 'person-detail') {
     items.push({
       label: 'People',
-      to: { name: 'people-search', query: relatedEvidenceQuery(route) },
+      to: { name: 'people-search', query: relatedQuery(route) },
     })
     items.push({
       label: String(route.params.personId),
@@ -40,37 +38,33 @@ const breadcrumbs = computed(() => {
   if (route.name === 'document-list') {
     items.push({
       label: 'Documents',
-      to: { name: 'document-list', query: relatedEvidenceQuery(route) },
+      to: { name: 'document-list', query: relatedQuery(route) },
     })
-    if (typeof library === 'string') {
-      items.push({
-        label: library,
-        to: { name: 'document-list', query: relatedEvidenceQuery(route, { library }) },
-      })
-    }
     return items
   }
-  if (typeof library === 'string') {
+  // A page's library/document crumbs open that scope in Scans. The archive
+  // document ID resolves to its registered document there.
+  if (route.name === 'document-page' && typeof library === 'string') {
     items.push({
       label: library,
-      to: { name: 'document-search', query: relatedEvidenceQuery(route, { library }) },
+      to: { name: 'document-search', query: relatedQuery(route, { library }) },
     })
     if (typeof document === 'string') {
       items.push({
         label: document,
-        to: { name: 'document-search', query: relatedEvidenceQuery(route, { library, document }) },
+        to: { name: 'document-search', query: relatedQuery(route, { library, archive_document: document }) },
       })
     }
-    if (route.name === 'document-page') {
-      items.push({
-        label: `Page ${String(route.params.pageId)}`,
-        to: { path: route.path, query: route.query },
-      })
-    }
+    items.push({
+      label: `Page ${String(route.params.pageId)}`,
+      to: { path: route.path, query: route.query },
+    })
+  } else if (route.name === 'document-search') {
+    items.push({ label: 'Scans', to: { name: 'document-search', query: route.query } })
   } else if (route.name === 'people-search' || route.name === 'person-detail') {
     items.push({
       label: 'People',
-      to: { name: 'people-search', query: relatedEvidenceQuery(route) },
+      to: { name: 'people-search', query: relatedQuery(route) },
     })
     if (route.name === 'person-detail') {
       items.push({
@@ -85,18 +79,11 @@ const breadcrumbs = computed(() => {
 const isScanRoute = computed(
   () => route.name === 'document-search' || route.name === 'document-page',
 )
+// Top-level navigation carries only the shared configuration; on Scans the
+// tab keeps the current scan search.
 const scansLink = computed(() => ({
   name: 'document-search',
-  query: {
-    ...relatedEvidenceQuery(route),
-    ...Object.fromEntries(
-      ['library', 'document', 'q', 'assignment'].flatMap((key) =>
-        typeof route.query[key] === 'string' ? [[key, route.query[key]]] : [],
-      ),
-    ),
-    ...(typeof route.params.libraryId === 'string' && { library: route.params.libraryId }),
-    ...(typeof route.params.documentId === 'string' && { document: route.params.documentId }),
-  },
+  query: route.name === 'document-search' ? route.query : relatedQuery(route),
 }))
 const isPeopleRoute = computed(
   () => route.name === 'people-search' || route.name === 'person-detail',
@@ -109,7 +96,7 @@ const isPeopleRoute = computed(
   >
     <div class="flex shrink-0 items-center gap-2">
       <RouterLink
-        :to="{ name: 'document-list' }"
+        :to="{ name: 'document-list', query: relatedQuery(route) }"
         aria-label="PeopleGator"
         class="z-20 flex size-12 shrink-0 items-center justify-center bg-background"
       >
@@ -169,13 +156,7 @@ const isPeopleRoute = computed(
         </RouterLink>
 
         <RouterLink
-          :to="{
-            name: 'document-list',
-            query: relatedEvidenceQuery(
-              route,
-              route.query.library ? { library: route.query.library } : {},
-            ),
-          }"
+          :to="{ name: 'document-list', query: relatedQuery(route) }"
           aria-label="Documents"
           :aria-current="route.name === 'document-list' ? 'page' : undefined"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
@@ -192,7 +173,7 @@ const isPeopleRoute = computed(
         </RouterLink>
 
         <RouterLink
-          :to="{ name: 'people-search', query: relatedEvidenceQuery(route) }"
+          :to="{ name: 'people-search', query: relatedQuery(route) }"
           aria-label="People"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
           :class="

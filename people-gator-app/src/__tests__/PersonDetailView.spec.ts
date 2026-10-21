@@ -84,8 +84,8 @@ describe('PersonDetailView', () => {
           PersonPortrait: true,
           VerifyEntityLink: true,
           PersonFacesPanel: true,
-          EvidenceFilterControls: true,
-          EvidenceFilterTags: true,
+          SharedFilterControls: true,
+          SharedFilterTags: true,
         },
       },
     })

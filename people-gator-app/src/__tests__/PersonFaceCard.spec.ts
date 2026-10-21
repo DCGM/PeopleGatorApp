@@ -40,7 +40,7 @@ describe('person evidence cards', () => {
         },
       ],
     })
-    await router.push('/people/person?evidence_key=00000000-0000-4000-8000-000000000001&origin_text=Irena')
+    await router.push('/people/person?api_key=00000000-0000-4000-8000-000000000001')
     const wrapper = mount(PersonFaceCard, {
       props: {
         face: { ...face, verifiedBy: 'verifier', verifiedAt: '2026-10-20T09:00:00Z' },
@@ -61,7 +61,7 @@ describe('person evidence cards', () => {
     expect(wrapper.text()).toContain('Preview reviewer')
     expect(wrapper.find('details').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Detection origin')
-    expect(wrapper.get('a').attributes('href')).toContain('evidence_key=00000000-0000-4000-8000-000000000001')
+    expect(wrapper.get('a').attributes('href')).toContain('api_key=00000000-0000-4000-8000-000000000001')
     expect(wrapper.get('a').attributes('href')).toContain('person=detection')
     expect(wrapper.find('a a').exists()).toBe(false)
     const editor = wrapper.get('[title="Evidence changed by Preview reviewer"]')
@@ -69,7 +69,7 @@ describe('person evidence cards', () => {
     expect(editor.find('a').exists()).toBe(false)
     await editor.trigger('click')
     expect(router.currentRoute.value.name).toBe('person-detail')
-    expect(router.currentRoute.value.query.evidence_user).toBeUndefined()
+    expect(router.currentRoute.value.query.touched_by).toBeUndefined()
     await wrapper.setProps({ face: { ...face, pageId: '', metadata: undefined } })
     expect(wrapper.text()).toContain('Last changed not recorded')
     expect(wrapper.text()).toContain('User not recorded')

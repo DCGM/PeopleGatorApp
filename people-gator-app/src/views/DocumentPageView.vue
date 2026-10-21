@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
+import { useSharedFilters } from '@/viewmodels/shared-filters'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
@@ -58,7 +58,7 @@ const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const route = useRoute()
 const router = useRouter()
-const evidence = useEvidenceFilters()
+const evidence = useSharedFilters()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
 const linkStates = useLinkStateFilter()

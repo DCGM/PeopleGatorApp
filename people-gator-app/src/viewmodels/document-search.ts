@@ -1,6 +1,6 @@
-import type { EvidenceQuery } from './evidence-filters'
+import type { SharedQuery } from './shared-filters'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import type { EntityLinkState, PageResponse, PageSortField } from '@/client'
+import type { PageResponse, PageSortField } from '@/client'
 import type { SortState } from '@/lib/sorting'
 
 import { pageContentFilter, type PageContentFilter } from '@/viewmodels/assignment'
@@ -13,29 +13,21 @@ export function useDocumentSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<PageContentFilter>,
   pageSize = 12,
-  scope: MaybeRefOrGetter<{ library?: string; documentId?: string }> = {},
-  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
-  evidenceValid: MaybeRefOrGetter<boolean> = true,
+  shared: MaybeRefOrGetter<SharedQuery & { 'filter.document_id'?: string[] }> = {},
+  enabled: MaybeRefOrGetter<boolean> = true,
   sort?: MaybeRefOrGetter<SortState<PageSortField>>,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const contentFilter = computed(() => pageContentFilter(toValue(filter)))
   const pageResultsQuery = usePageResultsQuery(
-    computed(() => {
-      const { library, documentId } = toValue(scope)
-      return {
-        query: normalizedSearch.value,
-        ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
-        ...(library && { 'filter.library': [library] }),
-        ...(documentId && { 'filter.document_id': [documentId] }),
-        ...contentFilter.value,
-        ...toValue(evidence),
-        limit: pageSize,
-        sort: sort && toValue(sort),
-      }
-    }),
-    evidenceValid,
+    computed(() => ({
+      query: normalizedSearch.value,
+      ...toValue(shared),
+      ...contentFilter.value,
+      limit: pageSize,
+      sort: sort && toValue(sort),
+    })),
+    enabled,
   )
 
   const pages = computed(() => {
