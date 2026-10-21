@@ -83,6 +83,12 @@ and batch-mutation responses are not browsable result lists.
 complete filtered set, never normalizing spelling, case, accents or punctuation.
 `filter.name` on `/text-mentions` selects one group's occurrences.
 
+Each panel has one standard **Sort** select whose options are complete
+strategies: every field in both directions, natural direction first (for
+example *Name · A–Z*, *Name · Z–A*, *Last change · Newest first*). Activity's
+select combines its two keys, group order and edit order, into four strategies
+(for example *Days newest first · Edits oldest first*).
+
 Browser URLs keep one independent choice per panel, omitting defaults:
 
 | Panel | URL keys |

@@ -538,9 +538,10 @@ page count), `sorting-document-names` (search with an explicit name order),
 `sorting-people`, `sorting-scans` (one document's pages by page ID descending),
 `sorting-faces` (Marta's faces by confidence), `sorting-mention-groups`
 (Mentions → Exact appearance by occurrence count; expand a group to see its
-occurrences, sorted independently) and `sorting-similar-faces` (Discover). Change
-the **Sort** selector and direction button, reload, copy the link and use
-Back/Forward; each panel keeps its own choice. Seeded edit times are recorded by
+occurrences, sorted independently) and `sorting-similar-faces` (Discover). Choose
+a strategy (field and direction, such as *Pages · Highest first*) in a panel's
+single **Sort** select, reload, copy the link and use Back/Forward; each panel
+keeps its own choice. Seeded edit times are recorded by
 the repositories and are not reset on rerun; the preview has no historical
 unknown times, so integration tests cover unknown-last ordering with disposable
 records.

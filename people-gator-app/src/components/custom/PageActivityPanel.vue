@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { ArrowDownWideNarrow, ArrowUpNarrowWide } from '@lucide/vue'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { directionLabel, type SortDirection } from '@/lib/sorting'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ActiveFilters from './ActiveFilters.vue'
@@ -27,13 +27,31 @@ const order = computed(() => ({
   items: direction(route.query.activity_items, 'desc'),
 }))
 const groupKind = computed(() => (mode.value === 'user' ? 'text' : 'time'))
-function flip(
-  key: 'activity_order' | 'activity_items',
-  current: SortDirection,
-  fallback: SortDirection,
-) {
-  const next = current === 'asc' ? 'desc' : 'asc'
-  void router.push({ query: { ...route.query, [key]: next === fallback ? undefined : next } })
+// One select combines the group order and the edit order within groups.
+function orderLabel(groups: SortDirection, items: SortDirection) {
+  const name = mode.value === 'user' ? 'Users' : 'Days'
+  return `${name} ${directionLabel(groupKind.value, groups).toLowerCase()} · Edits ${directionLabel('time', items).toLowerCase()}`
+}
+const orderStrategies = computed(() => {
+  const groupOrders: SortDirection[] =
+    groupDefault.value === 'asc' ? ['asc', 'desc'] : ['desc', 'asc']
+  return groupOrders.flatMap((groups) =>
+    (['desc', 'asc'] as const).map((items) => ({
+      value: `${groups}:${items}`,
+      label: orderLabel(groups, items),
+    })),
+  )
+})
+function selectOrder(value: unknown) {
+  const [groups, items] = String(value).split(':')
+  if (!['asc', 'desc'].includes(groups!) || !['asc', 'desc'].includes(items!)) return
+  void router.push({
+    query: {
+      ...route.query,
+      activity_order: groups === groupDefault.value ? undefined : groups,
+      activity_items: items === 'desc' ? undefined : items,
+    },
+  })
 }
 const groups = computed(() => activityGroups(items.value, mode.value, order.value, label))
 const tags = computed(() => [
@@ -127,30 +145,19 @@ function clear() {
         ><TabsTrigger value="user">By user</TabsTrigger></TabsList
       >
     </Tabs>
-    <div class="flex flex-wrap gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        :aria-label="`${mode === 'user' ? 'User' : 'Day'} order: ${directionLabel(groupKind, order.groups)}. Change to ${directionLabel(groupKind, order.groups === 'asc' ? 'desc' : 'asc')}`"
-        @click="flip('activity_order', order.groups, groupDefault)"
-      >
-        <ArrowUpNarrowWide v-if="order.groups === 'asc'" aria-hidden="true" />
-        <ArrowDownWideNarrow v-else aria-hidden="true" />
-        {{ mode === 'user' ? 'Users' : 'Days' }}: {{ directionLabel(groupKind, order.groups) }}
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        :aria-label="`Edit order: ${directionLabel('time', order.items)}. Change to ${directionLabel('time', order.items === 'asc' ? 'desc' : 'asc')}`"
-        @click="flip('activity_items', order.items, 'desc')"
-      >
-        <ArrowUpNarrowWide v-if="order.items === 'asc'" aria-hidden="true" />
-        <ArrowDownWideNarrow v-else aria-hidden="true" />
-        Edits: {{ directionLabel('time', order.items) }}
-      </Button>
-    </div>
+    <Select :model-value="`${order.groups}:${order.items}`" @update:model-value="selectOrder">
+      <SelectTrigger aria-label="Sort activity" size="sm" class="min-w-0 max-w-full">
+        <span class="min-w-0 truncate">Sort: {{ orderLabel(order.groups, order.items) }}</span>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem
+          v-for="strategy in orderStrategies"
+          :key="strategy.value"
+          :value="strategy.value"
+          >{{ strategy.label }}</SelectItem
+        >
+      </SelectContent>
+    </Select>
     <ActiveFilters
       clear-label="Clear activity filters"
       :filters="tags"

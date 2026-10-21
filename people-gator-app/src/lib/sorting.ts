@@ -50,6 +50,30 @@ export function directionLabel(kind: SortKind, direction: SortDirection) {
   return DIRECTION_LABELS[kind][direction]
 }
 
+export type SortStrategy<Field extends string = string> = SortState<Field> & {
+  /** Stable select value, `field:direction`. */
+  value: string
+  label: string
+}
+
+/**
+ * Every field in both directions as one selectable strategy, natural direction
+ * first, e.g. "Name · A–Z", "Name · Z–A", "Last change · Newest first".
+ */
+export function sortStrategies<Field extends string>(
+  options: readonly SortOption<Field>[],
+): SortStrategy<Field>[] {
+  return options.flatMap((option) => {
+    const natural = defaultDirection(option.value)
+    return ([natural, natural === 'asc' ? 'desc' : 'asc'] as const).map((direction) => ({
+      field: option.value,
+      direction,
+      value: `${option.value}:${direction}`,
+      label: `${option.label} · ${directionLabel(option.kind, direction)}`,
+    }))
+  })
+}
+
 /**
  * Read one list's sort from the URL. Unknown fields, including Relevance when
  * no score exists, recover to the list's default with truthful controls.

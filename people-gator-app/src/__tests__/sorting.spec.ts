@@ -16,7 +16,14 @@ vi.mock('@/client', async (original) => ({
 
 import SortControl from '@/components/custom/SortControl.vue'
 import { Select } from '@/components/ui/select'
-import { listSortParams, readSort, sortUrl, useRouteSort, type SortState } from '@/lib/sorting'
+import {
+  listSortParams,
+  readSort,
+  sortStrategies,
+  sortUrl,
+  useRouteSort,
+  type SortState,
+} from '@/lib/sorting'
 import { useDocumentResultsQuery } from '@/query/search/documents'
 import { activityGroups } from '@/viewmodels/page-activity'
 import {
@@ -118,7 +125,19 @@ describe('shared sort state', () => {
 })
 
 describe('SortControl', () => {
-  it('selects a field with its natural direction and toggles the direction', async () => {
+  it('offers each field and direction as one combined strategy', async () => {
+    expect(sortStrategies(browse.slice(0, 2)).map((item) => item.label)).toEqual([
+      'Name · A–Z',
+      'Name · Z–A',
+      'Library · A–Z',
+      'Library · Z–A',
+    ])
+    expect(
+      sortStrategies(browse.filter((option) => option.value === 'last_touched_at')).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['Last processing · Newest first', 'Last processing · Oldest first'])
+
     const sort = ref<SortState>({ field: 'name', direction: 'asc' })
     const wrapper = mount(SortControl, {
       props: {
@@ -130,17 +149,16 @@ describe('SortControl', () => {
         },
       },
     })
-    expect(wrapper.text()).toContain('Sort: Name')
-    const toggle = wrapper.get('button[aria-label^="Order:"]')
-    expect(toggle.attributes('aria-label')).toBe('Order: A–Z. Change to Z–A')
-    await toggle.trigger('click')
-    expect(sort.value).toEqual({ field: 'name', direction: 'desc' })
-    wrapper.findComponent(Select).vm.$emit('update:modelValue', 'last_touched_at')
+    expect(wrapper.text()).toContain('Sort: Name · A–Z')
+    // A single control: no separate direction button.
+    expect(wrapper.findAll('button[aria-label^="Order:"]')).toHaveLength(0)
+    wrapper.findComponent(Select).vm.$emit('update:modelValue', 'name:desc')
     await flushPromises()
-    expect(sort.value).toEqual({ field: 'last_touched_at', direction: 'desc' })
-    expect(wrapper.get('button[aria-label^="Order:"]').attributes('aria-label')).toBe(
-      'Order: Newest first. Change to Oldest first',
-    )
+    expect(sort.value).toEqual({ field: 'name', direction: 'desc' })
+    wrapper.findComponent(Select).vm.$emit('update:modelValue', 'page_count:desc')
+    await flushPromises()
+    expect(sort.value).toEqual({ field: 'page_count', direction: 'desc' })
+    expect(wrapper.text()).toContain('Sort: Pages · Highest first')
   })
 })
 
