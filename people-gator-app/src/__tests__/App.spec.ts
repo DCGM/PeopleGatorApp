@@ -52,6 +52,20 @@ vi.mock('@/viewmodels/document-search', () => ({
   }),
 }))
 
+vi.mock('@/viewmodels/document-list', () => ({
+  useDocumentList: () => ({
+    documents: ref([]),
+    resultCount: ref(0),
+    filterError: ref(null),
+    error: ref(null),
+    isLoading: ref(false),
+    hasNextPage: ref(false),
+    isFetchingNextPage: ref(false),
+    loadMore: vi.fn(),
+    retry: vi.fn(),
+  }),
+}))
+
 vi.mock('@/viewmodels/people-search', () => ({
   usePeopleSearch: () => ({
     error: ref(null),
@@ -225,7 +239,7 @@ describe('App', () => {
       'document',
       'Page page',
     ])
-    expect(crumbs[0]!.attributes('href')).toBe('/scans')
+    expect(crumbs[0]!.attributes('href')).toBe('/documents')
     expect(crumbs[1]!.attributes('href')).toContain('library=library')
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
@@ -535,9 +549,67 @@ describe('Scans and Documents navigation', () => {
     wrapper.unmount()
   })
 
-  it('keeps the default landing route on Scans', async () => {
-    await router.push('/')
-    expect(router.currentRoute.value.path).toBe('/scans')
-    expect(document.title).toBe('Scan search | People Gator')
+  it.each(['/', '/unknown/nested/path'])(
+    'opens Documents from %s and preserves the incoming query and hash',
+    async (path) => {
+      await router.push(`${path}?library=preview-mzk&evidence_key=selected#results`)
+      const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('document-list')
+      expect(router.currentRoute.value.path).toBe('/documents')
+      expect(router.currentRoute.value.query).toEqual({
+        library: 'preview-mzk',
+        evidence_key: 'selected',
+      })
+      expect(router.currentRoute.value.hash).toBe('#results')
+      expect(document.title).toBe('Documents | People Gator')
+      expect(wrapper.get('h1').text()).toBe('Browse documents')
+      expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
+      expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBeUndefined()
+    },
+  )
+
+  it.each([
+    '/scans?q=Ada&library=preview-mzk',
+    '/libraries/preview-mzk/documents/album/pages/page',
+    '/people/ada?evidence_library=preview-mzk',
+  ])('opens Documents with either home control from %s', async (path) => {
+    for (const control of ['logo', 'breadcrumb']) {
+      await router.push(path)
+      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      const home =
+        control === 'logo'
+          ? wrapper.get('a[aria-label="PeopleGator"]')
+          : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
+      expect(home.attributes('href')).toBe('/documents')
+      await home.trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('document-list')
+      expect(router.currentRoute.value.query).toEqual({})
+      expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
+      wrapper.unmount()
+    }
+  })
+
+  it.each([
+    ['/scans', 'document-search'],
+    ['/documents', 'document-list'],
+    ['/libraries/preview-mzk/documents/album/pages/page', 'document-page'],
+    ['/people', 'people-search'],
+    ['/people/ada', 'person-detail'],
+  ])('keeps explicit %s links and shared filters', async (path, name) => {
+    await router.push(`${path}?evidence_library=preview-mzk&link_state=verified`)
+    expect(router.currentRoute.value.name).toBe(name)
+    expect(router.currentRoute.value.path).toBe(path)
+    expect(router.currentRoute.value.query).toEqual({
+      evidence_library: 'preview-mzk',
+      link_state: 'verified',
+    })
+    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    await wrapper.get('a[aria-label="Scans"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('document-search')
+    expect(readEvidenceFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
+    expect(readEvidenceFilters(router.currentRoute.value.query).states).toEqual(['verified'])
   })
 })
