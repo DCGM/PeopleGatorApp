@@ -49,7 +49,7 @@ export function useFaceAlignedCropQuery(
   maxWidth?: MaybeRefOrGetter<number | undefined>,
 ) {
   return useQuery({
-    queryKey: computed(() => queryKeys.faces.alignedCrop(toValue(detectionId), toValue(maxWidth))),
+    queryKey: computed(() => queryKeys.faceCrops.aligned(toValue(detectionId), toValue(maxWidth))),
     queryFn: ({ signal }) => fetchFaceAlignedCrop(toValue(detectionId), toValue(maxWidth), signal),
     enabled: computed(() => Boolean(toValue(detectionId))),
     staleTime: Number.POSITIVE_INFINITY,
@@ -234,8 +234,7 @@ export function useReviewFacesMutation() {
     onSettled: async () => {
       await Promise.all(
         [
-          queryKeys.faces.lists(),
-          queryKeys.faces.details(),
+          queryKeys.faces.all,
           queryKeys.entities.all,
           queryKeys.pages.all,
           queryKeys.documents.all,

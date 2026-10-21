@@ -164,7 +164,7 @@ export function usePersonDetail(
   const alignedCropQueries = useQueries({
     queries: computed(() =>
       detectionIds.value.map((detectionId) => ({
-        queryKey: queryKeys.faces.alignedCrop(detectionId, 256),
+        queryKey: queryKeys.faceCrops.aligned(detectionId, 256),
         queryFn: ({ signal }: { signal: AbortSignal }) =>
           fetchFaceAlignedCrop(detectionId, 256, signal),
         staleTime: Number.POSITIVE_INFINITY,

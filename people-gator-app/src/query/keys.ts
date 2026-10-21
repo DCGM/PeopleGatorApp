@@ -23,10 +23,14 @@ export const queryKeys = {
     lists: () => ['faces', 'list'] as const,
     list: (params?: QueryParams) => ['faces', 'list', params ?? {}] as const,
     infinite: (params?: QueryParams) => ['faces', 'list', 'infinite', params ?? {}] as const,
-    details: () => ['faces', 'detail'] as const,
     detail: (detectionId: string) => ['faces', 'detail', detectionId] as const,
-    alignedCrop: (detectionId: string, maxWidth?: number) =>
-      ['faces', 'aligned-crop', detectionId, maxWidth] as const,
+  },
+  // Crops are immutable per detection. Keep them outside `faces` so evidence
+  // edits that invalidate faces do not re-download every displayed portrait.
+  faceCrops: {
+    all: ['face-crops'] as const,
+    aligned: (detectionId: string, maxWidth?: number) =>
+      ['face-crops', 'aligned', detectionId, maxWidth] as const,
   },
   textMentions: {
     all: ['text-mentions'] as const,

@@ -45,7 +45,7 @@ describe('canonical person media', () => {
     )
     expect(
       queryClient.getQueryData(
-        queryKeys.faces.alignedCrop('saved-face-outside-evidence-page', 256),
+        queryKeys.faceCrops.aligned('saved-face-outside-evidence-page', 256),
       ),
     ).toBeInstanceOf(Blob)
     expect(wrapper.findComponent({ name: 'AvatarImage' }).props('src')).toBe('blob:portrait')
@@ -82,7 +82,7 @@ describe('canonical person media', () => {
           finish = resolve
         }),
     )
-    const refresh = queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
+    const refresh = queryClient.invalidateQueries({ queryKey: queryKeys.faceCrops.all })
     await flushPromises()
     expect(wrapper.findComponent({ name: 'AvatarImage' }).props('loading')).toBe(false)
     expect(wrapper.findComponent({ name: 'AvatarImage' }).props('src')).toBe('blob:portrait')

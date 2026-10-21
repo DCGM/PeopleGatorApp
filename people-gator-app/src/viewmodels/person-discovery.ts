@@ -99,7 +99,7 @@ export function usePersonDiscovery(
   const matchedCropQueries = useQueries({
     queries: computed(() =>
       matchedFaceIds.value.map((faceId) => ({
-        queryKey: queryKeys.faces.alignedCrop(faceId, 320),
+        queryKey: queryKeys.faceCrops.aligned(faceId, 320),
         queryFn: ({ signal }: { signal: AbortSignal }) => fetchFaceAlignedCrop(faceId, 320, signal),
         staleTime: Number.POSITIVE_INFINITY,
         gcTime: DISCOVERY_GC_TIME,
