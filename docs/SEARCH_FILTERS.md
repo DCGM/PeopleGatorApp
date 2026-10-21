@@ -11,7 +11,7 @@ runtime filter-definition file or saved search-profile service.
 | Parameter | Meaning |
 | --- | --- |
 | `query.text` | Repeated unique nonblank text queries |
-| `query.face_id` | Repeated unique existing reference-face UUIDs |
+| `query.face_id` | Repeated unique existing reference-face UUIDs with usable cosine embeddings |
 | `query.face_embedding_model` | Registered model stub; every reference needs a vector for it |
 | `query.exclude_reference_face_id` | Exclude the reference faces; defaults to true |
 | `query.score_aggregation` | `min` (default), `max` or `average` across query items within a modality |
@@ -23,6 +23,50 @@ use higher-is-better semantics. Modalities rank independently after aggregation;
 RRF sums `1 / (60 + rank)` using one-based ranks and equal modality weights.
 Final order is score descending, then object UUID ascending. Raw text scores
 are backend-specific; final scores are rank signals, not identity probabilities.
+For `/search-faces` and `/search-entities` only, `query.entity_id=<UUID>`
+resolves reference inputs on the server. Repeat `query.entity_annotations=faces`,
+`aliases`, or `name` to select any combination; omission equals all three. Faces
+use every linked, compatible finite nonzero vector for the selected model,
+independently of frontend pagination and result filters. Aliases and name use the
+recorded reference text. Alias selection does not restrict candidate matching to
+candidate aliases. Explicit text/face inputs supplement selected entity inputs;
+duplicated derived signals are counted once. `filter.entity_id` still restricts
+results and never supplies reference inputs.
+
+```text
+/api/v1/search-faces?query.entity_id=<UUID>&query.entity_annotations=faces
+/api/v1/search-entities?query.entity_id=<UUID>&query.entity_annotations=aliases&query.entity_annotations=name
+```
+
+Unknown entities and selections with no usable combined signal return **422
+`invalid_search`**. Unsupported annotation values return 422 validation errors;
+annotations without an entity are invalid. Individual derived faces with missing,
+other-model or zero embeddings are skipped. Explicit face IDs remain strict:
+missing IDs, missing model embeddings and zero/unusable cosine embeddings return
+422 even alongside usable inputs. Undefined candidate cosine distances are
+excluded before aggregation; a text match may still return that candidate with
+`face_score=null`. Scores retain finite validation; internal result validation
+failures are server errors, not malformed-query errors. No scores are fabricated.
+
+With default reference exclusion, entity search excludes the reference entity;
+face search excludes all of its linked faces, also for name/alias-only searches.
+`query.exclude_reference_face_id=false` includes them. Explicit queries retain
+their existing face-ID exclusion behavior. Scoring, sorting, RRF fusion and
+bounded HNSW retrieval (at most eight representatives, 200 candidates each) are
+unchanged. Cursors bind the original entity and canonical annotation selection;
+changing either rejects reuse. Equivalent omitted/all or reordered selections
+share the same fingerprint. Stored-input edits can change subsequent rankings.
+Entity references require PostgreSQL; Weaviate returns 501 unsupported_operation
+instead of silently ignoring them. Other explicit Weaviate behavior is unchanged.
+
+Discover uses this compact contract for both result lists. **Reference inputs**
+selects sources; **Face model** chooses a registered embedding model (listing
+models requires browse scope; registration remains admin-only). Optional search
+text adds another signal. Choices are shareable through `discovery_annotations`,
+`discovery_model` and `discovery_text`; changes restart pagination. Selected source
+tags remain available with mobile controls collapsed. Empty/error states allow
+changing inputs and retrying without resetting evidence filters or assignments.
+
 Reference vectors are already stored; this search does not require an inference
 service. Large reference sets use bounded representative/candidate retrieval as
 documented in the [persistence guide](../people-gator-api/src/people_gator_api/persistence/README.md).

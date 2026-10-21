@@ -172,6 +172,11 @@ export type DocumentResponse = {
 export type DocumentSortField = 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
 
 /**
+ * EntityAnnotation
+ */
+export type EntityAnnotation = 'faces' | 'aliases' | 'name';
+
+/**
  * EntityCreateRequest
  *
  * Request body for creating a new entity.
@@ -2703,6 +2708,18 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     path?: never;
     query?: {
         /**
+         * Query.Entity Id
+         *
+         * Resolve stored reference inputs from this entity. Independent of filter.entity_id. Unknown entities or no usable combined inputs produce 422 invalid_search.
+         */
+        'query.entity_id'?: string | null;
+        /**
+         * Query.Entity Annotations
+         *
+         * Reference inputs: faces, aliases, name, or any combination. Omitted means all three. Derived inputs are combined with explicit text/face inputs; incompatible entity faces are skipped.
+         */
+        'query.entity_annotations'?: Array<EntityAnnotation> | null;
+        /**
          * Query.Text
          *
          * Unique, non-blank text queries. Candidate scores are aggregated across them.
@@ -2711,7 +2728,7 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
         /**
          * Query.Face Id
          *
-         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         * Unique reference face IDs. Every ID must exist and contain a finite, nonzero embedding for the selected model.
          */
         'query.face_id'?: Array<string> | null;
         /**
@@ -2905,6 +2922,18 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
     path?: never;
     query?: {
         /**
+         * Query.Entity Id
+         *
+         * Resolve stored reference inputs from this entity. Independent of filter.entity_id. Unknown entities or no usable combined inputs produce 422 invalid_search.
+         */
+        'query.entity_id'?: string | null;
+        /**
+         * Query.Entity Annotations
+         *
+         * Reference inputs: faces, aliases, name, or any combination. Omitted means all three. Derived inputs are combined with explicit text/face inputs; incompatible entity faces are skipped.
+         */
+        'query.entity_annotations'?: Array<EntityAnnotation> | null;
+        /**
          * Query.Text
          *
          * Unique, non-blank text queries. Candidate scores are aggregated across them.
@@ -2913,7 +2942,7 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
         /**
          * Query.Face Id
          *
-         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         * Unique reference face IDs. Every ID must exist and contain a finite, nonzero embedding for the selected model.
          */
         'query.face_id'?: Array<string> | null;
         /**
@@ -3055,7 +3084,7 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
         /**
          * Query.Face Id
          *
-         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         * Unique reference face IDs. Every ID must exist and contain a finite, nonzero embedding for the selected model.
          */
         'query.face_id'?: Array<string> | null;
         /**
@@ -3269,7 +3298,7 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
         /**
          * Query.Face Id
          *
-         * Unique reference face IDs. Every ID must exist and contain the selected embedding model.
+         * Unique reference face IDs. Every ID must exist and contain a finite, nonzero embedding for the selected model.
          */
         'query.face_id'?: Array<string> | null;
         /**

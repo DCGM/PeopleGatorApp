@@ -8,6 +8,7 @@ from pydantic import (
     Field,
     FiniteFloat,
     model_validator,
+    field_validator,
 )
 from people_gator_api.schemas.entities import EntityListFilter, EntityResponse
 from people_gator_api.schemas.common import GenericListRequest, GenericListResponse
@@ -69,7 +70,7 @@ class QueryBase(BaseModel):
     )
     face_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
-        description="Unique reference face IDs. Every ID must exist and contain the selected embedding model.",
+        description="Unique reference face IDs. Every ID must exist and contain a finite, nonzero embedding for the selected model.",
     )
     face_embedding_model: FaceModelStub = Field(
         default=DEFAULT_FACE_EMBEDDING_MODEL,
@@ -92,7 +93,7 @@ class QueryBase(BaseModel):
     def validate_modalities(self) -> Self:
         text_values = self.text if isinstance(self.text, list) else []
         face_ids = self.face_id if isinstance(self.face_id, list) else []
-        if not text_values and not face_ids:
+        if not text_values and not face_ids and not self.has_entity_reference():
             raise ValueError(
                 "provide at least one non-empty search modality: text or face_id"
             )
@@ -105,8 +106,49 @@ class QueryBase(BaseModel):
             raise ValueError("face_id values must be unique")
         return self
 
+    def has_entity_reference(self) -> bool:
+        return False
 
-class GenericSearchRequest[F: BaseModel, S: StrEnum](GenericListRequest, SortableRequest[S]):
+
+class EntityAnnotation(StrEnum):
+    faces = "faces"
+    aliases = "aliases"
+    name = "name"
+
+
+class EntitySearchQuery(QueryBase):
+    """Entity reference inputs are supported only by face and entity search."""
+
+    entity_id: uuid.UUID | None = Field(
+        default=None,
+        description="Resolve stored reference inputs from this entity. Independent of filter.entity_id. Unknown entities or no usable combined inputs produce 422 invalid_search.",
+    )
+    entity_annotations: list[EntityAnnotation] = Field(
+        default_factory=lambda: list(EntityAnnotation),
+        min_length=1,
+        description="Reference inputs: faces, aliases, name, or any combination. Omitted means all three. Derived inputs are combined with explicit text/face inputs; incompatible entity faces are skipped.",
+    )
+
+    @field_validator("entity_annotations")
+    @classmethod
+    def canonical_annotations(
+        cls, values: list[EntityAnnotation]
+    ) -> list[EntityAnnotation]:
+        return [annotation for annotation in EntityAnnotation if annotation in values]
+
+    def has_entity_reference(self) -> bool:
+        return self.entity_id is not None
+
+    @model_validator(mode="after")
+    def validate_entity_annotations(self) -> Self:
+        if self.entity_id is None and "entity_annotations" in self.model_fields_set:
+            raise ValueError("entity_annotations requires entity_id")
+        return self
+
+
+class GenericSearchRequest[F: BaseModel, S: StrEnum](
+    GenericListRequest, SortableRequest[S]
+):
     """Backend-neutral multimodal search request.
 
     Each modality ranks candidates independently after score aggregation. RRF
@@ -137,7 +179,10 @@ class GenericSearchRequest[F: BaseModel, S: StrEnum](GenericListRequest, Sortabl
 
 
 class FoundEntity(EntityResponse, FoundItemBase):
-    matched_detection_ids: list[uuid.UUID] = Field(default_factory=list, description="Actual face-similarity witnesses for this result; never an arbitrary portrait.")
+    matched_detection_ids: list[uuid.UUID] = Field(
+        default_factory=list,
+        description="Actual face-similarity witnesses for this result; never an arbitrary portrait.",
+    )
     """A single result from a nearest-neighbour search over an annotation collection."""
 
 
@@ -146,7 +191,19 @@ SearchEntitiesResultListResponse = GenericListResponse[FoundEntity]
 
 
 """Request type for entity search."""
-SearchEntitiesRequest = GenericSearchRequest[EntityListFilter, EntitySortField]
+
+
+class SearchEntitiesRequest(GenericSearchRequest[EntityListFilter, EntitySortField]):
+    query: EntitySearchQuery
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def accept_explicit_query(cls, value):
+        return (
+            value.model_dump()
+            if isinstance(value, QueryBase) and not isinstance(value, EntitySearchQuery)
+            else value
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +220,20 @@ SearchFacesResultListResponse = GenericListResponse[FoundFace]
 
 
 """Request type for face similarity search."""
-SearchFacesRequest = GenericSearchRequest[FaceListFilter, FaceSortField]
+
+
+class SearchFacesRequest(GenericSearchRequest[FaceListFilter, FaceSortField]):
+    query: EntitySearchQuery
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def accept_explicit_query(cls, value):
+        return (
+            value.model_dump()
+            if isinstance(value, QueryBase) and not isinstance(value, EntitySearchQuery)
+            else value
+        )
+
 
 # ---------------------------------------------------------------------------
 # Page similarity search
@@ -203,6 +273,8 @@ __all__ = [
     "FoundItemBase",
     "RRF_K",
     "QueryBase",
+    "EntitySearchQuery",
+    "EntityAnnotation",
     "GenericSearchRequest",
     "FoundEntity",
     "SearchEntitiesResultListResponse",

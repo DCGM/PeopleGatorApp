@@ -80,6 +80,8 @@ from .sorting import (
     text_keys,
 )
 from .touch import creation_values, touch_values, touch_sources, lock_annotation_graph
+from .search_resolution import resolve_entity_search
+
 
 class PostgresEntityRepository(EntityRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -487,7 +489,11 @@ class PostgresEntityRepository(EntityRepository):
     async def search(
         self, query: SearchEntitiesRequest
     ) -> SearchEntitiesResultListResponse:
+        fingerprint = cursor_fingerprint(query)
+        query = await resolve_entity_search(self._session, query)
         filters = entity_filters(query.filter_)
+        if query.query.entity_id is not None and query.query.exclude_reference_face_id:
+            filters.append(Entity.id != query.query.entity_id)
         ranked = fuse_scores(
             await self._text_scores(query, filters),
             await self._face_scores(query, filters),
@@ -505,7 +511,7 @@ class PostgresEntityRepository(EntityRepository):
             ranked,
             query.cursor,
             query.limit,
-            cursor_fingerprint(query),
+            fingerprint,
         )
         entities = await self._load_many([item[0] for item in page])
         witnesses: dict[uuid.UUID, list[uuid.UUID]] = {}

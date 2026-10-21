@@ -1648,6 +1648,8 @@ async def _basic_search[F: FoundItemBase](
     properties: Sequence[str],
     response: type[GenericListResponse[F]],
 ) -> GenericListResponse[F]:
+    if q.query.entity_id is not None:
+        raise NotImplementedError("entity-reference search requires PostgreSQL")
     filters = []
     if n == FACE_COLLECTION:
         filters = WeaviateFaceRepository(client).filters(q.filter_)
