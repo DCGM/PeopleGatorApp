@@ -303,6 +303,12 @@ export function usePersonDetail(
     libraryCount: computed(() => new Set(faces.value.map((face) => face.library)).size),
     mentionCount: computed(() => mentionQuery.data.value?.pages[0]?.total_count ?? 0),
     mentions,
+    // Weaviate stores no portrait; PostgreSQL leaves none only without linked
+    // faces. Fall back to the first loaded face once the entity is known.
+    portraitFaceId: computed(() => {
+      const entity = entityQuery.data.value
+      return entity ? (entity.thumbnail_face_id ?? faceRecords.value[0]?.detection_id) : undefined
+    }),
     profile,
     processing,
     updateProfile,

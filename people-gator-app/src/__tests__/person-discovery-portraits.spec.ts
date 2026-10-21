@@ -3,7 +3,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ faces: vi.fn(), crop: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  faces: vi.fn(),
+  crop: vi.fn(),
+  thumbnail: 'canonical-face' as string | null,
+}))
 vi.mock('@/query/faces', async () => {
   const { ref } = await import('vue')
   return {
@@ -35,7 +39,7 @@ vi.mock('@/query/search', async () => {
           entity_id: 'candidate',
           entity_type: 'person',
           name: 'Ada',
-          thumbnail_face_id: 'canonical-face',
+          thumbnail_face_id: mocks.thumbnail,
           matched_detection_ids: ['different-match'],
           face_score: 0.9,
         },
@@ -44,7 +48,32 @@ vi.mock('@/query/search', async () => {
 })
 import { usePersonDiscovery } from '@/viewmodels/person-discovery'
 
+async function discover() {
+  let result!: ReturnType<typeof usePersonDiscovery>
+  const queryClient = new QueryClient()
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        result = usePersonDiscovery('current-person', ref([]), null, 'Ada', true)
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+  )
+  await flushPromises()
+  const candidate = result.similarPeople.value[0]
+  wrapper.unmount()
+  queryClient.clear()
+  return candidate
+}
+
 describe('discovery canonical portraits', () => {
+  it('shows the matched face when the store persists no portrait', async () => {
+    mocks.thumbnail = null
+    expect(await discover()).toMatchObject({ thumbnailFaceId: 'different-match' })
+    mocks.thumbnail = 'canonical-face'
+  })
+
   it('uses metadata even when a different evidence face matched and needs no per-person face listing', async () => {
     let result!: ReturnType<typeof usePersonDiscovery>
     const queryClient = new QueryClient()

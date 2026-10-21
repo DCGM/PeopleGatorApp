@@ -29,8 +29,7 @@ vi.mock('@/viewmodels/person-detail', () => ({
         pageLabel: '1',
       },
     ]),
-    portrait: ref(''),
-    portraitLoading: ref(false),
+    portraitFaceId: ref(undefined),
     profile: ref({
       name: 'Ada Lovelace',
       shortDescription: '',

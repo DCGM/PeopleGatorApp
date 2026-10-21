@@ -183,7 +183,8 @@ export function usePersonDiscovery(
         name: entity.name || 'Unnamed person',
         shortDescription: entity.short_description || '',
         aliases: entity.aliases ?? [],
-        thumbnailFaceId: entity.thumbnail_face_id,
+        // Stores without persisted portraits (Weaviate) show the matched face.
+        thumbnailFaceId: entity.thumbnail_face_id ?? entity.matched_detection_ids?.[0],
       }
     }),
   )
