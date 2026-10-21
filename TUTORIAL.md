@@ -7,7 +7,7 @@
 ## Česky
 
 Ve sdílené živé ukázce máme zpracováno **7 dokumentů**.
-Pro vyzkoušení můžete otevřít následující dokumenty přímo v aplikaci:
+Kliknutím na odkaz otevřete stránky příslušného dokumentu:
 
 | Knihovna | Dokument |
 | --- | --- |
@@ -19,145 +19,231 @@ Pro vyzkoušení můžete otevřít následující dokumenty přímo v aplikaci:
 | knav | [3aa8d947-24a8-40b0-981c-a3b9cea401e6](https://live-preview.peoplegator.dev/scans?library=knav&document=3aa8d947-24a8-40b0-981c-a3b9cea401e6) |
 | knav | [b67494e1-4eb3-4ecd-bc99-405721f778e9](https://live-preview.peoplegator.dev/scans?library=knav&document=b67494e1-4eb3-4ecd-bc99-405721f778e9) |
 
-### 1. Otevření aplikace
+### 1. První obrazovka a navigace
 
-Otevřete [živou ukázku PeopleGator](https://live-preview.peoplegator.dev).
-V této ukázce není nutné přihlášení ani registrace. Dostupnost úprav závisí na
-oprávněních daného prostředí; sloučení osob vyžaduje oprávnění správce.
+Otevřete [PeopleGator](https://live-preview.peoplegator.dev). Přihlášení ani
+registrace nejsou potřeba. Úvodní obrazovka **Browse documents** obsahuje hledání,
+filtry a seznam dokumentů s náhledy stránek. Na obrázcích jsou ukázková data,
+například Ada Novak a knihovna `preview-mzk`.
 
-Screenshoty ukazují syntetická data, například Ada Novak a knihovnu
-`preview-mzk`. Jde o záběry z počítače (1440 × 900 CSS px). Postupy jsou stejné
-i pro dokumenty v živé ukázce.
+![Úvodní obrazovka: horní lišta, hledání a filtry, seznam dokumentů](docs/images/tutorial/21-start-screen-desktop.png)
 
-Začít můžete na [připravené anotované stránce](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b):
+**Horní lišta zůstává na všech obrazovkách.** Vlevo je logo, uprostřed cesta
+k aktuálnímu záznamu a vpravo přepínání mezi třemi částmi aplikace.
 
-- **Knihovna:** `svkhk`
-- **Dokument:** `6c50c29e-1994-46e6-b2ac-0289006fb764`
-- **Stránka:** `2a484f45-2393-11ed-afbf-00155d01210b`
+![Detail pravé části horní lišty: Scans, Documents a People](docs/images/tutorial/23-navigation-labels-desktop.png)
 
-### 2. Hledání dokumentů a osob
+V užším okně jsou místo názvů jen ikony. Jejich pořadí zleva je stejné:
 
-- V **Documents** zadejte do hledání název dokumentu, jméno osoby nebo UUID.
-  Pro ukázku zkuste UUID dokumentu uvedené výše. Otevřete náhled stránky
-  příslušného dokumentu; dostanete se ke skenu a přepisu textu.
-- V **People** hledejte podle jména nebo aliasu. Otevřete nalezený profil:
-  **Faces** obsahuje přiřazené tváře, **Mentions** textové zmínky a **Discover**
-  návrhy podobných tváří a osob.
-- **Scan search** slouží k vyhledávání jednotlivých stránek. Na otevřeném skenu
-  můžete obraz přibližovat a posouvat. Kliknutím na označenou tvář nebo jméno
-  v přepisu vyberete anotaci. Další stránky dokumentu otevřete v pásu
-  **Document pages** pod skenem.
+![Ikony horní navigace zleva: rámeček pro Scans, list papíru pro Documents, postava pro People](docs/images/tutorial/22-navigation-icons-desktop.png)
 
-Hledání dokumentu podle názvu.
+| Prvek horní lišty | Kam vás zavede |
+| --- | --- |
+| **Logo PeopleGator vlevo** | Na úvodní seznam dokumentů. |
+| **Scans — první ikona vpravo, rámeček** | Na seznam jednotlivých naskenovaných stránek. |
+| **Documents — druhá ikona, list papíru** | Na seznam dokumentů, kde můžete hledat podle názvu. |
+| **People — třetí ikona, postava** | Na hledání osob a jejich profilů. Profil osoby představuje jednu identitu. |
+| **Cesta vedle loga, oddělená šipkami `›`** | Na nadřazenou knihovnu, dokument nebo seznam osob podle toho, co máte otevřené. |
 
-![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png)
+Aktuální část je vpravo podtržená. Těmito ikonami přepínáte celé obrazovky;
+záložky **Faces**, **Mentions** a **Discover** uvnitř profilu osoby mají jiný účel.
 
-Stránky vybraného dokumentu.
+### 2. Najít dokument a otevřít jeho stránku
 
-![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png)
+**Chci najít dokument podle názvu nebo identifikátoru.**
 
-Hledání osoby podle jména.
+1. Vpravo nahoře klikněte na **Documents**, tedy ikonu listu papíru.
+   Zobrazí se **Browse documents**.
+2. Do hledání pod nadpisem napište název dokumentu nebo jeho UUID.
+   Vyzkoušet můžete `6c50c29e-1994-46e6-b2ac-0289006fb764`.
+   Pod panelem se zobrazí odpovídající dokumenty.
+3. Klikněte na **podtržený název dokumentu**. Otevře se **Document pages**,
+   seznam stránek tohoto dokumentu.
+4. Klikněte na **náhled konkrétní stránky**. Otevře se sken a jeho anotace.
 
-![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png)
+Kliknutí na náhled stránky přímo v seznamu dokumentů vás rovnou přenese na sken.
 
-Sken, označené tváře a textové zmínky.
+![Hledání názvu v Documents a nalezený dokument s náhledy stránek](docs/images/tutorial/01-document-search-desktop.png)
 
-![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png)
+![Document pages: seznam stránek vybraného dokumentu; náhled otevře sken](docs/images/tutorial/03-document-pages-desktop.png)
 
-### 3. Filtrování výsledků
+### 3. Najít osobu a prohlédnout její profil
 
-V **Documents** zkuste vybrat knihovnu `svkhk` v **Libraries**. V **People**
-můžete použít **Documents**, **Assignment** nebo **Link state**. Další filtry
-omezují výsledky podle uživatele, API klíče a data; rozlišujte popisky
-**Document processing**, **Person record** a **Annotation last** — vztahují se
-k různým záznamům a změnám.
+**Chci najít osobu podle jména nebo aliasu.**
 
-Na mobilu otevřete filtry tlačítkem s ikonou posuvníků vedle hledání.
-Aktivní filtry jsou zobrazené jako štítky pod panelem. Křížkem odstraníte
-jednotlivý filtr; **Clear all filters** zruší filtry a zachová hledaný text.
-Text vymažete samostatným křížkem v hledání. Pokud výsledky chybí, nejprve
-zkontrolujte aktivní štítky. Filtry se mezi obrazovkami zatím nepřenášejí vždy
-jednotně; po přechodu zkontrolujte jejich nastavení.
+1. Vpravo nahoře klikněte na **People**, tedy ikonu postavy.
+   Zobrazí se hledání osob.
+2. Do hledání napište jméno nebo alias. Jméno patří do hledání v **People**,
+   pokud chcete najít profil osoby; v **Documents** byste hledali dokumenty.
+3. Klikněte na nalezenou osobu. Zobrazí se její profil se jménem, popisem
+   a přehledem přiřazených podkladů.
 
-Hledání s aktivním filtrem knihovny.
+![People: hledání jména a výsledné profily osob](docs/images/tutorial/04-person-search-desktop.png)
 
-![Hledání s aktivním filtrem knihovny. / Search with an active library filter. — desktop](docs/images/tutorial/02-active-filters-desktop.png)
+V profilu pod nadpisem **Evidence and identity discovery** přepínáte záložky:
 
-### 4. Přiřazení tváře k osobě
+![Záložky uvnitř profilu osoby: Faces, Mentions a Discover](docs/images/tutorial/25-person-tabs-desktop.png)
 
-Na skenu vyberte tvář a v panelu **Faces** zkontrolujte její přiřazení:
+| Záložka profilu | Co se zobrazí |
+| --- | --- |
+| **Faces** | Tváře přiřazené této osobě. Náhled tváře otevře její zdrojový sken. |
+| **Mentions** | Textové zmínky o osobě. Kliknutím na zmínku otevřete příslušný sken. |
+| **Discover** | Návrhy dalších podobných tváří a možných duplicitních osob. |
 
-- **Link** otevře výběr existující osoby; vyhledejte jméno a u kandidáta zvolte
-  **Assign**.
-- **Reassign** umožní vybrat jinou osobu a potvrdit změnu u kandidáta tlačítkem
-  **Reassign**.
-- **Unlink** zruší přiřazení, ale zachová detekci tváře.
-- **New** umožní zadat jméno, případně krátký popis. Tlačítkem **Save**
-  vytvoříte profil a přiřadíte k němu vybranou tvář; **Cancel** úpravu zruší.
+Cesta nahoře v profilu má podobu **PeopleGator › People › identifikátor osoby**.
+Kliknutím na **People** se vrátíte na hledání osob; kliknutím na logo nebo
+**PeopleGator** na seznam dokumentů.
 
-Po uložení zkontrolujte jméno a stav u vybrané tváře. Kliknutím na jméno
-otevřete profil. Textové zmínky lze prohlížet a ověřovat v **Mentions**;
-výše uvedené akce popisují ovládání tváří, nikoli editor textových úseků.
+![Cesta v profilu osoby: PeopleGator, People a identifikátor otevřeného profilu](docs/images/tutorial/26-person-breadcrumb-desktop.png)
 
-Výběr osoby a tlačítko Assign.
+### 4. Prohlížet skeny a vrátit se k dokumentu
 
-![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png)
+**Chci otevřít sken nebo se ze skenu vrátit na seznam stránek.**
 
-Ruční přeřazení tváře k jiné osobě.
+Pro seznam skenů klikněte vpravo nahoře na **Scans**, ikonu rámečku.
+Pokud už máte otevřený konkrétní dokument, zobrazí se jeho stránky.
+Hledání i aktivní omezení najdete nad výsledky. Pro výběr jiného dokumentu
+klikněte na **Documents** a vyhledejte jej tam.
 
-![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png)
+Otevřený sken si můžete vyzkoušet na
+[připravené anotované stránce](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b).
 
-Po Unlink zůstane tvář nepřiřazená.
+![Pracovní obrazovka skenu: přepis textu, obraz stránky, pravý panel a náhledy dalších stránek](docs/images/tutorial/08-scan-and-mentions-desktop.png)
 
-![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png)
+| Část obrazovky skenu | Jak ji použít |
+| --- | --- |
+| **Přepis textu nad obrazem nebo vlevo** | Kliknutím na označené jméno vyberete zmínku a zvýrazníte její místo na stránce. |
+| **Obraz stránky uprostřed** | Kliknutím na rámeček tváře ji vyberete. Tlačítky **+ / −** obraz přiblížíte nebo oddálíte; obraz můžete posouvat. |
+| **Panel vpravo — Faces** | Obsahuje tváře ze stránky, detail vybrané tváře a hledání osoby pro její přiřazení. |
+| **Activity / Statistics v pravém panelu** | Přepínají mezi přehledem změn a statistikami stránky. |
+| **Document pages pod obrazem** | Kliknutím na jiný náhled přejdete na další stránku téhož dokumentu. |
 
-Vytvoření nové osoby pomocí New → Save a její přiřazená tvář.
+Cesta v horní liště má podobu
+**PeopleGator › knihovna › identifikátor dokumentu › Page identifikátor stránky**:
 
-![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png)
+![Cesta nad skenem: návrat do knihovny nebo na stránky konkrétního dokumentu](docs/images/tutorial/24-scan-breadcrumb-desktop.png)
 
-Výsledek najdete v záložce Faces nového profilu.
+- Kliknutí na **identifikátor dokumentu** otevře jeho seznam stránek.
+- Kliknutí na **knihovnu** otevře skeny dané knihovny.
+- Poslední položka **Page …** označuje právě otevřenou stránku.
+- Logo nebo **PeopleGator** vás vrátí na seznam dokumentů.
 
-![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png)
+### 5. Zúžit výsledky filtry
 
-### 5. Dohledání podobných tváří
+**Chci například zobrazit dokumenty pouze z knihovny svkhk.**
 
-V profilu osoby otevřete **Discover → Similar faces to review**. Osoba potřebuje
-alespoň jednu přiřazenou tvář použitelnou pro porovnání. Filtrem
-**Discovery assignment** lze vybrat **Unassigned** nebo **Assigned elsewhere**.
+1. Otevřete **Documents** a pod hledáním klikněte na **Libraries**.
+2. Vyberte `svkhk` a zavřete nabídku tlačítkem **Done**.
+3. Seznam se zúží a pod panelem se zobrazí štítek vybraného filtru.
 
-Nejprve otevřete náhled a porovnejte tvář v původním skenu. Potom vyberte
-vhodné tváře zaškrtávacími políčky a klikněte na **Assign to [jméno]**.
-Tváře přiřazené jinam se tím přeřadí. Výsledek zkontrolujte v **Faces**;
-skóre podobnosti je návrh, nikoli potvrzení totožnosti.
+![Hledání dokumentu s vybranou knihovnou a aktivním štítkem pod panelem](docs/images/tutorial/02-active-filters-desktop.png)
 
-Výběr podobné tváře a přiřazení k otevřené osobě.
+V **People** najdete například **Documents**, **Assignment** a **Link state**.
+Další filtry vybírají uživatele, API klíč a datum. Popisky **Document processing**,
+**Person record** a **Annotation last** rozlišují, kterého záznamu se změna týká.
 
-![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png)
+Křížkem na štítku odstraníte jeden filtr. **Clear all filters** zruší filtry
+a ponechá hledaný text. Samostatný křížek uvnitř hledání vymaže text.
+Po přechodu na jinou obrazovku zkontrolujte aktivní filtry, zvlášť pokud výsledky chybí.
 
-### 6. Sloučení duplicitních osob
+### 6. Přiřadit tvář k existující osobě
 
-Otevřete profil, který chcete **zachovat**, a přejděte do
-**Discover → Other similar people**. Podle potřeby upravte hledání
-**Search by name or alias**. Prohlédněte si kandidáty a jejich podklady,
-potom výběrovým tlačítkem označte pouze skutečně duplicitní osoby.
+**Chci říct, že vybraná tvář patří osobě, která už má profil.**
 
-Tlačítko **Merge into [jméno]** přesune jejich tváře a zmínky do otevřeného
-profilu a odstraní vybrané původní záznamy osob. Zkontrolujte jméno cíle před
-kliknutím: akce se odesílá přímo, bez dalšího potvrzovacího dialogu a bez
-tlačítka pro vrácení sloučení. Po dokončení ověřte **Faces** a **Mentions**
-zachovaného profilu. Pro přiřazení jedné tváře použijte **Assign**, nikoli merge.
-Přesunutá přiřazení budou mít stav **Manual** a případné původní ověření se
-zruší; po kontrole je můžete znovu ověřit.
+1. Otevřete sken a klikněte na rámeček požadované tváře nebo její náhled
+   v galerii **Page faces** vpravo.
+2. V pravém panelu **Faces** najděte kartu **Current face**.
+   Ta ukazuje vybranou tvář a její současné přiřazení.
+3. Pokud je tvář nepřiřazená, klikněte na **Link**. Pokud je přiřazená chybně,
+   klikněte na **Reassign**. Aktivuje se hledání osob pod kartou.
+4. Do pole **Search by name or alias** napište jméno. Pod polem se zobrazí
+   kandidáti. U správné osoby klikněte na **Assign**, případně **Reassign**.
+5. Na kartě **Current face** se zobrazí vybrané jméno a stav **Manual**.
+   Kliknutím na jméno otevřete profil této osoby.
 
-Vybraná duplicita a cílová osoba v tlačítku Merge into.
+![Current face, hledání podle jména a tlačítko Assign u nalezené osoby](docs/images/tutorial/13-link-candidate-desktop.png)
 
-![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png)
+![Po přeřazení ukazuje Current face novou osobu a stav Manual](docs/images/tutorial/09-reassignment-desktop.png)
 
-Tváře zachovaného profilu po sloučení.
+**Chci jen zrušit nesprávné přiřazení.** Na kartě **Current face** klikněte
+na **Unlink**. Zobrazí se **Unknown / Unassigned**; detekce tváře zůstane zachovaná.
 
-![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png)
+![Po Unlink zůstává vybraná tvář na stránce, ale nemá přiřazený profil](docs/images/tutorial/12-unassigned-desktop.png)
 
-### 7. Ověření a oprava přiřazení
+### 7. Vytvořit novou osobu přímo ze skenu
+
+**Chci k vybrané tváři založit osobu, která v aplikaci ještě nemá profil.**
+
+1. Na skenu vyberte konkrétní tvář kliknutím na její rámeček nebo náhled
+   v **Page faces**.
+2. V pravém panelu otevřete **Faces** a na kartě **Current face** klikněte
+   na **New** vedle tlačítka **Link** nebo **Reassign**.
+
+![Detail Current face: tlačítko New vytvoří novou osobu pro vybranou tvář](docs/images/tutorial/27-face-new-action-desktop.png)
+
+3. Na stejné kartě se místo jména zobrazí pole **Full name**,
+   **Short description (optional)** a tlačítka **Save / Cancel**.
+4. Vyplňte jméno; krátký popis je volitelný. Klikněte na **Save**.
+
+![Po New se přímo na kartě tváře vyplňuje jméno a popis; Save vytvoří osobu](docs/images/tutorial/19-new-profile-desktop.png)
+
+5. Zůstanete na skenu. Karta **Current face** ukáže nové jméno a stav
+   **Manual**: profil byl vytvořen a vybraná tvář k němu přiřazena.
+6. Klikněte na nové jméno. V profilu v záložce **Faces** uvidíte právě tuto tvář.
+
+![Profil nově vytvořené osoby s přiřazenou tváří v záložce Faces](docs/images/tutorial/20-new-profile-result-desktop.png)
+
+**Cancel** zavře rozepsaný formulář bez vytvoření osoby. Pokud měla vybraná
+tvář předtím jinou osobu, uložení nové osoby přeřadí tuto tvář k novému profilu.
+
+### 8. Dohledat podobné tváře
+
+**Chci k otevřené osobě najít další výskyty tváře.**
+
+1. Otevřete profil osoby a pod **Evidence and identity discovery** klikněte
+   na záložku **Discover**.
+2. V části **Similar faces to review** se zobrazí návrhy. Osoba potřebuje
+   alespoň jednu přiřazenou tvář použitelnou pro porovnání.
+   V **Discovery assignment** můžete vybrat **Unassigned** nebo **Assigned elsewhere**.
+3. Nejprve klikněte na náhled navržené tváře a zkontrolujte ji ve zdrojovém skenu.
+   Pak se vraťte tlačítkem Zpět v prohlížeči.
+4. Výběrovým políčkem v rohu náhledu označte vhodné tváře. Zobrazí se
+   lišta s tlačítkem **Assign to [jméno]**. Klikněte na něj.
+5. V záložce **Faces** zkontrolujte nové přiřazené tváře.
+
+![Discover: vybraná podobná tvář a akce Assign to pro otevřenou osobu](docs/images/tutorial/16-discover-assignment-desktop.png)
+
+Tváře přiřazené jiné osobě se tím přeřadí. Skóre podobnosti je návrh,
+nikoli potvrzení totožnosti.
+
+### 9. Sloučit duplicitní profily osob
+
+**Chci spojit dva profily, které představují tutéž osobu.**
+
+1. Otevřete profil, který chcete **zachovat**.
+2. Přejděte na **Discover** a posuňte se do části **Other similar people**
+   pod návrhy tváří. Podle potřeby upravte **Search by name or alias**.
+3. Prohlédněte si kandidáty. Výběrovým tlačítkem v rohu karty označte
+   pouze duplicitní profily, které chcete sloučit.
+4. Dole se zobrazí lišta **Merge into [jméno]**. Jméno v tlačítku je cíl:
+   otevřený profil, který zůstane zachovaný.
+5. Klikněte na **Merge into [jméno]**. Akce se provede přímo, bez dalšího
+   potvrzovacího dialogu a bez tlačítka pro vrácení sloučení.
+
+![Vybraný duplicitní profil A. Novak a cíl Ada Novak v tlačítku Merge into](docs/images/tutorial/17-merge-selection-desktop.png)
+
+Vybrané původní profily se odstraní a jejich tváře a zmínky přejdou
+do zachovaného profilu. V jeho **Faces** a **Mentions** zkontrolujte výsledek.
+Přesunutá přiřazení budou **Manual**; případné původní ověření se zruší.
+
+![Faces zachovaného profilu po přesunu podkladů ze sloučené osoby](docs/images/tutorial/18-merge-result-desktop.png)
+
+Sloučení vyžaduje oprávnění správce. Pro změnu přiřazení jediné tváře
+použijte **Assign / Reassign** na skenu.
+
+### 10. Ověřit nebo opravit přiřazení
+
+**Chci potvrdit, že tvář nebo textová zmínka patří správné osobě.**
 
 | Stav | Význam |
 | --- | --- |
@@ -166,45 +252,37 @@ Tváře zachovaného profilu po sloučení.
 | **Verified** | Přiřazení potvrzené uživatelem. |
 | **Unassigned** | Tvář nebo zmínka nemá přiřazenou osobu. |
 
-Po porovnání tváře s podklady klikněte na **Verify link** u vybrané tváře
-na skenu. Textovou zmínku ověříte stejným tlačítkem v profilu v **Mentions**.
-Stav se změní na **Verified**; u ověřeného přiřazení lze zobrazit autora a čas
-ověření, pokud jsou zaznamenány. Ověřujete vazbu k osobě, nikoli celý sken
-nebo správnost přepisu OCR.
+![Stavy přiřazení na kartách tváří v profilu osoby](docs/images/tutorial/05-person-states-desktop.png)
 
-Pro hromadné ověření v **Faces** označte tváře a použijte
-**Verify selected (počet)**. Chybné přiřazení tváře nejprve opravte pomocí
-**Reassign**, případně **Unlink**; v profilu lze použít **Unassign selected**.
-Změna na jinou osobu vytváří ruční přiřazení, které můžete po kontrole znovu
-ověřit. Po chybové hlášce zkontrolujte obnovený výsledek před opakováním akce.
+**Jedna tvář:** na skenu vyberte tvář, zkontrolujte jméno v **Current face**
+a pod kartou klikněte na **Verify link**. Stav se změní na **Verified**.
+U ověřeného přiřazení se zobrazí autor a čas ověření, pokud jsou zaznamenány.
 
-Stavy přiřazení na profilu osoby.
+![Current face po Verify link: stav Verified a údaj o ověření pod kartou](docs/images/tutorial/11-verified-link-desktop.png)
 
-![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png)
+**Více tváří:** v profilu otevřete **Faces**, označte tváře výběrovými políčky
+v rohu náhledů a ve spodní liště klikněte na **Verify selected (počet)**.
+Po dokončení se výběr zruší a zobrazí se potvrzení ověření.
 
-Výběr tváře a hromadné Verify selected.
+![Výběr více tváří a Verify selected ve spodní liště](docs/images/tutorial/06-batch-verification-desktop.png)
 
-![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png)
+**Textová zmínka:** v profilu přepněte na **Mentions**, zkontrolujte zmínku
+a u ní klikněte na **Verify link**.
 
-Ověřené přiřazení s autorem a časem.
+![Verify link u textové zmínky v záložce Mentions](docs/images/tutorial/14-mention-verification-desktop.png)
 
-![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png)
-
-Ověření textové zmínky v Mentions.
-
-![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png)
-
-### Další obrázky
-
-[Přehled všech screenshotů a ověřených postupů](docs/images/tutorial/README.md)
-obsahuje i stav před ověřením a výsledek hromadného ověření.
+Ověřujete vazbu k osobě, nikoli celý sken nebo správnost přepisu OCR.
+Chybné přiřazení tváře nejprve opravte přes **Reassign**, případně **Unlink**.
+V profilu lze vybrané tváře odpojit pomocí **Unassign selected**.
+Po změně na jinou osobu bude přiřazení **Manual** a můžete je znovu ověřit.
+Dostupnost úprav závisí na oprávněních daného prostředí.
 
 <a id="english"></a>
 
 ## English
 
 The shared live demo contains **7 processed documents**.
-Use these links to open the following documents directly in the application:
+Click a link to open the pages of that document:
 
 | Library | Document |
 | --- | --- |
@@ -216,144 +294,233 @@ Use these links to open the following documents directly in the application:
 | knav | [3aa8d947-24a8-40b0-981c-a3b9cea401e6](https://live-preview.peoplegator.dev/scans?library=knav&document=3aa8d947-24a8-40b0-981c-a3b9cea401e6) |
 | knav | [b67494e1-4eb3-4ecd-bc99-405721f778e9](https://live-preview.peoplegator.dev/scans?library=knav&document=b67494e1-4eb3-4ecd-bc99-405721f778e9) |
 
-### 1. Open the application
+### 1. First screen and navigation
 
-Open the [PeopleGator live demo](https://live-preview.peoplegator.dev).
-This demo requires no login or registration. Editing depends on the permissions
-available in that environment; merging people requires administrator permission.
+Open [PeopleGator](https://live-preview.peoplegator.dev). No login or registration
+is needed. The opening **Browse documents** screen contains search, filters and
+a document list with page previews. Screenshots use example data, such as
+Ada Novak and the `preview-mzk` library.
 
-Screenshots use synthetic data, such as Ada Novak and the `preview-mzk` library.
-The images show the desktop view (1440 × 900 CSS px). The same workflows apply
-to the documents in the live demo.
+![Opening screen: top bar, search and filters, document list](docs/images/tutorial/21-start-screen-desktop.png)
 
-Start with the [prepared annotated page](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b):
+**The top bar stays visible on every screen.** The logo is on the left,
+the path to the current record is in the middle, and the three main sections
+are on the right.
 
-- **Library:** `svkhk`
-- **Document:** `6c50c29e-1994-46e6-b2ac-0289006fb764`
-- **Page:** `2a484f45-2393-11ed-afbf-00155d01210b`
+![Close-up of the right side of the top bar: Scans, Documents and People](docs/images/tutorial/23-navigation-labels-desktop.png)
 
-### 2. Find documents and people
+In a narrower window, you may see icons without names. Their left-to-right
+order stays the same:
 
-- In **Documents**, search for a document title, person's name or UUID.
-  Try the document UUID above. Open a page preview in the matching document
-  to view its scan and transcription.
-- In **People**, search by name or alias. Open a matching profile:
-  **Faces** contains linked faces, **Mentions** contains text mentions, and
-  **Discover** offers similar faces and people.
-- **Scan search** searches individual pages. You can zoom and pan an open scan.
-  Click a marked face or a name in the transcription to select an annotation.
-  Open other pages using the **Document pages** strip below the scan.
+![Top navigation icons from left: scan frame for Scans, sheet of paper for Documents, person for People](docs/images/tutorial/22-navigation-icons-desktop.png)
 
-Search for a document by title.
+| Top-bar control | Where it takes you |
+| --- | --- |
+| **PeopleGator logo on the left** | The opening document list. |
+| **Scans — first icon on the right, a frame** | A list of individual scanned pages. |
+| **Documents — second icon, a sheet of paper** | The document list, where you can search by title. |
+| **People — third icon, a person** | Person search and profiles. A person profile represents one identity. |
+| **Path beside the logo, separated by `›` arrows** | The parent library, document or people list, depending on the current screen. |
 
-![Hledání dokumentu podle názvu. / Search for a document by title. — desktop](docs/images/tutorial/01-document-search-desktop.png)
+The current section is underlined on the right. These icons switch whole screens;
+the **Faces**, **Mentions** and **Discover** tabs inside a profile serve a different purpose.
 
-Pages of the selected document.
+### 2. Find a document and open a page
 
-![Stránky vybraného dokumentu. / Pages of the selected document. — desktop](docs/images/tutorial/03-document-pages-desktop.png)
+**I want to find a document by title or identifier.**
 
-Search for a person by name.
+1. Click **Documents**, the sheet-of-paper icon at the top right.
+   **Browse documents** appears.
+2. Enter a document title or UUID in the search field below the heading.
+   Try `6c50c29e-1994-46e6-b2ac-0289006fb764`.
+   Matching documents appear below the panel.
+3. Click the **underlined document title**. **Document pages** opens,
+   listing pages from that document.
+4. Click a **page preview** to open its scan and annotations.
 
-![Hledání osoby podle jména. / Search for a person by name. — desktop](docs/images/tutorial/04-person-search-desktop.png)
+Clicking a page preview directly in the document list opens that scan immediately.
 
-Scan, marked faces and text mentions.
+![Search for a title in Documents and inspect the matching document's page previews](docs/images/tutorial/01-document-search-desktop.png)
 
-![Sken, označené tváře a textové zmínky. / Scan, marked faces and text mentions. — desktop](docs/images/tutorial/08-scan-and-mentions-desktop.png)
+![Document pages lists the selected document's pages; click a preview to open the scan](docs/images/tutorial/03-document-pages-desktop.png)
 
-### 3. Filter results
+### 3. Find a person and inspect their profile
 
-In **Documents**, try selecting `svkhk` under **Libraries**. In **People**, use
-**Documents**, **Assignment** or **Link state**. Other filters narrow results
-by user, API key and date; distinguish the labels **Document processing**,
-**Person record** and **Annotation last** — they refer to different records
-and changes.
+**I want to find a person by name or alias.**
 
-On mobile, open filters with the sliders button beside search. Active filters
-appear as tags below the panel. Remove one with its X button;
-**Clear all filters** removes filters while preserving the search text.
-Clear the text separately with the X inside search. If results are missing,
-check the active tags first. Filters are not yet transferred consistently
-between screens; check their settings after navigating.
+1. Click **People**, the person icon at the top right.
+   Person search opens.
+2. Enter a name or alias in the search field. Use **People** to find a person
+   profile; searching in **Documents** finds documents instead.
+3. Click a matching person. Their profile shows a name, description
+   and summary of linked evidence.
 
-Search with an active library filter.
+![People: name search and matching person profiles](docs/images/tutorial/04-person-search-desktop.png)
 
-![Hledání s aktivním filtrem knihovny. / Search with an active library filter. — desktop](docs/images/tutorial/02-active-filters-desktop.png)
+Within the profile, use the tabs below **Evidence and identity discovery**:
 
-### 4. Link a face to a person
+![Tabs inside a person profile: Faces, Mentions and Discover](docs/images/tutorial/25-person-tabs-desktop.png)
 
-Select a face on the scan and inspect its assignment in the **Faces** panel:
+| Profile tab | What appears |
+| --- | --- |
+| **Faces** | Faces linked to this person. Click a face preview to open its source scan. |
+| **Mentions** | Text mentions of the person. Click a mention to open its scan. |
+| **Discover** | Suggested similar faces and potentially duplicate people. |
 
-- **Link** opens the existing-person selection; search for a name and choose
-  **Assign** on the candidate.
-- **Reassign** lets you select another person and confirm with **Reassign**
-  on the candidate.
-- **Unlink** removes the assignment while keeping the face detection.
-- **New** lets you enter a name and optionally a short description. **Save**
-  creates the profile and links the selected face; **Cancel** discards the edit.
+The profile's top path reads **PeopleGator › People › person identifier**.
+Click **People** to return to person search; click the logo or **PeopleGator**
+to return to the document list.
 
-After saving, check the selected face's name and state. Click the name to open
-the profile. Text mentions can be inspected and verified in **Mentions**;
-the actions above describe face controls rather than a text-span editor.
+![Person-profile path: PeopleGator, People and the current profile identifier](docs/images/tutorial/26-person-breadcrumb-desktop.png)
 
-Choose a person and use Assign.
+### 4. Browse scans and return to a document
 
-![Výběr osoby a tlačítko Assign. / Choose a person and use Assign. — desktop](docs/images/tutorial/13-link-candidate-desktop.png)
+**I want to open a scan or return from a scan to the document's page list.**
 
-Manually reassign a face to another person.
+Click **Scans**, the frame icon at the top right, to list scans.
+If you already have a document open, its pages are shown.
+Search and active restrictions appear above the results. To choose another
+document, click **Documents** and find it there.
 
-![Ruční přeřazení tváře k jiné osobě. / Manually reassign a face to another person. — desktop](docs/images/tutorial/09-reassignment-desktop.png)
+Try the scan workspace using the
+[prepared annotated page](https://live-preview.peoplegator.dev/libraries/svkhk/documents/6c50c29e-1994-46e6-b2ac-0289006fb764/pages/2a484f45-2393-11ed-afbf-00155d01210b).
 
-After Unlink, the face remains unassigned.
+![Scan workspace: transcription, page image, right panel and previews of other pages](docs/images/tutorial/08-scan-and-mentions-desktop.png)
 
-![Po Unlink zůstane tvář nepřiřazená. / After Unlink, the face remains unassigned. — desktop](docs/images/tutorial/12-unassigned-desktop.png)
+| Part of the scan screen | How to use it |
+| --- | --- |
+| **Transcription above or to the left of the image** | Click a marked name to select its mention and highlight its location on the page. |
+| **Page image in the centre** | Click a face box to select it. Use **+ / −** to zoom in or out; you can also pan the image. |
+| **Right panel — Faces** | Contains page faces, the selected face's details and person search for assignment. |
+| **Activity / Statistics in the right panel** | Switch between the change history and page statistics. |
+| **Document pages below the image** | Click another preview to open a different page of the same document. |
 
-Create a new person with New → Save and inspect its linked face.
+The top-bar path reads
+**PeopleGator › library › document identifier › Page page identifier**:
 
-![Nový profil / New profile — desktop](docs/images/tutorial/19-new-profile-desktop.png)
+![Path above a scan: return to the library or to the selected document's pages](docs/images/tutorial/24-scan-breadcrumb-desktop.png)
 
-The result appears in the new profile's Faces tab.
+- Click the **document identifier** to open its page list.
+- Click the **library** to open scans in that library.
+- The final **Page …** item identifies the page currently open.
+- Click the logo or **PeopleGator** to return to the document list.
 
-![Vytvořený profil / Created profile — desktop](docs/images/tutorial/20-new-profile-result-desktop.png)
+### 5. Narrow results with filters
 
-### 5. Find similar faces
+**I want to show documents from the svkhk library only.**
 
-In a person's profile, open **Discover → Similar faces to review**. The person
-needs at least one linked face usable for comparison. Use **Discovery assignment**
-to choose **Unassigned** or **Assigned elsewhere**.
+1. Open **Documents** and click **Libraries** below search.
+2. Select `svkhk`, then close the choices with **Done**.
+3. The list narrows and a tag for the selected filter appears below the panel.
 
-First open a preview and compare the face in its source scan. Then select
-suitable faces with their checkboxes and click **Assign to [name]**.
-Faces linked elsewhere will be reassigned. Check the result in **Faces**;
-the similarity score is a suggestion, not proof of identity.
+![Document search with a library selected and an active filter tag below the panel](docs/images/tutorial/02-active-filters-desktop.png)
 
-Select a similar face and assign it to the open person.
+In **People**, available controls include **Documents**, **Assignment** and
+**Link state**. Other filters select users, API keys and dates. The labels
+**Document processing**, **Person record** and **Annotation last** distinguish
+which record's change is being filtered.
 
-![Výběr podobné tváře a přiřazení k otevřené osobě. / Select a similar face and assign it to the open person. — desktop](docs/images/tutorial/16-discover-assignment-desktop.png)
+Remove one filter with the X on its tag. **Clear all filters** removes filters
+and preserves the search text. The separate X inside search clears the text.
+After changing screens, check the active filters, especially if results are missing.
 
-### 6. Merge duplicate people
+### 6. Link a face to an existing person
 
-Open the profile you want to **keep**, then go to
-**Discover → Other similar people**. Adjust **Search by name or alias** if needed.
-Inspect the candidates and their evidence, then use their selection buttons
-to select only genuine duplicate people.
+**I want to say that the selected face belongs to a person who already has a profile.**
 
-**Merge into [name]** moves their faces and mentions into the open profile
-and deletes the selected source person records. Check the destination name
-before clicking: the action is submitted directly, with no additional
-confirmation dialog or undo button. Afterwards, check **Faces** and **Mentions**
-on the retained profile. Use **Assign** to link a single face rather than merge.
-Moved assignments become **Manual** and any previous verification is cleared;
-you can verify them again after review.
+1. Open a scan and click the required face box or its preview
+   in **Page faces** on the right.
+2. In the right-hand **Faces** panel, find **Current face**.
+   This card shows the selected face and its current assignment.
+3. For an unassigned face, click **Link**. For a wrong assignment,
+   click **Reassign**. Person search below the card receives focus.
+4. Enter the name in **Search by name or alias**. Candidates appear below it.
+   Click **Assign**, or **Reassign**, on the correct candidate.
+5. **Current face** shows the chosen name and **Manual** state.
+   Click the name to open that person's profile.
 
-Selected duplicate and destination in the Merge into button.
+![Current face, name search and the Assign button on a matching person](docs/images/tutorial/13-link-candidate-desktop.png)
 
-![Vybraná duplicita a cílová osoba v tlačítku Merge into. / Selected duplicate and destination in the Merge into button. — desktop](docs/images/tutorial/17-merge-selection-desktop.png)
+![After reassignment, Current face shows the new person and Manual state](docs/images/tutorial/09-reassignment-desktop.png)
 
-Faces on the retained profile after merging.
+**I only want to remove an incorrect assignment.** Click **Unlink** on
+**Current face**. It becomes **Unknown / Unassigned**; the face detection remains.
 
-![Tváře zachovaného profilu po sloučení. / Faces on the retained profile after merging. — desktop](docs/images/tutorial/18-merge-result-desktop.png)
+![After Unlink, the face remains on the page without an assigned profile](docs/images/tutorial/12-unassigned-desktop.png)
 
-### 7. Verify and correct assignments
+### 7. Create a new person from a scan
+
+**I want to create a person who does not yet have a profile for the selected face.**
+
+1. On the scan, select the face by clicking its box or preview in **Page faces**.
+2. Open **Faces** in the right panel. On **Current face**, click **New**
+   beside **Link** or **Reassign**.
+
+![Current face close-up: New creates a person for the selected face](docs/images/tutorial/27-face-new-action-desktop.png)
+
+3. The same card replaces the name with **Full name**,
+   **Short description (optional)** and **Save / Cancel** controls.
+4. Fill in the name; the short description is optional. Click **Save**.
+
+![After New, enter a name and description directly on the face card; Save creates the person](docs/images/tutorial/19-new-profile-desktop.png)
+
+5. You remain on the scan. **Current face** shows the new name and **Manual**:
+   the profile has been created and the selected face linked to it.
+6. Click the new name. The profile's **Faces** tab contains that face.
+
+![The newly created person's profile with the linked face under Faces](docs/images/tutorial/20-new-profile-result-desktop.png)
+
+**Cancel** closes the unfinished form without creating a person. If the face
+previously belonged to another person, saving the new person reassigns that face
+to the new profile.
+
+### 8. Find similar faces
+
+**I want to find more appearances of the person whose profile is open.**
+
+1. Open their profile and click **Discover** below **Evidence and identity discovery**.
+2. **Similar faces to review** shows suggestions. The person needs at least
+   one linked face usable for comparison. **Discovery assignment** lets you
+   choose **Unassigned** or **Assigned elsewhere**.
+3. First click a suggested face preview and inspect its source scan.
+   Then return with the browser's Back button.
+4. Select suitable faces using the controls in their preview corners.
+   An action bar appears with **Assign to [name]**. Click it.
+5. Check the newly linked faces in **Faces**.
+
+![Discover: a selected similar face and Assign to for the open person](docs/images/tutorial/16-discover-assignment-desktop.png)
+
+Faces linked to another person will be reassigned. The similarity score
+is a suggestion, not proof of identity.
+
+### 9. Merge duplicate person profiles
+
+**I want to combine two profiles that represent the same person.**
+
+1. Open the profile you want to **keep**.
+2. Go to **Discover** and scroll down to **Other similar people**, below
+   the face suggestions. Adjust **Search by name or alias** if needed.
+3. Inspect the candidates. Use the selection control in a card's corner
+   to select only the duplicate profiles you want to merge.
+4. A **Merge into [name]** action bar appears at the bottom. The button's name
+   identifies the destination: the open profile that will remain.
+5. Click **Merge into [name]**. The action is submitted directly, with no
+   additional confirmation dialog or undo button.
+
+![Selected duplicate A. Novak and destination Ada Novak in the Merge into button](docs/images/tutorial/17-merge-selection-desktop.png)
+
+The selected source profiles are deleted and their faces and mentions move
+to the retained profile. Check its **Faces** and **Mentions**.
+Moved assignments become **Manual**, and any previous verification is cleared.
+
+![The retained profile's Faces after evidence moves from the merged person](docs/images/tutorial/18-merge-result-desktop.png)
+
+Merging requires administrator permission. Use **Assign / Reassign** on a scan
+to change a single face's assignment.
+
+### 10. Verify or correct assignments
+
+**I want to confirm that a face or text mention belongs to the right person.**
 
 | State | Meaning |
 | --- | --- |
@@ -362,36 +529,27 @@ Faces on the retained profile after merging.
 | **Verified** | Assignment confirmed by a user. |
 | **Unassigned** | The face or mention has no assigned person. |
 
-After comparing a face with the evidence, click **Verify link** for the selected
-face on the scan. Verify a text mention using the same button under **Mentions**
-in the person's profile. The state becomes **Verified**; verification details
-show who verified it and when, if recorded. Verification confirms the link to
-a person, rather than the whole scan or the accuracy of OCR text.
+![Assignment states on the face cards in a person profile](docs/images/tutorial/05-person-states-desktop.png)
 
-To verify several faces, select them in **Faces** and choose
-**Verify selected (count)**. Correct a wrong face assignment with **Reassign**
-or **Unlink** first; the profile also provides **Unassign selected**.
-Changing to another person creates a manual assignment, which you can verify
-again after review. If an error appears, inspect the refreshed result before
-repeating the action.
+**One face:** select it on the scan, check the name in **Current face**,
+then click **Verify link** below the card. The state becomes **Verified**.
+Verification details show who verified it and when, if recorded.
 
-Assignment states on a person profile.
+![Current face after Verify link: Verified state and verification details below the card](docs/images/tutorial/11-verified-link-desktop.png)
 
-![Stavy přiřazení na profilu osoby. / Assignment states on a person profile. — desktop](docs/images/tutorial/05-person-states-desktop.png)
+**Several faces:** open **Faces** in the profile and select faces using the
+controls in their preview corners. Click **Verify selected (count)** in the
+bottom action bar. The selection clears and a confirmation appears.
 
-Face selection and batch Verify selected.
+![Select several faces and use Verify selected in the bottom action bar](docs/images/tutorial/06-batch-verification-desktop.png)
 
-![Výběr tváře a hromadné Verify selected. / Face selection and batch Verify selected. — desktop](docs/images/tutorial/06-batch-verification-desktop.png)
+**Text mention:** switch to **Mentions** in the profile, inspect the mention
+and click **Verify link** beside it.
 
-Verified assignment with its actor and timestamp.
+![Verify link for a text mention under Mentions](docs/images/tutorial/14-mention-verification-desktop.png)
 
-![Ověřené přiřazení s autorem a časem. / Verified assignment with its actor and timestamp. — desktop](docs/images/tutorial/11-verified-link-desktop.png)
-
-Verify a text mention in Mentions.
-
-![Ověření textové zmínky v Mentions. / Verify a text mention in Mentions. — desktop](docs/images/tutorial/14-mention-verification-desktop.png)
-
-### More screenshots
-
-The [screenshot and checked-workflow index](docs/images/tutorial/README.md)
-also includes the state before verification and the batch-verification result.
+Verification confirms the link to a person, rather than the whole scan or OCR
+accuracy. Correct a wrong face assignment with **Reassign** or **Unlink** first.
+In a profile, **Unassign selected** removes the selected faces' assignments.
+Changing to another person makes the link **Manual**, ready to verify again
+after review. Editing availability depends on the environment's permissions.

@@ -1,4 +1,4 @@
-# Screenshoty návodu / Tutorial screenshots
+# PR capture evidence
 
 [Český a anglický návod / Czech and English tutorial](../../../TUTORIAL.md)
 
@@ -166,3 +166,39 @@ Click an image to inspect its full-size version.
 ### Rozbalené filtry / Expanded filters
 
 ![Rozbalené filtry / Expanded filters — mobile 390 × 844 CSS px](02-filters-expanded-mobile.png)
+
+## Navigation orientation
+
+These are unedited desktop Chromium captures of the same production application revision. The opening screen uses a 1440 × 900 CSS-pixel viewport; the labelled navigation uses 1600 × 900. Detail images are direct browser screenshot clips, not redrawn controls. Device scale factor: 1.
+
+The navigation journey passed: root → Browse documents; top People → person search; top Documents → document search; document title → Document pages; top Scans retains the active document scope; document breadcrumb → its page list; profile Faces/Mentions/Discover tabs change the visible section; People breadcrumb → person search; logo → Documents. No uncaught page errors occurred.
+
+### Úvodní obrazovka / Opening screen
+
+![Úvodní obrazovka / Opening screen](21-start-screen-desktop.png)
+
+### Ikony hlavní navigace / Main navigation icons
+
+![Ikony hlavní navigace / Main navigation icons](22-navigation-icons-desktop.png)
+
+### Popisky hlavní navigace / Main navigation labels
+
+![Popisky hlavní navigace / Main navigation labels](23-navigation-labels-desktop.png)
+
+### Cesta nad skenem / Scan breadcrumb
+
+![Cesta nad skenem / Scan breadcrumb](24-scan-breadcrumb-desktop.png)
+
+### Záložky profilu osoby / Person profile tabs
+
+![Záložky profilu osoby / Person profile tabs](25-person-tabs-desktop.png)
+
+### Cesta v profilu osoby / Person profile breadcrumb
+
+![Cesta v profilu osoby / Person profile breadcrumb](26-person-breadcrumb-desktop.png)
+
+### New on the selected face card
+
+![Current face and its New action](27-face-new-action-desktop.png)
+
+The 1440 × 900 viewport capture selects an unassigned face, then captures the actual Current face panel. Clicking New exposes the name/description fields and Save/Cancel. Cancel was exercised and returned to the unchanged card without creating a profile.
