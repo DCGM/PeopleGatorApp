@@ -404,6 +404,9 @@ async def test_document_groups_names_and_scan_only_media(seed_target):
         )
         is None
     )
+    assert parse_qs(urlsplit(first.filter_examples["unregistered-scan"]).query) == {
+        "library": [orphan.library], "archive_document": [str(orphan.document_id)],
+    }
     page = next(item for item in PAGES if item.document == orphan.key)
     content = await get_page_image(orphan.library, orphan.document_id, page.page_id)
     assert content.content

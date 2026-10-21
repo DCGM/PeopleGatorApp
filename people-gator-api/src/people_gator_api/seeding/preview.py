@@ -669,7 +669,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-source-touch": "/documents?library=preview-mzk&touched_by=" + str(actors["reviewer"].user_id),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"
-            + urlencode({"library": "preview-mzk", "document": next(
+            + urlencode({"library": "preview-mzk", "archive_document": next(
                 item.document_id for item in DOCUMENTS if item.key == "scan-only"
             )}),
             "mobile-filters": "/people?"

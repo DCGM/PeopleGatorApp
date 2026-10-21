@@ -256,6 +256,10 @@ async def test_relationship_predicates_need_one_matching_annotation(matrix):
     # Documents: link state is evaluated inside the selected page scope.
     assert await document_ids(m, page_source_id=[m.p1b.source_id], entity_link_state=[EntityLinkState.manual]) == set()
     assert await document_ids(m, page_source_id=[m.p1a.source_id], entity_link_state=[EntityLinkState.manual]) == {m.d1.source_id}
+    # An unassigned face elsewhere in the document cannot satisfy a selected page.
+    assert await document_ids(m, page_source_id=[m.p1a.source_id], has_unassigned_faces=True) == set()
+    assert await document_ids(m, page_source_id=[m.p1b.source_id], has_unassigned_faces=True) == {m.d1.source_id}
+    assert await document_ids(m, page_source_id=[m.p1a.source_id], has_unassigned_faces=False) == {m.d1.source_id}
     # Different fields AND; values within one field OR.
     assert await entity_ids(m, last_touched_by_user_id=[m.u.user_id, m.v.user_id],
                             document_source_id=[m.d2.source_id]) == {m.e2.entity_id, m.e3.entity_id}

@@ -591,7 +591,7 @@ def search_page(
 
 from .entity_link_queries import (
     evidence_predicate, load_link_stats, annotation_conditions, touch_conditions,
-    LINK_FIELDS, document_sources, library_sources, page_parent_documents,
+    LINK_FIELDS, document_sources, library_sources, page_parent_documents, scope_conditions,
 )
 
 def creation_metadata(record) -> dict:
@@ -828,6 +828,7 @@ def source_filters(
         scope = source_scope()
         predicate = exists(select(1).select_from(ImageOccurrence).join(scope, scope.c.source_id == ImageOccurrence.source_id).where(
             scope.c.owner_id == Source.id, ImageOccurrence.occurrence_type == "face", ImageOccurrence.entity_id.is_(None),
+            *scope_conditions(ImageOccurrence.source_id, filter_values),
         ).correlate(Source))
         filters.append(predicate if unassigned else ~predicate)
     source_types = missing_to_none(filter_values.source_type)
