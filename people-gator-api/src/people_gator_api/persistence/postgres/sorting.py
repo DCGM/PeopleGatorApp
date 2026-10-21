@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, cast as type_cast
 
-from sqlalchemy import ColumnElement, and_, case, false, func, or_, select
+from sqlalchemy import ColumnElement, and_, case, false, func, or_
 
 from people_gator_api.schemas.sorting import SortDirection
 
@@ -34,11 +34,16 @@ KeyKind = Literal["text", "uuid", "datetime", "number"]
 LINK_STATE_RANK = {"verified": 0, "manual": 1, "automatic": 2}
 
 
+# An outer join to a primary key that a sort key's expression reads from.
+SortJoin = tuple[Any, ColumnElement[bool]]
+
+
 @dataclass(frozen=True)
 class SortKey:
     expression: ColumnElement[Any]
     kind: KeyKind
     descending: bool = False
+    joins: tuple[SortJoin, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,21 @@ class SortSpec:
 
     label: str
     keys: tuple[SortKey, ...]
+
+    @property
+    def joins(self) -> list[SortJoin]:
+        """Distinct joins the keys need; each targets one row, so cardinality holds."""
+        seen: dict[str, SortJoin] = {}
+        for key in self.keys:
+            for join in key.joins:
+                seen.setdefault(join[0].name, join)
+        return list(seen.values())
+
+
+def with_sort_joins[T: Any](statement: T, spec: SortSpec) -> T:
+    for table, onclause in spec.joins:
+        statement = statement.outerjoin(table, onclause)
+    return statement
 
 
 def normalized_text(value: ColumnElement[Any]) -> ColumnElement[Any]:
@@ -121,10 +141,6 @@ def after_predicate(spec: SortSpec, values: Sequence[object]) -> ColumnElement[b
         clauses.append(and_(*equal_prefix, strictly_after))
         equal_prefix.append(equal)
     return or_(*clauses)
-
-
-def key_values(spec: SortSpec, row: Sequence[object]) -> list[object]:
-    return list(row[: len(spec.keys)])
 
 
 def _encode_value(value: object) -> object:
@@ -246,7 +262,6 @@ __all__ = [
     "build_spec",
     "decode_keyset",
     "encode_keyset",
-    "key_values",
     "keyset_page",
     "link_state_rank",
     "normalized_text",
@@ -255,6 +270,7 @@ __all__ = [
     "sort_columns",
     "sort_ranked",
     "text_keys",
+    "with_sort_joins",
 ]
 
 
@@ -274,37 +290,37 @@ def sort_ranked(
     """Order a complete bounded candidate set before it is paginated.
 
     ``spec`` None means relevance: final score, then identity ascending.
+    Candidates absent from ``values`` were removed after scoring and are dropped.
     """
     if spec is None:
         if direction == SortDirection.DESC:
             return ranked
         return sorted(ranked, key=lambda item: (item[1], item[0].int))
-    return sorted(ranked, key=lambda item: python_sort_key(spec, values[item[0]]))
+    present = [item for item in ranked if item[0] in values]
+    return sorted(present, key=lambda item: python_sort_key(spec, values[item[0]]))
 
 
 def source_context_keys(source_id: ColumnElement[Any], descending: bool) -> list[SortKey]:
-    """Library, archive document and page of an annotation's source; images are unknown."""
+    """Library, archive document and page of an annotation's source; images are unknown.
+
+    The source is outer-joined once by primary key as a page and as a document.
+    """
     from .models import Document, Page  # models import nothing from this module
 
     pages = Page.__table__.alias("context_pages")
     documents = Document.__table__.alias("context_documents")
-
-    def lookup(column_name: str) -> ColumnElement[Any]:
-        return func.coalesce(
-            select_scalar(pages, column_name, source_id),
-            select_scalar(documents, column_name, source_id),
-        )
-
-    library = lookup("library")
+    joins: tuple[SortJoin, ...] = (
+        (pages, pages.c.id == source_id),
+        (documents, documents.c.id == source_id),
+    )
+    library = func.coalesce(pages.c.library, documents.c.library)
     return [
-        *text_keys(normalized_text(library), library, descending),
-        SortKey(lookup("document_id"), "uuid", descending),
-        SortKey(select_scalar(pages, "page_id", source_id), "uuid", descending),
+        SortKey(key.expression, key.kind, key.descending, joins)
+        for key in text_keys(normalized_text(library), library, descending)
+    ] + [
+        SortKey(func.coalesce(pages.c.document_id, documents.c.document_id), "uuid", descending, joins),
+        SortKey(pages.c.page_id, "uuid", descending, joins),
     ]
-
-
-def select_scalar(table: Any, column_name: str, source_id: ColumnElement[Any]) -> ColumnElement[Any]:
-    return select(table.c[column_name]).where(table.c.id == source_id).scalar_subquery()
 
 
 def annotation_builders(model: Any) -> Builders:

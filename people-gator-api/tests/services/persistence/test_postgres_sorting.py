@@ -329,3 +329,13 @@ async def test_page_search_sorts_bounded_candidates_before_paging(collection):
     assert total == sorted_total == 3
     assert {item.source_id for item in relevance} == {item.source_id for item in by_page}
     assert [item.page_id.int for item in by_page] == sorted((item.page_id.int for item in by_page), reverse=True)
+
+
+async def test_ranked_candidates_removed_after_scoring_are_dropped():
+    from people_gator_api.persistence.postgres.sorting import SortKey, SortSpec, sort_ranked
+    from people_gator_api.schemas.sorting import SortDirection
+
+    kept, removed = uuid.uuid4(), uuid.uuid4()
+    spec = SortSpec("name:asc", (SortKey(text("1"), "text"),))
+    ranked = [(removed, 0.9, None, None), (kept, 0.5, None, None)]
+    assert sort_ranked(ranked, spec, SortDirection.ASC, {kept: ("ada",)}) == [(kept, 0.5, None, None)]

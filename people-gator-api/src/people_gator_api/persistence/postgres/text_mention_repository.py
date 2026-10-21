@@ -54,6 +54,7 @@ from .sorting import (
     keyset_page,
     order_by,
     sort_columns,
+    with_sort_joins,
     text_keys,
 )
 from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
@@ -105,7 +106,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         if after is not None:
             page_filters.append(after_predicate(spec, after))
         result = await self._session.execute(
-            select(TextMention, *sort_columns(spec))
+            with_sort_joins(select(TextMention, *sort_columns(spec)), spec)
             .where(*page_filters)
             .order_by(*order_by(spec))
             .limit(query.limit + 1)

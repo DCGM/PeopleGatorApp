@@ -72,6 +72,7 @@ from .sorting import (
     keyset_page,
     order_by,
     sort_columns,
+    with_sort_joins,
     sort_ranked,
 )
 from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
@@ -119,7 +120,7 @@ class PostgresFaceRepository(FaceRepository):
         if after is not None:
             page_filters.append(after_predicate(spec, after))
         result = await self._session.execute(
-            select(Face, *sort_columns(spec))
+            with_sort_joins(select(Face, *sort_columns(spec)), spec)
             .options(selectinload(Face.embeddings))
             .where(*page_filters)
             .order_by(*order_by(spec))
@@ -366,7 +367,9 @@ class PostgresFaceRepository(FaceRepository):
         values: dict[uuid.UUID, tuple[object, ...]] = {}
         if spec is not None and ranked:
             rows = await self._session.execute(
-                select(Face.id, *sort_columns(spec)).where(Face.id.in_([item[0] for item in ranked]))
+                with_sort_joins(select(Face.id, *sort_columns(spec)), spec).where(
+                    Face.id.in_([item[0] for item in ranked])
+                )
             )
             values = {row[0]: tuple(row[1:]) for row in rows.all()}
         ranked = sort_ranked(ranked, spec, direction, values)
