@@ -6,6 +6,7 @@ import { linkMetadata } from '@/lib/entity-links'
 import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
 import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import {
+  type FaceResponse,
   type EntityLinkState,
   type EntitySortField,
   type FaceSortField,
@@ -22,7 +23,12 @@ import type {
 import { lineMentionsEntity, transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import { useCreateEntityMutation, useEntityListQuery } from '@/query/entities'
-import { fetchFaceAlignedCrop, useAssignFaceMutation, useFaceListQuery } from '@/query/faces'
+import {
+  fetchFaceAlignedCrop,
+  useAssignFaceMutation,
+  useFaceListQuery,
+  useFaceQuery,
+} from '@/query/faces'
 import { usePageImageQuery, usePageLookupQuery } from '@/query/media'
 import { usePageLayoutQuery, usePageMentionSpansQuery } from '@/query/pages'
 import { useObjectUrl, useObjectUrlMap } from '@/composables/object-url'
@@ -155,6 +161,12 @@ export function useDocumentWorkspace(
   const faceRecords = computed(() =>
     (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
+  // Resolve the reference directly: workspace filters can hide it in the gallery.
+  const selectedFaceQuery = useFaceQuery(computed(() => toValue(selectedFaceId) ?? ''))
+  const selectedFaceRecord = computed(() => {
+    const face = selectedFaceQuery.data.value
+    return face?.source_id === sourceId.value ? face : undefined
+  })
   const candidateOrder = computed(() => toValue(candidateSort))
   const onPageEntityQuery = useEntityListQuery(
     computed(() => ({
@@ -220,7 +232,12 @@ export function useDocumentWorkspace(
 
   // Aligned face crops (ArcFace-aligned, 1:1) are fetched per detection and
   // used as the face portraits instead of the full page image.
-  const faceIds = computed(() => faceRecords.value.map((face) => face.detection_id))
+  const faceIds = computed(() => [
+    ...new Set([
+      ...faceRecords.value.map((face) => face.detection_id),
+      ...(selectedFaceRecord.value ? [selectedFaceRecord.value.detection_id] : []),
+    ]),
+  ])
   const alignedCropQueries = useQueries({
     queries: computed(() =>
       faceIds.value.map((detectionId) => ({
@@ -245,38 +262,38 @@ export function useDocumentWorkspace(
   // Source-filtered entities are authoritative for the "On this page" state;
   // ranked entity search results do not expose source membership.
 
-  const faces = computed<Face[]>(() =>
-    faceRecords.value.map((face, index) => {
-      const person = face.entity_id
-        ? onPageEntityRecords.value.find((entity) => entity.entity_id === face.entity_id)
-        : undefined
-      return {
-        ...linkMetadata(face),
-        id: face.detection_id,
-        sourceId: face.source_id,
-        embeddingModel: face.embeddings?.[0],
-        personId: face.entity_id ?? null,
-        name: person?.name || 'Unknown person',
-        shortDescription: person?.short_description || undefined,
-        wikidataId: person?.wikidata_id ?? undefined,
-        nlcrAuthorityId: person?.nlcr_authority_id ?? undefined,
-        confidence: percentage(face.confidence),
-        status: face.entity_id ? 'assigned' : 'unassigned',
-        portraitLoading: alignedCropQueries.value[index]?.isPending ?? false,
-        position: toPercentBox(face.bounding_box, annotationDimensions.value),
-        portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
-      }
-    }),
+  function toFace(face: FaceResponse): Face {
+    const person = face.entity_id
+      ? onPageEntityRecords.value.find((entity) => entity.entity_id === face.entity_id)
+      : undefined
+    return {
+      ...linkMetadata(face),
+      id: face.detection_id,
+      sourceId: face.source_id,
+      embeddingModel: face.embeddings?.[0],
+      personId: face.entity_id ?? null,
+      name: person?.name || 'Unknown person',
+      shortDescription: person?.short_description || undefined,
+      wikidataId: person?.wikidata_id ?? undefined,
+      nlcrAuthorityId: person?.nlcr_authority_id ?? undefined,
+      confidence: percentage(face.confidence),
+      status: face.entity_id ? 'assigned' : 'unassigned',
+      portraitLoading:
+        alignedCropQueries.value[faceIds.value.indexOf(face.detection_id)]?.isPending ?? false,
+      position: toPercentBox(face.bounding_box, annotationDimensions.value),
+      portrait: alignedCropUrls.value.get(face.detection_id) ?? pageImageUrl.value,
+    }
+  }
+  const faces = computed<Face[]>(() => faceRecords.value.map(toFace))
+  const referenceFace = computed(() =>
+    selectedFaceRecord.value ? toFace(selectedFaceRecord.value) : null,
   )
   const transcription = computed(() =>
     makeTranscription(layoutQuery.data.value ?? undefined, spanQuery.data.value),
   )
 
   const textTerm = computed(() => toValue(candidateTerm).trim())
-  const selectedFaceEmbedding = computed(() => {
-    const id = toValue(selectedFaceId)
-    return faceRecords.value.find((face) => face.detection_id === id)?.embeddings?.[0]
-  })
+  const selectedFaceEmbedding = computed(() => selectedFaceRecord.value?.embeddings?.[0])
   const searchParams = computed(() =>
     candidateSearchParams(
       toValue(selectedFaceId),
@@ -294,7 +311,7 @@ export function useDocumentWorkspace(
       ...(searchParams.value ?? { limit: 0 }),
       // Face similarity discovers identities globally; ordinary text lookup
       // retains its explicit annotation criteria.
-      ...(resultMode.value === 'text' && toValue(evidence)),
+      ...(resultMode.value === 'text' ? toValue(evidence) : {}),
       ...(candidateOrder.value && sortParams(candidateOrder.value)),
     })),
     computed(() => searchEnabled.value && (resultMode.value === 'face' || toValue(evidenceValid))),
@@ -422,12 +439,14 @@ export function useDocumentWorkspace(
         layoutQuery.error.value ||
         spanQuery.error.value ||
         faceQuery.error.value ||
+        selectedFaceQuery.error.value ||
         mentionQuery.error.value ||
         (resultMode.value === 'page'
           ? onPageEntityQuery.error.value
           : candidateSearchQuery.error.value),
     ),
     faces,
+    referenceFace,
     hasNextPage,
     isFetchingNextPage,
     isLoading: computed(
@@ -441,7 +460,11 @@ export function useDocumentWorkspace(
     loadMore,
     page: pageQuery.data,
     annotationsLoading: computed(
-      () => faceQuery.isPending.value || spanQuery.isPending.value || faceQuery.hasNextPage.value,
+      () =>
+        faceQuery.isPending.value ||
+        spanQuery.isPending.value ||
+        faceQuery.hasNextPage.value ||
+        (Boolean(toValue(selectedFaceId)) && selectedFaceQuery.isPending.value),
     ),
     pageDimensions: computed(() => annotationDimensions.value ?? { height: 297, width: 210 }),
     pageImageLoaded,

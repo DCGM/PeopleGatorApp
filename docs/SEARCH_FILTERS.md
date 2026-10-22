@@ -328,9 +328,11 @@ tags and query keys. Test actual AND/OR results, same-link restrictions, own-rec
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
 
-The scan editor's right panel omits shared workspace badges and the removable
-candidate-source badge. The candidate-source control still switches between
-page and similar-face results, and inherited workspace criteria stay in the URL.
-Its face-similarity candidate mode also searches globally. Its
-ordinary text candidate lookup continues to apply explicitly selected shared
-criteria, and page mode continues to show the current page's identities.
+The scan editor's right panel keeps removable workspace tags, including invalid
+values, so ordinary filtered browsing remains visible and recoverable. Only the
+redundant candidate-source badge is omitted; its control still switches between
+page and similar-face results. Face similarity resolves its selected reference
+directly, independently of the filtered gallery and shared-filter validation.
+The reference and global candidates remain available even when workspace filters
+hide that detection. Ordinary text candidate lookup continues to apply shared
+criteria, and page mode continues to show the current page's filtered identities.

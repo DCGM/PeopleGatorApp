@@ -9,44 +9,84 @@ import { fetchPageLayout, fetchPageMentionSpans } from '@/query/pages'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
 
 const api = vi.hoisted(() => ({
-  page: vi.fn(), image: vi.fn(), layout: vi.fn(), spans: vi.fn(),
-  search: vi.fn(), faces: vi.fn(), entities: vi.fn(), mentions: vi.fn(), crop: vi.fn(),
+  page: vi.fn(),
+  image: vi.fn(),
+  layout: vi.fn(),
+  spans: vi.fn(),
+  face: vi.fn(),
+  search: vi.fn(),
+  faces: vi.fn(),
+  entities: vi.fn(),
+  mentions: vi.fn(),
+  crop: vi.fn(),
 }))
-vi.mock('@/client', async importOriginal => ({
-  ...await importOriginal<typeof import('@/client')>(),
+vi.mock('@/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/client')>()),
   searchEntitiesGetApiV1SearchEntitiesGet: api.search,
   lookupPageRouteApiV1PagesLookupGet: api.page,
   getPageImageByIdRouteApiV1PagesPageSourceIdImageGet: api.image,
   getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet: api.layout,
   getTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansGet: api.spans,
   listFacesRouteApiV1FacesGet: api.faces,
+  getFaceRouteApiV1FacesDetectionIdGet: api.face,
   listEntitiesRouteApiV1EntitiesGet: api.entities,
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
   getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet: api.crop,
 }))
 const cleanup: (() => void)[] = []
-const httpError = (status: number) => new AxiosError('media unavailable', undefined, undefined, undefined, { status } as AxiosResponse)
+const httpError = (status: number) =>
+  new AxiosError('media unavailable', undefined, undefined, undefined, { status } as AxiosResponse)
 
 beforeEach(() => {
   vi.resetAllMocks()
   let id = 0
-  vi.stubGlobal('URL', class extends URL {
-    static createObjectURL = vi.fn(() => `blob:scan-${++id}`)
-    static revokeObjectURL = vi.fn()
-  })
-  api.page.mockImplementation(({ query }) => Promise.resolve({ data: { source_id: query.page_id } }))
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = vi.fn(() => `blob:scan-${++id}`)
+      static revokeObjectURL = vi.fn()
+    },
+  )
+  api.page.mockImplementation(({ query }) =>
+    Promise.resolve({ data: { source_id: query.page_id } }),
+  )
   api.image.mockImplementation(() => Promise.resolve({ data: new Blob(['scan']) }))
   api.layout.mockRejectedValue(httpError(404))
   api.spans.mockRejectedValue(httpError(404))
-  api.faces.mockResolvedValue({ data: { items: [{
-    detection_id: 'face', entity_id: null, entity_link_state: null, embeddings: [], confidence: 1,
-    bounding_box: { x: 300, y: 400, width: 200, height: 250 },
-  }], limit: 100, cursor: null } })
-  for (const mock of [api.entities, api.mentions]) mock.mockResolvedValue({ data: { items: [], limit: 100, cursor: null } })
+  api.faces.mockResolvedValue({
+    data: {
+      items: [
+        {
+          detection_id: 'face',
+          entity_id: null,
+          entity_link_state: null,
+          embeddings: [],
+          confidence: 1,
+          bounding_box: { x: 300, y: 400, width: 200, height: 250 },
+        },
+      ],
+      limit: 100,
+      cursor: null,
+    },
+  })
+  for (const mock of [api.entities, api.mentions])
+    mock.mockResolvedValue({ data: { items: [], limit: 100, cursor: null } })
+  api.face.mockResolvedValue({
+    data: {
+      detection_id: 'face',
+      source_id: 'page',
+      embeddings: ['model'],
+      confidence: 1,
+      bounding_box: { x: 0, y: 0, width: 100, height: 100 },
+    },
+  })
   api.crop.mockResolvedValue({ data: new Blob(['crop']) })
 })
 afterEach(() => {
-  cleanup.splice(0).reverse().forEach(fn => fn())
+  cleanup
+    .splice(0)
+    .reverse()
+    .forEach((fn) => fn())
   vi.unstubAllGlobals()
 })
 
@@ -54,24 +94,44 @@ async function workspace() {
   const pageId = ref('first-page')
   let model!: ReturnType<typeof useDocumentWorkspace>
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const wrapper = mount(defineComponent({ setup() {
-    model = useDocumentWorkspace('library', 'document', pageId, null, '')
-    const props = computed(() => ({
-      pageBounds: { left: 10, top: 20, width: 480, height: 720 },
-      faces: model.faces.value, transcription: [], selectedLineIndex: 0,
-      selectedFaceId: null, selectedPersonId: null, selectedCandidateFaceId: null,
-    }))
-    return () => h(DocumentPageOverlay, props.value)
-  } }), { global: { plugins: [[VueQueryPlugin, { queryClient }]] } })
-  cleanup.push(() => { wrapper.unmount(); queryClient.clear() })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        model = useDocumentWorkspace('library', 'document', pageId, null, '')
+        const props = computed(() => ({
+          pageBounds: { left: 10, top: 20, width: 480, height: 720 },
+          faces: model.faces.value,
+          transcription: [],
+          selectedLineIndex: 0,
+          selectedFaceId: null,
+          selectedPersonId: null,
+          selectedCandidateFaceId: null,
+        }))
+        return () => h(DocumentPageOverlay, props.value)
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+  )
+  cleanup.push(() => {
+    wrapper.unmount()
+    queryClient.clear()
+  })
   await flushPromises()
   return { model, wrapper, pageId }
 }
 
-async function loadImage(model: ReturnType<typeof useDocumentWorkspace>, width: number, height: number, src = model.pageImageUrl.value) {
+async function loadImage(
+  model: ReturnType<typeof useDocumentWorkspace>,
+  width: number,
+  height: number,
+  src = model.pageImageUrl.value,
+) {
   const image = document.createElement('img')
   image.src = src
-  Object.defineProperties(image, { naturalWidth: { value: width }, naturalHeight: { value: height } })
+  Object.defineProperties(image, {
+    naturalWidth: { value: width },
+    naturalHeight: { value: height },
+  })
   const event = new Event('load')
   Object.defineProperty(event, 'target', { value: image })
   model.pageImageLoaded(event)
@@ -94,7 +154,9 @@ describe('scan geometry without OCR', () => {
   })
 
   it('retains OCR coordinates while requesting a resized scan when a layout exists', async () => {
-    api.layout.mockResolvedValue({ data: { page_size: [3600, 2400], regions: [], reading_order: {} } })
+    api.layout.mockResolvedValue({
+      data: { page_size: [3600, 2400], regions: [], reading_order: {} },
+    })
     api.spans.mockResolvedValue({ data: [] })
     const { model, wrapper } = await workspace()
     expect(api.image.mock.lastCall?.[0].query).toEqual({ width: 1024 })
@@ -114,7 +176,9 @@ describe('scan geometry without OCR', () => {
     expect(wrapper.find('[data-region-type="face"]').exists()).toBe(false)
     await loadImage(model, 1800, 1200)
     expect(model.pageDimensions.value).toEqual({ width: 1800, height: 1200 })
-    expect(parseFloat((wrapper.get('[data-region-type="face"]').element as HTMLElement).style.left)).toBeCloseTo(90)
+    expect(
+      parseFloat((wrapper.get('[data-region-type="face"]').element as HTMLElement).style.left),
+    ).toBeCloseTo(90)
   })
 
   it('treats only missing OCR as optional and preserves authentication and storage errors', async () => {
@@ -129,32 +193,140 @@ describe('scan geometry without OCR', () => {
   })
 })
 
-
 it('searches scan face-similarity candidates globally while preserving text lookup criteria', async () => {
-  api.faces.mockResolvedValue({ data: { items: [{
-    detection_id: 'face', embeddings: ['model'], confidence: 1,
-    bounding_box: { x: 0, y: 0, width: 100, height: 100 },
-  }], cursor: null } })
-  api.search.mockResolvedValue({ data: { items: [{
-    entity_id: 'outside', entity_type: 'person', name: 'Outside', score: 0.9,
-  }], cursor: null } })
+  api.faces.mockResolvedValue({
+    data: {
+      items: [
+        {
+          detection_id: 'face',
+          embeddings: ['model'],
+          confidence: 1,
+          bounding_box: { x: 0, y: 0, width: 100, height: 100 },
+        },
+      ],
+      cursor: null,
+    },
+  })
+  api.search.mockResolvedValue({
+    data: {
+      items: [
+        {
+          entity_id: 'outside',
+          entity_type: 'person',
+          name: 'Outside',
+          score: 0.9,
+        },
+      ],
+      cursor: null,
+    },
+  })
   const term = ref('')
-  const evidence = ref({ 'filter.library': ['local'], 'filter.entity_link_state': ['verified'] as Array<'verified'> })
+  const evidence = ref({
+    'filter.library': ['local'],
+    'filter.entity_link_state': ['verified'] as Array<'verified'>,
+  })
   let model!: ReturnType<typeof useDocumentWorkspace>
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const wrapper = mount(defineComponent({ setup() {
-    model = useDocumentWorkspace('library', 'document', 'page', 'face', term, 'face', [], evidence)
-    return () => h('div')
-  } }), { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } })
-  cleanup.push(() => { wrapper.unmount(); client.clear() })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        model = useDocumentWorkspace(
+          'library',
+          'document',
+          'page',
+          'face',
+          term,
+          'face',
+          [],
+          evidence,
+        )
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+  )
+  cleanup.push(() => {
+    wrapper.unmount()
+    client.clear()
+  })
   await flushPromises()
   expect(api.search.mock.lastCall?.[0].query).toEqual({
-    'query.face_id': ['face'], 'query.face_embedding_model': 'model', limit: 50, cursor: null,
+    'query.face_id': ['face'],
+    'query.face_embedding_model': 'model',
+    limit: 50,
+    cursor: null,
   })
   expect(model.similarPeople.value[0]?.id).toBe('outside')
   term.value = 'Outside'
   await flushPromises()
   expect(api.search.mock.lastCall?.[0].query).toMatchObject({
-    'query.text': ['Outside'], ...evidence.value, cursor: null,
+    'query.text': ['Outside'],
+    ...evidence.value,
+    cursor: null,
   })
 })
+
+it.each([true, false])(
+  'loads a global scan reference with excluded gallery and evidence validity %s',
+  async (valid) => {
+    api.faces.mockResolvedValue({ data: { items: [], cursor: null } })
+    api.search.mockResolvedValue({
+      data: { items: [{ entity_id: 'outside', name: 'Outside', score: 0.9 }], cursor: null },
+    })
+    const term = ref('')
+    const selected = ref<string | null>('face')
+    const evidence = ref({ 'filter.last_touched_by_user_id': ['other-reviewer'] })
+    const evidenceValid = ref(valid)
+    let model!: ReturnType<typeof useDocumentWorkspace>
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          model = useDocumentWorkspace(
+            'library',
+            'document',
+            'page',
+            selected,
+            term,
+            'face',
+            [],
+            evidence,
+            evidenceValid,
+          )
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    )
+    cleanup.push(() => {
+      wrapper.unmount()
+      client.clear()
+    })
+    await flushPromises()
+    expect(model.faces.value).toEqual([])
+    expect(model.referenceFace.value).toMatchObject({ id: 'face', embeddingModel: 'model' })
+    expect(api.face.mock.lastCall?.[0].path).toEqual({ detection_id: 'face' })
+    expect(api.search.mock.lastCall?.[0].query).toEqual({
+      'query.face_id': ['face'],
+      'query.face_embedding_model': 'model',
+      limit: 50,
+      cursor: null,
+    })
+    expect(model.similarPeople.value[0]?.id).toBe('outside')
+    const calls = api.search.mock.calls.length
+    evidence.value = { 'filter.last_touched_by_user_id': ['another-reviewer'] }
+    await flushPromises()
+    expect(api.search).toHaveBeenCalledTimes(calls)
+    term.value = 'Outside'
+    await flushPromises()
+    if (valid)
+      expect(api.search.mock.lastCall?.[0].query).toMatchObject({
+        'query.text': ['Outside'],
+        ...evidence.value,
+      })
+    else expect(api.search).toHaveBeenCalledTimes(calls)
+    selected.value = null
+    await flushPromises()
+    expect(model.referenceFace.value).toBeNull()
+  },
+)

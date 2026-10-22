@@ -85,6 +85,7 @@ beforeEach(() => {
   )
   mocks.workspace.mockReturnValue({
     faces,
+    referenceFace: ref(null),
     transcription: lines,
     page: ref({ page_id: 'one' }),
     pageImageReady: ready,
@@ -112,7 +113,7 @@ beforeEach(() => {
 })
 async function settleFocus() {
   await flushPromises()
-  await new Promise(resolve => requestAnimationFrame(resolve))
+  await new Promise((resolve) => requestAnimationFrame(resolve))
   await flushPromises()
 }
 async function mountView() {
@@ -219,4 +220,17 @@ describe('document page gallery navigation', () => {
     expect(transcription.props('selectedLineIndex')).toBe(0)
     wrapper.unmount()
   })
+})
+
+it('keeps the selected reference and assignment panel when workspace filters hide its gallery entry', async () => {
+  route.query = { person: 'a', candidate_mode: 'face' }
+  const reference = ref<Face | null>(face('a'))
+  mocks.workspace.mockReturnValue({ ...mocks.workspace.getMockImplementation()!(), referenceFace: reference })
+  const wrapper = await mountView()
+  faces.value = []
+  await flushPromises()
+  expect(wrapper.findComponent({ name: 'CurrentFacePanel' }).props('face')).toMatchObject({ id: 'a' })
+  expect(wrapper.findComponent({ name: 'SimilarPeopleSearch' }).props('selectedFace')).toMatchObject({ id: 'a' })
+  expect(route.query.person).toBe('a')
+  wrapper.unmount()
 })

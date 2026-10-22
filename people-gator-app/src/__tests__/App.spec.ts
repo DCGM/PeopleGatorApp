@@ -104,6 +104,7 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     createAndAssign: vi.fn<() => void>(),
     error: ref(null),
     annotationsLoading: ref(false),
+    referenceFace: ref(null),
     faces: ref([]),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
@@ -161,9 +162,7 @@ describe('App', () => {
       expect(readSharedFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
         currentKey ? [currentKey] : [],
       )
-      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual([
-        'preview-mzk',
-      ])
+      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
       expect(router.currentRoute.value.query).not.toHaveProperty('origin_return')
       expect(router.currentRoute.value.query.q).toBeUndefined()
       wrapper.unmount()
@@ -228,22 +227,44 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('keeps scan scope and candidate mode without removable sidebar filter badges', async () => {
-    await router.push('/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a&candidate_mode=face')
+  it('shows and removes shared scope in the page workspace without losing selection', async () => {
+    await router.push(
+      '/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a',
+    )
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
     const sidebar = wrapper.get('.workspace-sidebar')
-    expect(sidebar.find('[aria-label="Active filters"]').exists()).toBe(false)
-    expect(sidebar.find('button[aria-label="Remove Library: preview-mzk"]').exists()).toBe(false)
-    expect(sidebar.text()).not.toContain('Candidate source: Similar faces')
-    expect(sidebar.text()).not.toContain('Clear all filters')
-    expect(router.currentRoute.value.query.library).toBe('preview-mzk')
-    expect(router.currentRoute.value.query.link_state).toBe('manual')
-    expect(router.currentRoute.value.query.person).toBe('face-a')
-    expect(router.currentRoute.value.query.candidate_mode).toBe('face')
-    await sidebar.get('button[aria-label="Show filters"]').trigger('click')
+    expect(sidebar.text()).not.toContain('Candidate source:')
+    await sidebar.get('button[aria-label="Remove Library: preview-mzk"]').trigger('click')
     await flushPromises()
-    expect(sidebar.find('[aria-label="Choose candidate source"]').exists()).toBe(true)
+    expect(router.currentRoute.value.query.library).toBeUndefined()
+    expect(router.currentRoute.value.query.link_state).toEqual(['manual'])
+    expect(router.currentRoute.value.query.person).toBe('face-a')
+    expect(sidebar.get('[aria-label="Active filters"]').text()).toContain('Link state: Manual')
+    wrapper.unmount()
+  })
+
+  it('removes invalid scan filters and clears all without losing candidate search', async () => {
+    await router.push(
+      '/libraries/library/documents/document/pages/page?page=bad-page&library=preview-mzk&candidate_text=Ada&candidate_mode=face',
+    )
+    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+    await flushPromises()
+    const sidebar = wrapper.get('.workspace-sidebar')
+    await sidebar.get('button[aria-label="Remove Invalid page: bad-page"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.page).toBeUndefined()
+    expect(sidebar.find('[role="alert"]').exists()).toBe(false)
+    await sidebar
+      .get('[aria-label="Active filters"]')
+      .findAll('button')
+      .find((button) => button.text() === 'Clear all filters')!
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.library).toBeUndefined()
+    expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
+    expect(router.currentRoute.value.query.candidate_mode).toBe('face')
+    expect(sidebar.find('[aria-label="Active filters"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -265,7 +286,10 @@ describe('App', () => {
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'library', archive_document: archive })
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      archive_document: archive,
+    })
     expect(wrapper.get('h1').text()).toBe('Document pages')
     await wrapper
       .get('input[placeholder="Search a person, page or document…"]')
@@ -482,7 +506,10 @@ describe('App', () => {
       .setValue('archives')
     await flushPromises()
 
-    expect(router.currentRoute.value.query).toEqual({ q: 'archives', page: '00000000-0000-4000-8000-000000000007' })
+    expect(router.currentRoute.value.query).toEqual({
+      q: 'archives',
+      page: '00000000-0000-4000-8000-000000000007',
+    })
   })
 
   it('defines all application pages', () => {
@@ -553,7 +580,9 @@ describe('Scans and Documents navigation', () => {
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
       '/documents?library=a&library=b',
     )
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans?library=a&library=b')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
+      '/scans?library=a&library=b',
+    )
     expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
       'PeopleGator',
       'Documents',
@@ -593,7 +622,9 @@ describe('Scans and Documents navigation', () => {
           ? wrapper.get('a[aria-label="PeopleGator"]')
           : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
       const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
-      expect(home.attributes('href')).toBe(router.resolve({ name: 'document-list', query: expected }).href)
+      expect(home.attributes('href')).toBe(
+        router.resolve({ name: 'document-list', query: expected }).href,
+      )
       await home.trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('document-list')
