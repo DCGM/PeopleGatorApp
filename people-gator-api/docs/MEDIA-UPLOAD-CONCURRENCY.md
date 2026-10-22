@@ -13,11 +13,12 @@ lookup. The returned `PageResponse` contains the canonical media identity and
 needs no live session.
 Closing the context returns the connection before reading the multipart file,
 preparing images, waiting for the existing page lock, or awaiting storage. The
-request-scoped dependency used by other routes is unchanged. Authentication also
-uses an explicit short context: its detached actor/user/key schemas need no
-live session. This releases the user repository's transaction-scoped identity
-lock before media I/O, so concurrent bearer requests for the same user can
-authenticate independently. Context dependencies are uncached because each is
+request-scoped dependency used by other routes is unchanged. Bearer
+authentication uses no database at all (#66): the actor comes from signed token
+claims. API-key authentication uses an explicit short context: its detached
+actor/user/key schemas need no live session. This releases the user repository's
+transaction-scoped identity lock before media I/O, so concurrent requests for
+the same user authenticate independently. Context dependencies are uncached because each is
 single-use and authentication and media lookups require separate instances.
 No pool limits, storage timeouts, media receipts or per-page cache ordering are
 changed.

@@ -37,11 +37,36 @@ describe('generated client authentication alternatives', () => {
   )
 
   it('the browser auth callback returns a token only for the bearer scheme', async () => {
-    const token = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`
+    const token = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
     sessionStorage.setItem('people-gator.access-token', token)
     const auth = apiClient.getConfig().auth
     if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
     expect(await auth({ type: 'http', scheme: 'bearer' })).toBe(token)
     expect(await auth({ type: 'apiKey', name: 'X-API-Key' })).toBeUndefined()
+  })
+
+  it('refreshes a stored token issued before the user UUID claim', async () => {
+    const legacy = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`
+    const fresh = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
+    sessionStorage.setItem('people-gator.access-token', legacy)
+    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
+    const adapter = vi.fn(async (config) => ({
+      data: { access_token: fresh, refresh_token: 'rotated', token_type: 'bearer' },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    }))
+    const previous = apiClient.getConfig().axios
+    apiClient.setConfig({ axios: axios.create({ adapter }) })
+    try {
+      const auth = apiClient.getConfig().auth
+      if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
+      expect(await auth({ type: 'http', scheme: 'bearer' })).toBe(fresh)
+      expect(adapter.mock.calls[0]![0].url).toContain('/token/refresh')
+      expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('rotated')
+    } finally {
+      apiClient.setConfig({ axios: previous })
+    }
   })
 })

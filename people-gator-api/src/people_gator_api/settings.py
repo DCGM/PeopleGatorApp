@@ -226,6 +226,8 @@ class JwkSettings(BaseModel):
     key_path: str = "peoplegator_api/jwks.json"
     users_path: str = Field(default="peoplegator_api/users.json", min_length=1)
     key_cache_ttl_seconds: int = Field(default=3600, gt=0)
+    # Bearer requests trust signed claims until expiry; deactivation applies at login/refresh.
+    access_token_lifetime_seconds: int = Field(default=7200, gt=0)
     issuer: str = "https://preview.peoplegator.dev"
     audience: str = "preview.peoplegator.dev"
     

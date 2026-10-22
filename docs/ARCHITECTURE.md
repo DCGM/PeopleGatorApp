@@ -37,6 +37,20 @@ JWT login checks Argon2 hashes in the users JSON file in the configured storage.
 Refresh sessions rotate and live in process memory, so a restart invalidates
 them and multiple workers require routing to the issuing worker.
 
+Login and refresh resolve the persisted user (creating it on first login) and
+reject inactive users with 403 before issuing tokens; a refresh rejected this way
+also revokes its session. Identity resolution never reactivates a user. Access
+tokens carry the user UUID in a signed `uid` claim. Ordinary bearer requests
+check only the signature, expiry, issuer, audience, `sub`, `uid` and scopes, with
+no database access. Disabling a user therefore stops new logins and refreshes,
+while an issued access token keeps working until it expires after
+`JWK__ACCESS_TOKEN_LIFETIME_SECONDS` (default 7200). Routes that need profile data,
+such as `/api/v1/me`, load it explicitly without an active-state check. Access
+tokens issued before `uid` existed are rejected with 401; clients refresh or log
+in again, and the browser app refreshes such stored tokens automatically. API
+keys have no token exchange, so each API-key request still resolves its user,
+rejects inactive users and registers the key.
+
 | Scope | Representative operations |
 | --- | --- |
 | `people-gator:browse` | Lists, searches, media reads and filter-option lookups |
