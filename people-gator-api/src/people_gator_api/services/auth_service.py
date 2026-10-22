@@ -10,13 +10,13 @@ from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.services.api_key_service import verify_api_key
 from fastapi.security import SecurityScopes
-from typing import Annotated, TypedDict
+from typing import Annotated, Protocol, TypedDict
 import argon2
 from pydantic import TypeAdapter
 from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserCreateRequest, UserResponse
-from people_gator_api.persistence.contracts import Database
-from people_gator_api.services.database_service import DatabaseContextDependency
+from people_gator_api.persistence.contracts import APIKeyRepository, UserRepository
+from people_gator_api.services.database_service import get_database_context
 from contextlib import AbstractAsyncContextManager
 from people_gator_api.services.filesystem_service import get_filesystem
 from people_gator_api.services.jwk_service import (
@@ -70,6 +70,23 @@ _refresh_session_locks: dict[str, asyncio.Lock] = {}
 _users_adapter = TypeAdapter(dict[str, UserRecord])
 
 
+class IdentityRepositories(Protocol):
+    """The persistence surface authentication may use; ``Database`` satisfies it."""
+
+    @property
+    def users(self) -> UserRepository: ...
+
+    @property
+    def api_keys(self) -> APIKeyRepository | None: ...
+
+
+type IdentityContext = AbstractAsyncContextManager[IdentityRepositories]
+type IdentityContextDependency = Annotated[
+    # Context managers are single-use; auth and handlers need distinct instances.
+    IdentityContext, Depends(get_database_context, use_cache=False)
+]
+
+
 async def get_users() -> dict[str, UserRecord]:
     """Load password hashes and allowed scopes from the configured filesystem."""
     filesystem = get_filesystem()
@@ -96,7 +113,7 @@ def _check_scopes(scopes: list[str], allowed_scopes: set[str]) -> None:
 
 
 async def resolve_active_user(
-    database_context: AbstractAsyncContextManager[Database], username: str,
+    database_context: IdentityContext, username: str,
 ) -> UserResponse:
     """Resolve the persisted identity for token issuance and require it to be active.
 
@@ -115,7 +132,7 @@ async def resolve_active_user(
 
 async def get_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    database_context: DatabaseContextDependency,
+    database_context: IdentityContextDependency,
 ) -> TokenResponse:
     """Get the raw access token and refresh token from the request context."""
     username = form_data.username
@@ -180,7 +197,9 @@ async def authenticate_bearer(token: str) -> AuthContext:
     return AuthContext(user_id=claims["uid"], authentication_method="bearer", scopes=set(claims["scopes"]))
 
 
-async def authenticate_api_key(secret: str, database: Database, required_scopes: list[str]) -> AuthContext:
+async def authenticate_api_key(
+    secret: str, database: IdentityRepositories, required_scopes: list[str],
+) -> AuthContext:
     identifier, record = await verify_api_key(secret)
     _check_scopes(required_scopes, record.scopes)
     user = await database.users.get_or_create(UserCreateRequest(
@@ -202,7 +221,7 @@ async def authenticate_api_key(secret: str, database: Database, required_scopes:
 async def get_auth_context(
     security_scopes: SecurityScopes,
     request: Request,
-    database_context: DatabaseContextDependency,
+    database_context: IdentityContextDependency,
     token: Annotated[str | None, Security(security)],
     api_key: Annotated[str | None, Security(api_key_security)],
 ) -> AuthContext:
@@ -232,7 +251,7 @@ get_current_user = get_auth_context
 
 
 async def refresh_access_token(
-    refresh_token: str, database_context: AbstractAsyncContextManager[Database],
+    refresh_token: str, database_context: IdentityContext,
 ) -> TokenResponse:
     """Exchange a refresh token for a new access token.
 
