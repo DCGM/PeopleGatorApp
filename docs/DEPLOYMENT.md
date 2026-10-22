@@ -88,6 +88,7 @@ explicitly set the unused object to null, as in [Development](DEVELOPMENT.md).
 | `STORAGE__S3__ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/REGION/ENDPOINT_URL` | S3 backend, mutually exclusive with local configuration |
 | `JWK__USERS_PATH`, `JWK__KEY_PATH` | Relative storage keys `peoplegator_api/users.json`, `peoplegator_api/jwks.json` |
 | `JWK__ISSUER`, `JWK__AUDIENCE` | Match the intended application origin/identity namespace; defaults target the historical preview host |
+| `JWK__ACCESS_TOKEN_LIFETIME_SECONDS` | Access-token lifetime, default 7200; also the longest a disabled user's issued token stays usable |
 | `API_KEYS__KEYS_PATH` | API-key credential file key, default `peoplegator_api/api-keys.json` |
 | `CORS__ALLOW_ORIGINS`, `CORS__ALLOW_ORIGIN_REGEX` | JSON list and regex; default regex permits loopback HTTP(S) |
 | `BATCH__MAX_*_BATCH_SIZE` | Entity, face, text-mention and media limits; each defaults to 10,000 |

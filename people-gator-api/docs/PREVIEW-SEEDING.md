@@ -83,6 +83,7 @@ This does not automatically seed the actual staging environment.
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
+| Deactivated reviewer attribution (#66) | Open `deactivated-reviewer`: **Olga Expiry** matches **Modified by: Preview former reviewer**, an inactive user |
 | Face geometry | Eight faces with pixel bounding boxes and all five alignment keypoints |
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
 | Multiple embedding models | Deterministic, normalized 8D and 4D synthetic vectors with registered models |
@@ -678,3 +679,26 @@ Integration tests query both list and text-search repositories in twelve-item
 batches, check distinct IDs, order, totals, exhausted cursors and document scope,
 read a real page image, and preserve an edited person/unassigned mention on
 rerun. Existing interrupted-checkpoint recovery covers the new fixture keys.
+
+## Deactivated reviewer attribution (#66)
+
+Bearer requests authorize from signed token claims, including the persisted
+user UUID (`uid`). Disabling a user stops login and refresh. An access token
+already issued keeps writing as that user until it expires. The
+**Deactivated reviewer ledger** (`preview-mzk`) shows the result: its OCR mention
+links **Olga Expiry** and is attributed to **Preview former reviewer**. This user
+is persisted inactive, has no API key and holds no usable credentials.
+
+Open the `deactivated-reviewer` link. **Modified by: Preview former reviewer**
+finds Olga through that mention. The editor filter still offers the
+inactive user, and the mention stays attributed after a reviewer verifies it.
+
+The seed creates the user inactive with stable fixture keys and no checkpoint
+upgrade. Identity resolution never changes `is_active`, so reruns preserve an
+administrator's later reactivation or deactivation. Reruns also keep reviewer
+edits, assignments and modification times. Integration tests check the
+attribution, the user and touch filters, edit preservation and both
+`is_active` states across reruns. A separate HTTP test against migrated
+PostgreSQL runs login, JWT-only requests, a mutation, deactivation, use of the
+existing token, rejected login/refresh and expiry. Authentication must enter no
+database context after login.

@@ -2,8 +2,10 @@ import asyncio
 import datetime
 import time
 import json
+import uuid
 import logging
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, TypedDict
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
 from joserfc.errors import ClaimError, InvalidKeyIdError, JoseError
@@ -103,7 +105,10 @@ async def get_access_claims_registry() -> JWTClaimsRegistry:
         iss=ClaimsOption(value=TOKEN_ISSUER, essential=True),
         aud=ClaimsOption(value=TOKEN_AUDIENCE, essential=True),
         sub=ClaimsOption(allow_blank=False, essential=True),
+        # Bearer requests trust these claims alone, so expiry is mandatory.
+        exp=ClaimsOption(essential=True),
         scopes=ClaimsOption(allow_blank=False, essential=True),
+        uid=ClaimsOption(allow_blank=False, essential=True),
     )
     return _access_claims_registry
 
@@ -137,10 +142,12 @@ async def get_jws_registry() -> JWSRegistry:
 async def issue_access_token(
     subject: str,
     scopes: list[str],
+    user_id: uuid.UUID,
 ):
+    """Sign an access token carrying the persisted user UUID for attribution."""
     iss = TOKEN_ISSUER
     iat = _now_datetime()
-    exp = iat + datetime.timedelta(hours=2)
+    exp = iat + datetime.timedelta(seconds=settings.jwk.access_token_lifetime_seconds)
     aud = TOKEN_AUDIENCE
     claims = {
         "iss": iss,
@@ -149,6 +156,7 @@ async def issue_access_token(
         "iat": iat,
         "exp": exp,
         "scopes": " ".join(scopes),
+        "uid": str(user_id),
     }
     protected = {"alg": "ES256"}
     key_set = await get_key_set()
@@ -202,13 +210,58 @@ async def _decode_token(token: str, *, refresh: bool = False) -> Token:
         ) from exc
 
 
-async def verify_access_token(token: str) -> dict[str, Any]:
-    """Decode and validate an access token."""
+type JSONValue = str | int | float | bool | None | list[JSONValue] | dict[str, JSONValue]
+
+
+class AccessTokenClaims(TypedDict):
+    """Verified access-token claims used for database-free authorization."""
+
+    iss: str
+    sub: str
+    iat: int
+    exp: int
+    scopes: list[str]
+    uid: uuid.UUID
+
+
+def _string_claim(claims: Mapping[str, JSONValue], name: str) -> str:
+    value = claims.get(name)
+    if not isinstance(value, str):
+        raise ClaimError(name, f"'{name}' claim must be a string")
+    return value
+
+
+def _integer_claim(claims: Mapping[str, JSONValue], name: str) -> int:
+    value = claims.get(name)
+    # bool is an int subclass but never a valid NumericDate.
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ClaimError(name, f"'{name}' claim must be an integer")
+    return value
+
+
+def access_token_claims(claims: Mapping[str, JSONValue]) -> AccessTokenClaims:
+    """Type-check registry-validated claims; ``uid`` must be a UUID string."""
+    return AccessTokenClaims(
+        iss=_string_claim(claims, "iss"),
+        sub=_string_claim(claims, "sub"),
+        iat=_integer_claim(claims, "iat"),
+        exp=_integer_claim(claims, "exp"),
+        scopes=_string_claim(claims, "scopes").split(),
+        uid=uuid.UUID(_string_claim(claims, "uid")),
+    )
+
+
+async def verify_access_token(token: str) -> AccessTokenClaims:
+    """Decode and validate an access token without consulting persistence.
+
+    Tokens issued before ``uid`` existed are rejected; clients refresh or log
+    in again.
+    """
     decoded_claims = await _decode_token(token)
     try:
         claims_registry = await get_access_claims_registry()
         claims_registry.validate(decoded_claims.claims)
-        decoded_claims.claims["scopes"] = str(decoded_claims.claims["scopes"]).split()
+        claims = access_token_claims(decoded_claims.claims)
     except ClaimError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -219,7 +272,7 @@ async def verify_access_token(token: str) -> dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",
         )
-    return decoded_claims.claims
+    return claims
 
 
 async def verify_refresh_token(token: str) -> dict[str, Any]:

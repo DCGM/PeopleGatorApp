@@ -155,22 +155,25 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
 
     actors: dict[str, AuthContext] = {}
     registered_keys: dict[str, UUID] = {}
-    for key, label in (
-        ("reviewer", "Preview reviewer"),
-        ("importer", "Preview face importer"),
-        ("ocr", "Preview OCR linker"),
-        ("curator", "Preview curator"),
+    for key, label, active in (
+        ("reviewer", "Preview reviewer", True),
+        ("importer", "Preview face importer", True),
+        ("ocr", "Preview OCR linker", True),
+        ("curator", "Preview curator", True),
+        # Issue #66: an inactive user's earlier bearer writes keep their
+        # attribution; get_or_create never reactivates an existing record.
+        ("former", "Preview former reviewer", False),
     ):
         user = await database.users.get_or_create(
             UserCreateRequest(
                 display_name=label,
-                is_active=True,
+                is_active=active,
                 external_subject=key,
                 external_issuer="urn:people-gator:preview-seed",
             )
         )
         api_key_id = None
-        if key != "reviewer":
+        if key not in {"reviewer", "former"}:
             registered = await database.api_keys.get_or_create(
                 APIKeyCreateRequest(
                     identifier="preview-seed-" + key,
@@ -182,7 +185,6 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             registered_keys[key] = api_key_id
         actors[key] = AuthContext(
             user_id=user.user_id,
-            user=user,
             api_key_id=api_key_id,
             authentication_method="api_key" if api_key_id else "bearer",
             scopes={"people-gator:ingest", "people-gator:annotate"},
@@ -465,7 +467,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 await database.entities.patch(person_id, EntityPatchRequest(
                     short_description="Curated after the reviewer linked her face.",
                 ), AuthContext(
-                    user_id=curator.user_id, user=curator.user, api_key_id=None,
+                    user_id=curator.user_id, api_key_id=None,
                     authentication_method="bearer", scopes=curator.scopes,
                 ))
             edit.complete = True
@@ -554,6 +556,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Issue #52: one configuration, each view's own latest change.
             # Documents → People keeps the curator selection: the ledger
             # document, Ivo (curator's key) and Hana (curator's own edit).
+            # Issue #66: Olga's mention stays attributed to a now-inactive
+            # reviewer, who is still offered as an editor filter.
+            "deactivated-reviewer": "/people?" + urlencode({
+                "touched_by": actors["former"].user_id,
+            }),
             "shared-filters-documents": "/documents?" + urlencode({
                 "touched_by": actors["curator"].user_id,
             }),

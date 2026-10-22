@@ -78,7 +78,6 @@ async def records():
         )
         actor = AuthContext(
             user_id=user.user_id,
-            user=user,
             api_key_id=key.api_key_id,
             authentication_method="api_key",
             scopes=set(),
