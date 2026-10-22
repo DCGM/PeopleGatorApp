@@ -504,6 +504,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             "pagination-people": "/people?q=Pagination&sort=name",
             "pagination-scans": "/scans?library=preview-pagination&q=Pagination",
+            "pagination-browse-people": "/people?library=preview-pagination&sort=name",
+            "pagination-browse-scans": "/scans?library=preview-pagination&sort=page_id",
             "pagination-documents": "/documents?library=preview-pagination&q=Pagination&sort=name",
             "pagination-scoped-scans": "/scans?" + urlencode({"document": documents["page-gallery"]}),
             **({"entity-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({

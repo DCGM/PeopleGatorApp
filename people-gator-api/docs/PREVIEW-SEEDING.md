@@ -634,6 +634,14 @@ Clear search to try ordinary browsing; the library scope on scans/documents
 keeps those lists at fourteen records. `pagination-scoped-scans` opens the
 existing fourteen-page **Page gallery navigation** document.
 
+The `pagination-browse-people` and `pagination-browse-scans` links reuse the
+same fourteen linked records without text search. To check mobile spare-space
+loading, open either link or its search counterpart at **390 × 12000** CSS
+pixels. Both batches must load at scroll position zero, even though the results
+section retains a minimum height of one viewport. The pagination marker follows
+the cards inside that section, before its unused space. Repeat by opening at
+**390 × 844** and increasing only the viewport height to 12000.
+
 On desktop and mobile, scroll to the loaded list's end to append the remaining
 results automatically. Increase viewport height to leave the end visible: the
 next batch loads without scrolling. Resize or expand/collapse settings to check
