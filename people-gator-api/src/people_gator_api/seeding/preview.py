@@ -182,7 +182,6 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             registered_keys[key] = api_key_id
         actors[key] = AuthContext(
             user_id=user.user_id,
-            user=user,
             api_key_id=api_key_id,
             authentication_method="api_key" if api_key_id else "bearer",
             scopes={"people-gator:ingest", "people-gator:annotate"},
@@ -465,7 +464,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 await database.entities.patch(person_id, EntityPatchRequest(
                     short_description="Curated after the reviewer linked her face.",
                 ), AuthContext(
-                    user_id=curator.user_id, user=curator.user, api_key_id=None,
+                    user_id=curator.user_id, api_key_id=None,
                     authentication_method="bearer", scopes=curator.scopes,
                 ))
             edit.complete = True

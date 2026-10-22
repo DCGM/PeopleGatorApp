@@ -164,11 +164,13 @@ async def upload_target(migrated_postgres, monkeypatch):
         monkeypatch.setattr(settings, "storage", StorageSettings(s3=config))
         api = FastAPI()
         api.include_router(router)
-        # Keep actual authentication, user/key repositories and DB scopes. Only
-        # credential verification is stubbed; a synthetic actor would hide leaks.
+        # Keep actual authentication, API-key/user repositories and DB scopes.
+        # Only credential verification is stubbed; a synthetic actor would hide
+        # leaks. Bearer claims carry the persisted user UUID, as login issues them.
         scopes = {"people-gator:browse", "people-gator:ingest"}
         monkeypatch.setattr(auth_service, "verify_access_token", AsyncMock(return_value={
             "sub": "reviewer", "iss": "urn:people-gator:preview-seed", "scopes": list(scopes),
+            "uid": user.user_id,
         }))
         monkeypatch.setattr(auth_service, "verify_api_key", AsyncMock(return_value=(
             "issue10-test-key", APIKeyRecord(

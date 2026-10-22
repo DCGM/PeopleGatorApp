@@ -850,7 +850,6 @@ async def test_entity_link_http_contract_and_batch_validation(seed_target):
     seed = await preview.seed_preview(db, fs)
     actor = AuthContext(
         user_id=seed.users["ocr"],
-        user=await db.users.get(seed.users["ocr"]),
         scopes={"people-gator:annotate", "people-gator:browse"},
         authentication_method="api_key",
         api_key_id=seed.api_keys["ocr"],
@@ -1270,7 +1269,7 @@ async def test_issue8_source_only_actor_and_key_references(seed_target):
     with pytest.raises(ValueError, match='referenced'):
         await database.users.delete(user.user_id)
     key = await database.api_keys.get_or_create(APIKeyCreateRequest(identifier='source-only-key', display_name='Historical source key', user_id=user.user_id))
-    key_actor = AuthContext(user_id=user.user_id, user=user, api_key_id=key.api_key_id, authentication_method='api_key', scopes=set())
+    key_actor = AuthContext(user_id=user.user_id, api_key_id=key.api_key_id, authentication_method='api_key', scopes=set())
     face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), key_actor)
     await database.faces.delete(face.detection_id, context=key_actor)
     with pytest.raises(ValueError, match='referenced API key'):

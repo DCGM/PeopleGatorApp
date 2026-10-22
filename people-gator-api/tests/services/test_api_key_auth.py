@@ -14,7 +14,7 @@ from people_gator_api.app import get_app
 from people_gator_api.schemas.api_keys import APIKeyResponse
 from people_gator_api.schemas.users import UserResponse
 from people_gator_api.services import auth_service
-from people_gator_api.services.database_service import get_database_context
+from people_gator_api.services.database_service import get_database, get_database_context
 from people_gator_api.settings import settings, StorageSettings, LocalStorageSettings
 
 
@@ -35,7 +35,9 @@ def authenticated_client(tmp_path, monkeypatch):
         user_id=user.user_id,
     )
     database = SimpleNamespace(
-        users=SimpleNamespace(get_or_create=AsyncMock(return_value=user)),
+        users=SimpleNamespace(
+            get_or_create=AsyncMock(return_value=user), get=AsyncMock(return_value=user),
+        ),
         api_keys=SimpleNamespace(get_or_create=AsyncMock(return_value=key)),
     )
     monkeypatch.setattr(
@@ -59,6 +61,7 @@ def authenticated_client(tmp_path, monkeypatch):
         return_value={
             "iss": settings.jwk.issuer,
             "sub": "robot",
+            "uid": user.user_id,
             "scopes": [auth_service.BROWSE_SCOPE],
         }
     )
@@ -69,6 +72,7 @@ def authenticated_client(tmp_path, monkeypatch):
         yield database
 
     app.dependency_overrides[get_database_context] = lambda: database_context()
+    app.dependency_overrides[get_database] = lambda: database
 
     @app.get("/browse")
     async def browse(actor: auth_service.BrowseActorDependency):
@@ -193,7 +197,6 @@ def test_me_preserves_the_public_user_contract(authenticated_client, method):
     user = database.users.get_or_create.return_value
     context = auth_service.AuthContext(
         user_id=user.user_id,
-        user=user,
         api_key_id=key.api_key_id if method == "api_key" else None,
         authentication_method=method,
         scopes={auth_service.ANNOTATE_SCOPE},
@@ -203,3 +206,22 @@ def test_me_preserves_the_public_user_contract(authenticated_client, method):
     assert response.status_code == 200
     assert response.json() == user.model_dump(mode="json")
     assert "api_key_id" not in response.json()
+    database.users.get.assert_awaited_once_with(user.user_id)
+
+
+def test_api_keys_of_inactive_users_are_rejected(authenticated_client):
+    client, database, _, _, _ = authenticated_client
+    user = database.users.get_or_create.return_value
+    database.users.get_or_create.return_value = user.model_copy(update={"is_active": False})
+    response = client.get("/browse", headers={"X-API-Key": "test-key"})
+    assert response.status_code == 403
+    database.api_keys.get_or_create.assert_not_awaited()
+
+
+def test_bearer_requests_do_not_resolve_users(authenticated_client):
+    client, database, _, _, _ = authenticated_client
+    response = client.get("/browse", headers={"Authorization": "Bearer good"})
+    assert response.status_code == 200
+    assert response.json()["user_id"] == str(database.users.get.return_value.user_id)
+    database.users.get_or_create.assert_not_awaited()
+    database.users.get.assert_not_awaited()

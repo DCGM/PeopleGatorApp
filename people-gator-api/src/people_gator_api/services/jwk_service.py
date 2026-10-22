@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import time
 import json
+import uuid
 import logging
 from typing import Any
 from botocore.exceptions import ClientError
@@ -104,6 +105,7 @@ async def get_access_claims_registry() -> JWTClaimsRegistry:
         aud=ClaimsOption(value=TOKEN_AUDIENCE, essential=True),
         sub=ClaimsOption(allow_blank=False, essential=True),
         scopes=ClaimsOption(allow_blank=False, essential=True),
+        uid=ClaimsOption(allow_blank=False, essential=True),
     )
     return _access_claims_registry
 
@@ -137,10 +139,12 @@ async def get_jws_registry() -> JWSRegistry:
 async def issue_access_token(
     subject: str,
     scopes: list[str],
+    user_id: uuid.UUID,
 ):
+    """Sign an access token carrying the persisted user UUID for attribution."""
     iss = TOKEN_ISSUER
     iat = _now_datetime()
-    exp = iat + datetime.timedelta(hours=2)
+    exp = iat + datetime.timedelta(seconds=settings.jwk.access_token_lifetime_seconds)
     aud = TOKEN_AUDIENCE
     claims = {
         "iss": iss,
@@ -149,6 +153,7 @@ async def issue_access_token(
         "iat": iat,
         "exp": exp,
         "scopes": " ".join(scopes),
+        "uid": str(user_id),
     }
     protected = {"alg": "ES256"}
     key_set = await get_key_set()
@@ -202,13 +207,25 @@ async def _decode_token(token: str, *, refresh: bool = False) -> Token:
         ) from exc
 
 
+def _require_string_claims(claims: dict[str, Any], *names: str) -> None:
+    for name in names:
+        if not isinstance(claims.get(name), str):
+            raise ClaimError(name, f"'{name}' claim must be a string")
+
+
 async def verify_access_token(token: str) -> dict[str, Any]:
-    """Decode and validate an access token."""
+    """Decode and validate an access token without consulting persistence.
+
+    ``uid`` is converted to a UUID and ``scopes`` to a list. Tokens issued
+    before ``uid`` existed are rejected; clients refresh or log in again.
+    """
     decoded_claims = await _decode_token(token)
     try:
         claims_registry = await get_access_claims_registry()
         claims_registry.validate(decoded_claims.claims)
-        decoded_claims.claims["scopes"] = str(decoded_claims.claims["scopes"]).split()
+        _require_string_claims(decoded_claims.claims, "sub", "iss", "scopes", "uid")
+        decoded_claims.claims["uid"] = uuid.UUID(decoded_claims.claims["uid"])
+        decoded_claims.claims["scopes"] = decoded_claims.claims["scopes"].split()
     except ClaimError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

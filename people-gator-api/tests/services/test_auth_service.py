@@ -1,5 +1,7 @@
 import asyncio
 import json
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -12,14 +14,55 @@ from pydantic import ValidationError
 
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.schemas.auth import TokenResponse
+from people_gator_api.schemas.users import UserCreateRequest, UserResponse
 from people_gator_api.services import auth_service, jwk_service
 from people_gator_api.settings import (
     JwkSettings, LocalStorageSettings, Settings, StorageSettings, settings,
 )
 
 
+class FakeUsers:
+    """Identity store with the get-or-create contract used at token issuance."""
+
+    def __init__(self) -> None:
+        self.records: dict[tuple[str, str], UserResponse] = {}
+        self.entries = 0
+
+    async def get_or_create(self, payload: UserCreateRequest) -> UserResponse:
+        key = (payload.external_issuer, payload.external_subject)
+        if key not in self.records:
+            self.records[key] = UserResponse(
+                user_id=uuid.uuid4(), email=None, **payload.model_dump(),
+            )
+        return self.records[key]
+
+    def set_active(self, subject: str, active: bool) -> None:
+        key = (settings.jwk.issuer, subject)
+        self.records[key] = self.records[key].model_copy(update={"is_active": active})
+
+    def context(self):
+        @asynccontextmanager
+        async def database():
+            self.entries += 1
+            yield self
+        return database()
+
+    @property
+    def users(self) -> "FakeUsers":
+        return self
+
+
+fake_users = FakeUsers()
+
+
+async def refresh(refresh_token: str) -> TokenResponse:
+    return await auth_service.refresh_access_token(refresh_token, fake_users.context())
+
+
 @pytest.fixture
 def users_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    global fake_users
+    fake_users = FakeUsers()
     monkeypatch.setattr(settings, "storage", StorageSettings(
         local=LocalStorageSettings(root=tmp_path),
     ))
@@ -49,7 +92,7 @@ async def login(
 ) -> TokenResponse:
     return await auth_service.get_token(OAuth2PasswordRequestForm(
         username=username, password=password, scope=scope,
-    ))
+    ), fake_users.context())
 
 
 def test_users_path_environment_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,14 +119,14 @@ async def test_login_and_refresh_keep_users_file_unchanged(users_file: Path) -> 
     assert claims["sub"] == "alice"
     assert claims["scopes"] == [auth_service.BROWSE_SCOPE]
     original_jti = (await jwk_service.verify_refresh_token(token.refresh_token))["jti"]
-    refreshed = await auth_service.refresh_access_token(token.refresh_token)
+    refreshed = await refresh(token.refresh_token)
     refreshed_claims = await jwk_service.verify_access_token(refreshed.access_token)
     assert refreshed_claims["sub"] == "alice"
     assert refreshed_claims["scopes"] == [auth_service.BROWSE_SCOPE]
     new_jti = (await jwk_service.verify_refresh_token(refreshed.refresh_token))["jti"]
     assert original_jti != new_jti
     with pytest.raises(HTTPException) as expired:
-        await auth_service.refresh_access_token(token.refresh_token)
+        await refresh(token.refresh_token)
     assert expired.value.status_code == 401
     assert users_file.read_bytes() == before
 
@@ -97,7 +140,7 @@ async def test_refresh_sessions_do_not_survive_restart(
     monkeypatch.setattr(auth_service, "_refresh_sessions", {})
     monkeypatch.setattr(auth_service, "_refresh_session_locks", {})
     with pytest.raises(HTTPException) as expired:
-        await auth_service.refresh_access_token(token.refresh_token)
+        await refresh(token.refresh_token)
     assert expired.value.status_code == 401
     assert users_file.read_bytes() == before
 
@@ -141,10 +184,10 @@ async def test_session_limit_and_concurrent_logins(users_file: Path) -> None:
     first = await login()
     tokens = await asyncio.gather(*(login() for _ in range(4)))
     with pytest.raises(HTTPException) as evicted:
-        await auth_service.refresh_access_token(first.refresh_token)
+        await refresh(first.refresh_token)
     assert evicted.value.status_code == 401
     for token in tokens:
-        refreshed = await auth_service.refresh_access_token(token.refresh_token)
+        refreshed = await refresh(token.refresh_token)
         assert (await jwk_service.verify_access_token(refreshed.access_token))["sub"] == "alice"
 
 
@@ -168,8 +211,8 @@ async def test_concurrent_refresh_only_succeeds_once(
     monkeypatch.setattr(auth_service, "issue_refresh_token", sign_together)
     async with asyncio.timeout(5):
         results = await asyncio.gather(
-            auth_service.refresh_access_token(token.refresh_token),
-            auth_service.refresh_access_token(token.refresh_token),
+            refresh(token.refresh_token),
+            refresh(token.refresh_token),
             return_exceptions=True,
         )
     failures = [result for result in results if isinstance(result, HTTPException)]
@@ -232,7 +275,7 @@ async def test_refresh_does_not_restore_session_evicted_while_signing(
 
     async def refresh_result() -> TokenResponse | HTTPException:
         try:
-            return await auth_service.refresh_access_token(first.refresh_token)
+            return await refresh(first.refresh_token)
         except HTTPException as exc:
             return exc
 
@@ -245,7 +288,7 @@ async def test_refresh_does_not_restore_session_evicted_while_signing(
     result = refreshing.result()
     assert isinstance(result, HTTPException)
     assert result.status_code == 401
-    assert (await auth_service.refresh_access_token(latest.refresh_token)).access_token
+    assert (await refresh(latest.refresh_token)).access_token
 
 
 @pytest.mark.asyncio
@@ -266,7 +309,7 @@ async def test_refresh_observes_user_removal(users_file: Path) -> None:
     users_file.write_text(json.dumps(users))
     before = users_file.read_bytes()
     with pytest.raises(HTTPException) as rejected:
-        await auth_service.refresh_access_token(token.refresh_token)
+        await refresh(token.refresh_token)
     assert rejected.value.status_code == 401
     assert users_file.read_bytes() == before
 
@@ -291,7 +334,7 @@ async def test_refresh_rejects_revoked_scopes(users_file: Path, scopes: list[str
     users_file.write_text(json.dumps(users))
     before = users_file.read_bytes()
     with pytest.raises(HTTPException) as rejected:
-        await auth_service.refresh_access_token(token.refresh_token)
+        await refresh(token.refresh_token)
     assert rejected.value.status_code == 403
     assert users_file.read_bytes() == before
 
@@ -302,7 +345,7 @@ async def test_refresh_preserves_requested_scopes_when_permissions_expand(users_
     users = json.loads(users_file.read_text())
     users["alice"]["scopes"] = sorted(auth_service.KNOWN_SCOPES)
     users_file.write_text(json.dumps(users))
-    refreshed = await auth_service.refresh_access_token(token.refresh_token)
+    refreshed = await refresh(token.refresh_token)
     assert (await jwk_service.verify_access_token(refreshed.access_token))["scopes"] == [auth_service.BROWSE_SCOPE]
 
 
@@ -344,3 +387,68 @@ async def test_s3_missing_file_and_storage_errors(
             await login()
         assert rejected.value.status_code == 401
         filesystem.write_bytes.assert_awaited_once_with(settings.jwk.users_path, b"{}")
+
+
+@pytest.mark.asyncio
+async def test_tokens_carry_the_persisted_user_uuid(users_file: Path) -> None:
+    token = await login()
+    user = fake_users.records[(settings.jwk.issuer, "alice")]
+    assert user.is_active
+    assert (await jwk_service.verify_access_token(token.access_token))["uid"] == user.user_id
+    refreshed = await refresh(token.refresh_token)
+    assert (await jwk_service.verify_access_token(refreshed.access_token))["uid"] == user.user_id
+    assert len(fake_users.records) == 1
+
+
+@pytest.mark.asyncio
+async def test_inactive_user_cannot_log_in_and_is_not_reactivated(users_file: Path) -> None:
+    await login()
+    fake_users.set_active("alice", False)
+    with pytest.raises(HTTPException) as rejected:
+        await login()
+    assert rejected.value.status_code == 403
+    assert not fake_users.records[(settings.jwk.issuer, "alice")].is_active
+    assert len(auth_service._refresh_sessions["alice"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_disabling_between_login_and_refresh_revokes_the_session(users_file: Path) -> None:
+    token = await login()
+    fake_users.set_active("alice", False)
+    with pytest.raises(HTTPException) as rejected:
+        await refresh(token.refresh_token)
+    assert rejected.value.status_code == 403
+    assert auth_service._refresh_sessions["alice"] == {}
+    # The original access token remains valid until it expires.
+    assert (await jwk_service.verify_access_token(token.access_token))["sub"] == "alice"
+    fake_users.set_active("alice", True)
+    with pytest.raises(HTTPException) as revoked:
+        await refresh(token.refresh_token)
+    assert revoked.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_rejected_credentials_do_not_resolve_identities(users_file: Path) -> None:
+    for username, password, scope in (
+        ("alice", "wrong", auth_service.BROWSE_SCOPE),
+        ("alice", "secret", auth_service.ADMIN_SCOPE),
+    ):
+        with pytest.raises(HTTPException):
+            await login(username, password, scope)
+    assert fake_users.entries == 0
+    assert fake_users.records == {}
+
+
+@pytest.mark.asyncio
+async def test_access_token_lifetime_is_configurable(
+    users_file: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.jwk, "access_token_lifetime_seconds", 60)
+    token = await login()
+    claims = await jwk_service.verify_access_token(token.access_token)
+    assert claims["exp"] - claims["iat"] == 60
+    monkeypatch.setattr(jwk_service, "_now", lambda: claims["exp"] + 1)
+    monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
+    with pytest.raises(HTTPException) as expired:
+        await jwk_service.verify_access_token(token.access_token)
+    assert expired.value.status_code == 401
