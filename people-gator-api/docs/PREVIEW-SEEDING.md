@@ -695,16 +695,21 @@ data, assign the outside unassigned face or merge the duplicate person. Candidat
 navigation also carries the original shared configuration. All searches retain
 normal API authorization. No optional face-scope control is introduced.
 
-The `global-discovery-scan` link opens the reference page in face-similarity
-candidate mode with local source filters retained. Orion Portrait remains a
-global assignment candidate; ordinary text lookup still uses shared criteria.
-The right panel shows removable workspace filters, including invalid values, while
-omitting the redundant candidate-source badge. Use the candidate-source control
-to switch between the page and similar faces; inherited criteria remain in the URL.
-The `global-discovery-scan-excluded` link applies Preview reviewer attribution,
-which hides the selected reference from the gallery. Its direct face lookup still
-loads global similarity candidates and keeps the selected reference available.
-Try adding `page=invalid` and remove its Invalid page tag to recover ordinary browsing.
+The `global-discovery-scan` link opens the reference page in face-similarity mode.
+The right panel never inherits workspace predicates or renders workspace tags.
+It shows entities on the current page, or searches text and face candidates across
+all accessible data. Source, actor, API key, assignment and date settings remain
+in the URL for navigation back to filtered lists; invalid workspace values do not
+block the scan. The page toolbar's explicit annotation display setting uses
+`page_link_state`, independently of the workspace's `link_state`.
+
+Open `scan-page-entities`: Zora and her reference faces remain visible despite
+retained Verified/reviewer/OCR-key criteria. Open `scan-global-text`: searching
+**Orion** finds **Orion Portrait** in `preview-nlk` without selecting a face.
+Clear the search to return to page identities. The stable
+`global-discovery-scan-excluded` link retains attribution that would exclude its
+reference in workspace browsing; the scan now shows that reference normally.
+Adding `page=invalid` keeps the page panel and global search usable.
 
 The additive document/page and two faces have new stable keys and generated local
 media, reusing the existing reference model and duplicate identity. Reruns preserve

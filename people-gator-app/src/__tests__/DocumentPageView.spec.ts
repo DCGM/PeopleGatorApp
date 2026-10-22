@@ -197,7 +197,7 @@ describe('document page gallery navigation', () => {
     expect(mocks.gallery.mock.calls[0]).toHaveLength(5)
     expect(order.value).toEqual({ field: 'page_id', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
-    route.query = { person: 'a', line: 'l2', link_state: 'manual' }
+    route.query = { person: 'a', line: 'l2', link_state: 'manual', page_link_state: 'verified' }
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },

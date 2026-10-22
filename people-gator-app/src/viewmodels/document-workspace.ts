@@ -1,4 +1,3 @@
-import type { SharedQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -138,19 +137,16 @@ export function useDocumentWorkspace(
   candidateTerm: MaybeRefOrGetter<string>,
   candidateBrowseMode: MaybeRefOrGetter<CandidateBrowseMode> = 'page',
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<SharedQuery> = {},
-  evidenceValid: MaybeRefOrGetter<boolean> = true,
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,
   candidateSort?: MaybeRefOrGetter<SortState<EntitySortField> | undefined>,
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
-  const hasPage = computed(() => Boolean(sourceId.value) && toValue(evidenceValid))
+  const hasPage = computed(() => Boolean(sourceId.value))
   const layoutQuery = usePageLayoutQuery(sourceId)
-  const spanQuery = usePageMentionSpansQuery(sourceId, linkStates, evidence)
+  const spanQuery = usePageMentionSpansQuery(sourceId, linkStates)
   const faceQuery = useFaceListQuery(
     computed(() => ({
-      ...toValue(evidence),
       'filter.source_id': [sourceId.value],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       ...listSortParams(toValue(faceSort)),
@@ -161,7 +157,7 @@ export function useDocumentWorkspace(
   const faceRecords = computed(() =>
     (faceQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
-  // Resolve the reference directly: workspace filters can hide it in the gallery.
+  // Resolve the reference directly even when page annotation controls hide its gallery entry.
   const selectedFaceQuery = useFaceQuery(computed(() => toValue(selectedFaceId) ?? ''))
   const selectedFaceRecord = computed(() => {
     const face = selectedFaceQuery.data.value
@@ -170,9 +166,7 @@ export function useDocumentWorkspace(
   const candidateOrder = computed(() => toValue(candidateSort))
   const onPageEntityQuery = useEntityListQuery(
     computed(() => ({
-      ...toValue(evidence),
       'filter.source_id': [sourceId.value],
-      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       ...(candidateOrder.value && listSortParams(candidateOrder.value)),
       limit: 100,
     })),
@@ -183,7 +177,6 @@ export function useDocumentWorkspace(
   )
   const mentionQuery = useTextMentionListQuery(
     computed(() => ({
-      ...toValue(evidence),
       'filter.source_id': [sourceId.value],
       'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
       limit: 100,
@@ -309,12 +302,10 @@ export function useDocumentWorkspace(
   const candidateSearchQuery = useEntitySearchQuery(
     computed(() => ({
       ...(searchParams.value ?? { limit: 0 }),
-      // Face similarity discovers identities globally; ordinary text lookup
-      // retains its explicit annotation criteria.
-      ...(resultMode.value === 'text' ? toValue(evidence) : {}),
+      // Both text and face candidates search all accessible data.
       ...(candidateOrder.value && sortParams(candidateOrder.value)),
     })),
-    computed(() => searchEnabled.value && (resultMode.value === 'face' || toValue(evidenceValid))),
+    searchEnabled,
   )
   const candidateMatches = computed(() =>
     (candidateSearchQuery.data.value?.pages ?? []).flatMap((page) => page.items),

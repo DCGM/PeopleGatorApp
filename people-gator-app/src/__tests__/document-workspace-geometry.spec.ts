@@ -193,7 +193,7 @@ describe('scan geometry without OCR', () => {
   })
 })
 
-it('searches scan face-similarity candidates globally while preserving text lookup criteria', async () => {
+it('shows page identities and searches text and face candidates globally', async () => {
   api.faces.mockResolvedValue({
     data: {
       items: [
@@ -221,25 +221,17 @@ it('searches scan face-similarity candidates globally while preserving text look
     },
   })
   const term = ref('')
-  const evidence = ref({
-    'filter.library': ['local'],
-    'filter.entity_link_state': ['verified'] as Array<'verified'>,
+  const selected = ref<string | null>('face')
+  api.entities.mockResolvedValue({
+    data: { items: [{ entity_id: 'local', name: 'Local' }], cursor: null },
   })
+  const mode = ref<'face' | 'page'>('page')
   let model!: ReturnType<typeof useDocumentWorkspace>
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = mount(
     defineComponent({
       setup() {
-        model = useDocumentWorkspace(
-          'library',
-          'document',
-          'page',
-          'face',
-          term,
-          'face',
-          [],
-          evidence,
-        )
+        model = useDocumentWorkspace('library', 'document', 'page', selected, term, mode)
         return () => h('div')
       },
     }),
@@ -250,6 +242,21 @@ it('searches scan face-similarity candidates globally while preserving text look
     client.clear()
   })
   await flushPromises()
+  expect(model.similarPeople.value.map((person) => person.id)).toEqual(['local'])
+  expect(api.entities.mock.lastCall?.[0].query).toEqual({
+    'filter.source_id': ['page'],
+    limit: 100,
+    cursor: null,
+  })
+  expect(api.faces.mock.lastCall?.[0].query).toMatchObject({ 'filter.source_id': ['page'] })
+  expect(api.mentions.mock.lastCall?.[0].query).toEqual({
+    'filter.source_id': ['page'],
+    limit: 100,
+    cursor: null,
+  })
+  expect(api.search).not.toHaveBeenCalled()
+  mode.value = 'face'
+  await flushPromises()
   expect(api.search.mock.lastCall?.[0].query).toEqual({
     'query.face_id': ['face'],
     'query.face_embedding_model': 'model',
@@ -257,76 +264,56 @@ it('searches scan face-similarity candidates globally while preserving text look
     cursor: null,
   })
   expect(model.similarPeople.value[0]?.id).toBe('outside')
+  selected.value = null
   term.value = 'Outside'
   await flushPromises()
-  expect(api.search.mock.lastCall?.[0].query).toMatchObject({
-    'query.text': ['Outside'],
-    ...evidence.value,
-    cursor: null,
+  expect(api.search.mock.lastCall?.[0].query).toEqual({
+    'query.text': ['Outside'], limit: 50, cursor: null,
   })
 })
 
-it.each([true, false])(
-  'loads a global scan reference with excluded gallery and evidence validity %s',
-  async (valid) => {
-    api.faces.mockResolvedValue({ data: { items: [], cursor: null } })
-    api.search.mockResolvedValue({
-      data: { items: [{ entity_id: 'outside', name: 'Outside', score: 0.9 }], cursor: null },
-    })
-    const term = ref('')
-    const selected = ref<string | null>('face')
-    const evidence = ref({ 'filter.last_touched_by_user_id': ['other-reviewer'] })
-    const evidenceValid = ref(valid)
-    let model!: ReturnType<typeof useDocumentWorkspace>
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const wrapper = mount(
-      defineComponent({
-        setup() {
-          model = useDocumentWorkspace(
-            'library',
-            'document',
-            'page',
-            selected,
-            term,
-            'face',
-            [],
-            evidence,
-            evidenceValid,
-          )
-          return () => h('div')
-        },
-      }),
-      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
-    )
-    cleanup.push(() => {
-      wrapper.unmount()
-      client.clear()
-    })
-    await flushPromises()
-    expect(model.faces.value).toEqual([])
-    expect(model.referenceFace.value).toMatchObject({ id: 'face', embeddingModel: 'model' })
-    expect(api.face.mock.lastCall?.[0].path).toEqual({ detection_id: 'face' })
-    expect(api.search.mock.lastCall?.[0].query).toEqual({
-      'query.face_id': ['face'],
-      'query.face_embedding_model': 'model',
-      limit: 50,
-      cursor: null,
-    })
-    expect(model.similarPeople.value[0]?.id).toBe('outside')
-    const calls = api.search.mock.calls.length
-    evidence.value = { 'filter.last_touched_by_user_id': ['another-reviewer'] }
-    await flushPromises()
-    expect(api.search).toHaveBeenCalledTimes(calls)
-    term.value = 'Outside'
-    await flushPromises()
-    if (valid)
-      expect(api.search.mock.lastCall?.[0].query).toMatchObject({
-        'query.text': ['Outside'],
-        ...evidence.value,
-      })
-    else expect(api.search).toHaveBeenCalledTimes(calls)
-    selected.value = null
-    await flushPromises()
-    expect(model.referenceFace.value).toBeNull()
-  },
-)
+it('loads a global scan reference hidden by the explicit page annotation control', async () => {
+  api.faces.mockResolvedValue({ data: { items: [], cursor: null } })
+  api.search.mockResolvedValue({
+    data: { items: [{ entity_id: 'outside', name: 'Outside', score: 0.9 }], cursor: null },
+  })
+  const term = ref('')
+  const selected = ref<string | null>('face')
+  const states = ref<Array<'manual' | 'verified'>>(['manual'])
+  let model!: ReturnType<typeof useDocumentWorkspace>
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        model = useDocumentWorkspace('library', 'document', 'page', selected, term, 'face', states)
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+  )
+  cleanup.push(() => {
+    wrapper.unmount()
+    client.clear()
+  })
+  await flushPromises()
+  expect(model.faces.value).toEqual([])
+  expect(model.referenceFace.value).toMatchObject({ id: 'face', embeddingModel: 'model' })
+  expect(api.face.mock.lastCall?.[0].path).toEqual({ detection_id: 'face' })
+  expect(api.search.mock.lastCall?.[0].query).toEqual({
+    'query.face_id': ['face'],
+    'query.face_embedding_model': 'model',
+    limit: 50,
+    cursor: null,
+  })
+  expect(model.similarPeople.value[0]?.id).toBe('outside')
+  const calls = api.search.mock.calls.length
+  states.value = ['verified']
+  await flushPromises()
+  expect(api.search).toHaveBeenCalledTimes(calls)
+  term.value = 'Outside'
+  await flushPromises()
+  expect(api.search.mock.lastCall?.[0].query).toMatchObject({ 'query.text': ['Outside'] })
+  selected.value = null
+  await flushPromises()
+  expect(model.referenceFace.value).toBeNull()
+})

@@ -41,7 +41,13 @@ defineExpose({ clear, focus })
       id="similar-people-search-title"
       class="font-mono text-xs font-semibold uppercase text-secondary"
     >
-      {{ props.selectedFace?.personId ? 'Reassign to similar' : 'Assign to similar' }}
+      {{
+        props.selectedFace
+          ? props.selectedFace.personId
+            ? 'Reassign to similar'
+            : 'Assign to similar'
+          : 'People'
+      }}
     </p>
     <SearchFilterPanel
       ref="inputElement"
@@ -49,7 +55,6 @@ defineExpose({ clear, focus })
       class="mt-2"
       label="Search people"
       placeholder="Search by name or alias"
-      :disabled="!props.selectedFace"
     >
       <ToggleGroup
         v-if="!query.trim()"

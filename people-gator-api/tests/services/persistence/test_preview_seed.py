@@ -2795,6 +2795,29 @@ async def test_global_discovery_outside_retained_workspace(seed_target):
         source_id=[reference_face.source_id], last_touched_by_user_id=excluded['touched_by'])))
     assert reference_face.detection_id not in {face.detection_id for face in hidden.items}
     assert first.entities['discovery-face'] in {item.entity_id for item in scan_matches.items}
+    page_example = urlsplit(first.filter_examples['scan-page-entities'])
+    page_scope = parse_qs(page_example.query)
+    reference_page = await db.sources.get_page(first.pages['discovery-1'])
+    assert reference_page is not None
+    assert page_example.path.endswith('/pages/' + str(reference_page.page_id))
+    assert page_scope['candidate_mode'] == ['page']
+    assert page_scope['link_state'] == ['verified']
+    assert page_scope['touched_by'] == [str(first.users['reviewer'])]
+    on_page = await db.entities.list(EntityListRequest(limit=100,
+        filter_=EntityListFilter(source_id=[first.pages['discovery-1']])))
+    assert {item.entity_id for item in on_page.items} == {reference}
+    page_faces = await db.faces.list(FaceListRequest(limit=100,
+        filter_=FaceListFilter(source_id=[first.pages['discovery-1']])))
+    assert reference_face.detection_id in {face.detection_id for face in page_faces.items}
+    text_scope = parse_qs(urlsplit(first.filter_examples['scan-global-text']).query)
+    assert 'person' not in text_scope  # Text lookup needs no selected face.
+    text_matches = await db.entities.search(SearchEntitiesRequest(limit=50,
+        query=QueryBase(text=text_scope['candidate_text'])))
+    assert first.entities['discovery-face'] in {item.entity_id for item in text_matches.items}
+    scoped_matches = await db.entities.search(SearchEntitiesRequest(limit=50,
+        query=QueryBase(text=text_scope['candidate_text']), filter_=EntityListFilter(
+            library=text_scope['library'], last_touched_by_user_id=text_scope['touched_by'])))
+    assert first.entities['discovery-face'] not in {item.entity_id for item in scoped_matches.items}
     assigned_id = first.faces['discovery-global-assigned']
     unassigned_id = first.faces['discovery-global-unassigned']
     candidate_id = first.entities['discovery-face']

@@ -506,7 +506,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
-            # Retained, removable workspace filters and a global face reference.
+            # Workspace criteria stay in navigation; the scan panel uses page membership or global search.
             "global-discovery-scan": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
                 f"/pages/{discovery_page.page_id}?" + urlencode({
@@ -522,6 +522,20 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     "library": "preview-mzk", "touched_by": actors["reviewer"].user_id,
                 })
             ),
+            **{
+                key: (
+                    f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                    f"/pages/{discovery_page.page_id}?" + urlencode({
+                        "candidate_mode": "page", "library": "preview-mzk",
+                        "link_state": "verified", "touched_by": actors["reviewer"].user_id,
+                        "api_key": registered_keys["ocr"], **extra,
+                    })
+                )
+                for key, extra in (
+                    ("scan-page-entities", {}),
+                    ("scan-global-text", {"candidate_text": "Orion"}),
+                )
+            },
             "global-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
                 "tab": "discover", "discovery_model": DISCOVERY_MODEL,
                 "discovery_annotations": "faces", "library": "preview-mzk",

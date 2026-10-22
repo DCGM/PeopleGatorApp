@@ -328,11 +328,12 @@ tags and query keys. Test actual AND/OR results, same-link restrictions, own-rec
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
 
-The scan editor's right panel keeps removable workspace tags, including invalid
-values, so ordinary filtered browsing remains visible and recoverable. Only the
-redundant candidate-source badge is omitted; its control still switches between
-page and similar-face results. Face similarity resolves its selected reference
-directly, independently of the filtered gallery and shared-filter validation.
-The reference and global candidates remain available even when workspace filters
-hide that detection. Ordinary text candidate lookup continues to apply shared
-criteria, and page mode continues to show the current page's filtered identities.
+The scan editor's right panel shows entities on the current page, or text/face
+search results across all accessible data. It does not inherit workspace source,
+assignment, actor/date or API key predicates, and shows no workspace tags or
+validation messages. Retained workspace URL values still apply when navigating
+back to ordinary lists. Invalid workspace values cannot block page entities or
+search. Text lookup works without selecting a face. The explicit page annotation
+link-state control uses `page_link_state`; it affects annotation display rather
+than the page's identity membership or global candidates. The workspace's
+`link_state` remains separate. Page navigation drops the page-specific setting.

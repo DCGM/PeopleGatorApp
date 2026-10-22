@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import SharedFilterTags from '@/components/custom/SharedFilterTags.vue'
 import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useSharedFilters, hasSharedFilters, legacyFilterNotice } from '@/viewmodels/shared-filters'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
@@ -59,10 +57,9 @@ const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const route = useRoute()
 const router = useRouter()
-const evidence = useSharedFilters()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
-const linkStates = useLinkStateFilter()
+const linkStates = useLinkStateFilter('page_link_state')
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -120,8 +117,6 @@ const {
   debouncedCandidateTerm,
   candidateBrowseMode,
   linkStates,
-  evidence.params,
-  computed(() => !evidence.error.value),
   faceSort,
   candidateSort,
 )
@@ -677,16 +672,6 @@ onBeforeUnmount(() => {
           <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="statistics">Statistics</TabsTrigger>
         </TabsList>
-      </div>
-      <div
-        v-if="
-          hasSharedFilters(evidence.filters.value) ||
-          evidence.error.value ||
-          legacyFilterNotice.length
-        "
-        class="shrink-0 px-3 pb-3"
-      >
-        <SharedFilterTags />
       </div>
       <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
         <FaceGallery
