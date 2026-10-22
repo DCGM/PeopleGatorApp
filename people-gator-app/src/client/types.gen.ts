@@ -320,7 +320,7 @@ export type EntityListFilter = {
     /**
      * Page Source Id
      *
-     * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+     * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
      */
     page_source_id?: Array<string>;
     /**
@@ -2797,7 +2797,7 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -2951,7 +2951,7 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -3147,7 +3147,7 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -3325,7 +3325,7 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -3508,7 +3508,7 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -3865,7 +3865,7 @@ export type ListFacesRouteApiV1FacesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -4266,7 +4266,7 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -4413,7 +4413,7 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -4733,7 +4733,7 @@ export type ListSourcesRouteApiV1SourcesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -4957,7 +4957,7 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -5270,7 +5270,7 @@ export type ListPagesRouteApiV1PagesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -5673,7 +5673,7 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**
@@ -5779,7 +5779,7 @@ export type ListImagesRouteApiV1ImagesGetData = {
         /**
          * Filter.Page Source Id
          *
-         * Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
          */
         'filter.page_source_id'?: Array<string> | null;
         /**

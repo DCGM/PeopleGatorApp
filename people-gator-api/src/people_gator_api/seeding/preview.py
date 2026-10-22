@@ -557,6 +557,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Document scope by internal UUID; the same archive ID in preview-nlk
             # has no links and never contributes results.
             "shared-filters-scope": "/people?" + urlencode({"document": documents["shared-ledger"]}),
+            # Strict page scope: Scans selects this page; People finds Hana
+            # through her face, while Documents never includes the parent ledger.
+            "shared-filters-page": "/scans?" + urlencode({"page": pages["shared-ledger-1"]}),
+            "shared-filters-page-people": "/people?" + urlencode({"page": pages["shared-ledger-1"]}),
             # Presentation examples reuse linked synthetic records and media.
             # Adding entry points never rewrites reviewer edits or checkpoints.
             # Mixed-state faces exercise green-outline Verify/red-outline Unassign;

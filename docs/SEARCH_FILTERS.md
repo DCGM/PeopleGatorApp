@@ -127,17 +127,19 @@ verifier, an earlier editor or a linked annotation.
 | --- | --- |
 | `library` | Actual source library; on entities, a linked annotation in that library |
 | `document_source_id` | Internal registered document source UUID, including its direct annotations and registered pages in the same library/archive document |
-| `page_source_id` | Internal page source UUID; Documents returns its registered parent document, other collections return that page or records linked on it |
+| `page_source_id` | Internal registered page source UUID; source lists return only selected pages, never their parent documents. Other collections match records linked on those pages. Non-page UUIDs do not match |
 | `entity_link_state` | OR of `automatic`, `manual`, `verified` assignment states; omit to include unassigned annotations |
 | `last_touched_by_user_id` | Users responsible for the record's latest recorded change |
 | `last_touched_by_api_key_id` | Registered API keys used for that latest change |
 | `last_touched_from`, `last_touched_to` | Inclusive, timezone-aware modification bounds, normalized to UTC |
 
 Library/document/page scope on sources does not require annotations: unannotated
-sources remain browsable. Library and archive IDs are paired, so an archive UUID
-reused in another library cannot leak results. On entities, scope and link state
+sources remain browsable. Page scope does not expand to containing documents:
+Documents returns no matches while a page selection is active. Library and archive
+IDs are paired, so an archive UUID reused in another library cannot leak results.
+On entities, scope and link state
 must match one assigned face or mention. On documents, an explicit link criterion
-must match an annotation within the selected page/document scope. Predicates
+must match an annotation within the selected document scope. Predicates
 cannot combine unrelated links to manufacture a match. Faces and mentions apply
 both scope and modification directly to themselves. Unknown history stays null
 and cannot satisfy a modification criterion. Empty selections, invalid/timezone-less

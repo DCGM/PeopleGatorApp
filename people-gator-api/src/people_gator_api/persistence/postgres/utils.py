@@ -591,7 +591,7 @@ def search_page(
 
 from .entity_link_queries import (
     evidence_predicate, load_link_stats, annotation_conditions, touch_conditions,
-    LINK_FIELDS, document_sources, library_sources, page_parent_documents, scope_conditions,
+    LINK_FIELDS, document_sources, library_sources, page_sources, scope_conditions,
 )
 
 def creation_metadata(record) -> dict:
@@ -814,14 +814,14 @@ def source_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = touch_conditions(Source, filter_values)
-    # Source scope is the source's own membership: a document contains its
-    # registered pages, and a page belongs to its registered document.
+    # A document scope includes its registered pages. A page scope matches
+    # only those pages, without expanding to their containing documents.
     documents = missing_to_none(filter_values.document_source_id)
     if documents is not None:
         filters.append(Source.id.in_(document_sources(documents)))
     pages = missing_to_none(filter_values.page_source_id)
     if pages is not None:
-        filters.append(or_(Source.id.in_(pages), Source.id.in_(page_parent_documents(pages))))
+        filters.append(Source.id.in_(page_sources(pages)))
     unassigned = missing_to_none(filter_values.has_unassigned_faces)
     if unassigned is not None:
         from .entity_link_queries import source_scope
