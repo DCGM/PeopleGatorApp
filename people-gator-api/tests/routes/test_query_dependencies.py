@@ -142,6 +142,7 @@ def test_search_endpoints_expose_query_filter_and_pagination_groups(
 ) -> None:
     assert _parameter_names(openapi, path) == {
         *QUERY_PARAMETERS,
+        *({"query.entity_id", "query.entity_annotations"} if path in {"/search-entities", "/search-faces"} else set()),
         *(f"filter.{field}" for field in fields),
         *({"filter.entity_link_state"} if path != "/users" else set()),
         *PAGINATION_PARAMETERS,

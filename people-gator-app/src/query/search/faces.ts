@@ -7,7 +7,7 @@ import {
 } from '@/client'
 import { responseData } from '@/query/api'
 import { queryKeys } from '@/query/keys'
-import { cursorResultPage, searchPageSize } from '@/query/search/shared'
+import { cursorResultPage, searchPageSize, useRestartSearchPages } from '@/query/search/shared'
 
 export type FaceSearchParams = NonNullable<SearchFacesGetApiV1SearchFacesGetData['query']>
 
@@ -21,8 +21,10 @@ export function useFaceSearchQuery(
   params: MaybeRefOrGetter<FaceSearchParams>,
   enabled: MaybeRefOrGetter<boolean> = true,
 ) {
+  const queryKey = computed(() => queryKeys.search.infiniteFaces(toValue(params)))
+  useRestartSearchPages(queryKey)
   return useInfiniteQuery({
-    queryKey: computed(() => queryKeys.search.infiniteFaces(toValue(params))),
+    queryKey,
     queryFn: async ({ pageParam, signal }) => {
       const resolvedParams = toValue(params)
       const pageSize = searchPageSize(resolvedParams.limit)

@@ -7,6 +7,7 @@ import numpy as np
 from collections.abc import Sequence
 
 from sqlalchemy import (
+    or_,
     ColumnElement,
     delete,
     func,
@@ -49,6 +50,7 @@ from people_gator_api.persistence.postgres.models import (
 
 from people_gator_api.persistence.postgres.utils import (
     aggregate_scores,
+    face_text_candidates,
     search_face_scores,
     commit,
     ensure_ids,
@@ -76,6 +78,8 @@ from .sorting import (
     sort_ranked,
 )
 from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
+from .search_resolution import resolve_entity_search
+
 
 class PostgresFaceRepository(FaceRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -331,7 +335,7 @@ class PostgresFaceRepository(FaceRepository):
                 select(Face.id, score.label("score"))
                 .outerjoin(Entity, Entity.id == Face.entity_id)
                 .outerjoin(Alias, Alias.entity_id == Entity.id)
-                .where(*filters)
+                .where(*filters, Face.id.in_(face_text_candidates(term, filters)))
                 .group_by(Face.id, Entity.id)
             )
             for item_id, raw_score in rows.all():
@@ -357,7 +361,11 @@ class PostgresFaceRepository(FaceRepository):
         )
 
     async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
+        fingerprint = cursor_fingerprint(query)
+        query = await resolve_entity_search(self._session, query)
         filters = face_filters(query.filter_)
+        if query.query.entity_id is not None and query.query.exclude_reference_face_id:
+            filters.append(or_(Face.entity_id.is_(None), Face.entity_id != query.query.entity_id))
         ranked = fuse_scores(
             await self._text_scores(query, filters),
             await self._face_scores(query, filters),
@@ -377,7 +385,7 @@ class PostgresFaceRepository(FaceRepository):
             ranked,
             query.cursor,
             query.limit,
-            cursor_fingerprint(query),
+            fingerprint,
         )
         faces = await self._load_many([item[0] for item in page])
         items = [

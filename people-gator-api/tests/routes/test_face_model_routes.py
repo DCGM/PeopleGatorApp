@@ -3,16 +3,16 @@ from fastapi import FastAPI
 from people_gator_api.routes.v1.face_models import router
 
 
-def test_face_model_routes_are_admin_only() -> None:
+def test_model_listing_allows_browse_but_registration_requires_admin() -> None:
     app = FastAPI()
     app.include_router(router)
     operations = app.openapi()["paths"]["/face-models"]
 
     assert {"get", "post"} <= operations.keys()
-    for method in ("get", "post"):
+    for method, scope in (("get", "people-gator:browse"), ("post", "people-gator:admin")):
         security = operations[method]["security"]
         assert any(
-            "people-gator:admin" in scopes
+            scope in scopes
             for item in security
             for scopes in item.values()
         )

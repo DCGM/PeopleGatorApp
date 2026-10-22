@@ -39,7 +39,9 @@ import {
 } from '@/viewmodels/sort-options'
 import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { usePersonDiscovery } from '@/viewmodels/person-discovery'
+import { usePersonDiscovery, DISCOVERY_ANNOTATIONS } from '@/viewmodels/person-discovery'
+import { useFaceModels } from '@/query/face-models'
+import type { EntityAnnotation } from '@/client'
 import { usePersonDetail } from '@/viewmodels/person-detail'
 
 const route = useRoute()
@@ -80,9 +82,7 @@ const {
   loadMoreFaces,
   loadMoreMentions,
   error,
-  faceEmbeddingModel,
   faceCount,
-  faceIds,
   faces,
   identifiers,
   libraryCount,
@@ -114,39 +114,48 @@ const personSearchTerm = ref(
   typeof route.query.discovery_text === 'string' ? route.query.discovery_text : '',
 )
 const debouncedPersonSearchTerm = useDebounce(personSearchTerm, 300)
-let searchSeeded = typeof route.query.discovery_text === 'string'
-let lastSeededName = ''
-
-watch(personId, () => {
-  if (typeof route.query.discovery_text === 'string') {
-    personSearchTerm.value = route.query.discovery_text
-    searchSeeded = true
-    lastSeededName = ''
-    return
-  }
-  const currentName = profile.value.name
-  const canSeed = Boolean(currentName && currentName !== 'Unnamed person')
-  personSearchTerm.value = canSeed ? currentName : ''
-  searchSeeded = canSeed
-  lastSeededName = canSeed ? currentName : ''
-})
-
-watch(
-  () => profile.value.name,
-  (name) => {
-    if (!name || name === 'Unnamed person') return
-    if (searchSeeded && personSearchTerm.value !== lastSeededName) return
-    personSearchTerm.value = name
-    searchSeeded = true
-    lastSeededName = name
-  },
-  { immediate: true },
+const faceModels = useFaceModels(computed(() => activeTab.value === 'discover'))
+const modelOptions = computed(() =>
+  (faceModels.data.value?.items ?? []).map((model) => ({
+    value: model.model_stub,
+    label: model.model_stub,
+  })),
 )
+const defaultDiscoveryModel = computed(
+  () =>
+    modelOptions.value.find((model) => model.value === 'vit_small_patch8_gap_112.cosface_ms1mv3')
+      ?.value ??
+    modelOptions.value[0]?.value ??
+    '',
+)
+const discoveryModel = computed({
+  get: () =>
+    typeof route.query.discovery_model === 'string'
+      ? route.query.discovery_model
+      : defaultDiscoveryModel.value,
+  set: (value: string) =>
+    void router.replace({ query: { ...route.query, discovery_model: value || undefined } }),
+})
+const discoveryAnnotations = computed<EntityAnnotation[]>({
+  get: () =>
+    route.query.discovery_annotations === undefined
+      ? [...DISCOVERY_ANNOTATIONS]
+      : DISCOVERY_ANNOTATIONS.filter((item) =>
+          queryValues(route.query.discovery_annotations).includes(item),
+        ),
+  set: (value) =>
+    void router.replace({
+      query: {
+        ...route.query,
+        discovery_annotations: value.length === 3 ? undefined : value.length ? value : 'none',
+      },
+    }),
+})
 
 watch(
   () => route.query.discovery_text,
   (text) => {
-    if (typeof text === 'string') personSearchTerm.value = text
+    personSearchTerm.value = typeof text === 'string' ? text : ''
   },
 )
 
@@ -158,7 +167,8 @@ watch(personSearchTerm, (text) => {
 const {
   assignFaces,
   assignmentStatus,
-  error: discoveryError,
+  searchError: discoveryError,
+  retry: retryDiscovery,
   isLoadingFaces,
   isLoadingPeople,
   mergePeople,
@@ -167,13 +177,13 @@ const {
   similarPeople,
 } = usePersonDiscovery(
   personId,
-  faceIds,
-  faceEmbeddingModel,
+  discoveryModel,
   debouncedPersonSearchTerm,
   computed(() => activeTab.value === 'discover' && !evidence.error.value),
   evidence.params,
   similarFaceSort,
   similarPeopleSort,
+  discoveryAnnotations,
 )
 
 function selectTab(tab: string | number) {
@@ -183,6 +193,17 @@ function selectTab(tab: string | number) {
     params: { personId: personId.value },
     query: { ...route.query, tab: selectedTab === 'faces' ? undefined : selectedTab },
   })
+}
+
+function clearDiscoveryFilters() {
+  void router.replace({
+    query: { ...route.query, discovery_model: undefined, discovery_annotations: undefined },
+  })
+}
+
+function retrySearch() {
+  retryDiscovery()
+  void faceModels.refetch()
 }
 </script>
 
@@ -341,6 +362,10 @@ function selectTab(tab: string | number) {
         <TabsContent value="discover">
           <PersonDiscoveryPanel
             v-model:search-term="personSearchTerm"
+            v-model:annotations="discoveryAnnotations"
+            v-model:face-model="discoveryModel"
+            :model-options="modelOptions"
+            :default-face-model="defaultDiscoveryModel"
             v-model:face-sort="similarFaceSort"
             v-model:people-sort="similarPeopleSort"
             :face-sort-options="FACE_SORTS"
@@ -348,14 +373,17 @@ function selectTab(tab: string | number) {
             :faces="similarFaces"
             :people="similarPeople"
             :current-name="profile.name"
-            :reference-face-count="faceIds.length"
+            :reference-face-count="entity?.entity_link_stats?.faces?.total ?? faceCount"
             :assigning-faces="assignmentStatus === 'pending'"
+            :assignment-failed="assignmentStatus === 'error'"
             :merging-people="mergeStatus === 'pending'"
             :merge-succeeded="mergeStatus === 'success'"
             :merge-failed="mergeStatus === 'error'"
             :loading-faces="isLoadingFaces"
             :loading-people="isLoadingPeople"
-            :error="discoveryError"
+            :search-error="discoveryError ?? faceModels.error.value"
+            @clear-filters="clearDiscoveryFilters"
+            @retry="retrySearch"
             @assign-faces="assignFaces"
             @merge-people="mergePeople"
           />

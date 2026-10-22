@@ -151,7 +151,7 @@ describe('entity link review', () => {
     expect(selected!.value).toEqual(['manual'])
   })
 
-  it('uses the same server filter for both person lists and leaves discovery references unfiltered', async () => {
+  it('uses the same server filter for both person lists without fetching discovery references', async () => {
     const states = ref<EntityLinkState[]>(['verified'])
     let detail: ReturnType<typeof usePersonDetail>
     renderQuery(() => {
@@ -168,7 +168,7 @@ describe('entity link review', () => {
     ).toBe(true)
     expect(
       api.faces.mock.calls.some(([args]) => args.query['filter.entity_link_state'] === undefined),
-    ).toBe(true)
+    ).toBe(false)
     expect(api.mentions.mock.calls[0]![0].query['filter.entity_link_state']).toEqual(['verified'])
     expect(detail!.entity.value?.entity_link_stats?.faces?.total).toBe(10)
     expect(detail!.faceCount.value).toBe(0)

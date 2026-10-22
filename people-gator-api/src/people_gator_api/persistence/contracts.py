@@ -317,6 +317,14 @@ class EntityRepository(ABC):
         """
         Search for entities based on the given query.
 
+        query.entity_id resolves the complete stored reference set for the chosen
+        annotations (faces/aliases/name; all by default), combined with explicit
+        inputs. Skip missing/incompatible/zero entity face embeddings; reject
+        unusable explicit IDs. Unknown entities or no usable combined signals
+        raise ValueError. Exclude the entity itself when reference exclusion is
+        enabled. Keep finite scores and bind cursors to the original selection.
+        Unsupported adapters raise NotImplementedError.
+
         Take the configuraiton from the query object.
         Vector-searchable items will be handled according to the vector search configuration specified in the query object.
         Fusion of muliple scores given by different search fields will be performed according to the configuration specified in the query object.
@@ -895,6 +903,10 @@ class FaceRepository(ABC):
     @abstractmethod
     async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
         """
+        Entity references follow EntityRepository.search's input/error contract.
+        Reference exclusion also removes every face assigned to that entity,
+        including when the query uses only its recorded text.
+
         Search for face entries based on the given query.
 
         :param self: The instance of the repository.

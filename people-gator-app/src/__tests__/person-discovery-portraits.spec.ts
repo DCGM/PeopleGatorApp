@@ -54,7 +54,7 @@ async function discover() {
   const wrapper = mount(
     defineComponent({
       setup() {
-        result = usePersonDiscovery('current-person', ref([]), null, 'Ada', true)
+        result = usePersonDiscovery('current-person', null, 'Ada', true)
         return () => h('div')
       },
     }),
@@ -80,7 +80,7 @@ describe('discovery canonical portraits', () => {
     const wrapper = mount(
       defineComponent({
         setup() {
-          result = usePersonDiscovery('current-person', ref([]), null, 'Ada', true)
+          result = usePersonDiscovery('current-person', null, 'Ada', true)
           return () => h('div')
         },
       }),

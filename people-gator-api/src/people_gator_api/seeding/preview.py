@@ -42,7 +42,7 @@ from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRe
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
-from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
+from .fixtures import DOCUMENTS, MODEL, PAGES, PEOPLE, SECOND_MODEL, DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL, ISSUE8_IMAGE_URL, ISSUE8_IMAGE_PAGE, Face
 from .media import face_box, face_keypoints, page_image, page_layout, png_image
 
 MANIFEST_KEY = "peoplegator_api/preview-seed.json"
@@ -187,7 +187,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             authentication_method="api_key" if api_key_id else "bearer",
             scopes={"people-gator:ingest", "people-gator:annotate"},
         )
-    for model, dimension in ((MODEL, 8), (SECOND_MODEL, 4)):
+    for model, dimension in ((MODEL, 8), (SECOND_MODEL, 4), (DISCOVERY_MODEL, 8), (DISCOVERY_OTHER_MODEL, 4)):
         await database.face_models.register(
             FaceModelRegisterRequest(model_stub=model, embedding_dim=dimension)
         )
@@ -303,9 +303,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                         embeddings=[
                             FaceEmbedding(
                                 model_identifier=model,
-                                vector=example_vector(face.group, face.key, dim),
+                                vector=[0.0] * dim if face.zero_vector else example_vector(face.group, face.key, dim),
                             )
-                            for model, dim in ((MODEL, 8), (SECOND_MODEL, 4)) if face.embedded
+                            for model, dim in ((MODEL, 8), (SECOND_MODEL, 4), (DISCOVERY_MODEL, 8), (DISCOVERY_OTHER_MODEL, 4)) if face.embedded and model in face.models
                         ],
                         **fields,
                     ),
@@ -502,6 +502,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            **({"entity-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+            }), "entity-discovery-identifier": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_annotations": "none",
+                "discovery_text": "preview-seed/discovery-unassigned",
+            })} if 'discovery' in manifest.entities else {}),
             # Root entry demonstrates the Documents landing view with the existing
             # linked album/media. These entry points require no persisted upgrade.
             "default-documents": "/",

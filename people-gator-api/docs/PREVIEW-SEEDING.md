@@ -53,6 +53,7 @@ This does not automatically seed the actual staging environment.
 | Mentions only | Nora Svoboda across Research notes and Correspondence |
 | No evidence | Lenka Vesela, ready for manual linking |
 | Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
+| Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, one missing, one other-model and one zero vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a zero-vector candidate exercise finite scoring and assignment recovery. All ten practice scans have local media. |
 | Identity discovery and merging | Open Ada Novak's Discover tab; A. Novak has nearby vectors |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
@@ -552,6 +553,36 @@ under new keys, and existing records, reviews and timestamps are untouched.
 Integration tests check confidence/state order, exact groups and counts,
 paged occurrences, accent-folded document names, page-count order, sorted
 similarity candidates and rerun preservation of a reviewer unassignment.
+
+### Entity reference discovery regression (#58)
+
+The additive `discovery` fixture has its own registered synthetic 8D model, stable
+keys and ten pages in **Entity discovery practice**. Existing records, timestamps,
+reviewed aliases, assignments and checkpoints are retained on reruns. No retained
+vectors or user edits are rewritten. Open the printed `entity-discovery` link,
+choose individual **Reference inputs** or combinations, and compare both result
+lists on desktop and mobile. Faces-only also finds `discovery-unassigned` for
+manual linking. Zero embeddings remain stored as realistic degenerate fixtures;
+search excludes undefined cosine contributions rather than assigning fake scores.
+
+The seed integration regression queries each source through both repositories,
+checks meaningful matches and finite scores, excludes zero-vector witnesses,
+reads a real aligned crop, and preserves edited aliases/assignments on rerun.
+Existing interrupted-checkpoint and edit-preservation checks cover the added keys.
+
+
+PR #59 review follow-up: `entity-discovery-identifier` opens text-only discovery
+for the existing unassigned face's `preview-seed/discovery-unassigned` identifier.
+Its exact text hit has no invented face score and retains working local media.
+The seeded integration regression exercises this indexed identifier path as well
+as name/alias input selection and preserves reviewed assignments on two reruns.
+Use `entity-discovery` to inspect the removable nondefault Face model tag with
+mobile settings collapsed; Clear filters resets sources/model while preserving
+search and evidence choices. On disposable data, failed assignment/merge requests
+retain their selection and point to the corresponding action for recovery.
+Face text candidate retrieval is bounded to 200 per term per indexed field;
+apply migration `d34a021b0012` before seed/startup to install its identifier index.
+
 
 
 ## Transferable source and modification filters (#52)

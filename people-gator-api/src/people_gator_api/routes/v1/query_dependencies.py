@@ -30,7 +30,7 @@ from people_gator_api.schemas.enums import (
 )
 from people_gator_api.schemas.faces import FaceListFilter
 from people_gator_api.schemas.mentions import TextMentionListFilter
-from people_gator_api.schemas.search import QueryBase
+from people_gator_api.schemas.search import QueryBase, EntitySearchQuery, EntityAnnotation
 from people_gator_api.schemas.sorting import (
     RELEVANCE,
     DocumentSortField,
@@ -179,6 +179,56 @@ def search_query_dependency(
         raise_api_error(422, "invalid_search", str(exc))
 
 
+def entity_search_query_dependency(
+    entity_id: Annotated[uuid.UUID | None, _model_parameter(EntitySearchQuery, "entity_id", "query")] = None,
+    entity_annotations: Annotated[list[EntityAnnotation] | None, _model_parameter(EntitySearchQuery, "entity_annotations", "query")] = None,
+    text: Annotated[
+        list[str] | None,
+        _model_parameter(QueryBase, "text", "query"),
+    ] = None,
+    face_id: Annotated[
+        list[uuid.UUID] | None,
+        _model_parameter(QueryBase, "face_id", "query"),
+    ] = None,
+    face_embedding_model: Annotated[
+        str,
+        _model_parameter(QueryBase, "face_embedding_model", "query"),
+    ] = DEFAULT_FACE_EMBEDDING_MODEL,
+    exclude_reference_face_id: Annotated[
+        bool,
+        _model_parameter(QueryBase, "exclude_reference_face_id", "query"),
+    ] = True,
+    score_aggregation: Annotated[
+        ScoreAggregation,
+        _model_parameter(QueryBase, "score_aggregation", "query"),
+    ] = ScoreAggregation.min,
+    score_fusion: Annotated[
+        ScoreFusion,
+        _model_parameter(QueryBase, "score_fusion", "query"),
+    ] = ScoreFusion.rrf,
+) -> EntitySearchQuery:
+    """Parse and validate the multimodal part of a search request."""
+    values: dict[str, object] = {
+        "face_embedding_model": face_embedding_model,
+        "exclude_reference_face_id": exclude_reference_face_id,
+        "score_aggregation": score_aggregation,
+        "score_fusion": score_fusion,
+    }
+    if entity_id is not None:
+        values["entity_id"] = entity_id
+    if entity_annotations is not None:
+        values["entity_annotations"] = entity_annotations
+    if text is not None:
+        values["text"] = text
+    if face_id is not None:
+        values["face_id"] = face_id
+
+    try:
+        return EntitySearchQuery.model_validate(values)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_search", str(exc))
+
+
 def shared_filter_dependency(
     request: Request,
     entity_link_state: Annotated[list[EntityLinkState] | None, _model_parameter(SharedFilter, "entity_link_state", "filter")] = None,
@@ -212,6 +262,7 @@ def shared_filter_dependency(
         "last_touched_by_user_id": last_touched_by_user_id,
         "last_touched_by_api_key_id": last_touched_by_api_key_id,
     }
+
 
 
 def entity_list_filter_dependency(
@@ -589,6 +640,7 @@ SearchListRequestDependency = Annotated[
     Depends(search_list_request_dependency),
 ]
 SearchQueryDependency = Annotated[QueryBase, Depends(search_query_dependency)]
+EntitySearchQueryDependency = Annotated[EntitySearchQuery, Depends(entity_search_query_dependency)]
 EntityListFilterDependency = Annotated[
     EntityListFilter,
     Depends(entity_list_filter_dependency),
@@ -644,6 +696,7 @@ __all__ = [
     "PageListFilterDependency",
     "SearchListRequestDependency",
     "SearchQueryDependency",
+    "EntitySearchQueryDependency",
     "SourceListFilterDependency",
     "TextMentionListFilterDependency",
     "UserListFilterDependency",

@@ -1,6 +1,7 @@
 """Multimodal search endpoints backed only by persistence contracts."""
 
 from fastapi import APIRouter
+from pydantic import ValidationError
 
 from people_gator_api.routes.v1.query_dependencies import (
     DEFAULT_SORT,
@@ -14,6 +15,7 @@ from people_gator_api.routes.v1.query_dependencies import (
     PageListFilterDependency,
     SearchListRequestDependency,
     SearchQueryDependency,
+    EntitySearchQueryDependency,
 )
 from people_gator_api.schemas.search import (
     SearchDocumentsRequest,
@@ -37,7 +39,7 @@ router = APIRouter(tags=["search"])
 async def search_entities_get(
     database: DatabaseDependency,
     user: BrowseActorDependency,
-    query: SearchQueryDependency,
+    query: EntitySearchQueryDependency,
     filter: EntityListFilterDependency,
     list_request: SearchListRequestDependency,
     sort: EntitySearchSortDependency = DEFAULT_SORT,
@@ -56,6 +58,9 @@ async def search_entities_get(
         return await database.entities.search(request)
     except NotImplementedError as exc:
         raise_api_error(501, "unsupported_operation", str(exc))
+    except ValidationError:
+        # A repository constructing an invalid result is an internal failure.
+        raise
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))
 
@@ -64,7 +69,7 @@ async def search_entities_get(
 async def search_faces_get(
     database: DatabaseDependency,
     user: BrowseActorDependency,
-    query: SearchQueryDependency,
+    query: EntitySearchQueryDependency,
     filter: FaceListFilterDependency,
     list_request: SearchListRequestDependency,
     sort: FaceSearchSortDependency = DEFAULT_SORT,
@@ -83,6 +88,9 @@ async def search_faces_get(
         return await database.faces.search(request)
     except NotImplementedError as exc:
         raise_api_error(501, "unsupported_operation", str(exc))
+    except ValidationError:
+        # A repository constructing an invalid result is an internal failure.
+        raise
     except ValueError as exc:
         raise_api_error(422, "invalid_search", str(exc))
 

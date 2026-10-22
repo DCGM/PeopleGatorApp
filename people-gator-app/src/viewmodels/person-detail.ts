@@ -117,24 +117,6 @@ export function usePersonDetail(
       ].map((face) => [face.detection_id, face]),
     ).values(),
   ])
-  const discoveryFaces = useFaceListQuery(
-    computed(() => ({ 'filter.entity_id': [toValue(personId)], limit: 100 })),
-    hasPerson,
-  )
-  const discoveryFaceRecords = computed(() =>
-    (discoveryFaces.data.value?.pages ?? []).flatMap((page) => page.items),
-  )
-  const faceEmbeddingModel = computed(
-    () =>
-      discoveryFaceRecords.value.find((face) => face.embeddings?.length)?.embeddings?.[0] ?? null,
-  )
-  const similarityFaceIds = computed(() => {
-    const model = faceEmbeddingModel.value
-    if (!model) return []
-    return discoveryFaceRecords.value
-      .filter((face) => face.embeddings?.includes(model))
-      .map((face) => face.detection_id)
-  })
   const mentionRecords = computed(() =>
     (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
@@ -293,9 +275,7 @@ export function usePersonDetail(
     loadMoreFaces: () => faceQuery.fetchNextPage(),
     loadMoreMentions: () => mentionQuery.fetchNextPage(),
     error: entityQuery.error,
-    faceEmbeddingModel,
     faceCount: computed(() => faceQuery.data.value?.pages[0]?.total_count ?? 0),
-    faceIds: similarityFaceIds,
     faces,
     identifiers,
     isLoading: computed(

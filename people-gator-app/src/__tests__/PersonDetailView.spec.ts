@@ -48,11 +48,16 @@ vi.mock('@/viewmodels/person-detail', () => ({
   }),
 }))
 
+vi.mock('@/query/face-models', () => ({
+  useFaceModels: () => ({ data: ref({ items: [] }), error: ref(null), refetch: vi.fn() }),
+}))
+
 vi.mock('@/viewmodels/person-discovery', () => ({
+  DISCOVERY_ANNOTATIONS: ['faces', 'aliases', 'name'],
   usePersonDiscovery: () => ({
     assignFaces: vi.fn<() => void>(),
     assignmentStatus: ref('idle'),
-    error: ref(null),
+    searchError: ref(null),
     isLoadingFaces: ref(false),
     isLoadingPeople: ref(false),
     similarFaces: ref([]),
@@ -115,4 +120,47 @@ describe('PersonDetailView', () => {
       query: expect.objectContaining({ selectedPerson: 'person-ada' }),
     })
   })
+})
+
+it('clears discovery source/model overrides together while keeping search and evidence URL state', async () => {
+  const { flushPromises } = await import('@vue/test-utils')
+  const { default: PersonDiscoveryPanel } =
+    await import('@/components/custom/PersonDiscoveryPanel.vue')
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/people/:personId', name: 'person-detail', component: PersonDetailView }],
+  })
+  await router.push(
+    '/people/person-ada?tab=discover&discovery_annotations=faces&discovery_model=alternate&discovery_text=extra&link_state=automatic&discovery_assignment=unassigned',
+  )
+  await router.isReady()
+  const wrapper = mount(PersonDetailView, {
+    global: {
+      plugins: [router],
+      stubs: {
+        RouterLink: RouterLinkStub,
+        PersonPortrait: true,
+        VerifyEntityLink: true,
+        PersonFacesPanel: true,
+        SharedFilterControls: true,
+        SharedFilterTags: true,
+        PersonDiscoveryPanel: true,
+      },
+    },
+  })
+  wrapper.getComponent(PersonDiscoveryPanel).vm.$emit('clearFilters')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({
+    tab: 'discover',
+    discovery_text: 'extra',
+    link_state: 'automatic',
+    discovery_assignment: 'unassigned',
+  })
+  expect(wrapper.getComponent(PersonDiscoveryPanel).props('annotations')).toEqual([
+    'faces',
+    'aliases',
+    'name',
+  ])
+  expect(wrapper.getComponent(PersonDiscoveryPanel).props('searchTerm')).toBe('extra')
+  wrapper.unmount()
 })

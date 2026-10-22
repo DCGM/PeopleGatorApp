@@ -29,7 +29,7 @@ from people_gator_api.schemas.entities import (
     EntityListRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.faces import FaceCreateRequest, FaceListRequest, FacePatchRequest
+from people_gator_api.schemas.faces import FaceCreateRequest, FaceListFilter, FaceListRequest, FacePatchRequest
 from people_gator_api.schemas.mentions import TextMentionListRequest, TextMentionPatchRequest
 from people_gator_api.schemas.sources import (
     DocumentListRequest,
@@ -89,9 +89,10 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (12, 33, 23)
-    assert len(result.documents) == 21 and len(result.pages) == 48
+    assert await counts(database) == (16, 53, 23)
+    assert len(result.documents) == 22 and len(result.pages) == 58
     assert len(result.users) == 4 and len(result.api_keys) == 3
+
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
     assert demo["document"] == [str(result.documents["album"])]
@@ -128,7 +129,8 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     for filters, expected in (
         (
             EntityListFilter(has_detections=True, has_mentions=False),
-            {"emil", "ada-candidate", "shared-hana"},
+            {"emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana"},
+
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo"}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
@@ -240,7 +242,8 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (12, 33, 23)
+    assert await counts(database) == (16, 53, 23)
+
     stored = await database.entities.get(first.entities["ada"])
     assert (
         stored.name == "Reviewed Ada"
@@ -262,7 +265,8 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (13, 33, 23)
+    assert await counts(database) == (17, 53, 23)
+
 
 
 @pytest.mark.asyncio
@@ -286,8 +290,9 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 12 and len(result.faces) == 33
-    assert await counts(database) == (12, 33, 23)
+    assert len(result.entities) == 16 and len(result.faces) == 53
+    assert await counts(database) == (16, 53, 23)
+
 
 
 @pytest.mark.asyncio
@@ -307,7 +312,8 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (11, 32, 22)
+    assert await counts(database) == (15, 52, 22)
+
 
 
 @pytest.mark.asyncio
@@ -2320,6 +2326,57 @@ async def test_default_documents_landing_has_linked_media_and_preserves_reviews(
             page.library, page.document_id, page.page_id, max_width=256,
         )
         assert thumbnail.content == thumbnails[page.source_id]
+
+
+@pytest.mark.asyncio
+async def test_entity_discovery_choices_many_faces_and_degenerate_vectors(seed_target):
+    import math
+    from people_gator_api.schemas.search import EntitySearchQuery
+    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL, DISCOVERY_OTHER_MODEL
+
+    db, filesystem, _ = seed_target
+    first = await preview.seed_preview(db, filesystem)
+    reference = first.entities["discovery"]
+    for annotation, expected in (("faces", "discovery-face"), ("name", "discovery-name"), ("aliases", "discovery-alias")):
+        query = EntitySearchQuery(entity_id=reference, entity_annotations=[annotation], face_embedding_model=DISCOVERY_MODEL)
+        people = await db.entities.search(SearchEntitiesRequest(limit=20, query=query))
+        assert people.items[0].entity_id == first.entities[expected]
+        faces = await db.faces.search(SearchFacesRequest(limit=40, query=query))
+        assert first.faces[{"faces": "discovery-face-match", "name": "discovery-name-match", "aliases": "discovery-alias-match"}[annotation]] in {face.detection_id for face in faces.items}
+        for hit in [*people.items, *faces.items]:
+            assert math.isfinite(hit.score)
+            assert hit.face_score is None or math.isfinite(hit.face_score)
+        if annotation == "faces":
+            assert first.faces["discovery-zero-candidate"] not in {face.detection_id for face in faces.items}
+            assert first.faces["discovery-zero-candidate"] not in people.items[0].matched_detection_ids
+    references = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[reference])))
+    assert len(references.items) == 15
+    assert (await db.faces.get(first.faces['discovery-missing'])).embeddings == []
+    assert (await db.faces.get(first.faces['discovery-other-model'])).embeddings == [DISCOVERY_OTHER_MODEL]
+    identifier_example = parse_qs(urlsplit(first.filter_examples['entity-discovery-identifier']).query)
+    assert identifier_example['discovery_annotations'] == ['none']
+    identifier_results = await db.faces.search(SearchFacesRequest(
+        limit=40, query=QueryBase(text=identifier_example['discovery_text']),
+    ))
+    assert identifier_results.items[0].detection_id == first.faces['discovery-unassigned']
+    assert identifier_results.items[0].face_score is None
+    assert identifier_results.items[0].text_score == 1
+    # Retain operator-reviewed inputs and assignments on an additive rerun.
+    actor = GenericActor(user_id=first.users["reviewer"])
+    edited = await db.entities.patch(reference, EntityPatchRequest(aliases=["Reviewed navigator"]), actor)
+    assigned = await db.faces.patch(first.faces['discovery-unassigned'], FacePatchRequest(entity_id=reference), actor)
+    before = await db.entities.get(reference)
+    second = await preview.seed_preview(db, filesystem)
+    assert second == first
+    retained = await db.entities.get(reference)
+    assert retained.aliases == edited.aliases
+    assert retained.last_touched_at == before.last_touched_at
+    assert (await db.faces.get(assigned.detection_id)).entity_id == reference
+    assert parse_qs(urlsplit(first.filter_examples['entity-discovery']).query)['discovery_model'] == [DISCOVERY_MODEL]
+    page = await db.sources.get_page(first.pages['discovery-8'])
+    crop = await get_aligned_face_crop(actor.user_id, await db.faces.get(first.faces['discovery-face-match']), page, max_width=128)
+    with Image.open(io.BytesIO(crop.content)) as image:
+        assert image.size == (128, 128)
 
 
 @pytest.mark.asyncio

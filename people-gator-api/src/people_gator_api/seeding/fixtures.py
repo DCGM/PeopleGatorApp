@@ -6,6 +6,8 @@ from uuid import UUID, uuid5
 NAMESPACE = UUID("3de5e244-1389-42bd-af9d-d99667987951")
 MODEL = "preview-synthetic-8d-v1"
 SECOND_MODEL = "preview-synthetic-4d-v1"
+DISCOVERY_MODEL = "preview-discovery-8d-v1"
+DISCOVERY_OTHER_MODEL = "preview-discovery-other-4d-v1"
 
 
 def fixture_id(key: str) -> UUID:
@@ -88,6 +90,11 @@ PEOPLE = (
         "Synthetic sorting subject with varied confidence, states and mention spellings.",
         "importer",
     ),
+    Person("discovery", "Zora Cartographer", ("Saffron Navigator",),
+           "Synthetic discovery reference with many faces and mixed embedding availability.", "importer"),
+    Person("discovery-face", "Orion Portrait", (), "Appearance match for Zora.", "importer"),
+    Person("discovery-name", "Zora Cartographer II", (), "Recorded-name match for Zora.", "importer"),
+    Person("discovery-alias", "Saffron Navigator", (), "Recorded-alias match for Zora.", "importer"),
     # Issue #52: one person linked by the curator's key, and one whose own
     # record the curator edits after a reviewer linked her face.
     Person("shared-ivo", "Ivo Ledger", (),
@@ -138,6 +145,7 @@ DOCUMENTS = (
     # Accent/case name variants and uneven page counts across two libraries (#33).
     Document("sorting-ledger", "preview-nlk", "Řádková ledger"),
     Document("sorting-notes", "preview-mzk", "radkova notes"),
+    Document("discovery", "preview-mzk", "Entity discovery practice"),
     # Shared filters (#52): the same archive ID in a second, unannotated library.
     Document("shared-ledger", "preview-mzk", "Shared filter ledger"),
     Document("shared-mirror", "preview-nlk", "Shared filter mirror", "shared-ledger"),
@@ -154,6 +162,8 @@ class Face:
     embedded: bool = True
     box: tuple[int, int, int, int] | None = None
     confidence: float = 0.97
+    models: tuple[str, ...] = (MODEL, SECOND_MODEL)
+    zero_vector: bool = False
 
 
 @dataclass(frozen=True)
@@ -355,6 +365,25 @@ PAGES = (
     Page("sorting-notes-1", "sorting-notes", 1,
          mentions=(Mention("sorting-unaccented", "sorting", "Marta Radkova copied these notes.", recorded="Marta Radkova"),
                    Mention("sorting-exact-3", "sorting", "Marta Řádková reviewed the copy."))),
+    *(Page(f"discovery-{i + 1}", "discovery", i + 1,
+        tuple(Face(f"discovery-reference-{i * 2 + j}", "discovery", j, 0,
+                   models=(DISCOVERY_MODEL,)) for j in range(2))) for i in range(6)),
+    Page("discovery-7", "discovery", 7, (
+        Face("discovery-missing", "discovery", 0, 0, embedded=False),
+        Face("discovery-other-model", "discovery", 1, 0, models=(DISCOVERY_OTHER_MODEL,)),
+    )),
+    Page("discovery-8", "discovery", 8, (
+        Face("discovery-zero-reference", "discovery", 0, 0, models=(DISCOVERY_MODEL,), zero_vector=True),
+        Face("discovery-face-match", "discovery-face", 1, 0, models=(DISCOVERY_MODEL,)),
+    )),
+    Page("discovery-9", "discovery", 9, (
+        Face("discovery-zero-candidate", "discovery-face", 0, 0, models=(DISCOVERY_MODEL,), zero_vector=True),
+        Face("discovery-name-match", "discovery-name", 1, 1, models=(DISCOVERY_MODEL,)),
+    )),
+    Page("discovery-10", "discovery", 10, (
+        Face("discovery-alias-match", "discovery-alias", 0, 2, models=(DISCOVERY_MODEL,)),
+        Face("discovery-unassigned", None, 1, 0, models=(DISCOVERY_MODEL,)),
+    )),
     # Shared filters (#52): the reviewer's face precedes the curator's mention,
     # so the document's latest change is the curator's.
     Page("shared-ledger-1", "shared-ledger", 1,
