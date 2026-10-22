@@ -328,6 +328,9 @@ tags and query keys. Test actual AND/OR results, same-link restrictions, own-rec
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
 
-The scan editor's face-similarity candidate mode also searches globally. Its
+The scan editor's right panel omits shared workspace badges and the removable
+candidate-source badge. The candidate-source control still switches between
+page and similar-face results, and inherited workspace criteria stay in the URL.
+Its face-similarity candidate mode also searches globally. Its
 ordinary text candidate lookup continues to apply explicitly selected shared
 criteria, and page mode continues to show the current page's identities.

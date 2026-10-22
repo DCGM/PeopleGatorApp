@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import SharedFilterTags from '@/components/custom/SharedFilterTags.vue'
 import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useSharedFilters, hasSharedFilters, legacyFilterNotice } from '@/viewmodels/shared-filters'
+import { useSharedFilters, legacyFilterNotice } from '@/viewmodels/shared-filters'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
@@ -633,10 +632,15 @@ onBeforeUnmount(() => {
         </TabsList>
       </div>
       <div
-        v-if="hasSharedFilters(evidence.filters.value) || evidence.error.value || legacyFilterNotice.length"
+        v-if="evidence.error.value || legacyFilterNotice.length"
         class="shrink-0 px-3 pb-3"
       >
-        <SharedFilterTags />
+        <p v-if="legacyFilterNotice.length" role="status" class="mt-2 text-sm">
+          Removed unsupported filters from this link: {{ legacyFilterNotice.join(', ') }}.
+        </p>
+        <p v-if="evidence.error.value" role="alert" class="mt-2 text-sm text-destructive">
+          {{ evidence.error.value }}
+        </p>
       </div>
       <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
         <FaceGallery

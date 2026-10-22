@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { AcceptableValue } from 'reka-ui'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
-import ActiveFilters from './ActiveFilters.vue'
 
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
@@ -34,11 +33,6 @@ function clear() {
 }
 
 defineExpose({ clear, focus })
-const active = computed(() =>
-  !query.value.trim() && resultMode.value === 'face'
-    ? [{ key: 'source', value: 'face', label: 'Candidate source: Similar faces' }]
-    : [],
-)
 </script>
 
 <template>
@@ -84,7 +78,6 @@ const active = computed(() =>
         size="sm"
       />
     </SearchFilterPanel>
-    <ActiveFilters :filters="active" @remove="resultMode = 'page'" @clear="resultMode = 'page'" />
     <p
       v-if="
         props.selectedFace &&

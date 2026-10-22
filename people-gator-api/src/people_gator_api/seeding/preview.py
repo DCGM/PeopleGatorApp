@@ -504,6 +504,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Retained URL scope, global candidates, and no duplicate sidebar filter tags.
             "global-discovery-scan": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
                 f"/pages/{discovery_page.page_id}?" + urlencode({

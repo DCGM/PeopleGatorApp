@@ -672,6 +672,9 @@ normal API authorization. No optional face-scope control is introduced.
 The `global-discovery-scan` link opens the reference page in face-similarity
 candidate mode with local source filters retained. Orion Portrait remains a
 global assignment candidate; ordinary text lookup still uses shared criteria.
+The right panel omits workspace filter badges and the removable candidate-source
+badge. Use the candidate-source control to switch between the page and similar
+faces; inherited workspace criteria remain in the URL.
 
 The additive document/page and two faces have new stable keys and generated local
 media, reusing the existing reference model and duplicate identity. Reruns preserve
