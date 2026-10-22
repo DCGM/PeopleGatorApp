@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (31, 55, 38)
+    assert await counts(database) == (31, 57, 38)
 
 
 @pytest.mark.asyncio
@@ -2786,6 +2786,14 @@ async def test_global_discovery_outside_retained_workspace(seed_target):
     assert scan['person'] == [str(first.faces['discovery-reference-0'])]
     scan_matches = await db.entities.search(SearchEntitiesRequest(limit=50, query=QueryBase(
         face_id=[first.faces['discovery-reference-0']], face_embedding_model=DISCOVERY_MODEL)))
+    assert first.entities['discovery-face'] in {item.entity_id for item in scan_matches.items}
+    excluded = parse_qs(urlsplit(first.filter_examples['global-discovery-scan-excluded']).query)
+    reference_face = await db.faces.get(uuid.UUID(excluded['person'][0]))
+    assert reference_face is not None
+    assert reference_face.embeddings == [DISCOVERY_MODEL]
+    hidden = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        source_id=[reference_face.source_id], last_touched_by_user_id=excluded['touched_by'])))
+    assert reference_face.detection_id not in {face.detection_id for face in hidden.items}
     assert first.entities['discovery-face'] in {item.entity_id for item in scan_matches.items}
     assigned_id = first.faces['discovery-global-assigned']
     unassigned_id = first.faces['discovery-global-unassigned']

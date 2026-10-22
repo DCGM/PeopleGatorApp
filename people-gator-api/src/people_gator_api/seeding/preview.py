@@ -506,13 +506,20 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
-            # Retained URL scope, global candidates, and no duplicate sidebar filter tags.
+            # Retained, removable workspace filters and a global face reference.
             "global-discovery-scan": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
                 f"/pages/{discovery_page.page_id}?" + urlencode({
                     "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
                     "library": "preview-mzk", "document": documents["discovery"],
                     "page": pages["discovery-1"],
+                })
+            ),
+            "global-discovery-scan-excluded": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
+                    "library": "preview-mzk", "touched_by": actors["reviewer"].user_id,
                 })
             ),
             "global-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
