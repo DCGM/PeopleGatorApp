@@ -26,6 +26,8 @@ def face_box(face: Face) -> BoundingBox:
 def face_keypoints(face: Face) -> list[FaceKeypoint]:
     box = face_box(face)
     points = ((50, 65), (110, 65), (80, 100), (55, 135), (105, 135))
+    if face.coincident_keypoints:
+        points = ((80, 95),) * 5  # All required types, at the in-bounds box center.
     return [
         FaceKeypoint(type=kind, x=box.x + x * box.width / 160, y=box.y + y * box.height / 190)
         for kind, (x, y) in zip(FaceKeypointType, points, strict=True)

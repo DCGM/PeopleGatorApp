@@ -1,5 +1,6 @@
 """Exercise the preview dataset against migrated PostgreSQL and real local media."""
 
+from collections.abc import Callable, Coroutine
 import io
 import json
 import uuid
@@ -14,7 +15,9 @@ from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
+from people_gator_api.filesystem.contracts import Filesystem
 from people_gator_api.filesystem.local import LocalFilesystem
+from people_gator_api.persistence.contracts import Database
 from people_gator_api.media.aligned_face_crop import get_aligned_face_crop
 from people_gator_api.media.page_image import get_page_image
 from people_gator_api.media.page_layout import get_page_layout
@@ -28,14 +31,17 @@ from people_gator_api.persistence.postgres.schema import (
     validate_postgres_schema,
 )
 from people_gator_api.schemas.common import GenericActor
+from people_gator_api.schemas.users import UserResponse
 from people_gator_api.schemas.entities import (
+    EntityResponse,
     EntityListFilter,
     EntityListRequest,
     EntityPatchRequest,
 )
-from people_gator_api.schemas.faces import FaceCreateRequest, FaceListFilter, FaceListRequest, FacePatchRequest
+from people_gator_api.schemas.faces import FaceResponse, FaceCreateRequest, FaceListFilter, FaceListRequest, FacePatchRequest
 from people_gator_api.schemas.mentions import TextMentionListRequest, TextMentionPatchRequest
 from people_gator_api.schemas.sources import (
+    PageResponse,
     DocumentListRequest,
     DocumentLookupRequest,
     GenericSourceLookupRequest,
@@ -98,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (31, 53, 38)
-    assert len(result.documents) == 37 and len(result.pages) == 73
+    assert await counts(database) == (31, 55, 38)
+    assert len(result.documents) == 38 and len(result.pages) == 74
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -227,11 +233,140 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             source = await database.sources.lookup(
                 GenericSourceLookupRequest(source_id=result.pages[page.key])
             )
+            if spec.coincident_keypoints:
+                with pytest.raises(SourceResolutionError) as error:
+                    await get_aligned_face_crop(
+                        result.users["reviewer"], face, source, max_width=256
+                    )
+                assert error.value.status_code == 422
+                assert error.value.code == "invalid_face_keypoints"
+                continue
             crop = await get_aligned_face_crop(
                 result.users["reviewer"], face, source, max_width=256
             )
             with Image.open(io.BytesIO(crop.content)) as image:
                 assert 0 < image.width <= 256 and image.width == image.height
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed_face", ["alignment-coincident", "alignment-valid"])
+async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
+    seed_target: tuple[Database, Filesystem, AsyncEngine],
+    monkeypatch: pytest.MonkeyPatch,
+    failed_face: str,
+) -> None:
+    import asyncio
+    import httpx
+    from fastapi import FastAPI
+    from people_gator_api.media import aligned_face_crop
+    from people_gator_api.routes.v1 import router
+    from people_gator_api.services import auth_service, database_service
+    from people_gator_api.services.auth_service import AuthContext
+
+    database: Database
+    filesystem: Filesystem
+    _engine: AsyncEngine
+    database, filesystem, _engine = seed_target
+    # Upgrade a retained preview without touching its existing fixture identities.
+    with monkeypatch.context() as legacy:
+        for name in ("DOCUMENTS", "PAGES"):
+            legacy.setattr(preview, name, tuple(
+                item for item in getattr(preview, name)
+                if not item.key.startswith("alignment")
+            ))
+        old: preview.SeedResult = await preview.seed_preview(database, filesystem)
+    old_face: FaceResponse | None = await database.faces.get(old.faces["ada-portrait"])
+    assert old_face is not None
+    original_write: Callable[[str, bytes], Coroutine[object, object, None]] = filesystem.write_bytes
+    interrupted_id: uuid.UUID | None = None
+
+    async def interrupt_checkpoint(key: str, content: bytes) -> None:
+        nonlocal interrupted_id
+        if key == preview.MANIFEST_KEY and interrupted_id is None:
+            identifier: str | None = json.loads(content)["faces"].get(failed_face)
+            if identifier is not None:
+                interrupted_id = uuid.UUID(identifier)
+                raise OSError("interrupted alignment checkpoint")
+        await original_write(key, content)
+
+    monkeypatch.setattr(filesystem, "write_bytes", interrupt_checkpoint)
+    with pytest.raises(OSError, match="interrupted alignment"):
+        await preview.seed_preview(database, filesystem)
+    seed: preview.SeedResult = await preview.seed_preview(database, filesystem)
+    assert seed.faces[failed_face] == interrupted_id
+    for name in ("entities", "documents", "pages", "faces", "mentions"):
+        assert getattr(old, name).items() <= getattr(seed, name).items()
+    assert await database.faces.get(old_face.detection_id) == old_face
+    faces: list[FaceResponse] = (await database.faces.list(FaceListRequest(
+        filter_=FaceListFilter(source_id=[seed.pages["alignment-1"]]), limit=100,
+    ))).items
+    assert {face.detection_id for face in faces} == {
+        seed.faces["alignment-coincident"], seed.faces["alignment-valid"],
+    }
+    invalid: FaceResponse | None = await database.faces.get(seed.faces["alignment-coincident"])
+    assert invalid is not None
+    assert len(invalid.keypoints) == 5
+    assert len({point.type for point in invalid.keypoints}) == 5
+    assert len({(point.x, point.y) for point in invalid.keypoints}) == 1
+    for point in invalid.keypoints:
+        assert 0 <= point.x < 800 and 0 <= point.y < 1100
+    page_before: PageResponse | None = await database.sources.get_page(invalid.source_id)
+    assert page_before is not None
+    user: UserResponse | None = await database.users.get(seed.users["reviewer"])
+    assert user is not None
+    actor: AuthContext = AuthContext(
+        user_id=seed.users["reviewer"],
+        user=user,
+        scopes={"people-gator:browse"}, authentication_method="bearer",
+    )
+    app: FastAPI = FastAPI()
+    app.include_router(router)
+
+    def get_database() -> Database:
+        return database
+
+    def get_auth_context() -> AuthContext:
+        return actor
+
+    app.dependency_overrides[database_service.get_database] = get_database
+    app.dependency_overrides[auth_service.get_auth_context] = get_auth_context
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test",
+    ) as client:
+        for enabled in (False, True):
+            monkeypatch.setattr(settings.aligned_face_crop, "cache_enabled", enabled)
+            response: httpx.Response = await client.get(seed.filter_examples["alignment-coincident-crop"])
+            assert response.status_code == 422
+            assert response.json()["detail"]["code"] == "invalid_face_keypoints"
+        response = await client.get(seed.filter_examples["alignment-valid-crop"])
+        assert response.status_code == 200 and response.headers["X-Cache"] == "MISS"
+        assert response.headers["content-type"] == "image/jpeg"
+        with Image.open(io.BytesIO(response.content)) as image:
+            image.load()
+            assert 0 < image.width <= 256 and image.width == image.height
+        await asyncio.gather(*list(aligned_face_crop._background_cache_writes))
+        hit: httpx.Response = await client.get(seed.filter_examples["alignment-valid-crop"])
+        assert hit.headers["X-Cache"] == "HIT" and hit.content == response.content
+        for width in (0, -1):
+            response = await client.get(
+                f"/api/v1/faces/{invalid.detection_id}/aligned_crop?max_width={width}"
+            )
+            assert response.status_code == 422
+            assert response.json()["detail"][0]["type"] == "greater_than"
+    assert await database.faces.get(invalid.detection_id) == invalid
+    assert await database.sources.get_page(invalid.source_id) == page_before
+
+    reviewed: FaceResponse | None = await database.faces.patch(
+        invalid.detection_id, FacePatchRequest(entity_id=seed.entities["lenka"]), actor,
+    )
+    assert reviewed is not None
+    reviewed_person: EntityResponse | None = await database.entities.get(seed.entities["lenka"])
+    assert reviewed_person is not None
+    for _ in range(2):
+        assert await preview.seed_preview(database, filesystem) == seed
+        assert await database.faces.get(invalid.detection_id) == reviewed
+        assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
+    assert await counts(database) == (31, 55, 38)
 
 
 @pytest.mark.asyncio
@@ -251,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (31, 53, 38)
+    assert await counts(database) == (31, 55, 38)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -274,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (32, 53, 38)
+    assert await counts(database) == (32, 55, 38)
 
 
 
@@ -299,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 31 and len(result.faces) == 53
-    assert await counts(database) == (31, 53, 38)
+    assert len(result.entities) == 31 and len(result.faces) == 55
+    assert await counts(database) == (31, 55, 38)
 
 
 
@@ -321,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (30, 52, 37)
+    assert await counts(database) == (30, 54, 37)
 
 
 

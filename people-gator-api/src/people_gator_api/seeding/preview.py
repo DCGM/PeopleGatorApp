@@ -504,6 +504,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            **{
+                f"{key}-crop": f"/api/v1/faces/{active_faces[key]}/aligned_crop?max_width=256"
+                for key in ("alignment-coincident", "alignment-valid") if key in active_faces
+            },
             "pagination-people": "/people?q=Pagination&sort=name",
             "pagination-scans": "/scans?library=preview-pagination&q=Pagination",
             "pagination-browse-people": "/people?library=preview-pagination&sort=name",

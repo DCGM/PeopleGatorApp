@@ -6,6 +6,8 @@ these fields. `automatic` with a null reference means no eligible portrait.
 Clients load the saved reference through authenticated
 `GET /api/v1/faces/{thumbnail_face_id}/aligned_crop`; failed media requests use
 initials. Media failures do not change the saved choice.
+Stored landmarks that cannot be aligned return the recoverable HTTP 422
+`invalid_face_keypoints` error; see [aligned face crops](ALIGNED-FACE-CROPS.md).
 
 In a person's evidence grid, select one face and choose **Use as portrait** in
 its bottom action bar. To reset, select the face marked **Portrait** and choose
