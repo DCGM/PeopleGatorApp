@@ -41,8 +41,13 @@ export function useDocumentList(
     error: query.error,
     isLoading: computed(() => query.isPending.value && toValue(enabled)),
     hasNextPage: query.hasNextPage,
+    isFetching: query.isFetching,
     isFetchingNextPage: query.isFetchingNextPage,
-    loadMore: query.fetchNextPage,
+    loadMore: () => {
+      if (!toValue(enabled) || query.isFetching.value || !query.hasNextPage.value)
+        return Promise.resolve()
+      return query.fetchNextPage({ cancelRefetch: false })
+    },
     retry: () => (query.isFetchNextPageError.value ? query.fetchNextPage() : query.refetch()),
   }
 }

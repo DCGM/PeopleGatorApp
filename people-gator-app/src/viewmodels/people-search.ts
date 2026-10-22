@@ -118,9 +118,14 @@ export function usePeopleSearch(
   return {
     error: peopleQuery.error,
     hasNextPage: peopleQuery.hasNextPage,
+    isFetching: peopleQuery.isFetching,
     isFetchingNextPage: peopleQuery.isFetchingNextPage,
     isLoading: computed(() => peopleQuery.isPending.value && toValue(enabled)),
-    loadMore: peopleQuery.fetchNextPage,
+    loadMore: () => {
+      if (!toValue(enabled) || peopleQuery.isFetching.value || !peopleQuery.hasNextPage.value)
+        return Promise.resolve()
+      return peopleQuery.fetchNextPage({ cancelRefetch: false })
+    },
     people,
     resultCount: computed(() => {
       return peopleQuery.data.value?.pages[0]?.totalCount ?? 0

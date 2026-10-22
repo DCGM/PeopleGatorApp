@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { relatedQuery, useSharedFilters, queryValues } from '@/viewmodels/shared-filters'
 import { useDocumentScopeResolution } from '@/viewmodels/document-scope'
 import { useRoute, useRouter } from 'vue-router'
@@ -53,15 +54,23 @@ const sortOptions = computed(() => scoredOptions(PAGE_SORTS, searching.value))
 const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
   searching.value ? RELEVANCE : PAGE_BROWSE_DEFAULT,
 )
-const { cards, error, hasNextPage, isFetchingNextPage, isLoading, loadMore, resultCount } =
-  useDocumentSearch(
-    searchTerm,
-    assignment,
-    resultsPerPage,
-    scope.apply(shared.params),
-    computed(() => !shared.error.value && !scope.resolving.value && !scope.error.value),
-    sort,
-  )
+const {
+  cards,
+  error,
+  isFetching,
+  hasNextPage,
+  isFetchingNextPage,
+  isLoading,
+  loadMore,
+  resultCount,
+} = useDocumentSearch(
+  searchTerm,
+  assignment,
+  resultsPerPage,
+  scope.apply(shared.params),
+  computed(() => !shared.error.value && !scope.resolving.value && !scope.error.value),
+  sort,
+)
 
 watch(
   () => route.query,
@@ -82,6 +91,15 @@ function updateSearch() {
     },
   })
 }
+const listEnd = ref<HTMLElement | null>(null)
+useAutomaticPagination({
+  target: listEnd,
+  hasNextPage,
+  isFetching,
+  error,
+  enabled: computed(() => !shared.error.value && !scope.resolving.value && !scope.error.value),
+  loadMore,
+})
 </script>
 
 <template>
@@ -150,8 +168,10 @@ function updateSearch() {
       </p>
     </section>
 
+    <div ref="listEnd" class="h-px" aria-hidden="true" />
+
     <div v-if="hasNextPage || isFetchingNextPage" class="flex justify-center pt-6">
-      <Button type="button" variant="outline" :disabled="isFetchingNextPage" @click="loadMore()">
+      <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">
         {{ isFetchingNextPage ? 'Loading scans…' : 'Load more scans' }}
       </Button>
     </div>

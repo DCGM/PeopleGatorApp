@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ const {
   error,
   isLoading,
   hasNextPage,
+  isFetching,
   isFetchingNextPage,
   loadMore,
   retry,
@@ -41,6 +43,15 @@ const filtered = computed(
   () =>
     searchTerm.value.trim() || unassigned.value !== 'all' || hasSharedFilters(shared.filters.value),
 )
+const listEnd = ref<HTMLElement | null>(null)
+useAutomaticPagination({
+  target: listEnd,
+  hasNextPage,
+  isFetching,
+  error,
+  enabled: computed(() => !shared.error.value),
+  loadMore,
+})
 </script>
 
 <template>
@@ -92,8 +103,10 @@ const filtered = computed(
           : 'No documents have been registered yet.'
       }}
     </p>
+    <div ref="listEnd" class="h-px" aria-hidden="true" />
+
     <div v-if="hasNextPage && !error" class="flex justify-center pt-6">
-      <Button type="button" variant="outline" :disabled="isFetchingNextPage" @click="loadMore()">{{
+      <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{
         isFetchingNextPage ? 'Loading documents…' : 'Load more documents'
       }}</Button>
     </div>
