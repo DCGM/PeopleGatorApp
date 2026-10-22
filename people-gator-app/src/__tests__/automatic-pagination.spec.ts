@@ -276,7 +276,7 @@ for (const screen of screens)
       api.list.mockImplementation(async ({ cursor }) =>
         cursor ? batch(['fresh-second']) : batch(['fresh-first'], 'fresh-next'),
       )
-      await router.push(`/?q=Fresh&library=test&sort=${screen.sort}&direction=desc`)
+      await router.push(`/?q=Fresh&library=test&sort=${screen.sort}&dir=desc`)
       await settle()
       complete(batch(['stale'], 'stale-next'))
       await settle()
@@ -287,6 +287,7 @@ for (const screen of screens)
       expect(last.cursor).toBe('fresh-next')
       expect(last['filter.library']).toEqual(['test'])
       expect(last.sort).toBe(screen.sort)
+      expect(last.sort_direction).toBe('desc')
     })
     it('uses the clipping scroll container and remains usable without observers', async () => {
       vi.stubGlobal('IntersectionObserver', undefined)
