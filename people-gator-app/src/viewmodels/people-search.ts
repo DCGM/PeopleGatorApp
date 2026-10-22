@@ -1,12 +1,6 @@
-import type { EvidenceQuery } from './evidence-filters'
-import type { EntityLinkState, EntitySortField } from '@/client'
+import type { SharedQuery } from './shared-filters'
+import type { EntitySortField } from '@/client'
 import type { SortState } from '@/lib/sorting'
-import {
-  emptyPeopleFilters,
-  peopleFiltersQuery,
-  processingFilterError,
-  type PeopleProcessingFilters,
-} from '@/viewmodels/people-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -32,28 +26,21 @@ export function usePeopleSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
-  processingFilters: MaybeRefOrGetter<PeopleProcessingFilters> = emptyPeopleFilters(),
-  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
-  evidenceValid: MaybeRefOrGetter<boolean> = true,
+  shared: MaybeRefOrGetter<SharedQuery> = {},
+  enabled: MaybeRefOrGetter<boolean> = true,
   sort?: MaybeRefOrGetter<SortState<EntitySortField>>,
 ) {
   const normalizedSearch = computed(() => toValue(searchTerm).trim())
   const assignment = computed(() => assignmentEntityFilter(toValue(filter)))
-  const filterError = computed(() => processingFilterError(toValue(processingFilters)))
   const peopleQuery = useEntityResultsQuery(
     computed(() => ({
       query: normalizedSearch.value,
       ...assignment.value,
-      processingFilters: {
-        ...toValue(evidence),
-        ...peopleFiltersQuery(toValue(processingFilters)),
-        ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
-      },
+      processingFilters: toValue(shared),
       limit: pageSize,
       sort: sort && toValue(sort),
     })),
-    computed(() => !filterError.value && toValue(evidenceValid)),
+    enabled,
   )
 
   const pageRecords = computed<EntitySearchRecord[]>(() => {
@@ -130,10 +117,9 @@ export function usePeopleSearch(
 
   return {
     error: peopleQuery.error,
-    filterError,
     hasNextPage: peopleQuery.hasNextPage,
     isFetchingNextPage: peopleQuery.isFetchingNextPage,
-    isLoading: computed(() => peopleQuery.isPending.value && !filterError.value),
+    isLoading: computed(() => peopleQuery.isPending.value && toValue(enabled)),
     loadMore: peopleQuery.fetchNextPage,
     people,
     resultCount: computed(() => {

@@ -38,11 +38,14 @@ def test_invalid_touch_ranges_return_validation_error(path, params):
 
 @pytest.mark.parametrize('path', ['/api/v1/entities', '/api/v1/search-entities', '/api/v1/faces', '/api/v1/text-mentions', '/api/v1/documents', '/api/v1/search-documents', '/api/v1/pages', '/api/v1/search-pages'])
 @pytest.mark.parametrize('params', [
-    {'filter.evidence_touched_from': '2026-01-02T00:00:00Z', 'filter.evidence_touched_to': '2026-01-01T00:00:00Z'},
-    {'filter.evidence_touched_from': '2026-01-01T00:00:00'},
-    {'filter.evidence_touched_to': 'not-a-date'},
+    {'filter.last_touched_from': '2026-01-02T00:00:00Z', 'filter.last_touched_to': '2026-01-01T00:00:00Z'},
+    {'filter.last_touched_from': '2026-01-01T00:00:00'},
+    {'filter.last_touched_to': 'not-a-date'},
+    # Removed #31 annotation criteria are rejected rather than silently ignored.
+    {'filter.evidence_touched_by_user_id': str(uuid.uuid4())},
+    {'filter.evidence_library': 'preview-mzk'},
 ])
-def test_shared_annotation_bounds_are_validated_on_every_resource(path, params):
+def test_shared_modification_bounds_are_validated_on_every_resource(path, params):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_database] = lambda: SimpleNamespace()

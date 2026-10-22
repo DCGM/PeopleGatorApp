@@ -305,41 +305,53 @@ export type EntityLinkStats = {
  */
 export type EntityListFilter = {
     /**
-     * Evidence Library
+     * Entity Link State
+     *
+     * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
      */
-    evidence_library?: Array<string>;
+    entity_link_state?: Array<EntityLinkState>;
     /**
-     * Evidence Source Id
+     * Library
+     *
+     * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
      */
-    evidence_source_id?: Array<string>;
+    library?: Array<string>;
     /**
      * Document Source Id
      *
-     * Internal document source IDs; match faces or mentions on any page.
+     * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
      */
     document_source_id?: Array<string>;
     /**
-     * Evidence Touched From
-     */
-    evidence_touched_from?: string;
-    /**
-     * Evidence Touched To
-     */
-    evidence_touched_to?: string;
-    /**
-     * Evidence Touched By User Id
-     */
-    evidence_touched_by_user_id?: Array<string>;
-    /**
-     * Evidence Touched By Api Key Id
-     */
-    evidence_touched_by_api_key_id?: Array<string>;
-    /**
-     * Entity Link State
+     * Page Source Id
      *
-     * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
+     * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
      */
-    entity_link_state?: Array<EntityLinkState>;
+    page_source_id?: Array<string>;
+    /**
+     * Last Touched From
+     *
+     * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+     */
+    last_touched_from?: string;
+    /**
+     * Last Touched To
+     *
+     * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+     */
+    last_touched_to?: string;
+    /**
+     * Last Touched By User Id
+     *
+     * Users who made the record's latest recorded change; unknown history never matches.
+     */
+    last_touched_by_user_id?: Array<string>;
+    /**
+     * Last Touched By Api Key Id
+     *
+     * Registered API keys used for the record's latest recorded change.
+     */
+    last_touched_by_api_key_id?: Array<string>;
     /**
      * Entity Id
      *
@@ -394,30 +406,6 @@ export type EntityListFilter = {
      * Whether the entity has detections.
      */
     has_detections?: boolean;
-    /**
-     * Last Touched From
-     *
-     * Inclusive UTC lower bound of the last touch.
-     */
-    last_touched_from?: string;
-    /**
-     * Last Touched To
-     *
-     * Inclusive UTC upper bound of the last touch.
-     */
-    last_touched_to?: string;
-    /**
-     * Last Touched By User Id
-     *
-     * Users responsible for the last touch, independent of entity ownership.
-     */
-    last_touched_by_user_id?: Array<string>;
-    /**
-     * Last Touched By Api Key Id
-     *
-     * Registered API keys used for the last touch.
-     */
-    last_touched_by_api_key_id?: Array<string>;
 };
 
 /**
@@ -2752,36 +2740,6 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * The unique identifiers of the entities.
@@ -2836,33 +2794,51 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'filter.has_detections'?: boolean | null;
         /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
          * Filter.Last Touched From
          *
-         * Inclusive UTC lower bound of the last touch.
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
          */
         'filter.last_touched_from'?: string | null;
         /**
          * Filter.Last Touched To
          *
-         * Inclusive UTC upper bound of the last touch.
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
          */
         'filter.last_touched_to'?: string | null;
         /**
-         * Filter.Document Source Id
-         *
-         * Internal document source IDs; match faces or mentions on any page.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
          * Filter.Last Touched By User Id
          *
-         * Users responsible for the last touch, independent of entity ownership.
+         * Users who made the record's latest recorded change; unknown history never matches.
          */
         'filter.last_touched_by_user_id'?: Array<string> | null;
         /**
          * Filter.Last Touched By Api Key Id
          *
-         * Registered API keys used for the last touch.
+         * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
@@ -2966,42 +2942,6 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -3019,6 +2959,54 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          * Filter by detection IDs.
          */
         'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -3108,53 +3096,11 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Url
          *
          * Filter by URL.
          */
         'filter.url'?: Array<string> | null;
-        /**
-         * Filter.Library
-         *
-         * Filter by library.
-         */
-        'filter.library'?: Array<string> | null;
         /**
          * Filter.Document Id
          *
@@ -3210,27 +3156,51 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          */
         'filter.has_entities'?: boolean | null;
         /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
          * Filter.Last Touched From
          *
-         * Inclusive lower bound of the last annotation change.
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
          */
         'filter.last_touched_from'?: string | null;
         /**
          * Filter.Last Touched To
          *
-         * Inclusive upper bound of the last annotation change.
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
          */
         'filter.last_touched_to'?: string | null;
         /**
          * Filter.Last Touched By User Id
          *
-         * Users responsible for the last annotation change.
+         * Users who made the record's latest recorded change; unknown history never matches.
          */
         'filter.last_touched_by_user_id'?: Array<string> | null;
         /**
          * Filter.Last Touched By Api Key Id
          *
-         * Registered API keys used for the last annotation change.
+         * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
@@ -3322,53 +3292,11 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Url
          *
          * Filter by URL.
          */
         'filter.url'?: Array<string> | null;
-        /**
-         * Filter.Library
-         *
-         * Filter by library.
-         */
-        'filter.library'?: Array<string> | null;
         /**
          * Filter.Document Id
          *
@@ -3400,35 +3328,59 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
-         * Filter.Last Touched From
-         *
-         * Inclusive lower bound of the last annotation change.
-         */
-        'filter.last_touched_from'?: string | null;
-        /**
-         * Filter.Last Touched To
-         *
-         * Inclusive upper bound of the last annotation change.
-         */
-        'filter.last_touched_to'?: string | null;
-        /**
-         * Filter.Last Touched By User Id
-         *
-         * Users responsible for the last annotation change.
-         */
-        'filter.last_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Last Touched By Api Key Id
-         *
-         * Registered API keys used for the last annotation change.
-         */
-        'filter.last_touched_by_api_key_id'?: Array<string> | null;
-        /**
          * Filter.Has Unassigned Faces
          *
          * Whether any face in the document scope is unassigned; false includes documents without faces.
          */
         'filter.has_unassigned_faces'?: boolean | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -3511,36 +3463,6 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * The unique identifiers of the entities.
@@ -3595,33 +3517,51 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          */
         'filter.has_detections'?: boolean | null;
         /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
          * Filter.Last Touched From
          *
-         * Inclusive UTC lower bound of the last touch.
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
          */
         'filter.last_touched_from'?: string | null;
         /**
          * Filter.Last Touched To
          *
-         * Inclusive UTC upper bound of the last touch.
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
          */
         'filter.last_touched_to'?: string | null;
         /**
-         * Filter.Document Source Id
-         *
-         * Internal document source IDs; match faces or mentions on any page.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
          * Filter.Last Touched By User Id
          *
-         * Users responsible for the last touch, independent of entity ownership.
+         * Users who made the record's latest recorded change; unknown history never matches.
          */
         'filter.last_touched_by_user_id'?: Array<string> | null;
         /**
          * Filter.Last Touched By Api Key Id
          *
-         * Registered API keys used for the last touch.
+         * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
@@ -3916,42 +3856,6 @@ export type ListFacesRouteApiV1FacesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -3969,6 +3873,54 @@ export type ListFacesRouteApiV1FacesGetData = {
          * Filter by detection IDs.
          */
         'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -4305,42 +4257,6 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -4358,6 +4274,54 @@ export type ListTextMentionsRouteApiV1TextMentionsGetData = {
          * Exact recorded mention text; spelling, case, accents and punctuation must match.
          */
         'filter.name'?: Array<string> | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -4440,42 +4404,6 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -4493,6 +4421,54 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
          * Exact recorded mention text; spelling, case, accents and punctuation must match.
          */
         'filter.name'?: Array<string> | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -4730,42 +4706,6 @@ export type ListSourcesRouteApiV1SourcesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Source Type
          *
          * Filter by source type.
@@ -4802,27 +4742,51 @@ export type ListSourcesRouteApiV1SourcesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
          * Filter.Last Touched From
          *
-         * Inclusive lower bound of the last annotation change.
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
          */
         'filter.last_touched_from'?: string | null;
         /**
          * Filter.Last Touched To
          *
-         * Inclusive upper bound of the last annotation change.
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
          */
         'filter.last_touched_to'?: string | null;
         /**
          * Filter.Last Touched By User Id
          *
-         * Users responsible for the last annotation change.
+         * Users who made the record's latest recorded change; unknown history never matches.
          */
         'filter.last_touched_by_user_id'?: Array<string> | null;
         /**
          * Filter.Last Touched By Api Key Id
          *
-         * Registered API keys used for the last annotation change.
+         * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
@@ -4960,53 +4924,11 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Url
          *
          * Filter by URL.
          */
         'filter.url'?: Array<string> | null;
-        /**
-         * Filter.Library
-         *
-         * Filter by library.
-         */
-        'filter.library'?: Array<string> | null;
         /**
          * Filter.Document Id
          *
@@ -5038,35 +4960,59 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
-         * Filter.Last Touched From
-         *
-         * Inclusive lower bound of the last annotation change.
-         */
-        'filter.last_touched_from'?: string | null;
-        /**
-         * Filter.Last Touched To
-         *
-         * Inclusive upper bound of the last annotation change.
-         */
-        'filter.last_touched_to'?: string | null;
-        /**
-         * Filter.Last Touched By User Id
-         *
-         * Users responsible for the last annotation change.
-         */
-        'filter.last_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Last Touched By Api Key Id
-         *
-         * Registered API keys used for the last annotation change.
-         */
-        'filter.last_touched_by_api_key_id'?: Array<string> | null;
-        /**
          * Filter.Has Unassigned Faces
          *
          * Whether any face in the document scope is unassigned; false includes documents without faces.
          */
         'filter.has_unassigned_faces'?: boolean | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
          * Limit
          *
@@ -5273,53 +5219,11 @@ export type ListPagesRouteApiV1PagesGetData = {
     path?: never;
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Url
          *
          * Filter by URL.
          */
         'filter.url'?: Array<string> | null;
-        /**
-         * Filter.Library
-         *
-         * Filter by library.
-         */
-        'filter.library'?: Array<string> | null;
         /**
          * Filter.Document Id
          *
@@ -5375,27 +5279,51 @@ export type ListPagesRouteApiV1PagesGetData = {
          */
         'filter.has_entities'?: boolean | null;
         /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
          * Filter.Last Touched From
          *
-         * Inclusive lower bound of the last annotation change.
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
          */
         'filter.last_touched_from'?: string | null;
         /**
          * Filter.Last Touched To
          *
-         * Inclusive upper bound of the last annotation change.
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
          */
         'filter.last_touched_to'?: string | null;
         /**
          * Filter.Last Touched By User Id
          *
-         * Users responsible for the last annotation change.
+         * Users who made the record's latest recorded change; unknown history never matches.
          */
         'filter.last_touched_by_user_id'?: Array<string> | null;
         /**
          * Filter.Last Touched By Api Key Id
          *
-         * Registered API keys used for the last annotation change.
+         * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**
@@ -5736,42 +5664,6 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
     };
     query?: {
         /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
-        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -5789,6 +5681,54 @@ export type GetTextMentionSpansByIdRouteApiV1PagesPageSourceIdTextMentionsSpansG
          * Exact recorded mention text; spelling, case, accents and punctuation must match.
          */
         'filter.name'?: Array<string> | null;
+        /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched From
+         *
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
+         */
+        'filter.last_touched_from'?: string | null;
+        /**
+         * Filter.Last Touched To
+         *
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
+         */
+        'filter.last_touched_to'?: string | null;
+        /**
+         * Filter.Last Touched By User Id
+         *
+         * Users who made the record's latest recorded change; unknown history never matches.
+         */
+        'filter.last_touched_by_user_id'?: Array<string> | null;
+        /**
+         * Filter.Last Touched By Api Key Id
+         *
+         * Registered API keys used for the record's latest recorded change.
+         */
+        'filter.last_touched_by_api_key_id'?: Array<string> | null;
     };
     url: '/api/v1/pages/{page_source_id}/text-mentions-spans';
 };
@@ -5817,42 +5757,6 @@ export type ListImagesRouteApiV1ImagesGetData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Filter.Evidence Library
-         */
-        'filter.evidence_library'?: Array<string> | null;
-        /**
-         * Filter.Evidence Source Id
-         */
-        'filter.evidence_source_id'?: Array<string> | null;
-        /**
-         * Filter.Document Source Id
-         *
-         * Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document.
-         */
-        'filter.document_source_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched From
-         */
-        'filter.evidence_touched_from'?: string | null;
-        /**
-         * Filter.Evidence Touched To
-         */
-        'filter.evidence_touched_to'?: string | null;
-        /**
-         * Filter.Evidence Touched By User Id
-         */
-        'filter.evidence_touched_by_user_id'?: Array<string> | null;
-        /**
-         * Filter.Evidence Touched By Api Key Id
-         */
-        'filter.evidence_touched_by_api_key_id'?: Array<string> | null;
-        /**
-         * Filter.Entity Link State
-         *
-         * Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.
-         */
-        'filter.entity_link_state'?: Array<EntityLinkState> | null;
         /**
          * Filter.Url
          *
@@ -5884,27 +5788,51 @@ export type ListImagesRouteApiV1ImagesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Entity Link State
+         *
+         * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
+         */
+        'filter.entity_link_state'?: Array<EntityLinkState> | null;
+        /**
+         * Filter.Library
+         *
+         * Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Source Id
+         *
+         * Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.
+         */
+        'filter.document_source_id'?: Array<string> | null;
+        /**
+         * Filter.Page Source Id
+         *
+         * Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.
+         */
+        'filter.page_source_id'?: Array<string> | null;
+        /**
          * Filter.Last Touched From
          *
-         * Inclusive lower bound of the last annotation change.
+         * Inclusive, timezone-aware lower bound of the record's latest recorded change.
          */
         'filter.last_touched_from'?: string | null;
         /**
          * Filter.Last Touched To
          *
-         * Inclusive upper bound of the last annotation change.
+         * Inclusive, timezone-aware upper bound of the record's latest recorded change.
          */
         'filter.last_touched_to'?: string | null;
         /**
          * Filter.Last Touched By User Id
          *
-         * Users responsible for the last annotation change.
+         * Users who made the record's latest recorded change; unknown history never matches.
          */
         'filter.last_touched_by_user_id'?: Array<string> | null;
         /**
          * Filter.Last Touched By Api Key Id
          *
-         * Registered API keys used for the last annotation change.
+         * Registered API keys used for the record's latest recorded change.
          */
         'filter.last_touched_by_api_key_id'?: Array<string> | null;
         /**

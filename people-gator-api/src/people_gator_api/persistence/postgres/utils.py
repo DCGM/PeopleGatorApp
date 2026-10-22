@@ -632,7 +632,10 @@ def search_page(
     )
 
 
-from .entity_link_queries import evidence_predicate, load_link_stats, annotation_conditions, EVIDENCE_FIELDS
+from .entity_link_queries import (
+    evidence_predicate, load_link_stats, annotation_conditions, touch_conditions,
+    LINK_FIELDS, document_sources, library_sources, page_sources, scope_conditions,
+)
 
 def creation_metadata(record) -> dict:
     return {"created_at": record.created_at,
@@ -749,17 +752,7 @@ def entity_filters(
     filter_values = missing_to_none(filter_)
     if filter_values is None:
         return []
-    filters: list[ColumnElement[bool]] = []
-    touched_from = missing_to_none(filter_values.last_touched_from)
-    touched_to = missing_to_none(filter_values.last_touched_to)
-    if touched_from is not None:
-        filters.append(Entity.last_touched_at >= touched_from)
-    if touched_to is not None:
-        filters.append(Entity.last_touched_at <= touched_to)
-    for name in ("last_touched_by_user_id", "last_touched_by_api_key_id"):
-        ids = missing_to_none(getattr(filter_values, name))
-        if ids is not None:
-            filters.append(getattr(Entity, name).in_(ids))
+    filters: list[ColumnElement[bool]] = touch_conditions(Entity, filter_values)
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Entity.id.in_(entity_ids))
@@ -773,7 +766,7 @@ def entity_filters(
     if authority_ids is not None:
         filters.append(Entity.nlcr_authority_id.in_(authority_ids))
     if any(missing_to_none(getattr(filter_values, field)) is not None for field in
-           (*EVIDENCE_FIELDS, "source_id", "detection_id", "mention_id")):
+           (*LINK_FIELDS, "source_id", "detection_id", "mention_id")):
         filters.append(evidence_predicate(filter_values, entity=True))
     has_mentions = missing_to_none(filter_values.has_mentions)
     if has_mentions is not None:
@@ -794,6 +787,7 @@ def face_filters(
         return []
     filters: list[ColumnElement[bool]] = []
     filters.extend(annotation_conditions(Face, filter_values))
+    filters.extend(touch_conditions(Face, filter_values))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Face.entity_id.in_(entity_ids))
@@ -814,6 +808,7 @@ def mention_filters(
         return []
     filters: list[ColumnElement[bool]] = []
     filters.extend(annotation_conditions(TextMention, filter_values))
+    filters.extend(touch_conditions(TextMention, filter_values))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(TextMention.entity_id.in_(entity_ids))
@@ -861,21 +856,22 @@ def source_filters(
     filter_values = missing_to_none(filter_)
     if filter_values is None:
         return []
-    filters: list[ColumnElement[bool]] = []
-    for name, operator in (("last_touched_from", Source.last_touched_at.__ge__), ("last_touched_to", Source.last_touched_at.__le__)):
-        value = missing_to_none(getattr(filter_values, name))
-        if value is not None:
-            filters.append(operator(value))
-    for name in ("last_touched_by_user_id", "last_touched_by_api_key_id"):
-        value = missing_to_none(getattr(filter_values, name))
-        if value is not None:
-            filters.append(getattr(Source, name).in_(value))
+    filters: list[ColumnElement[bool]] = touch_conditions(Source, filter_values)
+    # A document scope includes its registered pages. A page scope matches
+    # only those pages, without expanding to their containing documents.
+    documents = missing_to_none(filter_values.document_source_id)
+    if documents is not None:
+        filters.append(Source.id.in_(document_sources(documents)))
+    pages = missing_to_none(filter_values.page_source_id)
+    if pages is not None:
+        filters.append(Source.id.in_(page_sources(pages)))
     unassigned = missing_to_none(filter_values.has_unassigned_faces)
     if unassigned is not None:
         from .entity_link_queries import source_scope
         scope = source_scope()
         predicate = exists(select(1).select_from(ImageOccurrence).join(scope, scope.c.source_id == ImageOccurrence.source_id).where(
             scope.c.owner_id == Source.id, ImageOccurrence.occurrence_type == "face", ImageOccurrence.entity_id.is_(None),
+            *scope_conditions(ImageOccurrence.source_id, filter_values),
         ).correlate(Source))
         filters.append(predicate if unassigned else ~predicate)
     source_types = missing_to_none(filter_values.source_type)
@@ -889,9 +885,7 @@ def source_filters(
         filters.append(Source.id.in_(source_ids))
     libraries = missing_to_none(filter_values.library)
     if libraries is not None:
-        filters.append(
-            or_(Page.library.in_(libraries), Document.library.in_(libraries))
-        )
+        filters.append(Source.id.in_(library_sources(libraries)))
     document_ids = missing_to_none(filter_values.document_id)
     if document_ids is not None:
         filters.append(
@@ -904,7 +898,7 @@ def source_filters(
     if page_ids is not None:
         filters.append(Page.page_id.in_(page_ids))
     if any(missing_to_none(getattr(filter_values, field)) is not None for field in
-           (*EVIDENCE_FIELDS, "entity_id", "detection_id", "mention_id")):
+           ("entity_link_state", "entity_id", "detection_id", "mention_id")):
         filters.append(evidence_predicate(filter_values))
     has_mentions = missing_to_none(filter_values.has_mentions)
     if has_mentions is not None:

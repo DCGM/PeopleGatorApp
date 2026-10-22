@@ -1,7 +1,7 @@
 import { computed, toValue, watchEffect, type MaybeRefOrGetter } from 'vue'
 import { useFaceListQuery } from '@/query/faces'
 import { useTextMentionListQuery } from '@/query/text-mentions'
-import { utcToLocalTime } from './people-filters'
+import { utcToLocalTime } from './shared-filters'
 import type { SortDirection } from '@/lib/sorting'
 
 export type PageActivityItem = {

@@ -6,14 +6,14 @@ import SortSelect from './SortSelect.vue'
 import { directionLabel, type SortDirection } from '@/lib/sorting'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ActiveFilters from './ActiveFilters.vue'
-import { useEvidenceFilters } from '@/viewmodels/evidence-filters'
+import { useSharedFilters } from '@/viewmodels/shared-filters'
 import { activityGroups, localDayBounds, usePageActivity } from '@/viewmodels/page-activity'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
-const props = defineProps<{ sourceId: string }>()
+const props = defineProps<{ sourceId: string; hideFilterTags?: boolean }>()
 const route = useRoute(),
   router = useRouter()
 const { items, loading, error, retry } = usePageActivity(() => props.sourceId)
-const { filters } = useEvidenceFilters()
+const { filters } = useSharedFilters()
 const userSearch = ref('')
 const users = usePeopleFilterOptions('user', userSearch)
 const mode = computed(() => (route.query.activity_group === 'user' ? 'user' : 'time'))
@@ -61,7 +61,7 @@ const tags = computed(() => [
           {
             key,
             value: filters.value[key],
-            label: `Annotation ${key === 'touchedFrom' ? 'from' : 'to'}: ${filters.value[key].replace('T', ' ')}`,
+            label: `Modified ${key === 'touchedFrom' ? 'from' : 'to'}: ${filters.value[key].replace('T', ' ')}`,
           },
         ]
       : [],
@@ -69,7 +69,7 @@ const tags = computed(() => [
   ...filters.value.userIds.map((value) => ({
     key: 'userIds',
     value,
-    label: `Annotation user: ${users.labels.value[value] ?? value}`,
+    label: `Modified by: ${users.labels.value[value] ?? value}`,
   })),
 ])
 function selectGroup(key: string) {
@@ -153,6 +153,7 @@ function clear() {
       @update:model-value="selectOrder"
     />
     <ActiveFilters
+      v-if="!hideFilterTags"
       clear-label="Clear activity filters"
       :filters="tags"
       @remove="remove"

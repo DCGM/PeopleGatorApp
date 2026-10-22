@@ -582,3 +582,41 @@ search and evidence choices. On disposable data, failed assignment/merge request
 retain their selection and point to the corresponding action for recovery.
 Face text candidate retrieval is bounded to 200 per term per indexed field;
 apply migration `d34a021b0012` before seed/startup to install its identifier index.
+
+
+
+## Transferable source and modification filters (#52)
+
+The `shared-filters-*` report links demonstrate one configuration across views:
+
+1. Open `shared-filters-documents`: **Modified by: Preview curator** finds
+   **Shared filter ledger**. Use the top-level People navigation; the same
+   selection finds **Ivo Ledger** and **Hana Ledger** by their own latest edits.
+2. Add **Modified via key: preview-curator** (or open `shared-filters-api-key`).
+   Ivo remains; Hana's own curator edit used bearer authentication, without a key.
+   Remove the key tag and switch back to Documents; the removal travels too.
+3. Open `shared-filters-person-faces` (Hana). Her identity matches the curator,
+   while her reviewer-edited face is absent under the same selection. Remove
+   the modifier tag to show it. Compare Ivo's curator-linked faces and mentions.
+4. Open `shared-filters-page` in Scans: only the ledger's first page appears.
+   Switch to People (or open `shared-filters-page-people`): Hana matches through
+   her face on that page. Switch to Documents with the same page selection:
+   no documents match, including the containing ledger. Remove the Page tag
+   to browse documents again. Document/image UUIDs used as page selections
+   match nothing; selecting a document instead still includes its pages.
+5. Select the ledger in **Documents**, then switch to Scans. **Shared filter mirror** in `preview-nlk`
+   reuses the ledger's archive UUID but has separate internal source identities
+   and an unannotated page that remains browsable in Scans. Library/document/page
+   scope must not leak across it.
+6. Copy/reload a filtered URL, use Back/Forward, and expand/collapse mobile filters.
+   Controls, tags and API predicates restore the same effective configuration.
+
+New fixtures and the `shared-filters-own-edit-v1` upgrade use stable keys. Before
+editing Hana once, the manifest records her expected touch time; recovery checks
+it and the reviewer actor. Reruns preserve intervening reviewer changes, evidence
+assignments and modification times, even after an interrupted checkpoint.
+Integration coverage checks own entity versus annotation actors, key distinctions,
+source isolation, strict page-only source selection, non-page UUID exclusion,
+unannotated pages, counts, reruns and interrupted recovery. The page examples
+reuse existing linked synthetic records and local media; adding their report
+links changes no persisted fixture IDs or review edits.

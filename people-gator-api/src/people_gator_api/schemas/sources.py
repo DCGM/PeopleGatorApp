@@ -14,7 +14,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
-from people_gator_api.schemas.entity_links import EntityLinkFilter, EntityLinkStats
+from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
     GenericListRequest,
@@ -563,33 +563,7 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
 # ---------------------------------------------------------------------------
 
 
-class SourceProcessingFilter(BaseModel):
-    """Last actual annotation change on this source, independent of entities."""
-
-    last_touched_from: AwareDatetime | MissingType = Field(default=MISSING, description="Inclusive lower bound of the last annotation change.")
-    last_touched_to: AwareDatetime | MissingType = Field(default=MISSING, description="Inclusive upper bound of the last annotation change.")
-    last_touched_by_user_id: list[uuid.UUID] | MissingType = Field(default=MISSING, description="Users responsible for the last annotation change.")
-    last_touched_by_api_key_id: list[uuid.UUID] | MissingType = Field(default=MISSING, description="Registered API keys used for the last annotation change.")
-
-    @model_validator(mode="after")
-    def validate_processing(self) -> Self:
-        for name in ("last_touched_from", "last_touched_to"):
-            value = getattr(self, name)
-            if not is_missing(value):
-                setattr(self, name, value.astimezone(timezone.utc))
-        for name in type(self).model_fields:
-            value = getattr(self, name)
-            if isinstance(value, list):
-                setattr(self, name, list(dict.fromkeys(value)))
-        if not is_missing(self.last_touched_from) and not is_missing(self.last_touched_to) and self.last_touched_from > self.last_touched_to:
-            raise ValueError("last_touched_from must be before or equal to last_touched_to")
-        return self
-
-    def processing_values(self) -> dict:
-        return {name: getattr(self, name) for name in SourceProcessingFilter.model_fields}
-
-
-class GenericSourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
+class GenericSourceListFilter(ListFilterBase, SharedFilter):
     """Filter for listing generic sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -600,10 +574,6 @@ class GenericSourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessing
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
-    )
-    library: list[str] | MissingType = Field(
-        default=MISSING,
-        description="Filter by library."
     )
     document_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
@@ -646,7 +616,7 @@ class GenericSourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessing
     )
 
 
-class SourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
+class SourceListFilter(ListFilterBase, SharedFilter):
     """Filter for listing all sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -676,31 +646,24 @@ class SourceListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter)
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
-            **self.processing_values(),
-            **self.evidence_values(),
+            **self.shared_values(),
             source_type=self.source_type,
             url=self.url,
             source_id=self.source_id,
-            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
-            library=MISSING,
             page_id=MISSING,
             document_id=MISSING,
         )
 
 
-class PageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
+class PageListFilter(ListFilterBase, SharedFilter):
     """Filter for listing pages."""
 
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
-    )
-    library: list[str] | MissingType = Field(
-        default=MISSING,
-        description="Filter by library."
     )
     document_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
@@ -744,15 +707,12 @@ class PageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
-            **self.processing_values(),
-            **self.evidence_values(),
+            **self.shared_values(),
             source_type=[SourceKind.page],
             url=self.url,
-            library=self.library,
             document_id=self.document_id,
             page_id=self.page_id,
             source_id=self.source_id,
-            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
@@ -762,17 +722,13 @@ class PageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
         )
 
 
-class DocumentListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
+class DocumentListFilter(ListFilterBase, SharedFilter):
     """Filter for listing documents."""
 
     has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
     url: list[AnyUrl] | MissingType = Field(
         default=MISSING,
         description="Filter by URL."
-    )
-    library: list[str] | MissingType = Field(
-        default=MISSING,
-        description="Filter by library."
     )
     document_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
@@ -797,22 +753,19 @@ class DocumentListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilte
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
-            **self.processing_values(),
-            **self.evidence_values(),
+            **self.shared_values(),
             has_unassigned_faces=self.has_unassigned_faces,
             source_type=[SourceKind.document],
             url=self.url,
-            library=self.library,
             document_id=self.document_id,
             source_id=self.source_id,
-            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,
         )
 
 
-class ImageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
+class ImageListFilter(ListFilterBase, SharedFilter):
     """Filter for listing images."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -838,12 +791,10 @@ class ImageListFilter(ListFilterBase, EntityLinkFilter, SourceProcessingFilter):
 
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
-            **self.processing_values(),
-            **self.evidence_values(),
+            **self.shared_values(),
             source_type=[SourceKind.image],
             url=self.url,
             source_id=self.source_id,
-            entity_link_state=self.entity_link_state,
             entity_id=self.entity_id,
             detection_id=self.detection_id,
             mention_id=self.mention_id,

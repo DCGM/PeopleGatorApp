@@ -91,8 +91,8 @@ watch(groups, (items) => {
       </p>
       <p v-else-if="!query.isPending.value">Showing {{ groups.length }} of {{ total }} groups</p>
       <p v-if="!query.error.value && !query.isPending.value && !groups.length">
-        No mentions match the evidence filters.
-        <Button variant="link" @click="emit('broaden')">Broaden evidence</Button>
+        No mentions match the filters.
+        <Button variant="link" @click="emit('broaden')">Clear filters</Button>
       </p>
       <Button
         v-if="query.hasNextPage.value"

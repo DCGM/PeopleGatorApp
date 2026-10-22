@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { relatedQuery } from '@/viewmodels/shared-filters'
 import {
   Check,
   ChevronRight,
@@ -131,12 +131,9 @@ function formatTextScore(score: number) {
           :to="{
             name: 'person-detail',
             params: { personId: person.id },
-            query: relatedEvidenceQuery(route, {
-              ...(person.sourceId && { evidence_source: [person.sourceId] }),
+            query: relatedQuery(route, {
               origin_matched_face: person.faceId || undefined,
               origin_reference_face: person.referenceFaceId || undefined,
-              ...(person.candidateMode && { origin_candidate_mode: person.candidateMode }),
-              ...(person.candidateText && { origin_candidate_text: person.candidateText }),
             }),
           }"
           class="group z-20 flex min-w-0 w-full items-center gap underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

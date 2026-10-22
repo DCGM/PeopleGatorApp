@@ -58,10 +58,18 @@ class ThumbnailUpgrade(BaseModel):
     complete: bool = False
 
 
+class RecordEditUpgrade(BaseModel):
+    """One additive own-record edit, applied only to the unchanged seeded record."""
+
+    expected_touched_at: AwareDatetime | None
+    complete: bool = False
+
+
 class SeedUpgrades(BaseModel):
     # Ignore state written by newer code after a rollback.
     model_config = ConfigDict(extra="ignore")
     thumbnail: dict[str, ThumbnailUpgrade] = Field(default_factory=dict)
+    record_edits: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
 
 
 class SeedManifest(BaseModel):
@@ -151,6 +159,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         ("reviewer", "Preview reviewer"),
         ("importer", "Preview face importer"),
         ("ocr", "Preview OCR linker"),
+        ("curator", "Preview curator"),
     ):
         user = await database.users.get_or_create(
             UserCreateRequest(
@@ -436,6 +445,31 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 ), actors["reviewer"])
             upgrade.complete = True
             await checkpoint_upgrades()
+    # Explicit additive upgrade for #52: the curator edits Hana's own record
+    # after the reviewer's face link, so her own latest modifier differs from
+    # her linked face's. Record the precondition first; never overwrite a later
+    # review edit, and never repeat the edit after an interrupted checkpoint.
+    upgrade_key = "shared-filters-own-edit-v1"
+    person_id = active_entities.get("shared-hana")
+    person = await database.entities.get(person_id) if person_id else None
+    if person is not None:
+        edit = upgrades.record_edits.get(upgrade_key)
+        if edit is None:
+            edit = RecordEditUpgrade(expected_touched_at=person.last_touched_at)
+            upgrades.record_edits[upgrade_key] = edit
+            await checkpoint_upgrades()
+        if not edit.complete:
+            if (person.last_touched_at == edit.expected_touched_at
+                    and person.last_touched_by_user_id == actors["reviewer"].user_id):
+                curator = actors["curator"]
+                await database.entities.patch(person_id, EntityPatchRequest(
+                    short_description="Curated after the reviewer linked her face.",
+                ), AuthContext(
+                    user_id=curator.user_id, user=curator.user, api_key_id=None,
+                    authentication_method="bearer", scopes=curator.scopes,
+                ))
+            edit.complete = True
+            await checkpoint_upgrades()
     statistics_page = await database.sources.get_page(pages["links-2"])
     if statistics_page is None:
         raise ValueError("Link statistics preview page is missing")
@@ -477,10 +511,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Root entry demonstrates the Documents landing view with the existing
             # linked album/media. These entry points require no persisted upgrade.
             "default-documents": "/",
-            "default-documents-scans": "/scans?" + urlencode({
-                "library": next(item.library for item in DOCUMENTS if item.key == "album"),
-                "document": next(item.document_id for item in DOCUMENTS if item.key == "album"),
-            }),
+            "default-documents-scans": "/scans?" + urlencode({"document": documents["album"]}),
             # Select one existing linked evidence card, then Use as portrait in
             # the compact bottom bar. Select the marked portrait to reset.
             "person-portrait-selection": f"/people/{manifest.entities['provenance-review']}",
@@ -495,22 +526,47 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-pages-without-annotations": "/documents?" + urlencode({
                 "q": "Příběhy archivářů",
             }),
+            # Person faces last changed by the importer's key: the same shared
+            # user/key criteria as Documents/People, applied to each face (#52).
             "annotation-editor-filters": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
-                "evidence_user": actors["importer"].user_id,
-                "evidence_key": registered_keys["importer"],
+                "touched_by": actors["importer"].user_id,
+                "api_key": registered_keys["importer"],
             }),
             # Open Irena's scan, then search for Ada as an assignment candidate
             # outside that page. Opening a result must not invent evidence scope.
-            "scan-assignment-search": "/scans?" + urlencode({
-                "library": activity_document.library,
-                "document": activity_document.document_id,
-            }),
-            # Follow Irena into a profile, change/clear annotation filters, then
-            # use the normal People breadcrumb. It forwards the current choices.
+            "scan-assignment-search": "/scans?" + urlencode({"document": documents[activity_document.key]}),
+            # Follow Irena into a profile: the library scope keeps only her
+            # preview-mzk faces. Edit it, then use the People breadcrumb.
             "shared-filter-navigation": "/people?" + urlencode({
                 "q": "Irena",
-                "evidence_key": registered_keys["importer"],
+                "library": "preview-mzk",
             }),
+            # Issue #52: one configuration, each view's own latest change.
+            # Documents → People keeps the curator selection: the ledger
+            # document, Ivo (curator's key) and Hana (curator's own edit).
+            "shared-filters-documents": "/documents?" + urlencode({
+                "touched_by": actors["curator"].user_id,
+            }),
+            "shared-filters-people": "/people?" + urlencode({
+                "touched_by": actors["curator"].user_id,
+            }),
+            # Adding the curator's key leaves Ivo; Hana's edit used no key.
+            "shared-filters-api-key": "/people?" + urlencode({
+                "touched_by": actors["curator"].user_id,
+                "api_key": registered_keys["curator"],
+            }),
+            # Hana's profile under the curator selection: her own record matches,
+            # but her face was last changed by the reviewer, so it is filtered out.
+            "shared-filters-person-faces": f"/people/{manifest.entities['shared-hana']}?" + urlencode({
+                "touched_by": actors["curator"].user_id,
+            }),
+            # Document scope by internal UUID; the same archive ID in preview-nlk
+            # has no links and never contributes results.
+            "shared-filters-scope": "/people?" + urlencode({"document": documents["shared-ledger"]}),
+            # Strict page scope: Scans selects this page; People finds Hana
+            # through her face, while Documents never includes the parent ledger.
+            "shared-filters-page": "/scans?" + urlencode({"page": pages["shared-ledger-1"]}),
+            "shared-filters-page-people": "/people?" + urlencode({"page": pages["shared-ledger-1"]}),
             # Presentation examples reuse linked synthetic records and media.
             # Adding entry points never rewrites reviewer edits or checkpoints.
             # Mixed-state faces exercise green-outline Verify/red-outline Unassign;
@@ -521,7 +577,6 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "person-face-review": f"/people/{manifest.entities['provenance-review']}",
             "person-evidence-cards": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "origin_matched_face": manifest.faces["provenance-authority"],
-                "origin_text": "Irena",
             }),
             "page-statistics": (
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
@@ -567,12 +622,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/libraries/{gallery_document.library}/documents/{gallery_document.document_id}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'page-gallery-13')}"
             ),
-            # Annotation filters narrow the scan's evidence, never its page gallery:
-            # this importer filter matches 4 of the 6 registered pages.
+            # Shared filters narrow the scan's faces/mentions, never its page
+            # gallery: the importer's latest changes cover 3 of 6 pages.
             "document-page-gallery-filtered": (
                 f"/libraries/{search_document.library}/documents/{search_document.document_id}"
                 f"/pages/{next(item.page_id for item in PAGES if item.key == 'issue8-untouched')}?"
-                + urlencode({"evidence_user": actors["importer"].user_id})
+                + urlencode({"touched_by": actors["importer"].user_id})
             ),
             "media-upload": (
                 f"/libraries/{upload_page.library}/documents/{upload_page.document_id}"
@@ -591,8 +646,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "sorting-document-names": "/documents?" + urlencode({"q": "radkova", "sort": "name"}),
             "sorting-people": "/people?sort=last_touched_at",
             "sorting-scans": "/scans?" + urlencode({
-                "library": sorting_document.library,
-                "document": sorting_document.document_id,
+                "document": documents[sorting_document.key],
                 "sort": "page_id", "dir": "desc",
             }),
             **({
@@ -625,7 +679,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-source-touch": "/documents?library=preview-mzk&touched_by=" + str(actors["reviewer"].user_id),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"
-            + urlencode({"library": "preview-mzk", "document": next(
+            + urlencode({"library": "preview-mzk", "archive_document": next(
                 item.document_id for item in DOCUMENTS if item.key == "scan-only"
             )}),
             "mobile-filters": "/people?"

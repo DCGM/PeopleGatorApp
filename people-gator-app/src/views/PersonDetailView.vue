@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import EvidenceFilterControls from '@/components/custom/EvidenceFilterControls.vue'
-import EvidenceFilterTags from '@/components/custom/EvidenceFilterTags.vue'
+import SharedFilterControls from '@/components/custom/SharedFilterControls.vue'
+import SharedFilterTags from '@/components/custom/SharedFilterTags.vue'
 import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
-import { useEvidenceFilters, queryValues } from '@/viewmodels/evidence-filters'
+import { useSharedFilters, queryValues } from '@/viewmodels/shared-filters'
 import { Image, ScanFace, UserRoundSearch } from '@lucide/vue'
 import { useDebounce } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
@@ -46,7 +46,7 @@ import { usePersonDetail } from '@/viewmodels/person-detail'
 
 const route = useRoute()
 const router = useRouter()
-const evidence = useEvidenceFilters()
+const evidence = useSharedFilters()
 const matchingFaceIds = computed(() => queryValues(route.query.origin_matched_face))
 const linkStates = useLinkStateFilter()
 const personId = computed(() => String(route.params.personId))
@@ -246,12 +246,11 @@ function retrySearch() {
         </TabsList>
         <div class="mt-3">
           <SearchFilterPanel label="Person evidence" filters-only
-            ><EvidenceFilterControls
+            ><SharedFilterControls
           /></SearchFilterPanel>
-          <EvidenceFilterTags />
+          <SharedFilterTags />
           <p v-if="missingMatchedFaces" role="status">
-            A matching face is unavailable or outside the current evidence filters. Broaden evidence
-            or return to the originating search.
+            A matching face is unavailable or outside the current filters.
           </p>
         </div>
 
@@ -280,8 +279,8 @@ function retrySearch() {
               {{ entity?.entity_link_stats?.faces?.total ?? faceCount }} faces
             </p>
             <p v-if="!faceError && !faceLoading && !faces.length">
-              No faces match the evidence filters.
-              <Button variant="link" @click="evidence.clear()">Broaden evidence</Button>
+              No faces match the filters.
+              <Button variant="link" @click="evidence.clear()">Clear filters</Button>
             </p>
             <Button
               v-if="hasMoreFaces"
@@ -346,8 +345,8 @@ function retrySearch() {
                 {{ entity?.entity_link_stats?.mentions?.total ?? mentionCount }} mentions
               </p>
               <p v-if="!mentionError && !mentionLoading && !mentions.length">
-                No mentions match the evidence filters.
-                <Button variant="link" @click="evidence.clear()">Broaden evidence</Button>
+                No mentions match the filters.
+                <Button variant="link" @click="evidence.clear()">Clear filters</Button>
               </p>
               <Button
                 v-if="hasMoreMentions"

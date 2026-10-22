@@ -1,11 +1,11 @@
-import type { EvidenceQuery } from './evidence-filters'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
-import type { EntityLinkState, DocumentResponse, DocumentSortField, PageResponse } from '@/client'
+import type { DocumentResponse, DocumentSortField, PageResponse } from '@/client'
 import type { SortState } from '@/lib/sorting'
 import { usePageListQuery } from '@/query/media'
 import { useDocumentResultsQuery } from '@/query/search/documents'
-import { documentFiltersQuery, documentFilterError, type DocumentFilters } from './document-filters'
+import { unassignedQuery, type UnassignedFilter } from './document-filters'
+import type { SharedQuery } from './shared-filters'
 import { usePageCards } from '@/viewmodels/page-cards'
 
 function uniqueSources<T extends { source_id: string }>(pages: Array<{ items: T[] }> = []) {
@@ -20,28 +20,26 @@ export function documentTitle(document: Pick<DocumentResponse, 'name' | 'documen
 
 export function useDocumentList(
   search: MaybeRefOrGetter<string>,
-  filters: MaybeRefOrGetter<DocumentFilters>,
+  shared: MaybeRefOrGetter<SharedQuery>,
+  unassigned: MaybeRefOrGetter<UnassignedFilter> = 'all',
   pageSize = 12,
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
-  evidenceValid: MaybeRefOrGetter<boolean> = true,
+  enabled: MaybeRefOrGetter<boolean> = true,
   sort?: MaybeRefOrGetter<SortState<DocumentSortField>>,
 ) {
-  const filterError = computed(() => documentFilterError(toValue(filters)))
   const query = useDocumentResultsQuery(
     computed(() => ({
       query: toValue(search),
-      filters: { ...documentFiltersQuery(toValue(filters)), ...toValue(evidence) },
+      filters: { ...toValue(shared), ...unassignedQuery(toValue(unassigned)) },
       limit: pageSize,
       sort: sort && toValue(sort),
     })),
-    computed(() => !filterError.value && toValue(evidenceValid)),
+    enabled,
   )
   return {
     documents: computed(() => uniqueSources<DocumentResponse>(query.data.value?.pages)),
     resultCount: computed(() => query.data.value?.pages[0]?.totalCount ?? 0),
-    filterError,
     error: query.error,
-    isLoading: computed(() => query.isPending.value && !filterError.value),
+    isLoading: computed(() => query.isPending.value && toValue(enabled)),
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     loadMore: query.fetchNextPage,
@@ -49,18 +47,23 @@ export function useDocumentList(
   }
 }
 
+// Previews show this document's pages under the shared configuration. The document
+// matched it, so its own scope replaces the shared document selection.
 export function useDocumentGroup(
   document: MaybeRefOrGetter<DocumentResponse>,
   pageSize = 4,
-  linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  shared: MaybeRefOrGetter<SharedQuery> = {},
 ) {
+  const narrowed = computed(() => {
+    const rest = { ...toValue(shared) }
+    delete rest['filter.library']
+    delete rest['filter.document_source_id']
+    return Object.keys(rest).length > 0 ? rest : undefined
+  })
   const query = usePageListQuery(
     computed(() => ({
-      'filter.library': [toValue(document).library],
-      'filter.document_id': [toValue(document).document_id],
-      ...(toValue(linkStates).length && { 'filter.entity_link_state': toValue(linkStates) }),
-      ...toValue(evidence),
+      ...narrowed.value,
+      'filter.document_source_id': [toValue(document).source_id],
       // The same archive page-ID order as the scan list and gallery for this document.
       sort: 'page_id' as const,
       limit: Math.min(pageSize, 4),
@@ -69,21 +72,21 @@ export function useDocumentGroup(
   )
   const registeredCount = usePageListQuery(
     computed(() => ({
-      'filter.library': [toValue(document).library],
-      'filter.document_id': [toValue(document).document_id],
+      'filter.document_source_id': [toValue(document).source_id],
       limit: 0,
       return_total_count: true,
     })),
-    computed(() => Object.keys(toValue(evidence)).length > 0 || toValue(linkStates).length > 0),
+    computed(() => !!narrowed.value),
   )
   const pages = computed(() =>
     uniqueSources<PageResponse>(query.data.value?.pages.slice(0, 1)).slice(0, 4),
   )
   return {
     cards: usePageCards(pages),
+    narrowed: computed(() => !!narrowed.value),
     totalCount: computed(
       () =>
-        (Object.keys(toValue(evidence)).length || toValue(linkStates).length
+        (narrowed.value
           ? registeredCount.data.value?.pages[0]?.total_count
           : query.data.value?.pages[0]?.total_count) ?? null,
     ),

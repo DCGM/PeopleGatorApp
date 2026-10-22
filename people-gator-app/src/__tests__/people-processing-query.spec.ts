@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin, type InfiniteData } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h, ref } from 'vue'
+import { computed, defineComponent, h, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), search: vi.fn() }))
@@ -9,7 +9,23 @@ vi.mock('@/client', () => ({ searchEntitiesGetApiV1SearchEntitiesGet: mocks.sear
 vi.mock('@/query/faces', () => ({ fetchFaces: vi.fn() }))
 vi.mock('@/query/text-mentions', () => ({ fetchTextMentions: vi.fn() }))
 import { usePeopleSearch } from '@/viewmodels/people-search'
-import { emptyPeopleFilters, utcToLocalTime } from '@/viewmodels/people-filters'
+import {
+  emptySharedFilters,
+  sharedFilterError,
+  sharedFiltersQuery,
+  utcToLocalTime,
+  type SharedFilters,
+} from '@/viewmodels/shared-filters'
+
+function use(term: string | ReturnType<typeof ref<string>>, assignment: 'all' | 'mentions', filters: ReturnType<typeof ref<SharedFilters>>) {
+  return usePeopleSearch(
+    term as never,
+    assignment,
+    12,
+    computed(() => sharedFiltersQuery(filters.value!)),
+    computed(() => !sharedFilterError(filters.value!)),
+  )
+}
 
 function page(cursor: string | null = null) {
   return { items: [], limit: 12, total_count: 42, cursor }
@@ -24,14 +40,14 @@ describe('people processing queries', () => {
 
   it('sends the same filters to browsing and text search, with filter-aware pagination', async () => {
     const term = ref('')
-    const filters = ref(emptyPeopleFilters())
+    const filters = ref<SharedFilters>(emptySharedFilters())
     let result!: ReturnType<typeof usePeopleSearch>
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     mocks.list.mockResolvedValueOnce(page('old-cursor'))
     const wrapper = mount(
       defineComponent({
         setup() {
-          result = usePeopleSearch(term, 'mentions', 12, filters)
+          result = use(term, 'mentions', filters)
           return () => h('div')
         },
       }),
@@ -41,8 +57,8 @@ describe('people processing queries', () => {
     await result.loadMore()
     expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ cursor: 'old-cursor' })
     filters.value = {
+      ...emptySharedFilters(),
       touchedFrom: utcToLocalTime('2026-01-02T12:00:00Z'),
-      touchedTo: '',
       documentIds: ['doc'],
       userIds: ['user'],
       apiKeyIds: ['key'],
@@ -65,7 +81,7 @@ describe('people processing queries', () => {
       cursor: null,
     })
     expect(result.resultCount.value).toBe(42)
-    filters.value.documentIds = ['other-doc']
+    filters.value = { ...filters.value, documentIds: ['other-doc'] }
     await flushPromises()
     expect(mocks.search.mock.lastCall?.[0].query).toMatchObject({
       'filter.document_source_id': ['other-doc'],
@@ -74,7 +90,7 @@ describe('people processing queries', () => {
     expect(queryClient.getQueryCache().getAll().length).toBeGreaterThanOrEqual(4)
     // Revisiting a cached filter must discard its previously loaded second page.
     term.value = ''
-    filters.value = emptyPeopleFilters()
+    filters.value = emptySharedFilters()
     await flushPromises()
     const originalQuery = queryClient
       .getQueryCache()
@@ -86,8 +102,8 @@ describe('people processing queries', () => {
   })
 
   it('does not send an invalid time range to the API', async () => {
-    const filters = ref({
-      ...emptyPeopleFilters(),
+    const filters = ref<SharedFilters>({
+      ...emptySharedFilters(),
       touchedFrom: '2026-02-02T12:00',
       touchedTo: '2026-01-01T12:00',
     })
@@ -96,7 +112,7 @@ describe('people processing queries', () => {
     const wrapper = mount(
       defineComponent({
         setup() {
-          result = usePeopleSearch('', 'all', 12, filters)
+          result = use('', 'all', filters)
           return () => h('div')
         },
       }),
@@ -104,7 +120,7 @@ describe('people processing queries', () => {
     )
     await flushPromises()
     expect(mocks.list).not.toHaveBeenCalled()
-    expect(result.filterError.value).toContain('before or equal')
+    expect(sharedFilterError(filters.value)).toContain('before or equal')
     expect(result.isLoading.value).toBe(false)
     wrapper.unmount()
     queryClient.clear()

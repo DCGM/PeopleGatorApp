@@ -23,21 +23,31 @@ vi.mock('@/viewmodels/document-search', () => ({
   }),
 }))
 
+const media = vi.hoisted(() => ({ fetchDocuments: vi.fn() }))
+vi.mock('@/query/media', () => media)
+vi.mock('@/query/search/pages', () => ({ fetchPageSearch: vi.fn() }))
+const registered = '00000000-0000-4000-8000-000000000003'
+media.fetchDocuments.mockImplementation(async ({ 'filter.source_id': ids = [] }) => ({
+  items: ids.includes(registered)
+    ? [{ source_id: registered, library: 'preview-mzk', document_id: 'archive', name: 'Ledger' }]
+    : [],
+}))
 import DocumentSearchView from '@/views/DocumentSearchView.vue'
-import { readEvidenceFilters } from '@/viewmodels/evidence-filters'
+import { readSharedFilters } from '@/viewmodels/shared-filters'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 
 describe('opening a scan from search', () => {
   it.each<LocationQuery>([
     {},
     {
-      evidence_source: '00000000-0000-4000-8000-000000000002',
-      evidence_document: '00000000-0000-4000-8000-000000000003',
-      evidence_key: '00000000-0000-4000-8000-000000000004',
-      evidence_user: '00000000-0000-4000-8000-000000000005',
-      evidence_from: '2026-01-01T00:00:00Z',
+      page: '00000000-0000-4000-8000-000000000002',
+      document: registered,
+      api_key: '00000000-0000-4000-8000-000000000004',
+      touched_by: '00000000-0000-4000-8000-000000000005',
+      touched_from: '2026-01-01T00:00:00Z',
       link_state: 'manual',
     },
-  ])('preserves selected evidence without inventing a page filter: %j', async (query) => {
+  ])('preserves the shared configuration without inventing a page filter: %j', async (query) => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -52,7 +62,7 @@ describe('opening a scan from search', () => {
     await router.push({ path: '/scans', query })
     const wrapper = mount(DocumentSearchView, {
       global: {
-        plugins: [router],
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
         stubs: { DocumentSearchBar: true, DocumentCard: true },
       },
     })
@@ -61,8 +71,8 @@ describe('opening a scan from search', () => {
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('document-page')
       expect(router.currentRoute.value.params.pageId).toBe('page')
-      expect(readEvidenceFilters(router.currentRoute.value.query)).toEqual(
-        readEvidenceFilters(query),
+      expect(readSharedFilters(router.currentRoute.value.query)).toEqual(
+        readSharedFilters(query),
       )
     } finally {
       wrapper.unmount()

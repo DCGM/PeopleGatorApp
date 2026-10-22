@@ -1,5 +1,5 @@
 from __future__ import annotations
-from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, EntityLinkFilter
+from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, SharedFilter
 from typing import Annotated
 import uuid
 from pydantic import BaseModel, Field, field_validator
@@ -143,7 +143,7 @@ class FaceResponse(EntityLinkResponse):
 FaceListResponse = GenericListResponse[FaceResponse]
 
 
-class FaceListFilter(ListFilterBase, EntityLinkFilter):
+class FaceListFilter(ListFilterBase, SharedFilter):
     """Filter criteria for listing faces.
     Every field is optional and can be used to narrow down the results.
     Filter fields are combined using logical AND.

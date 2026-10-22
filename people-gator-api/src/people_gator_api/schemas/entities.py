@@ -13,7 +13,7 @@ from pydantic import (
     Field,
     field_validator,
 )
-from people_gator_api.schemas.entity_links import EntityLinkFilter, EntityLinkStats
+from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.sorting import EntitySortField, SortableRequest
 from people_gator_api.schemas.common import (
@@ -162,7 +162,7 @@ class EntityResponse(CreationMetadata):
 EntityListResponse = GenericListResponse[EntityResponse]
 
 
-class EntityListFilter(ListFilterBase, EntityLinkFilter):
+class EntityListFilter(ListFilterBase, SharedFilter):
     """\
     Filter criteria for listing entities.
     Every field is optional and can be used to narrow down the results.
@@ -200,35 +200,6 @@ class EntityListFilter(ListFilterBase, EntityLinkFilter):
     has_detections: bool | MissingType = Field(
         default=MISSING, description="Whether the entity has detections."
     )
-
-
-    last_touched_from: AwareDatetime | MissingType = Field(
-        default=MISSING, description="Inclusive UTC lower bound of the last touch."
-    )
-    last_touched_to: AwareDatetime | MissingType = Field(
-        default=MISSING, description="Inclusive UTC upper bound of the last touch."
-    )
-    document_source_id: list[uuid.UUID] | MissingType = Field(
-        default=MISSING, description="Internal document source IDs; match faces or mentions on any page."
-    )
-    last_touched_by_user_id: list[uuid.UUID] | MissingType = Field(
-        default=MISSING, description="Users responsible for the last touch, independent of entity ownership."
-    )
-    last_touched_by_api_key_id: list[uuid.UUID] | MissingType = Field(
-        default=MISSING, description="Registered API keys used for the last touch."
-    )
-
-    @model_validator(mode="after")
-    def validate_touch_range(self) -> Self:
-        from people_gator_api.schemas.missing import is_missing
-        for name in ("last_touched_from", "last_touched_to"):
-            value = getattr(self, name)
-            if not is_missing(value):
-                setattr(self, name, value.astimezone(timezone.utc))
-        if (not is_missing(self.last_touched_from) and not is_missing(self.last_touched_to)
-                and self.last_touched_from > self.last_touched_to):
-            raise ValueError("last_touched_from must be before or equal to last_touched_to")
-        return self
 
 
 class EntityListRequest(GenericListRequest, SortableRequest[EntitySortField]):

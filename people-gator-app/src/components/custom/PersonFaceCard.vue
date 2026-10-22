@@ -7,7 +7,7 @@ import AnnotationLastChange from './AnnotationLastChange.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import LoadableImage from './LoadableImage.vue'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
-import { relatedEvidenceQuery } from '@/viewmodels/evidence-filters'
+import { relatedQuery } from '@/viewmodels/shared-filters'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Item } from '@/components/ui/item'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +36,7 @@ const sourceTarget = computed(() =>
           documentId: props.face.documentId,
           pageId: props.face.pageId,
         },
-        query: relatedEvidenceQuery(route, { person: props.face.id }),
+        query: relatedQuery(route, { person: props.face.id }),
       }
     : undefined,
 )

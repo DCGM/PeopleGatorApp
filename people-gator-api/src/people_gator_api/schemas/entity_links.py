@@ -36,45 +36,81 @@ class EntityLinkResponse(CreationMetadata):
     entity_link_verified_at: datetime | None = None
 
 
-class EntityLinkFilter(BaseModel):
-    evidence_library: list[str] | MissingType = MISSING
-    evidence_source_id: list[uuid.UUID] | MissingType = MISSING
-    document_source_id: list[uuid.UUID] | MissingType = Field(
-        default=MISSING, description="Internal registered document source IDs; constrain the same annotation to direct evidence or pages in that library/document."
-    )
-    evidence_touched_from: AwareDatetime | MissingType = MISSING
-    evidence_touched_to: AwareDatetime | MissingType = MISSING
-    evidence_touched_by_user_id: list[uuid.UUID] | MissingType = MISSING
-    evidence_touched_by_api_key_id: list[uuid.UUID] | MissingType = MISSING
+LEGACY_FILTER_REPLACEMENTS = {
+    "evidence_library": "filter.library",
+    "evidence_source_id": "filter.page_source_id",
+    "evidence_touched_from": "filter.last_touched_from",
+    "evidence_touched_to": "filter.last_touched_to",
+    "evidence_touched_by_user_id": "filter.last_touched_by_user_id",
+    "evidence_touched_by_api_key_id": "filter.last_touched_by_api_key_id",
+}
+"""Removed #31 parameters. Their replacements describe the filtered record itself."""
 
-    def evidence_values(self):
-        return {name: getattr(self, name) for name in EntityLinkFilter.model_fields if name != "entity_link_state"}
 
-    @model_validator(mode="after")
-    def validate_evidence_range(self):
-        for name in ("evidence_touched_from", "evidence_touched_to"):
-            value = getattr(self, name)
-            if not is_missing(value):
-                setattr(self, name, value.astimezone(timezone.utc))
-        if (not is_missing(self.evidence_touched_from) and not is_missing(self.evidence_touched_to)
-                and self.evidence_touched_from > self.evidence_touched_to):
-            raise ValueError("evidence_touched_from must be before or equal to evidence_touched_to")
-        return self
+class SharedFilter(BaseModel):
+    """Canonical criteria shared by documents, pages, entities, faces and mentions.
 
-    @field_validator("evidence_library", "evidence_source_id", "document_source_id",
-                     "evidence_touched_by_user_id", "evidence_touched_by_api_key_id")
-    @classmethod
-    def normalize_evidence_values(cls, value):
-        if is_missing(value):
-            return value
-        if not value or any(isinstance(item, str) and not item.strip() for item in value):
-            raise ValueError("Evidence selections must be nonempty")
-        return sorted(set(value))
+    Source scope uses actual library/document/page relationships. Last-touch
+    criteria describe the latest recorded change of each returned record, never
+    its owner, creator/importer, verifier or an earlier editor. Different fields
+    combine with AND and repeated values with OR.
+    """
+
+    # Removed #31 names must fail loudly instead of being ignored by callers.
+    model_config = ConfigDict(extra="forbid")
 
     entity_link_state: list[EntityLinkState] | MissingType = Field(
         default=MISSING,
-        description="Match any selected link state on the same annotation as other evidence filters. Omit to include unassigned annotations.",
+        description="Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.",
     )
+    library: list[str] | MissingType = Field(
+        default=MISSING,
+        description="Libraries of the record's source: documents/pages in the library, or faces/mentions/entities linked through a source in it.",
+    )
+    document_source_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING,
+        description="Internal registered document source UUIDs (not archive IDs). A document scope includes its registered pages in the same library/archive document.",
+    )
+    page_source_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING,
+        description="Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.",
+    )
+    last_touched_from: AwareDatetime | MissingType = Field(
+        default=MISSING, description="Inclusive, timezone-aware lower bound of the record's latest recorded change."
+    )
+    last_touched_to: AwareDatetime | MissingType = Field(
+        default=MISSING, description="Inclusive, timezone-aware upper bound of the record's latest recorded change."
+    )
+    last_touched_by_user_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="Users who made the record's latest recorded change; unknown history never matches."
+    )
+    last_touched_by_api_key_id: list[uuid.UUID] | MissingType = Field(
+        default=MISSING, description="Registered API keys used for the record's latest recorded change."
+    )
+
+    def shared_values(self) -> dict:
+        return {name: getattr(self, name) for name in SharedFilter.model_fields}
+
+    @model_validator(mode="after")
+    def validate_touch_range(self):
+        for name in ("last_touched_from", "last_touched_to"):
+            value = getattr(self, name)
+            if not is_missing(value):
+                setattr(self, name, value.astimezone(timezone.utc))
+        if (not is_missing(self.last_touched_from) and not is_missing(self.last_touched_to)
+                and self.last_touched_from > self.last_touched_to):
+            raise ValueError("last_touched_from must be before or equal to last_touched_to")
+        return self
+
+    @field_validator("library", "document_source_id", "page_source_id",
+                     "last_touched_by_user_id", "last_touched_by_api_key_id")
+    @classmethod
+    def normalize_selections(cls, value):
+        if is_missing(value):
+            return value
+        if not value or any(isinstance(item, str) and not item.strip() for item in value):
+            raise ValueError("Filter selections must be nonempty")
+        return sorted(set(value))
 
     @field_validator("entity_link_state")
     @classmethod

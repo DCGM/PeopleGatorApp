@@ -1,4 +1,4 @@
-import type { EvidenceQuery } from './evidence-filters'
+import type { SharedQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -132,7 +132,7 @@ export function useDocumentWorkspace(
   candidateTerm: MaybeRefOrGetter<string>,
   candidateBrowseMode: MaybeRefOrGetter<CandidateBrowseMode> = 'page',
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
-  evidence: MaybeRefOrGetter<EvidenceQuery> = {},
+  evidence: MaybeRefOrGetter<SharedQuery> = {},
   evidenceValid: MaybeRefOrGetter<boolean> = true,
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,
   candidateSort?: MaybeRefOrGetter<SortState<EntitySortField> | undefined>,

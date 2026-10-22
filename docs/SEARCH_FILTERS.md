@@ -172,33 +172,47 @@ Prefix each field with `filter.` in HTTP requests. Different fields combine with
 AND, repeated values within one field with OR. Omit inactive list fields instead
 of sending empty lists. Unknown IDs do not mean unassigned annotations.
 
-| Resource | Supported filter groups |
+Every document, page/scan, entity, face and text-mention list/search uses the
+same shared criteria. The API applies modification fields to the **returned
+record's own latest recorded change**, never to its owner, creator/importer,
+verifier, an earlier editor or a linked annotation.
+
+| Shared API field | Meaning |
 | --- | --- |
-| Entities | `entity_id`, `entity_type`, `wikidata_id`, `nlcr_authority_id`; related `source_id`, `detection_id`, `mention_id`; `has_mentions`, `has_detections`; `document_source_id`; processing fields and link state |
-| Faces | `entity_id`, `source_id`, `detection_id`, `entity_link_state` |
-| Text mentions | `entity_id`, `source_id`, `entity_link_state` |
-| Documents | `url`, `library`, archive `document_id`, internal `source_id`; `entity_id`, `detection_id`, `mention_id`; `has_unassigned_faces`; processing fields and link state |
-| Pages | `url`, `library`, `document_id`, `page_id`, `source_id`; `entity_id`, `detection_id`, `mention_id`; `has_mentions`, `has_faces`, `has_entities`; processing fields and link state |
-| Images | `url`, `source_id`, `entity_id`, `detection_id`, `mention_id`; processing fields and link state |
+| `library` | Actual source library; on entities, a linked annotation in that library |
+| `document_source_id` | Internal registered document source UUID, including its direct annotations and registered pages in the same library/archive document |
+| `page_source_id` | Internal registered page source UUID; source lists return only selected pages, never their parent documents. Other collections match records linked on those pages. Non-page UUIDs do not match |
+| `entity_link_state` | OR of `automatic`, `manual`, `verified` assignment states; omit to include unassigned annotations |
+| `last_touched_by_user_id` | Users responsible for the record's latest recorded change |
+| `last_touched_by_api_key_id` | Registered API keys used for that latest change |
+| `last_touched_from`, `last_touched_to` | Inclusive, timezone-aware modification bounds, normalized to UTC |
 
-`entity_link_state` accepts repeated `automatic`, `manual`, `verified` values.
-It matches the same annotation as the other evidence criteria, avoiding a match
-assembled from unrelated faces/mentions. Omit it to include unassigned evidence.
-Document evidence covers its direct source plus registered pages with the same
-library and archive document UUID. Link statistics describe the full evidence
-scope, independently of pagination/current result filters.
+Library/document/page scope on sources does not require annotations: unannotated
+sources remain browsable. Page scope does not expand to containing documents:
+Documents returns no matches while a page selection is active. Library and archive
+IDs are paired, so an archive UUID reused in another library cannot leak results.
+On entities, scope and link state
+must match one assigned face or mention. On documents, an explicit link criterion
+must match an annotation within the selected document scope. Predicates
+cannot combine unrelated links to manufacture a match. Faces and mentions apply
+both scope and modification directly to themselves. Unknown history stays null
+and cannot satisfy a modification criterion. Empty selections, invalid/timezone-less
+bounds and reversed ranges return 422. Filtering and full counts precede pagination;
+cursors include the criteria and must be discarded when they change.
 
-`has_unassigned_faces=true` finds documents with an unassigned face;
-`false` excludes documents with unassigned faces and includes documents without
-faces. Text-mention assignment does not satisfy this face-specific condition.
+| Resource | Additional applicable criteria |
+| --- | --- |
+| Entities | `entity_id`, `entity_type`, `wikidata_id`, `nlcr_authority_id`, related `source_id`, `detection_id`, `mention_id`, `has_mentions`, `has_detections` |
+| Faces | `entity_id`, exact `source_id`, `detection_id`; face-similarity search remains a separate modality |
+| Text mentions | `entity_id`, exact `source_id`, exact recorded `name` |
+| Documents | `url`, archive `document_id`, exact internal `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_unassigned_faces` |
+| Pages | `url`, archive `document_id`, archive `page_id`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id`, `has_mentions`, `has_faces`, `has_entities` |
+| Images | `url`, exact `source_id`, linked `entity_id`, `detection_id`, `mention_id` |
 
-Entities and source projections accept inclusive `last_touched_from` and
-`last_touched_to`, plus repeated `last_touched_by_user_id` and
-`last_touched_by_api_key_id`. Timestamps must include a timezone; invalid or
-inverted ranges return 422. Historical null touch metadata is retained, but does
-not satisfy a touch criterion. Entity `document_source_id` takes the registered
-document's **internal source UUID**, not its archive `document_id`. See
-[processing filters](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md).
+`has_unassigned_faces=false` includes documents without faces; text-mention
+assignment never satisfies this face-specific condition. Link statistics describe
+the full record scope independently of pagination and current filters. See
+[modification metadata](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md).
 
 With `$TOKEN` supplied securely, a text/assignment search looks like:
 
@@ -217,102 +231,94 @@ for a credential-safe first request. For document search, text can match documen
 names, archive identifiers or evidence-linked entity names/aliases; ordinary
 `/documents` lists do not accept `query.text`.
 
-## Browser state and extending filters
+## One configuration across views (#52)
 
-People filters use URL keys `touched_from`, `touched_to`, `document`, `touched_by`
-and `api_key`; document filters also use `library`, `link_state` and `unassigned`.
-These screen URLs differ from the namespaced API parameters. Times are stored as
-UTC and rendered in browser local time. Viewmodels map URL state to API criteria;
-query keys include active filters. Individual chips and Clear all filters retain
-the search text. On small screens the sliders button expands collapsed filters.
+All panels use `SharedFilterControls`, `SharedFilterTags` and `shared-filters.ts`.
+There are no separate evidence-library/document or annotation actor/date facets.
 
-To add a filter, update the schema and typed HTTP dependency, repository query
-and count/cursor behavior, export/regenerate the SDK, then update query keys,
-viewmodel URL parsing and controls together. Test AND/OR combinations, empty or
-invalid inputs, evidence scope and cursor reset. Follow the shared layout rules
-in [AGENTS.md](../AGENTS.md) and extend the preview fixtures. A UI control must
-represent a working server criterion.
-
-## Shared evidence navigation (#31)
-
-Documents, scan search, people search and person details expose one shared set
-of annotation criteria. Page workspaces apply and forward those URL criteria
-without an additional filter panel above the scan. Its sidebar Activity tab
-lists the current page’s faces and mentions by local edit day or last user.
-Selecting a group applies inclusive annotation-day bounds or an annotation-user
-criterion; groups retain the complete source collection so selections can be
-broadened. Unknown historical metadata remains explicit and is not a time/user
-filter. Other shared criteria remain editable in a related list/profile. The existing compact scan toolbar
-continues to control annotation link state. Their names, OR selections, inclusive time
-bounds and AND combination match the API fields documented in
-[annotation processing](../people-gator-api/docs/ENTITY-PROCESSING-FILTERS.md#annotation-criteria-versus-resource-processing-31).
-Documents/people return resources containing matching evidence. Profiles return
-that person's matching faces/mentions with filtered counts alongside overall
-statistics. Every condition must match the same annotation, including document,
-state and actor; results cannot combine unrelated annotations.
-
-| Browser URL | API criterion / scope |
+| Browser URL | Shared API field |
 | --- | --- |
+| `library` | `filter.library` |
+| `document` | `filter.document_source_id` (internal registered UUID) |
+| `page` | `filter.page_source_id` (internal page UUID; never a pagination number) |
 | `link_state` | `filter.entity_link_state` |
-| `evidence_library` | `filter.evidence_library` |
-| `evidence_document` | `filter.document_source_id`: internal registered document source UUID |
-| `evidence_source` | `filter.evidence_source_id`: exact source UUID |
-| `evidence_from`, `evidence_to` | `filter.evidence_touched_from/to`: annotation edit time, timezone required |
-| `evidence_user`, `evidence_key` | `filter.evidence_touched_by_user_id/api_key_id`: annotation's last actor |
-| People `document` | Legacy internal document selection; mapped to active shared evidence on navigation |
-| Scan `library`, `document` | Resource library/archive UUID; opening a scan does not add an annotation-source filter |
-| `touched_from/to`, `touched_by`, `api_key` | Current person/source processing, **never** annotation edits |
-| `origin_person_*`, `origin_source_*` | Resource-specific processing context; never applied as annotation edits |
-| `origin_text` | Name/alias/source search signal; never literal text filtering of face images |
-| `origin_matched_face`, `origin_reference_face` | Actual matching detection / reference face signals |
-| Legacy `origin_return` | Ignored by breadcrumbs and omitted from related navigation |
-| `tab` | Faces (default), mentions or discover; incoming assigned-mentions searches open Mentions |
-| `discovery_assignment`, `discovery_text`, `candidate_mode`, `candidate_text` | View-specific discovery/candidate choices, retained as origin context on related navigation |
+| `touched_by`, `api_key` | `filter.last_touched_by_user_id`, `filter.last_touched_by_api_key_id` |
+| `touched_from`, `touched_to` | `filter.last_touched_from`, `filter.last_touched_to` |
 
-Related links copy the current shared selections and keep resource-specific
-criteria separate. Source metadata is not rendered as removable origin tags.
-Opening a document's scan list uses library/archive scope and shows all
-registered pages by default, including pages without faces or mentions. Document
-heading, +more and page links copy only the selected annotation criteria;
-ordinary document browsing does not add an evidence-presence restriction.
-Opening a scan preserves explicitly selected evidence filters without adding
-`evidence_source` for the opened page. The workspace already constrains its
-annotations to that page; database assignment searches can still find people
-whose evidence is elsewhere. Explicit evidence-source selections remain effective.
-Profiles use the normal **PeopleGator → People → person ID** breadcrumb. The
-People link forwards the profile's current shared filters, including edits and
-removals. It does not restore a saved source URL or old filter selections.
-Shared criteria populate the actual filter controls and their removable
-active-filter tags. Changes carry forward on the next related link.
-Each view is reproducible from its URL, including copied links and browser
-Back/Forward. Destination queries start at their own first page; source cursors
-never travel across resources. Removing a filter tag changes controls, URL and
-server results. A single Clear all filters action per panel and profile broadening preserve unrelated
-search context; clearing text remains a separate action. Invalid copied
-annotation bounds/UUIDs show recoverable criteria and block evidence
-requests until corrected/removed. Missing matched detections and unavailable
-source pages are reported without blocking identity details. Missing option
-labels fall back to identifiers without exposing credentials.
+Times are UTC in URLs and browser-local in controls. Different fields AND;
+multi-select values OR. Shared controls, tags and outgoing predicates stay active
+through Documents ↔ People, profile tabs, Scans, page workspaces, related cards,
+breadcrumbs and the logo. In Documents, **Modified by U** filters documents; in
+People it filters entities; on profile Faces/Mentions and in page workspaces it
+filters each annotation's own change. A profile identity remains visible even when
+none of its annotations match. Discover applies the shared criteria independently
+to its similar-face and similar-person results.
 
-Face-similarity entity results include `matched_detection_ids`; profile links
-retain these actual witnesses. They are loaded within the fixed person and
-current evidence scope, independently of the first evidence page. Person face
-cards use compact assignment/confidence, library/document and last-change/editor
-rows. Identity creation/import time and actor remain separately labeled in the
-profile statistics; owner, verifier and last editor are independent.
+Individual tag removal updates controls, URL and results immediately. Clear all
+removes shared and the screen's specific filters while preserving search and sort.
+Search clearing is separate. Copied links, reload and Back/Forward restore effective
+state. New criteria restart pagination. Related navigation transfers no cursor,
+sort or text modality: a person's name never becomes a literal face-image query.
+Assignment/page-content/unassigned-face and discovery choices stay on their
+applicable view. Similarity witnesses (`origin_matched_face`, `origin_reference_face`)
+identify real detections; they are not hidden filters. Witness faces are loaded
+inside the current person and shared scope, independently of the first result page.
 
-PostgreSQL implements the persisted annotation metadata and shared filters. The
-optional Weaviate adapter explicitly rejects unsupported annotation edit filters.
+A document heading or +more link explicitly selects that document's internal source
+UUID for its scan list. Opening a page keeps existing shared scope without adding
+an implicit page filter. Page document breadcrumbs use a scans-only
+`archive_document` scope, resolved to the registered internal document when one
+exists. Without a registered document it remains an explicit, removable archive
+scope alongside its library on Scans; it does not restrict unrelated resources.
 
-The scan pane has top-level Faces, Activity and Statistics tabs. Activity and
-Statistics replace the entire pane content and scroll within its remaining height;
-face selection and candidate settings survive tab switches. Statistics presents
-page/document totals with explicit state labels and has no disclosure. The legacy
-`#link-statistics` URL opens Statistics too.
+Below 640px, filters start collapsed beside the search/sliders row. Tags remain
+visible and settings survive collapse. Invalid copied UUIDs or bounds remain
+visible as removable tags and block list requests until corrected or removed.
+Controls use standard shadcn-vue components and the layout in [AGENTS.md](../AGENTS.md).
 
-Page sidebar URLs use `panel=activity` or `panel=statistics` (default `face`) and
-`activity_group=user` (default local day). Day boundaries use consecutive local
-midnights, including daylight-saving changes; the upper bound is inclusive at
-23:59:59.999999 local time, preserving database microsecond precision. Group entries show their own recorded annotation edit
-time, rather than the page/document processing timestamp. Activity time/user
-chips can be removed independently and clearing them retains other criteria.
+### Legacy URL and API compatibility
+
+The router replaces copied #31 URL names deliberately:
+
+- `evidence_library`, `evidence_document`, `evidence_source` become `library`,
+  `document`, `page`. Same-meaning multi-selections are combined.
+- `evidence_user/key/from/to` become the canonical modification keys only on
+  profiles and page workspaces, where the returned records are annotations.
+  On Documents, People and scan search they are removed with a visible notice;
+  applying them to those resources would change their meaning. Current date
+  bounds take precedence when a link contains both old and new bounds.
+- Existing resource `touched_*`/`api_key` criteria remain active canonical criteria.
+  Obsolete `origin_person_*`, `origin_source_*`, `origin_discovery_*`,
+  `origin_text` and `origin_return` context is removed. It never silently filters
+  results or restores stale selections on return navigation.
+- Old Scans `library` + archive `document` links resolve to internal registered
+  document UUIDs before querying. A missing/unresolvable UUID is not treated as
+  an unrestricted scope. Explicit archive breadcrumbs support pages registered
+  before their parent document. Lookup failures are reported with Retry.
+- HTTP `filter.evidence_*` parameters return 422 naming the replacement, rather
+  than silently broadening results or reinterpreting annotation edits. API callers
+  must migrate intentionally. The schemas reject obsolete filter properties.
+  No historical attribution is backfilled and no schema migration is needed.
+
+PostgreSQL implements the shared predicates. Weaviate rejects unsupported shared
+scope/modification criteria instead of pretending to evaluate them.
+
+## Page workspace activity
+
+Faces, Activity and Statistics tabs replace the sidebar pane while preserving
+selection and candidate settings. `panel=activity|statistics` chooses the pane;
+`activity_group=user` groups edits by latest user instead of local day. Activity
+loads the page's complete faces/mentions independently of active filters, allowing
+broader group selection. Choosing a day/user edits the same shared modification
+configuration; unknown history is shown explicitly and cannot be selected as a
+recorded actor or time. Local-day bounds use consecutive midnights (including DST)
+and an inclusive upper bound of 23:59:59.999999. Activity entries display their own
+annotation times. `#link-statistics` still opens Statistics.
+
+## Extending filters
+
+Update the schema and HTTP dependency, repository predicates/counts/cursors,
+export OpenAPI locally and regenerate the SDK, then update shared state, controls,
+tags and query keys. Test actual AND/OR results, same-link restrictions, own-record
+modification, unknown metadata and cursor reset. Extend the synthetic preview and
+its preservation tests; follow [AGENTS.md](../AGENTS.md).

@@ -13,7 +13,7 @@ import {
   type FoundEntity,
   type SearchEntitiesGetApiV1SearchEntitiesGetData,
 } from '@/client'
-import type { ProcessingQueryParams } from '@/viewmodels/people-filters'
+import type { SharedQuery } from '@/viewmodels/shared-filters'
 import { responseData } from '@/query/api'
 import { fetchEntities } from '@/query/entities'
 import { queryKeys } from '@/query/keys'
@@ -35,7 +35,7 @@ export type EntityResultsParams = {
   cursor?: string | null
   hasDetections?: boolean
   hasMentions?: boolean
-  processingFilters?: ProcessingQueryParams
+  processingFilters?: SharedQuery
   limit?: number
   sort?: SortState<EntitySortField>
 }
