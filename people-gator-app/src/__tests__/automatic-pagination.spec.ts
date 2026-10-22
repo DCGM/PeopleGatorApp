@@ -26,6 +26,7 @@ import DocumentSearchView from '@/views/DocumentSearchView.vue'
 import DocumentListView from '@/views/DocumentListView.vue'
 
 let endTop: number
+let minimumHeightLayout: boolean
 let intersection: () => void
 let layoutChanged: () => void
 let frames: Map<number, FrameRequestCallback>
@@ -58,10 +59,19 @@ beforeEach(() => {
   vi.clearAllMocks()
   frames = new Map()
   endTop = 1500
+  minimumHeightLayout = false
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
-    const top = this.getAttribute('aria-hidden') === 'true' ? endTop : 0
+    const sentinel = this.getAttribute('aria-hidden') === 'true'
+    // Model a short list inside a section starting at 200px with min-height:
+    // 100dvh. A sibling sentinel follows the section's minimum height, while a
+    // child follows the cards, before the section's remaining blank space.
+    const top = sentinel
+      ? minimumHeightLayout && !this.closest('.stable-search-results')
+        ? Math.max(endTop, 200 + document.documentElement.clientHeight)
+        : endTop
+      : 0
     return {
       top,
       bottom: top + 1,
@@ -196,6 +206,18 @@ for (const screen of screens)
       expect(wrapper.findAll('.result')).toHaveLength(3)
       expect(api.list.mock.calls.map(([p]) => p.cursor)).toEqual([null, 'next', 'last'])
     })
+    if (screen.name !== 'documents')
+      it.each(['', '?q=Pagination'])(
+        'fills spare space before the mobile results section minimum height (%s)',
+        async (query) => {
+          minimumHeightLayout = true
+          endTop = 500
+          const { wrapper } = await render(query)
+          await settle()
+          expect(wrapper.findAll('.result')).toHaveLength(2)
+          expect(api.list.mock.calls.map(([params]) => params.cursor)).toEqual([null, 'next'])
+        },
+      )
     it('rechecks resize/layout and stops once appended content fills the viewport', async () => {
       const { wrapper } = await render()
       api.list.mockImplementation(async () => {

@@ -166,9 +166,8 @@ useAutomaticPagination({
       >
         No scans match this search.
       </p>
+      <div ref="listEnd" class="h-px" aria-hidden="true" />
     </section>
-
-    <div ref="listEnd" class="h-px" aria-hidden="true" />
 
     <div v-if="hasNextPage || isFetchingNextPage" class="flex justify-center pt-6">
       <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">
