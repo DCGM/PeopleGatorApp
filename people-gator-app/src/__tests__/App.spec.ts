@@ -8,7 +8,7 @@ import { ref } from 'vue'
 import App from '../App.vue'
 import DocumentPageOverlay from '../components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
-import TopBar from '../components/custom/TopBar.vue'
+import WorkspaceShowcase from '../components/custom/WorkspaceShowcase.vue'
 import router from '../router'
 import { readSharedFilters } from '@/viewmodels/shared-filters'
 
@@ -122,12 +122,12 @@ vi.mock('@/viewmodels/document-workspace', () => ({
 enableAutoUnmount(afterEach)
 
 describe('App', () => {
-  it('keeps the logo when the optional top bar title is omitted', () => {
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+  it('places the logo in the sidebar header', () => {
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
 
     const logo = wrapper.get('a[aria-label="PeopleGator"] svg.lucide-people-gator')
     expect(logo.attributes('stroke-width')).toBe('1')
-    expect(wrapper.get('nav').text()).not.toContain('People Gator')
+    expect(wrapper.get('[data-sidebar=header]').text()).toContain('PeopleGator')
   })
 
   it.each(['00000000-0000-4000-8000-000000000002', undefined])(
@@ -143,7 +143,7 @@ describe('App', () => {
           library: 'preview-mzk',
         },
       })
-      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
       await router.push({ query: { ...router.currentRoute.value.query, api_key: currentKey } })
       await flushPromises()
       const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
@@ -161,9 +161,7 @@ describe('App', () => {
       expect(readSharedFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
         currentKey ? [currentKey] : [],
       )
-      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual([
-        'preview-mzk',
-      ])
+      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
       expect(router.currentRoute.value.query).not.toHaveProperty('origin_return')
       expect(router.currentRoute.value.query.q).toBeUndefined()
       wrapper.unmount()
@@ -229,7 +227,9 @@ describe('App', () => {
   })
 
   it('shows and removes shared scope in the page workspace without losing selection', async () => {
-    await router.push('/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a')
+    await router.push(
+      '/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a',
+    )
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
     const sidebar = wrapper.get('.workspace-sidebar')
@@ -260,7 +260,10 @@ describe('App', () => {
     expect(crumbs[3]!.attributes('aria-current')).toBe('page')
     await crumbs[2]!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ library: 'library', archive_document: archive })
+    expect(router.currentRoute.value.query).toEqual({
+      library: 'library',
+      archive_document: archive,
+    })
     expect(wrapper.get('h1').text()).toBe('Document pages')
     await wrapper
       .get('input[placeholder="Search a person, page or document…"]')
@@ -477,7 +480,10 @@ describe('App', () => {
       .setValue('archives')
     await flushPromises()
 
-    expect(router.currentRoute.value.query).toEqual({ q: 'archives', page: '00000000-0000-4000-8000-000000000007' })
+    expect(router.currentRoute.value.query).toEqual({
+      q: 'archives',
+      page: '00000000-0000-4000-8000-000000000007',
+    })
   })
 
   it('defines all application pages', () => {
@@ -499,7 +505,7 @@ describe('App', () => {
 describe('Scans and Documents navigation', () => {
   it('activates independent tabs and keeps scan query filters', async () => {
     await router.push('/scans?library=mzk&document=album&q=Ada&assignment=faces')
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBeUndefined()
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('assignment=faces')
@@ -544,11 +550,13 @@ describe('Scans and Documents navigation', () => {
 
   it('preserves multiple libraries in Documents navigation without treating them as a scan scope', async () => {
     await router.push('/documents?library=a&library=b')
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
       '/documents?library=a&library=b',
     )
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans?library=a&library=b')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
+      '/scans?library=a&library=b',
+    )
     expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
       'PeopleGator',
       'Documents',
@@ -582,13 +590,15 @@ describe('Scans and Documents navigation', () => {
   ])('opens Documents with either home control from %s', async (path) => {
     for (const control of ['logo', 'breadcrumb']) {
       await router.push(path)
-      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
       const home =
         control === 'logo'
           ? wrapper.get('a[aria-label="PeopleGator"]')
           : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
       const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
-      expect(home.attributes('href')).toBe(router.resolve({ name: 'document-list', query: expected }).href)
+      expect(home.attributes('href')).toBe(
+        router.resolve({ name: 'document-list', query: expected }).href,
+      )
       await home.trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('document-list')
@@ -612,7 +622,7 @@ describe('Scans and Documents navigation', () => {
       library: ['preview-mzk'],
       link_state: 'verified',
     })
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
     await wrapper.get('a[aria-label="Scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('document-search')

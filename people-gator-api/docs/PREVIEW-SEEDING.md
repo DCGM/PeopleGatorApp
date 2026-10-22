@@ -32,6 +32,23 @@ verify failed requests leave processing times unchanged, and preserve an
 assignment on rerun. Interrupted-checkpoint recovery covers both
 new detection keys.
 
+## Workspace sidebar showcase (#60)
+
+This draft adds a frontend-only visual demo around the existing seeded screens.
+Open Documents, then choose **Configure Local Workspace** in the sidebar. Try
+Library, Document, Page, Last user, Last API key and modification dates; remove
+sample tags, switch Global/Local, navigate to Scans or People, and open the drawer
+on mobile. The logo sits in the sidebar header; configured account information
+and the theme switch sit in its footer.
+
+Sidebar options are synthetic in-memory examples, independent of database
+fixtures. They do not filter results, change URLs, call option endpoints or save
+workspace state. Global hides the sample configuration; returning to Local
+restores it until reload. Existing page filters continue to work normally.
+The sidebar says **Visual demo** to make that limitation visible. No seed records,
+checkpoints, repository contracts or media need to change for this showcase;
+the eventual workspace integration remains in #60.
+
 ## Run it
 
 From `people-gator-api`, with PostgreSQL and filesystem settings configured for
