@@ -89,8 +89,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (16, 53, 23)
-    assert len(result.documents) == 22 and len(result.pages) == 58
+    assert await counts(database) == (30, 53, 37)
+    assert len(result.documents) == 36 and len(result.pages) == 72
     assert len(result.users) == 4 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -132,7 +132,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             {"emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana"},
 
         ),
-        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo"}),
+        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", *(f"pagination-{i}" for i in range(1, 15))}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
         (
             EntityListFilter(document_source_id=[result.documents["album"]]),
@@ -242,7 +242,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (16, 53, 23)
+    assert await counts(database) == (30, 53, 37)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -265,12 +265,12 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (17, 53, 23)
+    assert await counts(database) == (31, 53, 37)
 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failed_checkpoint", [1, 7])
+@pytest.mark.parametrize("failed_checkpoint", [1, 7, 15])
 async def test_retry_recovers_a_write_before_its_checkpoint(
     seed_target, monkeypatch, failed_checkpoint
 ):
@@ -290,8 +290,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 16 and len(result.faces) == 53
-    assert await counts(database) == (16, 53, 23)
+    assert len(result.entities) == 30 and len(result.faces) == 53
+    assert await counts(database) == (30, 53, 37)
 
 
 
@@ -312,7 +312,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (15, 52, 22)
+    assert await counts(database) == (29, 52, 36)
 
 
 
@@ -1133,8 +1133,9 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     assert {item.source_id for item in images.items} <= {item.source_id for item in sources.items}
     first = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, return_total_count=True))
     second = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, return_total_count=True))
-    assert first.total_count == 2
-    assert [first.items[0].library, second.items[0].library] == ['preview-mzk', 'preview-nlk']
+    third = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=second.cursor, return_total_count=True))
+    assert first.total_count == 3 and third.cursor is None
+    assert [first.items[0].library, second.items[0].library, third.items[0].library] == ['preview-mzk', 'preview-nlk', 'preview-pagination']
     with pytest.raises(ValueError, match='cursor'):
         await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, q='mzk'))
 
@@ -2520,3 +2521,91 @@ async def test_shared_filter_edit_recovers_from_interrupted_checkpoint(seed_targ
     assert await db.entities.get(hana) == applied
     upgrades = preview.SeedUpgrades.model_validate_json(await filesystem.read_bytes(preview.UPGRADES_KEY))
     assert upgrades.record_edits["shared-filters-own-edit-v1"].complete
+
+
+@pytest.mark.asyncio
+async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_target, monkeypatch):
+    from people_gator_api.schemas.search import SearchDocumentsRequest, SearchPagesRequest
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.seeding.fixtures import PAGINATION_ITEMS
+
+    database, filesystem, _ = seed_target
+    # Upgrade a retained pre-pagination preview, preserving its reviewed records.
+    with monkeypatch.context() as legacy:
+        for name in ("PEOPLE", "DOCUMENTS", "PAGES"):
+            legacy.setattr(preview, name, tuple(
+                item for item in getattr(preview, name)
+                if not item.key.startswith("pagination-")
+            ))
+        old = await preview.seed_preview(database, filesystem)
+    actor = GenericActor(user_id=old.users["reviewer"])
+    reviewed = await database.entities.patch(
+        old.entities["ada"], EntityPatchRequest(name="Reviewed Ada"), actor,
+    )
+    first = await preview.seed_preview(database, filesystem)
+    for name in ("entities", "documents", "pages", "faces", "mentions"):
+        assert getattr(old, name).items() <= getattr(first, name).items()
+    assert (await database.entities.get(reviewed.entity_id)).last_touched_at == reviewed.last_touched_at
+    keys = [f"pagination-{i}" for i in range(1, PAGINATION_ITEMS + 1)]
+    people = {first.entities[key] for key in keys}
+    documents = {first.documents[key] for key in keys}
+    pages = {first.pages[key] for key in keys}
+    library = ["preview-pagination"]
+
+    async def check_batches(fetch, request, expected, id_field):
+        initial = await fetch(request)
+        assert len(initial.items) == 12 and initial.cursor is not None
+        final = await fetch(request.model_copy(update={"cursor": initial.cursor}))
+        assert len(final.items) == PAGINATION_ITEMS - 12 and final.cursor is None
+        ids = [getattr(item, id_field) for item in [*initial.items, *final.items]]
+        assert len(ids) == len(set(ids)) and set(ids) == expected
+        assert initial.total_count == PAGINATION_ITEMS
+        # Replaying the initial cursor preserves server order.
+        assert [getattr(item, id_field) for item in (await fetch(request)).items] == ids[:12]
+
+    for searching in (False, True):
+        common = dict(limit=12, return_total_count=True)
+        query = QueryBase(text=["Pagination"])
+        await check_batches(
+            database.entities.search if searching else database.entities.list,
+            SearchEntitiesRequest(**common, query=query, filter_=EntityListFilter(library=library))
+            if searching else EntityListRequest(**common, filter_=EntityListFilter(library=library)),
+            people, "entity_id",
+        )
+        await check_batches(
+            database.sources.search_documents if searching else database.sources.list_documents,
+            SearchDocumentsRequest(**common, query=query, filter_=DocumentListFilter(library=library))
+            if searching else DocumentListRequest(**common, filter_=DocumentListFilter(library=library)),
+            documents, "source_id",
+        )
+        await check_batches(
+            database.sources.search_pages if searching else database.sources.list_pages,
+            SearchPagesRequest(**common, query=query, filter_=PageListFilter(library=library))
+            if searching else PageListRequest(**common, filter_=PageListFilter(library=library)),
+            pages, "source_id",
+        )
+    # Canonical document scope also exceeds a batch, without any implicit face filter.
+    gallery = first.documents["page-gallery"]
+    initial = await database.sources.list_pages(PageListRequest(
+        limit=12, filter_=PageListFilter(document_source_id=[gallery]),
+    ))
+    assert len(initial.items) == 12 and initial.cursor is not None
+    final = await database.sources.list_pages(PageListRequest(
+        limit=12, cursor=initial.cursor, filter_=PageListFilter(document_source_id=[gallery]),
+    ))
+    assert len(final.items) == 2 and final.cursor is None
+    assert first.filter_examples["pagination-scoped-scans"] == f"/scans?document={gallery}"
+    for key in ("pagination-people", "pagination-scans", "pagination-documents"):
+        assert parse_qs(urlsplit(first.filter_examples[key]).query)["q"] == ["Pagination"]
+    page = await database.sources.get_page(first.pages[keys[-1]])
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    with Image.open(io.BytesIO(image.content)) as stored:
+        assert stored.width == 256
+    actor = GenericActor(user_id=first.users["reviewer"])
+    edited = await database.entities.patch(first.entities[keys[0]], EntityPatchRequest(name="Reviewed pagination"), actor)
+    mention = await database.text_mentions.patch(first.mentions[keys[0]], TextMentionPatchRequest(entity_id=None), actor)
+    edited = await database.entities.get(edited.entity_id)
+    second = await preview.seed_preview(database, filesystem)
+    assert second == first
+    assert (await database.entities.get(edited.entity_id)).last_touched_at == edited.last_touched_at
+    assert (await database.text_mentions.get(mention.mention_id)).entity_id is None

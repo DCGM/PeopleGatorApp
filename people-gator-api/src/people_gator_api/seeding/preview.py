@@ -502,6 +502,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "pagination-people": "/people?q=Pagination&sort=name",
+            "pagination-scans": "/scans?library=preview-pagination&q=Pagination",
+            "pagination-documents": "/documents?library=preview-pagination&q=Pagination&sort=name",
+            "pagination-scoped-scans": "/scans?" + urlencode({"document": documents["page-gallery"]}),
             **({"entity-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
                 "tab": "discover", "discovery_model": DISCOVERY_MODEL,
             }), "entity-discovery-identifier": f"/people/{manifest.entities['discovery']}?" + urlencode({
