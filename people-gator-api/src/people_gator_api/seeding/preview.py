@@ -493,6 +493,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
+    discovery_page = next(item for item in PAGES if item.key == "discovery-1")
+    discovery_document = next(item for item in DOCUMENTS if item.key == discovery_page.document)
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -502,6 +504,21 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "global-discovery-scan": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
+                    "library": "preview-mzk", "document": documents["discovery"],
+                    "page": pages["discovery-1"],
+                })
+            ),
+            "global-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+                "discovery_annotations": "faces", "library": "preview-mzk",
+                "document": documents["discovery"], "page": pages["discovery-1"],
+                "link_state": "verified", "touched_by": actors["reviewer"].user_id,
+                "api_key": registered_keys["ocr"],
+            }),
             "pagination-people": "/people?q=Pagination&sort=name",
             "pagination-scans": "/scans?library=preview-pagination&q=Pagination",
             "pagination-browse-people": "/people?library=preview-pagination&sort=name",

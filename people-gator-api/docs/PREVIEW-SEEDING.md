@@ -653,3 +653,28 @@ Integration tests query both list and text-search repositories in twelve-item
 batches, check distinct IDs, order, totals, exhausted cursors and document scope,
 read a real page image, and preserve an edited person/unassigned mention on
 rerun. Existing interrupted-checkpoint recovery covers the new fixture keys.
+
+## Global Discover with a retained workspace (#67)
+
+Open the seed report's `global-discovery` link for **Zora Cartographer**.
+The URL retains `preview-mzk`, **Entity discovery practice**, its first page,
+Verified, Preview reviewer and the OCR API key. Discover still shows **Orion
+Portrait** and two matching faces from **Discovery beyond the workspace** in
+`preview-nlk`, including one unassigned face. Reference inputs starts at Faces
+with the synthetic 8D model; name, aliases, text and sorting remain available.
+
+Switch to Faces or Mentions to see the retained local criteria applied there;
+switch back to Discover or reload to find global candidates again. On disposable
+data, assign the outside unassigned face or merge the duplicate person. Candidate
+navigation also carries the original shared configuration. All searches retain
+normal API authorization. No optional face-scope control is introduced.
+
+The `global-discovery-scan` link opens the reference page in face-similarity
+candidate mode with local source filters retained. Orion Portrait remains a
+global assignment candidate; ordinary text lookup still uses shared criteria.
+
+The additive document/page and two faces have new stable keys and generated local
+media, reusing the existing reference model and duplicate identity. Reruns preserve
+reviewed assignments, identity edits, processing times and checkpoints. Integration
+coverage resolves both crops, finds the global candidates through repositories,
+shows how source predicates exclude them, and verifies a second seed preserves edits.

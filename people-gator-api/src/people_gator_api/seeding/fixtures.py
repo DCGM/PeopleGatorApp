@@ -152,6 +152,7 @@ DOCUMENTS = (
     Document("sorting-ledger", "preview-nlk", "Řádková ledger"),
     Document("sorting-notes", "preview-mzk", "radkova notes"),
     Document("discovery", "preview-mzk", "Entity discovery practice"),
+    Document("discovery-global", "preview-nlk", "Discovery beyond the workspace"),
     # Shared filters (#52): the same archive ID in a second, unannotated library.
     Document("shared-ledger", "preview-mzk", "Shared filter ledger"),
     Document("shared-mirror", "preview-nlk", "Shared filter mirror", "shared-ledger"),
@@ -391,6 +392,11 @@ PAGES = (
     Page("discovery-10", "discovery", 10, (
         Face("discovery-alias-match", "discovery-alias", 0, 2, models=(DISCOVERY_MODEL,)),
         Face("discovery-unassigned", None, 1, 0, models=(DISCOVERY_MODEL,)),
+    )),
+    # Global discovery (#67): matching faces outside the reference library/document/page.
+    Page("discovery-global-1", "discovery-global", 1, (
+        Face("discovery-global-assigned", "discovery-face", 0, 0, models=(DISCOVERY_MODEL,)),
+        Face("discovery-global-unassigned", None, 1, 0, models=(DISCOVERY_MODEL,)),
     )),
     # Shared filters (#52): the reviewer's face precedes the curator's mention,
     # so the document's latest change is the curator's.
