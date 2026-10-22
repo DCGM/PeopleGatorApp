@@ -123,9 +123,8 @@ useAutomaticPagination({
         <UserRound class="mb-3 size-8" aria-hidden="true" />
         <p class="text-sm">No people match this search.</p>
       </div>
+      <div ref="listEnd" class="h-px" aria-hidden="true" />
     </section>
-
-    <div ref="listEnd" class="h-px" aria-hidden="true" />
 
     <div v-if="hasNextPage || isFetchingNextPage" class="flex justify-center pt-8">
       <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">
