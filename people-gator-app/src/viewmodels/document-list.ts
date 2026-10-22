@@ -48,7 +48,12 @@ export function useDocumentList(
         return Promise.resolve()
       return query.fetchNextPage({ cancelRefetch: false })
     },
-    retry: () => (query.isFetchNextPageError.value ? query.fetchNextPage() : query.refetch()),
+    retry: () => {
+      if (!toValue(enabled) || query.isFetching.value) return Promise.resolve()
+      return query.isFetchNextPageError.value
+        ? query.fetchNextPage({ cancelRefetch: false })
+        : query.refetch({ cancelRefetch: false })
+    },
   }
 }
 

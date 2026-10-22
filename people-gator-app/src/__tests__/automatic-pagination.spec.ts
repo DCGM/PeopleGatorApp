@@ -135,6 +135,7 @@ for (const screen of screens)
       await router.push('/' + query)
       const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
       const wrapper = mount(screen.view, {
+        attachTo: document.body,
         global: {
           plugins: [router, [VueQueryPlugin, { queryClient: client }]],
           stubs: {
@@ -286,6 +287,46 @@ for (const screen of screens)
       expect(last.cursor).toBe('fresh-next')
       expect(last['filter.library']).toEqual(['test'])
       expect(last.sort).toBe(screen.sort)
+    })
+    it('uses the clipping scroll container and remains usable without observers', async () => {
+      vi.stubGlobal('IntersectionObserver', undefined)
+      vi.stubGlobal('ResizeObserver', undefined)
+      const { wrapper } = await render()
+      wrapper.element.style.overflowY = 'auto'
+      vi.spyOn(wrapper.element, 'clientHeight', 'get').mockReturnValue(400)
+      endTop = 500
+      window.dispatchEvent(new Event('resize'))
+      await settle()
+      expect(api.list).toHaveBeenCalledTimes(1)
+      endTop = 300
+      wrapper.element.dispatchEvent(new Event('scroll'))
+      await settle()
+      expect(wrapper.findAll('.result')).toHaveLength(2)
+    })
+    it('keeps the manual control available and guards background refetches', async () => {
+      const { wrapper, client } = await render()
+      let complete!: (value: ReturnType<typeof batch>) => void
+      api.list.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve
+          }),
+      )
+      const refetch = client.refetchQueries()
+      await settle()
+      endTop = 500
+      intersection()
+      await settle()
+      expect(api.list).toHaveBeenCalledTimes(2)
+      expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      complete(batch(['first'], 'next'))
+      await refetch
+      endTop = 1500
+      await settle()
+      expect(api.list).toHaveBeenCalledTimes(2)
+      await wrapper.get('button').trigger('click')
+      await settle()
+      expect(wrapper.findAll('.result')).toHaveLength(2)
     })
     it('does not load empty results or a disabled configuration', async () => {
       endTop = 500
