@@ -22,7 +22,9 @@ function tokenExpiry(token: string): number {
     if (!payload) return 0
     const unpadded = payload.replace(/-/g, '+').replace(/_/g, '/')
     const normalized = unpadded.padEnd(Math.ceil(unpadded.length / 4) * 4, '=')
-    const decoded = JSON.parse(atob(normalized)) as { exp?: number }
+    const decoded = JSON.parse(atob(normalized)) as { exp?: number; uid?: unknown }
+    // Tokens issued before the user UUID claim are rejected by the API; refresh them.
+    if (typeof decoded.uid !== 'string') return 0
     return (decoded.exp ?? 0) * 1000
   } catch {
     return 0
