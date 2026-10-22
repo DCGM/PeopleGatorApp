@@ -17,6 +17,7 @@ import hashlib
 import io
 import json
 import logging
+import math
 import posixpath
 import uuid
 
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 _JPEG_MEDIA_TYPE = "image/jpeg"
 _CACHE_FORMAT_VERSION = 1
+# Reject unusable native canvases before Pillow allocates them. JPEG dimensions
+# must fit its encoder; the pixel budget matches Pillow's source-image warning
+# threshold (and remains enforced if source-image checks are disabled).
+_MAX_CROP_DIMENSION = 65_500
+_MAX_CROP_PIXELS = 89_478_485
 
 # Keep strong references to best-effort writes until they finish.
 _background_cache_writes: set[asyncio.Task[None]] = set()
@@ -178,16 +184,86 @@ def _similarity_transform(src: np.ndarray, dst: np.ndarray) -> tuple[np.ndarray,
     dst_mean = dst.mean(axis=0)
     src_centered = src - src_mean
     dst_centered = dst - dst_mean
+    # There is no absolute pixel-distance epsilon: small valid faces still
+    # align. Zero variance, including underflow to zero, has no usable scale.
+    src_variance = src_centered.var(axis=0).sum()
+    if not np.isfinite(src_variance) or src_variance <= 0:
+        raise _invalid_keypoints()
     covariance = (dst_centered.T @ src_centered) / point_count
     u, singular_values, vt = np.linalg.svd(covariance)
     sign_fix = np.ones(2)
     if np.linalg.det(u) * np.linalg.det(vt) < 0:
         sign_fix[-1] = -1
     rotation = u @ np.diag(sign_fix) @ vt
-    src_variance = src_centered.var(axis=0).sum()
     scale = float((singular_values * sign_fix).sum() / src_variance)
+    if not math.isfinite(scale) or scale <= 0:
+        raise _invalid_keypoints()
     translation = dst_mean - scale * (rotation @ src_mean)
     return rotation, translation, scale
+
+
+def _invalid_keypoints() -> SourceResolutionError:
+    return SourceResolutionError(
+        "face keypoints cannot produce a usable alignment",
+        status_code=422,
+        code="invalid_face_keypoints",
+    )
+
+
+def _crop_geometry(
+    keypoints: np.ndarray,
+    crop_cfg: AlignedFaceCropSettings,
+) -> tuple[tuple[int, int], tuple[float, ...]]:
+    """Validate all geometry before division, integer conversion or allocation.
+
+    Only numerical alignment failures are translated; image/storage failures
+    retain their existing handling outside this calculation.
+    """
+    if not np.isfinite(keypoints).all():
+        raise _invalid_keypoints()
+    try:
+        with np.errstate(over="raise", invalid="raise", divide="raise", under="ignore"):
+            reference = _reference_keypoints(crop_cfg)
+            rotation, transform_translation, scale = _similarity_transform(keypoints, reference)
+            if (
+                not math.isfinite(scale)
+                or scale <= 0
+                or not np.isfinite(rotation).all()
+                or not np.isfinite(transform_translation).all()
+            ):
+                raise _invalid_keypoints()
+            scale_factor = 1.0 / scale
+            if not math.isfinite(scale_factor) or scale_factor <= 0:
+                raise _invalid_keypoints()
+            dimensions = np.array(
+                [crop_cfg.reference_width, crop_cfg.reference_height]
+            ) * scale_factor
+            if (
+                not np.isfinite(dimensions).all()
+                or (dimensions <= 0).any()
+                or (dimensions > _MAX_CROP_DIMENSION).any()
+            ):
+                raise _invalid_keypoints()
+            output_width, output_height = (max(1, round(float(value))) for value in dimensions)
+            if output_width * output_height > _MAX_CROP_PIXELS:
+                raise _invalid_keypoints()
+            scaled_reference = reference * scale_factor
+            translation = scaled_reference.mean(axis=0) - (rotation @ keypoints.mean(axis=0))
+            inverse_rotation = rotation.T
+            inverse_translation = -inverse_rotation @ translation
+            if not np.isfinite(inverse_translation).all():
+                raise _invalid_keypoints()
+    except (FloatingPointError, np.linalg.LinAlgError) as exc:
+        raise _invalid_keypoints() from exc
+    coefficients = (
+        float(inverse_rotation[0, 0]),
+        float(inverse_rotation[0, 1]),
+        float(inverse_translation[0]),
+        float(inverse_rotation[1, 0]),
+        float(inverse_rotation[1, 1]),
+        float(inverse_translation[1]),
+    )
+    return (output_width, output_height), coefficients
 
 
 def _render_aligned_crop(
@@ -202,32 +278,13 @@ def _render_aligned_crop(
     output preserves the original image's pixel scale; the output canvas is
     sized to match, then optionally downscaled to ``max_width``.
     """
-    reference = _reference_keypoints(crop_cfg)
-    rotation, _, scale = _similarity_transform(keypoints, reference)
-    scale_factor = 1.0 / scale
-
-    scaled_reference = reference * scale_factor
-    translation = scaled_reference.mean(axis=0) - (rotation @ keypoints.mean(axis=0))
-
-    output_width = max(1, round(crop_cfg.reference_width * scale_factor))
-    output_height = max(1, round(crop_cfg.reference_height * scale_factor))
-
-    inverse_rotation = rotation.T
-    inverse_translation = -inverse_rotation @ translation
-    affine_coefficients = (
-        inverse_rotation[0, 0],
-        inverse_rotation[0, 1],
-        inverse_translation[0],
-        inverse_rotation[1, 0],
-        inverse_rotation[1, 1],
-        inverse_translation[1],
-    )
+    output_size, affine_coefficients = _crop_geometry(keypoints, crop_cfg)
 
     with Image.open(io.BytesIO(image_bytes)) as source_image:
         if source_image.mode not in ("RGB", "L"):
             source_image = source_image.convert("RGB")
         aligned: Image.Image = source_image.transform(
-            (output_width, output_height),
+            output_size,
             Image.Transform.AFFINE,
             affine_coefficients,
             resample=Image.Resampling.BICUBIC,
