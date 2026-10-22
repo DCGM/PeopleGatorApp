@@ -43,9 +43,18 @@ export function useDocumentSearch(
     cards,
     error: pageResultsQuery.error,
     hasNextPage: pageResultsQuery.hasNextPage,
+    isFetching: pageResultsQuery.isFetching,
     isFetchingNextPage: pageResultsQuery.isFetchingNextPage,
     isLoading: pageResultsQuery.isPending,
-    loadMore: pageResultsQuery.fetchNextPage,
+    loadMore: () => {
+      if (
+        !toValue(enabled) ||
+        pageResultsQuery.isFetching.value ||
+        !pageResultsQuery.hasNextPage.value
+      )
+        return Promise.resolve()
+      return pageResultsQuery.fetchNextPage({ cancelRefetch: false })
+    },
     resultCount: computed(() => {
       return pageResultsQuery.data.value?.pages[0]?.totalCount ?? 0
     }),

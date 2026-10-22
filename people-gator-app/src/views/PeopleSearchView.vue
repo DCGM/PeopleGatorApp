@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
+import { computed, ref } from 'vue'
 import { relatedQuery, useSharedFilters } from '@/viewmodels/shared-filters'
 
 import { useRoute, useRouter } from 'vue-router'
@@ -46,6 +47,7 @@ const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
 const {
   error,
   hasNextPage,
+  isFetching,
   isFetchingNextPage,
   isLoading,
   loadMore,
@@ -59,6 +61,15 @@ const {
   computed(() => !shared.error.value),
   sort,
 )
+const listEnd = ref<HTMLElement | null>(null)
+useAutomaticPagination({
+  target: listEnd,
+  hasNextPage,
+  isFetching,
+  error,
+  enabled: computed(() => !shared.error.value),
+  loadMore,
+})
 </script>
 
 <template>
@@ -114,8 +125,10 @@ const {
       </div>
     </section>
 
+    <div ref="listEnd" class="h-px" aria-hidden="true" />
+
     <div v-if="hasNextPage || isFetchingNextPage" class="flex justify-center pt-8">
-      <Button type="button" variant="outline" :disabled="isFetchingNextPage" @click="loadMore()">
+      <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">
         {{ isFetchingNextPage ? 'Loading people…' : 'Load more people' }}
       </Button>
     </div>
