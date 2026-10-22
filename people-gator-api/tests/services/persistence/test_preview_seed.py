@@ -2835,6 +2835,8 @@ async def test_global_discovery_outside_retained_workspace(seed_target):
     assert await db.sources.get_page(page.source_id) == before_page
     assert await filesystem.read_bytes(preview.MANIFEST_KEY) == manifest
 
+
+@pytest.mark.asyncio
 async def test_deactivated_reviewer_keeps_attribution_across_reruns(seed_target: SeedTarget) -> None:
     from people_gator_api.schemas.entity_links import EntityLinkState
     from people_gator_api.schemas.mentions import TextMentionListFilter
