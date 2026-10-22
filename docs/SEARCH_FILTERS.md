@@ -251,8 +251,13 @@ through Documents ↔ People, profile tabs, Scans, page workspaces, related card
 breadcrumbs and the logo. In Documents, **Modified by U** filters documents; in
 People it filters entities; on profile Faces/Mentions and in page workspaces it
 filters each annotation's own change. A profile identity remains visible even when
-none of its annotations match. Discover applies the shared criteria independently
-to its similar-face and similar-person results.
+none of its annotations match. Discover searches similar faces and people across all data accessible to the
+current user. It does not inherit source, modifier, date or assignment predicates
+from shared browsing filters. Those filters remain in the URL and still apply
+when returning to Faces/Mentions or navigating to related views. Reference inputs,
+face model, discovery text and each result list’s sort remain explicit discovery
+choices; only changes to those effective criteria change the discovery cache key
+and restart pagination. Invalid shared filters do not block global discovery.
 
 Individual tag removal updates controls, URL and results immediately. Clear all
 removes shared and the screen's specific filters while preserving search and sort.
