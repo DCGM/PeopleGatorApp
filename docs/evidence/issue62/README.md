@@ -31,3 +31,25 @@ Mobile Scans measures a one-CSS-pixel scroll-width rounding difference; no layou
 changes were included. Firefox/Safari were not exercised. Unit tests additionally
 cover criteria changes while a request is delayed, clipping scroll containers,
 background refetch guards, missing observers, empty results and unmount cleanup.
+
+## Review regression: mobile section minimum height
+
+The People and Scans pagination markers now follow the result content inside
+`.stable-search-results`, before its unused minimum-height space. Four component
+regressions model the section's position and minimum height in browse and search
+mode; all four failed before the fix and pass afterward.
+
+Chromium checks on the revised application used the same migrated synthetic
+instance and fourteen linked `preview-pagination` records. For both screens,
+browse and search at **1440 × 12000** and **390 × 12000** CSS pixels loaded
+**12 → 14** rows in exactly two requests, with `scrollY = 0`. Reopening at height
+844 and increasing height to 12000 also loaded the second batch without scrolling.
+At width 390, the actual section minimum height was 12000px and its bottom lay
+below the viewport; the markers remained visible at 1925px (People) and about
+8903px (Scans). No browser JavaScript errors occurred.
+
+`review-desktop-*-space.png` (**1440 × 12000**) and
+`review-mobile-*-space.png` (**390 × 12000**) capture the exhausted search lists
+at scroll position zero. These intentionally tall viewports expose the original
+failure: the section's blank space must not prevent automatic continuation.
+Firefox/Safari were not exercised.
