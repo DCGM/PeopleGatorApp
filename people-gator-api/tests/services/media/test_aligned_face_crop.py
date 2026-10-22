@@ -4,6 +4,7 @@ import asyncio
 import io
 import os
 import uuid
+from typing import Never
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -27,9 +28,11 @@ os.environ.setdefault("PEOPLE_GATOR_API__PERSISTENCE__WEAVIATE__GRPC_SECURE", "f
 os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 
 import numpy as np
+from numpy.typing import NDArray
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import Response
 from PIL import Image, ImageDraw
 from botocore.exceptions import ClientError
 from pydantic import AnyUrl
@@ -82,16 +85,16 @@ def _source() -> GenericSourceResponse:
 
 
 def _image() -> bytes:
-    image = Image.new("RGB", (256, 256), "white")
+    image: Image.Image = Image.new("RGB", (256, 256), "white")
     # A landmark marker verifies alignment as well as dimensions.
     image.putpixel((56, 72), (0, 0, 0))
-    buffer = io.BytesIO()
+    buffer: io.BytesIO = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
 
 
 def _coincident_face() -> FaceResponse:
-    face = _face()
+    face: FaceResponse = _face()
     for point in face.keypoints:
         point.x = point.y = 64.0
     return face
@@ -100,27 +103,34 @@ def _coincident_face() -> FaceResponse:
 @pytest.mark.parametrize("cache_enabled", [False, True])
 @pytest.mark.parametrize("max_width", [None, 256])
 def test_coincident_landmarks_return_structured_http_error_without_cache_write(
-    monkeypatch, cache_enabled, max_width
-):
+    monkeypatch: pytest.MonkeyPatch, cache_enabled: bool, max_width: int | None,
+) -> None:
     from people_gator_api.routes.v1.annotations import router
     from people_gator_api.services import auth_service, database_service
 
     monkeypatch.setattr(aligned_face_crop.settings, "aligned_face_crop",
                         AlignedFaceCropSettings(cache_enabled=cache_enabled))
     monkeypatch.setattr(aligned_face_crop, "_read_face_source_image", AsyncMock(return_value=_image()))
-    read_cache = AsyncMock(side_effect=FileNotFoundError)
-    write_cache = AsyncMock()
+    read_cache: AsyncMock = AsyncMock(side_effect=FileNotFoundError)
+    write_cache: AsyncMock = AsyncMock()
     monkeypatch.setattr(aligned_face_crop, "read_bytes", read_cache)
     monkeypatch.setattr(aligned_face_crop, "write_bytes", write_cache)
-    app = FastAPI()
+    app: FastAPI = FastAPI()
     app.include_router(router, prefix="/api/v1")
-    app.dependency_overrides[database_service.get_database] = lambda: SimpleNamespace(
-        faces=SimpleNamespace(get=AsyncMock(return_value=_coincident_face())),
-        sources=SimpleNamespace(lookup=AsyncMock(return_value=_source())),
-    )
-    app.dependency_overrides[auth_service.get_auth_context] = lambda: SimpleNamespace(user_id=_USER_ID)
+
+    def get_database() -> SimpleNamespace:
+        return SimpleNamespace(
+            faces=SimpleNamespace(get=AsyncMock(return_value=_coincident_face())),
+            sources=SimpleNamespace(lookup=AsyncMock(return_value=_source())),
+        )
+
+    def get_auth_context() -> SimpleNamespace:
+        return SimpleNamespace(user_id=_USER_ID)
+
+    app.dependency_overrides[database_service.get_database] = get_database
+    app.dependency_overrides[auth_service.get_auth_context] = get_auth_context
     with TestClient(app) as client:
-        response = client.get(
+        response: Response = client.get(
             f"/api/v1/faces/{_DETECTION_ID}/aligned_crop",
             params={} if max_width is None else {"max_width": max_width},
         )
@@ -142,15 +152,17 @@ def test_coincident_landmarks_return_structured_http_error_without_cache_write(
     aligned_face_crop._ARCFACE_REFERENCE_112 * 100,  # pixel budget, within JPEG dimensions
     np.full((5, 2), np.nan),
 ])
-def test_unusable_geometry_is_a_media_error_before_image_allocation(points):
+def test_unusable_geometry_is_a_media_error_before_image_allocation(
+    points: NDArray[np.float64],
+) -> None:
     # Invalid image bytes ensure validation finishes before opening/allocating an image.
     with pytest.raises(SourceResolutionError) as error:
         aligned_face_crop._render_aligned_crop(b"", points, AlignedFaceCropSettings(), 256)
     assert (error.value.status_code, error.value.code) == (422, "invalid_face_keypoints")
 
 
-def test_svd_failure_is_a_geometry_error(monkeypatch):
-    def fail(*_args):
+def test_svd_failure_is_a_geometry_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(*_args: object) -> Never:
         raise np.linalg.LinAlgError("SVD did not converge")
 
     monkeypatch.setattr(np.linalg, "svd", fail)
@@ -162,9 +174,11 @@ def test_svd_failure_is_a_geometry_error(monkeypatch):
 
 
 @pytest.mark.parametrize("scale", [0.0, -1.0, float("nan"), float("inf"), 5e-324, 1e-307])
-def test_invalid_derived_scale_is_rejected(monkeypatch, scale):
-    monkeypatch.setattr(aligned_face_crop, "_similarity_transform",
-                        lambda *_args: (np.eye(2), np.zeros(2), scale))
+def test_invalid_derived_scale_is_rejected(monkeypatch: pytest.MonkeyPatch, scale: float) -> None:
+    def transform(*_args: object) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
+        return np.eye(2), np.zeros(2), scale
+
+    monkeypatch.setattr(aligned_face_crop, "_similarity_transform", transform)
     with pytest.raises(SourceResolutionError, match="usable alignment"):
         aligned_face_crop._render_aligned_crop(
             b"", aligned_face_crop._ARCFACE_REFERENCE_112, AlignedFaceCropSettings(), 256,
@@ -175,9 +189,13 @@ def test_invalid_derived_scale_is_rejected(monkeypatch, scale):
     (np.full((2, 2), np.nan), np.zeros(2)),
     (np.eye(2), np.full(2, np.inf)),
 ])
-def test_nonfinite_transform_is_rejected(monkeypatch, rotation, translation):
-    monkeypatch.setattr(aligned_face_crop, "_similarity_transform",
-                        lambda *_args: (rotation, translation, 1.0))
+def test_nonfinite_transform_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, rotation: NDArray[np.float64], translation: NDArray[np.float64],
+) -> None:
+    def transform(*_args: object) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
+        return rotation, translation, 1.0
+
+    monkeypatch.setattr(aligned_face_crop, "_similarity_transform", transform)
     with pytest.raises(SourceResolutionError, match="usable alignment"):
         aligned_face_crop._render_aligned_crop(
             b"", aligned_face_crop._ARCFACE_REFERENCE_112, AlignedFaceCropSettings(), 256,
@@ -188,10 +206,14 @@ def test_nonfinite_transform_is_rejected(monkeypatch, rotation, translation):
     (1, None, 112), (2, None, 224), (2, 100, 100), (1, 256, 112), (1e-3, None, 1),
 ])
 @pytest.mark.parametrize("angle", [0.0, 0.7])
-def test_valid_small_rotated_and_native_scale_crops(size, max_width, expected, angle):
-    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
-    points = size * aligned_face_crop._ARCFACE_REFERENCE_112 @ rotation.T + 20
-    content = aligned_face_crop._render_aligned_crop(
+def test_valid_small_rotated_and_native_scale_crops(
+    size: float, max_width: int | None, expected: int, angle: float,
+) -> None:
+    rotation: NDArray[np.float64] = np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+    )
+    points: NDArray[np.float64] = size * aligned_face_crop._ARCFACE_REFERENCE_112 @ rotation.T + 20
+    content: bytes = aligned_face_crop._render_aligned_crop(
         _image(), points, AlignedFaceCropSettings(), max_width,
     )
     with Image.open(io.BytesIO(content)) as image:
@@ -199,8 +221,8 @@ def test_valid_small_rotated_and_native_scale_crops(size, max_width, expected, a
         assert image.format == "JPEG" and image.size == (expected, expected)
 
 
-def test_valid_alignment_preserves_landmark_position():
-    content = aligned_face_crop._render_aligned_crop(
+def test_valid_alignment_preserves_landmark_position() -> None:
+    content: bytes = aligned_face_crop._render_aligned_crop(
         _image(), aligned_face_crop._ARCFACE_REFERENCE_112,
         AlignedFaceCropSettings(), None,
     )
@@ -213,8 +235,10 @@ def test_valid_alignment_preserves_landmark_position():
     aligned_face_crop._ARCFACE_REFERENCE_112 * 1e-150,
     np.column_stack((np.arange(5) * 5 + 40, np.full(5, 70))),
 ])
-def test_representable_tiny_and_collinear_geometry_is_not_arbitrarily_rejected(points):
-    content = aligned_face_crop._render_aligned_crop(
+def test_representable_tiny_and_collinear_geometry_is_not_arbitrarily_rejected(
+    points: NDArray[np.float64],
+) -> None:
+    content: bytes = aligned_face_crop._render_aligned_crop(
         _image(), points, AlignedFaceCropSettings(), None,
     )
     with Image.open(io.BytesIO(content)) as image:
@@ -222,16 +246,20 @@ def test_representable_tiny_and_collinear_geometry_is_not_arbitrarily_rejected(p
         assert image.format == "JPEG" and image.width > 0 and image.height > 0
 
 
-def test_rotated_alignment_moves_landmark_to_reference_position():
-    angle = 0.7
-    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
-    points = aligned_face_crop._ARCFACE_REFERENCE_112 @ rotation.T + 60
-    image = Image.new("RGB", (256, 256), "white")
+def test_rotated_alignment_moves_landmark_to_reference_position() -> None:
+    angle: float = 0.7
+    rotation: NDArray[np.float64] = np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+    )
+    points: NDArray[np.float64] = aligned_face_crop._ARCFACE_REFERENCE_112 @ rotation.T + 60
+    image: Image.Image = Image.new("RGB", (256, 256), "white")
+    x: np.float64
+    y: np.float64
     x, y = points[2]  # Nose in the rotated source.
     ImageDraw.Draw(image).rectangle((x - 3, y - 3, x + 3, y + 3), fill="black")
-    buffer = io.BytesIO()
+    buffer: io.BytesIO = io.BytesIO()
     image.save(buffer, format="PNG")
-    content = aligned_face_crop._render_aligned_crop(
+    content: bytes = aligned_face_crop._render_aligned_crop(
         buffer.getvalue(), points, AlignedFaceCropSettings(), None,
     )
     with Image.open(io.BytesIO(content)) as aligned:
@@ -240,8 +268,10 @@ def test_rotated_alignment_moves_landmark_to_reference_position():
 
 
 @pytest.mark.parametrize("error_type", [ValueError, RuntimeError])
-def test_unrelated_transform_failure_is_not_classified_as_geometry(monkeypatch, error_type):
-    def fail(*_args):
+def test_unrelated_transform_failure_is_not_classified_as_geometry(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[ValueError] | type[RuntimeError],
+) -> None:
+    def fail(*_args: object) -> Never:
         raise error_type("unrelated implementation failure")
 
     monkeypatch.setattr(aligned_face_crop, "_similarity_transform", fail)
@@ -251,8 +281,10 @@ def test_unrelated_transform_failure_is_not_classified_as_geometry(monkeypatch, 
         )
 
 
-def test_unrelated_render_failure_is_not_classified_as_keypoint_error(monkeypatch):
-    def fail(*_args, **_kwargs):
+def test_unrelated_render_failure_is_not_classified_as_keypoint_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*_args: object, **_kwargs: object) -> Never:
         raise OSError("storage/image failure")
 
     monkeypatch.setattr(Image, "open", fail)
@@ -263,32 +295,43 @@ def test_unrelated_render_failure_is_not_classified_as_keypoint_error(monkeypatc
         )
 
 
-def test_real_renderer_cache_miss_hit_and_landmark_edit(monkeypatch):
+def test_real_renderer_cache_miss_hit_and_landmark_edit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(aligned_face_crop.settings, "aligned_face_crop",
                         AlignedFaceCropSettings(cache_enabled=True))
-    source = AsyncMock(return_value=_image())
+    source: AsyncMock = AsyncMock(return_value=_image())
     monkeypatch.setattr(aligned_face_crop, "_read_face_source_image", source)
-    objects = {}
+    objects: dict[str, bytes] = {}
 
-    async def read(key):
+    async def read(key: str) -> bytes:
         if key not in objects:
             raise FileNotFoundError(key)
         return objects[key]
 
-    async def write(key, content):
+    async def write(key: str, content: bytes) -> None:
         objects[key] = content
 
     monkeypatch.setattr(aligned_face_crop, "read_bytes", read)
     monkeypatch.setattr(aligned_face_crop, "write_bytes", write)
 
-    async def scenario():
-        first = await get_aligned_face_crop(_USER_ID, _face(), _source(), max_width=100)
+    async def scenario() -> tuple[
+        AlignedFaceCropContent, AlignedFaceCropContent, AlignedFaceCropContent,
+    ]:
+        first: AlignedFaceCropContent = await get_aligned_face_crop(
+            _USER_ID, _face(), _source(), max_width=100,
+        )
         await asyncio.gather(*list(aligned_face_crop._background_cache_writes))
-        second = await get_aligned_face_crop(_USER_ID, _face(), _source(), max_width=100)
-        edited = await get_aligned_face_crop(_USER_ID, _face(left_eye_x=39), _source(), max_width=100)
+        second: AlignedFaceCropContent = await get_aligned_face_crop(
+            _USER_ID, _face(), _source(), max_width=100,
+        )
+        edited: AlignedFaceCropContent = await get_aligned_face_crop(
+            _USER_ID, _face(left_eye_x=39), _source(), max_width=100,
+        )
         await asyncio.gather(*list(aligned_face_crop._background_cache_writes))
         return first, second, edited
 
+    first: AlignedFaceCropContent
+    second: AlignedFaceCropContent
+    edited: AlignedFaceCropContent
     first, second, edited = asyncio.run(scenario())
     assert not first.cache_hit and second.cache_hit and not edited.cache_hit
     assert first.content == second.content
@@ -304,7 +347,9 @@ def test_real_renderer_cache_miss_hit_and_landmark_edit(monkeypatch):
     ("mismatch", "source_mismatch"),
     ("width", "invalid_max_width"),
 ])
-def test_existing_media_validation_is_preserved(case, code):
+def test_existing_media_validation_is_preserved(case: str, code: str) -> None:
+    face: FaceResponse
+    source: GenericSourceResponse
     face, source = _face(), _source()
     if case == "missing":
         face.keypoints = []
