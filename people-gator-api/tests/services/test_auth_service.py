@@ -1,7 +1,5 @@
 import asyncio
 import json
-import uuid
-from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -12,57 +10,33 @@ from fastapi import HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import ValidationError
 
+from auth_doubles import IdentityStore
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.schemas.auth import TokenResponse
-from people_gator_api.schemas.users import UserCreateRequest, UserResponse
+from people_gator_api.schemas.users import UserResponse
 from people_gator_api.services import auth_service, jwk_service
 from people_gator_api.settings import (
     JwkSettings, LocalStorageSettings, Settings, StorageSettings, settings,
 )
 
 
-class FakeUsers:
-    """Identity store with the get-or-create contract used at token issuance."""
-
-    def __init__(self) -> None:
-        self.records: dict[tuple[str, str], UserResponse] = {}
-        self.entries = 0
-
-    async def get_or_create(self, payload: UserCreateRequest) -> UserResponse:
-        key = (payload.external_issuer, payload.external_subject)
-        if key not in self.records:
-            self.records[key] = UserResponse(
-                user_id=uuid.uuid4(), email=None, **payload.model_dump(),
-            )
-        return self.records[key]
-
-    def set_active(self, subject: str, active: bool) -> None:
-        key = (settings.jwk.issuer, subject)
-        self.records[key] = self.records[key].model_copy(update={"is_active": active})
-
-    def context(self):
-        @asynccontextmanager
-        async def database():
-            self.entries += 1
-            yield self
-        return database()
-
-    @property
-    def users(self) -> "FakeUsers":
-        return self
+identity_store = IdentityStore()
 
 
-fake_users = FakeUsers()
+def alice() -> UserResponse:
+    user = identity_store.users.by_subject(settings.jwk.issuer, "alice")
+    assert user is not None
+    return user
 
 
 async def refresh(refresh_token: str) -> TokenResponse:
-    return await auth_service.refresh_access_token(refresh_token, fake_users.context())
+    return await auth_service.refresh_access_token(refresh_token, identity_store.context())
 
 
 @pytest.fixture
 def users_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    global fake_users
-    fake_users = FakeUsers()
+    global identity_store
+    identity_store = IdentityStore()
     monkeypatch.setattr(settings, "storage", StorageSettings(
         local=LocalStorageSettings(root=tmp_path),
     ))
@@ -92,7 +66,7 @@ async def login(
 ) -> TokenResponse:
     return await auth_service.get_token(OAuth2PasswordRequestForm(
         username=username, password=password, scope=scope,
-    ), fake_users.context())
+    ), identity_store.context())
 
 
 def test_users_path_environment_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -392,36 +366,41 @@ async def test_s3_missing_file_and_storage_errors(
 @pytest.mark.asyncio
 async def test_tokens_carry_the_persisted_user_uuid(users_file: Path) -> None:
     token = await login()
-    user = fake_users.records[(settings.jwk.issuer, "alice")]
+    user = alice()
     assert user.is_active
     assert (await jwk_service.verify_access_token(token.access_token))["uid"] == user.user_id
     refreshed = await refresh(token.refresh_token)
     assert (await jwk_service.verify_access_token(refreshed.access_token))["uid"] == user.user_id
-    assert len(fake_users.records) == 1
+    assert len(identity_store.users.records) == 1
 
 
 @pytest.mark.asyncio
 async def test_inactive_user_cannot_log_in_and_is_not_reactivated(users_file: Path) -> None:
-    await login()
-    fake_users.set_active("alice", False)
+    first = await login()
+    identity_store.users.set_active(alice().user_id, False)
     with pytest.raises(HTTPException) as rejected:
         await login()
     assert rejected.value.status_code == 403
-    assert not fake_users.records[(settings.jwk.issuer, "alice")].is_active
-    assert len(auth_service._refresh_sessions["alice"]) == 1
+    assert not alice().is_active
+    # The rejected login created no session: three more logins fill the
+    # session limit without evicting the first.
+    identity_store.users.set_active(alice().user_id, True)
+    for _ in range(auth_service.MAX_REFRESH_SESSIONS_PER_USER - 1):
+        await login()
+    assert (await refresh(first.refresh_token)).access_token
 
 
 @pytest.mark.asyncio
 async def test_disabling_between_login_and_refresh_revokes_the_session(users_file: Path) -> None:
     token = await login()
-    fake_users.set_active("alice", False)
+    identity_store.users.set_active(alice().user_id, False)
     with pytest.raises(HTTPException) as rejected:
         await refresh(token.refresh_token)
     assert rejected.value.status_code == 403
-    assert auth_service._refresh_sessions["alice"] == {}
     # The original access token remains valid until it expires.
     assert (await jwk_service.verify_access_token(token.access_token))["sub"] == "alice"
-    fake_users.set_active("alice", True)
+    # Reactivation does not revive the revoked refresh session.
+    identity_store.users.set_active(alice().user_id, True)
     with pytest.raises(HTTPException) as revoked:
         await refresh(token.refresh_token)
     assert revoked.value.status_code == 401
@@ -435,8 +414,8 @@ async def test_rejected_credentials_do_not_resolve_identities(users_file: Path) 
     ):
         with pytest.raises(HTTPException):
             await login(username, password, scope)
-    assert fake_users.entries == 0
-    assert fake_users.records == {}
+    assert identity_store.entries == 0
+    assert identity_store.users.records == {}
 
 
 @pytest.mark.asyncio

@@ -2,24 +2,74 @@
 
 import json
 import uuid
-from contextlib import asynccontextmanager
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
 
 import argon2
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from pydantic import BaseModel, TypeAdapter
+
+from auth_doubles import IdentityStore, InMemoryAPIKeyRepository
 from people_gator_api.app import get_app
-from people_gator_api.schemas.api_keys import APIKeyResponse
 from people_gator_api.schemas.users import UserResponse
 from people_gator_api.services import auth_service
 from people_gator_api.services.database_service import get_database, get_database_context
+from people_gator_api.services.jwk_service import AccessTokenClaims
 from people_gator_api.settings import settings, StorageSettings, LocalStorageSettings
 
 
+@dataclass
+class FakeVerifier:
+    """Stands in for JWT verification, returning fixed claims for any token."""
+
+    claims: AccessTokenClaims
+    error: HTTPException | None = None
+    tokens: list[str] = field(default_factory=list[str])
+
+    async def __call__(self, token: str) -> AccessTokenClaims:
+        self.tokens.append(token)
+        if self.error is not None:
+            raise self.error
+        return self.claims
+
+
+@dataclass
+class AuthenticatedClient:
+    client: TestClient
+    app: FastAPI
+    store: IdentityStore
+    api_keys: InMemoryAPIKeyRepository
+    keys_path: Path
+    verify: FakeVerifier
+    user: UserResponse
+
+
+async def browse(actor: auth_service.BrowseActorDependency) -> dict[str, str | None]:
+    return {
+        "user_id": str(actor.user_id),
+        "api_key_id": str(actor.api_key_id) if actor.api_key_id else None,
+    }
+
+
+async def annotate(actor: auth_service.AnnotatorActorDependency) -> dict[str, str]:
+    return {"user_id": str(actor.user_id)}
+
+
+async def ingest(actor: auth_service.DataIngestActorDependency) -> dict[str, str]:
+    return {"user_id": str(actor.user_id)}
+
+
+async def admin(actor: auth_service.AdminActorDependency) -> dict[str, str]:
+    return {"user_id": str(actor.user_id)}
+
+
 @pytest.fixture
-def authenticated_client(tmp_path, monkeypatch):
+def authenticated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AuthenticatedClient:
+    api_keys = InMemoryAPIKeyRepository()
+    store = IdentityStore(api_keys=api_keys)
     user = UserResponse(
         user_id=uuid.uuid4(),
         display_name="Robot",
@@ -28,18 +78,7 @@ def authenticated_client(tmp_path, monkeypatch):
         external_issuer=settings.jwk.issuer,
         email=None,
     )
-    key = APIKeyResponse(
-        api_key_id=uuid.uuid4(),
-        identifier="importer",
-        display_name="Importer",
-        user_id=user.user_id,
-    )
-    database = SimpleNamespace(
-        users=SimpleNamespace(
-            get_or_create=AsyncMock(return_value=user), get=AsyncMock(return_value=user),
-        ),
-        api_keys=SimpleNamespace(get_or_create=AsyncMock(return_value=key)),
-    )
+    store.users.records[user.user_id] = user
     monkeypatch.setattr(
         settings, "storage", StorageSettings(local=LocalStorageSettings(root=tmp_path))
     )
@@ -57,43 +96,19 @@ def authenticated_client(tmp_path, monkeypatch):
             }
         )
     )
-    verify = AsyncMock(
-        return_value={
-            "iss": settings.jwk.issuer,
-            "sub": "robot",
-            "uid": user.user_id,
-            "scopes": [auth_service.BROWSE_SCOPE],
-        }
-    )
+    verify = FakeVerifier(AccessTokenClaims(
+        iss=settings.jwk.issuer, sub="robot", iat=0, exp=1,
+        scopes=[auth_service.BROWSE_SCOPE], uid=user.user_id,
+    ))
     monkeypatch.setattr(auth_service, "verify_access_token", verify)
     app = FastAPI()
-    @asynccontextmanager
-    async def database_context():
-        yield database
-
-    app.dependency_overrides[get_database_context] = lambda: database_context()
-    app.dependency_overrides[get_database] = lambda: database
-
-    @app.get("/browse")
-    async def browse(actor: auth_service.BrowseActorDependency):
-        return {
-            "user_id": str(actor.user_id),
-            "api_key_id": str(actor.api_key_id) if actor.api_key_id else None,
-        }
-
-    @app.get("/annotate")
-    async def annotate(actor: auth_service.AnnotatorActorDependency):
-        return {}
-
-    @app.get("/ingest")
-    async def ingest(actor: auth_service.DataIngestActorDependency):
-        return {}
-
-    @app.get("/admin")
-    async def admin(actor: auth_service.AdminActorDependency):
-        return {}
-
-    return TestClient(app), database, path, verify, key
+    app.dependency_overrides[get_database_context] = store.context
+    app.dependency_overrides[get_database] = lambda: store
+    for path_name, handler in (
+        ("/browse", browse), ("/annotate", annotate), ("/ingest", ingest), ("/admin", admin),
+    ):
+        app.add_api_route(path_name, handler)
+    return AuthenticatedClient(TestClient(app), app, store, api_keys, path, verify, user)
 
 
 @pytest.mark.parametrize(
@@ -109,65 +124,74 @@ def authenticated_client(tmp_path, monkeypatch):
         ({"Authorization": "", "X-API-Key": ""}, 400, None),
     ],
 )
-def test_authentication_error_matrix(authenticated_client, headers, status, challenge):
-    client, database, _, verify, _ = authenticated_client
-    response = client.get("/browse", headers=headers)
+def test_authentication_error_matrix(
+    authenticated: AuthenticatedClient, headers: dict[str, str], status: int, challenge: str | None,
+) -> None:
+    response = authenticated.client.get("/browse", headers=headers)
     assert response.status_code == status
     if challenge:
         assert response.headers["www-authenticate"] == challenge
-    verify.assert_not_awaited()
-    database.api_keys.get_or_create.assert_not_awaited()
+    assert authenticated.verify.tokens == []
+    assert authenticated.api_keys.requests == []
 
 
-def test_same_endpoint_accepts_either_method(authenticated_client):
-    client, database, _, _, key = authenticated_client
-    bearer = client.get("/browse", headers={"Authorization": "Bearer good"})
-    api_key = client.get("/browse", headers={"X-API-Key": "test-key"})
+def test_same_endpoint_accepts_either_method(authenticated: AuthenticatedClient) -> None:
+    bearer = authenticated.client.get("/browse", headers={"Authorization": "Bearer good"})
+    api_key = authenticated.client.get("/browse", headers={"X-API-Key": "test-key"})
     assert bearer.status_code == api_key.status_code == 200
     assert bearer.json()["api_key_id"] is None
-    assert api_key.json()["api_key_id"] == str(key.api_key_id)
-    assert bearer.json()["user_id"] == api_key.json()["user_id"]
-    assert "hash" not in str(database.api_keys.get_or_create.call_args)
-    assert "test-key" not in str(database.api_keys.get_or_create.call_args)
+    assert api_key.json()["api_key_id"] == str(authenticated.api_keys.records["importer"].api_key_id)
+    assert bearer.json()["user_id"] == api_key.json()["user_id"] == str(authenticated.user.user_id)
+    registered = str(authenticated.api_keys.requests)
+    assert "hash" not in registered
+    assert "test-key" not in registered
 
 
-def test_revocation_and_insufficient_scopes(authenticated_client):
-    client, database, path, _, _ = authenticated_client
+def test_revocation_and_insufficient_scopes(authenticated: AuthenticatedClient) -> None:
+    client = authenticated.client
     assert client.get("/annotate", headers={"X-API-Key": "test-key"}).status_code == 403
-    database.api_keys.get_or_create.assert_not_awaited()
+    assert authenticated.api_keys.requests == []
     assert (
         client.get("/annotate", headers={"Authorization": "Bearer good"}).status_code
         == 403
     )
     assert client.get("/browse", headers={"X-API-Key": "test-key"}).status_code == 200
-    path.write_text("{}")
+    authenticated.keys_path.write_text("{}")
     assert client.get("/browse", headers={"X-API-Key": "test-key"}).status_code == 401
 
 
-def test_invalid_jwt_has_bearer_challenge(authenticated_client):
-    client, _, _, verify, _ = authenticated_client
-    verify.side_effect = HTTPException(401, "expired")
-    response = client.get("/browse", headers={"Authorization": "Bearer expired"})
+def test_invalid_jwt_has_bearer_challenge(authenticated: AuthenticatedClient) -> None:
+    authenticated.verify.error = HTTPException(401, "expired")
+    response = authenticated.client.get("/browse", headers={"Authorization": "Bearer expired"})
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
 
 
-def test_operational_errors_are_not_invalid_credentials(authenticated_client):
-    client, _, path, _, _ = authenticated_client
-    path.unlink()
+def test_operational_errors_are_not_invalid_credentials(authenticated: AuthenticatedClient) -> None:
+    authenticated.keys_path.unlink()
     with pytest.raises(FileNotFoundError):
-        client.get("/browse", headers={"X-API-Key": "test-key"})
+        authenticated.client.get("/browse", headers={"X-API-Key": "test-key"})
 
 
-def test_openapi_has_scoped_or_alternatives_and_cache():
+class _Operation(BaseModel):
+    """The part of an OpenAPI operation these checks read; other fields are ignored."""
+
+    security: list[dict[str, list[str]]] | None = None
+
+
+# FastAPI path items contain only HTTP-method operations.
+_paths = TypeAdapter(dict[str, dict[str, _Operation]])
+
+
+def test_openapi_has_scoped_or_alternatives_and_cache() -> None:
     app = get_app()
     schema = app.openapi()
     assert app.openapi() is schema
-    for path, operations in schema["paths"].items():
+    for operations in _paths.validate_python(schema["paths"]).values():
         for operation in operations.values():
-            if not isinstance(operation, dict) or "security" not in operation:
+            if operation.security is None:
                 continue
-            security = operation["security"]
+            security = operation.security
             if {"PeopleGatorAPIKey": []} in security:
                 assert {} not in security
                 assert len(security) == 2
@@ -182,46 +206,45 @@ def test_openapi_has_scoped_or_alternatives_and_cache():
 @pytest.mark.parametrize(
     "headers", [{"Authorization": "Bearer good"}, {"X-API-Key": "test-key"}]
 )
-def test_each_actor_scope_is_enforced(authenticated_client, path, headers):
-    client, _, _, _, _ = authenticated_client
-    assert client.get(path, headers=headers).status_code == 403
+def test_each_actor_scope_is_enforced(
+    authenticated: AuthenticatedClient, path: str, headers: dict[str, str],
+) -> None:
+    assert authenticated.client.get(path, headers=headers).status_code == 403
 
 
 @pytest.mark.parametrize("method", ["bearer", "api_key"])
-def test_me_preserves_the_public_user_contract(authenticated_client, method):
-    client, database, _, _, key = authenticated_client
+def test_me_preserves_the_public_user_contract(
+    authenticated: AuthenticatedClient, method: Literal["bearer", "api_key"],
+) -> None:
     from people_gator_api.routes.v1.users import router
 
-    app = client.app
-    app.include_router(router)
-    user = database.users.get_or_create.return_value
+    authenticated.app.include_router(router)
+    user = authenticated.user
     context = auth_service.AuthContext(
         user_id=user.user_id,
-        api_key_id=key.api_key_id if method == "api_key" else None,
+        api_key_id=uuid.uuid4() if method == "api_key" else None,
         authentication_method=method,
         scopes={auth_service.ANNOTATE_SCOPE},
     )
-    app.dependency_overrides[auth_service.get_auth_context] = lambda: context
-    response = client.get("/me")
+    authenticated.app.dependency_overrides[auth_service.get_auth_context] = lambda: context
+    response = authenticated.client.get("/me")
     assert response.status_code == 200
     assert response.json() == user.model_dump(mode="json")
     assert "api_key_id" not in response.json()
-    database.users.get.assert_awaited_once_with(user.user_id)
+    assert authenticated.store.users.calls == ["get"]
 
 
-def test_api_keys_of_inactive_users_are_rejected(authenticated_client):
-    client, database, _, _, _ = authenticated_client
-    user = database.users.get_or_create.return_value
-    database.users.get_or_create.return_value = user.model_copy(update={"is_active": False})
-    response = client.get("/browse", headers={"X-API-Key": "test-key"})
+def test_api_keys_of_inactive_users_are_rejected(authenticated: AuthenticatedClient) -> None:
+    authenticated.store.users.set_active(authenticated.user.user_id, False)
+    response = authenticated.client.get("/browse", headers={"X-API-Key": "test-key"})
     assert response.status_code == 403
-    database.api_keys.get_or_create.assert_not_awaited()
+    assert authenticated.api_keys.requests == []
+    assert not authenticated.store.users.records[authenticated.user.user_id].is_active
 
 
-def test_bearer_requests_do_not_resolve_users(authenticated_client):
-    client, database, _, _, _ = authenticated_client
-    response = client.get("/browse", headers={"Authorization": "Bearer good"})
+def test_bearer_requests_do_not_resolve_users(authenticated: AuthenticatedClient) -> None:
+    response = authenticated.client.get("/browse", headers={"Authorization": "Bearer good"})
     assert response.status_code == 200
-    assert response.json()["user_id"] == str(database.users.get.return_value.user_id)
-    database.users.get_or_create.assert_not_awaited()
-    database.users.get.assert_not_awaited()
+    assert response.json()["user_id"] == str(authenticated.user.user_id)
+    assert authenticated.store.users.calls == []
+    assert authenticated.store.entries == 0

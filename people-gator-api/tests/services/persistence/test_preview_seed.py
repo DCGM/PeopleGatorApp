@@ -3,6 +3,8 @@
 import io
 import json
 import uuid
+from collections.abc import AsyncIterator
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -10,7 +12,7 @@ import pytest_asyncio
 from alembic import command
 from PIL import Image
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from people_gator_api.filesystem.local import LocalFilesystem
 from people_gator_api.media.aligned_face_crop import get_aligned_face_crop
@@ -18,6 +20,8 @@ from people_gator_api.media.page_image import get_page_image
 from people_gator_api.media.page_layout import get_page_layout
 from people_gator_api.media.errors import SourceResolutionError
 from people_gator_api.media.text_mention_spans import get_text_mention_spans
+from people_gator_api.persistence.contracts import Database
+from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.persistence.postgres.schema import (
     migration_config,
@@ -58,8 +62,13 @@ from people_gator_api.services import filesystem_service
 from people_gator_api.settings import settings
 
 
+type SeedTarget = tuple[Database, LocalFilesystem, AsyncEngine]
+
+
 @pytest_asyncio.fixture
-async def seed_target(tmp_path, monkeypatch, migrated_postgres):
+async def seed_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, migrated_postgres: AsyncEngine,
+) -> AsyncIterator[SeedTarget]:
     filesystem = LocalFilesystem(tmp_path)
     monkeypatch.setattr(filesystem_service, "get_filesystem", lambda: filesystem)
     monkeypatch.setattr(settings.aligned_face_crop, "cache_enabled", False)
@@ -2618,16 +2627,26 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
 
 
 @pytest.mark.asyncio
-async def test_deactivated_reviewer_keeps_attribution_across_reruns(seed_target):
+async def test_deactivated_reviewer_keeps_attribution_across_reruns(seed_target: SeedTarget) -> None:
+    from people_gator_api.schemas.entity_links import EntityLinkState
     from people_gator_api.schemas.mentions import TextMentionListFilter
-    from people_gator_api.schemas.users import UserListFilter, UserListRequest, UserPatchRequest
+    from people_gator_api.schemas.users import (
+        UserListFilter, UserListRequest, UserPatchRequest, UserResponse,
+    )
 
     db, fs, _ = seed_target
+
+    async def user(user_id: uuid.UUID) -> UserResponse:
+        found = await db.users.get(user_id)
+        assert found is not None
+        return found
+
     seed = await preview.seed_preview(db, fs)
-    former = await db.users.get(seed.users["former"])
-    assert former is not None and not former.is_active
+    former = await user(seed.users["former"])
+    assert not former.is_active
     assert "former" not in seed.api_keys
     mention = await db.text_mentions.get(seed.mentions["deactivated-olga-mention"])
+    assert mention is not None
     assert mention.entity_id == seed.entities["deactivated-olga"]
     assert mention.last_touched_by_user_id == former.user_id
     assert mention.last_touched_by_api_key_id is None
@@ -2638,38 +2657,46 @@ async def test_deactivated_reviewer_keeps_attribution_across_reruns(seed_target)
     example = parse_qs(urlsplit(seed.filter_examples["deactivated-reviewer"]).query)
     assert example["touched_by"] == [str(former.user_id)]
     options = await db.users.list(UserListRequest(limit=10, filter_=UserListFilter(search="former")))
-    assert [user.user_id for user in options.items] == [former.user_id]
+    assert [option.user_id for option in options.items] == [former.user_id]
 
     # A reviewer verifies the link; an administrator later reactivates the user.
     reviewed = await db.text_mentions.patch(
-        mention.mention_id, TextMentionPatchRequest(entity_link_state="verified"),
+        mention.mention_id, TextMentionPatchRequest(entity_link_state=EntityLinkState.verified),
         GenericActor(user_id=seed.users["reviewer"]),
     )
+    assert reviewed is not None
     await db.users.patch(former.user_id, UserPatchRequest(is_active=True))
     again = await preview.seed_preview(db, fs)
     assert again.users["former"] == former.user_id
-    assert (await db.users.get(former.user_id)).is_active
+    assert (await user(former.user_id)).is_active
     kept = await db.text_mentions.get(mention.mention_id)
-    assert kept.entity_link_state == "verified"
+    assert kept is not None
+    assert kept.entity_link_state == EntityLinkState.verified
     assert kept.last_touched_at == reviewed.last_touched_at
     assert kept.last_touched_by_user_id == seed.users["reviewer"]
 
     # Seeding never reactivates (or deactivates) an existing identity.
     await db.users.patch(former.user_id, UserPatchRequest(is_active=False))
     await preview.seed_preview(db, fs)
-    assert not (await db.users.get(former.user_id)).is_active
+    assert not (await user(former.user_id)).is_active
 
 
 @pytest.mark.asyncio
-async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(seed_target, tmp_path, monkeypatch):
+async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
+    seed_target: SeedTarget, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import asyncio
+    from dataclasses import dataclass
+    from types import TracebackType
+
     import argon2
     import httpx
-    from contextlib import asynccontextmanager
     from fastapi import FastAPI
     from people_gator_api.routes.jwks import router as token_router
     from people_gator_api.routes.v1 import router
-    from people_gator_api.schemas.users import UserListFilter, UserListRequest, UserPatchRequest
+    from people_gator_api.schemas.users import (
+        UserListFilter, UserListRequest, UserPatchRequest, UserResponse,
+    )
     from people_gator_api.services import auth_service, database_service, jwk_service
     from people_gator_api.settings import JwkSettings, LocalStorageSettings, StorageSettings
 
@@ -2692,28 +2719,39 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(seed_ta
         "scopes": ["people-gator:browse", "people-gator:annotate"],
     }}))
 
-    entries = 0
+    @dataclass
+    class CountedContext:
+        """Counts database scopes entered through get_database_context()."""
 
-    @asynccontextmanager
-    async def counted_context():
-        nonlocal entries
-        entries += 1
-        yield db
+        entries: int = 0
 
+        def __call__(self) -> "CountedContext":
+            return self
+
+        async def __aenter__(self) -> Database:
+            self.entries += 1
+            return db
+
+        async def __aexit__(
+            self, exc_type: type[BaseException] | None, exc: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            return None
+
+    async def whoami(actor: auth_service.BrowseActorDependency) -> dict[str, str]:
+        return {"user_id": str(actor.user_id)}
+
+    contexts = CountedContext()
     app = FastAPI()
     app.include_router(token_router)
     app.include_router(router)
-
-    @app.get("/whoami")
-    async def whoami(actor: auth_service.BrowseActorDependency):
-        return {"user_id": str(actor.user_id)}
-
+    app.add_api_route("/whoami", whoami)
     app.dependency_overrides[database_service.get_database] = lambda: db
-    app.dependency_overrides[database_service.get_database_context] = lambda: counted_context()
+    app.dependency_overrides[database_service.get_database_context] = contexts
     login_form = {"username": "lifecycle", "password": "synthetic",
                   "scope": "people-gator:browse people-gator:annotate"}
 
-    async def identities():
+    async def identities() -> list[UserResponse]:
         return (await db.users.list(UserListRequest(limit=10, filter_=UserListFilter(
             external_subject=["lifecycle"], external_issuer=[settings.jwk.issuer],
         )))).items
@@ -2722,13 +2760,13 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(seed_ta
         assert await identities() == []
         login = await client.post("/token/login", data=login_form)
         assert login.status_code == 200, login.text
-        assert entries == 1
+        assert contexts.entries == 1
         [user] = await identities()
         assert user.is_active
-        tokens = login.json()
-        claims = await jwk_service.verify_access_token(tokens["access_token"])
+        tokens = TokenResponse.model_validate(login.json())
+        claims = await jwk_service.verify_access_token(tokens.access_token)
         assert claims["uid"] == user.user_id
-        bearer = {"Authorization": "Bearer " + tokens["access_token"]}
+        bearer = {"Authorization": "Bearer " + tokens.access_token}
 
         for _ in range(2):
             response = await client.get("/whoami", headers=bearer)
@@ -2738,7 +2776,7 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(seed_ta
         assert patched.status_code == 200, patched.text
         assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
         assert patched.json()["last_touched_by_api_key_id"] is None
-        assert entries == 1
+        assert contexts.entries == 1
 
         await db.users.patch(user.user_id, UserPatchRequest(is_active=False))
         # Issued access tokens remain valid until expiry, including profile reads.
@@ -2747,23 +2785,23 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(seed_ta
         assert me.status_code == 200 and me.json()["is_active"] is False
         patched = await client.patch(olga, json={"short_description": "Written after deactivation."}, headers=bearer)
         assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
-        assert entries == 1
+        assert contexts.entries == 1
 
         assert (await client.post("/token/login", data=login_form)).status_code == 403
-        refused = await client.post("/token/refresh", json={"refresh_token": tokens["refresh_token"]})
+        refused = await client.post("/token/refresh", json={"refresh_token": tokens.refresh_token})
         assert refused.status_code == 403
         assert "access_token" not in refused.json()
         await db.users.patch(user.user_id, UserPatchRequest(is_active=True))
         # The rejected refresh revoked its session; reactivation does not revive it.
-        revoked = await client.post("/token/refresh", json={"refresh_token": tokens["refresh_token"]})
+        revoked = await client.post("/token/refresh", json={"refresh_token": tokens.refresh_token})
         assert revoked.status_code == 401
         assert [item.user_id for item in await identities()] == [user.user_id]
 
-        relogin = await client.post("/token/login", data=login_form)
-        assert relogin.status_code == 200
-        refreshed = await client.post("/token/refresh", json={"refresh_token": relogin.json()["refresh_token"]})
+        relogin = TokenResponse.model_validate((await client.post("/token/login", data=login_form)).json())
+        refreshed = await client.post("/token/refresh", json={"refresh_token": relogin.refresh_token})
         assert refreshed.status_code == 200
-        assert (await jwk_service.verify_access_token(refreshed.json()["access_token"]))["uid"] == user.user_id
+        renewed = TokenResponse.model_validate(refreshed.json())
+        assert (await jwk_service.verify_access_token(renewed.access_token))["uid"] == user.user_id
 
         expires = claims["exp"]
         monkeypatch.setattr(jwk_service, "_now", lambda: expires + 1)
