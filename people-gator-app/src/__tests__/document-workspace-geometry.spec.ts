@@ -10,10 +10,11 @@ import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
 
 const api = vi.hoisted(() => ({
   page: vi.fn(), image: vi.fn(), layout: vi.fn(), spans: vi.fn(),
-  faces: vi.fn(), entities: vi.fn(), mentions: vi.fn(), crop: vi.fn(),
+  search: vi.fn(), faces: vi.fn(), entities: vi.fn(), mentions: vi.fn(), crop: vi.fn(),
 }))
 vi.mock('@/client', async importOriginal => ({
   ...await importOriginal<typeof import('@/client')>(),
+  searchEntitiesGetApiV1SearchEntitiesGet: api.search,
   lookupPageRouteApiV1PagesLookupGet: api.page,
   getPageImageByIdRouteApiV1PagesPageSourceIdImageGet: api.image,
   getPageLayoutByIdRouteApiV1PagesPageSourceIdPageLayoutGet: api.layout,
@@ -125,5 +126,35 @@ describe('scan geometry without OCR', () => {
       await expect(fetchPageLayout('page')).rejects.toMatchObject({ response: { status } })
       await expect(fetchPageMentionSpans('page')).rejects.toMatchObject({ response: { status } })
     }
+  })
+})
+
+
+it('searches scan face-similarity candidates globally while preserving text lookup criteria', async () => {
+  api.faces.mockResolvedValue({ data: { items: [{
+    detection_id: 'face', embeddings: ['model'], confidence: 1,
+    bounding_box: { x: 0, y: 0, width: 100, height: 100 },
+  }], cursor: null } })
+  api.search.mockResolvedValue({ data: { items: [{
+    entity_id: 'outside', entity_type: 'person', name: 'Outside', score: 0.9,
+  }], cursor: null } })
+  const term = ref('')
+  const evidence = ref({ 'filter.library': ['local'], 'filter.entity_link_state': ['verified'] as Array<'verified'> })
+  let model!: ReturnType<typeof useDocumentWorkspace>
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = mount(defineComponent({ setup() {
+    model = useDocumentWorkspace('library', 'document', 'page', 'face', term, 'face', [], evidence)
+    return () => h('div')
+  } }), { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } })
+  cleanup.push(() => { wrapper.unmount(); client.clear() })
+  await flushPromises()
+  expect(api.search.mock.lastCall?.[0].query).toEqual({
+    'query.face_id': ['face'], 'query.face_embedding_model': 'model', limit: 50, cursor: null,
+  })
+  expect(model.similarPeople.value[0]?.id).toBe('outside')
+  term.value = 'Outside'
+  await flushPromises()
+  expect(api.search.mock.lastCall?.[0].query).toMatchObject({
+    'query.text': ['Outside'], ...evidence.value, cursor: null,
   })
 })

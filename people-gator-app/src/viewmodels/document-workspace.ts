@@ -292,10 +292,12 @@ export function useDocumentWorkspace(
   const candidateSearchQuery = useEntitySearchQuery(
     computed(() => ({
       ...(searchParams.value ?? { limit: 0 }),
-      ...toValue(evidence),
+      // Face similarity discovers identities globally; ordinary text lookup
+      // retains its explicit annotation criteria.
+      ...(resultMode.value === 'text' && toValue(evidence)),
       ...(candidateOrder.value && sortParams(candidateOrder.value)),
     })),
-    computed(() => searchEnabled.value && toValue(evidenceValid)),
+    computed(() => searchEnabled.value && (resultMode.value === 'face' || toValue(evidenceValid))),
   )
   const candidateMatches = computed(() =>
     (candidateSearchQuery.data.value?.pages ?? []).flatMap((page) => page.items),

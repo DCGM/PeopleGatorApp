@@ -327,3 +327,7 @@ export OpenAPI locally and regenerate the SDK, then update shared state, control
 tags and query keys. Test actual AND/OR results, same-link restrictions, own-record
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
+
+The scan editor's face-similarity candidate mode also searches globally. Its
+ordinary text candidate lookup continues to apply explicitly selected shared
+criteria, and page mode continues to show the current page's identities.
