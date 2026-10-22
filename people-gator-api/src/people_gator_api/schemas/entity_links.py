@@ -73,7 +73,7 @@ class SharedFilter(BaseModel):
     )
     page_source_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING,
-        description="Internal page source UUIDs. Documents match the registered document containing the page; other records match links on that page.",
+        description="Internal registered page source UUIDs. Source lists match only those pages, never their containing documents; linked records match annotations on those pages. Non-page UUIDs do not match.",
     )
     last_touched_from: AwareDatetime | MissingType = Field(
         default=MISSING, description="Inclusive, timezone-aware lower bound of the record's latest recorded change."

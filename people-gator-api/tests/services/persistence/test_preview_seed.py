@@ -2381,6 +2381,66 @@ async def test_shared_filter_scenario_transfers_own_latest_changes(seed_target):
 
 
 @pytest.mark.asyncio
+async def test_shared_page_scope_matches_pages_without_parent_documents(seed_target):
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.schemas.mentions import TextMentionListFilter
+    from people_gator_api.schemas.sources import (
+        DocumentListFilter, GenericSourceListFilter, GenericSourceListRequest,
+    )
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    selected = seed.pages["shared-ledger-1"]
+    for key, path in (("shared-filters-page", "/scans"), ("shared-filters-page-people", "/people")):
+        example = urlsplit(seed.filter_examples[key])
+        assert example.path == path
+        assert parse_qs(example.query) == {"page": [str(selected)]}
+
+    sources = await db.sources.list(GenericSourceListRequest(
+        limit=100, return_total_count=True,
+        filter_=GenericSourceListFilter(page_source_id=[selected]),
+    ))
+    assert [item.source_id for item in sources.items] == [selected]
+    assert sources.total_count == 1
+    documents = await db.sources.list_documents(DocumentListRequest(
+        limit=100, filter_=DocumentListFilter(page_source_id=[selected]),
+    ))
+    assert not documents.items
+    people = await db.entities.list(EntityListRequest(
+        limit=100, filter_=EntityListFilter(page_source_id=[selected]),
+    ))
+    assert [item.entity_id for item in people.items] == [seed.entities["shared-hana"]]
+    faces = await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(page_source_id=[selected]),
+    ))
+    assert [item.detection_id for item in faces.items] == [seed.faces["shared-hana-face"]]
+
+    # These existing non-page fixtures have actual annotations. A page filter
+    # must not mistake their UUIDs for pages, even alongside a valid selection.
+    image_face = await db.faces.get(seed.faces["issue8-image-face"])
+    invalid_ids = [seed.documents["issue8-direct"], image_face.source_id]
+    for source_id in invalid_ids:
+        assert not (await db.entities.list(EntityListRequest(
+            limit=100, filter_=EntityListFilter(page_source_id=[source_id]),
+        ))).items
+        assert not (await db.text_mentions.list(TextMentionListRequest(
+            limit=100, filter_=TextMentionListFilter(page_source_id=[source_id]),
+        ))).items
+        assert not (await db.faces.list(FaceListRequest(
+            limit=100, filter_=FaceListFilter(page_source_id=[source_id]),
+        ))).items
+    sources = await db.sources.list(GenericSourceListRequest(
+        limit=100, filter_=GenericSourceListFilter(page_source_id=[selected, *invalid_ids]),
+    ))
+    assert [item.source_id for item in sources.items] == [selected]
+
+    # New report links are additive and a second seed keeps the reviewed graph.
+    face = await db.faces.get(seed.faces["shared-hana-face"])
+    assert await preview.seed_preview(db, filesystem) == seed
+    assert await db.faces.get(face.detection_id) == face
+
+
+@pytest.mark.asyncio
 async def test_shared_filter_edit_recovers_from_interrupted_checkpoint(seed_target, monkeypatch):
     """An edit written before its completion checkpoint is not repeated."""
     db, filesystem, _ = seed_target

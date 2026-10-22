@@ -36,11 +36,14 @@ from people_gator_api.schemas.mentions import (
     TextMentionListFilter,
     TextMentionListRequest,
 )
-from people_gator_api.schemas.search import QueryBase, SearchDocumentsRequest, SearchEntitiesRequest
+from people_gator_api.schemas.search import QueryBase, SearchDocumentsRequest, SearchEntitiesRequest, SearchPagesRequest
 from people_gator_api.schemas.sources import (
     DocumentCreateRequest,
     DocumentListFilter,
     DocumentListRequest,
+    GenericSourceListFilter,
+    GenericSourceListRequest,
+    ImageCreateRequest,
     PageCreateRequest,
     PageListFilter,
     PageListRequest,
@@ -229,14 +232,74 @@ async def test_source_scope_uses_real_relationships_without_leaks(matrix):
     assert await document_ids(m, document_source_id=[m.d1.source_id]) == {m.d1.source_id}
     assert await entity_ids(m, document_source_id=[m.d1.source_id]) == {m.e1.entity_id, m.e3.entity_id}
     assert await entity_ids(m, document_source_id=[m.d2.source_id]) == {m.e2.entity_id, m.e3.entity_id}
-    # A page scope selects the containing document and the page's linked records.
-    assert await document_ids(m, page_source_id=[m.p2a.source_id]) == {m.d2.source_id}
+    # A page scope selects only pages and their linked records, never parent documents.
+    assert await document_ids(m, page_source_id=[m.p2a.source_id]) == set()
     assert await page_ids(m, page_source_id=[m.p3.source_id]) == {m.p3.source_id}
     assert await entity_ids(m, page_source_id=[m.p1b.source_id]) == set()
     assert await face_ids(m, page_source_id=[m.p1b.source_id]) == {m.f2.detection_id}
     assert await mention_ids(m, document_source_id=[m.d1.source_id]) == set()
     # Unknown identifiers select nothing; they never mean "unassigned".
     assert await entity_ids(m, document_source_id=[uuid.uuid4()]) == set()
+
+
+async def test_page_scope_excludes_nonpage_sources_and_parent_documents(matrix):
+    m = matrix
+    image, _ = await m.db.sources.get_or_create_image(ImageCreateRequest(
+        url=f"https://preview.invalid/page-scope/{m.d1.source_id}.png",
+    ))
+    # Give both non-page sources real annotations, so wrong-kind IDs cannot
+    # appear to be excluded just because their sources have no linked records.
+    for source in (m.d1, image):
+        await m.db.faces.create(_face(source.source_id, m.e1.entity_id), m.v)
+        await m.db.text_mentions.create(TextMentionCreateRequest(
+            name="Direct non-page mention", source_id=source.source_id, entity_id=m.e1.entity_id,
+        ), m.v)
+    invalid_ids = [m.d1.source_id, image.source_id, uuid.uuid4()]
+    for source_id in invalid_ids:
+        scope = {"page_source_id": [source_id]}
+        assert await document_ids(m, **scope) == set()
+        assert await page_ids(m, **scope) == set()
+        assert await entity_ids(m, **scope) == set()
+        assert await face_ids(m, **scope) == set()
+        assert await mention_ids(m, **scope) == set()
+
+    # A mixed selection retains valid pages, without including either their
+    # parent documents or annotations directly attached to non-page sources.
+    scope = {"page_source_id": [m.p1a.source_id, *invalid_ids]}
+    sources = await m.db.sources.list(GenericSourceListRequest(
+        limit=100, return_total_count=True, filter_=GenericSourceListFilter(**scope),
+    ))
+    assert [item.source_id for item in sources.items] == [m.p1a.source_id]
+    assert sources.total_count == 1
+    assert await entity_ids(m, **scope) == {m.e1.entity_id, m.e3.entity_id}
+    assert await face_ids(m, **scope) == {m.f1.detection_id, m.f3.detection_id}
+    assert await mention_ids(m, **scope) == set()
+    assert await mention_ids(m, page_source_id=[m.p2a.source_id]) == {m.m1.mention_id, m.m2.mention_id}
+
+    documents = await m.db.sources.search_documents(SearchDocumentsRequest(
+        limit=1, return_total_count=True, query=QueryBase(text=[str(m.d1.document_id)]),
+        filter_=DocumentListFilter(**scope),
+    ))
+    assert documents.items == [] and documents.total_count == 0
+    pages = await m.db.sources.search_pages(SearchPagesRequest(
+        limit=1, return_total_count=True, query=QueryBase(text=[m.l1]),
+        filter_=PageListFilter(**scope),
+    ))
+    assert [item.source_id for item in pages.items] == [m.p1a.source_id]
+    assert pages.total_count == 1
+
+    seen, cursor = [], None
+    while True:
+        page = await m.db.sources.list(GenericSourceListRequest(
+            limit=1, cursor=cursor, return_total_count=True,
+            filter_=GenericSourceListFilter(page_source_id=[m.p1a.source_id, m.p1b.source_id, *invalid_ids]),
+        ))
+        assert page.total_count == 2
+        seen.extend(item.source_id for item in page.items)
+        cursor = page.cursor
+        if cursor is None:
+            break
+    assert sorted(seen) == sorted([m.p1a.source_id, m.p1b.source_id])
 
 
 async def test_relationship_predicates_need_one_matching_annotation(matrix):
@@ -253,13 +316,15 @@ async def test_relationship_predicates_need_one_matching_annotation(matrix):
         library=[m.l2], entity_link_state=automatic,
     )))
     assert {item.entity_id for item in result.items} == {m.e2.entity_id, m.e3.entity_id}
-    # Documents: link state is evaluated inside the selected page scope.
+    # Page lists apply link state on the selected page itself.
+    assert await page_ids(m, page_source_id=[m.p1b.source_id], entity_link_state=[EntityLinkState.manual]) == set()
+    assert await page_ids(m, page_source_id=[m.p1a.source_id], entity_link_state=[EntityLinkState.manual]) == {m.p1a.source_id}
+    # Additional linked-record criteria never make a parent document match a page filter.
     assert await document_ids(m, page_source_id=[m.p1b.source_id], entity_link_state=[EntityLinkState.manual]) == set()
-    assert await document_ids(m, page_source_id=[m.p1a.source_id], entity_link_state=[EntityLinkState.manual]) == {m.d1.source_id}
-    # An unassigned face elsewhere in the document cannot satisfy a selected page.
+    assert await document_ids(m, page_source_id=[m.p1a.source_id], entity_link_state=[EntityLinkState.manual]) == set()
     assert await document_ids(m, page_source_id=[m.p1a.source_id], has_unassigned_faces=True) == set()
-    assert await document_ids(m, page_source_id=[m.p1b.source_id], has_unassigned_faces=True) == {m.d1.source_id}
-    assert await document_ids(m, page_source_id=[m.p1a.source_id], has_unassigned_faces=False) == {m.d1.source_id}
+    assert await document_ids(m, page_source_id=[m.p1b.source_id], has_unassigned_faces=True) == set()
+    assert await document_ids(m, page_source_id=[m.p1a.source_id], has_unassigned_faces=False) == set()
     # Different fields AND; values within one field OR.
     assert await entity_ids(m, last_touched_by_user_id=[m.u.user_id, m.v.user_id],
                             document_source_id=[m.d2.source_id]) == {m.e2.entity_id, m.e3.entity_id}

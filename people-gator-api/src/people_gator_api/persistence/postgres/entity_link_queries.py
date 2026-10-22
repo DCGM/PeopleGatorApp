@@ -37,13 +37,10 @@ def library_sources(libraries):
     )
 
 
-def page_parent_documents(ids):
-    document = Document.__table__
+def page_sources(ids):
+    """Resolve only registered pages; document/image UUIDs cannot select a page."""
     page = Page.__table__
-    return select(document.c.id).select_from(document.join(
-        page,
-        (document.c.library == page.c.library) & (document.c.document_id == page.c.document_id),
-    )).where(page.c.id.in_(ids))
+    return select(page.c.id).where(page.c.id.in_(ids))
 
 
 SCOPE_FIELDS = ("library", "document_source_id", "page_source_id")
@@ -62,7 +59,7 @@ def scope_conditions(source_id, values):
         conditions.append(source_id.in_(document_sources(documents)))
     pages = missing_to_none(values.page_source_id)
     if pages is not None:
-        conditions.append(source_id.in_(pages))
+        conditions.append(source_id.in_(page_sources(pages)))
     return conditions
 
 
