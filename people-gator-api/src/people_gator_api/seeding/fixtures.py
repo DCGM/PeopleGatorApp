@@ -157,6 +157,7 @@ DOCUMENTS = (
     Document("shared-mirror", "preview-nlk", "Shared filter mirror", "shared-ledger"),
     *(Document(f"pagination-{i}", "preview-pagination", f"Pagination ledger {i:02}")
       for i in range(1, PAGINATION_ITEMS + 1)),
+    Document("alignment", "preview-mzk", "Face alignment recovery"),
 )
 
 
@@ -172,6 +173,7 @@ class Face:
     confidence: float = 0.97
     models: tuple[str, ...] = (MODEL, SECOND_MODEL)
     zero_vector: bool = False
+    coincident_keypoints: bool = False
 
 
 @dataclass(frozen=True)
@@ -403,6 +405,12 @@ PAGES = (
            mentions=(Mention(f"pagination-{i}", f"pagination-{i}",
                              f"Pagination Person {i:02} recorded this ledger."),))
       for i in range(1, PAGINATION_ITEMS + 1)),
+    # Issue #64: stored, finite geometry that cannot be aligned, beside a valid
+    # control. Independent keys keep existing media, reviews and timestamps intact.
+    Page("alignment-1", "alignment", 1, (
+        Face("alignment-coincident", None, 0, 2, embedded=False, coincident_keypoints=True),
+        Face("alignment-valid", None, 1, 3, embedded=False),
+    )),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

@@ -7,6 +7,31 @@ content, credentials, external downloads or embedding/OCR service are required.
 The seeder currently requires PostgreSQL because its scenarios include the
 API-key registry and transactional last-processing metadata.
 
+## Unalignable stored face (#64)
+
+The additive **Face alignment recovery** document (`alignment`, `preview-mzk`)
+has one locally generated page (`alignment-1`) with two unassigned faces:
+
+- `alignment-coincident` has all five required landmark types at the same
+  finite, in-bounds point. Its aligned crop returns HTTP 422 with
+  `detail.code: invalid_face_keypoints`.
+- `alignment-valid` is the valid control and returns a decodable JPEG.
+
+Open the CLI's `alignment-1` page link to inspect the synthetic detections.
+The seed report includes each detection UUID and the `alignment-coincident-crop`
+and `alignment-valid-crop` API paths. With browse authentication, request
+`GET /api/v1/faces/{detection_id}/aligned_crop?max_width=256`; use the API origin
+for these paths (the CLI prefixes printed links with the configured app origin).
+See [aligned face crops](ALIGNED-FACE-CROPS.md) for the error and numerical limits.
+
+New stable fixture/checkpoint keys add this scenario to retained previews without
+rewriting existing faces, assignments, media or modification times. Reruns keep
+reviewer evidence assignments and processing timestamps. Integration
+tests read real media and repository records, exercise the crop HTTP endpoint,
+verify failed requests leave processing times unchanged, and preserve an
+assignment on rerun. Interrupted-checkpoint recovery covers both
+new detection keys.
+
 ## Run it
 
 From `people-gator-api`, with PostgreSQL and filesystem settings configured for
