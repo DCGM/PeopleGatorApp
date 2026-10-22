@@ -569,3 +569,16 @@ The seed integration regression queries each source through both repositories,
 checks meaningful matches and finite scores, excludes zero-vector witnesses,
 reads a real aligned crop, and preserves edited aliases/assignments on rerun.
 Existing interrupted-checkpoint and edit-preservation checks cover the added keys.
+
+
+PR #59 review follow-up: `entity-discovery-identifier` opens text-only discovery
+for the existing unassigned face's `preview-seed/discovery-unassigned` identifier.
+Its exact text hit has no invented face score and retains working local media.
+The seeded integration regression exercises this indexed identifier path as well
+as name/alias input selection and preserves reviewed assignments on two reruns.
+Use `entity-discovery` to inspect the removable nondefault Face model tag with
+mobile settings collapsed; Clear filters resets sources/model while preserving
+search and evidence choices. On disposable data, failed assignment/merge requests
+retain their selection and point to the corresponding action for recovery.
+Face text candidate retrieval is bounded to 200 per term per indexed field;
+apply migration `d34a021b0012` before seed/startup to install its identifier index.

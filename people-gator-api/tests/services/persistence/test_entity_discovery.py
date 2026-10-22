@@ -439,3 +439,63 @@ async def test_entity_search_resolves_beyond_one_hundred_linked_faces(discovery)
         db.entities._session, SearchEntitiesRequest(limit=50, query=query)
     )
     assert set(resolved.query.face_id) == {face.detection_id for face in faces}
+
+
+@pytest.mark.asyncio
+async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(discovery):
+    from people_gator_api.schemas.faces import FaceListFilter
+    from people_gator_api.persistence.postgres.utils import TEXT_SEARCH_CANDIDATE_LIMIT
+
+    db, _, candidate, _, _, _, _, useful, _, actor, page = discovery
+    template = FaceCreateRequest(
+        source_id=page.source_id, entity_id=candidate.entity_id,
+        identifier="Catalogue Witness", confidence=0.5,
+        bounding_box=useful.bounding_box, keypoints=useful.keypoints,
+    )
+    created = await db.faces.create_batch([template] * (TEXT_SEARCH_CANDIDATE_LIMIT + 5), actor)
+    from people_gator_api.schemas.entities import EntityPatchRequest
+    await db.entities.patch(candidate.entity_id, EntityPatchRequest(aliases=["Catalogue Alias"]), actor)
+    # Each branch is independently bounded, even when one identity has many faces.
+    for term in ("Catalogue Witness", "Useful Portrait", "Catalogue Alias"):
+        result = await db.faces.search(SearchFacesRequest(
+            query=QueryBase(text=[term]), limit=0, return_total_count=True,
+        ))
+        assert TEXT_SEARCH_CANDIDATE_LIMIT <= result.total_count < len(created)
+        scores = await db.faces._text_scores(SearchFacesRequest(query=QueryBase(text=[term]), limit=1), [])
+        special = next(face for face in created if face.detection_id not in scores)
+        filtered = await db.faces.search(SearchFacesRequest(
+            query=QueryBase(text=[term]), limit=100,
+            filter_=FaceListFilter(detection_id=[special.detection_id]),
+        ))
+        assert [face.detection_id for face in filtered.items] == [special.detection_id]
+    # Unassigned identifiers remain searchable without an entity or embedding.
+    unassigned = await db.faces.create(template.model_copy(update={
+        "entity_id": None, "identifier": "Standalone Identifier", "confidence": 0.99,
+    }), actor)
+    result = await db.faces.search(SearchFacesRequest(
+        query=QueryBase(text=["Standalone Identifier"]), limit=10,
+    ))
+    assert result.items[0].detection_id == unassigned.detection_id
+    assert result.items[0].text_score == 1 and result.items[0].face_score is None
+
+
+@pytest.mark.asyncio
+async def test_face_text_candidate_predicates_can_use_all_three_gin_indexes(discovery):
+    from sqlalchemy import text
+    from sqlalchemy.dialects import postgresql
+    from people_gator_api.persistence.postgres.utils import face_text_candidates
+
+    db = discovery[0]
+    # Tiny fixtures naturally choose sequential scans. Disable that preference
+    # only to prove all predicate branches have usable indexes in the real schema.
+    await db.faces._session.execute(text("SET LOCAL enable_seqscan = off"))
+    await db.faces._session.execute(text("SET LOCAL enable_indexscan = off"))
+    statement = face_text_candidates("Useful Portrait", [])
+    compiled = statement.compile(
+        dialect=postgresql.dialect(paramstyle="named"), compile_kwargs={"literal_binds": True},
+    )
+    plan = await db.faces._session.execute(text("EXPLAIN " + str(compiled)))
+    plan_text = "\n".join(row[0] for row in plan)
+    for name in ("faces_identifier_trgm", "entities_name_trgm", "aliases_name_trgm"):
+        assert name in plan_text
+    assert plan_text.count("Limit") == 3

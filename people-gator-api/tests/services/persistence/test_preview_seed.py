@@ -2335,6 +2335,14 @@ async def test_entity_discovery_choices_many_faces_and_degenerate_vectors(seed_t
     assert len(references.items) == 15
     assert (await db.faces.get(first.faces['discovery-missing'])).embeddings == []
     assert (await db.faces.get(first.faces['discovery-other-model'])).embeddings == [DISCOVERY_OTHER_MODEL]
+    identifier_example = parse_qs(urlsplit(first.filter_examples['entity-discovery-identifier']).query)
+    assert identifier_example['discovery_annotations'] == ['none']
+    identifier_results = await db.faces.search(SearchFacesRequest(
+        limit=40, query=QueryBase(text=identifier_example['discovery_text']),
+    ))
+    assert identifier_results.items[0].detection_id == first.faces['discovery-unassigned']
+    assert identifier_results.items[0].face_score is None
+    assert identifier_results.items[0].text_score == 1
     # Retain operator-reviewed inputs and assignments on an additive rerun.
     actor = GenericActor(user_id=first.users["reviewer"])
     edited = await db.entities.patch(reference, EntityPatchRequest(aliases=["Reviewed navigator"]), actor)

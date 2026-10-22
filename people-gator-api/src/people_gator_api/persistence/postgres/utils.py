@@ -282,6 +282,37 @@ def entity_text_candidates(
     return select(candidates.c.candidate_id).distinct()
 
 
+def face_text_candidates(term: str, filters: Sequence[ColumnElement[bool]]):
+    """Bound each indexed text branch before joining aliases for final scoring.
+
+    Apply face filters inside each branch so unrelated evidence cannot consume
+    the candidate budget. Keep the original similarity scoring after retrieval.
+    """
+    normalized_term = func.lower(func.unaccent(term))
+    identifiers = (
+        select(Face.id.label("candidate_id"))
+        .where(*filters, Face.identifier.op("%")(term))
+        .order_by(func.similarity(Face.identifier, term).desc(), Face.id)
+        .limit(TEXT_SEARCH_CANDIDATE_LIMIT)
+    )
+    names = (
+        select(Face.id.label("candidate_id"))
+        .join(Entity, Entity.id == Face.entity_id)
+        .where(*filters, Entity.name_normalized.op("%")(normalized_term))
+        .order_by(func.similarity(Entity.name_normalized, normalized_term).desc(), Face.id)
+        .limit(TEXT_SEARCH_CANDIDATE_LIMIT)
+    )
+    aliases = (
+        select(Face.id.label("candidate_id"))
+        .join(Alias, Alias.entity_id == Face.entity_id)
+        .where(*filters, Alias.name_normalized.op("%")(normalized_term))
+        .order_by(func.similarity(Alias.name_normalized, normalized_term).desc(), Face.id)
+        .limit(TEXT_SEARCH_CANDIDATE_LIMIT)
+    )
+    candidates = union_all(identifiers, names, aliases).subquery("face_text_candidates")
+    return select(candidates.c.candidate_id).distinct()
+
+
 @trace("postgres.hnsw.configure")
 async def configure_hnsw_search(session: AsyncSession) -> None:
     await session.execute(text(f"SET LOCAL hnsw.ef_search = {HNSW_EF_SEARCH}"))

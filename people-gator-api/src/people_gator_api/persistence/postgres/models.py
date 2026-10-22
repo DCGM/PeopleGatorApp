@@ -423,6 +423,12 @@ class Face(ImageOccurrence):
 
     __tablename__ = TABLE_NAME_FORMAT.format("faces")
     __table_args__ = (
+        Index(
+            "ix_pg_demo_faces_identifier_trgm",
+            "identifier",
+            postgresql_using="gin",
+            postgresql_ops={"identifier": "gin_trgm_ops"},
+        ),
         CheckConstraint(
             """array_ndims(keypoints) = 2
             AND array_length(keypoints, 1) = 5

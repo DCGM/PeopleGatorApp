@@ -50,6 +50,7 @@ from people_gator_api.persistence.postgres.models import (
 
 from people_gator_api.persistence.postgres.utils import (
     aggregate_scores,
+    face_text_candidates,
     search_face_scores,
     commit,
     ensure_ids,
@@ -334,7 +335,7 @@ class PostgresFaceRepository(FaceRepository):
                 select(Face.id, score.label("score"))
                 .outerjoin(Entity, Entity.id == Face.entity_id)
                 .outerjoin(Alias, Alias.entity_id == Entity.id)
-                .where(*filters)
+                .where(*filters, Face.id.in_(face_text_candidates(term, filters)))
                 .group_by(Face.id, Entity.id)
             )
             for item_id, raw_score in rows.all():

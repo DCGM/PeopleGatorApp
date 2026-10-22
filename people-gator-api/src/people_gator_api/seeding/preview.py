@@ -470,6 +470,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             **({"entity-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
                 "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+            }), "entity-discovery-identifier": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_annotations": "none",
+                "discovery_text": "preview-seed/discovery-unassigned",
             })} if 'discovery' in manifest.entities else {}),
             # Root entry demonstrates the Documents landing view with the existing
             # linked album/media. These entry points require no persisted upgrade.
