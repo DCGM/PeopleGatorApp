@@ -257,35 +257,102 @@ it('removes reference tags, resets sources without clearing search, and retries 
       referenceFaceCount: 15,
       annotations: ['faces', 'name'],
       searchTerm: 'extra signal',
-      error: new Error('invalid search'),
+      searchError: new Error('invalid search'),
     },
     global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
   })
-  expect(wrapper.get('[aria-label="Active reference inputs"]').findAll('small')).toHaveLength(2)
+  expect(wrapper.get('[aria-label="Active discovery filters"]').findAll('small')).toHaveLength(2)
   await wrapper.get('[aria-label="Remove reference faces"]').trigger('click')
   expect(wrapper.emitted('update:annotations')?.[0]).toEqual([['name']])
   await wrapper
     .findAll('button')
     .find((button) => button.text() === 'Clear filters')!
     .trigger('click')
-  expect(wrapper.emitted('update:annotations')?.[1]).toEqual([['faces', 'aliases', 'name']])
+  expect(wrapper.emitted('clearFilters')).toHaveLength(1)
   expect(wrapper.emitted('update:searchTerm')).toBeUndefined()
   await wrapper
     .findAll('button')
     .find((button) => button.text() === 'Retry')!
     .trigger('click')
   expect(wrapper.emitted('retry')).toHaveLength(1)
-  await wrapper.setProps({ annotations: [], searchTerm: '', error: undefined })
+  await wrapper.setProps({ annotations: [], searchTerm: '', searchError: undefined })
   expect(wrapper.text()).toContain('Choose a reference input or enter search text.')
-  expect(wrapper.find('[aria-label="Active reference inputs"]').exists()).toBe(false)
+  expect(wrapper.find('[aria-label="Active discovery filters"]').exists()).toBe(false)
 })
-
 
 it('labels text-only matches without inventing cosine percentages', () => {
   const wrapper = mount(PersonDiscoveryPanel, {
-    props: { faces: [{ ...face('text-face'), score: null }], people: [], currentName: 'Zora', referenceFaceCount: 15 },
+    props: {
+      faces: [{ ...face('text-face'), score: null }],
+      people: [],
+      currentName: 'Zora',
+      referenceFaceCount: 15,
+    },
     global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
   })
   expect(wrapper.text()).toContain('Text match')
   expect(wrapper.text()).not.toContain('sim ')
+})
+
+it('shows and removes a model override with default sources, and clears both choices together', async () => {
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: {
+      faces: [],
+      people: [],
+      currentName: 'Zora',
+      referenceFaceCount: 15,
+      annotations: ['faces', 'aliases', 'name'],
+      faceModel: 'alternate',
+      defaultFaceModel: 'default',
+      modelOptions: [{ value: 'alternate', label: 'Alternate model' }],
+      searchTerm: 'keep me',
+    },
+    global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+  })
+  expect(wrapper.get('[aria-label="Active discovery filters"]').text()).toContain(
+    'Face model: Alternate model',
+  )
+  expect(wrapper.findAll('small[data-slot="badge"]')).toHaveLength(1)
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'Clear filters')!
+    .trigger('click')
+  expect(wrapper.emitted('clearFilters')).toHaveLength(1)
+  expect(wrapper.emitted('update:searchTerm')).toBeUndefined()
+  await wrapper.get('[aria-label="Remove face model"]').trigger('click')
+  expect(wrapper.emitted('update:faceModel')).toEqual([['']])
+  await wrapper.setProps({ faceModel: 'default' })
+  expect(wrapper.find('[aria-label="Active discovery filters"]').exists()).toBe(false)
+})
+
+it('keeps failed action selections available for retry without offering a search retry', async () => {
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: {
+      faces: [face('retry-face')],
+      people: [{ id: 'retry-person', name: 'Orion', aliases: [], shortDescription: '' }],
+      currentName: 'Zora',
+      referenceFaceCount: 15,
+    },
+    global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+  })
+  await wrapper.get('[aria-label="Select face retry-face for assignment"]').trigger('click')
+  const assign = () =>
+    wrapper.findAll('button').find((button) => button.text() === 'Assign to Zora')!
+  await assign().trigger('click')
+  await wrapper.setProps({ assignmentFailed: true })
+  expect(wrapper.get('[role="alert"]').text()).toContain('Assignment failed.')
+  expect(wrapper.text()).not.toContain('Search failed.')
+  expect(wrapper.findAll('button').some((button) => button.text() === 'Retry')).toBe(false)
+  await assign().trigger('click')
+  expect(wrapper.emitted('assignFaces')).toEqual([[['retry-face']], [['retry-face']]])
+  await wrapper.setProps({ assignmentFailed: false })
+  await wrapper.get('[aria-label="Select Orion for merge"]').trigger('click')
+  const merge = () =>
+    wrapper.findAll('button').find((button) => button.text() === 'Merge into Zora')!
+  await merge().trigger('click')
+  await wrapper.setProps({ mergeFailed: true })
+  expect(wrapper.get('[role="alert"]').text()).toContain('Merge failed.')
+  expect(wrapper.text()).not.toContain('Search failed.')
+  await merge().trigger('click')
+  expect(wrapper.emitted('mergePeople')).toEqual([[['retry-person']], [['retry-person']]])
 })

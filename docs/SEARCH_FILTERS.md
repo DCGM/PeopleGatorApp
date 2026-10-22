@@ -53,7 +53,13 @@ face search excludes all of its linked faces, also for name/alias-only searches.
 `query.exclude_reference_face_id=false` includes them. Explicit queries retain
 their existing face-ID exclusion behavior. Scoring, sorting, RRF fusion and
 bounded HNSW retrieval (at most eight representatives, 200 candidates each) are
-unchanged. Cursors bind the original entity and canonical annotation selection;
+unchanged. Face text retrieval uses three separate trigram GIN predicates on
+identifier, normalized entity name and normalized alias. Each branch applies
+face/evidence filters before taking at most 200 candidates per term, with UUID
+tie-breaking, then only those candidates enter the existing similarity scoring
+and aggregation. PostgreSQL's `pg_trgm.similarity_threshold` (default 0.3)
+gates text candidates; weak incidental overlaps no longer expand the face pool.
+The identifier index is added by migration `d34a021b0012`. Cursors bind the original entity and canonical annotation selection;
 changing either rejects reuse. Equivalent omitted/all or reordered selections
 share the same fingerprint. Stored-input edits can change subsequent rankings.
 Entity references require PostgreSQL; Weaviate returns 501 unsupported_operation
@@ -64,7 +70,11 @@ selects sources; **Face model** chooses a registered embedding model (listing
 models requires browse scope; registration remains admin-only). Optional search
 text adds another signal. Choices are shareable through `discovery_annotations`,
 `discovery_model` and `discovery_text`; changes restart pagination. Selected source
-tags remain available with mobile controls collapsed. Empty/error states allow
+tags remain available with mobile controls collapsed. Nondefault Face model
+choices have a removable tag; Clear filters resets reference inputs and the
+model override together while preserving search text and evidence settings.
+Assignment and merge failures retain selections and direct recovery through
+their corresponding action; Retry only repeats searches and model loading. Empty/error states allow
 changing inputs and retrying without resetting evidence filters or assignments.
 
 Reference vectors are already stored; this search does not require an inference

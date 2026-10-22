@@ -40,13 +40,15 @@ const props = defineProps<{
   currentName: string
   referenceFaceCount: number
   modelOptions?: { value: string; label: string }[]
+  defaultFaceModel?: string
   assigningFaces?: boolean
+  assignmentFailed?: boolean
   mergingPeople?: boolean
   mergeSucceeded?: boolean
   mergeFailed?: boolean
   loadingFaces?: boolean
   loadingPeople?: boolean
-  error?: unknown
+  searchError?: unknown
   faceSortOptions?: SortOption<FaceSortField>[]
   peopleSortOptions?: SortOption<EntitySortField>[]
 }>()
@@ -56,6 +58,17 @@ const annotations = defineModel<EntityAnnotation[]>('annotations', {
   default: () => ['faces', 'aliases', 'name'],
 })
 const faceModel = defineModel<string>('faceModel', { default: '' })
+const hasReferenceFilters = computed(
+  () => annotations.value.length > 0 && annotations.value.length < 3,
+)
+const hasModelOverride = computed(() =>
+  Boolean(faceModel.value && faceModel.value !== props.defaultFaceModel),
+)
+const modelLabel = computed(
+  () =>
+    props.modelOptions?.find((option) => option.value === faceModel.value)?.label ??
+    faceModel.value,
+)
 const inputSearch = ref('')
 const inputOptions = computed(() =>
   [
@@ -78,6 +91,7 @@ const peopleSort = defineModel<SortState<EntitySortField>>('peopleSort')
 
 const emit = defineEmits<{
   retry: []
+  clearFilters: []
   assignFaces: [faceIds: string[]]
   mergePeople: [entityIds: string[]]
 }>()
@@ -283,40 +297,50 @@ watch(
         />
       </SearchFilterPanel>
       <div
-        v-if="annotations.length > 0 && annotations.length < 3"
+        v-if="hasReferenceFilters || hasModelOverride"
         class="mt-3 flex min-w-0 flex-wrap items-center gap-2"
-        aria-label="Active reference inputs"
+        aria-label="Active discovery filters"
       >
-        <Badge
-          v-for="input in annotations"
-          :key="input"
-          as="small"
-          variant="outline"
-          class="max-w-full gap-1"
-        >
-          <span class="min-w-0 break-all">Reference: {{ inputLabels[input] }}</span>
+        <template v-if="hasReferenceFilters">
+          <Badge
+            v-for="input in annotations"
+            :key="input"
+            as="small"
+            variant="outline"
+            class="max-w-full gap-1"
+          >
+            <span class="min-w-0 break-all">Reference: {{ inputLabels[input] }}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-full"
+              :aria-label="`Remove reference ${inputLabels[input].toLowerCase()}`"
+              @click="annotations = annotations.filter((item) => item !== input)"
+              ><X aria-hidden="true"
+            /></Button>
+          </Badge>
+        </template>
+        <Badge v-if="hasModelOverride" as="small" variant="outline" class="max-w-full gap-1">
+          <span class="min-w-0 break-all">Face model: {{ modelLabel }}</span>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
             class="rounded-full"
-            :aria-label="`Remove reference ${inputLabels[input].toLowerCase()}`"
-            @click="annotations = annotations.filter((item) => item !== input)"
+            aria-label="Remove face model"
+            @click="faceModel = ''"
             ><X aria-hidden="true"
           /></Button>
         </Badge>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          @click="annotations = ['faces', 'aliases', 'name']"
+        <Button type="button" variant="ghost" size="sm" @click="emit('clearFilters')"
           >Clear filters</Button
         >
       </div>
       <p v-if="!annotations.length && !searchTerm.trim()" role="status" class="mt-3">
         Choose a reference input or enter search text.
       </p>
-      <div v-if="props.error" role="alert" class="mt-3 flex flex-wrap items-center gap-2">
+      <div v-if="props.searchError" role="alert" class="mt-3 flex flex-wrap items-center gap-2">
         <p>Search failed. Choose other reference inputs or a face model, then retry.</p>
         <Button type="button" variant="outline" size="sm" @click="emit('retry')">Retry</Button>
       </div>
@@ -347,6 +371,9 @@ watch(
         />
       </SearchFilterPanel>
 
+      <p v-if="props.assignmentFailed" role="alert" class="mt-3">
+        Assignment failed. Select faces and try Assign again.
+      </p>
       <SelectedFaceActions
         v-if="selectedFaces.length"
         :count="selectedFaces.length"
@@ -523,6 +550,9 @@ watch(
         </SearchFilterPanel>
       </div>
 
+      <p v-if="props.mergeFailed" role="alert" class="mt-3">
+        Merge failed. Select people and try Merge again.
+      </p>
       <div
         v-if="selectedPeople.length"
         class="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-4xl flex-col gap-3 border border-accent bg-card p-3 shadow-lg sm:flex-row sm:items-center sm:justify-between"
@@ -537,9 +567,6 @@ watch(
           <p class="text-xs text-muted-foreground">
             Their faces and mentions will move to {{ props.currentName }}. The selected records will
             be deleted.
-          </p>
-          <p v-if="props.mergeFailed" class="text-xs text-destructive">
-            Merge failed. Check the selected records and try again.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">

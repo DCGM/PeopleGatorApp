@@ -121,15 +121,18 @@ const modelOptions = computed(() =>
     label: model.model_stub,
   })),
 )
+const defaultDiscoveryModel = computed(
+  () =>
+    modelOptions.value.find((model) => model.value === 'vit_small_patch8_gap_112.cosface_ms1mv3')
+      ?.value ??
+    modelOptions.value[0]?.value ??
+    '',
+)
 const discoveryModel = computed({
   get: () =>
     typeof route.query.discovery_model === 'string'
       ? route.query.discovery_model
-      : (modelOptions.value.find(
-          (model) => model.value === 'vit_small_patch8_gap_112.cosface_ms1mv3',
-        )?.value ??
-        modelOptions.value[0]?.value ??
-        ''),
+      : defaultDiscoveryModel.value,
   set: (value: string) =>
     void router.replace({ query: { ...route.query, discovery_model: value || undefined } }),
 })
@@ -164,7 +167,7 @@ watch(personSearchTerm, (text) => {
 const {
   assignFaces,
   assignmentStatus,
-  error: discoveryError,
+  searchError: discoveryError,
   retry: retryDiscovery,
   isLoadingFaces,
   isLoadingPeople,
@@ -189,6 +192,12 @@ function selectTab(tab: string | number) {
     name: 'person-detail',
     params: { personId: personId.value },
     query: { ...route.query, tab: selectedTab === 'faces' ? undefined : selectedTab },
+  })
+}
+
+function clearDiscoveryFilters() {
+  void router.replace({
+    query: { ...route.query, discovery_model: undefined, discovery_annotations: undefined },
   })
 }
 
@@ -357,6 +366,7 @@ function retrySearch() {
             v-model:annotations="discoveryAnnotations"
             v-model:face-model="discoveryModel"
             :model-options="modelOptions"
+            :default-face-model="defaultDiscoveryModel"
             v-model:face-sort="similarFaceSort"
             v-model:people-sort="similarPeopleSort"
             :face-sort-options="FACE_SORTS"
@@ -366,12 +376,14 @@ function retrySearch() {
             :current-name="profile.name"
             :reference-face-count="entity?.entity_link_stats?.faces?.total ?? faceCount"
             :assigning-faces="assignmentStatus === 'pending'"
+            :assignment-failed="assignmentStatus === 'error'"
             :merging-people="mergeStatus === 'pending'"
             :merge-succeeded="mergeStatus === 'success'"
             :merge-failed="mergeStatus === 'error'"
             :loading-faces="isLoadingFaces"
             :loading-people="isLoadingPeople"
-            :error="discoveryError ?? faceModels.error.value"
+            :search-error="discoveryError ?? faceModels.error.value"
+            @clear-filters="clearDiscoveryFilters"
             @retry="retrySearch"
             @assign-faces="assignFaces"
             @merge-people="mergePeople"

@@ -219,13 +219,7 @@ export function usePersonDiscovery(
       })
     },
     mergeStatus: mergeEntitiesMutation.status,
-    error: computed(
-      () =>
-        faceSearchQuery.error.value ??
-        entitySearchQuery.error.value ??
-        assignFacesMutation.error.value ??
-        mergeEntitiesMutation.error.value,
-    ),
+    searchError: computed(() => faceSearchQuery.error.value ?? entitySearchQuery.error.value),
     isLoadingFaces: computed(
       () =>
         canSearch.value && (faceSearchQuery.isPending.value || faceSearchQuery.isFetching.value),
