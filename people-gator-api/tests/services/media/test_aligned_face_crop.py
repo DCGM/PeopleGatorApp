@@ -30,7 +30,7 @@ import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, ImageDraw
 from botocore.exceptions import ClientError
 from pydantic import AnyUrl
 
@@ -161,7 +161,7 @@ def test_svd_failure_is_a_geometry_error(monkeypatch):
         )
 
 
-@pytest.mark.parametrize("scale", [0.0, -1.0, float("nan"), float("inf"), 5e-324])
+@pytest.mark.parametrize("scale", [0.0, -1.0, float("nan"), float("inf"), 5e-324, 1e-307])
 def test_invalid_derived_scale_is_rejected(monkeypatch, scale):
     monkeypatch.setattr(aligned_face_crop, "_similarity_transform",
                         lambda *_args: (np.eye(2), np.zeros(2), scale))
@@ -207,6 +207,48 @@ def test_valid_alignment_preserves_landmark_position():
     with Image.open(io.BytesIO(content)) as image:
         assert max(image.getpixel((56, 72))) < 40
         assert min(image.getpixel((60, 72))) > 230
+
+
+@pytest.mark.parametrize("points", [
+    aligned_face_crop._ARCFACE_REFERENCE_112 * 1e-150,
+    np.column_stack((np.arange(5) * 5 + 40, np.full(5, 70))),
+])
+def test_representable_tiny_and_collinear_geometry_is_not_arbitrarily_rejected(points):
+    content = aligned_face_crop._render_aligned_crop(
+        _image(), points, AlignedFaceCropSettings(), None,
+    )
+    with Image.open(io.BytesIO(content)) as image:
+        image.load()
+        assert image.format == "JPEG" and image.width > 0 and image.height > 0
+
+
+def test_rotated_alignment_moves_landmark_to_reference_position():
+    angle = 0.7
+    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+    points = aligned_face_crop._ARCFACE_REFERENCE_112 @ rotation.T + 60
+    image = Image.new("RGB", (256, 256), "white")
+    x, y = points[2]  # Nose in the rotated source.
+    ImageDraw.Draw(image).rectangle((x - 3, y - 3, x + 3, y + 3), fill="black")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    content = aligned_face_crop._render_aligned_crop(
+        buffer.getvalue(), points, AlignedFaceCropSettings(), None,
+    )
+    with Image.open(io.BytesIO(content)) as aligned:
+        assert max(aligned.getpixel((56, 72))) < 40
+        assert min(aligned.getpixel((65, 72))) > 230
+
+
+@pytest.mark.parametrize("error_type", [ValueError, RuntimeError])
+def test_unrelated_transform_failure_is_not_classified_as_geometry(monkeypatch, error_type):
+    def fail(*_args):
+        raise error_type("unrelated implementation failure")
+
+    monkeypatch.setattr(aligned_face_crop, "_similarity_transform", fail)
+    with pytest.raises(error_type, match="unrelated implementation failure"):
+        aligned_face_crop._render_aligned_crop(
+            b"", aligned_face_crop._ARCFACE_REFERENCE_112, AlignedFaceCropSettings(), None,
+        )
 
 
 def test_unrelated_render_failure_is_not_classified_as_keypoint_error(monkeypatch):
