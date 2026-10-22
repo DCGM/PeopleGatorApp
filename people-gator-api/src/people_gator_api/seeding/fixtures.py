@@ -23,6 +23,8 @@ class Person:
     actor: str
 
 
+PAGINATION_ITEMS = 14
+
 PEOPLE = (
     Person("provenance-review", "Irena Evidence", (),
            "Synthetic imported identity with separately edited annotations in two libraries.", "importer"),
@@ -95,6 +97,10 @@ PEOPLE = (
     Person("discovery-face", "Orion Portrait", (), "Appearance match for Zora.", "importer"),
     Person("discovery-name", "Zora Cartographer II", (), "Recorded-name match for Zora.", "importer"),
     Person("discovery-alias", "Saffron Navigator", (), "Recorded-alias match for Zora.", "importer"),
+    # Issue #62: a searchable, linked scenario exceeding a 12-item list batch.
+    *(Person(f"pagination-{i}", f"Pagination Person {i:02}", (),
+             "Synthetic automatic pagination example.", "reviewer")
+      for i in range(1, PAGINATION_ITEMS + 1)),
     # Issue #52: one person linked by the curator's key, and one whose own
     # record the curator edits after a reviewer linked her face.
     Person("shared-ivo", "Ivo Ledger", (),
@@ -149,6 +155,8 @@ DOCUMENTS = (
     # Shared filters (#52): the same archive ID in a second, unannotated library.
     Document("shared-ledger", "preview-mzk", "Shared filter ledger"),
     Document("shared-mirror", "preview-nlk", "Shared filter mirror", "shared-ledger"),
+    *(Document(f"pagination-{i}", "preview-pagination", f"Pagination ledger {i:02}")
+      for i in range(1, PAGINATION_ITEMS + 1)),
 )
 
 
@@ -391,6 +399,10 @@ PAGES = (
     Page("shared-ledger-2", "shared-ledger", 2,
          mentions=(Mention("shared-ivo-mention", "shared-ivo", "Ivo Ledger recorded the shared filter ledger."),)),
     Page("shared-mirror-1", "shared-mirror", 1),
+    *(Page(f"pagination-{i}", f"pagination-{i}", 1,
+           mentions=(Mention(f"pagination-{i}", f"pagination-{i}",
+                             f"Pagination Person {i:02} recorded this ledger."),))
+      for i in range(1, PAGINATION_ITEMS + 1)),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

@@ -620,3 +620,28 @@ source isolation, strict page-only source selection, non-page UUID exclusion,
 unannotated pages, counts, reruns and interrupted recovery. The page examples
 reuse existing linked synthetic records and local media; adding their report
 links changes no persisted fixture IDs or review edits.
+
+## Automatic list pagination (#62)
+
+The additive `pagination-1` through `pagination-14` fixtures provide fourteen
+people, registered documents and scans, linked by OCR mentions with generated
+local images/layouts in `preview-pagination`. Existing fixture IDs, checkpoint
+keys, assignments and reviewed media remain intact on rerun.
+
+Open the CLI's `pagination-people`, `pagination-scans` and `pagination-documents`
+links. Each searches **Pagination** across the twelve-item cursor boundary.
+Clear search to try ordinary browsing; the library scope on scans/documents
+keeps those lists at fourteen records. `pagination-scoped-scans` opens the
+existing fourteen-page **Page gallery navigation** document.
+
+On desktop and mobile, scroll to the loaded list's end to append the remaining
+results automatically. Increase viewport height to leave the end visible: the
+next batch loads without scrolling. Resize or expand/collapse settings to check
+layout re-evaluation. The manual Load more buttons remain available; after a
+failed continuation, retry explicitly. Search, filters and sorting keep their
+existing cursor reset and URL behavior.
+
+Integration tests query both list and text-search repositories in twelve-item
+batches, check distinct IDs, order, totals, exhausted cursors and document scope,
+read a real page image, and preserve an edited person/unassigned mention on
+rerun. Existing interrupted-checkpoint recovery covers the new fixture keys.
