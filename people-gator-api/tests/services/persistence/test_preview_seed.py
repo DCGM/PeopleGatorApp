@@ -89,9 +89,9 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (30, 53, 37)
-    assert len(result.documents) == 36 and len(result.pages) == 72
-    assert len(result.users) == 4 and len(result.api_keys) == 3
+    assert await counts(database) == (31, 53, 38)
+    assert len(result.documents) == 37 and len(result.pages) == 73
+    assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -132,7 +132,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
             {"emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana"},
 
         ),
-        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", *(f"pagination-{i}" for i in range(1, 15))}),
+        (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", *(f"pagination-{i}" for i in range(1, 15))}),
         (EntityListFilter(has_detections=False, has_mentions=False), {"lenka"}),
         (
             EntityListFilter(document_source_id=[result.documents["album"]]),
@@ -242,7 +242,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (30, 53, 37)
+    assert await counts(database) == (31, 53, 38)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -265,7 +265,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (31, 53, 37)
+    assert await counts(database) == (32, 53, 38)
 
 
 
@@ -290,8 +290,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 30 and len(result.faces) == 53
-    assert await counts(database) == (30, 53, 37)
+    assert len(result.entities) == 31 and len(result.faces) == 53
+    assert await counts(database) == (31, 53, 38)
 
 
 
@@ -312,7 +312,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (29, 52, 36)
+    assert await counts(database) == (30, 52, 37)
 
 
 
@@ -2615,3 +2615,157 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
     assert second == first
     assert (await database.entities.get(edited.entity_id)).last_touched_at == edited.last_touched_at
     assert (await database.text_mentions.get(mention.mention_id)).entity_id is None
+
+
+@pytest.mark.asyncio
+async def test_deactivated_reviewer_keeps_attribution_across_reruns(seed_target):
+    from people_gator_api.schemas.mentions import TextMentionListFilter
+    from people_gator_api.schemas.users import UserListFilter, UserListRequest, UserPatchRequest
+
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    former = await db.users.get(seed.users["former"])
+    assert former is not None and not former.is_active
+    assert "former" not in seed.api_keys
+    mention = await db.text_mentions.get(seed.mentions["deactivated-olga-mention"])
+    assert mention.entity_id == seed.entities["deactivated-olga"]
+    assert mention.last_touched_by_user_id == former.user_id
+    assert mention.last_touched_by_api_key_id is None
+    touched = await db.text_mentions.list(TextMentionListRequest(
+        limit=10, filter_=TextMentionListFilter(last_touched_by_user_id=[former.user_id]),
+    ))
+    assert [item.mention_id for item in touched.items] == [mention.mention_id]
+    example = parse_qs(urlsplit(seed.filter_examples["deactivated-reviewer"]).query)
+    assert example["touched_by"] == [str(former.user_id)]
+    options = await db.users.list(UserListRequest(limit=10, filter_=UserListFilter(search="former")))
+    assert [user.user_id for user in options.items] == [former.user_id]
+
+    # A reviewer verifies the link; an administrator later reactivates the user.
+    reviewed = await db.text_mentions.patch(
+        mention.mention_id, TextMentionPatchRequest(entity_link_state="verified"),
+        GenericActor(user_id=seed.users["reviewer"]),
+    )
+    await db.users.patch(former.user_id, UserPatchRequest(is_active=True))
+    again = await preview.seed_preview(db, fs)
+    assert again.users["former"] == former.user_id
+    assert (await db.users.get(former.user_id)).is_active
+    kept = await db.text_mentions.get(mention.mention_id)
+    assert kept.entity_link_state == "verified"
+    assert kept.last_touched_at == reviewed.last_touched_at
+    assert kept.last_touched_by_user_id == seed.users["reviewer"]
+
+    # Seeding never reactivates (or deactivates) an existing identity.
+    await db.users.patch(former.user_id, UserPatchRequest(is_active=False))
+    await preview.seed_preview(db, fs)
+    assert not (await db.users.get(former.user_id)).is_active
+
+
+@pytest.mark.asyncio
+async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(seed_target, tmp_path, monkeypatch):
+    import asyncio
+    import argon2
+    import httpx
+    from contextlib import asynccontextmanager
+    from fastapi import FastAPI
+    from people_gator_api.routes.jwks import router as token_router
+    from people_gator_api.routes.v1 import router
+    from people_gator_api.schemas.users import UserListFilter, UserListRequest, UserPatchRequest
+    from people_gator_api.services import auth_service, database_service, jwk_service
+    from people_gator_api.settings import JwkSettings, LocalStorageSettings, StorageSettings
+
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    monkeypatch.setattr(settings, "storage", StorageSettings(local=LocalStorageSettings(root=tmp_path)))
+    monkeypatch.setattr(settings, "jwk", JwkSettings(
+        users_path="auth/users.json", key_path="auth/jwks.json",
+        issuer=jwk_service.TOKEN_ISSUER, audience=jwk_service.TOKEN_AUDIENCE,
+    ))
+    monkeypatch.setattr(auth_service, "_refresh_sessions", {})
+    monkeypatch.setattr(auth_service, "_refresh_session_locks", {})
+    monkeypatch.setattr(jwk_service, "_keyset", None)
+    monkeypatch.setattr(jwk_service, "_last_fetch_time", None)
+    monkeypatch.setattr(jwk_service, "_keyset_lock", asyncio.Lock())
+    monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
+    (tmp_path / "auth").mkdir()
+    (tmp_path / "auth/users.json").write_text(json.dumps({"lifecycle": {
+        "hash": argon2.PasswordHasher().hash("synthetic"),
+        "scopes": ["people-gator:browse", "people-gator:annotate"],
+    }}))
+
+    entries = 0
+
+    @asynccontextmanager
+    async def counted_context():
+        nonlocal entries
+        entries += 1
+        yield db
+
+    app = FastAPI()
+    app.include_router(token_router)
+    app.include_router(router)
+
+    @app.get("/whoami")
+    async def whoami(actor: auth_service.BrowseActorDependency):
+        return {"user_id": str(actor.user_id)}
+
+    app.dependency_overrides[database_service.get_database] = lambda: db
+    app.dependency_overrides[database_service.get_database_context] = lambda: counted_context()
+    login_form = {"username": "lifecycle", "password": "synthetic",
+                  "scope": "people-gator:browse people-gator:annotate"}
+
+    async def identities():
+        return (await db.users.list(UserListRequest(limit=10, filter_=UserListFilter(
+            external_subject=["lifecycle"], external_issuer=[settings.jwk.issuer],
+        )))).items
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        assert await identities() == []
+        login = await client.post("/token/login", data=login_form)
+        assert login.status_code == 200, login.text
+        assert entries == 1
+        [user] = await identities()
+        assert user.is_active
+        tokens = login.json()
+        claims = await jwk_service.verify_access_token(tokens["access_token"])
+        assert claims["uid"] == user.user_id
+        bearer = {"Authorization": "Bearer " + tokens["access_token"]}
+
+        for _ in range(2):
+            response = await client.get("/whoami", headers=bearer)
+            assert response.json() == {"user_id": str(user.user_id)}
+        olga = f"/api/v1/entities/{seed.entities['deactivated-olga']}"
+        patched = await client.patch(olga, json={"short_description": "Checked by lifecycle."}, headers=bearer)
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
+        assert patched.json()["last_touched_by_api_key_id"] is None
+        assert entries == 1
+
+        await db.users.patch(user.user_id, UserPatchRequest(is_active=False))
+        # Issued access tokens remain valid until expiry, including profile reads.
+        assert (await client.get("/whoami", headers=bearer)).status_code == 200
+        me = await client.get("/api/v1/me", headers=bearer)
+        assert me.status_code == 200 and me.json()["is_active"] is False
+        patched = await client.patch(olga, json={"short_description": "Written after deactivation."}, headers=bearer)
+        assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
+        assert entries == 1
+
+        assert (await client.post("/token/login", data=login_form)).status_code == 403
+        refused = await client.post("/token/refresh", json={"refresh_token": tokens["refresh_token"]})
+        assert refused.status_code == 403
+        assert "access_token" not in refused.json()
+        await db.users.patch(user.user_id, UserPatchRequest(is_active=True))
+        # The rejected refresh revoked its session; reactivation does not revive it.
+        revoked = await client.post("/token/refresh", json={"refresh_token": tokens["refresh_token"]})
+        assert revoked.status_code == 401
+        assert [item.user_id for item in await identities()] == [user.user_id]
+
+        relogin = await client.post("/token/login", data=login_form)
+        assert relogin.status_code == 200
+        refreshed = await client.post("/token/refresh", json={"refresh_token": relogin.json()["refresh_token"]})
+        assert refreshed.status_code == 200
+        assert (await jwk_service.verify_access_token(refreshed.json()["access_token"]))["uid"] == user.user_id
+
+        expires = claims["exp"]
+        monkeypatch.setattr(jwk_service, "_now", lambda: expires + 1)
+        monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
+        assert (await client.get("/whoami", headers=bearer)).status_code == 401

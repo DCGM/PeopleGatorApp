@@ -107,6 +107,9 @@ PEOPLE = (
            "Synthetic person linked by the preview curator's API key.", "curator"),
     Person("shared-hana", "Hana Ledger", (),
            "Synthetic person whose own record the curator edited after a reviewer's face link.", "reviewer"),
+    # Issue #66: evidence written by a reviewer who was deactivated afterwards.
+    Person("deactivated-olga", "Olga Expiry", (),
+           "Synthetic person linked by a reviewer whose account is now inactive.", "former"),
 )
 
 
@@ -155,6 +158,7 @@ DOCUMENTS = (
     # Shared filters (#52): the same archive ID in a second, unannotated library.
     Document("shared-ledger", "preview-mzk", "Shared filter ledger"),
     Document("shared-mirror", "preview-nlk", "Shared filter mirror", "shared-ledger"),
+    Document("deactivated-ledger", "preview-mzk", "Deactivated reviewer ledger"),
     *(Document(f"pagination-{i}", "preview-pagination", f"Pagination ledger {i:02}")
       for i in range(1, PAGINATION_ITEMS + 1)),
 )
@@ -399,6 +403,9 @@ PAGES = (
     Page("shared-ledger-2", "shared-ledger", 2,
          mentions=(Mention("shared-ivo-mention", "shared-ivo", "Ivo Ledger recorded the shared filter ledger."),)),
     Page("shared-mirror-1", "shared-mirror", 1),
+    Page("deactivated-ledger-1", "deactivated-ledger", 1,
+         mentions=(Mention("deactivated-olga-mention", "deactivated-olga",
+                           "Olga Expiry signed the deactivated reviewer ledger."),)),
     *(Page(f"pagination-{i}", f"pagination-{i}", 1,
            mentions=(Mention(f"pagination-{i}", f"pagination-{i}",
                              f"Pagination Person {i:02} recorded this ledger."),))
