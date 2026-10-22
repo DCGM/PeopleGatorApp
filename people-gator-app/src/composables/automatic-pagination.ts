@@ -99,7 +99,6 @@ export function useAutomaticPagination(options: PaginationOptions) {
       if (typeof ResizeObserver !== 'undefined') {
         resize = new ResizeObserver(schedule)
         // Includes cards, filter expansion, image loading and responsive reflow.
-        resize.observe(target.parentElement ?? target)
         for (let parent = target.parentElement; parent; parent = parent.parentElement)
           resize.observe(parent)
       }

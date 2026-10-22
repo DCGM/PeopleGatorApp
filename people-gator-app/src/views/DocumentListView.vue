@@ -91,7 +91,9 @@ useAutomaticPagination({
     </p>
     <div v-if="error" class="py-6 text-center" role="alert">
       <p class="text-sm text-destructive">Could not load documents.</p>
-      <Button type="button" variant="outline" class="mt-2" @click="retry()">Retry documents</Button>
+      <Button type="button" variant="outline" class="mt-2" :disabled="isFetching" @click="retry()"
+        >Retry documents</Button
+      >
     </div>
     <p
       v-else-if="!isLoading && !shared.error.value && documents.length === 0"
