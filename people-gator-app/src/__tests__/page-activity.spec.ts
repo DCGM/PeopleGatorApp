@@ -43,7 +43,7 @@ describe('page annotation activity', () => {
     expect(bounds.touchedFrom).toMatch(/^2026-03-29T00:00:00/)
     expect(bounds.touchedTo).toMatch(/^2026-03-29T23:59:59.999999$/)
   })
-  it('filters the scan by day and user without losing other criteria or the return journey', async () => {
+  it('sets workspace day and user filters without losing other criteria', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/', component: PageActivityPanel }],
@@ -86,6 +86,28 @@ describe('page annotation activity', () => {
     expect(router.currentRoute.value.query.touched_by).toBeUndefined()
     expect(router.currentRoute.value.query.touched_from).toBeUndefined()
     expect(router.currentRoute.value.query.library).toEqual(['preview-mzk'])
+    wrapper.unmount()
+  })
+  it('shows informational groups without workspace actions in the scan pane', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: PageActivityPanel }],
+    })
+    await router.push({
+      path: '/',
+      query: { panel: 'activity', activity_group: 'user', touched_by: user },
+    })
+    const wrapper = mount(PageActivityPanel, {
+      props: { sourceId: 'page', workspaceFilters: false },
+      global: { plugins: [router] },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Preview reviewer')
+    expect(wrapper.text()).toContain('Historical face')
+    expect(wrapper.find('button[aria-label^="Filter "]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('set workspace filters')
+    expect(wrapper.text()).not.toContain('filter the scan')
     wrapper.unmount()
   })
   it('combines day and edit order in one select', async () => {

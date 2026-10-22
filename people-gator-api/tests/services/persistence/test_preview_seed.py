@@ -1554,7 +1554,7 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
         ('scan-toolbar-assigned', 'links-2', list(State)),
     ):
         link = urlsplit(first.filter_examples[example])
-        assert parse_qs(link.query).get('link_state', []) == selected
+        assert parse_qs(link.query).get('page_link_state', []) == selected
         page = await database.sources.get_page(first.pages[page_key])
         assert link.path == (
             f'/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}'

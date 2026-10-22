@@ -218,7 +218,8 @@ Compare `scan-toolbar-assigned` (all three toggles pressed, only the verified
 face and mention on page 2) with **All** (no states selected, also includes the
 unassigned face and mention). `scan-toolbar-union` opens page 1 with automatic
 and manual evidence selected together. Toggle each state, reset, reload and use
-browser back/forward to compare pressed states, URL and evidence. Check the
+browser back/forward to compare pressed states, the page-specific
+`page_link_state` URL setting and evidence. Workspace `link_state` is retained separately. Check the
 neighboring tools and keyboard arrow/Space operation at desktop and mobile sizes.
 In light and dark themes, the toolbar container is transparent: the scan stays
 visible in the gaps between the controls, including when they wrap on mobile.
@@ -407,7 +408,8 @@ and mentions in two libraries. **Annotation review ledger** (`preview-mzk`) has
 an importer-created face and a reviewer-verified face; **Annotation review
 correspondence** (`preview-nlk`) has a manual face and a verified mention.
 Select a modification user, API key, date bound or document to follow the same
-annotation criteria through Documents, People, profiles and scans. Combining
+annotation criteria through Documents, People, profiles and scan lists. Opened scan pages retain
+these criteria for navigation but show their complete page entities. Combining
 criteria from different annotations must not produce a match.
 
 Creation/import times and actors remain separate from annotation changes and
@@ -420,8 +422,9 @@ identical verification, plus upgrades from the previously deployed revision.
 The `page-activity` example opens the annotation review ledger directly with
 `panel=activity`. Its two faces and one mention have two importer edits and one
 later reviewer verification. In the scan sidebar, choose Activity, then By user:
-selecting Preview reviewer shows the reviewer-verified face. By day groups the
-recorded annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
+Preview reviewer summarizes the reviewer-verified face. These group headings
+are informational and do not edit workspace filters. By day groups the recorded
+annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
 Faces, Activity and Statistics share the top-level pane navigation; Activity uses
 the full remaining pane height and scrolls independently of the scan. The seed's activity link is additive and
 does not rewrite reviewed fixture data.

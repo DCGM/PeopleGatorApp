@@ -653,12 +653,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "scan-toolbar-union": (
                 f"/libraries/{toolbar_union_page.library}/documents/{toolbar_union_page.document_id}"
                 f"/pages/{toolbar_union_page.page_id}?"
-                + urlencode({"link_state": ["automatic", "manual"]}, doseq=True)
+                + urlencode({"page_link_state": ["automatic", "manual"]}, doseq=True)
             ),
             "scan-toolbar-assigned": (
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}?"
-                + urlencode({"link_state": ["automatic", "manual", "verified"]}, doseq=True)
+                + urlencode({"page_link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
             "viewport-focus": focus_path,
             # Reuse Ada's two linked OCR lines; no persisted fixtures need changing.

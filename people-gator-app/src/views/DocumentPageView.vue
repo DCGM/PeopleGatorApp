@@ -730,7 +730,7 @@ onBeforeUnmount(() => {
         />
       </TabsContent>
       <TabsContent value="activity" class="mt-0 min-h-0 overflow-y-auto">
-        <PageActivityPanel v-if="page" :source-id="page.source_id" hide-filter-tags />
+        <PageActivityPanel v-if="page" :source-id="page.source_id" :workspace-filters="false" />
       </TabsContent>
       <TabsContent value="statistics" class="mt-0 min-h-0 overflow-y-auto">
         <PageStatisticsPanel

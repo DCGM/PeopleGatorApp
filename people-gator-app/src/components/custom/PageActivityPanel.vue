@@ -9,7 +9,9 @@ import ActiveFilters from './ActiveFilters.vue'
 import { useSharedFilters } from '@/viewmodels/shared-filters'
 import { activityGroups, localDayBounds, usePageActivity } from '@/viewmodels/page-activity'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
-const props = defineProps<{ sourceId: string; hideFilterTags?: boolean }>()
+const props = withDefaults(defineProps<{ sourceId: string; workspaceFilters?: boolean }>(), {
+  workspaceFilters: true,
+})
 const route = useRoute(),
   router = useRouter()
 const { items, loading, error, retry } = usePageActivity(() => props.sourceId)
@@ -123,8 +125,11 @@ function clear() {
     <h3>Annotation activity</h3>
     <p>
       <small
-        >Latest face and mention edits on this page. Group by local day or last editor; select a
-        group to filter the scan.</small
+        >Latest face and mention edits on this page. Group by local day or last editor.<template
+          v-if="workspaceFilters"
+        >
+          Select a group to set workspace filters.</template
+        ></small
       >
     </p>
     <Tabs
@@ -153,7 +158,7 @@ function clear() {
       @update:model-value="selectOrder"
     />
     <ActiveFilters
-      v-if="!hideFilterTags"
+      v-if="workspaceFilters"
       clear-label="Clear activity filters"
       :filters="tags"
       @remove="remove"
@@ -167,7 +172,7 @@ function clear() {
     <div v-else class="space-y-3">
       <section v-for="group in groups" :key="group.key" class="min-w-0 space-y-2">
         <Button
-          v-if="group.key"
+          v-if="group.key && workspaceFilters"
           type="button"
           :variant="selected(group.key) ? 'secondary' : 'outline'"
           class="w-full max-w-full justify-between"
