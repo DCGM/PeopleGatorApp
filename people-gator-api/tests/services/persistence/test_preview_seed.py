@@ -2551,6 +2551,13 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
     documents = {first.documents[key] for key in keys}
     pages = {first.pages[key] for key in keys}
     library = ["preview-pagination"]
+    browse_filters = {}
+    for screen in ("people", "scans"):
+        link = urlsplit(first.filter_examples[f"pagination-browse-{screen}"])
+        assert link.path == f"/{screen}"
+        params = parse_qs(link.query)
+        assert "q" not in params
+        browse_filters[screen] = params["library"]
 
     async def check_batches(fetch, request, expected, id_field):
         initial = await fetch(request)
@@ -2569,7 +2576,7 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
         await check_batches(
             database.entities.search if searching else database.entities.list,
             SearchEntitiesRequest(**common, query=query, filter_=EntityListFilter(library=library))
-            if searching else EntityListRequest(**common, filter_=EntityListFilter(library=library)),
+            if searching else EntityListRequest(**common, filter_=EntityListFilter(library=browse_filters["people"])),
             people, "entity_id",
         )
         await check_batches(
@@ -2581,7 +2588,7 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
         await check_batches(
             database.sources.search_pages if searching else database.sources.list_pages,
             SearchPagesRequest(**common, query=query, filter_=PageListFilter(library=library))
-            if searching else PageListRequest(**common, filter_=PageListFilter(library=library)),
+            if searching else PageListRequest(**common, filter_=PageListFilter(library=browse_filters["scans"])),
             pages, "source_id",
         )
     # Canonical document scope also exceeds a batch, without any implicit face filter.
