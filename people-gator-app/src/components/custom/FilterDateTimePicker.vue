@@ -8,7 +8,10 @@ import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
-const props = defineProps<{ label: string; invalid?: boolean }>()
+const props = withDefaults(
+  defineProps<{ label: string; invalid?: boolean; showLabel?: boolean }>(),
+  { showLabel: true },
+)
 const value = defineModel<string>({ required: true })
 const open = ref(false)
 const timeId = useId()
@@ -54,7 +57,9 @@ function clear() {
           :title="`${label}: ${displayValue}`"
         >
           <CalendarIcon class="size-4 shrink-0" aria-hidden="true" />
-          <span class="truncate">{{ label }}: {{ displayValue }}</span>
+          <span class="min-w-0 truncate"
+            ><template v-if="showLabel">{{ label }}: </template>{{ displayValue }}</span
+          >
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" :collision-padding="12" class="w-auto p-0" :aria-label="label">

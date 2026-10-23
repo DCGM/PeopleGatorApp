@@ -1,23 +1,15 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { Globe, SlidersHorizontal, Moon, Sun, Plus, ChevronsUpDown } from '@lucide/vue'
+import { Globe, SlidersHorizontal, Moon, Sun, ChevronsUpDown } from '@lucide/vue'
 import { useDark, useToggle } from '@vueuse/core'
 import { SelectTrigger as WorkspaceModeTrigger } from 'reka-ui'
 import WorkspaceSidebarBrand from './WorkspaceSidebarBrand.vue'
 import TopBar from './TopBar.vue'
-import FilterMultiSelect from './FilterMultiSelect.vue'
-import FilterDateTimePicker from './FilterDateTimePicker.vue'
+import WorkspaceFilterBuilder, { type WorkspaceFilterDraft } from './WorkspaceFilterBuilder.vue'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import WorkspaceSidebarToggle from './WorkspaceSidebarToggle.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -119,26 +111,11 @@ function clear() {
   from.value = ''
   to.value = ''
 }
-const adding = ref(false)
-const filterType = ref('library')
-const draftValues = ref<string[]>([])
-const draftSearch = ref('')
-const draftDate = ref('')
-const draftField = computed(() => fields.find((field) => field.key === filterType.value))
-const canAdd = computed(() => (draftField.value ? draftValues.value.length > 0 : !!draftDate.value))
-function resetDraft() {
-  draftValues.value = []
-  draftSearch.value = ''
-  draftDate.value = ''
-}
-function addFilter() {
-  if (!canAdd.value) return
-  if (draftField.value) {
-    draftField.value.selected = [...new Set([...draftField.value.selected, ...draftValues.value])]
-  } else if (filterType.value === 'from') from.value = draftDate.value
-  else to.value = draftDate.value
-  adding.value = false
-  resetDraft()
+function addFilter(filter: WorkspaceFilterDraft) {
+  const field = fields.find((field) => field.key === filter.key)
+  if (field) field.selected = [...new Set([...field.selected, ...filter.values])]
+  else if (filter.key === 'from') from.value = filter.date
+  else if (filter.key === 'to') to.value = filter.date
 }
 </script>
 
@@ -162,7 +139,7 @@ function addFilter() {
           <SidebarGroup>
             <SidebarMenu>
               <SidebarMenuItem>
-                <Select v-model="mode" @update:model-value="adding = false">
+                <Select v-model="mode">
                   <WorkspaceModeTrigger as-child aria-label="Workspace mode">
                     <SidebarMenuButton :tooltip="mode === 'global' ? 'Global' : 'Local'">
                       <Globe v-if="mode === 'global'" aria-hidden="true" />
@@ -188,61 +165,8 @@ function addFilter() {
                 Visual demo · settings do not filter results.
               </p>
               <template v-if="mode === 'local'">
-                <div
-                  class="flex w-full min-w-0 flex-row flex-wrap gap-2 p-2"
-                  aria-label="Workspace sample filters"
-                >
-                  <Popover v-model:open="adding" @update:open="resetDraft">
-                    <PopoverTrigger as-child>
-                      <Button variant="outline" size="icon" aria-label="Add filter"
-                        ><Plus aria-hidden="true"
-                      /></Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      :collision-padding="12"
-                      class="w-72 max-w-(--reka-popover-content-available-width)"
-                    >
-                      <div class="flex min-w-0 flex-row flex-wrap items-center gap-2">
-                        <Select v-model="filterType" @update:model-value="resetDraft">
-                          <SelectTrigger aria-label="Filter type" class="max-w-full"
-                            >Filter: <SelectValue placeholder="Filter type"
-                          /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="field in fields"
-                              :key="field.key"
-                              :value="field.key"
-                              >{{ field.label }}</SelectItem
-                            >
-                            <SelectItem value="from">Modified from</SelectItem>
-                            <SelectItem value="to">Modified to</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FilterMultiSelect
-                          v-if="draftField"
-                          v-model="draftValues"
-                          v-model:search="draftSearch"
-                          :label="draftField.label"
-                          :options="
-                            draftField.options.filter((option) =>
-                              option.label.toLowerCase().includes(draftSearch.toLowerCase()),
-                            )
-                          "
-                          class="max-w-full flex-none"
-                        />
-                        <FilterDateTimePicker
-                          v-else
-                          v-model="draftDate"
-                          :label="filterType === 'from' ? 'Modified from' : 'Modified to'"
-                        />
-                        <div class="flex w-full justify-end gap-2">
-                          <Button variant="ghost" @click="adding = false">Cancel</Button>
-                          <Button :disabled="!canAdd" @click="addFilter">Add</Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                <div class="min-w-0 px-1 py-2">
+                  <WorkspaceFilterBuilder :fields="fields" @add="addFilter" />
                 </div>
                 <div v-if="filters.length" class="min-w-0 px-2 pb-2">
                   <ActiveFilters

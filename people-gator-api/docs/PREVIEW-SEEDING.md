@@ -36,17 +36,21 @@ new detection keys.
 
 This draft adds a frontend-only visual demo around the existing seeded screens.
 Open Documents, then use the **Global/Local** selector below the sidebar
-navigation to choose **Local**. Use **+** to choose a filter type and its values,
-then **Add**; **Cancel** discards that draft. Try Library, Document, Page, Last
-user, Last API key and modification dates. Add filters one by one, remove
-individual tags or clear them, switch Global/Local, and navigate to Scans or
-People. Collapse to the desktop icon rail or open the mobile drawer; there is
-one opening action in either layout: click the logo to expand the desktop rail
-or open the mobile drawer. Use the separate sidebar button to collapse or close
-it. Keyboard focus follows these controls as the sidebar opens and closes. The sidebar uses a vertical
-ScrollArea and keeps the account footer reachable on short screens. The logo
-sits in the sidebar header; configured account information and the theme switch
-sit in its footer.
+navigation to choose **Local**. Use **+** to turn it into an inline filter row
+and open the type dropdown immediately. The value control is disabled until a
+type is chosen. Pick a type, then use its searchable multi-select or date/time
+picker. Click the type again to change it; this clears the draft value. The
+checkmark applies the filter, and the X cancels the draft; both restore **+**
+without changing existing filters. Try Library, Document, Page, Last user, Last
+API key and modification dates. Add filters one by one, remove individual tags
+or clear them, switch Global/Local, and navigate to Scans or People. Collapse to
+the desktop icon rail or open the mobile drawer; there is one opening action in
+either layout: click the logo to expand the desktop rail or open the mobile
+drawer. Use the separate sidebar button to collapse or close it. Keyboard focus
+follows these controls as the sidebar opens and closes. The sidebar uses a
+vertical ScrollArea and keeps the account footer reachable on short screens. The
+logo sits in the sidebar header; configured account information and the theme
+switch sit in its footer.
 
 Sidebar options are synthetic in-memory examples, independent of database
 fixtures. They do not filter results, change URLs, call option endpoints or save

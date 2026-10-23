@@ -18,6 +18,7 @@ import {
 
 defineProps<{
   label: string
+  placeholder?: string
   options: FilterOption[]
   isLoading?: boolean
   error?: unknown
@@ -50,8 +51,9 @@ function updateSelection(value: unknown) {
     <ComboboxAnchor class="w-full" as-child>
       <ComboboxTrigger as-child :aria-label="label">
         <Button type="button" variant="outline" class="w-full justify-between">
-          <span
-            >{{ label }}<template v-if="selected.length"> ({{ selected.length }})</template></span
+          <span class="min-w-0 truncate"
+            >{{ placeholder ?? label
+            }}<template v-if="selected.length"> ({{ selected.length }})</template></span
           >
           <ChevronsUpDown class="size-4 shrink-0" aria-hidden="true" />
         </Button>
