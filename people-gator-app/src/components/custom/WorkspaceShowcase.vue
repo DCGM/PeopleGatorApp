@@ -17,6 +17,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
@@ -134,6 +135,7 @@ function updateFilter(filter: WorkspaceFilterSelection) {
           <WorkspaceNavigation />
           <SidebarSeparator class="mx-0 w-full" />
           <SidebarGroup>
+            <SidebarGroupLabel class="group-data-[collapsible=icon]:hidden">Workspace</SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem>
                 <Select v-model="mode">

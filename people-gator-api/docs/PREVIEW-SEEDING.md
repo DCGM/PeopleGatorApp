@@ -35,8 +35,8 @@ new detection keys.
 ## Workspace sidebar showcase (#60)
 
 This draft adds a frontend-only visual demo around the existing seeded screens.
-Open Documents, then use the **Global/Local** selector below the sidebar
-navigation to choose **Local**. The filter type and value selectors are always
+Open Documents, then use the **Global/Local** selector in the **Workspace**
+section below **Explore** to choose **Local**. The filter type and value selectors are always
 visible. Choose a type using **Filter**; the value control is disabled until a
 type is chosen. Choosing a type immediately opens its searchable multi-select or
 date/time picker. Values are applied to the configuration as they are clicked;
