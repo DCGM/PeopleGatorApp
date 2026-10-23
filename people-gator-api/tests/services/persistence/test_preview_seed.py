@@ -3068,8 +3068,15 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
         event.remove(engine.sync_engine, "before_cursor_execute", capture)
     document = next(item for item in listed.items if item.source_id == seeded.documents["table-ledger"])
     def summary(item):
-        return (item.registered_page_count, item.linked_entity_count, item.entity_link_stats)
+        return (item.registered_page_count, item.linked_entity_count, item.entity_link_stats, item.first_page_source_id)
     assert document.registered_page_count == 2
+    first_fixture = min((page for page in PAGES if page.document == "table-ledger"), key=lambda page: page.page_id)
+    assert document.first_page_source_id == seeded.pages[first_fixture.key]
+    # The preview is usable media and the same choice even under evidence filters.
+    first_page = await database.sources.get_page(document.first_page_source_id)
+    thumbnail = await get_page_image(first_page.library, first_page.document_id, first_page.page_id, max_width=256)
+    with Image.open(io.BytesIO(thumbnail.content)) as image:
+        assert image.width == 256
     assert document.linked_entity_count == 2
     assert document.entity_link_stats.faces.model_dump() == dict(total=4, automatic=1, manual=1, verified=1, unassigned=1)
     assert document.entity_link_stats.mentions.model_dump() == dict(total=5, automatic=2, manual=1, verified=1, unassigned=1)
@@ -3082,6 +3089,7 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
         assert empty.registered_page_count == empty.linked_entity_count == 0
         assert empty.entity_link_stats.faces.total == empty.entity_link_stats.mentions.total == 0
         assert empty.last_touched_at is None
+        assert empty.first_page_source_id is None
     filtered = await database.sources.list_documents(DocumentListRequest(
         limit=100, filter_=DocumentListFilter(entity_link_state=["verified"], library=["preview-table"]),
     ))

@@ -161,6 +161,12 @@ export type DocumentResponse = {
      */
     document_id: string;
     /**
+     * First Page Source Id
+     *
+     * First registered page by archive page ID, independent of evidence filters; null when no registered page is available.
+     */
+    first_page_source_id?: string | null;
+    /**
      * Registered Page Count
      *
      * All registered pages in this library/document, independent of evidence filters.
@@ -1101,6 +1107,12 @@ export type FoundDocument = {
      * Document Id
      */
     document_id: string;
+    /**
+     * First Page Source Id
+     *
+     * First registered page by archive page ID, independent of evidence filters; null when no registered page is available.
+     */
+    first_page_source_id?: string | null;
     /**
      * Registered Page Count
      *

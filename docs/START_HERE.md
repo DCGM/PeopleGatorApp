@@ -15,7 +15,8 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
 3. Open the application root to land on **Documents** and explore registered
    documents, including document groups across libraries. Switch to **Table** to
    compare document-wide page/evidence totals and last-change metadata. Use
-   **Columns** to choose fields; horizontal scrolling keeps the page width
+   **Columns** to choose fields, including the optional **First page** thumbnail;
+   horizontal scrolling keeps the page width
    bounded, and reaching the final row loads the next cursor batch. The PeopleGator logo
    and first breadcrumb return here. Open **Scan search** for pages and evidence;
    follow a result into its page workspace and inspect the OCR/face overlays. Use the

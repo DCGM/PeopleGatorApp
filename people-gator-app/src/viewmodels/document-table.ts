@@ -2,7 +2,7 @@ import type { DocumentResponse } from '@/client'
 import type { ColumnVisibilityState } from '@tanstack/vue-table'
 
 export function defaultDocumentColumns(): ColumnVisibilityState {
-  return { document_id: false, modified_by: false, api_key: false }
+  return { first_page: false, document_id: false, modified_by: false, api_key: false }
 }
 
 export function annotationCount(

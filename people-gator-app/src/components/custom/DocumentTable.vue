@@ -10,6 +10,7 @@ import {
   type ColumnVisibilityState,
 } from '@tanstack/vue-table'
 import type { DocumentResponse } from '@/client'
+import DocumentFirstPage from './DocumentFirstPage.vue'
 import { documentTitle } from '@/viewmodels/document-list'
 import { annotationCount, defaultDocumentColumns } from '@/viewmodels/document-table'
 import { relatedQuery } from '@/viewmodels/shared-filters'
@@ -51,6 +52,11 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
           ? `${row.original.library} · ${row.original.document_id}`
           : 'Open',
       ),
+  },
+  {
+    id: 'first_page',
+    header: 'First page',
+    cell: ({ row }) => h(DocumentFirstPage, { document: row.original }),
   },
   {
     id: 'name',

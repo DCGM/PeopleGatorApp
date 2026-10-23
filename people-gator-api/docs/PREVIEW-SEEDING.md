@@ -760,4 +760,12 @@ can hide each data field, including Document name, and restore defaults; Open
 always retains document navigation. The table uses document-wide counts even
 when evidence filters select matching documents. Scroll horizontally to reach
 all fields and vertically to append cursor batches; Load more and Retry remain
-keyboard accessible. No preview page/image requests are made in Table.
+keyboard accessible. The optional **First page** column is hidden by default. Enable it in Columns to
+show a single thumbnail per document. The document response supplies its source
+UUID in the same batched projection as the page total; enabling the column adds
+only thumbnail requests, without page-list or annotation/name queries. Hidden
+previews make no media requests. First means the first registered page in archive
+page-ID order, matching the existing page browser, independent of evidence filters.
+No pages and unavailable media have short fallbacks. The
+`document-table-first-page` manifest link opens the seeded two-page example;
+both local page images are usable and repository/media tests verify its first page.

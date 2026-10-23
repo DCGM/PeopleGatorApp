@@ -1,11 +1,19 @@
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
 import { defaultDocumentColumns } from '@/viewmodels/document-table'
 import type { DocumentResponse } from '@/client'
 
+const media = vi.hoisted(() => ({ image: vi.fn() }))
+vi.mock('@/client', () => ({ getPageImageByIdRouteApiV1PagesPageSourceIdImageGet: media.image }))
+beforeEach(() => {
+  media.image.mockReset()
+  media.image.mockResolvedValue({ data: new Blob(['page'], { type: 'image/jpeg' }) })
+  vi.stubGlobal('URL', { createObjectURL: () => 'blob:first-page', revokeObjectURL: vi.fn() })
+})
 const documents: DocumentResponse[] = [
   {
     source_id: 'source-a',
@@ -15,6 +23,7 @@ const documents: DocumentResponse[] = [
     document_id: 'archive-id',
     name: '  ',
     registered_page_count: 2,
+    first_page_source_id: 'first-page-source',
     linked_entity_count: 1,
     last_touched_by_user_name: 'Reviewer',
     last_touched_by_user_id: 'user',
@@ -26,7 +35,10 @@ const documents: DocumentResponse[] = [
   },
 ]
 const cleanups: (() => void)[] = []
-afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
+afterEach(() => {
+  cleanups.splice(0).forEach((cleanup) => cleanup())
+  vi.unstubAllGlobals()
+})
 async function render() {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -36,6 +48,9 @@ async function render() {
     ],
   })
   await router.push('/documents?view=table&library=Archive&link_state=verified')
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 60_000 } },
+  })
   const visibility = ref(defaultDocumentColumns())
   const wrapper = mount(DocumentTable, {
     props: {
@@ -47,9 +62,12 @@ async function render() {
       },
     },
     attachTo: document.body,
-    global: { plugins: [router] },
+    global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
   })
-  cleanups.push(() => wrapper.unmount())
+  cleanups.push(() => {
+    wrapper.unmount()
+    queryClient.clear()
+  })
   return { wrapper, router, visibility }
 }
 describe('document table', () => {
@@ -110,5 +128,51 @@ describe('document table', () => {
     })
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     expect(visibility.value).toEqual(defaultDocumentColumns())
+  })
+  it('loads just one thumbnail when First page is enabled and reuses it across toggles', async () => {
+    const { wrapper, visibility } = await render()
+    expect(media.image).not.toHaveBeenCalled()
+    expect(wrapper.find('img').exists()).toBe(false)
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    const toggle = document
+      .querySelector('label')!
+      .querySelector('[role="checkbox"]') as HTMLElement
+    expect(toggle.closest('label')?.textContent).toContain('First page')
+    toggle.click()
+    await flushPromises()
+    expect(visibility.value.first_page).toBe(true)
+    expect(media.image).toHaveBeenCalledTimes(1)
+    expect(media.image).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { page_source_id: 'first-page-source' },
+        query: { width: 256 },
+      }),
+    )
+    expect(wrapper.findAll('tbody img')).toHaveLength(1)
+    expect(wrapper.get('tbody img').attributes('alt')).toBe(
+      'First registered page of Document archive-id',
+    )
+    toggle.click()
+    await flushPromises()
+    expect(wrapper.find('img').exists()).toBe(false)
+    toggle.click()
+    await flushPromises()
+    expect(media.image).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({
+      documents: [{ ...documents[0]!, first_page_source_id: null, registered_page_count: 0 }],
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('No pages')
+    expect(media.image).toHaveBeenCalledTimes(1)
+  })
+  it('shows a short fallback when the registered first page has no stored image', async () => {
+    media.image.mockRejectedValue({ isAxiosError: true, response: { status: 404 } })
+    const { wrapper } = await render()
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), first_page: true } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('No preview')
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(media.image).toHaveBeenCalledTimes(1)
   })
 })

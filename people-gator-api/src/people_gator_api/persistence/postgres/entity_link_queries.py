@@ -189,16 +189,17 @@ async def load_document_summaries(session, objects):
     if not documents:
         return
     for obj in documents.values():
-        obj._document_summary = {"registered_page_count": 0, "linked_entity_count": 0}
+        obj._document_summary = {"registered_page_count": 0, "linked_entity_count": 0, "first_page_source_id": None}
     document, page = Document.__table__.c, Page.__table__.c
     pages = (
-        select(document.id, func.count(page.id))
+        # Count before DISTINCT ON selects the first archive page for each document.
+        select(document.id, func.count(page.id).over(partition_by=document.id), page.id)
         .select_from(Document.__table__.join(Page.__table__,
             (page.library == document.library) & (page.document_id == document.document_id)))
-        .where(document.id.in_(documents)).group_by(document.id)
+        .where(document.id.in_(documents)).distinct(document.id).order_by(document.id, page.page_id)
     )
-    for owner, count in await session.execute(pages):
-        documents[owner]._document_summary["registered_page_count"] = count
+    for owner, count, first_page in await session.execute(pages):
+        documents[owner]._document_summary.update(registered_page_count=count, first_page_source_id=first_page)
     scope = source_scope()
     evidence = union_all(
         select(ImageOccurrence.source_id, ImageOccurrence.entity_id).where(ImageOccurrence.occurrence_type == "face"),
