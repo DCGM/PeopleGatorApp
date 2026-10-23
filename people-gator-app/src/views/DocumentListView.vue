@@ -100,6 +100,7 @@ useAutomaticPagination({
     <DocumentTable
       v-if="presentation === 'table'"
       v-model:visibility="visibility"
+      v-model:sort="sort"
       :documents="documents"
       class="pt-4"
     />

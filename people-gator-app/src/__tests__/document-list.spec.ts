@@ -416,4 +416,32 @@ describe('document presentation navigation', () => {
     await flushPromises()
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
   })
+  it.each(['', '&q=Album'])('header sorting shares URL/server state with the selector (%s)', async (search) => {
+    const { wrapper, router } = await render('/documents?view=table&library=a&unassigned=no' + search)
+    const params = () => (search ? api.search : api.documents).mock.calls.slice(-1)[0]![0].query
+    const pages = wrapper.get('button[aria-label="Sort by Pages"]')
+    await pages.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ view: 'table', library: 'a', unassigned: 'no', sort: 'page_count' })
+    expect(params()).toMatchObject({ sort: 'page_count', sort_direction: 'desc', cursor: null, 'filter.library': ['a'], 'filter.has_unassigned_faces': false })
+    expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
+    expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Pages · Highest first')
+    await pages.trigger('click')
+    await flushPromises()
+    expect(params()).toMatchObject({ sort: 'page_count', sort_direction: 'asc', cursor: null })
+    expect(router.currentRoute.value.query.dir).toBe('asc')
+    expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('ascending')
+    expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Pages · Lowest first')
+    router.back()
+    await flushPromises()
+    expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
+    if (search) {
+      expect(params()['query.text']).toEqual(['Album'])
+      await router.push('/documents?view=table&q=Album')
+      await flushPromises()
+      expect(wrapper.find('th[aria-sort]').exists()).toBe(false) // Relevance has no data column.
+      expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Relevance')
+    }
+  })
+
 })

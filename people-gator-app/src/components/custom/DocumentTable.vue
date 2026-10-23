@@ -9,10 +9,17 @@ import {
   type ColumnDef,
   type ColumnVisibilityState,
 } from '@tanstack/vue-table'
-import type { DocumentResponse } from '@/client'
+import { ArrowUp, ArrowDown } from '@lucide/vue'
+import { defaultDirection, type SortState } from '@/lib/sorting'
+import { DOCUMENT_BROWSE_DEFAULT } from '@/viewmodels/sort-options'
+import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
 import { documentTitle } from '@/viewmodels/document-list'
-import { annotationCount, defaultDocumentColumns } from '@/viewmodels/document-table'
+import {
+  annotationCount,
+  defaultDocumentColumns,
+  DOCUMENT_COLUMN_SORTS,
+} from '@/viewmodels/document-table'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -28,6 +35,29 @@ import {
 
 const props = defineProps<{ documents: DocumentResponse[] }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
+const sort = defineModel<SortState<DocumentSortField>>('sort', {
+  default: () => ({ ...DOCUMENT_BROWSE_DEFAULT }),
+})
+function toggleSort(columnId: string) {
+  const field = DOCUMENT_COLUMN_SORTS[columnId]
+  if (!field) return
+  sort.value = {
+    field,
+    direction:
+      sort.value.field === field
+        ? sort.value.direction === 'asc'
+          ? 'desc'
+          : 'asc'
+        : defaultDirection(field),
+  }
+}
+function headerSort(columnId: string) {
+  return DOCUMENT_COLUMN_SORTS[columnId] === sort.value.field
+    ? sort.value.direction === 'asc'
+      ? 'ascending'
+      : 'descending'
+    : undefined
+}
 const route = useRoute()
 const features = tableFeatures({ columnVisibilityFeature })
 const link = (document: DocumentResponse, text: string) =>
@@ -154,9 +184,29 @@ const table = useTable({
       <Table aria-describedby="document-table-counts">
         <TableHeader>
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
-            <TableHead v-for="header in group.headers" :key="header.id" scope="col">
+            <TableHead
+              v-for="header in group.headers"
+              :key="header.id"
+              scope="col"
+              :aria-sort="headerSort(header.column.id)"
+            >
+              <Button
+                v-if="!header.isPlaceholder && DOCUMENT_COLUMN_SORTS[header.column.id]"
+                variant="ghost"
+                size="sm"
+                class="-ml-2.5"
+                :aria-label="`Sort by ${header.column.columnDef.header}`"
+                @click="toggleSort(header.column.id)"
+              >
+                <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
+                <ArrowUp v-if="headerSort(header.column.id) === 'ascending'" aria-hidden="true" />
+                <ArrowDown
+                  v-else-if="headerSort(header.column.id) === 'descending'"
+                  aria-hidden="true"
+                />
+              </Button>
               <FlexRender
-                v-if="!header.isPlaceholder"
+                v-else-if="!header.isPlaceholder"
                 :render="header.column.columnDef.header"
                 :props="header.getContext()"
               />

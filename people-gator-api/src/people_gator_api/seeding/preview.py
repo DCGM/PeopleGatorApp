@@ -759,6 +759,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             + urlencode({"library": "preview-mzk", "archive_document": next(
                 item.document_id for item in DOCUMENTS if item.key == "scan-only"
             )}),
+            "document-table-sort": "/documents?" + urlencode({"view": "table", "library": "preview-pagination", "sort": "name", "dir": "desc"}),
             "document-table-first-page": "/documents?" + urlencode({"view": "table", "document": documents["table-ledger"]}),
             "document-table": "/documents?" + urlencode({"view": "table", "library": "preview-table"}),
             "mobile-filters": "/people?"

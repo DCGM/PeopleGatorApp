@@ -175,4 +175,40 @@ describe('document table', () => {
     expect(wrapper.find('img').exists()).toBe(false)
     expect(media.image).toHaveBeenCalledTimes(1)
   })
+  it('offers only supported server sort fields and flips their indicated direction', async () => {
+    const { wrapper } = await render()
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), document_id: true } })
+    expect(
+      wrapper.findAll('thead button').map((button) => button.attributes('aria-label')),
+    ).toEqual([
+      'Sort by Document name',
+      'Sort by Library',
+      'Sort by Document ID',
+      'Sort by Pages',
+      'Sort by Last modified',
+    ])
+    expect(wrapper.get('th[aria-sort="ascending"]').text()).toBe('Document name')
+    for (const [label, field, natural] of [
+      ['Pages', 'page_count', 'desc'],
+      ['Library', 'library', 'asc'],
+      ['Document ID', 'document_id', 'asc'],
+      ['Last modified', 'last_touched_at', 'desc'],
+      ['Document name', 'name', 'asc'],
+    ]) {
+      const button = wrapper.get(`button[aria-label="Sort by ${label}"]`)
+      await button.trigger('click')
+      expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([{ field, direction: natural }])
+      expect(button.element.closest('th')?.getAttribute('aria-sort')).toBe(
+        natural === 'asc' ? 'ascending' : 'descending',
+      )
+      expect(button.find('svg').exists()).toBe(true)
+      const flipped = natural === 'asc' ? 'desc' : 'asc'
+      await button.trigger('click')
+      expect(wrapper.emitted('update:sort')?.slice(-1)[0]).toEqual([{ field, direction: flipped }])
+      expect(button.element.closest('th')?.getAttribute('aria-sort')).toBe(
+        flipped === 'asc' ? 'ascending' : 'descending',
+      )
+      expect(wrapper.findAll('th[aria-sort]')).toHaveLength(1)
+    }
+  })
 })

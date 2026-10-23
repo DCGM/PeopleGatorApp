@@ -3125,3 +3125,24 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
     assert edited.last_touched_by_api_key_id is edited.last_touched_by_api_key_name is None
     await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(document.source_id) == edited
+
+
+@pytest.mark.asyncio
+async def test_document_table_sort_example_uses_server_cursor_order(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    demo = parse_qs(urlsplit(seeded.filter_examples["document-table-sort"]).query)
+    assert demo["view"] == ["table"]
+    query = DocumentListRequest(
+        limit=12, return_total_count=True,
+        filter_=DocumentListFilter(library=demo["library"]),
+        sort=demo["sort"][0], sort_direction=demo["dir"][0],
+    )
+    first = await database.sources.list_documents(query)
+    second = await database.sources.list_documents(query.model_copy(update={"cursor": first.cursor}))
+    assert first.total_count == 14 and len(first.items) == 12 and first.cursor
+    assert len(second.items) == 2 and second.cursor is None
+    assert [item.name for item in [*first.items, *second.items]] == [
+        f"Pagination ledger {i:02}" for i in range(14, 0, -1)
+    ]

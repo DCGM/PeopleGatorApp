@@ -1,4 +1,4 @@
-import type { DocumentResponse } from '@/client'
+import type { DocumentResponse, DocumentSortField } from '@/client'
 import type { ColumnVisibilityState } from '@tanstack/vue-table'
 
 export function defaultDocumentColumns(): ColumnVisibilityState {
@@ -14,4 +14,13 @@ export function annotationCount(
     (document.entity_link_stats.faces?.[state] ?? 0) +
     (document.entity_link_stats.mentions?.[state] ?? 0)
   )
+}
+
+/** Only server-supported fields can offer header sorting. */
+export const DOCUMENT_COLUMN_SORTS: Readonly<Partial<Record<string, DocumentSortField>>> = {
+  name: 'name',
+  library: 'library',
+  document_id: 'document_id',
+  registered_page_count: 'page_count',
+  last_modified: 'last_touched_at',
 }

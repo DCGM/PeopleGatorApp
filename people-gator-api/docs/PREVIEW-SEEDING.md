@@ -769,3 +769,13 @@ page-ID order, matching the existing page browser, independent of evidence filte
 No pages and unavailable media have short fallbacks. The
 `document-table-first-page` manifest link opens the seeded two-page example;
 both local page images are usable and repository/media tests verify its first page.
+
+
+Sortable table headers (Document name, Library, Document ID, Pages and Last
+modified) use the same server sort as the Sort selector. Click a heading to select
+its normal initial direction; click again to reverse it. An arrow and accessible
+sort state identify the active heading. The `document-table-sort` manifest link
+opens the 14 pagination ledgers by name descending; reverse Document name and
+scroll to verify ascending order across the cursor boundary. Relevance remains
+available in the selector during text search. Other metadata/count headings have
+no sort action because their fields are not supported by the API.
