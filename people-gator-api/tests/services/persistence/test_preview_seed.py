@@ -104,7 +104,7 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (31, 61, 43)
+    assert await counts(database) == (33, 61, 43)
     assert len(result.documents) == 41 and len(result.pages) == 77
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (31, 61, 43)
+    assert await counts(database) == (33, 61, 43)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (31, 61, 43)
+    assert await counts(database) == (33, 61, 43)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (32, 61, 43)
+    assert await counts(database) == (34, 61, 43)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 31 and len(result.faces) == 61
-    assert await counts(database) == (31, 61, 43)
+    assert len(result.entities) == 33 and len(result.faces) == 61
+    assert await counts(database) == (33, 61, 43)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (30, 56, 37)
+    assert await counts(database) == (32, 60, 42)
 
 
 
@@ -1277,8 +1277,12 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     first = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, return_total_count=True))
     second = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, return_total_count=True))
     third = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=second.cursor, return_total_count=True))
-    assert first.total_count == 3 and third.cursor is None
-    assert [first.items[0].library, second.items[0].library, third.items[0].library] == ['preview-mzk', 'preview-nlk', 'preview-pagination']
+    fourth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=third.cursor, return_total_count=True))
+    fifth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fourth.cursor, return_total_count=True))
+    assert first.total_count == 5 and fifth.cursor is None
+    assert [batch.items[0].library for batch in (first, second, third, fourth, fifth)] == [
+        'preview-mzk', 'preview-nlk', 'preview-pagination', 'preview-table', 'preview-table-mirror',
+    ]
     with pytest.raises(ValueError, match='cursor'):
         await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, q='mzk'))
 
@@ -3095,3 +3099,21 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
     again = await database.sources.get_document(document.source_id)
     assert summary(again) == summary(document)
     assert again.last_touched_at == document.last_touched_at
+
+    # Annotation edits/deletes update summaries and the same recorded actor.
+    from people_gator_api.services.auth_service import AuthContext
+    reviewer_actor = AuthContext(
+        user_id=seeded.users["reviewer"], authentication_method="bearer",
+        scopes={"people-gator:annotate"},
+    )
+    await database.faces.delete(seeded.faces["table-manual"], context=reviewer_actor)
+    await database.text_mentions.delete(seeded.mentions["table-manual-mention"], context=reviewer_actor)
+    edited = await database.sources.get_document(document.source_id)
+    assert edited.linked_entity_count == 1  # Repeated Tereza links still count once.
+    assert edited.entity_link_stats.faces.total == 3
+    assert edited.entity_link_stats.mentions.total == 4
+    assert edited.last_touched_by_user_id == reviewer_actor.user_id
+    assert edited.last_touched_by_user_name == "Preview reviewer"
+    assert edited.last_touched_by_api_key_id is edited.last_touched_by_api_key_name is None
+    await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(document.source_id) == edited

@@ -414,16 +414,16 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     # entities cannot be calculated by summing page/type counts. Recovery finds
     # a write before its manifest checkpoint and preserves later reviewer edits.
     key = "table-direct-mention"
-    if key not in manifest.mentions and "link-ada" in active_entities:
+    if key not in manifest.mentions and "table-tereza" in active_entities:
         source_id = documents["table-ledger"]
         records = (await database.text_mentions.list(TextMentionListRequest(
             limit=100, filter_=TextMentionListFilter(source_id=[source_id]),
         ))).items
-        context = "Ada Review catalogued the document table ledger directly."
+        context = "Tereza Columns catalogued the document table ledger directly."
         record = next((item for item in records if item.context == context), None)
         if record is None:
             record = await database.text_mentions.create(TextMentionCreateRequest(
-                name="Ada Review", context=context, entity_id=active_entities["link-ada"],
+                name="Tereza Columns", context=context, entity_id=active_entities["table-tereza"],
                 entity_link_state=EntityLinkState.automatic, source_id=source_id,
             ), actors["importer"])
         manifest.mentions[key] = record.mention_id

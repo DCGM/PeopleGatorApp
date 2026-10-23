@@ -749,7 +749,8 @@ Open `/documents?view=table&library=preview-table` (the `document-table` manifes
 entry). **Document table ledger** has two registered pages, four faces and five
 mentions including one direct document mention: three automatic, two verified,
 two manual and two unassigned annotations, linked to just two distinct entities.
-Its last change is attributed to Preview face importer and its registered key.
+Its synthetic subjects are Tereza Columns and Oskar Rows. Its last change is
+attributed to Preview face importer and its registered key.
 The same archive ID in `preview-table-mirror` has no pages or evidence; Document
 awaiting scans also demonstrates zero counts and unknown modification history.
 Direct annotation ledger demonstrates a user-only modification without a key.

@@ -279,9 +279,9 @@ describe('document search and bounded groups', () => {
       'docs-next',
     ])
   })
-  it('restores all URL filters, combines them in list/search, and applies shared ones to previews', async () => {
+  it.each(['items', 'table'])('restores combined URL filters, tags and clear/history behavior in %s', async (view) => {
     const { wrapper, router } = await render(
-      `/documents?q=Ada&library=a&library=b&link_state=verified&unassigned=no&touched_from=2026-01-01T00:00:00Z&touched_by=${user}&api_key=${key}`,
+      `/documents?q=Ada&library=a&library=b&link_state=verified&unassigned=no&touched_from=2026-01-01T00:00:00Z&touched_by=${user}&api_key=${key}${view === 'table' ? '&view=table' : ''}`,
     )
     expect(api.documents).not.toHaveBeenCalled()
     expect(api.search).toHaveBeenLastCalledWith(
@@ -301,7 +301,8 @@ describe('document search and bounded groups', () => {
     )
     // Previews: this document's pages matching the same shared criteria; the
     // Documents-only unassigned-faces choice does not restrict pages.
-    expect(api.pages.mock.calls[0]![0].query).toEqual({
+    if (view === 'table') expect(api.pages).not.toHaveBeenCalled()
+    else expect(api.pages.mock.calls[0]![0].query).toEqual({
       'filter.document_source_id': ['a-shared'],
       'filter.entity_link_state': ['verified'],
       'filter.last_touched_by_user_id': [user],
@@ -320,7 +321,7 @@ describe('document search and bounded groups', () => {
       .find((button) => button.text() === 'Clear all filters')!
       .trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada', ...(view === 'table' && { view }) })
     await wrapper.get('input[aria-label="Search documents"]').setValue('  ')
     await flushPromises()
     expect(api.documents).toHaveBeenCalled()
@@ -330,9 +331,9 @@ describe('document search and bounded groups', () => {
       wrapper.get<HTMLInputElement>('input[aria-label="Search documents"]').element.value,
     ).toBe('Ada')
   })
-  it('shows no matches and suppresses invalid date queries', async () => {
+  it.each(['items', 'table'])('shows no matches and suppresses invalid dates in %s', async (view) => {
     api.documents.mockResolvedValue(response([]))
-    const { wrapper, router } = await render('/documents?library=missing')
+    const { wrapper, router } = await render(`/documents?library=missing&view=${view}`)
     expect(wrapper.text()).toContain('No documents match your search and filters.')
     const calls = api.documents.mock.calls.length
     await router.push(
@@ -342,9 +343,9 @@ describe('document search and bounded groups', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('before or equal')
     expect(api.documents.mock.calls.length).toBe(calls)
   })
-  it('keeps active badges outside the panel and accessible while mobile filters are collapsed', async () => {
+  it.each(['items', 'table'])('keeps active tags accessible with mobile filters collapsed in %s', async (view) => {
     desktop.value = false
-    const { wrapper, router } = await render('/documents?q=Ada&library=a')
+    const { wrapper, router } = await render(`/documents?q=Ada&library=a${view === 'table' ? '&view=table' : ''}`)
     expect(wrapper.get('button[aria-label="Show filters"]').attributes('aria-expanded')).toBe(
       'false',
     )
@@ -361,7 +362,7 @@ describe('document search and bounded groups', () => {
     expect(wrapper.find('.active-filters').exists()).toBe(true)
     await active.get('button[aria-label="Remove Library: a"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query).toEqual({ q: 'Ada' })
+    expect(router.currentRoute.value.query).toEqual({ q: 'Ada', ...(view === 'table' && { view }) })
     expect(wrapper.find('.active-filters').exists()).toBe(false)
   })
   it('keeps scan result envelopes separate from raw page list cache entries', async () => {

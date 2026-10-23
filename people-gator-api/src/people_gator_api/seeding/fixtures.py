@@ -26,6 +26,8 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("table-tereza", "Tereza Columns", (), "Synthetic document table subject.", "importer"),
+    Person("table-oskar", "Oskar Rows", (), "Synthetic document table reviewer subject.", "reviewer"),
     Person("provenance-review", "Irena Evidence", (),
            "Synthetic imported identity with separately edited annotations in two libraries.", "importer"),
     Person(
@@ -214,13 +216,13 @@ PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
     Page("table-1", "table-ledger", 1,
-         (Face("table-auto", "link-ada", 0, 2), Face("table-manual", "link-emil", 1, 3, "manual")),
-         (Mention("table-auto-mention", "link-ada", "Ada Review indexed the document table."),
-          Mention("table-manual-mention", "link-emil", "Emil Review curated the table.", "manual"))),
+         (Face("table-auto", "table-tereza", 0, 2), Face("table-manual", "table-oskar", 1, 3, "manual")),
+         (Mention("table-auto-mention", "table-tereza", "Tereza Columns indexed the document table."),
+          Mention("table-manual-mention", "table-oskar", "Oskar Rows curated the table.", "manual"))),
     Page("table-2", "table-ledger", 2,
-         (Face("table-verified", "link-ada", 0, 2, "verified"), Face("table-unassigned", None, 1, 3)),
-         (Mention("table-verified-mention", "link-ada", "Ada Review verified this table.", "verified"),
-          Mention("table-unassigned-mention", "link-emil", "Emil Review awaits table assignment.", None))),
+         (Face("table-verified", "table-tereza", 0, 2, "verified"), Face("table-unassigned", None, 1, 3)),
+         (Mention("table-verified-mention", "table-tereza", "Tereza Columns verified this table.", "verified"),
+          Mention("table-unassigned-mention", "table-oskar", "Oskar Rows awaits table assignment.", None))),
     Page("provenance-a-1", "provenance-a", 1,
         (Face("provenance-auto", "provenance-review", 0, 1),
          Face("provenance-authority", "provenance-review", 1, 1, "verified")),
