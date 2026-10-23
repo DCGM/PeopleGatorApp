@@ -2,6 +2,10 @@
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import DocumentTable from '@/components/custom/DocumentTable.vue'
+import { defaultDocumentColumns } from '@/viewmodels/document-table'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
@@ -14,6 +18,16 @@ import {
   RELEVANCE,
   scoredOptions,
 } from '@/viewmodels/sort-options'
+const route = useRoute()
+const router = useRouter()
+const presentation = computed({
+  get: () => (route.query.view === 'table' ? 'table' : 'items'),
+  set: (view: string) => {
+    if (view)
+      void router.push({ query: { ...route.query, view: view === 'table' ? 'table' : undefined } })
+  },
+})
+const visibility = ref(defaultDocumentColumns())
 const shared = useSharedFilters()
 const { searchTerm, unassigned } = useDocumentFilters()
 const searching = computed(() => Boolean(searchTerm.value.trim()))
@@ -46,6 +60,7 @@ const filtered = computed(
 const listEnd = ref<HTMLElement | null>(null)
 useAutomaticPagination({
   target: listEnd,
+  resetKey: computed(() => route.fullPath),
   hasNextPage,
   isFetching,
   error,
@@ -55,7 +70,7 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full max-w-6xl px-2 md:px-4">
+  <main class="mx-auto w-full min-w-0 max-w-6xl px-2 md:px-4">
     <header class="pb-4 pt-6">
       <small class="font-semibold uppercase text-secondary">Documents index</small>
       <h1>Browse documents</h1>
@@ -71,7 +86,25 @@ useAutomaticPagination({
     <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
       Search reports a bounded set of ranked document candidates.
     </p>
+    <div class="flex flex-wrap items-center gap-2 pt-4">
+      <ToggleGroup
+        v-model="presentation"
+        type="single"
+        variant="outline"
+        aria-label="Document view"
+      >
+        <ToggleGroupItem value="items" aria-label="Items view">Items</ToggleGroupItem>
+        <ToggleGroupItem value="table" aria-label="Table view">Table</ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+    <DocumentTable
+      v-if="presentation === 'table'"
+      v-model:visibility="visibility"
+      :documents="documents"
+      class="pt-4"
+    />
     <section
+      v-else
       class="document-pages flex w-full min-w-0 flex-col gap-4 pt-4"
       aria-label="Registered documents"
       aria-live="polite"

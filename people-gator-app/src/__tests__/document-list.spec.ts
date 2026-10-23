@@ -386,3 +386,33 @@ describe('document search and bounded groups', () => {
     expect(wrapper.findAll('h2')).toHaveLength(2)
   })
 })
+
+describe('document presentation navigation', () => {
+  it('switches presentation without changing search, filters, sort or the result query', async () => {
+    const { wrapper, router } = await render(
+      '/documents?q=Album&library=a&sort=document_id&dir=desc&view=table',
+    )
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(api.pages).not.toHaveBeenCalled()
+    const firstParams = api.search.mock.calls[0]![0].query
+    await wrapper.get('[aria-label="Items view"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.document-row')).toHaveLength(1)
+    expect(router.currentRoute.value.query).toEqual({
+      q: 'Album',
+      library: 'a',
+      sort: 'document_id',
+      dir: 'desc',
+    })
+    await wrapper.get('[aria-label="Table view"]').trigger('click')
+    await flushPromises()
+    expect(api.search).toHaveBeenCalledTimes(1)
+    expect(api.search.mock.calls[0]![0].query).toEqual(firstParams)
+    router.back()
+    await flushPromises()
+    expect(wrapper.find('table').exists()).toBe(false)
+    router.forward()
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+  })
+})

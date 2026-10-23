@@ -6,6 +6,7 @@ type PaginationOptions = {
   isFetching: MaybeRefOrGetter<boolean>
   error: MaybeRefOrGetter<unknown>
   enabled: MaybeRefOrGetter<boolean>
+  resetKey?: MaybeRefOrGetter<unknown>
   loadMore: () => Promise<unknown>
 }
 
@@ -88,8 +89,11 @@ export function useAutomaticPagination(options: PaginationOptions) {
     schedule,
     { flush: 'post' },
   )
-  onMounted(() => {
-    active = true
+  function observeTarget() {
+    intersection?.disconnect()
+    resize?.disconnect()
+    intersection = undefined
+    resize = undefined
     const target = options.target.value
     if (target) {
       if (typeof IntersectionObserver !== 'undefined') {
@@ -103,6 +107,18 @@ export function useAutomaticPagination(options: PaginationOptions) {
           resize.observe(parent)
       }
     }
+    schedule()
+  }
+  watch(
+    () => [options.target.value, toValue(options.resetKey)],
+    () => {
+      if (active) observeTarget()
+    },
+    { flush: 'post' },
+  )
+  onMounted(() => {
+    active = true
+    observeTarget()
     window.addEventListener('scroll', schedule, true)
     window.addEventListener('resize', schedule)
     schedule()

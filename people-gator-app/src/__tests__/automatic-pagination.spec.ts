@@ -126,6 +126,7 @@ const screens = [
   { name: 'people', view: PeopleSearchView, sort: 'name' },
   { name: 'scans', view: DocumentSearchView, sort: 'page_id' },
   { name: 'documents', view: DocumentListView, sort: 'name' },
+  { name: 'document table', view: DocumentListView, sort: 'name', table: true },
 ]
 for (const screen of screens)
   describe(`automatic ${screen.name} pagination`, () => {
@@ -142,7 +143,9 @@ for (const screen of screens)
           },
         ],
       })
-      await router.push('/' + query)
+      await router.push(
+        '/' + (screen.table ? (query ? query + '&view=table' : '?view=table') : query),
+      )
       const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
       const wrapper = mount(screen.view, {
         attachTo: document.body,
@@ -152,6 +155,12 @@ for (const screen of screens)
             PeopleSearchBar: true,
             DocumentSearchBar: true,
             DocumentListSearchBar: true,
+            ToggleGroup: true,
+            DocumentTable: {
+              props: ['documents'],
+              template:
+                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span></div>',
+            },
             PeopleCard: { props: ['name'], template: '<span class="result">{{ name }}</span>' },
             DocumentCard: { props: ['library'], template: '<span class="result">scan</span>' },
             DocumentPageGroup: {
@@ -206,7 +215,7 @@ for (const screen of screens)
       expect(wrapper.findAll('.result')).toHaveLength(3)
       expect(api.list.mock.calls.map(([p]) => p.cursor)).toEqual([null, 'next', 'last'])
     })
-    if (screen.name !== 'documents')
+    if (screen.view !== DocumentListView)
       it.each(['', '?q=Pagination'])(
         'fills spare space before the mobile results section minimum height (%s)',
         async (query) => {
@@ -311,6 +320,23 @@ for (const screen of screens)
       expect(last.sort).toBe(screen.sort)
       expect(last.sort_direction).toBe('desc')
     })
+    if (screen.view === DocumentListView)
+      it('stops cursor cycles, including a cursor seen before the previous batch', async () => {
+        endTop = 500
+        api.list.mockImplementation(async ({ cursor }) =>
+          cursor === 'last'
+            ? batch(['third'], 'next')
+            : cursor
+              ? batch(['second'], 'last')
+              : batch(['first'], 'next'),
+        )
+        const { wrapper } = await render()
+        await settle()
+        await settle()
+        await settle()
+        expect(wrapper.findAll('.result')).toHaveLength(3)
+        expect(api.list.mock.calls.map(([p]) => p.cursor)).toEqual([null, 'next', 'last'])
+      })
     it('uses the clipping scroll container and remains usable without observers', async () => {
       vi.stubGlobal('IntersectionObserver', undefined)
       vi.stubGlobal('ResizeObserver', undefined)
