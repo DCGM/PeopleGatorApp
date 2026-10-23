@@ -167,8 +167,9 @@ function updateFilter(filter: WorkspaceFilterSelection) {
                     @change="updateFilter"
                   />
                 </div>
-                <div v-if="filters.length" class="min-w-0 px-2 pb-2">
+                <div v-if="filters.length" class="min-w-0">
                   <ActiveFilters
+                    class="mt-0!"
                     :filters="filters"
                     clear-label="Clear filters"
                     @remove="remove"

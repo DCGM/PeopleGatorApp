@@ -44,7 +44,8 @@ toggling a selected value removes it immediately. Date and time changes apply
 immediately too. The picker stays open for additional values or time edits,
 without Done, Enter or a checkmark being required. Reopening a type restores its
 selected values. Press **Escape** to close the selector and preserve values
-already applied; tags remove applied values individually. Clicking away
+already applied; tags remove applied values individually and align with the
+workspace content edges without extra outer padding or margin. Clicking away
 or dismissing the picker resets the row to **Filter** and a disabled **Value**
 selector, ready for the next filter; applied tags remain unchanged.
 Clicking the type control allows
