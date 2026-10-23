@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Globe, SlidersHorizontal, Moon, Sun } from '@lucide/vue'
+import { Globe, SlidersHorizontal, Moon, Sun, Plus, ChevronsUpDown } from '@lucide/vue'
 import { useDark, useToggle } from '@vueuse/core'
+import { SelectTrigger as WorkspaceModeTrigger } from 'reka-ui'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 import PeopleGatorIcon from './PeopleGatorIcon'
 import TopBar from './TopBar.vue'
 import FilterMultiSelect from './FilterMultiSelect.vue'
-import FilterSingleSelect from './FilterSingleSelect.vue'
 import FilterDateTimePicker from './FilterDateTimePicker.vue'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
-import { Badge } from '@/components/ui/badge'
+import WorkspaceSidebarToggle from './WorkspaceSidebarToggle.vue'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -18,12 +27,13 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
   SidebarSeparator,
-  SidebarTrigger,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
 } from '@/components/ui/sidebar'
 import WorkspaceNavigation from './WorkspaceNavigation.vue'
 
@@ -37,8 +47,7 @@ const fields = reactive([
   {
     key: 'library',
     label: 'Library',
-    selected: ['archive'],
-    search: '',
+    selected: [] as string[],
     options: [
       { id: 'archive', label: 'City archive' },
       { id: 'collection', label: 'Family collection' },
@@ -47,8 +56,7 @@ const fields = reactive([
   {
     key: 'document',
     label: 'Document',
-    selected: ['register'],
-    search: '',
+    selected: [] as string[],
     options: [
       { id: 'register', label: 'Register 12' },
       { id: 'album', label: 'Photo album' },
@@ -58,7 +66,6 @@ const fields = reactive([
     key: 'page',
     label: 'Page',
     selected: [] as string[],
-    search: '',
     options: [
       { id: 'page-1', label: 'Register 12 · Page 1' },
       { id: 'page-2', label: 'Register 12 · Page 2' },
@@ -68,7 +75,6 @@ const fields = reactive([
     key: 'user',
     label: 'Last user',
     selected: [] as string[],
-    search: '',
     options: [
       { id: 'reviewer', label: 'Demo reviewer' },
       { id: 'editor', label: 'Demo editor' },
@@ -77,8 +83,7 @@ const fields = reactive([
   {
     key: 'key',
     label: 'Last API key',
-    selected: ['importer'],
-    search: '',
+    selected: [] as string[],
     options: [
       { id: 'importer', label: 'Archive importer' },
       { id: 'ocr', label: 'OCR worker' },
@@ -117,6 +122,27 @@ function clear() {
   from.value = ''
   to.value = ''
 }
+const adding = ref(false)
+const filterType = ref('library')
+const draftValues = ref<string[]>([])
+const draftSearch = ref('')
+const draftDate = ref('')
+const draftField = computed(() => fields.find((field) => field.key === filterType.value))
+const canAdd = computed(() => (draftField.value ? draftValues.value.length > 0 : !!draftDate.value))
+function resetDraft() {
+  draftValues.value = []
+  draftSearch.value = ''
+  draftDate.value = ''
+}
+function addFilter() {
+  if (!canAdd.value) return
+  if (draftField.value) {
+    draftField.value.selected = [...new Set([...draftField.value.selected, ...draftValues.value])]
+  } else if (filterType.value === 'from') from.value = draftDate.value
+  else to.value = draftDate.value
+  adding.value = false
+  resetDraft()
+}
 </script>
 
 <template>
@@ -125,90 +151,133 @@ function clear() {
     style="--sidebar-width: 19rem"
     class="bg-background text-foreground"
   >
-    <Sidebar>
+    <Sidebar collapsible="icon" class="overflow-hidden">
       <SidebarHeader>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 group-data-[collapsible=icon]:flex-col">
           <RouterLink
             :to="{ name: 'document-list', query: relatedQuery(route) }"
-            class="flex min-w-0 flex-1 items-center gap-2 p-2"
+            class="flex min-w-0 flex-1 items-center gap-2 p-2 group-data-[collapsible=icon]:p-0"
             aria-label="PeopleGator"
           >
-            <PeopleGatorIcon class="size-9 shrink-0" aria-hidden="true" stroke-width="1" />
-            <span class="font-heading text-xl">PeopleGator</span>
+            <PeopleGatorIcon class="size-8 shrink-0" aria-hidden="true" stroke-width="1" />
+            <span class="font-heading text-xl group-data-[collapsible=icon]:hidden"
+              >PeopleGator</span
+            >
           </RouterLink>
-          <SidebarTrigger />
+          <WorkspaceSidebarToggle location="sidebar" />
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        <WorkspaceNavigation />
-        <SidebarSeparator />
-        <SidebarGroup>
-          <SidebarGroupLabel class="flex justify-between"
-            >Workspace <Badge variant="outline">Preview</Badge></SidebarGroupLabel
-          >
-          <div class="flex w-full flex-row flex-wrap gap-2 p-2">
-            <FilterSingleSelect
-              v-model="mode"
-              label="Workspace"
-              :options="[
-                { value: 'global', label: 'Global' },
-                { value: 'local', label: 'Local' },
-              ]"
-            />
-          </div>
-          <p class="px-2 pb-2 text-xs text-muted-foreground">
-            Visual demo · settings do not filter results.
-          </p>
-          <template v-if="mode === 'global'">
-            <div class="flex items-start gap-2 px-2 py-3 text-sm text-muted-foreground">
-              <Globe class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span>Explore all accessible data.</span>
+      <SidebarContent class="overflow-hidden">
+        <ScrollArea class="min-h-0 w-full flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
+          <WorkspaceNavigation />
+          <SidebarSeparator class="mx-0 w-full" />
+          <SidebarGroup>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Select v-model="mode" @update:model-value="adding = false">
+                  <WorkspaceModeTrigger as-child aria-label="Workspace mode">
+                    <SidebarMenuButton :tooltip="mode === 'global' ? 'Global' : 'Local'">
+                      <Globe v-if="mode === 'global'" aria-hidden="true" />
+                      <SlidersHorizontal v-else aria-hidden="true" />
+                      <span class="group-data-[collapsible=icon]:hidden">{{
+                        mode === 'global' ? 'Global' : 'Local'
+                      }}</span>
+                      <ChevronsUpDown
+                        class="ml-auto group-data-[collapsible=icon]:hidden"
+                        aria-hidden="true"
+                      />
+                    </SidebarMenuButton>
+                  </WorkspaceModeTrigger>
+                  <SelectContent>
+                    <SelectItem value="global">Global</SelectItem>
+                    <SelectItem value="local">Local</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <div class="min-w-0 group-data-[collapsible=icon]:hidden">
+              <p class="px-2 py-2 text-xs text-muted-foreground">
+                Visual demo · settings do not filter results.
+              </p>
+              <template v-if="mode === 'local'">
+                <div
+                  class="flex w-full min-w-0 flex-row flex-wrap gap-2 p-2"
+                  aria-label="Workspace sample filters"
+                >
+                  <Popover v-model:open="adding" @update:open="resetDraft">
+                    <PopoverTrigger as-child>
+                      <Button variant="outline" size="icon" aria-label="Add filter"
+                        ><Plus aria-hidden="true"
+                      /></Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      :collision-padding="12"
+                      class="w-72 max-w-(--reka-popover-content-available-width)"
+                    >
+                      <div class="flex min-w-0 flex-row flex-wrap items-center gap-2">
+                        <Select v-model="filterType" @update:model-value="resetDraft">
+                          <SelectTrigger aria-label="Filter type" class="max-w-full"
+                            >Filter: <SelectValue placeholder="Filter type"
+                          /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="field in fields"
+                              :key="field.key"
+                              :value="field.key"
+                              >{{ field.label }}</SelectItem
+                            >
+                            <SelectItem value="from">Modified from</SelectItem>
+                            <SelectItem value="to">Modified to</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FilterMultiSelect
+                          v-if="draftField"
+                          v-model="draftValues"
+                          v-model:search="draftSearch"
+                          :label="draftField.label"
+                          :options="
+                            draftField.options.filter((option) =>
+                              option.label.toLowerCase().includes(draftSearch.toLowerCase()),
+                            )
+                          "
+                          class="max-w-full flex-none"
+                        />
+                        <FilterDateTimePicker
+                          v-else
+                          v-model="draftDate"
+                          :label="filterType === 'from' ? 'Modified from' : 'Modified to'"
+                        />
+                        <div class="flex w-full justify-end gap-2">
+                          <Button variant="ghost" @click="adding = false">Cancel</Button>
+                          <Button :disabled="!canAdd" @click="addFilter">Add</Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div v-if="filters.length" class="min-w-0 px-2 pb-2">
+                  <ActiveFilters
+                    :filters="filters"
+                    clear-label="Clear filters"
+                    @remove="remove"
+                    @clear="clear"
+                  />
+                </div>
+              </template>
             </div>
-            <Button variant="outline" class="mx-2" @click="mode = 'local'"
-              ><SlidersHorizontal aria-hidden="true" />Configure Local Workspace</Button
-            >
-          </template>
-          <template v-else>
-            <SidebarGroupLabel>Local Workspace</SidebarGroupLabel>
-            <div
-              class="flex w-full min-w-0 flex-row flex-wrap gap-2 p-2"
-              aria-label="Workspace sample filters"
-            >
-              <FilterMultiSelect
-                v-for="field in fields"
-                :key="field.key"
-                v-model="field.selected"
-                v-model:search="field.search"
-                :label="field.label"
-                :options="
-                  field.options.filter((option) =>
-                    option.label.toLowerCase().includes(field.search.toLowerCase()),
-                  )
-                "
-                class="max-w-full flex-none"
-              />
-              <FilterDateTimePicker v-model="from" label="Modified from" />
-              <FilterDateTimePicker v-model="to" label="Modified to" />
-            </div>
-            <div v-if="filters.length" class="min-w-0 px-2 pb-2">
-              <SidebarGroupLabel>Sample filters</SidebarGroupLabel>
-              <ActiveFilters
-                :filters="filters"
-                clear-label="Clear filters"
-                @remove="remove"
-                @clear="clear"
-              />
-            </div>
-          </template>
-        </SidebarGroup>
+          </SidebarGroup>
+        </ScrollArea>
       </SidebarContent>
-      <SidebarSeparator />
+      <SidebarSeparator class="mx-0 w-full" />
       <SidebarFooter>
-        <div class="flex items-center gap-3 p-2">
+        <div
+          class="flex items-center gap-3 p-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:px-0"
+        >
           <Avatar
             ><AvatarFallback>{{ username.slice(0, 2).toUpperCase() }}</AvatarFallback></Avatar
           >
-          <div class="min-w-0 flex-1">
+          <div class="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
             <p class="truncate text-sm font-medium">{{ username }}</p>
             <p class="text-xs text-muted-foreground">Configured account</p>
           </div>
@@ -224,34 +293,8 @@ function clear() {
     </Sidebar>
     <SidebarInset class="min-w-0">
       <TopBar>
-        <template #toggle><SidebarTrigger /></template>
-        <template #workspace>
-          <Badge variant="outline" class="shrink-0">Sidebar demo</Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            @click="mode = mode === 'global' ? 'local' : 'global'"
-          >
-            <Globe v-if="mode === 'global'" aria-hidden="true" /><SlidersHorizontal
-              v-else
-              aria-hidden="true"
-            />
-            {{ mode === 'global' ? 'Global' : `Local · ${filters.length}` }}
-          </Button>
-        </template>
+        <template #toggle><WorkspaceSidebarToggle location="topbar" /></template>
       </TopBar>
-      <div
-        v-if="mode === 'local' && filters.length"
-        class="px-4 pb-2"
-        aria-label="Workspace sample summary"
-      >
-        <ActiveFilters
-          :filters="filters"
-          clear-label="Clear filters"
-          @remove="remove"
-          @clear="clear"
-        />
-      </div>
       <slot />
     </SidebarInset>
   </SidebarProvider>

@@ -30,10 +30,14 @@ const navigation = [
 </script>
 <template>
   <SidebarGroup>
-    <SidebarGroupLabel>Explore</SidebarGroupLabel>
+    <SidebarGroupLabel class="group-data-[collapsible=icon]:hidden">Explore</SidebarGroupLabel>
     <SidebarMenu>
       <SidebarMenuItem v-for="item in navigation" :key="item.name">
-        <SidebarMenuButton as-child :is-active="item.routes.includes(String(route.name))">
+        <SidebarMenuButton
+          as-child
+          :is-active="item.routes.includes(String(route.name))"
+          :tooltip="item.label"
+        >
           <RouterLink
             :aria-label="item.label"
             :to="{
@@ -43,7 +47,10 @@ const navigation = [
             :aria-current="item.routes.includes(String(route.name)) ? 'page' : undefined"
             @click="setOpenMobile(false)"
           >
-            <component :is="item.icon" aria-hidden="true" /><span>{{ item.label }}</span>
+            <component :is="item.icon" aria-hidden="true" /><span
+              class="group-data-[collapsible=icon]:hidden"
+              >{{ item.label }}</span
+            >
           </RouterLink>
         </SidebarMenuButton>
       </SidebarMenuItem>

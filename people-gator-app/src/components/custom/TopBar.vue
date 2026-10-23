@@ -115,7 +115,5 @@ const breadcrumbs = computed(() => {
         </BreadcrumbList>
       </Breadcrumb>
     </div>
-
-    <slot name="workspace" />
   </nav>
 </template>

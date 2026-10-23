@@ -35,10 +35,14 @@ new detection keys.
 ## Workspace sidebar showcase (#60)
 
 This draft adds a frontend-only visual demo around the existing seeded screens.
-Open Documents, then choose **Configure Local Workspace** in the sidebar. Try
-Library, Document, Page, Last user, Last API key and modification dates; remove
-sample tags, switch Global/Local, navigate to Scans or People, and open the drawer
-on mobile. The logo sits in the sidebar header; configured account information
+Open Documents, then use the **Global/Local** selector below the sidebar
+navigation to choose **Local**. Use **+** to choose a filter type and its values,
+then **Add**; **Cancel** discards that draft. Try Library, Document, Page, Last
+user, Last API key and modification dates. Add filters one by one, remove
+individual tags or clear them, switch Global/Local, and navigate to Scans or
+People. Collapse to the desktop icon rail or open the mobile drawer; there is
+only one visible sidebar toggle in either layout. The sidebar uses a vertical
+ScrollArea and keeps the account footer reachable on short screens. The logo sits in the sidebar header; configured account information
 and the theme switch sit in its footer.
 
 Sidebar options are synthetic in-memory examples, independent of database
