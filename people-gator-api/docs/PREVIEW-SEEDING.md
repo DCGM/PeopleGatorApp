@@ -39,25 +39,28 @@ Open Documents, then use the **Global/Local** selector below the sidebar
 navigation to choose **Local**. Use **+** to turn it into an inline filter row
 and open the type dropdown immediately. The value control is disabled until a
 type is chosen. Pick a type, then use its searchable multi-select or date/time
-picker. Click the type again to change it; this clears the draft value. The
-checkmark applies the filter, and the X cancels the draft; both restore **+**
-without changing existing filters. Try Library, Document, Page, Last user, Last
-API key and modification dates. Add filters one by one, remove individual tags
-or clear them, switch Global/Local, and navigate to Scans or People. Collapse to
-the desktop icon rail or open the mobile drawer; there is one opening action in
-either layout: click the logo to expand the desktop rail or open the mobile
-drawer. Use the separate sidebar button to collapse or close it. Keyboard focus
-follows these controls as the sidebar opens and closes. The sidebar uses a
-vertical ScrollArea and keeps the account footer reachable on short screens. The
-logo sits in the sidebar header; configured account information and the theme
-switch sit in its footer.
+picker. Click the type again to change it; this clears the draft value. Use
+**Done** in the value picker, Enter in the time field, or click elsewhere to
+apply a valid selection. There is no separate apply button. **Cancel** discards
+the draft, even with the picker open. Clicking the type control or pressing
+Escape keeps the draft available for editing. Empty values are never applied.
+Completing or cancelling restores **+**; cancellation preserves existing
+filters. Try Library, Document, Page, Last user, Last API key and modification
+dates. Add filters one by one, remove individual tags or clear them, switch
+Global/Local, and navigate to Scans or People. Collapse to the desktop icon rail
+or open the mobile drawer; there is one opening action in either layout: click
+the logo to expand the desktop rail or open the mobile drawer. Use the separate
+sidebar button to collapse or close it. Keyboard focus follows these controls as
+the sidebar opens and closes. The sidebar uses a vertical ScrollArea and keeps
+the account footer reachable on short screens. The logo sits in the sidebar
+header; configured account information and the theme switch sit in its footer.
 
 Sidebar options are synthetic in-memory examples, independent of database
 fixtures. They do not filter results, change URLs, call option endpoints or save
 workspace state. Global hides the sample configuration; returning to Local
 restores it until reload. Existing page filters continue to work normally.
-The sidebar says **Visual demo** to make that limitation visible. No seed records,
-checkpoints, repository contracts or media need to change for this showcase;
+The sidebar omits demo/status helper text so the design can be evaluated. No
+seed records, checkpoints, repository contracts or media need to change for this showcase;
 the eventual workspace integration remains in #60.
 
 ## Run it

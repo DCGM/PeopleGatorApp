@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { CalendarIcon } from '@lucide/vue'
 import { parseDate } from '@internationalized/date'
 import type { DateValue } from 'reka-ui'
@@ -13,7 +13,13 @@ const props = withDefaults(
   { showLabel: true },
 )
 const value = defineModel<string>({ required: true })
+const emit = defineEmits<{
+  openChange: [value: boolean]
+  interactOutside: [event: Event]
+  escape: []
+}>()
 const open = ref(false)
+watch(open, (value) => emit('openChange', value), { flush: 'sync' })
 const timeId = useId()
 
 const date = computed<DateValue | undefined>(() => {
@@ -62,7 +68,14 @@ function clear() {
           >
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" :collision-padding="12" class="w-auto p-0" :aria-label="label">
+      <PopoverContent
+        align="start"
+        :collision-padding="12"
+        class="w-auto p-0"
+        :aria-label="label"
+        @interact-outside="emit('interactOutside', $event)"
+        @escape-key-down="emit('escape')"
+      >
         <Calendar
           :model-value="date"
           :default-placeholder="date"
@@ -81,6 +94,7 @@ function clear() {
             :disabled="!date"
             :aria-label="`${props.label} time`"
             @update:model-value="updateTime"
+            @keydown.enter.prevent="open = false"
           />
           <div class="flex justify-between">
             <Button type="button" variant="ghost" size="sm" :disabled="!value" @click="clear"

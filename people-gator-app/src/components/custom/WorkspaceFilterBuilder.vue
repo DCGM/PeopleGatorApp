@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, type ComponentPublicInstance } from 'vue'
-import { Check, ChevronDown, Plus, X } from '@lucide/vue'
+import { ChevronDown, Plus } from '@lucide/vue'
 import type { FilterOption } from '@/query/people-filter-options'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,12 +25,17 @@ const values = ref<string[]>([])
 const search = ref('')
 const date = ref('')
 const addButton = useTemplateRef<ComponentPublicInstance>('addButton')
+const row = useTemplateRef<HTMLElement>('row')
+let valueOpen = false
+const submitOnClose = ref(true)
+let restoreFocus = true
 const field = computed(() => props.fields.find((field) => field.key === filterType.value))
 const canAdd = computed(
   () => !!filterType.value && (field.value ? values.value.length > 0 : !!date.value),
 )
 
 function resetValue() {
+  valueOpen = false
   values.value = []
   search.value = ''
   date.value = ''
@@ -41,17 +46,38 @@ function start() {
   adding.value = true
   typeOpen.value = true
 }
-async function close() {
+async function close(focus = true) {
   adding.value = false
   typeOpen.value = false
   resetValue()
   await nextTick()
-  addButton.value?.$el.focus()
+  if (focus) addButton.value?.$el.focus()
 }
 function add() {
   if (!canAdd.value || !filterType.value) return
   emit('add', { key: filterType.value, values: [...values.value], date: date.value })
-  void close()
+  void close(restoreFocus)
+}
+function valueOpenChange(open: boolean) {
+  if (open) {
+    valueOpen = true
+    submitOnClose.value = true
+    restoreFocus = true
+  } else if (valueOpen) {
+    valueOpen = false
+    if (submitOnClose.value) add()
+  }
+}
+function outsideValue(event: Event) {
+  if (event.defaultPrevented) return
+  const target = (event as CustomEvent<{ originalEvent: Event }>).detail.originalEvent.target
+  // Changing type or clicking Cancel must not apply the draft first.
+  if (target instanceof Node && row.value?.contains(target)) submitOnClose.value = false
+  restoreFocus = false
+}
+function typeOpenChange(open: boolean) {
+  // Opening another dropdown moves focus into its portal before pointer dismissal.
+  if (open) submitOnClose.value = false
 }
 </script>
 
@@ -67,8 +93,19 @@ function add() {
     >
       <Plus aria-hidden="true" />
     </Button>
-    <div v-else class="flex w-full min-w-0 items-center gap-1" role="group" aria-label="New filter">
-      <Select v-model="filterType" v-model:open="typeOpen" @update:model-value="resetValue">
+    <div
+      v-else
+      ref="row"
+      class="flex w-full min-w-0 items-center gap-1"
+      role="group"
+      aria-label="New filter"
+    >
+      <Select
+        v-model="filterType"
+        v-model:open="typeOpen"
+        @update:open="typeOpenChange"
+        @update:model-value="resetValue"
+      >
         <SelectTrigger
           aria-label="Filter type"
           :title="
@@ -110,7 +147,10 @@ function add() {
         v-model="values"
         v-model:search="search"
         :label="field.label"
-        placeholder="Values"
+        placeholder="Value"
+        @open-change="valueOpenChange"
+        @interact-outside="outsideValue"
+        @escape="submitOnClose = false"
         :options="
           field.options.filter((option) =>
             option.label.toLowerCase().includes(search.toLowerCase()),
@@ -124,19 +164,12 @@ function add() {
         v-model="date"
         :label="filterType === 'from' ? 'Modified from' : 'Modified to'"
         :show-label="false"
+        @open-change="valueOpenChange"
+        @interact-outside="outsideValue"
+        @escape="submitOnClose = false"
         class="min-w-0 max-w-full shrink"
       />
-      <Button variant="ghost" size="icon-xs" aria-label="Cancel filter" @click="close"
-        ><X aria-hidden="true"
-      /></Button>
-      <Button
-        variant="outline"
-        size="icon-xs"
-        aria-label="Apply filter"
-        :disabled="!canAdd"
-        @click="add"
-        ><Check aria-hidden="true"
-      /></Button>
+      <Button variant="ghost" size="sm" aria-label="Cancel filter" @click="close()">Cancel</Button>
     </div>
   </div>
 </template>

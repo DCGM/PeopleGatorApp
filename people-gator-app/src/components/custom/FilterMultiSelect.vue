@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Check, ChevronsUpDown } from '@lucide/vue'
 import type { FilterOption } from '@/query/people-filter-options'
 import { Button } from '@/components/ui/button'
@@ -27,8 +27,15 @@ defineProps<{
 }>()
 const selected = defineModel<string[]>({ required: true })
 const search = defineModel<string>('search', { default: '' })
-const emit = defineEmits<{ loadMore: []; retry: []; openChange: [value: boolean] }>()
+const emit = defineEmits<{
+  loadMore: []
+  retry: []
+  openChange: [value: boolean]
+  interactOutside: [event: Event]
+  escape: []
+}>()
 const open = ref(false)
+watch(open, (value) => emit('openChange', value), { flush: 'sync' })
 
 function updateSelection(value: unknown) {
   if (Array.isArray(value))
@@ -39,7 +46,6 @@ function updateSelection(value: unknown) {
 <template>
   <Combobox
     v-model:open="open"
-    @update:open="emit('openChange', $event)"
     :model-value="selected"
     multiple
     ignore-filter
@@ -60,6 +66,8 @@ function updateSelection(value: unknown) {
       </ComboboxTrigger>
     </ComboboxAnchor>
     <ComboboxList
+      @interact-outside="emit('interactOutside', $event)"
+      @escape-key-down="emit('escape')"
       align="start"
       :collision-padding="12"
       class="w-(--reka-combobox-trigger-width) min-w-64 max-w-(--reka-combobox-content-available-width)"

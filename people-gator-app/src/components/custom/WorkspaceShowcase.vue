@@ -161,11 +161,8 @@ function addFilter(filter: WorkspaceFilterDraft) {
               </SidebarMenuItem>
             </SidebarMenu>
             <div class="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p class="px-2 py-2 text-xs text-muted-foreground">
-                Visual demo · settings do not filter results.
-              </p>
               <template v-if="mode === 'local'">
-                <div class="min-w-0 px-1 py-2">
+                <div class="min-w-0 py-2">
                   <WorkspaceFilterBuilder :fields="fields" @add="addFilter" />
                 </div>
                 <div v-if="filters.length" class="min-w-0 px-2 pb-2">
