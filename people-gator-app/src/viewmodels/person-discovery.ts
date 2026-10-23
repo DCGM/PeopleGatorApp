@@ -1,4 +1,3 @@
-import type { SharedQuery } from './shared-filters'
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -50,7 +49,6 @@ export function usePersonDiscovery(
   referenceFaceModel: MaybeRefOrGetter<string | null>,
   extraText: MaybeRefOrGetter<string>,
   enabled: MaybeRefOrGetter<boolean>,
-  evidence: MaybeRefOrGetter<SharedQuery> = {},
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = RELEVANCE,
   peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
   annotations: MaybeRefOrGetter<EntityAnnotation[]> = DISCOVERY_ANNOTATIONS,
@@ -67,8 +65,9 @@ export function usePersonDiscovery(
     () =>
       toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim())),
   )
+  // Discovery searches all accessible data; shared browsing filters stay in the URL.
   const faceSearchQuery = useFaceSearchQuery(
-    computed(() => ({ ...toValue(evidence), ...signals.value, ...sortParams(toValue(faceSort)) })),
+    computed(() => ({ ...signals.value, ...sortParams(toValue(faceSort)) })),
     canSearch,
   )
 
@@ -169,7 +168,6 @@ export function usePersonDiscovery(
   )
 
   const entitySearchParams = computed(() => ({
-    ...toValue(evidence),
     ...signals.value,
     'filter.entity_type': ['person'] as Array<'person'>,
     ...sortParams(toValue(peopleSort)),

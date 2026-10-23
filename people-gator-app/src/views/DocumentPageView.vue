@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import SharedFilterTags from '@/components/custom/SharedFilterTags.vue'
 import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useSharedFilters, hasSharedFilters, legacyFilterNotice } from '@/viewmodels/shared-filters'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { useDebounce } from '@vueuse/core'
@@ -59,10 +57,9 @@ const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const route = useRoute()
 const router = useRouter()
-const evidence = useSharedFilters()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
-const linkStates = useLinkStateFilter()
+const linkStates = useLinkStateFilter('page_link_state')
 const documentQuery = useDocumentLookupQuery(libraryId, documentId)
 const pageId = computed(() => String(route.params.pageId))
 const selectedFaceId = ref<string | null>(
@@ -92,6 +89,7 @@ const candidateSort = useRouteSort(CANDIDATE_SORT_KEYS, candidateSortOptions, ()
 const {
   page,
   annotationsLoading,
+  referenceFace,
   assignFace,
   assignmentStatus,
   createAndAssign,
@@ -119,8 +117,6 @@ const {
   debouncedCandidateTerm,
   candidateBrowseMode,
   linkStates,
-  evidence.params,
-  computed(() => !evidence.error.value),
   faceSort,
   candidateSort,
 )
@@ -180,32 +176,71 @@ function applyPendingFocus() {
   const request = pendingFocus.value
   const viewer = viewerElement.value
   const pageNode = pageElement.value
-  if (!request || !panzoom || !viewer || !pageNode || !pageImageReady.value || annotationsLoading.value) return
-  if (request.page !== focusPageKey.value) { pendingFocus.value = null; return }
+  if (
+    !request ||
+    !panzoom ||
+    !viewer ||
+    !pageNode ||
+    !pageImageReady.value ||
+    annotationsLoading.value
+  )
+    return
+  if (request.page !== focusPageKey.value) {
+    pendingFocus.value = null
+    return
+  }
   if (page.value?.page_id !== pageId.value) return
   const target = request.target
-  const position = target.kind === 'face'
-    ? (selectedFaceId.value === target.id ? faces.value.find(face => face.id === target.id)?.position : undefined)
-    : transcription.value.find((line, index) => index === selectedLineIndex.value && line.id === target.id &&
-        (!target.entityKey || (selectedEntityKey.value === target.entityKey &&
-          line.entities?.some(entity => transcriptionEntityKey(entity) === target.entityKey))))?.position
-  if (!position) { pendingFocus.value = null; return }
+  const position =
+    target.kind === 'face'
+      ? selectedFaceId.value === target.id
+        ? faces.value.find((face) => face.id === target.id)?.position
+        : undefined
+      : transcription.value.find(
+          (line, index) =>
+            index === selectedLineIndex.value &&
+            line.id === target.id &&
+            (!target.entityKey ||
+              (selectedEntityKey.value === target.entityKey &&
+                line.entities?.some(
+                  (entity) => transcriptionEntityKey(entity) === target.entityKey,
+                ))),
+        )?.position
+  if (!position) {
+    pendingFocus.value = null
+    return
+  }
   const viewerRect = viewer.getBoundingClientRect()
   const pageRect = pageNode.getBoundingClientRect()
   const toolbar = viewer.querySelector('.viewer-tools')?.getBoundingClientRect()
-  const transform = focusTransform(position, {
-    left: pageRect.left - viewerRect.left, top: pageRect.top - viewerRect.top,
-    width: pageRect.width, height: pageRect.height,
-  }, { width: viewerRect.width, height: viewerRect.height,
-    toolbarBottom: toolbar ? toolbar.bottom - viewerRect.top : 0 },
-  { scale: panzoom.getScale(), ...panzoom.getPan() })
+  const transform = focusTransform(
+    position,
+    {
+      left: pageRect.left - viewerRect.left,
+      top: pageRect.top - viewerRect.top,
+      width: pageRect.width,
+      height: pageRect.height,
+    },
+    {
+      width: viewerRect.width,
+      height: viewerRect.height,
+      toolbarBottom: toolbar ? toolbar.bottom - viewerRect.top : 0,
+    },
+    { scale: panzoom.getScale(), ...panzoom.getPan() },
+  )
   if (!transform) return
   pendingFocus.value = null
   panzoom.zoom(transform.scale, { animate: false })
   panzoom.pan(transform.x, transform.y, { animate: false, force: true })
 }
 
-watch(focusPageKey, () => { pendingFocus.value = null }, { flush: 'sync' })
+watch(
+  focusPageKey,
+  () => {
+    pendingFocus.value = null
+  },
+  { flush: 'sync' },
+)
 // Another page reuses this view: discard the previous page's selections and viewport.
 watch(pageId, () => {
   selectedEntityKey.value = null
@@ -216,7 +251,9 @@ watch([pageImageReady, faces, transcription, annotationsLoading], () => {
   scheduleFocus()
 })
 
-const selectedFace = computed(() => faces.value.find((face) => face.id === selectedFaceId.value))
+const selectedFace = computed(
+  () => faces.value.find((face) => face.id === selectedFaceId.value) ?? referenceFace.value,
+)
 const selectedPersonCandidate = computed(() =>
   similarPeople.value.find((person) => person.id === selectedPersonId.value),
 )
@@ -442,10 +479,10 @@ watch(
   },
 )
 
-watch([faces, transcription, annotationsLoading], () => {
+watch([faces, referenceFace, transcription, annotationsLoading], () => {
   if (annotationsLoading.value) return
   let changed = false
-  if (selectedFaceId.value && !faces.value.some((face) => face.id === selectedFaceId.value)) {
+  if (selectedFaceId.value && !selectedFace.value) {
     selectedFaceId.value = null
     selectedPersonId.value = null
     changed = true
@@ -481,7 +518,10 @@ onMounted(async () => {
   }) as EventListener)
   window.addEventListener('resize', updatePageBounds)
   if (typeof ResizeObserver !== 'undefined' && viewerElement.value && pageElement.value) {
-    pageResizeObserver = new ResizeObserver(() => { updatePageBounds(); scheduleFocus() })
+    pageResizeObserver = new ResizeObserver(() => {
+      updatePageBounds()
+      scheduleFocus()
+    })
     pageResizeObserver.observe(viewerElement.value)
     pageResizeObserver.observe(pageElement.value)
   }
@@ -573,7 +613,8 @@ onBeforeUnmount(() => {
           >
             <template #fallback>
               <div class="flex size-full items-center justify-center text-muted-foreground">
-                <span v-if="error || pageImageError">Could not load scan</span><span v-else>Loading scan…</span>
+                <span v-if="error || pageImageError">Could not load scan</span
+                ><span v-else>Loading scan…</span>
               </div>
             </template>
           </LoadableImage>
@@ -632,12 +673,6 @@ onBeforeUnmount(() => {
           <TabsTrigger value="statistics">Statistics</TabsTrigger>
         </TabsList>
       </div>
-      <div
-        v-if="hasSharedFilters(evidence.filters.value) || evidence.error.value || legacyFilterNotice.length"
-        class="shrink-0 px-3 pb-3"
-      >
-        <SharedFilterTags />
-      </div>
       <TabsContent value="face" class="mt-0 flex min-h-0 flex-col overflow-y-auto">
         <FaceGallery
           class="shrink-0 border-l-0"
@@ -695,7 +730,7 @@ onBeforeUnmount(() => {
         />
       </TabsContent>
       <TabsContent value="activity" class="mt-0 min-h-0 overflow-y-auto">
-        <PageActivityPanel v-if="page" :source-id="page.source_id" hide-filter-tags />
+        <PageActivityPanel v-if="page" :source-id="page.source_id" :workspace-filters="false" />
       </TabsContent>
       <TabsContent value="statistics" class="mt-0 min-h-0 overflow-y-auto">
         <PageStatisticsPanel

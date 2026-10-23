@@ -247,12 +247,17 @@ There are no separate evidence-library/document or annotation actor/date facets.
 
 Times are UTC in URLs and browser-local in controls. Different fields AND;
 multi-select values OR. Shared controls, tags and outgoing predicates stay active
-through Documents ↔ People, profile tabs, Scans, page workspaces, related cards,
-breadcrumbs and the logo. In Documents, **Modified by U** filters documents; in
-People it filters entities; on profile Faces/Mentions and in page workspaces it
-filters each annotation's own change. A profile identity remains visible even when
-none of its annotations match. Discover applies the shared criteria independently
-to its similar-face and similar-person results.
+through Documents ↔ People, profile tabs, scan lists, related cards, breadcrumbs
+and the logo. Page workspaces retain them for return navigation. In Documents, **Modified by U** filters documents; in
+People it filters entities; on profile Faces/Mentions it filters each annotation's own change.
+Scan page panels ignore these predicates. A profile identity remains visible even when
+none of its annotations match. Discover searches similar faces and people across all data accessible to the
+current user. It does not inherit source, modifier, date or assignment predicates
+from shared browsing filters. Those filters remain in the URL and still apply
+when returning to Faces/Mentions or navigating to related views. Reference inputs,
+face model, discovery text and each result list’s sort remain explicit discovery
+choices; only changes to those effective criteria change the discovery cache key
+and restart pagination. Invalid shared filters do not block global discovery.
 
 Individual tag removal updates controls, URL and results immediately. Clear all
 removes shared and the screen's specific filters while preserving search and sort.
@@ -308,12 +313,10 @@ scope/modification criteria instead of pretending to evaluate them.
 Faces, Activity and Statistics tabs replace the sidebar pane while preserving
 selection and candidate settings. `panel=activity|statistics` chooses the pane;
 `activity_group=user` groups edits by latest user instead of local day. Activity
-loads the page's complete faces/mentions independently of active filters, allowing
-broader group selection. Choosing a day/user edits the same shared modification
-configuration; unknown history is shown explicitly and cannot be selected as a
-recorded actor or time. Local-day bounds use consecutive midnights (including DST)
-and an inclusive upper bound of 23:59:59.999999. Activity entries display their own
-annotation times. `#link-statistics` still opens Statistics.
+loads the page's complete faces/mentions independently of workspace filters.
+Day/user headings summarize the recorded edits without workspace-filter actions
+or selected workspace groups. Unknown history is shown explicitly. Activity
+entries display their own annotation times. `#link-statistics` still opens Statistics.
 
 ## Extending filters
 
@@ -322,3 +325,13 @@ export OpenAPI locally and regenerate the SDK, then update shared state, control
 tags and query keys. Test actual AND/OR results, same-link restrictions, own-record
 modification, unknown metadata and cursor reset. Extend the synthetic preview and
 its preservation tests; follow [AGENTS.md](../AGENTS.md).
+
+The scan editor's right panel shows entities on the current page, or text/face
+search results across all accessible data. It does not inherit workspace source,
+assignment, actor/date or API key predicates, and shows no workspace tags or
+validation messages. Retained workspace URL values still apply when navigating
+back to ordinary lists. Invalid workspace values cannot block page entities or
+search. Text lookup works without selecting a face. The explicit page annotation
+link-state control uses `page_link_state`; it affects annotation display rather
+than the page's identity membership or global candidates. The workspace's
+`link_state` remains separate. Page navigation drops the page-specific setting.

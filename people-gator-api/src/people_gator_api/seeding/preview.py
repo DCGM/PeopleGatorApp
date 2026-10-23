@@ -495,6 +495,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
+    discovery_page = next(item for item in PAGES if item.key == "discovery-1")
+    discovery_document = next(item for item in DOCUMENTS if item.key == discovery_page.document)
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -504,6 +506,44 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Workspace criteria stay in navigation; the scan panel uses page membership or global search.
+            "global-discovery-scan": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
+                    "library": "preview-mzk", "document": documents["discovery"],
+                    "page": pages["discovery-1"],
+                })
+            ),
+            "global-discovery-scan-excluded": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
+                    "library": "preview-mzk", "touched_by": actors["reviewer"].user_id,
+                })
+            ),
+            **{
+                key: (
+                    f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                    f"/pages/{discovery_page.page_id}?" + urlencode({
+                        "candidate_mode": "page", "library": "preview-mzk",
+                        "link_state": "verified", "touched_by": actors["reviewer"].user_id,
+                        "api_key": registered_keys["ocr"], **extra,
+                    })
+                )
+                for key, extra in (
+                    ("scan-page-entities", {}),
+                    ("scan-global-text", {"candidate_text": "Orion"}),
+                )
+            },
+            "global-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+                "discovery_annotations": "faces", "library": "preview-mzk",
+                "document": documents["discovery"], "page": pages["discovery-1"],
+                "link_state": "verified", "touched_by": actors["reviewer"].user_id,
+                "api_key": registered_keys["ocr"],
+            }),
+
             **{
                 f"{key}-crop": f"/api/v1/faces/{active_faces[key]}/aligned_crop?max_width=256"
                 for key in ("alignment-coincident", "alignment-valid") if key in active_faces
@@ -613,12 +653,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "scan-toolbar-union": (
                 f"/libraries/{toolbar_union_page.library}/documents/{toolbar_union_page.document_id}"
                 f"/pages/{toolbar_union_page.page_id}?"
-                + urlencode({"link_state": ["automatic", "manual"]}, doseq=True)
+                + urlencode({"page_link_state": ["automatic", "manual"]}, doseq=True)
             ),
             "scan-toolbar-assigned": (
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}?"
-                + urlencode({"link_state": ["automatic", "manual", "verified"]}, doseq=True)
+                + urlencode({"page_link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
             "viewport-focus": focus_path,
             # Reuse Ada's two linked OCR lines; no persisted fixtures need changing.

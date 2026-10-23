@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (31, 55, 38)
-    assert len(result.documents) == 38 and len(result.pages) == 74
+    assert await counts(database) == (31, 57, 38)
+    assert len(result.documents) == 39 and len(result.pages) == 75
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (31, 55, 38)
+    assert await counts(database) == (31, 57, 38)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (31, 55, 38)
+    assert await counts(database) == (31, 57, 38)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (32, 55, 38)
+    assert await counts(database) == (32, 57, 38)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 31 and len(result.faces) == 55
-    assert await counts(database) == (31, 55, 38)
+    assert len(result.entities) == 31 and len(result.faces) == 57
+    assert await counts(database) == (31, 57, 38)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (30, 54, 37)
+    assert await counts(database) == (30, 56, 37)
 
 
 
@@ -1554,7 +1554,7 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
         ('scan-toolbar-assigned', 'links-2', list(State)),
     ):
         link = urlsplit(first.filter_examples[example])
-        assert parse_qs(link.query).get('link_state', []) == selected
+        assert parse_qs(link.query).get('page_link_state', []) == selected
         page = await database.sources.get_page(first.pages[page_key])
         assert link.path == (
             f'/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}'
@@ -2759,6 +2759,104 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
     assert second == first
     assert (await database.entities.get(edited.entity_id)).last_touched_at == edited.last_touched_at
     assert (await database.text_mentions.get(mention.mention_id)).entity_id is None
+
+
+@pytest.mark.asyncio
+async def test_global_discovery_outside_retained_workspace(seed_target):
+    from people_gator_api.schemas.search import EntitySearchQuery
+    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
+
+    db, filesystem, _ = seed_target
+    first = await preview.seed_preview(db, filesystem)
+    example = urlsplit(first.filter_examples['global-discovery'])
+    scope = parse_qs(example.query)
+    reference = first.entities['discovery']
+    assert example.path == f'/people/{reference}'
+    assert scope['library'] == ['preview-mzk']
+    assert scope['document'] == [str(first.documents['discovery'])]
+    assert scope['page'] == [str(first.pages['discovery-1'])]
+    assert scope['link_state'] == ['verified']
+    assert scope['touched_by'] == [str(first.users['reviewer'])]
+    assert scope['api_key'] == [str(first.api_keys['ocr'])]
+    query = EntitySearchQuery(entity_id=reference, entity_annotations=scope['discovery_annotations'],
+                              face_embedding_model=scope['discovery_model'][0])
+    assert query.face_embedding_model == DISCOVERY_MODEL
+    scan = parse_qs(urlsplit(first.filter_examples['global-discovery-scan']).query)
+    assert scan['candidate_mode'] == ['face']
+    assert scan['person'] == [str(first.faces['discovery-reference-0'])]
+    scan_matches = await db.entities.search(SearchEntitiesRequest(limit=50, query=QueryBase(
+        face_id=[first.faces['discovery-reference-0']], face_embedding_model=DISCOVERY_MODEL)))
+    assert first.entities['discovery-face'] in {item.entity_id for item in scan_matches.items}
+    excluded = parse_qs(urlsplit(first.filter_examples['global-discovery-scan-excluded']).query)
+    reference_face = await db.faces.get(uuid.UUID(excluded['person'][0]))
+    assert reference_face is not None
+    assert reference_face.embeddings == [DISCOVERY_MODEL]
+    hidden = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(
+        source_id=[reference_face.source_id], last_touched_by_user_id=excluded['touched_by'])))
+    assert reference_face.detection_id not in {face.detection_id for face in hidden.items}
+    assert first.entities['discovery-face'] in {item.entity_id for item in scan_matches.items}
+    page_example = urlsplit(first.filter_examples['scan-page-entities'])
+    page_scope = parse_qs(page_example.query)
+    reference_page = await db.sources.get_page(first.pages['discovery-1'])
+    assert reference_page is not None
+    assert page_example.path.endswith('/pages/' + str(reference_page.page_id))
+    assert page_scope['candidate_mode'] == ['page']
+    assert page_scope['link_state'] == ['verified']
+    assert page_scope['touched_by'] == [str(first.users['reviewer'])]
+    on_page = await db.entities.list(EntityListRequest(limit=100,
+        filter_=EntityListFilter(source_id=[first.pages['discovery-1']])))
+    assert {item.entity_id for item in on_page.items} == {reference}
+    page_faces = await db.faces.list(FaceListRequest(limit=100,
+        filter_=FaceListFilter(source_id=[first.pages['discovery-1']])))
+    assert reference_face.detection_id in {face.detection_id for face in page_faces.items}
+    text_scope = parse_qs(urlsplit(first.filter_examples['scan-global-text']).query)
+    assert 'person' not in text_scope  # Text lookup needs no selected face.
+    text_matches = await db.entities.search(SearchEntitiesRequest(limit=50,
+        query=QueryBase(text=text_scope['candidate_text'])))
+    assert first.entities['discovery-face'] in {item.entity_id for item in text_matches.items}
+    scoped_matches = await db.entities.search(SearchEntitiesRequest(limit=50,
+        query=QueryBase(text=text_scope['candidate_text']), filter_=EntityListFilter(
+            library=text_scope['library'], last_touched_by_user_id=text_scope['touched_by'])))
+    assert first.entities['discovery-face'] not in {item.entity_id for item in scoped_matches.items}
+    assigned_id = first.faces['discovery-global-assigned']
+    unassigned_id = first.faces['discovery-global-unassigned']
+    candidate_id = first.entities['discovery-face']
+    # These are actual cross-library/document/page candidates, with local media.
+    page = await db.sources.get_page(first.pages['discovery-global-1'])
+    assert page.library == 'preview-nlk'
+    assert page.source_id != first.pages['discovery-1']
+    for face_id in (assigned_id, unassigned_id):
+        face = await db.faces.get(face_id)
+        assert face.source_id == page.source_id
+        crop = await get_aligned_face_crop(first.users['reviewer'], face, page, max_width=128)
+        with Image.open(io.BytesIO(crop.content)) as image:
+            assert image.size == (128, 128)
+    people = await db.entities.search(SearchEntitiesRequest(limit=40, query=query))
+    faces = await db.faces.search(SearchFacesRequest(limit=40, query=query))
+    assert candidate_id in {item.entity_id for item in people.items}
+    assert {assigned_id, unassigned_id} <= {item.detection_id for item in faces.items}
+    # Each individual inherited source predicate would wrongly hide both.
+    for field, value in (('library', ['preview-mzk']),
+                         ('document_source_id', [first.documents['discovery']]),
+                         ('page_source_id', [first.pages['discovery-1']])):
+        local_faces = await db.faces.search(SearchFacesRequest(
+            limit=40, query=query, filter_=FaceListFilter(**{field: value})))
+        assert not {assigned_id, unassigned_id} & {item.detection_id for item in local_faces.items}
+    # The duplicate person has no evidence on the locally selected reference page.
+    local_people = await db.entities.search(SearchEntitiesRequest(
+        limit=40, query=query, filter_=EntityListFilter(page_source_id=[first.pages['discovery-1']])))
+    assert candidate_id not in {item.entity_id for item in local_people.items}
+    actor = GenericActor(user_id=first.users['reviewer'])
+    reviewed = await db.faces.patch(unassigned_id, FacePatchRequest(entity_id=reference), actor)
+    edited = await db.entities.patch(candidate_id, EntityPatchRequest(short_description='Reviewed global match'), actor)
+    before_page = await db.sources.get_page(page.source_id)
+    manifest = await filesystem.read_bytes(preview.MANIFEST_KEY)
+    second = await preview.seed_preview(db, filesystem)
+    assert second == first
+    assert await db.faces.get(unassigned_id) == reviewed
+    assert await db.entities.get(candidate_id) == edited
+    assert await db.sources.get_page(page.source_id) == before_page
+    assert await filesystem.read_bytes(preview.MANIFEST_KEY) == manifest
 
 
 @pytest.mark.asyncio
