@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, type ComponentPublicInstance } from 'vue'
-import { ChevronDown, Plus } from '@lucide/vue'
+import { ChevronDown } from '@lucide/vue'
 import type { FilterOption } from '@/query/people-filter-options'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,7 +20,6 @@ const props = defineProps<{
   to: string
 }>()
 const emit = defineEmits<{ change: [filter: WorkspaceFilterSelection] }>()
-const adding = ref(false)
 const typeOpen = ref(false)
 const pickerOpen = ref(false)
 const openValueOnTypeClose = ref(false)
@@ -28,7 +27,7 @@ const filterType = ref<string>()
 const values = ref<string[]>([])
 const search = ref('')
 const date = ref('')
-const addButton = useTemplateRef<ComponentPublicInstance>('addButton')
+const typeTrigger = useTemplateRef<ComponentPublicInstance>('typeTrigger')
 const row = useTemplateRef<HTMLElement>('row')
 let valueOpen = false
 let restoreFocus = true
@@ -41,20 +40,13 @@ function resetValue() {
   search.value = ''
   date.value = ''
 }
-function start() {
-  openValueOnTypeClose.value = false
-  filterType.value = undefined
-  resetValue()
-  adding.value = true
-  typeOpen.value = true
-}
 async function close(focus = true) {
   openValueOnTypeClose.value = false
-  adding.value = false
+  filterType.value = undefined
   typeOpen.value = false
   resetValue()
   await nextTick()
-  if (focus) addButton.value?.$el.focus()
+  if (focus) typeTrigger.value?.$el.focus()
 }
 function selectType() {
   resetValue()
@@ -80,7 +72,7 @@ function outsideValue(event: Event) {
   restoreFocus = target instanceof Node && !!row.value?.contains(target)
 }
 async function afterTypeClose(event: Event) {
-  if (!openValueOnTypeClose.value || !adding.value || !filterType.value) return
+  if (!openValueOnTypeClose.value || !filterType.value) return
   event.preventDefault()
   openValueOnTypeClose.value = false
   // Let the type dropdown release focus before opening the value picker.
@@ -91,25 +83,16 @@ async function afterTypeClose(event: Event) {
 
 <template>
   <div class="flex w-full min-w-0 flex-row flex-wrap gap-2" aria-label="Workspace sample filters">
-    <Button
-      v-if="!adding"
-      ref="addButton"
-      variant="outline"
-      aria-label="Add filter"
-      @click="start"
-    >
-      <Plus aria-hidden="true" /> Add filter
-    </Button>
     <div
-      v-else
       ref="row"
       class="flex w-full min-w-0 items-center gap-1"
       role="group"
-      aria-label="New filter"
+      aria-label="Workspace filter"
       @keydown.esc.stop.prevent="close()"
     >
       <Select v-model="filterType" v-model:open="typeOpen" @update:model-value="selectType">
         <SelectTrigger
+          ref="typeTrigger"
           aria-label="Filter type"
           :title="
             field?.label ??
