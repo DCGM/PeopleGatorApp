@@ -42,8 +42,9 @@ user, Last API key and modification dates. Add filters one by one, remove
 individual tags or clear them, switch Global/Local, and navigate to Scans or
 People. Collapse to the desktop icon rail or open the mobile drawer; there is
 only one visible sidebar toggle in either layout. The sidebar uses a vertical
-ScrollArea and keeps the account footer reachable on short screens. The logo sits in the sidebar header; configured account information
-and the theme switch sit in its footer.
+ScrollArea and keeps the account footer reachable on short screens. The logo
+sits in the sidebar header; configured account information and the theme switch
+sit in its footer.
 
 Sidebar options are synthetic in-memory examples, independent of database
 fixtures. They do not filter results, change URLs, call option endpoints or save
