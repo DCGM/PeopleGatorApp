@@ -15,3 +15,11 @@ collapse; mobile drawer navigation and Escape dismissal; no horizontal overflow
 or uncaught JavaScript errors. Sidebar examples are in-memory samples and do not
 filter the underlying results. The account footer identifies the configured login,
 not a new profile/authentication integration.
+
+Latest filter-selector revision: **+ Add filter** names the opening action.
+Escape dismisses the type, value or date selector and returns focus to the button,
+without removing applied values or closing the mobile sidebar. There is no Cancel
+button. `add-filter-*`, `filter-type-*`, `value-filter-*`, `date-filter-*`,
+`local-*` and `local-dark-*` show this revision at the dimensions above.
+These captures use the local frontend and the synthetic PR #70 preview API;
+Chromium web security was disabled for this cross-origin browser check.

@@ -95,11 +95,10 @@ async function afterTypeClose(event: Event) {
       v-if="!adding"
       ref="addButton"
       variant="outline"
-      size="icon"
       aria-label="Add filter"
       @click="start"
     >
-      <Plus aria-hidden="true" />
+      <Plus aria-hidden="true" /> Add filter
     </Button>
     <div
       v-else
@@ -107,6 +106,7 @@ async function afterTypeClose(event: Event) {
       class="flex w-full min-w-0 items-center gap-1"
       role="group"
       aria-label="New filter"
+      @keydown.esc.stop.prevent="close()"
     >
       <Select v-model="filterType" v-model:open="typeOpen" @update:model-value="selectType">
         <SelectTrigger
@@ -127,7 +127,7 @@ async function afterTypeClose(event: Event) {
             }}</span>
           </SelectValue>
         </SelectTrigger>
-        <SelectContent @close-auto-focus="afterTypeClose">
+        <SelectContent @close-auto-focus="afterTypeClose" @escape-key-down.prevent="close()">
           <SelectItem
             v-for="field in fields"
             :key="field.key"
@@ -160,6 +160,7 @@ async function afterTypeClose(event: Event) {
         @update:model-value="apply"
         @open-change="valueOpenChange"
         @interact-outside="outsideValue"
+        @escape="close()"
         :options="
           field.options.filter((option) =>
             option.label.toLowerCase().includes(search.toLowerCase()),
@@ -178,9 +179,9 @@ async function afterTypeClose(event: Event) {
         @update:model-value="apply"
         @open-change="valueOpenChange"
         @interact-outside="outsideValue"
+        @escape="close()"
         class="min-w-0 max-w-full shrink"
       />
-      <Button variant="ghost" size="sm" aria-label="Cancel filter" @click="close()">Cancel</Button>
     </div>
   </div>
 </template>

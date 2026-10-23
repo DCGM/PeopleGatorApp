@@ -36,16 +36,16 @@ new detection keys.
 
 This draft adds a frontend-only visual demo around the existing seeded screens.
 Open Documents, then use the **Global/Local** selector below the sidebar
-navigation to choose **Local**. Use **+** to turn it into an inline filter row
+navigation to choose **Local**. Use **+ Add filter** to turn it into an inline filter row
 and open the type dropdown immediately. The value control is disabled until a
 type is chosen. Choosing a type immediately opens its searchable multi-select or
 date/time picker. Values are applied to the configuration as they are clicked;
 toggling a selected value removes it immediately. Date and time changes apply
 immediately too. The picker stays open for additional values or time edits,
 without Done, Enter or a checkmark being required. Reopening a type restores its
-selected values. The labelled **Cancel** closes the selector and preserves
-values already applied; tags remove applied values individually. Clicking away
-or dismissing the picker also returns to **+**. Clicking the type control allows
+selected values. Press **Escape** to close the selector and preserve values
+already applied; tags remove applied values individually. Clicking away
+or dismissing the picker also returns to **+ Add filter**. Clicking the type control allows
 selecting another type without resetting existing filters. Try Library,
 Document, Page, Last user, Last API key and modification dates. Add filters one
 by one, remove individual tags or clear them, switch Global/Local, and navigate
