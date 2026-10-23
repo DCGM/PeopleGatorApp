@@ -1,6 +1,23 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, type ComponentPublicInstance } from 'vue'
-import { ChevronDown } from '@lucide/vue'
+import {
+  computed,
+  nextTick,
+  ref,
+  useTemplateRef,
+  type Component,
+  type ComponentPublicInstance,
+} from 'vue'
+import {
+  CalendarArrowDown,
+  CalendarArrowUp,
+  ChevronDown,
+  FileImage,
+  Files,
+  KeyRound,
+  LibraryBig,
+  ListFilter,
+  UserRoundPen,
+} from '@lucide/vue'
 import type { FilterOption } from '@/query/people-filter-options'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +37,22 @@ const props = defineProps<{
   to: string
 }>()
 const emit = defineEmits<{ change: [filter: WorkspaceFilterSelection] }>()
+const typeIcons: Record<string, Component> = {
+  library: LibraryBig,
+  document: Files,
+  page: FileImage,
+  user: UserRoundPen,
+  key: KeyRound,
+}
+const filterTypes = computed(() => [
+  ...props.fields.map((field) => ({
+    key: field.key,
+    label: field.label,
+    icon: typeIcons[field.key] ?? ListFilter,
+  })),
+  { key: 'from', label: 'Modified from', icon: CalendarArrowUp },
+  { key: 'to', label: 'Modified to', icon: CalendarArrowDown },
+])
 const typeOpen = ref(false)
 const pickerOpen = ref(false)
 const openValueOnTypeClose = ref(false)
@@ -32,6 +65,7 @@ const row = useTemplateRef<HTMLElement>('row')
 let valueOpen = false
 let restoreFocus = true
 const field = computed(() => props.fields.find((field) => field.key === filterType.value))
+const selectedType = computed(() => filterTypes.value.find((type) => type.key === filterType.value))
 
 function resetValue() {
   valueOpen = false
@@ -93,33 +127,33 @@ async function afterTypeClose(event: Event) {
       <Select v-model="filterType" v-model:open="typeOpen" @update:model-value="selectType">
         <SelectTrigger
           ref="typeTrigger"
-          aria-label="Filter type"
-          :title="
-            field?.label ??
-            (filterType === 'from'
-              ? 'Modified from'
-              : filterType === 'to'
-                ? 'Modified to'
-                : 'Filter type')
+          :title="selectedType?.label ?? 'Filter type'"
+          :aria-label="selectedType ? `Filter type: ${selectedType.label}` : 'Filter type'"
+          :class="
+            selectedType
+              ? 'size-9 shrink-0 justify-center p-0 [&>svg:last-child]:hidden'
+              : 'min-w-0 max-w-full shrink px-2'
           "
-          class="min-w-0 max-w-full shrink px-2"
         >
           <SelectValue placeholder="Filter">
-            <span v-if="filterType" class="min-w-0 truncate">{{
-              field?.label ?? (filterType === 'from' ? 'From' : 'To')
-            }}</span>
+            <component
+              v-if="selectedType"
+              :is="selectedType.icon"
+              class="size-4"
+              aria-hidden="true"
+            />
           </SelectValue>
         </SelectTrigger>
         <SelectContent @close-auto-focus="afterTypeClose" @escape-key-down.prevent="close()">
           <SelectItem
-            v-for="field in fields"
-            :key="field.key"
-            :value="field.key"
+            v-for="type in filterTypes"
+            :key="type.key"
+            :value="type.key"
             @select="openValueOnTypeClose = true"
-            >{{ field.label }}</SelectItem
           >
-          <SelectItem value="from" @select="openValueOnTypeClose = true">Modified from</SelectItem>
-          <SelectItem value="to" @select="openValueOnTypeClose = true">Modified to</SelectItem>
+            <component :is="type.icon" class="size-4" aria-hidden="true" />
+            <span>{{ type.label }}</span>
+          </SelectItem>
         </SelectContent>
       </Select>
       <Button
