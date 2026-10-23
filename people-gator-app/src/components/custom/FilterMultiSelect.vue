@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { watch } from 'vue'
 import { Check, ChevronsUpDown } from '@lucide/vue'
 import type { FilterOption } from '@/query/people-filter-options'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ import {
 
 defineProps<{
   label: string
+  placeholder?: string
+  showDone?: boolean
   options: FilterOption[]
   isLoading?: boolean
   error?: unknown
@@ -26,8 +28,15 @@ defineProps<{
 }>()
 const selected = defineModel<string[]>({ required: true })
 const search = defineModel<string>('search', { default: '' })
-const emit = defineEmits<{ loadMore: []; retry: []; openChange: [value: boolean] }>()
-const open = ref(false)
+const emit = defineEmits<{
+  loadMore: []
+  retry: []
+  openChange: [value: boolean]
+  interactOutside: [event: Event]
+  escape: []
+}>()
+const open = defineModel<boolean>('open', { default: false })
+watch(open, (value) => emit('openChange', value), { flush: 'sync' })
 
 function updateSelection(value: unknown) {
   if (Array.isArray(value))
@@ -38,7 +47,6 @@ function updateSelection(value: unknown) {
 <template>
   <Combobox
     v-model:open="open"
-    @update:open="emit('openChange', $event)"
     :model-value="selected"
     multiple
     ignore-filter
@@ -50,14 +58,17 @@ function updateSelection(value: unknown) {
     <ComboboxAnchor class="w-full" as-child>
       <ComboboxTrigger as-child :aria-label="label">
         <Button type="button" variant="outline" class="w-full justify-between">
-          <span
-            >{{ label }}<template v-if="selected.length"> ({{ selected.length }})</template></span
+          <span class="min-w-0 truncate"
+            >{{ placeholder ?? label
+            }}<template v-if="selected.length"> ({{ selected.length }})</template></span
           >
           <ChevronsUpDown class="size-4 shrink-0" aria-hidden="true" />
         </Button>
       </ComboboxTrigger>
     </ComboboxAnchor>
     <ComboboxList
+      @interact-outside="emit('interactOutside', $event)"
+      @escape-key-down="emit('escape')"
       align="start"
       :collision-padding="12"
       class="w-(--reka-combobox-trigger-width) min-w-64 max-w-(--reka-combobox-content-available-width)"
@@ -93,7 +104,7 @@ function updateSelection(value: unknown) {
           </ComboboxGroup>
         </template>
       </ComboboxViewport>
-      <div class="flex justify-between p-1">
+      <div v-if="hasMore || showDone !== false" class="flex justify-between p-1">
         <Button
           v-if="hasMore"
           type="button"
@@ -104,7 +115,13 @@ function updateSelection(value: unknown) {
         >
           {{ isLoadingMore ? 'Loading…' : 'Load more options' }}
         </Button>
-        <Button type="button" variant="ghost" size="sm" class="ml-auto" @click="open = false"
+        <Button
+          v-if="showDone !== false"
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="ml-auto"
+          @click="open = false"
           >Done</Button
         >
       </div>

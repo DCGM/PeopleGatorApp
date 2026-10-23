@@ -32,6 +32,56 @@ verify failed requests leave processing times unchanged, and preserve an
 assignment on rerun. Interrupted-checkpoint recovery covers both
 new detection keys.
 
+## Workspace sidebar showcase (#60)
+
+This draft adds a frontend-only visual demo around the existing seeded screens.
+Open Documents, then use the **Global/Local** selector in the **Workspace**
+section below **Explore** to choose **Local**. The filter type and value selectors are always
+visible. Choose a type using **Filter**; each option pairs its full label with
+a Lucide icon. Once selected, the type control shows only its icon, with a hover
+label and a full accessible name. The value control is disabled until a type is
+chosen. Choosing a type immediately opens its searchable multi-select or
+date/time picker. Values are applied to the configuration as they are clicked;
+toggling a selected value removes it immediately. Date and time changes apply
+immediately too. The picker stays open for additional values or time edits,
+without Done, Enter or a checkmark being required. Reopening a type restores its
+selected values. Press **Escape** to close the selector and preserve values
+already applied; tags remove applied values individually and align with the
+workspace content edges without extra outer padding or margin. Clicking away
+or dismissing the picker resets the row to **Filter** and a disabled **Value**
+selector, ready for the next filter; applied tags remain unchanged.
+Clicking the type control allows
+selecting another type without resetting existing filters. Try Library,
+Document, Page, Last user, Last API key and modification dates. Add filters one
+by one, remove individual tags or clear them, switch Global/Local, and navigate
+to Scans or People. Collapse to the desktop icon rail or open the mobile drawer;
+the logo, app name and collapse icon form one button in the sidebar header.
+Click anywhere on that button to collapse the desktop sidebar or close the mobile
+drawer; click the collapsed logo to expand the desktop rail. The topbar logo opens
+the mobile drawer. Enter and Space activate the same controls, and keyboard focus
+stays on the desktop toggle or returns to the mobile opening button. The sidebar
+uses a vertical ScrollArea and keeps the account footer reachable on short screens.
+The logo sits in the sidebar header; configured account information and the theme switch sit in its footer.
+
+| Filter type | Lucide icon |
+| --- | --- |
+| Library | [LibraryBig](https://lucide.dev/icons/library-big) — bookshelves |
+| Document | [Files](https://lucide.dev/icons/files) — grouped pages |
+| Page | [FileImage](https://lucide.dev/icons/file-image) — a scanned page |
+| Last user | [UserRoundPen](https://lucide.dev/icons/user-round-pen) — an editor |
+| Last API key | [KeyRound](https://lucide.dev/icons/key-round) — an API key |
+| Modified from | [CalendarArrowUp](https://lucide.dev/icons/calendar-arrow-up) — lower date bound |
+| Modified to | [CalendarArrowDown](https://lucide.dev/icons/calendar-arrow-down) — upper date bound |
+
+
+Sidebar options are synthetic in-memory examples, independent of database
+fixtures. They do not filter results, change URLs, call option endpoints or save
+workspace state. Global hides the sample configuration; returning to Local
+restores it until reload. Existing page filters continue to work normally.
+The sidebar omits demo/status helper text so the design can be evaluated. No
+seed records, checkpoints, repository contracts or media need to change for this
+showcase; eventual workspace integration remains in #60.
+
 ## Run it
 
 From `people-gator-api`, with PostgreSQL and filesystem settings configured for

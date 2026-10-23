@@ -8,7 +8,7 @@ import { ref } from 'vue'
 import App from '../App.vue'
 import DocumentPageOverlay from '../components/custom/DocumentPageOverlay.vue'
 import DocumentTeleprompter from '../components/custom/DocumentTeleprompter.vue'
-import TopBar from '../components/custom/TopBar.vue'
+import WorkspaceShowcase from '../components/custom/WorkspaceShowcase.vue'
 import router from '../router'
 import { readSharedFilters } from '@/viewmodels/shared-filters'
 
@@ -123,12 +123,27 @@ vi.mock('@/viewmodels/document-workspace', () => ({
 enableAutoUnmount(afterEach)
 
 describe('App', () => {
-  it('keeps the logo when the optional top bar title is omitted', () => {
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+  it('uses one logo, name and icon button to toggle the sidebar without navigation', async () => {
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
 
-    const logo = wrapper.get('a[aria-label="PeopleGator"] svg.lucide-people-gator')
-    expect(logo.attributes('stroke-width')).toBe('1')
-    expect(wrapper.get('nav').text()).not.toContain('People Gator')
+    const header = wrapper.get('[data-sidebar=header]')
+    const toggle = header.get('button')
+    const route = router.currentRoute.value.fullPath
+    expect(header.findAll('button')).toHaveLength(1)
+    expect(header.find('a').exists()).toBe(false)
+    expect(toggle.get('svg.lucide-people-gator').attributes('stroke-width')).toBe('1')
+    expect(toggle.text()).toContain('PeopleGator')
+    expect(toggle.find('svg.lucide-panel-left').exists()).toBe(true)
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    for (const target of ['svg.lucide-people-gator', 'span', 'svg.lucide-panel-left']) {
+      await toggle.get(target).trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(toggle.attributes('aria-label')).toBe('Expand PeopleGator sidebar')
+      expect(router.currentRoute.value.fullPath).toBe(route)
+      await toggle.trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(toggle.attributes('aria-label')).toBe('Collapse PeopleGator sidebar')
+    }
   })
 
   it.each(['00000000-0000-4000-8000-000000000002', undefined])(
@@ -144,7 +159,7 @@ describe('App', () => {
           library: 'preview-mzk',
         },
       })
-      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
       await router.push({ query: { ...router.currentRoute.value.query, api_key: currentKey } })
       await flushPromises()
       const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
@@ -520,7 +535,7 @@ describe('App', () => {
 describe('Scans and Documents navigation', () => {
   it('activates independent tabs and keeps scan query filters', async () => {
     await router.push('/scans?library=mzk&document=album&q=Ada&assignment=faces')
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBeUndefined()
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('assignment=faces')
@@ -565,7 +580,7 @@ describe('Scans and Documents navigation', () => {
 
   it('preserves multiple libraries in Documents navigation without treating them as a scan scope', async () => {
     await router.push('/documents?library=a&library=b')
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
       '/documents?library=a&library=b',
     )
@@ -602,25 +617,20 @@ describe('Scans and Documents navigation', () => {
     '/scans?q=Ada&library=preview-mzk',
     '/libraries/preview-mzk/documents/album/pages/page',
     '/people/ada?evidence_library=preview-mzk',
-  ])('opens Documents with either home control from %s', async (path) => {
-    for (const control of ['logo', 'breadcrumb']) {
-      await router.push(path)
-      const wrapper = mount(TopBar, { global: { plugins: [router] } })
-      const home =
-        control === 'logo'
-          ? wrapper.get('a[aria-label="PeopleGator"]')
-          : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
-      const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
-      expect(home.attributes('href')).toBe(
-        router.resolve({ name: 'document-list', query: expected }).href,
-      )
-      await home.trigger('click')
-      await flushPromises()
-      expect(router.currentRoute.value.name).toBe('document-list')
-      expect(router.currentRoute.value.query).toEqual(expected)
-      expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
-      wrapper.unmount()
-    }
+  ])('opens Documents from the first breadcrumb from %s', async (path) => {
+    await router.push(path)
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
+    const home = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
+    const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
+    expect(home.attributes('href')).toBe(
+      router.resolve({ name: 'document-list', query: expected }).href,
+    )
+    await home.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('document-list')
+    expect(router.currentRoute.value.query).toEqual(expected)
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
+    wrapper.unmount()
   })
 
   it.each([
@@ -637,7 +647,7 @@ describe('Scans and Documents navigation', () => {
       library: ['preview-mzk'],
       link_state: 'verified',
     })
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
     await wrapper.get('a[aria-label="Scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('document-search')

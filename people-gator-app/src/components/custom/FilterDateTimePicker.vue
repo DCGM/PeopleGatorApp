@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, useId, watch } from 'vue'
 import { CalendarIcon } from '@lucide/vue'
 import { parseDate } from '@internationalized/date'
 import type { DateValue } from 'reka-ui'
@@ -8,9 +8,18 @@ import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
-const props = defineProps<{ label: string; invalid?: boolean }>()
+const props = withDefaults(
+  defineProps<{ label: string; invalid?: boolean; showLabel?: boolean; showDone?: boolean }>(),
+  { showLabel: true, showDone: true },
+)
 const value = defineModel<string>({ required: true })
-const open = ref(false)
+const emit = defineEmits<{
+  openChange: [value: boolean]
+  interactOutside: [event: Event]
+  escape: []
+}>()
+const open = defineModel<boolean>('open', { default: false })
+watch(open, (value) => emit('openChange', value), { flush: 'sync' })
 const timeId = useId()
 
 const date = computed<DateValue | undefined>(() => {
@@ -54,10 +63,19 @@ function clear() {
           :title="`${label}: ${displayValue}`"
         >
           <CalendarIcon class="size-4 shrink-0" aria-hidden="true" />
-          <span class="truncate">{{ label }}: {{ displayValue }}</span>
+          <span class="min-w-0 truncate"
+            ><template v-if="showLabel">{{ label }}: </template>{{ displayValue }}</span
+          >
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" :collision-padding="12" class="w-auto p-0" :aria-label="label">
+      <PopoverContent
+        align="start"
+        :collision-padding="12"
+        class="w-auto p-0"
+        :aria-label="label"
+        @interact-outside="emit('interactOutside', $event)"
+        @escape-key-down="emit('escape')"
+      >
         <Calendar
           :model-value="date"
           :default-placeholder="date"
@@ -76,12 +94,15 @@ function clear() {
             :disabled="!date"
             :aria-label="`${props.label} time`"
             @update:model-value="updateTime"
+            @keydown.enter.prevent="open = false"
           />
           <div class="flex justify-between">
             <Button type="button" variant="ghost" size="sm" :disabled="!value" @click="clear"
               >Clear</Button
             >
-            <Button type="button" variant="outline" size="sm" @click="open = false">Done</Button>
+            <Button v-if="showDone" type="button" variant="outline" size="sm" @click="open = false"
+              >Done</Button
+            >
           </div>
         </div>
       </PopoverContent>
