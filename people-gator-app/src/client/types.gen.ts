@@ -161,6 +161,32 @@ export type DocumentResponse = {
      */
     document_id: string;
     /**
+     * First Page Source Id
+     *
+     * First registered page by archive page ID, independent of evidence filters; null when no registered page is available.
+     */
+    first_page_source_id?: string | null;
+    /**
+     * Registered Page Count
+     *
+     * All registered pages in this library/document, independent of evidence filters.
+     */
+    registered_page_count?: number | null;
+    /**
+     * Linked Entity Count
+     *
+     * Distinct assigned entities across direct and page faces/mentions.
+     */
+    linked_entity_count?: number | null;
+    /**
+     * Last Touched By User Name
+     */
+    last_touched_by_user_name?: string | null;
+    /**
+     * Last Touched By Api Key Name
+     */
+    last_touched_by_api_key_name?: string | null;
+    /**
      * Name
      */
     name?: string | null;
@@ -1081,6 +1107,32 @@ export type FoundDocument = {
      * Document Id
      */
     document_id: string;
+    /**
+     * First Page Source Id
+     *
+     * First registered page by archive page ID, independent of evidence filters; null when no registered page is available.
+     */
+    first_page_source_id?: string | null;
+    /**
+     * Registered Page Count
+     *
+     * All registered pages in this library/document, independent of evidence filters.
+     */
+    registered_page_count?: number | null;
+    /**
+     * Linked Entity Count
+     *
+     * Distinct assigned entities across direct and page faces/mentions.
+     */
+    linked_entity_count?: number | null;
+    /**
+     * Last Touched By User Name
+     */
+    last_touched_by_user_name?: string | null;
+    /**
+     * Last Touched By Api Key Name
+     */
+    last_touched_by_api_key_name?: string | null;
     /**
      * Name
      */

@@ -742,3 +742,40 @@ attribution, the user and touch filters, edit preservation and both
 PostgreSQL runs login, JWT-only requests, a mutation, deactivation, use of the
 existing token, rejected login/refresh and expiry. Authentication must enter no
 database context after login.
+
+## Document table (#57)
+
+Open `/documents?view=table&library=preview-table` (the `document-table` manifest
+entry). **Document table ledger** has two registered pages, four faces and five
+mentions including one direct document mention: three automatic, two verified,
+two manual and two unassigned annotations, linked to just two distinct entities.
+Its synthetic subjects are Tereza Columns and Oskar Rows. Its last change is
+attributed to Preview face importer and its registered key.
+The same archive ID in `preview-table-mirror` has no pages or evidence; Document
+awaiting scans also demonstrates zero counts and unknown modification history.
+Direct annotation ledger demonstrates a user-only modification without a key.
+
+Switch Items/Table without changing search, filters or server sorting. Columns
+can hide each data field, including Document name, and restore defaults; Open
+always retains document navigation. The table uses document-wide counts even
+when evidence filters select matching documents. Scroll horizontally to reach
+all fields and vertically to append cursor batches; Load more and Retry remain
+keyboard accessible. The optional **First page** column is hidden by default. Enable it in Columns to
+show a single thumbnail per document. The document response supplies its source
+UUID in the same batched projection as the page total; enabling the column adds
+only thumbnail requests, without page-list or annotation/name queries. Hidden
+previews make no media requests. First means the first registered page in archive
+page-ID order, matching the existing page browser, independent of evidence filters.
+No pages and unavailable media have short fallbacks. The
+`document-table-first-page` manifest link opens the seeded two-page example;
+both local page images are usable and repository/media tests verify its first page.
+
+
+Sortable table headers (Document name, Library, Document ID, Pages and Last
+modified) use the same server sort as the Sort selector. Click a heading to select
+its normal initial direction; click again to reverse it. An arrow and accessible
+sort state identify the active heading. The `document-table-sort` manifest link
+opens the 14 pagination ledgers by name descending; reverse Document name and
+scroll to verify ascending order across the cursor boundary. Relevance remains
+available in the selector during text search. Other metadata/count headings have
+no sort action because their fields are not supported by the API.

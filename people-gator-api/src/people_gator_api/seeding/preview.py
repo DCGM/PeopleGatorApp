@@ -410,6 +410,26 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         await checkpoint()
     if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
         active_mentions[key] = manifest.mentions[key]
+    # Issue #57: direct document evidence shares the page entity, so distinct
+    # entities cannot be calculated by summing page/type counts. Recovery finds
+    # a write before its manifest checkpoint and preserves later reviewer edits.
+    key = "table-direct-mention"
+    if key not in manifest.mentions and "table-tereza" in active_entities:
+        source_id = documents["table-ledger"]
+        records = (await database.text_mentions.list(TextMentionListRequest(
+            limit=100, filter_=TextMentionListFilter(source_id=[source_id]),
+        ))).items
+        context = "Tereza Columns catalogued the document table ledger directly."
+        record = next((item for item in records if item.context == context), None)
+        if record is None:
+            record = await database.text_mentions.create(TextMentionCreateRequest(
+                name="Tereza Columns", context=context, entity_id=active_entities["table-tereza"],
+                entity_link_state=EntityLinkState.automatic, source_id=source_id,
+            ), actors["importer"])
+        manifest.mentions[key] = record.mention_id
+        await checkpoint()
+    if key in manifest.mentions and await database.text_mentions.get(manifest.mentions[key]) is not None:
+        active_mentions[key] = manifest.mentions[key]
     # Explicit, checkpointed additive upgrade for #35. Use existing synthetic
     # linked media; preserve manual choices and every choice after this upgrade.
     # Record the precondition BEFORE writing, so an interrupted checkpoint cannot
@@ -739,6 +759,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             + urlencode({"library": "preview-mzk", "archive_document": next(
                 item.document_id for item in DOCUMENTS if item.key == "scan-only"
             )}),
+            "document-table-sort": "/documents?" + urlencode({"view": "table", "library": "preview-pagination", "sort": "name", "dir": "desc"}),
+            "document-table-first-page": "/documents?" + urlencode({"view": "table", "document": documents["table-ledger"]}),
+            "document-table": "/documents?" + urlencode({"view": "table", "library": "preview-table"}),
             "mobile-filters": "/people?"
             + urlencode(
                 {

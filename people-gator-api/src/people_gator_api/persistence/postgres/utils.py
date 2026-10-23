@@ -690,7 +690,8 @@ def source_response(source: Source) -> GenericSourceResponse:
             page_id=source.page_id,
         )
     elif isinstance(source, Document):
-        common.update(library=source.library, document_id=source.document_id, name=source.name)
+        common.update(library=source.library, document_id=source.document_id, name=source.name,
+                      **getattr(source, "_document_summary", {}))
     return GenericSourceResponse(**common)
 
 

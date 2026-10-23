@@ -43,8 +43,8 @@ export function useDocumentSearchQuery(
       return cursorResultPage(response)
     },
     initialPageParam: computed(() => toValue(params).cursor ?? null),
-    getNextPageParam: (lastPage, _pages, lastPageParam) =>
-      lastPage.nextPage === lastPageParam ? null : lastPage.nextPage,
+    getNextPageParam: (lastPage, _pages, _lastPageParam, pageParams) =>
+      pageParams.includes(lastPage.nextPage ?? null) ? null : lastPage.nextPage,
     enabled: computed(() => toValue(enabled)),
   })
 }
@@ -114,8 +114,8 @@ export function useDocumentResultsQuery(
       )
     },
     initialPageParam: null,
-    getNextPageParam: (page, _pages, previous) =>
-      page.nextPage === previous ? null : page.nextPage,
+    getNextPageParam: (page, _pages, _previous, pageParams) =>
+      pageParams.includes(page.nextPage ?? null) ? null : page.nextPage,
     enabled: computed(() => toValue(enabled)),
   })
 }
