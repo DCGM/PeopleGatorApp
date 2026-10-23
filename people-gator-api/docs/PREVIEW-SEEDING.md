@@ -50,12 +50,13 @@ selecting another type without resetting existing filters. Try Library,
 Document, Page, Last user, Last API key and modification dates. Add filters one
 by one, remove individual tags or clear them, switch Global/Local, and navigate
 to Scans or People. Collapse to the desktop icon rail or open the mobile drawer;
-there is one opening action in either layout: click the logo to expand the
-desktop rail or open the mobile drawer. Use the separate sidebar button to
-collapse or close it. Keyboard focus follows these controls as the sidebar opens
-and closes. The sidebar uses a vertical ScrollArea and keeps the account footer
-reachable on short screens. The logo sits in the sidebar header; configured
-account information and the theme switch sit in its footer.
+the logo, app name and collapse icon form one button in the sidebar header.
+Click anywhere on that button to collapse the desktop sidebar or close the mobile
+drawer; click the collapsed logo to expand the desktop rail. The topbar logo opens
+the mobile drawer. Enter and Space activate the same controls, and keyboard focus
+stays on the desktop toggle or returns to the mobile opening button. The sidebar
+uses a vertical ScrollArea and keeps the account footer reachable on short screens.
+The logo sits in the sidebar header; configured account information and the theme switch sit in its footer.
 
 Sidebar options are synthetic in-memory examples, independent of database
 fixtures. They do not filter results, change URLs, call option endpoints or save

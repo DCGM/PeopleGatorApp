@@ -127,10 +127,7 @@ function updateFilter(filter: WorkspaceFilterSelection) {
   >
     <Sidebar collapsible="icon" class="overflow-hidden">
       <SidebarHeader>
-        <div class="flex items-center gap-2 group-data-[collapsible=icon]:flex-col">
-          <WorkspaceSidebarBrand />
-          <WorkspaceSidebarToggle location="sidebar" />
-        </div>
+        <WorkspaceSidebarBrand />
       </SidebarHeader>
       <SidebarContent class="overflow-hidden">
         <ScrollArea class="min-h-0 w-full flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
@@ -207,7 +204,7 @@ function updateFilter(filter: WorkspaceFilterSelection) {
     </Sidebar>
     <SidebarInset class="min-w-0">
       <TopBar>
-        <template #toggle><WorkspaceSidebarToggle location="topbar" /></template>
+        <template #toggle><WorkspaceSidebarToggle /></template>
       </TopBar>
       <slot />
     </SidebarInset>

@@ -123,12 +123,27 @@ vi.mock('@/viewmodels/document-workspace', () => ({
 enableAutoUnmount(afterEach)
 
 describe('App', () => {
-  it('places the logo in the sidebar header', () => {
+  it('uses one logo, name and icon button to toggle the sidebar without navigation', async () => {
     const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
 
-    const logo = wrapper.get('a[aria-label="PeopleGator"] svg.lucide-people-gator')
-    expect(logo.attributes('stroke-width')).toBe('1')
-    expect(wrapper.get('[data-sidebar=header]').text()).toContain('PeopleGator')
+    const header = wrapper.get('[data-sidebar=header]')
+    const toggle = header.get('button')
+    const route = router.currentRoute.value.fullPath
+    expect(header.findAll('button')).toHaveLength(1)
+    expect(header.find('a').exists()).toBe(false)
+    expect(toggle.get('svg.lucide-people-gator').attributes('stroke-width')).toBe('1')
+    expect(toggle.text()).toContain('PeopleGator')
+    expect(toggle.find('svg.lucide-panel-left').exists()).toBe(true)
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    for (const target of ['svg.lucide-people-gator', 'span', 'svg.lucide-panel-left']) {
+      await toggle.get(target).trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(toggle.attributes('aria-label')).toBe('Expand PeopleGator sidebar')
+      expect(router.currentRoute.value.fullPath).toBe(route)
+      await toggle.trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(toggle.attributes('aria-label')).toBe('Collapse PeopleGator sidebar')
+    }
   })
 
   it.each(['00000000-0000-4000-8000-000000000002', undefined])(
@@ -602,25 +617,20 @@ describe('Scans and Documents navigation', () => {
     '/scans?q=Ada&library=preview-mzk',
     '/libraries/preview-mzk/documents/album/pages/page',
     '/people/ada?evidence_library=preview-mzk',
-  ])('opens Documents with either home control from %s', async (path) => {
-    for (const control of ['logo', 'breadcrumb']) {
-      await router.push(path)
-      const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
-      const home =
-        control === 'logo'
-          ? wrapper.get('a[aria-label="PeopleGator"]')
-          : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
-      const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
-      expect(home.attributes('href')).toBe(
-        router.resolve({ name: 'document-list', query: expected }).href,
-      )
-      await home.trigger('click')
-      await flushPromises()
-      expect(router.currentRoute.value.name).toBe('document-list')
-      expect(router.currentRoute.value.query).toEqual(expected)
-      expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
-      wrapper.unmount()
-    }
+  ])('opens Documents from the first breadcrumb from %s', async (path) => {
+    await router.push(path)
+    const wrapper = mount(WorkspaceShowcase, { global: { plugins: [router] } })
+    const home = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
+    const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
+    expect(home.attributes('href')).toBe(
+      router.resolve({ name: 'document-list', query: expected }).href,
+    )
+    await home.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('document-list')
+    expect(router.currentRoute.value.query).toEqual(expected)
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
+    wrapper.unmount()
   })
 
   it.each([
