@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
 import { Globe, SlidersHorizontal, Moon, Sun, Plus, ChevronsUpDown } from '@lucide/vue'
 import { useDark, useToggle } from '@vueuse/core'
 import { SelectTrigger as WorkspaceModeTrigger } from 'reka-ui'
-import { relatedQuery } from '@/viewmodels/shared-filters'
-import PeopleGatorIcon from './PeopleGatorIcon'
+import WorkspaceSidebarBrand from './WorkspaceSidebarBrand.vue'
 import TopBar from './TopBar.vue'
 import FilterMultiSelect from './FilterMultiSelect.vue'
 import FilterDateTimePicker from './FilterDateTimePicker.vue'
@@ -38,7 +36,6 @@ import {
 import WorkspaceNavigation from './WorkspaceNavigation.vue'
 
 // Deliberately disconnected from route filters, API queries and persistence (#60).
-const route = useRoute()
 const mode = ref('global')
 const dark = useDark()
 const toggleDark = useToggle(dark)
@@ -154,16 +151,7 @@ function addFilter() {
     <Sidebar collapsible="icon" class="overflow-hidden">
       <SidebarHeader>
         <div class="flex items-center gap-2 group-data-[collapsible=icon]:flex-col">
-          <RouterLink
-            :to="{ name: 'document-list', query: relatedQuery(route) }"
-            class="flex min-w-0 flex-1 items-center gap-2 p-2 group-data-[collapsible=icon]:p-0"
-            aria-label="PeopleGator"
-          >
-            <PeopleGatorIcon class="size-8 shrink-0" aria-hidden="true" stroke-width="1" />
-            <span class="font-heading text-xl group-data-[collapsible=icon]:hidden"
-              >PeopleGator</span
-            >
-          </RouterLink>
+          <WorkspaceSidebarBrand />
           <WorkspaceSidebarToggle location="sidebar" />
         </div>
       </SidebarHeader>
