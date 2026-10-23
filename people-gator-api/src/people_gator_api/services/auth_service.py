@@ -10,13 +10,14 @@ from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest
 from people_gator_api.services.api_key_service import verify_api_key
 from fastapi.security import SecurityScopes
-from typing import Annotated, TypedDict
+from typing import Annotated, Protocol, TypedDict
 import argon2
 from pydantic import TypeAdapter
 from people_gator_api.schemas.auth import TokenResponse
 from people_gator_api.schemas.users import UserCreateRequest, UserResponse
-from people_gator_api.persistence.contracts import Database
-from people_gator_api.services.database_service import DatabaseContextDependency
+from people_gator_api.persistence.contracts import APIKeyRepository, UserRepository
+from people_gator_api.services.database_service import get_database_context
+from contextlib import AbstractAsyncContextManager
 from people_gator_api.services.filesystem_service import get_filesystem
 from people_gator_api.services.jwk_service import (
     issue_access_token,
@@ -69,6 +70,23 @@ _refresh_session_locks: dict[str, asyncio.Lock] = {}
 _users_adapter = TypeAdapter(dict[str, UserRecord])
 
 
+class IdentityRepositories(Protocol):
+    """The persistence surface authentication may use; ``Database`` satisfies it."""
+
+    @property
+    def users(self) -> UserRepository: ...
+
+    @property
+    def api_keys(self) -> APIKeyRepository | None: ...
+
+
+type IdentityContext = AbstractAsyncContextManager[IdentityRepositories]
+type IdentityContextDependency = Annotated[
+    # Context managers are single-use; auth and handlers need distinct instances.
+    IdentityContext, Depends(get_database_context, use_cache=False)
+]
+
+
 async def get_users() -> dict[str, UserRecord]:
     """Load password hashes and allowed scopes from the configured filesystem."""
     filesystem = get_filesystem()
@@ -94,9 +112,27 @@ def _check_scopes(scopes: list[str], allowed_scopes: set[str]) -> None:
             )
 
 
+async def resolve_active_user(
+    database_context: IdentityContext, username: str,
+) -> UserResponse:
+    """Resolve the persisted identity for token issuance and require it to be active.
+
+    First login creates an active identity; existing records are never reactivated.
+    """
+    async with database_context as database:
+        user = await database.users.get_or_create(UserCreateRequest(
+            display_name=username, is_active=True,
+            external_subject=username, external_issuer=settings.jwk.issuer,
+        ))
+    if not user.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "User is inactive")
+    return user
+
+
 
 async def get_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    database_context: IdentityContextDependency,
 ) -> TokenResponse:
     """Get the raw access token and refresh token from the request context."""
     username = form_data.username
@@ -117,8 +153,9 @@ async def get_token(
             headers={"WWW-Authenticate": "Basic"},
         )
     _check_scopes(scopes, user_record["scopes"])
+    user = await resolve_active_user(database_context, username)
 
-    access_token = await issue_access_token(subject=username, scopes=scopes)
+    access_token = await issue_access_token(subject=username, scopes=scopes, user_id=user.user_id)
     jti = str(uuid.uuid4())
     refresh_token = await issue_refresh_token(
         subject=username, scopes=scopes, jti=jti,
@@ -138,46 +175,53 @@ api_key_security = APIKeyHeader(name="X-API-Key", scheme_name="PeopleGatorAPIKey
 
 
 class AuthContext(GenericActor):
+    """Authenticated actor for authorization and attribution.
+
+    Bearer contexts come from signed claims alone. Endpoints needing persisted
+    profile data load it explicitly with ``database.users.get(user_id)``.
+    """
+
     api_key_id: uuid.UUID | None = None
-    user: UserResponse
     authentication_method: Literal["bearer", "api_key"]
     scopes: set[str]
 
 
-async def authenticate_bearer(token: str, database: Database) -> AuthContext:
+async def authenticate_bearer(token: str) -> AuthContext:
+    """Authorize from the signed access token; never touches persistence."""
     try:
         claims = await verify_access_token(token)
     except HTTPException as exc:
         if exc.status_code == 401:
             raise HTTPException(401, "Invalid bearer token", headers={"WWW-Authenticate": "Bearer"}) from exc
         raise
-    user = await database.users.get_or_create(UserCreateRequest(
-        display_name=claims["sub"], is_active=True,
-        external_subject=claims["sub"], external_issuer=claims["iss"],
-    ))
-    return AuthContext(user_id=user.user_id, user=user, authentication_method="bearer", scopes=set(claims["scopes"]))
+    return AuthContext(user_id=claims["uid"], authentication_method="bearer", scopes=set(claims["scopes"]))
 
 
-async def authenticate_api_key(secret: str, database: Database, required_scopes: list[str]) -> AuthContext:
+async def authenticate_api_key(
+    secret: str, database: IdentityRepositories, required_scopes: list[str],
+) -> AuthContext:
     identifier, record = await verify_api_key(secret)
     _check_scopes(required_scopes, record.scopes)
     user = await database.users.get_or_create(UserCreateRequest(
         display_name=record.username, is_active=True,
         external_subject=record.username, external_issuer=settings.jwk.issuer,
     ))
+    # API keys have no token exchange, so their persisted user is checked per request.
+    if not user.is_active:
+        raise HTTPException(403, "User is inactive")
     if database.api_keys is None:
         raise RuntimeError("API-key registry is unavailable for this persistence backend")
     key = await database.api_keys.get_or_create(APIKeyCreateRequest(
         identifier=identifier, display_name=record.display_name, user_id=user.user_id,
     ))
-    return AuthContext(user_id=user.user_id, user=user, api_key_id=key.api_key_id,
+    return AuthContext(user_id=user.user_id, api_key_id=key.api_key_id,
                        authentication_method="api_key", scopes=record.scopes)
 
 
 async def get_auth_context(
     security_scopes: SecurityScopes,
     request: Request,
-    database_context: DatabaseContextDependency,
+    database_context: IdentityContextDependency,
     token: Annotated[str | None, Security(security)],
     api_key: Annotated[str | None, Security(api_key_security)],
 ) -> AuthContext:
@@ -188,20 +232,17 @@ async def get_auth_context(
     if has_bearer:
         if not token or not token.strip():
             raise HTTPException(401, "Invalid bearer token", headers={"WWW-Authenticate": "Bearer"})
-        # Authentication returns detached schemas. Release its connection and
-        # user-identity advisory lock before the handler waits on external I/O.
-        async with database_context as database:
-            context = await authenticate_bearer(token, database)
+        context = await authenticate_bearer(token)
     elif has_key:
         if not api_key or not api_key.strip():
             raise HTTPException(401, "Invalid API key", headers={"WWW-Authenticate": "APIKey"})
+        # Authentication returns detached schemas. Release its connection and
+        # user-identity advisory lock before the handler waits on external I/O.
         async with database_context as database:
             context = await authenticate_api_key(api_key, database, security_scopes.scopes)
     else:
         raise HTTPException(401, "Missing credentials", headers={"WWW-Authenticate": "Bearer, APIKey"})
     _check_scopes(security_scopes.scopes, context.scopes)
-    if not context.user.is_active:
-        raise HTTPException(403, "User is inactive")
     return context
 
 
@@ -209,11 +250,14 @@ async def get_auth_context(
 get_current_user = get_auth_context
 
 
-async def refresh_access_token(refresh_token: str) -> TokenResponse:
+async def refresh_access_token(
+    refresh_token: str, database_context: IdentityContext,
+) -> TokenResponse:
     """Exchange a refresh token for a new access token.
-    
-    Validates that the refresh token is valid and that the session exists,
-    then generates a new access token with the same scopes.
+
+    Validates the refresh token, its session, current credential scopes and the
+    persisted user's active state, then rotates the session with the same scopes.
+    An inactive user's session is revoked and no tokens are issued.
     """
     try:
         claims = await verify_refresh_token(refresh_token)
@@ -249,8 +293,15 @@ async def refresh_access_token(refresh_token: str) -> TokenResponse:
 
     scopes = session["scopes"]
     _check_scopes(scopes, user_record["scopes"])
+    try:
+        user = await resolve_active_user(database_context, subject)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            async with _refresh_session_locks.setdefault(subject, asyncio.Lock()):
+                _refresh_sessions.get(subject, {}).pop(jti, None)
+        raise
 
-    access_token = await issue_access_token(subject=subject, scopes=scopes)
+    access_token = await issue_access_token(subject=subject, scopes=scopes, user_id=user.user_id)
     new_jti = str(uuid.uuid4())
     new_refresh_token = await issue_refresh_token(
         subject=subject, scopes=scopes, jti=new_jti,

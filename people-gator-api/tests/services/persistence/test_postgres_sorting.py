@@ -60,7 +60,7 @@ async def sorted_records(migrated_postgres):
         key = await db.api_keys.get_or_create(APIKeyCreateRequest(
             identifier="issue33-" + uuid.uuid4().hex, display_name="Sort key", user_id=user.user_id,
         ))
-        actor = AuthContext(user_id=user.user_id, user=user, api_key_id=key.api_key_id,
+        actor = AuthContext(user_id=user.user_id, api_key_id=key.api_key_id,
                             authentication_method="api_key", scopes=set())
         names = ["Émil Zorn", "ada Novak", "Ada Novak", "ADA NOVAK", "Bea Ortiz", "Ada Novak"]
         entities = await db.entities.create_batch(

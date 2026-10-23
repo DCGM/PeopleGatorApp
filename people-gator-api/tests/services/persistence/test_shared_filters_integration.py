@@ -95,13 +95,13 @@ async def matrix():
                 identifier=f"{name}-{tag}", display_name=name, user_id=user.user_id,
             )) if key else None
             return AuthContext(
-                user_id=user.user_id, user=user,
+                user_id=user.user_id,
                 api_key_id=api_key.api_key_id if api_key else None,
                 authentication_method="api_key" if api_key else "bearer", scopes=set(),
             )
 
         u_key = await actor("u", key=True)
-        u = AuthContext(user_id=u_key.user_id, user=u_key.user, api_key_id=None,
+        u = AuthContext(user_id=u_key.user_id, api_key_id=None,
                         authentication_method="bearer", scopes=set())
         v = await actor("v")
         l1, l2 = f"lib-a-{tag}", f"lib-b-{tag}"

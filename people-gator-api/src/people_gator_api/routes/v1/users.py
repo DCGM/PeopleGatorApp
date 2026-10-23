@@ -51,8 +51,14 @@ async def list_user_filter_options_route(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me_route(current_user: AnnotatorActorDependency) -> UserResponse:
-    return current_user.user
+async def get_me_route(
+    current_user: AnnotatorActorDependency, database: DatabaseDependency,
+) -> UserResponse:
+    # Profile data is read on demand; it is not an active-state gate.
+    user = await database.users.get(current_user.user_id)
+    if user is None:
+        raise_api_error(404, "not_found", "User not found")
+    return user
 
 
 @router.get("/users", response_model=UserListResponse)

@@ -105,6 +105,7 @@ This does not automatically seed the actual staging environment.
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
+| Deactivated reviewer attribution (#66) | Open `deactivated-reviewer`: **Olga Expiry** matches **Modified by: Preview former reviewer**, an inactive user |
 | Face geometry | Eight faces with pixel bounding boxes and all five alignment keypoints |
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
 | Multiple embedding models | Deterministic, normalized 8D and 4D synthetic vectors with registered models |
@@ -239,7 +240,8 @@ Compare `scan-toolbar-assigned` (all three toggles pressed, only the verified
 face and mention on page 2) with **All** (no states selected, also includes the
 unassigned face and mention). `scan-toolbar-union` opens page 1 with automatic
 and manual evidence selected together. Toggle each state, reset, reload and use
-browser back/forward to compare pressed states, URL and evidence. Check the
+browser back/forward to compare pressed states, the page-specific
+`page_link_state` URL setting and evidence. Workspace `link_state` is retained separately. Check the
 neighboring tools and keyboard arrow/Space operation at desktop and mobile sizes.
 In light and dark themes, the toolbar container is transparent: the scan stays
 visible in the gaps between the controls, including when they wrap on mobile.
@@ -428,7 +430,8 @@ and mentions in two libraries. **Annotation review ledger** (`preview-mzk`) has
 an importer-created face and a reviewer-verified face; **Annotation review
 correspondence** (`preview-nlk`) has a manual face and a verified mention.
 Select a modification user, API key, date bound or document to follow the same
-annotation criteria through Documents, People, profiles and scans. Combining
+annotation criteria through Documents, People, profiles and scan lists. Opened scan pages retain
+these criteria for navigation but show their complete page entities. Combining
 criteria from different annotations must not produce a match.
 
 Creation/import times and actors remain separate from annotation changes and
@@ -441,8 +444,9 @@ identical verification, plus upgrades from the previously deployed revision.
 The `page-activity` example opens the annotation review ledger directly with
 `panel=activity`. Its two faces and one mention have two importer edits and one
 later reviewer verification. In the scan sidebar, choose Activity, then By user:
-selecting Preview reviewer shows the reviewer-verified face. By day groups the
-recorded annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
+Preview reviewer summarizes the reviewer-verified face. These group headings
+are informational and do not edit workspace filters. By day groups the recorded
+annotation edits in browser local time. The default Faces tab contains the gallery, current face and assignment candidates.
 Faces, Activity and Statistics share the top-level pane navigation; Activity uses
 the full remaining pane height and scrolls independently of the scan. The seed's activity link is additive and
 does not rewrite reviewed fixture data.
@@ -700,3 +704,63 @@ Integration tests query both list and text-search repositories in twelve-item
 batches, check distinct IDs, order, totals, exhausted cursors and document scope,
 read a real page image, and preserve an edited person/unassigned mention on
 rerun. Existing interrupted-checkpoint recovery covers the new fixture keys.
+
+## Global Discover with a retained workspace (#67)
+
+Open the seed report's `global-discovery` link for **Zora Cartographer**.
+The URL retains `preview-mzk`, **Entity discovery practice**, its first page,
+Verified, Preview reviewer and the OCR API key. Discover still shows **Orion
+Portrait** and two matching faces from **Discovery beyond the workspace** in
+`preview-nlk`, including one unassigned face. Reference inputs starts at Faces
+with the synthetic 8D model; name, aliases, text and sorting remain available.
+
+Switch to Faces or Mentions to see the retained local criteria applied there;
+switch back to Discover or reload to find global candidates again. On disposable
+data, assign the outside unassigned face or merge the duplicate person. Candidate
+navigation also carries the original shared configuration. All searches retain
+normal API authorization. No optional face-scope control is introduced.
+
+The `global-discovery-scan` link opens the reference page in face-similarity mode.
+The right panel never inherits workspace predicates or renders workspace tags.
+It shows entities on the current page, or searches text and face candidates across
+all accessible data. Source, actor, API key, assignment and date settings remain
+in the URL for navigation back to filtered lists; invalid workspace values do not
+block the scan. The page toolbar's explicit annotation display setting uses
+`page_link_state`, independently of the workspace's `link_state`.
+
+Open `scan-page-entities`: Zora and her reference faces remain visible despite
+retained Verified/reviewer/OCR-key criteria. Open `scan-global-text`: searching
+**Orion** finds **Orion Portrait** in `preview-nlk` without selecting a face.
+Clear the search to return to page identities. The stable
+`global-discovery-scan-excluded` link retains attribution that would exclude its
+reference in workspace browsing; the scan now shows that reference normally.
+Adding `page=invalid` keeps the page panel and global search usable.
+
+The additive document/page and two faces have new stable keys and generated local
+media, reusing the existing reference model and duplicate identity. Reruns preserve
+reviewed assignments, identity edits, processing times and checkpoints. Integration
+coverage resolves both crops, finds the global candidates through repositories,
+shows how source predicates exclude them, and verifies a second seed preserves edits.
+
+## Deactivated reviewer attribution (#66)
+
+Bearer requests authorize from signed token claims, including the persisted
+user UUID (`uid`). Disabling a user stops login and refresh. An access token
+already issued keeps writing as that user until it expires. The
+**Deactivated reviewer ledger** (`preview-mzk`) shows the result: its OCR mention
+links **Olga Expiry** and is attributed to **Preview former reviewer**. This user
+is persisted inactive, has no API key and holds no usable credentials.
+
+Open the `deactivated-reviewer` link. **Modified by: Preview former reviewer**
+finds Olga through that mention. The editor filter still offers the
+inactive user, and the mention stays attributed after a reviewer verifies it.
+
+The seed creates the user inactive with stable fixture keys and no checkpoint
+upgrade. Identity resolution never changes `is_active`, so reruns preserve an
+administrator's later reactivation or deactivation. Reruns also keep reviewer
+edits, assignments and modification times. Integration tests check the
+attribution, the user and touch filters, edit preservation and both
+`is_active` states across reruns. A separate HTTP test against migrated
+PostgreSQL runs login, JWT-only requests, a mutation, deactivation, use of the
+existing token, rejected login/refresh and expiry. Authentication must enter no
+database context after login.

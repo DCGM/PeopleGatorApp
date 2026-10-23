@@ -104,6 +104,7 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     createAndAssign: vi.fn<() => void>(),
     error: ref(null),
     annotationsLoading: ref(false),
+    referenceFace: ref(null),
     faces: ref([]),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
@@ -226,21 +227,35 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('shows and removes shared scope in the page workspace without losing selection', async () => {
-    await router.push(
-      '/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a',
-    )
-    const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
-    await flushPromises()
-    const sidebar = wrapper.get('.workspace-sidebar')
-    await sidebar.get('button[aria-label="Remove Library: preview-mzk"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.library).toBeUndefined()
-    expect(router.currentRoute.value.query.link_state).toEqual(['manual'])
-    expect(router.currentRoute.value.query.person).toBe('face-a')
-    expect(sidebar.get('[aria-label="Active filters"]').text()).toContain('Link state: Manual')
-    wrapper.unmount()
-  })
+  it.each(['', '&page=bad-page&touched_from=bad-date'])(
+    'keeps workspace filters out of the scan sidebar and its page toolbar (%s)',
+    async (extra) => {
+      await router.push(
+        '/libraries/library/documents/document/pages/page?library=preview-mzk&link_state=manual&person=face-a&candidate_text=Ada' +
+          extra,
+      )
+      const original = { ...router.currentRoute.value.query }
+      const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
+      await flushPromises()
+      const sidebar = wrapper.get('.workspace-sidebar')
+      expect(sidebar.find('[aria-label="Active filters"]').exists()).toBe(false)
+      expect(sidebar.find('[role="alert"]').exists()).toBe(false)
+      expect(sidebar.text()).not.toContain('Candidate source:')
+      expect(sidebar.text()).not.toContain('Clear all filters')
+      expect(
+        sidebar.get('input[placeholder="Search by name or alias"]').attributes('disabled'),
+      ).toBeUndefined()
+      expect(router.currentRoute.value.query).toEqual(original)
+      const tools = wrapper.get('[aria-label="Scan tools"]')
+      expect(tools.get('button[aria-label="Manual"]').attributes('data-state')).toBe('off')
+      await tools.get('button[aria-label="Verified"]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.query).toMatchObject(original)
+      expect(router.currentRoute.value.query.page_link_state).toEqual(['verified'])
+      expect(router.currentRoute.value.query.link_state).toBe('manual')
+      wrapper.unmount()
+    },
+  )
 
   it('links breadcrumbs to scoped scan lists and preserves scope when searching', async () => {
     const archive = '00000000-0000-4000-8000-00000000000d'

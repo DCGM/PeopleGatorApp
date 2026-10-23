@@ -15,7 +15,7 @@ export const PAGE_GALLERY_BATCH_SIZE = 12
 export const PAGE_GALLERY_THUMBNAIL_WIDTH = 256
 
 /** Selections that only make sense on the page where they were made. */
-const PAGE_SPECIFIC_QUERY = ['person', 'selectedPerson', 'line'] as const
+const PAGE_SPECIFIC_QUERY = ['person', 'selectedPerson', 'line', 'page_link_state'] as const
 
 export type PageGalleryItem = {
   sourceId: string

@@ -155,22 +155,25 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
 
     actors: dict[str, AuthContext] = {}
     registered_keys: dict[str, UUID] = {}
-    for key, label in (
-        ("reviewer", "Preview reviewer"),
-        ("importer", "Preview face importer"),
-        ("ocr", "Preview OCR linker"),
-        ("curator", "Preview curator"),
+    for key, label, active in (
+        ("reviewer", "Preview reviewer", True),
+        ("importer", "Preview face importer", True),
+        ("ocr", "Preview OCR linker", True),
+        ("curator", "Preview curator", True),
+        # Issue #66: an inactive user's earlier bearer writes keep their
+        # attribution; get_or_create never reactivates an existing record.
+        ("former", "Preview former reviewer", False),
     ):
         user = await database.users.get_or_create(
             UserCreateRequest(
                 display_name=label,
-                is_active=True,
+                is_active=active,
                 external_subject=key,
                 external_issuer="urn:people-gator:preview-seed",
             )
         )
         api_key_id = None
-        if key != "reviewer":
+        if key not in {"reviewer", "former"}:
             registered = await database.api_keys.get_or_create(
                 APIKeyCreateRequest(
                     identifier="preview-seed-" + key,
@@ -182,7 +185,6 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             registered_keys[key] = api_key_id
         actors[key] = AuthContext(
             user_id=user.user_id,
-            user=user,
             api_key_id=api_key_id,
             authentication_method="api_key" if api_key_id else "bearer",
             scopes={"people-gator:ingest", "people-gator:annotate"},
@@ -465,7 +467,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 await database.entities.patch(person_id, EntityPatchRequest(
                     short_description="Curated after the reviewer linked her face.",
                 ), AuthContext(
-                    user_id=curator.user_id, user=curator.user, api_key_id=None,
+                    user_id=curator.user_id, api_key_id=None,
                     authentication_method="bearer", scopes=curator.scopes,
                 ))
             edit.complete = True
@@ -493,6 +495,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
+    discovery_page = next(item for item in PAGES if item.key == "discovery-1")
+    discovery_document = next(item for item in DOCUMENTS if item.key == discovery_page.document)
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -502,6 +506,44 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Workspace criteria stay in navigation; the scan panel uses page membership or global search.
+            "global-discovery-scan": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
+                    "library": "preview-mzk", "document": documents["discovery"],
+                    "page": pages["discovery-1"],
+                })
+            ),
+            "global-discovery-scan-excluded": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "candidate_mode": "face", "person": active_faces.get("discovery-reference-0", ""),
+                    "library": "preview-mzk", "touched_by": actors["reviewer"].user_id,
+                })
+            ),
+            **{
+                key: (
+                    f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                    f"/pages/{discovery_page.page_id}?" + urlencode({
+                        "candidate_mode": "page", "library": "preview-mzk",
+                        "link_state": "verified", "touched_by": actors["reviewer"].user_id,
+                        "api_key": registered_keys["ocr"], **extra,
+                    })
+                )
+                for key, extra in (
+                    ("scan-page-entities", {}),
+                    ("scan-global-text", {"candidate_text": "Orion"}),
+                )
+            },
+            "global-discovery": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+                "discovery_annotations": "faces", "library": "preview-mzk",
+                "document": documents["discovery"], "page": pages["discovery-1"],
+                "link_state": "verified", "touched_by": actors["reviewer"].user_id,
+                "api_key": registered_keys["ocr"],
+            }),
+
             **{
                 f"{key}-crop": f"/api/v1/faces/{active_faces[key]}/aligned_crop?max_width=256"
                 for key in ("alignment-coincident", "alignment-valid") if key in active_faces
@@ -554,6 +596,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Issue #52: one configuration, each view's own latest change.
             # Documents → People keeps the curator selection: the ledger
             # document, Ivo (curator's key) and Hana (curator's own edit).
+            # Issue #66: Olga's mention stays attributed to a now-inactive
+            # reviewer, who is still offered as an editor filter.
+            "deactivated-reviewer": "/people?" + urlencode({
+                "touched_by": actors["former"].user_id,
+            }),
             "shared-filters-documents": "/documents?" + urlencode({
                 "touched_by": actors["curator"].user_id,
             }),
@@ -606,12 +653,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "scan-toolbar-union": (
                 f"/libraries/{toolbar_union_page.library}/documents/{toolbar_union_page.document_id}"
                 f"/pages/{toolbar_union_page.page_id}?"
-                + urlencode({"link_state": ["automatic", "manual"]}, doseq=True)
+                + urlencode({"page_link_state": ["automatic", "manual"]}, doseq=True)
             ),
             "scan-toolbar-assigned": (
                 f"/libraries/{statistics_page.library}/documents/{statistics_page.document_id}"
                 f"/pages/{statistics_page.page_id}?"
-                + urlencode({"link_state": ["automatic", "manual", "verified"]}, doseq=True)
+                + urlencode({"page_link_state": ["automatic", "manual", "verified"]}, doseq=True)
             ),
             "viewport-focus": focus_path,
             # Reuse Ada's two linked OCR lines; no persisted fixtures need changing.

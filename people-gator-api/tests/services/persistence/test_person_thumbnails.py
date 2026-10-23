@@ -36,7 +36,7 @@ async def portraits(migrated_postgres):
             identifier="portrait-reviewer-" + uuid.uuid4().hex,
             display_name="Portrait review key", user_id=user.user_id,
         ))
-        actor = AuthContext(user_id=user.user_id, user=user, api_key_id=key.api_key_id,
+        actor = AuthContext(user_id=user.user_id, api_key_id=key.api_key_id,
                             authentication_method="api_key", scopes=set())
         entities = await db.entities.create_batch([
             EntityCreateRequest(entity_type=kind, name=name)

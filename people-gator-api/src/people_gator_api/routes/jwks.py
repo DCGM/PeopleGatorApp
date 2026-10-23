@@ -10,6 +10,7 @@ from people_gator_api.services.auth_service import (
     TokenDependency,
     refresh_access_token,
 )
+from people_gator_api.services.database_service import DatabaseContextDependency
 from people_gator_api.services.jwk_service import TOKEN_ISSUER, get_key_set
 
 router = APIRouter(tags=["jwks"])
@@ -51,10 +52,12 @@ async def get_token(token: TokenDependency) -> TokenResponse:
 
 
 @router.post("/token/refresh", response_model=TokenResponse)
-async def refresh_token(request: RefreshTokenRequest) -> TokenResponse:
+async def refresh_token(
+    request: RefreshTokenRequest, database_context: DatabaseContextDependency,
+) -> TokenResponse:
     """Refresh an access token using a valid refresh token.
     
     The refresh token must be valid and its session must still be active.
     Returns a new access token with the same scopes as the original.
     """
-    return await refresh_access_token(request.refresh_token)
+    return await refresh_access_token(request.refresh_token, database_context)
