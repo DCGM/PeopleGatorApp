@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (31, 57, 38)
-    assert len(result.documents) == 39 and len(result.pages) == 75
+    assert await counts(database) == (31, 61, 43)
+    assert len(result.documents) == 41 and len(result.pages) == 77
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (31, 57, 38)
+    assert await counts(database) == (31, 61, 43)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (31, 57, 38)
+    assert await counts(database) == (31, 61, 43)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (32, 57, 38)
+    assert await counts(database) == (32, 61, 43)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 31 and len(result.faces) == 57
-    assert await counts(database) == (31, 57, 38)
+    assert len(result.entities) == 31 and len(result.faces) == 61
+    assert await counts(database) == (31, 61, 43)
 
 
 
@@ -3040,3 +3040,58 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
         monkeypatch.setattr(jwk_service, "_now", lambda: expires + 1)
         monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
         assert (await client.get("/whoami", headers=bearer)).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.search import SearchDocumentsRequest
+    from sqlalchemy import event
+
+    database, filesystem, engine = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    statements = []
+    def capture(conn, cursor, statement, params, context, executemany):
+        statements.append(statement)
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        listed = await database.sources.list_documents(DocumentListRequest(limit=100))
+        list_queries = len(statements)
+        statements.clear()
+        await database.sources.list_documents(DocumentListRequest(limit=1))
+        assert len(statements) == list_queries  # No per-document query cascade.
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    document = next(item for item in listed.items if item.source_id == seeded.documents["table-ledger"])
+    def summary(item):
+        return (item.registered_page_count, item.linked_entity_count, item.entity_link_stats)
+    assert document.registered_page_count == 2
+    assert document.linked_entity_count == 2
+    assert document.entity_link_stats.faces.model_dump() == dict(total=4, automatic=1, manual=1, verified=1, unassigned=1)
+    assert document.entity_link_stats.mentions.model_dump() == dict(total=5, automatic=2, manual=1, verified=1, unassigned=1)
+    assert document.last_touched_by_user_id == seeded.users["importer"]
+    assert document.last_touched_by_api_key_id == seeded.api_keys["importer"]
+    assert document.last_touched_by_user_name == "Preview face importer"
+    assert document.last_touched_by_api_key_name == "Preview face importer"
+    for key in ("table-mirror", "empty-document"):
+        empty = next(item for item in listed.items if item.source_id == seeded.documents[key])
+        assert empty.registered_page_count == empty.linked_entity_count == 0
+        assert empty.entity_link_stats.faces.total == empty.entity_link_stats.mentions.total == 0
+        assert empty.last_touched_at is None
+    filtered = await database.sources.list_documents(DocumentListRequest(
+        limit=100, filter_=DocumentListFilter(entity_link_state=["verified"], library=["preview-table"]),
+    ))
+    assert [item.source_id for item in filtered.items] == [document.source_id]
+    assert summary(filtered.items[0]) == summary(document)
+    scored = await database.sources.search_documents(SearchDocumentsRequest(limit=100, query=QueryBase(text=["Document table ledger"])))
+    found = next(item for item in scored.items if item.source_id == document.source_id)
+    assert summary(found) == summary(document)
+    assert found.last_touched_by_user_name == document.last_touched_by_user_name
+    reviewer = next(item for item in listed.items if item.source_id == seeded.documents["issue8-direct"])
+    assert reviewer.last_touched_by_user_name == "Preview reviewer"
+    assert reviewer.last_touched_by_api_key_id is reviewer.last_touched_by_api_key_name is None
+    # Rerunning adds nothing and does not retouch the aggregate attribution.
+    await preview.seed_preview(database, filesystem)
+    again = await database.sources.get_document(document.source_id)
+    assert summary(again) == summary(document)
+    assert again.last_touched_at == document.last_touched_at

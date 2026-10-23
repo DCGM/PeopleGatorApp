@@ -392,6 +392,10 @@ class GenericSourceResponse(SourceResponseBase):
 
     model_config = ConfigDict(extra="forbid")
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
+    registered_page_count: int | None = Field(default=None, ge=0, description="All registered pages in this library/document, independent of evidence filters.")
+    linked_entity_count: int | None = Field(default=None, ge=0, description="Distinct assigned entities across direct and page faces/mentions.")
+    last_touched_by_user_name: str | None = None
+    last_touched_by_api_key_name: str | None = None
     name: str | None = None
     library: str | None = Field(
         default=None,
@@ -477,6 +481,10 @@ class DocumentResponse(SourceResponseBase):
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     library: str = Field(min_length=1)
     document_id: uuid.UUID
+    registered_page_count: int | None = Field(default=None, ge=0, description="All registered pages in this library/document, independent of evidence filters.")
+    linked_entity_count: int | None = Field(default=None, ge=0, description="Distinct assigned entities across direct and page faces/mentions.")
+    last_touched_by_user_name: str | None = None
+    last_touched_by_api_key_name: str | None = None
     name: str | None = None
 
     @classmethod
@@ -497,6 +505,10 @@ class DocumentResponse(SourceResponseBase):
             last_touched_by_api_key_id=generic.last_touched_by_api_key_id,
             library=generic.library,
             document_id=generic.document_id,
+            registered_page_count=generic.registered_page_count,
+            linked_entity_count=generic.linked_entity_count,
+            last_touched_by_user_name=generic.last_touched_by_user_name,
+            last_touched_by_api_key_name=generic.last_touched_by_api_key_name,
             name=generic.name,
         )
 

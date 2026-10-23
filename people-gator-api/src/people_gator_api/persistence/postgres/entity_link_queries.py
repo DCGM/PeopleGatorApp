@@ -2,7 +2,7 @@
 
 from sqlalchemy import select, union_all, or_, exists, func
 from people_gator_api.schemas.entity_links import EntityLinkStats
-from .models import Source, Document, Page, Entity, ImageOccurrence, TextMention
+from .models import Source, Document, Page, Entity, ImageOccurrence, TextMention, User, APIKey
 
 
 def source_scope():
@@ -179,3 +179,45 @@ async def load_link_stats(session, objects, *, entities=False):
             counts.total += count
     for obj in objects:
         obj._entity_link_stats = stats[obj.id]
+    if not entities:
+        await load_document_summaries(session, objects)
+
+
+async def load_document_summaries(session, objects):
+    """Three bounded batch queries, with no page/evidence Cartesian product."""
+    documents = {obj.id: obj for obj in objects if isinstance(obj, Document)}
+    if not documents:
+        return
+    for obj in documents.values():
+        obj._document_summary = {"registered_page_count": 0, "linked_entity_count": 0}
+    document, page = Document.__table__.c, Page.__table__.c
+    pages = (
+        select(document.id, func.count(page.id))
+        .select_from(Document.__table__.join(Page.__table__,
+            (page.library == document.library) & (page.document_id == document.document_id)))
+        .where(document.id.in_(documents)).group_by(document.id)
+    )
+    for owner, count in await session.execute(pages):
+        documents[owner]._document_summary["registered_page_count"] = count
+    scope = source_scope()
+    evidence = union_all(
+        select(ImageOccurrence.source_id, ImageOccurrence.entity_id).where(ImageOccurrence.occurrence_type == "face"),
+        select(TextMention.source_id, TextMention.entity_id),
+    ).subquery("linked_evidence")
+    linked = (
+        select(scope.c.owner_id, func.count(func.distinct(evidence.c.entity_id)))
+        .select_from(scope).join(evidence, evidence.c.source_id == scope.c.source_id)
+        .where(scope.c.owner_id.in_(documents)).group_by(scope.c.owner_id)
+    )
+    for owner, count in await session.execute(linked):
+        documents[owner]._document_summary["linked_entity_count"] = count
+    attribution = (
+        select(Source.id, User.display_name, APIKey.display_name)
+        .outerjoin(User, User.id == Source.last_touched_by_user_id)
+        .outerjoin(APIKey, APIKey.id == Source.last_touched_by_api_key_id)
+        .where(Source.id.in_(documents))
+    )
+    for owner, user, key in await session.execute(attribution):
+        documents[owner]._document_summary.update(
+            last_touched_by_user_name=user, last_touched_by_api_key_name=key,
+        )

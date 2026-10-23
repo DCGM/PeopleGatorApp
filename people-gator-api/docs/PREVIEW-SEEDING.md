@@ -742,3 +742,21 @@ attribution, the user and touch filters, edit preservation and both
 PostgreSQL runs login, JWT-only requests, a mutation, deactivation, use of the
 existing token, rejected login/refresh and expiry. Authentication must enter no
 database context after login.
+
+## Document table (#57)
+
+Open `/documents?view=table&library=preview-table` (the `document-table` manifest
+entry). **Document table ledger** has two registered pages, four faces and five
+mentions including one direct document mention: three automatic, two verified,
+two manual and two unassigned annotations, linked to just two distinct entities.
+Its last change is attributed to Preview face importer and its registered key.
+The same archive ID in `preview-table-mirror` has no pages or evidence; Document
+awaiting scans also demonstrates zero counts and unknown modification history.
+Direct annotation ledger demonstrates a user-only modification without a key.
+
+Switch Items/Table without changing search, filters or server sorting. Columns
+can hide each data field, including Document name, and restore defaults; Open
+always retains document navigation. The table uses document-wide counts even
+when evidence filters select matching documents. Scroll horizontally to reach
+all fields and vertically to append cursor batches; Load more and Retry remain
+keyboard accessible. No preview page/image requests are made in Table.

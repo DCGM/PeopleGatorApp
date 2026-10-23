@@ -128,6 +128,8 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("table-ledger", "preview-table", "Document table ledger"),
+    Document("table-mirror", "preview-table-mirror", "Document table mirror", "table-ledger"),
     Document("provenance-a", "preview-mzk", "Annotation review ledger"),
     Document("provenance-b", "preview-nlk", "Annotation review correspondence"),
     Document("focus", "preview-mzk", "Viewport focus practice"),
@@ -211,6 +213,14 @@ PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
+    Page("table-1", "table-ledger", 1,
+         (Face("table-auto", "link-ada", 0, 2), Face("table-manual", "link-emil", 1, 3, "manual")),
+         (Mention("table-auto-mention", "link-ada", "Ada Review indexed the document table."),
+          Mention("table-manual-mention", "link-emil", "Emil Review curated the table.", "manual"))),
+    Page("table-2", "table-ledger", 2,
+         (Face("table-verified", "link-ada", 0, 2, "verified"), Face("table-unassigned", None, 1, 3)),
+         (Mention("table-verified-mention", "link-ada", "Ada Review verified this table.", "verified"),
+          Mention("table-unassigned-mention", "link-emil", "Emil Review awaits table assignment.", None))),
     Page("provenance-a-1", "provenance-a", 1,
         (Face("provenance-auto", "provenance-review", 0, 1),
          Face("provenance-authority", "provenance-review", 1, 1, "verified")),
