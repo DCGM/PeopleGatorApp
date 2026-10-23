@@ -13,13 +13,17 @@ import {
 import FilterMultiSelect from './FilterMultiSelect.vue'
 import FilterDateTimePicker from './FilterDateTimePicker.vue'
 
-export type WorkspaceFilterDraft = { key: string; values: string[]; date: string }
+export type WorkspaceFilterSelection = { key: string; values: string[]; date: string }
 const props = defineProps<{
-  fields: { key: string; label: string; options: FilterOption[] }[]
+  fields: { key: string; label: string; options: FilterOption[]; selected: string[] }[]
+  from: string
+  to: string
 }>()
-const emit = defineEmits<{ add: [filter: WorkspaceFilterDraft] }>()
+const emit = defineEmits<{ change: [filter: WorkspaceFilterSelection] }>()
 const adding = ref(false)
 const typeOpen = ref(false)
+const pickerOpen = ref(false)
+const openValueOnTypeClose = ref(false)
 const filterType = ref<string>()
 const values = ref<string[]>([])
 const search = ref('')
@@ -27,57 +31,61 @@ const date = ref('')
 const addButton = useTemplateRef<ComponentPublicInstance>('addButton')
 const row = useTemplateRef<HTMLElement>('row')
 let valueOpen = false
-const submitOnClose = ref(true)
 let restoreFocus = true
 const field = computed(() => props.fields.find((field) => field.key === filterType.value))
-const canAdd = computed(
-  () => !!filterType.value && (field.value ? values.value.length > 0 : !!date.value),
-)
 
 function resetValue() {
   valueOpen = false
+  pickerOpen.value = false
   values.value = []
   search.value = ''
   date.value = ''
 }
 function start() {
+  openValueOnTypeClose.value = false
   filterType.value = undefined
   resetValue()
   adding.value = true
   typeOpen.value = true
 }
 async function close(focus = true) {
+  openValueOnTypeClose.value = false
   adding.value = false
   typeOpen.value = false
   resetValue()
   await nextTick()
   if (focus) addButton.value?.$el.focus()
 }
-function add() {
-  if (!canAdd.value || !filterType.value) return
-  emit('add', { key: filterType.value, values: [...values.value], date: date.value })
-  void close(restoreFocus)
+function selectType() {
+  resetValue()
+  values.value = [...(field.value?.selected ?? [])]
+  date.value = filterType.value === 'from' ? props.from : filterType.value === 'to' ? props.to : ''
+}
+function apply() {
+  if (!filterType.value) return
+  emit('change', { key: filterType.value, values: [...values.value], date: date.value })
 }
 function valueOpenChange(open: boolean) {
   if (open) {
     valueOpen = true
-    submitOnClose.value = true
     restoreFocus = true
   } else if (valueOpen) {
     valueOpen = false
-    if (submitOnClose.value) add()
+    if (!typeOpen.value && !openValueOnTypeClose.value) void close(restoreFocus)
   }
 }
 function outsideValue(event: Event) {
   if (event.defaultPrevented) return
   const target = (event as CustomEvent<{ originalEvent: Event }>).detail.originalEvent.target
-  // Changing type or clicking Cancel must not apply the draft first.
-  if (target instanceof Node && row.value?.contains(target)) submitOnClose.value = false
-  restoreFocus = false
+  restoreFocus = target instanceof Node && !!row.value?.contains(target)
 }
-function typeOpenChange(open: boolean) {
-  // Opening another dropdown moves focus into its portal before pointer dismissal.
-  if (open) submitOnClose.value = false
+async function afterTypeClose(event: Event) {
+  if (!openValueOnTypeClose.value || !adding.value || !filterType.value) return
+  event.preventDefault()
+  openValueOnTypeClose.value = false
+  // Let the type dropdown release focus before opening the value picker.
+  await nextTick()
+  pickerOpen.value = true
 }
 </script>
 
@@ -100,12 +108,7 @@ function typeOpenChange(open: boolean) {
       role="group"
       aria-label="New filter"
     >
-      <Select
-        v-model="filterType"
-        v-model:open="typeOpen"
-        @update:open="typeOpenChange"
-        @update:model-value="resetValue"
-      >
+      <Select v-model="filterType" v-model:open="typeOpen" @update:model-value="selectType">
         <SelectTrigger
           aria-label="Filter type"
           :title="
@@ -124,12 +127,16 @@ function typeOpenChange(open: boolean) {
             }}</span>
           </SelectValue>
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem v-for="field in fields" :key="field.key" :value="field.key">{{
-            field.label
-          }}</SelectItem>
-          <SelectItem value="from">Modified from</SelectItem>
-          <SelectItem value="to">Modified to</SelectItem>
+        <SelectContent @close-auto-focus="afterTypeClose">
+          <SelectItem
+            v-for="field in fields"
+            :key="field.key"
+            :value="field.key"
+            @select="openValueOnTypeClose = true"
+            >{{ field.label }}</SelectItem
+          >
+          <SelectItem value="from" @select="openValueOnTypeClose = true">Modified from</SelectItem>
+          <SelectItem value="to" @select="openValueOnTypeClose = true">Modified to</SelectItem>
         </SelectContent>
       </Select>
       <Button
@@ -145,12 +152,14 @@ function typeOpenChange(open: boolean) {
         v-else-if="field"
         :key="field.key"
         v-model="values"
+        v-model:open="pickerOpen"
         v-model:search="search"
         :label="field.label"
         placeholder="Value"
+        :show-done="false"
+        @update:model-value="apply"
         @open-change="valueOpenChange"
         @interact-outside="outsideValue"
-        @escape="submitOnClose = false"
         :options="
           field.options.filter((option) =>
             option.label.toLowerCase().includes(search.toLowerCase()),
@@ -162,11 +171,13 @@ function typeOpenChange(open: boolean) {
         v-else
         :key="filterType"
         v-model="date"
+        v-model:open="pickerOpen"
         :label="filterType === 'from' ? 'Modified from' : 'Modified to'"
         :show-label="false"
+        :show-done="false"
+        @update:model-value="apply"
         @open-change="valueOpenChange"
         @interact-outside="outsideValue"
-        @escape="submitOnClose = false"
         class="min-w-0 max-w-full shrink"
       />
       <Button variant="ghost" size="sm" aria-label="Cancel filter" @click="close()">Cancel</Button>

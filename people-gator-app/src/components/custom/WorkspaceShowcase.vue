@@ -5,7 +5,7 @@ import { useDark, useToggle } from '@vueuse/core'
 import { SelectTrigger as WorkspaceModeTrigger } from 'reka-ui'
 import WorkspaceSidebarBrand from './WorkspaceSidebarBrand.vue'
 import TopBar from './TopBar.vue'
-import WorkspaceFilterBuilder, { type WorkspaceFilterDraft } from './WorkspaceFilterBuilder.vue'
+import WorkspaceFilterBuilder, { type WorkspaceFilterSelection } from './WorkspaceFilterBuilder.vue'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import WorkspaceSidebarToggle from './WorkspaceSidebarToggle.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -111,9 +111,9 @@ function clear() {
   from.value = ''
   to.value = ''
 }
-function addFilter(filter: WorkspaceFilterDraft) {
+function updateFilter(filter: WorkspaceFilterSelection) {
   const field = fields.find((field) => field.key === filter.key)
-  if (field) field.selected = [...new Set([...field.selected, ...filter.values])]
+  if (field) field.selected = [...filter.values]
   else if (filter.key === 'from') from.value = filter.date
   else if (filter.key === 'to') to.value = filter.date
 }
@@ -163,7 +163,12 @@ function addFilter(filter: WorkspaceFilterDraft) {
             <div class="min-w-0 group-data-[collapsible=icon]:hidden">
               <template v-if="mode === 'local'">
                 <div class="min-w-0 py-2">
-                  <WorkspaceFilterBuilder :fields="fields" @add="addFilter" />
+                  <WorkspaceFilterBuilder
+                    :fields="fields"
+                    :from="from"
+                    :to="to"
+                    @change="updateFilter"
+                  />
                 </div>
                 <div v-if="filters.length" class="min-w-0 px-2 pb-2">
                   <ActiveFilters

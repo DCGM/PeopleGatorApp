@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, useId, watch } from 'vue'
 import { CalendarIcon } from '@lucide/vue'
 import { parseDate } from '@internationalized/date'
 import type { DateValue } from 'reka-ui'
@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 const props = withDefaults(
-  defineProps<{ label: string; invalid?: boolean; showLabel?: boolean }>(),
-  { showLabel: true },
+  defineProps<{ label: string; invalid?: boolean; showLabel?: boolean; showDone?: boolean }>(),
+  { showLabel: true, showDone: true },
 )
 const value = defineModel<string>({ required: true })
 const emit = defineEmits<{
@@ -18,7 +18,7 @@ const emit = defineEmits<{
   interactOutside: [event: Event]
   escape: []
 }>()
-const open = ref(false)
+const open = defineModel<boolean>('open', { default: false })
 watch(open, (value) => emit('openChange', value), { flush: 'sync' })
 const timeId = useId()
 
@@ -100,7 +100,9 @@ function clear() {
             <Button type="button" variant="ghost" size="sm" :disabled="!value" @click="clear"
               >Clear</Button
             >
-            <Button type="button" variant="outline" size="sm" @click="open = false">Done</Button>
+            <Button v-if="showDone" type="button" variant="outline" size="sm" @click="open = false"
+              >Done</Button
+            >
           </div>
         </div>
       </PopoverContent>

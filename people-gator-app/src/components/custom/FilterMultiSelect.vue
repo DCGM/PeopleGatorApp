@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { watch } from 'vue'
 import { Check, ChevronsUpDown } from '@lucide/vue'
 import type { FilterOption } from '@/query/people-filter-options'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import {
 defineProps<{
   label: string
   placeholder?: string
+  showDone?: boolean
   options: FilterOption[]
   isLoading?: boolean
   error?: unknown
@@ -34,7 +35,7 @@ const emit = defineEmits<{
   interactOutside: [event: Event]
   escape: []
 }>()
-const open = ref(false)
+const open = defineModel<boolean>('open', { default: false })
 watch(open, (value) => emit('openChange', value), { flush: 'sync' })
 
 function updateSelection(value: unknown) {
@@ -103,7 +104,7 @@ function updateSelection(value: unknown) {
           </ComboboxGroup>
         </template>
       </ComboboxViewport>
-      <div class="flex justify-between p-1">
+      <div v-if="hasMore || showDone !== false" class="flex justify-between p-1">
         <Button
           v-if="hasMore"
           type="button"
@@ -114,7 +115,13 @@ function updateSelection(value: unknown) {
         >
           {{ isLoadingMore ? 'Loading…' : 'Load more options' }}
         </Button>
-        <Button type="button" variant="ghost" size="sm" class="ml-auto" @click="open = false"
+        <Button
+          v-if="showDone !== false"
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="ml-auto"
+          @click="open = false"
           >Done</Button
         >
       </div>
