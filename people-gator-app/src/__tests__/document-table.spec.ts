@@ -75,7 +75,6 @@ describe('document table', () => {
     const { wrapper } = await render()
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.findAll('tbody td').map((cell) => cell.text())).toEqual([
-      'Open',
       'Document archive-id',
       'Archive',
       '2',
@@ -87,6 +86,8 @@ describe('document table', () => {
       '2',
       '1',
     ])
+    expect(wrapper.findAll('th')[0]!.text()).toBe('Document name')
+    expect(wrapper.findAll('tbody a')).toHaveLength(1)
     const link = wrapper.get('tbody a')
     expect(link.attributes('href')).toBe(
       '/scans?library=Archive&link_state=verified&document=source-a',
@@ -94,7 +95,7 @@ describe('document table', () => {
     expect(link.attributes('aria-label')).toContain('archive-id')
     expect(wrapper.get('[role="region"]').attributes('tabindex')).toBe('0')
   })
-  it('shows and hides every data field including name, retains Open and restores defaults', async () => {
+  it('shows and hides every data field including name, retains identity navigation and restores defaults', async () => {
     const { wrapper, visibility } = await render()
     await wrapper.get('button').trigger('click')
     await flushPromises()
@@ -129,14 +130,39 @@ describe('document table', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     expect(visibility.value).toEqual(defaultDocumentColumns())
   })
+  it('uses the document ID link when the name is hidden without an extra column', async () => {
+    const { wrapper, router } = await render()
+    await wrapper.setProps({
+      visibility: { ...defaultDocumentColumns(), name: false, document_id: true },
+    })
+    expect(wrapper.findAll('th').map((cell) => cell.text())).not.toContain('Document')
+    expect(wrapper.findAll('tbody a')).toHaveLength(1)
+    expect(wrapper.get('tbody a').text()).toBe('archive-id')
+    await wrapper.get('tbody a').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({
+      library: ['Archive'],
+      link_state: ['verified'],
+      document: 'source-a',
+    })
+  })
+  it('opens a named document from the first cell', async () => {
+    const { wrapper, router } = await render()
+    await wrapper.setProps({ documents: [{ ...documents[0]!, name: 'Named ledger' }] })
+    expect(wrapper.get('tbody td a').text()).toBe('Named ledger')
+    await wrapper.get('tbody td a').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('document-search')
+    expect(router.currentRoute.value.query.document).toBe('source-a')
+  })
   it('loads just one thumbnail when First page is enabled and reuses it across toggles', async () => {
     const { wrapper, visibility } = await render()
     expect(media.image).not.toHaveBeenCalled()
     expect(wrapper.find('img').exists()).toBe(false)
     await wrapper.get('button').trigger('click')
     await flushPromises()
-    const toggle = document
-      .querySelector('label')!
+    const toggle = [...document.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('First page'))!
       .querySelector('[role="checkbox"]') as HTMLElement
     expect(toggle.closest('label')?.textContent).toContain('First page')
     toggle.click()

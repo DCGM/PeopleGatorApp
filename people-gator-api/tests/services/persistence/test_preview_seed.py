@@ -3146,3 +3146,30 @@ async def test_document_table_sort_example_uses_server_cursor_order(seed_target)
     assert [item.name for item in [*first.items, *second.items]] == [
         f"Pagination ledger {i:02}" for i in range(14, 0, -1)
     ]
+
+
+@pytest.mark.asyncio
+async def test_document_table_unnamed_link_resolves_and_preserves_identity(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    demo = parse_qs(urlsplit(seeded.filter_examples["document-table-unnamed"]).query)
+    assert demo["view"] == ["table"]
+    result = await database.sources.list_documents(DocumentListRequest(
+        limit=12, filter_=DocumentListFilter(source_id=demo["document"]),
+    ))
+    assert len(result.items) == 1
+    document = result.items[0]
+    assert document.source_id == seeded.documents["legacy-document"]
+    assert not document.name
+    assert document.document_id and document.library == "preview-mzk"
+    assert document.registered_page_count > 0 and document.first_page_source_id
+    page = await database.sources.get_page(document.first_page_source_id)
+    assert (page.library, page.document_id) == (document.library, document.document_id)
+    await preview.seed_preview(database, filesystem)
+    reviewed = await database.sources.get_document(document.source_id)
+    assert reviewed.name is None
+    assert reviewed.source_id == document.source_id
+    assert reviewed.document_id == document.document_id
+    assert reviewed.first_page_source_id == document.first_page_source_id

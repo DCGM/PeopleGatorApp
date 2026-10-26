@@ -72,21 +72,10 @@ const link = (document: DocumentResponse, text: string) =>
   )
 const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   {
-    id: 'open',
+    id: 'identity',
     header: 'Document',
     enableHiding: false,
-    cell: ({ row }) =>
-      link(
-        row.original,
-        visibility.value.name === false && visibility.value.document_id !== true
-          ? `${row.original.library} · ${row.original.document_id}`
-          : 'Open',
-      ),
-  },
-  {
-    id: 'first_page',
-    header: 'First page',
-    cell: ({ row }) => h(DocumentFirstPage, { document: row.original }),
+    cell: ({ row }) => link(row.original, `${row.original.library} · ${row.original.document_id}`),
   },
   {
     id: 'name',
@@ -94,8 +83,17 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     accessorFn: documentTitle,
     cell: ({ row }) => link(row.original, documentTitle(row.original)),
   },
+  {
+    id: 'first_page',
+    header: 'First page',
+    cell: ({ row }) => h(DocumentFirstPage, { document: row.original }),
+  },
   { accessorKey: 'library', header: 'Library' },
-  { accessorKey: 'document_id', header: 'Document ID' },
+  {
+    accessorKey: 'document_id',
+    header: 'Document ID',
+    cell: ({ row }) => link(row.original, row.original.document_id),
+  },
   {
     accessorKey: 'registered_page_count',
     header: 'Pages',
@@ -141,7 +139,12 @@ const table = useTable({
   columns,
   data: computed(() => props.documents),
   getRowId: (row: DocumentResponse) => row.source_id,
-  state: computed(() => ({ columnVisibility: visibility.value })),
+  state: computed(() => ({
+    columnVisibility: {
+      ...visibility.value,
+      identity: visibility.value.name === false && visibility.value.document_id !== true,
+    },
+  })),
   onColumnVisibilityChange: (next) => {
     visibility.value = typeof next === 'function' ? next(visibility.value) : next
   },

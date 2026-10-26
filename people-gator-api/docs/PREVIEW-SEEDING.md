@@ -756,9 +756,13 @@ awaiting scans also demonstrates zero counts and unknown modification history.
 Direct annotation ledger demonstrates a user-only modification without a key.
 
 Switch Items/Table without changing search, filters or server sorting. Columns
-can hide each data field, including Document name, and restore defaults; Open
-always retains document navigation. The table uses document-wide counts even
-when evidence filters select matching documents. Scroll horizontally to reach
+can hide each data field, including Document name, and restore defaults. Document
+name is the first default column and links to the document page. There is no
+separate Open column. With the name hidden, Document ID links to the same page;
+when both are hidden, a compact library/ID link keeps navigation available.
+The `document-table-unnamed` manifest link demonstrates the document-ID fallback
+using the existing unnamed legacy document and its registered page.
+The table uses document-wide counts even when evidence filters select matching documents. Scroll horizontally to reach
 all fields and vertically to append cursor batches; Load more and Retry remain
 keyboard accessible. The optional **First page** column is hidden by default. Enable it in Columns to
 show a single thumbnail per document. The document response supplies its source
