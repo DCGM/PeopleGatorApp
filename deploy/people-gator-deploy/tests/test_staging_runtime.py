@@ -70,7 +70,15 @@ class RuntimeTests(unittest.TestCase):
             "runtime_file": str(runtime), "snapshot": {"path": str(archive),
                 "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40},
             "staging": {"state_dir": str(state), "host": "staging-fixture.example.invalid"}})
+        snapshot_revision = "d34a021b0005"
         if backup_source:
+            # Roundtrip already-existing thumbnail constraints. An old snapshot
+            # predating thumbnails recreates them during migration and misses
+            # PostgreSQL's array-to-element coercion rewrite on archive restore.
+            subprocess.run([sys.executable, "-m", "people_gator_api.cli.database", "migrate"],
+                cwd=snapshot_tests.REPOSITORY / "people-gator-api", env=fixture.environment,
+                capture_output=True, check=True)
+            snapshot_revision = fixture.sql("SELECT version_num FROM alembic_version", fixture.source).strip()
             source = backup_source.source
             source.put_bucket_versioning(Bucket="source-fixture", VersioningConfiguration={"Status": "Enabled"})
             prefix = "production/db-backups/"
@@ -107,7 +115,7 @@ class RuntimeTests(unittest.TestCase):
         candidate.write_text(controller.dotenv(values))
         try:
             controller.prepare(generation, values, state)
-            self.assertEqual(generation["provenance"]["source_schema_revision"], "d34a021b0005")
+            self.assertEqual(generation["provenance"]["source_schema_revision"], snapshot_revision)
             self.assertEqual(generation["provenance"]["sha256"], hashlib.sha256(latest if backup_source else fixture.archive).hexdigest())
             if backup_source:
                 self.assertEqual(generation["provenance"]["key"], prefix + "peoplegator-prod-2026-10-25.dump")
