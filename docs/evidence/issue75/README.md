@@ -5,7 +5,8 @@ new, migrated PostgreSQL database seeded twice with local synthetic media.
 Desktop captures use 1440 × 900 CSS pixels; mobile uses 390 × 844 CSS pixels.
 
 - `scan-*` and `gallery-*`: page archive link in the header, document archive
-  link beside Document pages, and existing internal thumbnail navigation.
+  link beside Document pages, and existing internal thumbnail navigation. Below
+  640px the header link shows only its icon to leave room for the breadcrumb.
 - `faces-*`: Profile photo / Search hit indicators and NDK thumbnail overlays.
 - `discover-*`: NDK overlays on global face matches from both preview libraries.
 - `*-selected-*`: links remain independently operable in selection mode.

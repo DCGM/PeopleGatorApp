@@ -150,6 +150,7 @@ const isPeopleRoute = computed(
     <ArchiveLink
       v-if="route.name === 'document-page'"
       :url="pageQuery.data.value?.url"
+      compact
       class="self-center"
     />
 
