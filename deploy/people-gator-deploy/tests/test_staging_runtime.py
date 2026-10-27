@@ -1,4 +1,4 @@
-"""Real local snapshot restore, migration/check and startup gates without S3."""
+"""Real local/S3 snapshot restore, migration/check and startup gates."""
 import hashlib
 import json
 import os
@@ -8,6 +8,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from s3_fixture import S3Fixture
 
 from people_gator_deploy import staging
 from people_gator_deploy.core import DeployError
@@ -34,7 +37,18 @@ class RuntimeTests(unittest.TestCase):
         finally:
             subprocess.run(["docker", "network", "rm", network], capture_output=True, check=True)
 
-    def exercise(self, root, network):
+    def test_latest_s3_snapshot_restores_actual_newest_records(self):
+        network = "staging-test-s3-" + secrets.token_hex(8)
+        subprocess.run(["docker", "network", "create", network], capture_output=True, check=True)
+        try:
+            with S3Fixture(network) as source, tempfile.TemporaryDirectory() as temporary:
+                # Use the real TLS provider with its disposable CA, not disabled TLS.
+                with patch.dict(os.environ, {"AWS_CA_BUNDLE": str(source.ca)}):
+                    self.exercise(Path(temporary), network, backup_source=source)
+        finally:
+            subprocess.run(["docker", "network", "rm", network], capture_output=True, check=True)
+
+    def exercise(self, root, network, backup_source=None):
         fixture = snapshot_tests.SnapshotIntegrationTests
         state = root / "staging"
         state.mkdir()
@@ -56,6 +70,27 @@ class RuntimeTests(unittest.TestCase):
             "runtime_file": str(runtime), "snapshot": {"path": str(archive),
                 "sha256": hashlib.sha256(fixture.archive).hexdigest(), "application_revision": "a" * 40},
             "staging": {"state_dir": str(state), "host": "staging-fixture.example.invalid"}})
+        if backup_source:
+            source = backup_source.source
+            source.put_bucket_versioning(Bucket="source-fixture", VersioningConfiguration={"Status": "Enabled"})
+            prefix = "production/db-backups/"
+            def publish(key, raw):
+                source.put_object(Bucket="source-fixture", Key=prefix + key, Body=raw,
+                    Metadata={"sha256": hashlib.sha256(raw).hexdigest(), "application-revision": "b" * 40})
+            publish("peoplegator-prod-2026-10-23.dump", fixture.archive)
+            fixture.sql("UPDATE pg_demo_entities SET description='LATEST-S3-SNAPSHOT'", fixture.source)
+            latest = subprocess.run(["docker", "exec", fixture.container, "pg_dump", "-Fc", "-U", fixture.username,
+                "-d", fixture.source], capture_output=True, check=True).stdout
+            publish("peoplegator-prod-2026-10-25.dump", latest)
+            publish("peoplegator-prod-2099-01-01.dump.tmp", b"incomplete")
+            source_file = root / "backup-source.json"
+            source_file.write_text(json.dumps({"endpoint_url": source.meta.endpoint_url, "region": "us-east-1",
+                "bucket": "source-fixture", "prefix": prefix,
+                "access_key_id": backup_source.source_config["access_key_id"],
+                "secret_access_key": backup_source.source_config["secret_access_key"]}))
+            source_file.chmod(0o600)
+            del controller.config["snapshot"]
+            controller.config["snapshot_source_file"] = str(source_file)
         controller.sql = fixture.sql
         controller.infra = lambda *args: ["docker", "exec", "-i", fixture.container,
             *[fixture.username if arg == "preview_admin" else arg for arg in args[3:]]]
@@ -73,7 +108,25 @@ class RuntimeTests(unittest.TestCase):
         try:
             controller.prepare(generation, values, state)
             self.assertEqual(generation["provenance"]["source_schema_revision"], "d34a021b0005")
-            self.assertEqual(generation["provenance"]["sha256"], hashlib.sha256(fixture.archive).hexdigest())
+            self.assertEqual(generation["provenance"]["sha256"], hashlib.sha256(latest if backup_source else fixture.archive).hexdigest())
+            if backup_source:
+                self.assertEqual(generation["provenance"]["key"], prefix + "peoplegator-prod-2026-10-25.dump")
+                self.assertTrue(generation["provenance"]["version_id"])
+                self.assertTrue(generation["provenance"]["etag"])
+                self.assertGreater(int(fixture.sql("SELECT count(*) FROM pg_demo_entities WHERE description='LATEST-S3-SNAPSHOT'",
+                    values["DB_NAME"])), 0)
+                # A correctly checksummed but invalid latest archive fails --list
+                # before provisioning any database; existing records are untouched.
+                before = fixture.sql("SELECT datname FROM pg_database ORDER BY datname")
+                publish("peoplegator-prod-2026-10-27.dump", b"PGDMP corrupt custom archive")
+                failed = {"generation": secrets.token_hex(8), "password": secrets.token_hex(32)}
+                failed_values = controller.values(failed, {"backend": os.environ["STAGING_TEST_IMAGE"], "frontend": "unused"}, "a" * 40)
+                with self.assertRaises(DeployError):
+                    controller.prepare(failed, failed_values, state)
+                self.assertEqual(fixture.sql("SELECT datname FROM pg_database ORDER BY datname"), before)
+                self.assertGreater(int(fixture.sql("SELECT count(*) FROM pg_demo_entities WHERE description='LATEST-S3-SNAPSHOT'",
+                    values["DB_NAME"])), 0)
+                self.assertFalse(list(state.glob("snapshot-*")))
             self.assertEqual(generation["provenance"]["data_mode"], "original")
             self.assertEqual(archive.read_bytes(), fixture.archive)
             self.assertNotIn("external-secret", (state / "worker.env").read_text())

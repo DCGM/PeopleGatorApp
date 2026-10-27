@@ -275,7 +275,7 @@ class StagingTests(unittest.TestCase):
         controller.deploy()
         self.assertNotIn("prepare", controller.events)
         controller.events.clear()
-        with self.assertRaisesRegex(DeployError, "needs snapshot for snapshot-init/refresh"):
+        with self.assertRaisesRegex(DeployError, "needs snapshot_source_file for snapshot-init/refresh"):
             controller.deploy(refresh=True)
         self.assertEqual(controller.events, [])
 

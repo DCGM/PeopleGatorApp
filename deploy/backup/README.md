@@ -5,7 +5,8 @@ It receives an explicit private JSON configuration with database connection
 settings and a dedicated S3 publisher identity for `peoplegator-db-backup`.
 The API never needs that identity. Backup publisher/restore storage is separate
 from application storage. Staging application storage is managed externally; the
-staging deployment utility receives only a local database archive.
+staging deployment utility uses its separate read-only source to gather the
+latest production database archive.
 
 ## Publish a backup
 
@@ -171,14 +172,16 @@ Do not put backup credentials in root `.env`: live-preview's API imports that
 entire file. No backup operation inherits the app's storage settings or AWS
 credentials.
 
-For staging initialization, obtain a verified custom-format database dump
-externally, keep it private on the deployment host and configure its absolute
-path, SHA-256 and source application revision in the staging descriptor's
-`snapshot` section ([example](../people-gator-deploy/examples/staging.json)).
-The staging utility restores databases only; backup downloads, application S3
-configuration, media copying and auth provisioning remain external operator work.
-The IAM examples above describe external backup/application operations, not
-requirements imposed by staging deployment.
+For staging initialization/refresh, configure the deployment utility's private
+`snapshot_source_file` once with the restore-reader storage settings (endpoint,
+region, bucket, prefix and read-only credentials only). It automatically lists
+all pages, selects the latest dated archive and performs a private, conditional,
+verified download before restoring a separate candidate database. No dated
+path/checksum/revision edits are required. See [Backup gathering](../people-gator-deploy/README.md#backup-gathering)
+for setup and the explicit transition from legacy local descriptors. Ordinary
+staging updates retain data; only `snapshot-init` and guarded `refresh` consume
+snapshots. Application S3 configuration, media copying and auth provisioning
+remain external operator work. This change does not refresh a live database.
 
 ## Enable scheduled live-preview backups
 

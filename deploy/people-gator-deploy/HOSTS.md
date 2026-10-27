@@ -65,7 +65,7 @@ Protect release tags (`v*`) with a ruleset so only maintainers can create them.
 
 Staging shares the preview PostgreSQL (`infrastructure.mode: external`) and has
 its own hostname and database state. The utility manages **databases only**;
-S3, media and authentication objects are operated externally.
+Application S3 storage, media and authentication objects are operated externally.
 
 The private descriptor ([example](examples/staging.json)) names:
 
@@ -74,14 +74,15 @@ The private descriptor ([example](examples/staging.json)) names:
   authentication configuration appropriate for your external environment. Do
   not put persistence settings in this file; staging generates its database
   connection. Routine updates require neither a snapshot nor S3 source inputs.
-- `snapshot`: needed only by `snapshot-init`/`refresh`. Provide a private, local
-  PostgreSQL 16 `pg_dump -Fc` archive, its expected `sha256` and the source
-  `application_revision`. Obtain/download backups externally before running the
-  utility. The pinned archive is read without copying or deleting it; checksums,
-  archive validation and candidate database checks gate activation.
+- `snapshot_source_file`: private read-only production backup S3 source, needed
+  only by `snapshot-init`/`refresh`. Provision prefix-scoped list/read/version-read
+  access once. Each operation selects the latest valid dated archive, downloads
+  privately and checks identity, publisher checksum/revision and archive format
+  before restore. See [Backup gathering](README.md#backup-gathering), including
+  migration from legacy fixed-local `snapshot` descriptors.
 
-No bucket, account, signing-key, media-copy or S3-object validation is part of
-staging installation or refresh. Missing scans/layouts do not fail a database
+Bucket/account provisioning, application signing keys and media copying remain
+external. Only database backup objects are downloaded and verified by refresh. Missing scans/layouts do not fail a database
 snapshot. Operators maintain external storage/auth compatibility separately;
 staging never rewrites media prefixes or imports production auth objects.
 Sign in at `https://<host>/staging-login.html` using externally provisioned

@@ -3,9 +3,5 @@
   "docker_context": "rootless",
   "host": "staging.peoplegator.dev",
   "runtime_file": "/private/staging-runtime.env",
-  "snapshot": {
-    "path": "/private/staging-snapshot.dump",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "application_revision": "0000000000000000000000000000000000000000"
-  }
+  "snapshot_source_file": "/private/staging-backup-source.json"
 }

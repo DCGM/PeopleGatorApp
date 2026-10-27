@@ -76,7 +76,7 @@ class Staging(Host):
         if "snapshot_source_file" in self.config:
             return snapshots.read_source(self.config["snapshot_source_file"])
         if "snapshot" not in self.config:
-            raise StagingConfigurationError("The staging descriptor needs snapshot for snapshot-init/refresh (prefer snapshot_source_file); "
+            raise StagingConfigurationError("The staging descriptor needs snapshot_source_file for snapshot-init/refresh (or a legacy snapshot); "
                                            "run people-gator-deploy staging configure --input <private-json>")
         return validate_snapshot(self.config["snapshot"], inputs=True)
 
@@ -177,9 +177,11 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         # TemporaryDirectory is mode 700; the streamed archive is mode 600.
         with tempfile.TemporaryDirectory(prefix="snapshot-", dir=self.staging_root) as temporary:
             try:
+                print("Staging: discovering the latest dated production database backup", flush=True)
                 client = snapshots.client_for(source)
                 key = snapshots.select_backup(client, source)
                 path = Path(temporary) / "snapshot.dump"
+                print("Staging: downloading and verifying the selected backup privately", flush=True)
                 provenance = snapshots.download(client, source, key, path)
             except DeployError:
                 raise
@@ -187,6 +189,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 # SDK errors may contain private endpoints or identifiers.
                 raise DeployError("Snapshot gathering failed; check source read-only ListBucket/GetObject/GetObjectVersion "
                                   "access, endpoint connectivity and available private disk space") from None
+            print("Staging: backup verified; preparing an isolated candidate database", flush=True)
             self.prepare_archive(generation, values, directory,
                 {"path": str(path), "sha256": provenance["sha256"],
                  "application_revision": provenance["application_revision"]})
@@ -213,7 +216,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
                 raise DeployError("Selected snapshot is not a PostgreSQL custom archive")
             stream.seek(0)
             if hashlib.file_digest(stream, "sha256").hexdigest() != snapshot["sha256"]:
-                raise DeployError("Snapshot SHA-256 does not match the configured checksum")
+                raise DeployError("Snapshot SHA-256 does not match the expected checksum")
             stream.seek(0)
             self.private_command(self.infra("exec", "-T", "postgres", "pg_restore", "--list"), input_file=stream)
             stream.seek(0)

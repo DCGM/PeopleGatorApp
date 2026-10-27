@@ -41,6 +41,9 @@ class InstallationTests(unittest.TestCase):
             executable = Path(result["executable"])
             invocation = subprocess.check_output([executable, "--version"], cwd="/tmp")
             self.assertEqual(json.loads(invocation)["revision"], first)
+            subprocess.run([executable.parent / "python", "-I", "-B", "-c",
+                            "import boto3; from people_gator_deploy import snapshots"],
+                           cwd="/tmp", check=True, capture_output=True)
             default = prefix / "bin/people-gator-deploy"
             def default_revision():
                 environment = {**os.environ, "PATH": str(default.parent) + os.pathsep + os.environ["PATH"]}

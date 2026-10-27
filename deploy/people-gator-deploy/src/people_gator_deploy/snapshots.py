@@ -1,7 +1,7 @@
 """Private S3 snapshot gathering, aligned with the backend backup publication contract.
 
 Kept inside the reviewed host package: candidate application code never selects
-or downloads backups. Only boto3/botocore are external runtime dependencies.
+or downloads backups. The S3 client dependencies are fully pinned in pyproject.toml.
 """
 from datetime import date
 import hashlib
@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 
 from .core import DeployError
 from .config import private_file
+
+BACKUP_NAME = re.compile(r"peoplegator-prod-(\d{4}-\d{2}-\d{2})\.dump")
 
 
 def require(condition, message):
@@ -26,6 +28,7 @@ def text_fields(value, names):
                 not any(ord(c) < 32 or ord(c) == 127 for c in value[k]) for k in names),
             "Required configuration fields must be nonempty strings without control characters")
 
+
 def validate_storage(storage):
     text_fields(storage, ("endpoint_url", "region", "bucket", "prefix", "access_key_id", "secret_access_key"))
     endpoint = urlsplit(storage["endpoint_url"])
@@ -38,6 +41,7 @@ def validate_storage(storage):
             and "\\" not in prefix, "Backup prefix must be a relative directory ending in slash")
     return storage
 
+
 def client_for(storage):
     import boto3
     from botocore.config import Config
@@ -46,6 +50,7 @@ def client_for(storage):
                         aws_access_key_id=storage["access_key_id"], aws_secret_access_key=storage["secret_access_key"],
                         config=Config(connect_timeout=10, read_timeout=120,
                                       retries={"max_attempts": 3, "mode": "standard"}))
+
 
 def object_metadata(response):
     """Metadata comes from case-insensitive HTTP headers on S3 providers."""
@@ -59,7 +64,6 @@ def object_metadata(response):
         result[normalized] = value
     return result
 
-BACKUP_NAME = re.compile(r"peoplegator-prod-(\d{4}-\d{2}-\d{2})\.dump")
 
 def backup_date(key, prefix):
     match = BACKUP_NAME.fullmatch(key[len(prefix):]) if key.startswith(prefix) else None
@@ -69,6 +73,7 @@ def backup_date(key, prefix):
         except ValueError:
             pass
     return None
+
 
 def select_backup(client, storage, exact_key=""):
     validate_storage(storage)
@@ -84,6 +89,7 @@ def select_backup(client, storage, exact_key=""):
                 latest = (day, item["Key"])
     require(latest is not None, "No completed dated backup exists in the configured prefix")
     return latest[1]
+
 
 def download(client, storage, key, destination):
     request = {"Bucket": storage["bucket"], "Key": key}
@@ -145,4 +151,3 @@ def unchanged(client, storage, provenance):
         and object_metadata(current).get("sha256") == provenance["sha256"]
         and object_metadata(current).get("application-revision") == provenance["application_revision"],
         "Backup changed during restore; candidate will not be activated")
-

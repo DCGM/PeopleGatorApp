@@ -113,7 +113,7 @@ jobs:
           if [ -f ../deploy/people-gator-deploy/tests/test_snapshot.py ]; then
             uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
           fi
-      - name: Exercise candidate container migration and API startup gates
+      - name: Exercise latest S3 snapshot restore and candidate startup gates
         working-directory: people-gator-api
         env:
           STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
@@ -163,8 +163,9 @@ jobs:
           python3 -m venv "$scratch/build env"
           "$scratch/build env/bin/pip" wheel --no-deps -w "$scratch/dist" deploy/people-gator-deploy
           python3 -m venv "$scratch/run env"
-          "$scratch/run env/bin/pip" install --no-deps "$scratch"/dist/people_gator_deploy-*.whl
+          "$scratch/run env/bin/pip" install "$scratch"/dist/people_gator_deploy-*.whl
           cd "$scratch"
+          "$scratch/run env/bin/python" -I -B -c 'import boto3; from people_gator_deploy import snapshots'
           "$scratch/run env/bin/people-gator-deploy" --version
           "$scratch/run env/bin/people-gator-deploy" --help >/dev/null
 
