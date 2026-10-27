@@ -14,7 +14,7 @@ defineProps<{ url?: string | null; kind?: 'page' | 'document' }>()
     title="Digitální knihovna"
     target="_blank"
     rel="noopener noreferrer"
-    :aria-label="`Open ${kind ?? 'page'} in Digitální knihovna (new tab)`"
+    :aria-label="`NDK: open ${kind ?? 'page'} in Digitální knihovna (new tab)`"
     class="relative z-20 max-w-full self-start whitespace-normal bg-background/95 text-foreground"
     @click.stop
     @keydown.stop
