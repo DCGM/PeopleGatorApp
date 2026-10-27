@@ -124,7 +124,7 @@ enableAutoUnmount(afterEach)
 
 describe('App', () => {
   it('keeps the logo when the optional top bar title is omitted', () => {
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
 
     const logo = wrapper.get('a[aria-label="PeopleGator"] svg.lucide-people-gator')
     expect(logo.attributes('stroke-width')).toBe('1')
@@ -144,7 +144,7 @@ describe('App', () => {
           library: 'preview-mzk',
         },
       })
-      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
       await router.push({ query: { ...router.currentRoute.value.query, api_key: currentKey } })
       await flushPromises()
       const crumb = wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[1]!
@@ -520,7 +520,7 @@ describe('App', () => {
 describe('Scans and Documents navigation', () => {
   it('activates independent tabs and keeps scan query filters', async () => {
     await router.push('/scans?library=mzk&document=album&q=Ada&assignment=faces')
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBeUndefined()
     expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('assignment=faces')
@@ -565,7 +565,7 @@ describe('Scans and Documents navigation', () => {
 
   it('preserves multiple libraries in Documents navigation without treating them as a scan scope', async () => {
     await router.push('/documents?library=a&library=b')
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
     expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
       '/documents?library=a&library=b',
     )
@@ -605,7 +605,7 @@ describe('Scans and Documents navigation', () => {
   ])('opens Documents with either home control from %s', async (path) => {
     for (const control of ['logo', 'breadcrumb']) {
       await router.push(path)
-      const wrapper = mount(TopBar, { global: { plugins: [router] } })
+      const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
       const home =
         control === 'logo'
           ? wrapper.get('a[aria-label="PeopleGator"]')
@@ -637,7 +637,7 @@ describe('Scans and Documents navigation', () => {
       library: ['preview-mzk'],
       link_state: 'verified',
     })
-    const wrapper = mount(TopBar, { global: { plugins: [router] } })
+    const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
     await wrapper.get('a[aria-label="Scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('document-search')

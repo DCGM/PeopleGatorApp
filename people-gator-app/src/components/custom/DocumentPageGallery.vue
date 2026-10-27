@@ -4,6 +4,7 @@ import { useIntersectionObserver } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 
+import ArchiveLink from './ArchiveLink.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -14,6 +15,7 @@ import type { SortOption, SortState } from '@/lib/sorting'
 
 const props = defineProps<{
   items: PageGalleryItem[]
+  documentUrl?: string
   totalCount: number | null
   loading?: boolean
   error?: boolean
@@ -51,11 +53,9 @@ function scrollCurrentIntoView() {
   })
 }
 
-watch(
-  () => props.items.find((item) => item.current)?.pageId,
-  scrollCurrentIntoView,
-  { immediate: true },
-)
+watch(() => props.items.find((item) => item.current)?.pageId, scrollCurrentIntoView, {
+  immediate: true,
+})
 
 // Reaching the end of the strip loads the next batch; the button covers keyboard use.
 useIntersectionObserver(sentinel, ([entry]) => {
@@ -72,12 +72,18 @@ useIntersectionObserver(sentinel, ([entry]) => {
   >
     <div class="px-3 pt-2 sm:px-5">
       <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id="document-pages-title" class="font-mono text-xs font-semibold uppercase text-secondary">
-          Document pages
-          <span v-if="props.totalCount !== null" class="font-normal text-muted-foreground">
-            · {{ props.totalCount }} {{ props.totalCount === 1 ? 'page' : 'pages' }}
-          </span>
-        </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <h2
+            id="document-pages-title"
+            class="font-mono text-xs font-semibold uppercase text-secondary"
+          >
+            Document pages
+            <span v-if="props.totalCount !== null" class="font-normal text-muted-foreground">
+              · {{ props.totalCount }} {{ props.totalCount === 1 ? 'page' : 'pages' }}
+            </span>
+          </h2>
+          <ArchiveLink :url="documentUrl" kind="document" />
+        </div>
         <div class="flex flex-wrap items-center gap-2">
           <p id="document-pages-order" class="text-xs text-muted-foreground">
             Page IDs are not page numbers
@@ -97,11 +103,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
           Retry pages
         </Button>
       </div>
-      <p
-        v-else-if="!props.loading && props.totalCount === 1"
-        class="sr-only"
-        role="status"
-      >
+      <p v-else-if="!props.loading && props.totalCount === 1" class="sr-only" role="status">
         This document has one registered page.
       </p>
       <ScrollArea type="always" orientation="horizontal" class="w-full">
@@ -124,7 +126,11 @@ useIntersectionObserver(sentinel, ([entry]) => {
                 :loading="item.thumbnailLoading"
                 alt=""
                 class="aspect-[8/11] w-full rounded-md border-2 bg-muted transition-[border-color] group-hover:border-accent"
-                :class="item.current ? 'border-secondary ring-2 ring-secondary ring-offset-2' : 'border-border'"
+                :class="
+                  item.current
+                    ? 'border-secondary ring-2 ring-secondary ring-offset-2'
+                    : 'border-border'
+                "
                 image-class="object-cover"
               >
                 <template #fallback>

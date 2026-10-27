@@ -161,6 +161,7 @@ export function usePersonDiscovery(
           : undefined,
         library: page?.library,
         documentId: page?.document_id,
+        pageUrl: page?.url,
         pageId: page?.page_id,
         pageLabel: page?.page_id,
       }

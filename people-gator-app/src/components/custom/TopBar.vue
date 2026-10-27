@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ArchiveLink from './ArchiveLink.vue'
+import { usePageLookupQuery } from '@/query/media'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
@@ -14,6 +16,12 @@ import {
 } from '@/components/ui/breadcrumb'
 
 const route = useRoute()
+
+const pageQuery = usePageLookupQuery(
+  () => (route.name === 'document-page' ? String(route.params.libraryId) : ''),
+  () => (route.name === 'document-page' ? String(route.params.documentId) : ''),
+  () => (route.name === 'document-page' ? String(route.params.pageId) : ''),
+)
 
 const breadcrumbs = computed(() => {
   const library = route.params.libraryId
@@ -52,7 +60,10 @@ const breadcrumbs = computed(() => {
     if (typeof document === 'string') {
       items.push({
         label: document,
-        to: { name: 'document-search', query: relatedQuery(route, { library, archive_document: document }) },
+        to: {
+          name: 'document-search',
+          query: relatedQuery(route, { library, archive_document: document }),
+        },
       })
     }
     items.push({
@@ -135,6 +146,8 @@ const isPeopleRoute = computed(
         </BreadcrumbList>
       </Breadcrumb>
     </div>
+
+    <ArchiveLink v-if="route.name === 'document-page'" :url="pageQuery.data.value?.url" />
 
     <div class="flex shrink-0 items-center gap-3 sm:gap-6">
       <slot name="navigation">

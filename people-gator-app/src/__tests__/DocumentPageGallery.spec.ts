@@ -4,10 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
-import {
-  pageGalleryQuery,
-  type PageGalleryItem,
-} from '@/viewmodels/document-page-gallery'
+import { pageGalleryQuery, type PageGalleryItem } from '@/viewmodels/document-page-gallery'
 
 const item = (index: number, current = false): PageGalleryItem => ({
   sourceId: `source-${index}`,
@@ -59,6 +56,19 @@ afterEach(() => {
 })
 
 describe('DocumentPageGallery', () => {
+  it('exposes the API document target beside the title, without nesting page links', async () => {
+    const url = 'https://archive.example/document-from-api'
+    const { wrapper } = await mountGallery({ documentUrl: url })
+    const link = wrapper.get('a[target="_blank"]')
+    expect(link.attributes('href')).toBe(url)
+    expect(link.attributes('aria-label')).toContain('document in Digitální knihovna (new tab)')
+    expect(link.element.parentElement?.querySelector('h2')?.textContent).toContain('Document pages')
+    expect(wrapper.find('a a').exists()).toBe(false)
+    await wrapper.setProps({ documentUrl: undefined })
+    expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('names every page link and marks only the current page', async () => {
     const { wrapper } = await mountGallery()
     const nav = wrapper.get('nav')

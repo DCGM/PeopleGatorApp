@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { relatedQuery } from '@/viewmodels/shared-filters'
+import ArchiveLink from './ArchiveLink.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
@@ -459,6 +460,7 @@ watch(
               </template>
             </LoadableImage>
           </ItemMedia>
+          <ArchiveLink :url="face.pageUrl" />
           <FaceSelectionControl
             :face-id="face.id"
             :selected="selectedFaceIds.has(face.id)"
