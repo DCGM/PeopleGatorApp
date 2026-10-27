@@ -192,15 +192,25 @@ def _validate_thumbnail_invariants(connection: Connection) -> None:
         WHERE conrelid = to_regclass('pg_demo_entities') AND contype = 'c'
     """)).all())
     expected_checks = {
-        "ck_pg_demo_entities_thumbnail_mode":
+        "ck_pg_demo_entities_thumbnail_mode": (
             "(thumbnail_mode = ANY ((ARRAY['automatic', 'manual'])))",
-        "ck_pg_demo_entities_manual_thumbnail":
+            # pg_dump/restore reparses the array's text[] coercion into text
+            # casts on its elements. Accept this exact equivalent spelling;
+            # keep boolean grouping and the permitted values checked strictly.
+            "(thumbnail_mode = ANY (ARRAY[('automatic'), ('manual')]))",
+        ),
+        "ck_pg_demo_entities_manual_thumbnail": (
             "((thumbnail_mode <> 'manual') OR (thumbnail_face_id IS NOT NULL))",
-        "ck_pg_demo_entities_person_thumbnail":
+        ),
+        "ck_pg_demo_entities_person_thumbnail": (
             "((kind = 'person') OR ((thumbnail_face_id IS NULL) AND (thumbnail_mode = 'automatic')))",
+        ),
     }
-    for name, expected in expected_checks.items():
-        if name not in checks or normalized_check(checks[name]) != normalized_check(f"CHECK ({expected})"):
+    for name, alternatives in expected_checks.items():
+        if name not in checks or not any(
+            normalized_check(checks[name]) == normalized_check(f"CHECK ({expected})")
+            for expected in alternatives
+        ):
             raise SchemaValidationError(f"Missing or incompatible person thumbnail consistency constraint: {name}")
 
 
