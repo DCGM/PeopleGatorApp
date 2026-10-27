@@ -92,6 +92,18 @@ def isolated_settings_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(name, value)
 
 
+@pytest.fixture(autouse=True)
+def isolated_model_indexes():
+    """Do not let model registration change later tests' bootstrap metadata."""
+    from people_gator_api.persistence.postgres.models import FaceEmbedding
+
+    indexes = FaceEmbedding.__table__.indexes
+    original = set(indexes)
+    yield
+    indexes.clear()
+    indexes.update(original)
+
+
 @pytest_asyncio.fixture
 async def migrated_postgres():
     """A unique migrated schema on the explicitly disposable schema-test store."""

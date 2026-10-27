@@ -18,6 +18,17 @@ URLS = {
 }
 
 
+@pytest.mark.parametrize("iteration", range(2))
+def test_model_indexes_do_not_leak_between_cases(iteration):
+    from people_gator_api.persistence.postgres.models import FaceEmbedding, face_embedding_hnsw_index
+
+    indexes = FaceEmbedding.__table__.indexes
+    assert not any(index.info.get("worker_isolation_probe") for index in indexes)
+    index = face_embedding_hnsw_index("worker-isolation-probe", 3)
+    index.info["worker_isolation_probe"] = True
+    assert index in indexes
+
+
 def test_workers_and_store_types_receive_distinct_databases(monkeypatch):
     execute = AsyncMock()
     monkeypatch.setattr(postgres_workers, "database_command", execute)
