@@ -52,7 +52,8 @@ vi.mock('@/viewmodels/document-search', () => ({
   }),
 }))
 
-vi.mock('@/viewmodels/document-list', () => ({
+vi.mock('@/viewmodels/document-list', async (original) => ({
+  ...(await original<typeof import('@/viewmodels/document-list')>()),
   useDocumentList: () => ({
     documents: ref([]),
     resultCount: ref(0),

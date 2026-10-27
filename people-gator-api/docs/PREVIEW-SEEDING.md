@@ -70,7 +70,7 @@ This does not automatically seed the actual staging environment.
 
 | Scenario | Example |
 | --- | --- |
-| Default Documents landing | Open `default-documents` (the application root): Documents is current, with named document groups and linked page thumbnails. Find **Portrait album**, open a page, then use the PeopleGator logo or first breadcrumb to return. `default-documents-scans` opens the same album in explicit Scan search. |
+| Default Documents landing | Open `default-documents` (the application root): Documents is current, with named document rows. Find **Portrait album**, click its name to browse pages, then use the PeopleGator logo or first breadcrumb to return. `default-documents-scans` opens the same album in explicit Scan search. |
 | Mobile filtering | Open the printed mobile-filters link on a narrow viewport; only search and the sliders toggle show until expanded |
 | Identity editing and aliases | Ada Novak, alias A. Novak; six people in total |
 | Faces and mentions together | Ada Novak across Portrait album and Research notes |
@@ -162,13 +162,13 @@ candidate image supplies the fixture code.
 Successful preview state includes a `seeded_version` marker; after a host upgrade,
 rerunning the same deployment can seed previews created by older controllers.
 
-## Grouped documents and scans
+## Documents and scans
 
 Open `/documents?library=preview-mzk` to explore **Named preview album** with two
 scans and **Document awaiting scans** with no pages. **Album in another library**
 in `preview-nlk` deliberately shares the album's document UUID; its single page
-must stay in its own group. **Legacy unnamed document** has one scan and no stored
-name, demonstrating the `Document <document_id>` heading fallback on fresh previews.
+must stay scoped to its own document row. **Legacy unnamed document** has one scan and no stored
+name, demonstrating the `Document <document_id>` name fallback on fresh previews.
 `/scans` also includes **Unregistered scan collection**,
 which has local media but no registered document and is absent from Documents.
 The seed CLI prints `grouped-documents` and `unregistered-scan` links.
@@ -177,7 +177,7 @@ Existing document identities are retained. New registrations receive their fixtu
 titles; documents already seeded without names keep their nullable name and use the
 UI's `Document <document_id>` fallback. Reregistration never overwrites a name.
 The added scenario keys demonstrate names even in retained preview databases.
-Integration coverage checks names, empty groups, library isolation, page cursors,
+Integration coverage checks names, empty documents, library isolation, page cursors,
 scan-only media, repeat registration and legacy requests without a name.
 
 ### Entity link review (#6)
@@ -285,15 +285,11 @@ at the right end of the search input group, after the clear-search button. Remov
 to update both the URL and results. The `rounded-filter-removal` link demonstrates
 circular X buttons for library, link-state and unassigned-face badges. Hover or
 keyboard-focus one, then remove its filter while preserving the search text.
-In the document information, registered
-page count precedes processing time, user and API key (each on its own line),
-followed by face and mention statistics. A `+N` link with a right chevron follows
-the last preview and opens the remaining scans in the same document scope.
-The `document-preview-remainder` link shows six registered pages with four
-previews and `+2` (two previews and `+4` on mobile). Hover the `+N` link to see
-its underline and small rightward chevron movement, without a background
-change. `+N` is orange and the chevron uses the standard text color. Page labels show standard UUIDs with an ellipsis when needed; hover
-the label to read the full UUID.
+The document table shows registered page counts, modification metadata and
+annotation statistics in configurable columns. Click a document name to open its
+scan list. The existing `document-preview-remainder` link now demonstrates a
+six-page document through its Pages total; enable First page for one optional
+thumbnail, or open the name link to browse all six scans.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
 (inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,
@@ -770,3 +766,80 @@ Archive badges read **NDK**, with **Digitální knihovna** in the hover tooltip.
 On phones, the header badge shows only its external-link icon.
 On Faces and Discover, the badge overlays the top-left of the thumbnail with a
 nearly opaque theme background; selection remains at the top-right.
+
+## Document table (#57)
+
+Open `/documents?library=preview-table` (the `document-table` manifest
+entry). **Document table ledger** has two registered pages, four faces and five
+mentions including one direct document mention: three automatic, two verified,
+two manual and two unassigned annotations, linked to just two distinct entities.
+Its synthetic subjects are Tereza Columns and Oskar Rows. Its last change is
+attributed to Preview face importer and its registered key.
+The same archive ID in `preview-table-mirror` has no pages or evidence; Document
+awaiting scans also demonstrates zero counts and unknown modification history.
+Direct annotation ledger demonstrates a user-only modification without a key.
+
+Documents uses the table only; the Items listing and view switch are removed.
+Existing links with `view=items` or `view=table` also open the table. Search,
+filters and server sorting retain their existing behavior. Columns can hide each data field, including Document name, and restore defaults. Document
+name is the first default column and links to the document page. There is no
+separate Open column. With the name hidden, Document ID links to the same page;
+when both are hidden, a compact library/ID link keeps navigation available.
+The `document-table-unnamed` manifest link demonstrates the document-ID fallback
+using the existing unnamed legacy document and its registered page.
+The table uses document-wide counts even when evidence filters select matching documents. Scroll horizontally to reach
+all fields and vertically to append cursor batches; Load more and Retry remain
+keyboard accessible. The optional **First page** column is hidden by default. Enable it in Columns to
+show a single thumbnail per document. The document response supplies its source
+UUID in the same batched projection as the page total; enabling the column adds
+only thumbnail requests, without page-list or annotation/name queries. Hidden
+previews make no media requests. First means the first registered page in archive
+page-ID order, matching the existing page browser, independent of evidence filters.
+No pages and unavailable media have short fallbacks. The
+`document-table-first-page` manifest link opens the seeded two-page example;
+both local page images are usable and repository/media tests verify its first page.
+
+
+Sortable table headers (Document name, Library, Document ID, Pages and Last
+modified) use the same server sort as the Sort selector. Click a heading to select
+its normal initial direction; click again to reverse it. An arrow and accessible
+sort state identify the active heading. The `document-table-sort` manifest link
+opens the 14 pagination ledgers by name descending; reverse Document name and
+scroll to verify ascending order across the cursor boundary. Relevance remains
+available in the selector during text search. Other metadata/count headings have
+no sort action because their fields are not supported by the API.
+
+The `document-table-scroll` link opens the 14 pagination ledgers. Enable First
+page for taller rows, then scroll the full page: the table headings scroll away
+with the rows. There is no sticky table header or separate vertical table scroll
+area. Horizontal scrolling and automatic cursor loading still work. The earlier
+`document-table-page-header`, `document-table-sticky-header` and
+`document-table-scroll-performance` links remain aliases for this same scenario.
+
+The `document-table-unknown-names` link (also available as the older
+`document-table-name-fallback` link) sorts `preview-mzk` by Document name.
+The unnamed legacy document displays `Document 1c0b07a3-f413-518d-b5a2-1116ab58df00`
+but its unknown name compares as an empty string: first ascending and last
+descending, including across cursor batches and during search. The UUID label is
+display-only. Its stored name remains null; reruns preserve this fixture and its
+stable identity. Multiple unknown names tie-break by source UUID ascending.
+
+
+Open `document-table-ndk-column` (the earlier `document-table-ndk-link` alias
+still works). **NDK** is a default column immediately after Document name: a
+simple source link with an external-link icon. Hover or keyboard-focus it for
+**Národní digitální knihovna**; it opens the stored source URL in a new tab. It is
+independent of the optional First page thumbnail, which has no overlay link. The
+document-name column still opens the application's document page. The canonical
+source and optional image belong to the same archive document, and reruns retain
+existing identities and edits.
+
+Open `document-table-annotation-groups` for the ledger and its empty same-ID
+mirror in another library. Columns groups counts under **All annotations**,
+**Faces** and **Text mentions**, each with Total, Automatic, Manual, Verified and
+Unassigned. Combined counts remain shown by default; choose individual face or
+mention fields to compare them. Selected groups also label the table headers.
+The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
+combined counts 9/3/2/2/2. Counts include direct document mentions and every
+registered page, even when evidence filters select the document. The mirror
+has zero in every field. Switching columns adds no requests or local sorting.

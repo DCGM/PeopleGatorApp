@@ -2,7 +2,9 @@
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
-import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
+import { useRoute } from 'vue-router'
+import DocumentTable from '@/components/custom/DocumentTable.vue'
+import { defaultDocumentColumns } from '@/viewmodels/document-table'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
@@ -14,6 +16,8 @@ import {
   RELEVANCE,
   scoredOptions,
 } from '@/viewmodels/sort-options'
+const route = useRoute()
+const visibility = ref(defaultDocumentColumns())
 const shared = useSharedFilters()
 const { searchTerm, unassigned } = useDocumentFilters()
 const searching = computed(() => Boolean(searchTerm.value.trim()))
@@ -46,6 +50,7 @@ const filtered = computed(
 const listEnd = ref<HTMLElement | null>(null)
 useAutomaticPagination({
   target: listEnd,
+  resetKey: computed(() => route.fullPath),
   hasNextPage,
   isFetching,
   error,
@@ -55,7 +60,7 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full max-w-6xl px-2 md:px-4">
+  <main class="mx-auto w-full min-w-0 max-w-6xl px-2 md:px-4">
     <header class="pb-4 pt-6">
       <small class="font-semibold uppercase text-secondary">Documents index</small>
       <h1>Browse documents</h1>
@@ -71,17 +76,12 @@ useAutomaticPagination({
     <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
       Search reports a bounded set of ranked document candidates.
     </p>
-    <section
-      class="document-pages flex w-full min-w-0 flex-col gap-4 pt-4"
-      aria-label="Registered documents"
-      aria-live="polite"
-    >
-      <DocumentPageGroup
-        v-for="document in documents"
-        :key="document.source_id"
-        :document="document"
-      />
-    </section>
+    <DocumentTable
+      v-model:visibility="visibility"
+      v-model:sort="sort"
+      :documents="documents"
+      class="pt-4"
+    />
     <p
       v-if="isLoading || isFetchingNextPage"
       class="py-6 text-center text-sm text-muted-foreground"
@@ -105,6 +105,7 @@ useAutomaticPagination({
           : 'No documents have been registered yet.'
       }}
     </p>
+
     <div ref="listEnd" class="h-px" aria-hidden="true" />
 
     <div v-if="hasNextPage && !error" class="flex justify-center pt-6">

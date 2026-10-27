@@ -1,0 +1,67 @@
+# Document table evidence
+
+Real Chromium captures of this issue branch running with its isolated PostgreSQL
+store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
+390 × 844 CSS pixels. Full-page captures retain those viewport widths; scrolling captures show the scrolled viewport.
+
+- `table-*`: default columns; all document-wide totals are visible by horizontal scrolling.
+- `columns-*`: standard Columns popover with metadata fields and annotation-group choices.
+- `annotation-columns-*`: All annotations, Faces and Text mentions with independent state checkboxes.
+- `annotation-groups-*`: grouped count headers and values, including the empty library mirror; dark-theme captures are included.
+- `annotation-mentions-*`: horizontal scrolling reaches the Text mentions columns.
+- `sort-ascending-*` / `sort-descending-*`: clickable Document name header with its active direction and server-ordered rows.
+- `first-page-*`: optional First page enabled separately from the default NDK source column.
+- `first-page-dark-*`: the default NDK link and optional image in dark theme.
+- `ndk-tooltip-*`: expanded Národní digitální knihovna tooltip on keyboard focus.
+- `name-hidden-*`: document identity remains visible and linked with Document name hidden.
+- `attribution-*`: user/key label columns enabled and horizontally scrolled into view.
+- `loading-end-*`: all 14 pagination ledgers appended through the existing opaque cursor.
+- `scrolling-*`: headings have scrolled out of view with the table rows; horizontal scrolling and cursor loading remain available.
+- `unnamed-sort-ascending-*` / `unnamed-sort-descending-*`: unknown names compare as empty strings, appearing first ascending and last descending.
+- `filters-mobile`: existing mobile settings expanded above the table. The default
+  desktop captures show the corresponding always-available settings.
+
+Browser checks passed at both sizes: one row per document, no per-row page/media
+requests when First page is hidden, one image request with no page-list/name
+requests when enabled, show/hide name and restore defaults, preserve field choices
+while filtering and sorting, default and legacy presentation URLs rendering the
+table, bounded page width, horizontal scroll plus automatic
+cursor loading/exhaustion, keyboard horizontal scrolling when fields overflow,
+click/Enter/Space sorting, direction reversal and history restoration, supported-only header actions,
+and no browser runtime errors. The preview-table scenario has 2 registered pages,
+9 annotations (3 automatic, 2 verified, 2 manual, 2 unassigned), and 2 distinct
+linked entities. All data are synthetic; actor columns expose registry labels only.
+
+The production build uses only TanStack v9's column visibility feature; Vue Query
+and the existing route filters/sort still own the remote result sequence. There
+is no client pagination, filtering or sorting; first-page media is the only
+optional per-row request.
+The table-only production build measures 827.45 kB minified JS (248.13 kB gzip).
+The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
+Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.
+
+Unnamed-sort checks verify complete loaded name order and the legacy document's
+position first ascending and last descending, at desktop and mobile sizes. In
+`preview-mzk`, its positions are 1 of 17 ascending and 17 of 17 descending; the stored name remains null. Regression tests cover one-row cursor
+batches and the same order in ordinary browsing and bounded text search.
+
+NDK column checks at both sizes verify that the link follows Document name,
+shows NDK with an external-link icon, expands its name on keyboard focus and
+opens the stored source URL in a new tab. It is shown by default with no thumbnail
+request. External navigation uses an intercepted synthetic response; no external
+archive data is fetched. Enabling First page requests one image and leaves the
+NDK link in its own column. The thumbnail has no overlay link. Light/dark captures
+include this arrangement, with page width bounded and standard focus states.
+
+Ordinary-scroll checks verify that column headings move by the same amount as
+the page and leave the viewport. There is no sticky positioning or inline header
+transform, and the table has no vertical scroll area. Horizontal overflow,
+automatic loading at the far right and keyboard header sorting still work.
+
+Annotation-group checks at both viewport sizes verify all 15 values against
+independent faces/mentions summaries and the zero-count mirror. Group labels and
+column spans follow individual visibility changes, a checkbox toggles by keyboard,
+Restore defaults hides per-type fields, and changing columns adds no requests,
+local sorting or URL changes. Unit tests use unequal values for every state,
+verify unknown versus zero and header associations, and preserve selections
+while appending rows. Grouped counts reuse the existing API response.

@@ -196,8 +196,15 @@ class PostgresSourceRepository(SourceRepository):
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
         elif model is Document:
+            # Unknown names compare as empty strings: first ascending, last
+            # descending, with the canonical source UUID breaking ties. The UI's
+            # Document <UUID> label is display-only, not a stored name.
             builders = {
-                "name": lambda desc: text_keys(document.name_normalized, document.name, desc),
+                "name": lambda desc: text_keys(
+                    func.coalesce(document.name_normalized, ""),
+                    func.coalesce(document.name, ""),
+                    desc,
+                ),
                 "library": lambda desc: [
                     *text_keys(normalized_text(document.library), document.library, desc),
                     SortKey(document.document_id, "uuid", desc),
