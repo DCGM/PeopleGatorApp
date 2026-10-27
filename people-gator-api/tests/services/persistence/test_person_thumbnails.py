@@ -272,6 +272,25 @@ async def test_batch_reset_returns_database_resolved_choices(portraits):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("expression, compatible", [
+    ("thumbnail_mode::text = ANY ((ARRAY['automatic'::varchar, 'manual'::varchar])::text[])", True),
+    ("thumbnail_mode::text = ANY (ARRAY[('automatic'::varchar)::text, ('manual'::varchar)::text])", True),
+    ("thumbnail_mode::text = ANY (ARRAY[('automatic'::varchar)::text, ('manual'::varchar)::text, 'other'])", False),
+    ("thumbnail_mode::text = ANY (ARRAY[('automatic'::varchar)::text])", False),
+])
+async def test_schema_validation_checks_archive_roundtrip_mode_expressions(migrated_postgres, expression, compatible):
+    from people_gator_api.persistence.postgres.schema import SchemaValidationError
+    async with migrated_postgres.begin() as connection:
+        await connection.execute(text("ALTER TABLE pg_demo_entities DROP CONSTRAINT ck_pg_demo_entities_thumbnail_mode"))
+        await connection.execute(text(f"ALTER TABLE pg_demo_entities ADD CONSTRAINT ck_pg_demo_entities_thumbnail_mode CHECK ({expression})"))
+    if compatible:
+        await validate_postgres_schema(migrated_postgres)
+    else:
+        with pytest.raises(SchemaValidationError, match="thumbnail consistency constraint"):
+            await validate_postgres_schema(migrated_postgres)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("constraint", [
     "ck_pg_demo_entities_thumbnail_mode", "ck_pg_demo_entities_manual_thumbnail",
     "ck_pg_demo_entities_person_thumbnail",

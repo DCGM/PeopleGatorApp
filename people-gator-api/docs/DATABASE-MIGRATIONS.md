@@ -115,3 +115,15 @@ starting this application revision; bootstrap alone cannot upgrade retained tabl
 Back up the retained database and matching storage first. Downgrade discards
 portrait preferences but preserves people and evidence. See
 [person portraits](PERSON-THUMBNAILS.md) for PATCH, selection and lifecycle details.
+
+## Checks after archive restoration
+
+Use the normal `database migrate` and `database check` commands on an isolated
+restored candidate before activation. PostgreSQL 16 may reparse the thumbnail
+mode constraint's array-wide text cast into casts on individual array elements.
+Schema validation accepts these two equivalent spellings while still requiring
+the same permitted modes and the original boolean grouping of the other checks.
+No constraint rewrite or manual migration stamping is needed for this variation.
+The staging S3 runtime test roundtrips a current-head synthetic database, including
+its existing thumbnail constraints; the legacy local test covers an older source
+that needs migrations. Missing or incompatible checks still stop activation.
