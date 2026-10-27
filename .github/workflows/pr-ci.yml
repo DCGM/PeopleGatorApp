@@ -91,7 +91,7 @@ jobs:
           uv run --locked python -m people_gator_api.cli.seed
           uv run --locked python -m people_gator_api.cli.seed
           uv run --locked python -m people_gator_api.cli.database check
-      - run: uv run --locked pytest tests
+      - run: uv run --locked pytest tests -n 4 --dist=worksteal
         working-directory: people-gator-api
       - name: Exercise isolated database backup publisher and recovery
         env:

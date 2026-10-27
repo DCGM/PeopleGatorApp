@@ -161,6 +161,13 @@ export PEOPLE_GATOR_SCHEMA_TEST_URL=postgresql+asyncpg://test:test@127.0.0.1:554
 uv run --locked pytest tests
 ```
 
+For a faster full PostgreSQL run, use
+`uv run --locked pytest tests -n 4 --dist=worksteal` with both URLs above. Each
+worker receives private databases; the disposable user must have `CREATEDB`.
+Use `-n 2` on smaller machines or `-n 0` for debugging. See
+[test performance guidance](TEST.md#faster-backend-feedback) for isolation,
+cleanup and timing details.
+
 Schema tests drop/recreate objects. Reuse only disposable stores. Optional live
 Weaviate coverage needs its own service and
 `PEOPLE_GATOR_WEAVIATE_TEST_HTTP_PORT`/`PEOPLE_GATOR_WEAVIATE_TEST_GRPC_PORT`;
