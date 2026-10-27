@@ -50,6 +50,9 @@ describe('PersonDiscoveryPanel', () => {
     })
 
     const archive = wrapper.get('a[target="_blank"]')
+    expect(archive.text()).toBe('NDK')
+    expect(archive.attributes('title')).toBe('Digitální knihovna')
+    expect(archive.classes()).toEqual(expect.arrayContaining(['absolute', 'left-3', 'top-3']))
     expect(archive.attributes('href')).toBe('https://archive.example/other-library/face-match')
     expect(wrapper.find('a a').exists()).toBe(false)
     await archive.trigger('click')

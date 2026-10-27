@@ -745,7 +745,7 @@ database context after login.
 
 ### Archive links (#75)
 
-Open `filter_examples.archive-links-scan`: the header's **Digitální knihovna**
+Open `filter_examples.archive-links-scan`: the header's **NDK**
 link targets this exact page; the link beside **Document pages** targets its
 containing document. Navigate a thumbnail and check that the header target changes.
 Open `archive-links-faces` (Irena Evidence) for **Profile photo** and **Search hit**
@@ -757,3 +757,7 @@ source responses; synthetic archive UUIDs demonstrate target structure and do no
 represent documents hosted by the external archive. These entry points reuse
 existing local media, stable source identities and portrait choices without
 rewriting any records on retained previews.
+
+Archive badges read **NDK**, with **Digitální knihovna** in the hover tooltip.
+On Faces and Discover, the badge overlays the top-left of the thumbnail with a
+nearly opaque theme background; selection remains at the top-right.

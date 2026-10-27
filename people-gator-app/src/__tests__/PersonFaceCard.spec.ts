@@ -103,6 +103,11 @@ describe('person evidence cards', () => {
     expect(wrapper.get('[data-person-match]').text()).toBe('Search hit')
     expect(wrapper.findAll('[data-slot="badge"]')).toHaveLength(1)
     const link = wrapper.get('a[target="_blank"]')
+    expect(link.text()).toBe('NDK')
+    expect(link.attributes('title')).toBe('Digitální knihovna')
+    expect(link.classes()).toEqual(
+      expect.arrayContaining(['absolute', 'left-3', 'top-3', 'bg-background/95']),
+    )
     expect(link.attributes('href')).toBe(face.pageUrl)
     expect(link.attributes('rel')).toBe('noopener noreferrer')
     expect(link.attributes('aria-label')).toContain('page in Digitální knihovna (new tab)')
