@@ -460,7 +460,7 @@ watch(
               </template>
             </LoadableImage>
           </ItemMedia>
-          <ArchiveLink :url="face.pageUrl" />
+          <ArchiveLink :url="face.pageUrl" class="absolute left-3 top-3" />
           <FaceSelectionControl
             :face-id="face.id"
             :selected="selectedFaceIds.has(face.id)"

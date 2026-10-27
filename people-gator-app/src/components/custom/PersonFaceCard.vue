@@ -112,7 +112,7 @@ const sourceTarget = computed(() =>
       <span v-if="portrait" data-person-portrait>Profile photo</span>
       <span v-if="face.matched" data-person-match>Search hit</span>
     </p>
-    <ArchiveLink :url="face.pageUrl" />
+    <ArchiveLink :url="face.pageUrl" class="absolute left-3 top-3" />
     <AnnotationLastChange
       :touched-at="face.metadata?.last_touched_at"
       :user-id="face.metadata?.last_touched_by_user_id"
