@@ -119,7 +119,7 @@ watch(
   },
 )
 watch(
-  () => props.faces.map((face) => face.id),
+  () => visibleFaces.value.map((face) => face.id),
   (ids) => {
     const available = new Set(ids)
     selectedIds.value = new Set([...selectedIds.value].filter((id) => available.has(id)))
@@ -154,9 +154,13 @@ watch(
       @add="select(face.id, $event, true)"
     />
     <div v-if="collapsible && canExpand" class="col-span-full flex flex-wrap gap-2">
-      <Button variant="outline" :aria-expanded="expanded" @click="toggleExpansion">{{
-        expanded ? 'Show less' : 'Show all faces'
-      }}</Button>
+      <Button
+        variant="outline"
+        :aria-expanded="expanded"
+        :disabled="busy"
+        @click="toggleExpansion"
+        >{{ expanded ? 'Show less' : 'Show all faces' }}</Button
+      >
       <slot v-if="expanded" name="pagination" />
     </div>
     <SelectedFaceActions

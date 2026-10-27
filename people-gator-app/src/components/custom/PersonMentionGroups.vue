@@ -103,6 +103,7 @@ function toggle(name: string, value: boolean) {
 watch(groups, (items) => {
   const names = new Set(items.map((group) => key(group)))
   open.value = new Set([...open.value].filter((name) => names.has(name)))
+  selected.value = new Set([...selected.value].filter((name) => names.has(name)))
 })
 </script>
 
@@ -163,7 +164,7 @@ watch(groups, (items) => {
                 <span class="min-w-0 flex-1 break-words"
                   >{{ group.name }}
                   <small v-if="mode !== 'mention'" class="block text-muted-foreground"
-                    >{{ group.library }} · {{ group.document_id ?? group.source_id
+                    >{{ group.library }} · {{ (group.document_id ?? group.source_id)?.slice(0, 8)
                     }}<template v-if="group.page_id">
                       · {{ group.page_id.slice(0, 8) }}</template
                     ></small
