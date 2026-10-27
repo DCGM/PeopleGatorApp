@@ -124,6 +124,60 @@ unexecuted coverage. A smoke check verifies a small operational path, not every
 feature. Static documentation checks validate links/claims; a documented runtime
 example needs execution before it can be reported as tested.
 
+### Faster backend feedback
+
+From `people-gator-api`, use sequential execution for small selections and runs
+without live PostgreSQL. Use four workers for the full database-enabled suite:
+
+```sh
+uv run --locked pytest --lf -q
+uv run --locked pytest tests/services/persistence/test_preview_seed.py -k reruns -q
+# With both disposable PostgreSQL URLs configured as in Development:
+uv run --locked pytest tests -n 4 --dist=worksteal -q --durations=30
+```
+
+Use `-n 2` on smaller machines, or `-n 0` for sequential debugging. Work stealing
+distributes individual cases, including parametrized cases, across workers; do
+not use `--dist=loadfile`, which leaves the expensive preview-seed module on one
+worker. Keep the worker count bounded instead of using `-n auto` on shared hosts.
+Parallel execution is optional; no workers are started by default.
+
+For each worker, the pytest controller creates a separate empty database for
+each configured `PEOPLE_GATOR_POSTGRES_TEST_URL` and
+`PEOPLE_GATOR_SCHEMA_TEST_URL`, then supplies those URLs before test collection.
+The PostgreSQL user needs `CREATEDB` in addition to the existing extension/role
+permissions (the documented disposable Docker user has these). The original
+databases are connection targets and remain untouched by parallel tests.
+Application persistence settings also point at the worker's repository database,
+including when CI supplied nested settings overrides.
+
+Each worker runs its cases sequentially. Tests retain function-scoped schemas,
+real migrations, independent sessions, commits and concurrency checks.
+Migration/downgrade, schema-validation and extension-mutating cases on different
+workers never share a database. Dynamic model-index metadata is restored after
+each case so bootstrap tests do not depend on collection order. Live Weaviate
+opt-ins are rejected with parallel execution because that service is not isolated
+per worker; use `-n 0` for those checks.
+
+The controller drops its allocated `pytest_worker_<uuid>` databases on shutdown,
+including after worker failure and partial provisioning failure. Killing the
+controller forcibly can leave those databases behind; remove only the names
+allocated by that invocation on the disposable test server. Never enable these
+commands against project or production stores.
+
+Compare timings on one machine with the same URLs/services, running separately:
+
+```sh
+time uv run --locked pytest --collect-only -q
+time uv run --locked pytest -q -n 0 --durations=0
+time uv run --locked pytest -q -n 2 --dist=worksteal --durations=0
+time uv run --locked pytest -q -n 4 --dist=worksteal --durations=0
+```
+
+`--durations=0` includes setup, call and teardown timings. Repeat the chosen full
+run to check cleanup and ordering. The [issue #81 measurements](TEST-PERFORMANCE.md)
+record the baseline, profiling evidence and worker-count comparison.
+
 ### What PR CI runs
 
 The [PR CI workflow](../.github/workflows/pr-ci.yml) currently runs:
@@ -132,7 +186,7 @@ The [PR CI workflow](../.github/workflows/pr-ci.yml) currently runs:
 2. Backend locked dependency installation and disposable PostgreSQL databases
    for repository tests (`ci`), schema tests (`ci_schema`) and CLI smoke (`ci_seed`).
 3. Real CLI migration → seed → seed → schema check using disposable local storage,
-   followed by the backend pytest suite.
+   followed by the backend pytest suite with four isolated PostgreSQL workers.
 4. Preview-controller tests from the exact workflow commit in a separate
    checkout. The workflow enables live PostgreSQL isolation; it does not enable
    live Weaviate or OTLP log delivery.
