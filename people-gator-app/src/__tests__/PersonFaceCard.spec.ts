@@ -17,6 +17,7 @@ const face: PersonFace = {
   library: 'preview-library',
   documentId: 'document-identifier',
   pageId: 'page-identifier',
+  pageUrl: 'https://archive.example/exact-api-page',
   pageLabel: 'Page 1',
   position: { x: 0, y: 0, width: 1, height: 1 },
   linkState: 'verified',
@@ -61,7 +62,9 @@ describe('person evidence cards', () => {
     expect(wrapper.text()).toContain('Preview reviewer')
     expect(wrapper.find('details').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Detection origin')
-    expect(wrapper.get('a').attributes('href')).toContain('api_key=00000000-0000-4000-8000-000000000001')
+    expect(wrapper.get('a').attributes('href')).toContain(
+      'api_key=00000000-0000-4000-8000-000000000001',
+    )
     expect(wrapper.get('a').attributes('href')).toContain('person=detection')
     expect(wrapper.find('a a').exists()).toBe(false)
     const editor = wrapper.get('[title="Evidence changed by Preview reviewer"]')
@@ -74,6 +77,47 @@ describe('person evidence cards', () => {
     expect(wrapper.text()).toContain('Last changed not recorded')
     expect(wrapper.text()).toContain('User not recorded')
     expect(wrapper.text()).toContain('Source page unavailable.')
+    wrapper.unmount()
+  })
+
+  it('keeps archive links separate from routing and selection and replaces overlay badges', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/page', name: 'document-page', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonFaceCard, {
+      props: {
+        face: { ...face, matched: true },
+        personName: 'Irena',
+        portrait: true,
+        selectable: true,
+        selectionEnabled: true,
+      },
+      global: { plugins: [router] },
+    })
+    expect(wrapper.get('[data-person-portrait]').text()).toBe('Profile photo')
+    expect(wrapper.get('[data-person-match]').text()).toBe('Search hit')
+    expect(wrapper.findAll('[data-slot="badge"]')).toHaveLength(1)
+    const link = wrapper.get('a[target="_blank"]')
+    expect(link.attributes('href')).toBe(face.pageUrl)
+    expect(link.attributes('rel')).toBe('noopener noreferrer')
+    expect(link.attributes('aria-label')).toContain('page in Digitální knihovna (new tab)')
+    expect(link.classes()).toContain('z-20')
+    expect(wrapper.find('a a').exists()).toBe(false)
+    await link.trigger('click')
+    await link.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('add')).toBeUndefined()
+    expect(wrapper.emitted('toggle')).toBeUndefined()
+    expect(router.currentRoute.value.path).toBe('/')
+    await wrapper.setProps({
+      face: { ...face, pageUrl: undefined, sourceLoading: true, pageId: '' },
+    })
+    expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Loading source page')
     wrapper.unmount()
   })
 

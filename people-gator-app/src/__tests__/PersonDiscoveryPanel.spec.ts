@@ -15,6 +15,7 @@ function face(id: string, score = 93): PersonDiscoveryFace {
     library: 'nlp',
     documentId: 'document-1',
     pageId: `page-${id}`,
+    pageUrl: `https://archive.example/other-library/${id}`,
     pageLabel: `page-${id}`,
   }
 }
@@ -48,11 +49,18 @@ describe('PersonDiscoveryPanel', () => {
       global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
     })
 
+    const archive = wrapper.get('a[target="_blank"]')
+    expect(archive.attributes('href')).toBe('https://archive.example/other-library/face-match')
+    expect(wrapper.find('a a').exists()).toBe(false)
+    await archive.trigger('click')
+    expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+    expect(wrapper.emitted('assignFaces')).toBeUndefined()
     expect(wrapper.text()).toContain('93%')
     expect(wrapper.text()).toContain('Unassigned')
     expect(wrapper.findAll('[data-face-selection-target="control"]')).toHaveLength(1)
     await wrapper.get('[aria-label="Select face face-match for assignment"]').trigger('click')
 
+    await archive.trigger('click')
     expect(wrapper.get('[role="toolbar"]').text()).toContain('1 face selected')
     expect(wrapper.get('[role="toolbar"]').classes()).toContain('fixed')
     expect(wrapper.get('[data-slot="item"]').classes()).toContain('border-secondary')

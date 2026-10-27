@@ -221,6 +221,7 @@ export function usePersonDetail(
           confidence: percentage(face.confidence),
           library: page?.library ?? 'Source unavailable',
           documentId: page?.document_id ?? face.source_id,
+          pageUrl: page?.url,
           pageId: page?.page_id ?? '',
           pageLabel: page?.page_id ?? '',
           position: face.bounding_box,

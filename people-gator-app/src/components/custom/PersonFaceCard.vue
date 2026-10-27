@@ -10,7 +10,7 @@ import type { PersonFace } from '@/viewmodels/person-detail.types'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Item } from '@/components/ui/item'
-import { Badge } from '@/components/ui/badge'
+import ArchiveLink from './ArchiveLink.vue'
 
 const props = defineProps<{
   face: PersonFace
@@ -48,13 +48,6 @@ const sourceTarget = computed(() =>
     :class="selected && 'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'"
     data-person-face-card
   >
-    <div
-      v-if="portrait || face.matched"
-      class="pointer-events-none absolute left-2 top-2 z-20 flex flex-wrap gap-1"
-    >
-      <Badge v-if="portrait" variant="outline" data-person-portrait>Portrait</Badge>
-      <Badge v-if="face.matched" variant="outline" data-person-match>Match</Badge>
-    </div>
     <button
       v-if="selectionEnabled"
       type="button"
@@ -115,6 +108,11 @@ const sourceTarget = computed(() =>
         />
       </div>
     </component>
+    <p v-if="portrait || face.matched" class="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+      <span v-if="portrait" data-person-portrait>Profile photo</span>
+      <span v-if="face.matched" data-person-match>Search hit</span>
+    </p>
+    <ArchiveLink :url="face.pageUrl" />
     <AnnotationLastChange
       :touched-at="face.metadata?.last_touched_at"
       :user-id="face.metadata?.last_touched_by_user_id"

@@ -636,6 +636,7 @@ onBeforeUnmount(() => {
 
     <DocumentPageGallery
       class="workspace-gallery border-t"
+      :document-url="documentQuery.data.value?.url"
       :items="gallery.items.value"
       :total-count="gallery.totalCount.value"
       :loading="gallery.isLoading.value"
