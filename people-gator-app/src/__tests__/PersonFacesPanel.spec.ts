@@ -261,3 +261,17 @@ describe('assigned face selection and review', () => {
     expect(wrapper.get('[role="status"]').text()).toBe('Portrait saved.')
   })
 })
+
+it('collapses to two measured rows and exposes pagination only after expansion', async () => {
+  const { wrapper } = await render()
+  await wrapper.setProps({ collapsible: true, hasMore: true })
+  // A zero-width jsdom grid has one column; browser coverage exercises real widths.
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(2)
+  const toggle = wrapper.findAll('button').find(button => button.text() === 'Show all faces')!
+  expect(toggle.attributes('aria-expanded')).toBe('false')
+  await toggle.trigger('click')
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(4)
+  expect(toggle.attributes('aria-expanded')).toBe('true')
+  await toggle.trigger('click')
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(2)
+})
