@@ -3200,14 +3200,14 @@ async def test_document_table_default_link_has_usable_rows_and_media(seed_target
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", ["asc", "desc"])
-async def test_document_table_unnamed_sorts_by_visible_title(seed_target, direction):
+async def test_document_table_unknown_name_sorts_at_directional_edge(seed_target, direction):
     import unicodedata
     from people_gator_api.schemas.sources import DocumentListFilter
     from people_gator_api.schemas.search import SearchDocumentsRequest
 
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
-    demo = parse_qs(urlsplit(seeded.filter_examples["document-table-name-fallback"]).query)
+    demo = parse_qs(urlsplit(seeded.filter_examples["document-table-unknown-names"]).query)
     scope = DocumentListFilter(library=demo["library"])
     request = DocumentListRequest(limit=2, filter_=scope, sort=demo["sort"][0], sort_direction=direction)
     rows, cursor = [], None
@@ -3218,13 +3218,13 @@ async def test_document_table_unnamed_sorts_by_visible_title(seed_target, direct
         if cursor is None:
             break
     def key(row):
-        title = row.name or f"Document {row.document_id}"
+        title = row.name or ""
         normalized = "".join(char for char in unicodedata.normalize("NFD", title) if not unicodedata.combining(char)).lower()
         return normalized, title
     expected = sorted(sorted(rows, key=lambda row: row.source_id.int), key=key, reverse=direction == "desc")
     assert [row.source_id for row in rows] == [row.source_id for row in expected]
     position = next(i for i, row in enumerate(rows) if row.source_id == seeded.documents["legacy-document"])
-    assert 0 < position < len(rows) - 1
+    assert position == (0 if direction == "asc" else len(rows) - 1)
     assert rows[position].name is None
     search = await database.sources.search_documents(SearchDocumentsRequest(
         limit=100, filter_=scope, query=QueryBase(text=demo["library"]), sort="name", sort_direction=direction,

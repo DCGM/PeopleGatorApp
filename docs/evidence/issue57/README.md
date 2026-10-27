@@ -14,7 +14,7 @@ store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
 - `sticky-header-*`: pinned headings partway down the table, with First page enabled.
 - `sticky-header-right-*`: pinned headings aligned with the final columns after horizontal scrolling and cursor loading.
 - `sticky-header-dark-*`: pinned headings and sort direction in the dark theme.
-- `unnamed-sort-ascending-*` / `unnamed-sort-descending-*`: the unnamed legacy document sorts by its displayed Document UUID title among named rows, rather than remaining last.
+- `unnamed-sort-ascending-*` / `unnamed-sort-descending-*`: unknown names compare as empty strings, appearing first ascending and last descending.
 - `filters-mobile`: existing mobile settings expanded above the table. The default
   desktop captures show the corresponding always-available settings.
 
@@ -44,7 +44,6 @@ batch at the far right, and keyboard sorting from the pinned header. Light and
 dark screenshots use the same synthetic pagination documents and local media.
 
 Unnamed-sort checks verify complete loaded name order and the legacy document's
-position between named neighbors in both directions, at desktop and mobile
-sizes. In `preview-mzk`, its positions are 4 of 17 ascending and 14 of 17
-descending; the stored name remains null. Regression tests cover one-row cursor
+position first ascending and last descending, at desktop and mobile sizes. In
+`preview-mzk`, its positions are 1 of 17 ascending and 17 of 17 descending; the stored name remains null. Regression tests cover one-row cursor
 batches and the same order in ordinary browsing and bounded text search.

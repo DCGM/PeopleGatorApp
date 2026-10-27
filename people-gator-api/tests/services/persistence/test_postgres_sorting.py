@@ -239,8 +239,8 @@ async def test_document_sorts_cover_name_library_and_page_count(collection):
     by_name, _ = await pages(c.r.db.sources.list_documents, DocumentListRequest, filter_=scope,
                              sort="name", sort_direction="desc")
     names = [item.name for item in by_name]
-    # Unnamed records use the displayed Document <UUID> title in name order.
-    assert names == ["Ödön album", "odon album", None, "Bravo"]
+    # Unknown names compare as empty strings and follow named rows descending.
+    assert names == ["Ödön album", "odon album", "Bravo", None]
 
     by_library, _ = await pages(c.r.db.sources.list_documents, DocumentListRequest, filter_=scope,
                                 sort="library")
@@ -342,13 +342,19 @@ async def test_ranked_candidates_removed_after_scoring_are_dropped():
 
 
 @pytest.mark.parametrize("direction", ["asc", "desc"])
-async def test_document_name_fallback_agrees_in_paged_browse_and_search(collection, direction):
+async def test_unknown_document_names_agree_in_paged_browse_and_search(collection, direction):
     from people_gator_api.schemas.search import SearchDocumentsRequest
 
     c = collection
+    # Multiple unknown names must keep the same UUID tie order in both
+    # directions, even when a cursor splits the unknown-name group.
+    unknown, _ = await c.r.db.sources.get_or_create_document(DocumentCreateRequest(
+        library=c.libraries[0], document_id=uuid.uuid4(), name=None,
+    ))
+    documents = [*c.documents, unknown]
     scope = DocumentListFilter(library=c.libraries)
-    expected = sorted(c.documents, key=lambda row: row.source_id.int)
-    expected.sort(key=lambda row: text_key(row.name or f"Document {row.document_id}"), reverse=direction == "desc")
+    expected = sorted(documents, key=lambda row: row.source_id.int)
+    expected.sort(key=lambda row: text_key(row.name or ""), reverse=direction == "desc")
     browse, total = await pages(c.r.db.sources.list_documents, DocumentListRequest,
                                filter_=scope, sort="name", sort_direction=direction, limit=1)
     search, search_total = await pages(c.r.db.sources.search_documents, SearchDocumentsRequest,
@@ -359,4 +365,7 @@ async def test_document_name_fallback_agrees_in_paged_browse_and_search(collecti
     assert [row.source_id for row in browse] == ids
     assert [row.source_id for row in search] == ids
     assert len(set(ids)) == len(ids)
-    assert 0 < next(i for i, row in enumerate(browse) if row.name is None) < len(browse) - 1
+    unknowns = [row for row in browse if row.name is None]
+    edge = browse[:2] if direction == "asc" else browse[-2:]
+    assert [row.source_id for row in edge] == sorted(row.source_id for row in unknowns)
+    assert len(unknowns) == 2

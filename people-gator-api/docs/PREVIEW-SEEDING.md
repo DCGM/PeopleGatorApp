@@ -788,8 +788,10 @@ pinned at the top. Scroll down and sideways to verify aligned headings and
 automatic loading at the final row; the loading marker remains reachable at
 every horizontal position. Sort buttons stay keyboard accessible while pinned.
 
-The `document-table-name-fallback` link sorts `preview-mzk` by Document name.
+The `document-table-unknown-names` link (also available as the older
+`document-table-name-fallback` link) sorts `preview-mzk` by Document name.
 The unnamed legacy document displays `Document 1c0b07a3-f413-518d-b5a2-1116ab58df00`
-and sorts by that displayed title among the named rows in both directions,
-including across cursor batches and during search. Its stored name remains null;
-reruns preserve this fixture and its stable identity. It is not a pinned last row.
+but its unknown name compares as an empty string: first ascending and last
+descending, including across cursor batches and during search. The UUID label is
+display-only. Its stored name remains null; reruns preserve this fixture and its
+stable identity. Multiple unknown names tie-break by source UUID ascending.

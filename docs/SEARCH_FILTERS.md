@@ -103,8 +103,9 @@ Semantics shared by every resource:
 - Counts compare numerically, times chronologically and IDs by UUID value.
 - Assignment state orders `verified`, `manual`, `automatic`, then unassigned.
 - Unknown values (no edit time, no source context, unassigned) sort last in
-  **both** directions. Document name sorting uses the displayed `Document <UUID>`
-  fallback for unnamed documents, so they sort alphabetically with named rows.
+  **both** directions. Unknown document names compare as empty strings instead:
+  first ascending, last descending, with source UUID ascending breaking ties.
+  The displayed `Document <UUID>` fallback is not used for name sorting.
 - The canonical UUID ascending is the final tie-breaker; an ID sort may be
   descending and is its own tie-breaker.
 - PostgreSQL list cursors carry every key value and are bound to the query,
@@ -123,7 +124,7 @@ Semantics shared by every resource:
 | Collection (endpoint) | Fields | API default | UI default |
 | --- | --- | --- | --- |
 | People browse/search, Discover people, scan candidates (`/entities`, `/search-entities`) | `relevance` (search), `name`, `last_touched_at`, `created_at`, `entity_id` | UUID / relevance | Name A–Z; Relevance while a query or face signal exists |
-| Documents (`/documents`, `/search-documents`) | `relevance` (search), `name`, `library` (then archive ID), `document_id`, `page_count` (registered pages with the same library/archive ID), `last_touched_at` (document processing) | UUID / relevance | Name A–Z (including the displayed fallback); Relevance while searching |
+| Documents (`/documents`, `/search-documents`) | `relevance` (search), `name`, `library` (then archive ID), `document_id`, `page_count` (registered pages with the same library/archive ID), `last_touched_at` (document processing) | UUID / relevance | Name A–Z (unknown names first); Relevance while searching |
 | Scans (`/pages`, `/search-pages`) | `relevance` (search), `library` (then document, page ID), `document_id` (then page ID), `page_id`, `last_touched_at` | UUID / relevance | Library A–Z; Relevance while searching |
 | Document page gallery and scan lists (`/pages`) | `page_id`, `last_touched_at` | UUID | Page ID ascending. No physical page sequence is recorded; page IDs are never shown as page numbers |
 | Person faces, scan page faces, Discover similar faces (`/faces`, `/search-faces`) | `relevance` (similarity, search), `last_touched_at`, `link_state`, `confidence`, `source` (library, document, page), `detection_id` | UUID / relevance | Face ID; Similarity in Discover. Scan page faces omit Source |
