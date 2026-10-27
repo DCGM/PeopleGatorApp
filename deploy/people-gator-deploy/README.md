@@ -1,7 +1,7 @@
 # people-gator-deploy
 
 One installable deployment utility for **PR previews**, **staging from `main`**
-and **tagged releases**. It is a standard-library-only Python package with the
+and **tagged releases**. It is a Python package with a pinned boto3 S3 client and the
 `people-gator-deploy` command and an equivalent Python API
 (`people_gator_deploy.environments.Environment`). Compose files, the login page,
 the collector configuration and the database validator ship inside the package.
@@ -9,9 +9,11 @@ the collector configuration and the database validator ship inside the package.
 **Prerequisites:** Linux, Python 3.11+ with `venv`/`ensurepip`, Git, Docker Engine
 and Docker Compose v2.32+, plus the proxy, DNS, runners and buckets in
 [HOSTS.md](HOSTS.md). The first installation of each revision downloads
-`setuptools` from the configured package index to build the wheel. No API
-dependencies are installed on the host; database snapshot work runs in
-operation-scoped backend containers.
+`setuptools` to build the wheel and the fully pinned S3 client dependency set
+from the configured package index. The host package gathers backup archives;
+database restore uses the infrastructure PostgreSQL 16 tools and database
+validation runs in operation-scoped backend containers. Candidate application
+code never selects backups or receives backup credentials.
 
 ## First setup
 
@@ -106,7 +108,8 @@ people-gator-deploy staging migrate-config [--dry-run]              # explicit s
 ```
 
 `configure` deep-merges the input into the descriptor (so a file with only
-`{"snapshot": {"sha256": "…"}}` updates the expected archive checksum), validates
+`{"snapshot_source_file": "/private/staging-backup-source.json"}` selects the
+automatic source), validates
 everything, keeps a private `config.backup-<sha256>.json` and refuses concurrent
 edits (`--expected-digest` for read-modify-write tools). It never contacts
 services or prints secrets. Once installed, state/infrastructure paths, Docker
@@ -131,19 +134,19 @@ Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`,
   receives it; migration/check/validation tools receive database settings only.
   It must not define persistence settings, which staging owns.
 
-  `snapshot` is needed only by `snapshot-init`/`refresh`: `path` is an absolute
-  path to an owned private PostgreSQL custom-format archive, `sha256` is its
-  expected 64-character lowercase SHA-256 and `application_revision` is the
-  source application's 40-character Git SHA. Obtain and verify the archive
-  externally, and record its checksum/source revision before configuring it.
-  The utility never downloads backups or requires S3/media-source credentials.
+  `snapshot_source_file` names an owned private JSON file with the automatic
+  read-only backup source. It is read only for `snapshot-init`/`refresh`.
+  See [Backup gathering](#backup-gathering) for setup, selection and failures.
   Optional `project` defaults to `people-gator-staging`.
 
-  When converting a pre-rollout descriptor, explicitly configure `runtime_file`
-  and `snapshot`; configure removes obsolete `storage`, `backup_source`,
-  `media_source`, `accounts` and `media_transfer` sections, retaining a private
-  backup. Existing database generations stay intact; any storage/auth setup and
-  media-prefix compatibility are the operator's external responsibility.
+  Legacy `snapshot` objects remain supported for explicit local recovery. To
+  switch an existing fixed-local descriptor, configure `snapshot_source_file`;
+  configure removes `snapshot` atomically and preserves a private descriptor
+  backup. It does not touch staging data. Supplying both settings directly is
+  rejected. No per-date path/checksum/revision edits are needed afterward.
+  Pre-rollout descriptors must also configure `runtime_file`, which removes
+  obsolete `storage`, `backup_source`, `media_source`, `accounts` and
+  `media_transfer` sections. Their external application setup remains operator work.
 * **release** — `host`, `database_network` (external PostgreSQL), mode-600
   `runtime_file` and `migration_file` with only `PEOPLE_GATOR_API__*` lines, and
   `"access_reviewed": true` (see the access boundary below). Optional `project`,
@@ -214,18 +217,93 @@ once with `staging snapshot-init`; replace the database only with
 check runs under the environment lock, so queued initializations cannot replace
 an already initialized database without the refresh backup guard.
 
-Preparation pins a local archive's inode, verifies its SHA-256/custom format,
-restores original rows into a separate database/role, rejects changes to the
-archive during restore, and validates rows, links, vectors and migration history.
+Preparation gathers the latest production archive as described below, pins its
+local inode, verifies SHA-256/custom format, restores original rows into a separate
+database/role, rejects changes during restore, and validates rows, links, vectors
+and migration history.
 It then migrates, checks the runtime role and starts the backend/frontend before
 recording success. Failed refreshes retain the active database.
 
-S3 and all media/authentication objects are managed externally. Staging does not
+Application S3 storage and all media/authentication objects are managed externally. Staging does not
 provision buckets/users/keys, copy or validate media, change storage generations,
 or impose S3 migration requirements. Missing media does not reject a database
 snapshot. Supply the running application's external settings through
 `runtime_file`; application startup and routed readiness remain required. Normal
 updates and database refreshes leave that file and external storage untouched.
+
+### Backup gathering
+
+Provision a separate read-only identity once for the production backup prefix:
+`ListBucket` restricted to that prefix, `GetObject` and `GetObjectVersion` only.
+Use the [restore-reader policy example](../backup/restore-policy.example.json).
+It needs no production database access, writes, deletes or application storage
+permissions. Keep the backup publisher's identity separate.
+
+Copy [staging-backup-source.example.json](examples/staging-backup-source.example.json)
+to a private host directory outside the checkout and utility installation. Set
+an explicit HTTPS endpoint, region, bucket, prefix and the reader credentials.
+The JSON is exactly those six fields; no restore database or target settings.
+Make the directory mode 700 and file mode 600, owned by the deployment account.
+Use system-trusted TLS; a private CA can be supplied through `AWS_CA_BUNDLE`.
+No ambient AWS credentials, application settings or instance profile fill missing
+values. Do not put backup credentials in `runtime_file` or GitHub input fields.
+
+Configure the reference once (using an absolute private input JSON path):
+
+```json
+{"snapshot_source_file": "/private/staging-backup-source.json"}
+```
+
+```sh
+people-gator-deploy staging configure --input /private/staging-source-change.json --dry-run
+people-gator-deploy staging configure --input /private/staging-source-change.json
+```
+
+This configuration change does **not** refresh the running database. The next
+explicit `snapshot-init` or guarded `refresh` uses the source. Ordinary `update`,
+including automatic successful-main deployments, keeps staging edits and never
+reads the source file or contacts the backup bucket. Existing initialization,
+refresh backup-record and deployment locks remain in force.
+
+Each snapshot operation follows this sequence:
+
+1. List **all pages** under the configured prefix. Accept only direct-child
+   `peoplegator-prod-YYYY-MM-DD.dump` names with real calendar dates. Ignore
+   unrelated keys, subdirectories, incomplete uploads and invalid dates. Select
+   the greatest filename date, independently of listing order or LastModified.
+2. HEAD the selected key. Require publisher `sha256` (64 lowercase hex) and
+   `application-revision` (40 lowercase hex) metadata, a nonempty ETag and size.
+   Pin those values and any version ID for the operation. A newer dated upload
+   during this operation is considered only by the **next** snapshot operation.
+3. Stream a conditional `If-Match` GET, requesting the pinned version when
+   available, into a mode-600 archive inside a mode-700 temporary directory in
+   staging state. Check response identity, exact size, SHA-256, `PGDMP` format
+   and a second HEAD. Metadata names are case insensitive. There is no persistent
+   archive cache and no reuse of a previous selection.
+4. Run `pg_restore --list` before provisioning. Restore into an independent
+   candidate database, check the open archive for local mutation, validate the
+   restored database, then recheck the current S3 identity/metadata before
+   proceeding with migration and activation. A changed selected key fails even
+   when an older object version remains readable. SHA/revision metadata follows
+   the existing trusted publisher contract; it is not a cryptographic signature.
+5. Remove the downloaded archive on ordinary success/failure. Write mode-600
+   `generation-*/provenance.json` and successful active `state.json` with bucket,
+   selected key/date, ETag, available version ID, size, SHA-256, source application
+   revision and restored schema revision. These are private deployment evidence;
+   credentials and archive contents never enter public summaries.
+
+An empty source, access/network errors, invalid metadata, changed object, corrupt
+latest archive or insufficient disk space stops the operation. There is **no
+fallback to older backups** and the active staging database is retained. Public
+errors give fixed guidance without relaying provider errors or private values.
+Check reader grants and connectivity for gathering failures, publisher metadata
+for metadata failures, and the trusted source archive for integrity/format
+failures. Repair the source deliberately before retrying. Do not overwrite a dated
+object as a routine fix. Ensure private disk capacity for the full compressed
+archive; abrupt process/host death can leave a private `snapshot-*` directory or
+unserved candidate database for operator cleanup after confirming no job is active.
+Media/auth copying, publisher installation and a live staging refresh are outside
+this configuration transition.
 
 **Releases.** A `v*` tag push runs `release.yml`. The tag resolves to its commit
 (annotated or lightweight); moved tags, tags not on `main`, and commits without a
@@ -277,3 +355,7 @@ PREVIEW_TEST_OTEL=1 python3 -B deploy/people-gator-deploy/tests/test_observabili
 
 `test_staging_runtime.py` needs a backend image, an internal network aliasing
 PostgreSQL as `preview-postgres` and Docker; see the PR CI workflow for the setup.
+It runs both legacy local restore and latest-source discovery/download/restore
+against disposable TLS MinIO. It verifies the newest archive's actual records
+and that a corrupt newer archive creates no database. The backend environment
+supplies boto3 and application dependencies; no real operator source is read.

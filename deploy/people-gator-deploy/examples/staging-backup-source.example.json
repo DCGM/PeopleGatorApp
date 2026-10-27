@@ -1,0 +1,8 @@
+{
+  "endpoint_url": "https://s3.example.invalid",
+  "region": "us-east-1",
+  "bucket": "peoplegator-db-backup",
+  "prefix": "production/db-backups/",
+  "access_key_id": "REPLACE_WITH_READ_ONLY_BACKUP_ID",
+  "secret_access_key": "REPLACE_WITH_READ_ONLY_BACKUP_SECRET"
+}

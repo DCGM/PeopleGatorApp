@@ -3,13 +3,12 @@ import copy
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from people_gator_deploy import config, snapshots, staging
+from people_gator_deploy import snapshots, staging
 from people_gator_deploy.core import DeployError
 from test_staging import FakeStaging
 
@@ -99,6 +98,15 @@ class SourceTests(unittest.TestCase):
             {"sha256": "a" * 64, "Sha256": "b" * 64, "application-revision": "a" * 40}):
             self.s3.objects[NEW]["Metadata"] = metadata
             with self.subTest(metadata=metadata), self.assertRaises(DeployError):
+                self.download()
+            self.assertEqual(self.s3.gets, [])
+
+    def test_missing_identity_or_invalid_size_fails_before_download(self):
+        for field, value in (("ETag", ""), ("ETag", None), ("ContentLength", -1),
+                             ("ContentLength", True), ("ContentLength", "123")):
+            self.s3 = S3()
+            self.s3.objects[NEW][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(DeployError):
                 self.download()
             self.assertEqual(self.s3.gets, [])
 

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: update retains staging data; snapshot-init populates it once; refresh replaces it explicitly
+        description: update retains data; snapshot-init/refresh restore the latest production backup (refresh requires backup record)
         type: choice
         options: [update, snapshot-init, refresh]
         default: update
