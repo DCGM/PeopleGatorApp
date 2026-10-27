@@ -128,6 +128,11 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: 'API key',
     accessorFn: (d) => d.last_touched_by_api_key_name || d.last_touched_by_api_key_id || '—',
   },
+  {
+    accessorKey: 'linked_entity_count',
+    header: 'Linked entities',
+    cell: ({ getValue }) => getValue() ?? 'Unknown',
+  },
   ...DOCUMENT_ANNOTATION_GROUPS.map((group) => ({
     id: group.id,
     header: group.label,
@@ -138,11 +143,6 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
       cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
     })),
   })),
-  {
-    accessorKey: 'linked_entity_count',
-    header: 'Linked entities',
-    cell: ({ getValue }) => getValue() ?? 'Unknown',
-  },
 ]
 const table = useTable({
   features,

@@ -80,12 +80,12 @@ describe('document table', () => {
       'Archive',
       '2',
       'Unknown',
+      '1',
       '6',
       '2',
       '1',
       '1',
       '2',
-      '1',
     ])
     expect(wrapper.findAll('th')[0]!.text()).toBe('Document name')
     expect(wrapper.findAll('tbody a[href^="/scans"]')).toHaveLength(1)
