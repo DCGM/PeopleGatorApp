@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (33, 61, 43)
-    assert len(result.documents) == 41 and len(result.pages) == 77
+    assert await counts(database) == (33, 64, 44)
+    assert len(result.documents) == 42 and len(result.pages) == 78
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (33, 61, 43)
+    assert await counts(database) == (33, 64, 44)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (33, 61, 43)
+    assert await counts(database) == (33, 64, 44)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (34, 61, 43)
+    assert await counts(database) == (34, 64, 44)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 33 and len(result.faces) == 61
-    assert await counts(database) == (33, 61, 43)
+    assert len(result.entities) == 33 and len(result.faces) == 64
+    assert await counts(database) == (33, 64, 44)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (32, 60, 42)
+    assert await counts(database) == (32, 63, 43)
 
 
 
@@ -3342,3 +3342,56 @@ async def test_archive_links_use_each_evidence_page_and_containing_document(seed
     before = await db.entities.get(person.entity_id)
     assert await preview.seed_preview(db, filesystem) == first
     assert await db.entities.get(person.entity_id) == before
+
+
+@pytest.mark.asyncio
+async def test_identity_reference_gallery_pages_cross_library_crops_and_preserves_review(seed_target):
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    ada = seed.entities['ada']
+    expected = {
+        seed.faces[face.key]
+        for page in PAGES for face in page.faces if face.person == 'ada'
+    }
+    items = []
+    cursor = None
+    while True:
+        page = await database.faces.list(FaceListRequest(
+            filter_=FaceListFilter(entity_id=[ada]), limit=6,
+            return_total_count=True, sort='detection_id', sort_direction='asc', cursor=cursor,
+        ))
+        assert page.total_count == len(expected)
+        items.extend(page.items)
+        if page.cursor is None:
+            break
+        assert page.cursor != cursor
+        cursor = page.cursor
+    assert len(items) > 6
+    assert len(items) == len({face.detection_id for face in items})
+    assert {face.detection_id for face in items} == expected
+    assert all(face.entity_id == ada for face in items)
+    assert {face.entity_link_state for face in items} == {'automatic', 'manual', 'verified'}
+    sources = [await database.sources.get_page(face.source_id) for face in items]
+    assert {source.library for source in sources} == {'preview-mzk', 'preview-nlk'}
+    assert len({source.document_id for source in sources}) > 1
+    for face in items:
+        source = await database.sources.lookup(GenericSourceLookupRequest(source_id=face.source_id))
+        crop = await get_aligned_face_crop(seed.users["reviewer"], face, source, max_width=96)
+        with Image.open(io.BytesIO(crop.content)) as image:
+            assert image.width == image.height == 96
+    nora = await database.faces.list(FaceListRequest(limit=6, filter_=FaceListFilter(entity_id=[seed.entities['nora']])))
+    assert nora.items == []
+    assert seed.faces['reference-emil'] not in expected
+    assert seed.faces['unassigned-ada'] not in expected
+
+    actor = GenericActor(user_id=seed.users['reviewer'])
+    reviewed = await database.faces.patch(
+        seed.faces['reference-ada-manual'], FacePatchRequest(entity_id=None, entity_link_state=None), actor,
+    )
+    before = await database.entities.get(ada)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.faces == seed.faces
+    assert (await database.faces.get(reviewed.detection_id)) == reviewed
+    assert (await database.entities.get(ada)).last_touched_at == before.last_touched_at
+    linked = await database.faces.list(FaceListRequest(filter_=FaceListFilter(entity_id=[ada]), limit=100))
+    assert {face.detection_id for face in linked.items} == expected - {reviewed.detection_id}

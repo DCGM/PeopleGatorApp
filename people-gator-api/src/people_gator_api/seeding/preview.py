@@ -517,6 +517,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     discovery_page = next(item for item in PAGES if item.key == "discovery-1")
     discovery_document = next(item for item in DOCUMENTS if item.key == discovery_page.document)
+    reference_document = next(item for item in DOCUMENTS if item.key == "reference-faces")
+    reference_path = (
+        f"/libraries/{reference_document.library}/documents/{reference_document.document_id}"
+        f"/pages/{next(item.page_id for item in PAGES if item.key == 'reference-faces-1')}"
+    )
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -526,6 +531,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "identity-reference-faces": reference_path + "?" + urlencode({
+                "person": active_faces.get("reference-ada-manual", ""),
+                "library": "preview-nlk", "link_state": "verified",
+            }),
+            "identity-reference-empty": reference_path + "?candidate_text=Nora",
             # #75 reuses linked local media and the saved portrait without changing review edits.
             "archive-links-faces": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "tab": "faces", "origin_matched_face": active_faces.get("provenance-auto", ""),

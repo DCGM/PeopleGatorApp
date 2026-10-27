@@ -843,3 +843,28 @@ The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
 combined counts 9/3/2/2/2. Counts include direct document mentions and every
 registered page, even when evidence filters select the document. The mirror
 has zero in every field. Switching columns adds no requests or local sorting.
+
+## In-place identity face references (#41)
+
+Open `identity-reference-faces` for **Reference appearances** in `preview-nlk`.
+Hover **View faces** on Ada Novak's candidate card, or click/tap to keep it open.
+The same control is available on the currently assigned identity. The shadcn
+popover shows six crops per batch in a bounded scroll area; **Load more faces**
+reaches the rest. The count reports loaded/total faces. Close with Escape, the
+close button or a click outside. Keyboard users can open with Enter/Space,
+Tab to the scroll area and loading control, and scroll with arrow keys.
+
+Ada has more than six appearances across pages, documents and libraries, with
+manual, automatic and verified links. Reference membership uses only her exact
+identity, independently of workspace filters and candidate search. Emil's faces
+and similar unassigned faces stay excluded. `identity-reference-empty` finds
+mention-only Nora Svoboda and demonstrates **No linked faces**. Browsing crops
+preserves the selected scan annotation, viewer position and assignments.
+
+The additive `reference-faces` document/page and three linked faces reuse the
+existing synthetic identities, deterministic geometry and generated local media.
+The added faces need no embeddings, so existing similarity-ranking examples stay
+unchanged. Stable keys and checkpoints preserve earlier examples, review edits,
+assignments and processing timestamps. Integration coverage traverses six-item cursor batches,
+checks exact membership and cross-library sources, reads every aligned crop,
+checks Nora's empty gallery and preserves a reviewed assignment on rerun.
