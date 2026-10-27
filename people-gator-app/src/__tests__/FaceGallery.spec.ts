@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
+import UiTooltip from '@/components/custom/UiTooltip.vue'
 import FaceGallery from '@/components/custom/FaceGallery.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 
@@ -52,7 +53,9 @@ describe('FaceGallery', () => {
     ).toBe('true')
     expect(wrapper.findAll('[data-face-status-badge]')).toHaveLength(2)
     expect(wrapper.get('[data-face-status-badge]').text()).toBe('')
-    expect(wrapper.get('[data-face-status-badge]').attributes('title')).toBe('Unassigned')
+    expect(wrapper.find('[title]').exists()).toBe(false)
+    expect(wrapper.findComponent(UiTooltip).exists()).toBe(false)
+    expect(wrapper.get('[data-face-status-badge]').attributes('aria-label')).toBe('Unassigned')
     expect(wrapper.find('[data-face-status-badge] svg').exists()).toBe(true)
     expect(wrapper.get('[data-face-status-badge]').classes()).toContain('border-0')
 

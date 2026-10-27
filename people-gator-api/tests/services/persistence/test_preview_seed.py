@@ -1756,6 +1756,25 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
 
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
+    hover = urlsplit(seed.filter_examples['scan-annotation-hover'])
+    hover_page = await db.sources.get_page(seed.pages['provenance-a-1'])
+    assert hover.path == (
+        f'/libraries/{hover_page.library}/documents/{hover_page.document_id}'
+        f'/pages/{hover_page.page_id}'
+    )
+    assert not hover.query  # Open every annotation, without hiding states.
+    hover_faces = (await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(source_id=[hover_page.source_id]),
+    ))).items
+    assert {face.detection_id for face in hover_faces} == {
+        seed.faces['provenance-auto'], seed.faces['provenance-authority'],
+    }
+    assert {face.entity_link_state.value for face in hover_faces} == {'automatic', 'verified'}
+    hover_spans = await get_text_mention_spans(
+        db, hover_page.source_id, library=hover_page.library,
+        document_id=hover_page.document_id, page_id=hover_page.page_id,
+    )
+    assert hover_spans and all(span.entity_id == seed.entities['provenance-review'] for span in hover_spans)
     cards = urlsplit(seed.filter_examples['person-evidence-cards'])
     person_id = seed.entities['provenance-review']
     comparison = urlsplit(seed.filter_examples['person-face-style-comparison'])
@@ -3285,3 +3304,41 @@ async def test_document_table_annotation_groups_have_independent_full_scope_coun
     await preview.seed_preview(database, filesystem)
     again = await database.sources.list_documents(DocumentListRequest(limit=12, filter_=scope))
     assert again.items == listed.items
+
+
+@pytest.mark.asyncio
+async def test_archive_links_use_each_evidence_page_and_containing_document(seed_target):
+    from people_gator_api.schemas.search import EntitySearchQuery
+    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
+
+    db, filesystem, _ = seed_target
+    first = await preview.seed_preview(db, filesystem)
+    person = await db.entities.get(first.entities["provenance-review"])
+    assert person.thumbnail_face_id in {
+        face.detection_id for face in (await db.faces.list(FaceListRequest(
+            limit=100, filter_=FaceListFilter(entity_id=[person.entity_id]),
+        ))).items
+    }
+    faces_path = urlsplit(first.filter_examples["archive-links-faces"])
+    assert faces_path.path == f"/people/{person.entity_id}"
+    assert parse_qs(faces_path.query)["origin_matched_face"] == [str(first.faces["provenance-auto"])]
+    hits = await db.faces.search(SearchFacesRequest(limit=40, query=EntitySearchQuery(
+        entity_id=first.entities["discovery"], entity_annotations=["faces"],
+        face_embedding_model=DISCOVERY_MODEL,
+    )))
+    outside = {first.faces["discovery-global-assigned"], first.faces["discovery-global-unassigned"]}
+    assert outside <= {face.detection_id for face in hits.items}
+    for face in hits.items:
+        page = await db.sources.get_page(face.source_id)
+        document = await db.sources.lookup_document(DocumentLookupRequest(
+            library=page.library, document_id=page.document_id,
+        ))
+        assert str(page.url) == f"{document.url}?page=uuid:{page.page_id}"
+        assert not urlsplit(str(document.url)).query
+        if face.detection_id in outside:
+            assert page.library == "preview-nlk"
+    page = await db.sources.get_page(first.pages["discovery-1"])
+    assert first.filter_examples["archive-links-scan"].endswith(f"/pages/{page.page_id}")
+    before = await db.entities.get(person.entity_id)
+    assert await preview.seed_preview(db, filesystem) == first
+    assert await db.entities.get(person.entity_id) == before

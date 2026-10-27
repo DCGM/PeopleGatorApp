@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import UiTooltip from '@/components/custom/UiTooltip.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import type { TranscriptionEntitySpan } from '@/viewmodels/document-workspace.types'
 
@@ -112,7 +113,10 @@ describe('DocumentPageOverlay', () => {
       },
     })
 
+    expect(wrapper.findComponent(UiTooltip).exists()).toBe(false)
+    expect(wrapper.find('[title]').exists()).toBe(false)
     const face = wrapper.get('[data-region-type="face"]')
+    expect(face.attributes('aria-label')).toContain('Select Ada:')
     expect(face.attributes('style')).toContain('left: 110px')
     expect(face.attributes('style')).toContain('top: 220px')
     expect(face.attributes('style')).toContain('width: 150px')

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import UiTooltip from './UiTooltip.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
 import type { AcceptableValue } from 'reka-ui'
@@ -120,8 +119,8 @@ watch([() => props.selectedFaceId, faceFilter], scrollSelectedThumbnailIntoView,
 
       <ScrollArea type="always" orientation="horizontal" class="mt-4 w-full">
         <div ref="thumbnailList" class="flex min-h-22 w-max items-start gap-3 px-1 pb-5 pt-1">
-          <UiTooltip v-for="(face, index) in visibleFaces" :key="face.id" :text="linkTooltip(face)">
           <button
+            v-for="(face, index) in visibleFaces"
             :key="face.id"
             type="button"
             class="group relative size-16 shrink-0 rounded-md border-2 bg-muted outline-none transition-[border-color,box-shadow] hover:border-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:size-18"
@@ -142,9 +141,8 @@ watch([() => props.selectedFaceId, faceFilter], scrollSelectedThumbnailIntoView,
               class="size-full rounded-[calc(var(--radius-md)-2px)]"
               image-class="size-full object-cover grayscale transition-transform duration-200 group-hover:scale-105"
             />
-            <EntityLinkStateBadge v-bind="face" :focusable="false" compact class="absolute -right-1.5 -bottom-1.5 shadow-sm" />
+            <EntityLinkStateBadge v-bind="face" :focusable="false" :tooltip="false" compact class="absolute -right-1.5 -bottom-1.5 shadow-sm" />
           </button>
-          </UiTooltip>
           <p
             v-if="!props.loading && visibleFaces.length === 0"
             class="flex h-16 items-center pr-4 text-sm text-muted-foreground sm:h-18"

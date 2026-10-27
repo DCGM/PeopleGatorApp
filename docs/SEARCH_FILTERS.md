@@ -166,7 +166,7 @@ browse and search. Filter tag removal and **Clear all filters** keep search and
 sort. Related navigation to another resource carries no sort or cursor; links to
 another page of the same document keep the workspace's face, gallery and
 candidate orders. Profile witnesses from an originating face search are pinned
-first and labelled **Match**; the remaining faces follow the selected order.
+first and labelled **Search hit**; the remaining faces follow the selected order.
 
 ## Filter reference
 

@@ -28,6 +28,7 @@ export type PersonFace = LinkMetadata & {
   metadata?: FaceResponse
   sourceId?: string
   sourceLoading?: boolean
+  pageUrl?: string
   id: string
   portrait: string
   portraitLoading: boolean
@@ -43,6 +44,7 @@ export type PersonMention = LinkMetadata & {
   metadata?: TextMentionResponse
   sourceId?: string
   sourceLoading?: boolean
+  pageUrl?: string
   id: string
   excerpt: string
   matchedText: string
@@ -63,6 +65,7 @@ export type PersonDiscoveryFace = {
   library?: string
   documentId?: string
   pageId?: string
+  pageUrl?: string
   pageLabel?: string
 }
 

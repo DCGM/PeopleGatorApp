@@ -415,6 +415,14 @@ Internal fixture keys are stable for retained preview compatibility. Integration
 coverage checks equivalent repository matches, unchanged times on rerun and
 identical verification, plus upgrades from the previously deployed revision.
 
+The `scan-annotation-hover` example opens the same ledger with all annotations
+visible. Move between the automatic and verified face regions, transcription
+mentions and Page faces badges: no annotation status/type tooltip should cover
+content. State icons, accessible annotation names and selection remain available.
+Check Enter/Space selection and mobile touch selection; use the link-state scan
+examples for manual and unassigned faces. This entry point reuses existing local
+media and stable records and leaves review edits and timestamps unchanged.
+
 The `page-activity` example opens the annotation review ledger directly with
 `panel=activity`. Its two faces and one mention have two importer edits and one
 later reviewer verification. In the scan sidebar, choose Activity, then By user:
@@ -738,6 +746,26 @@ attribution, the user and touch filters, edit preservation and both
 PostgreSQL runs login, JWT-only requests, a mutation, deactivation, use of the
 existing token, rejected login/refresh and expiry. Authentication must enter no
 database context after login.
+
+### Archive links (#75)
+
+Open `filter_examples.archive-links-scan`: the header's **NDK**
+link targets this exact page; the link beside **Document pages** targets its
+containing document. Navigate a thumbnail and check that the header target changes.
+Open `archive-links-faces` (Irena Evidence) for **Profile photo** and **Search hit**
+indicators and a page link on each face. Open `archive-links-discover` (Zora
+Cartographer, synthetic discovery model) for page links on assigned and unassigned
+matches, including the `preview-nlk` document outside her reference library.
+Links remain available while faces are selected. All targets come from canonical
+source responses; synthetic archive UUIDs demonstrate target structure and do not
+represent documents hosted by the external archive. These entry points reuse
+existing local media, stable source identities and portrait choices without
+rewriting any records on retained previews.
+
+Archive badges read **NDK**, with **Digitální knihovna** in the hover tooltip.
+On phones, the header badge shows only its external-link icon.
+On Faces and Discover, the badge overlays the top-left of the thumbnail with a
+nearly opaque theme background; selection remains at the top-right.
 
 ## Document table (#57)
 

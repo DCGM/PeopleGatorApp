@@ -526,6 +526,18 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # #75 reuses linked local media and the saved portrait without changing review edits.
+            "archive-links-faces": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
+                "tab": "faces", "origin_matched_face": active_faces.get("provenance-auto", ""),
+            }),
+            "archive-links-discover": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+                "discovery_annotations": "faces",
+            }),
+            "archive-links-scan": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}"
+            ),
             # Workspace criteria stay in navigation; the scan panel uses page membership or global search.
             "global-discovery-scan": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
@@ -604,6 +616,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "touched_by": actors["importer"].user_id,
                 "api_key": registered_keys["importer"],
             }),
+            # Hover-free scan review reuses the linked importer/verified faces,
+            # OCR mention and local page media without rewriting retained edits.
+            "scan-annotation-hover": (
+                f"/libraries/{activity_document.library}/documents/{activity_document.document_id}"
+                f"/pages/{activity_page.page_id}"
+            ),
             # Open Irena's scan, then search for Ada as an assignment candidate
             # outside that page. Opening a result must not invent evidence scope.
             "scan-assignment-search": "/scans?" + urlencode({"document": documents[activity_document.key]}),
