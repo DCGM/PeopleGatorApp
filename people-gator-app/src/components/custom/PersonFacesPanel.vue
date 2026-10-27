@@ -154,12 +154,9 @@ watch(
       @add="select(face.id, $event, true)"
     />
     <div v-if="collapsible && canExpand" class="col-span-full flex flex-wrap gap-2">
-      <Button
-        variant="outline"
-        :aria-expanded="expanded"
-        @click="toggleExpansion"
-        >{{ expanded ? 'Show less' : 'Show all faces' }}</Button
-      >
+      <Button variant="outline" :aria-expanded="expanded" @click="toggleExpansion">{{
+        expanded ? 'Show less' : 'Show all faces'
+      }}</Button>
       <slot v-if="expanded" name="pagination" />
     </div>
     <SelectedFaceActions

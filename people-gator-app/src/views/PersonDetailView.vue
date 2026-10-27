@@ -17,7 +17,7 @@ import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
 import PersonFacesPanel from '@/components/custom/PersonFacesPanel.vue'
 import PersonFaceCardSkeleton from '@/components/custom/PersonFaceCardSkeleton.vue'
-import PersonMentionEntry from '@/components/custom/PersonMentionEntry.vue'
+import PersonMentionReviewList from '@/components/custom/PersonMentionReviewList.vue'
 import PersonMentionGroups from '@/components/custom/PersonMentionGroups.vue'
 import SortControl from '@/components/custom/SortControl.vue'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -59,11 +59,14 @@ const mentionSort = useRouteSort(MENTION_SORT_KEYS, MENTION_SORTS, MENTION_DEFAU
 const groupSort = useRouteSort(MENTION_GROUP_SORT_KEYS, MENTION_GROUP_SORTS, MENTION_GROUP_DEFAULT)
 const similarFaceSort = useRouteSort(DISCOVERY_FACE_SORT_KEYS, FACE_SORTS, RELEVANCE)
 const similarPeopleSort = useRouteSort(SIMILAR_PEOPLE_SORT_KEYS, PEOPLE_SORTS, RELEVANCE)
-const mentionView = computed<'flat' | 'groups'>({
-  get: () => (route.query.mention_view === 'groups' ? 'groups' : 'flat'),
+const mentionView = computed<'flat' | 'groups' | 'document' | 'page'>({
+  get: () => {
+    const mode = route.query.mention_view
+    return mode === 'groups' || mode === 'document' || mode === 'page' ? mode : 'flat'
+  },
   set: (value) =>
     void router.push({
-      query: { ...route.query, mention_view: value === 'groups' ? 'groups' : undefined },
+      query: { ...route.query, mention_view: value === 'flat' ? undefined : value },
     }),
 })
 
@@ -286,10 +289,7 @@ function retrySearch() {
             <p v-if="faceError" role="alert">
               Could not load faces. <Button variant="link" @click="retryFaces()">Retry</Button>
             </p>
-            <p v-else-if="!faceLoading">
-              Showing {{ faceCount }} of
-              {{ entity?.entity_link_stats?.faces?.total ?? faceCount }} faces
-            </p>
+            <p v-else-if="!faceLoading">{{ faceCount }} matching faces</p>
             <p v-if="!faceError && !faceLoading && !faces.length">
               No faces match the filters.
               <Button variant="link" @click="evidence.clear()">Clear filters</Button>
@@ -331,13 +331,17 @@ function retrySearch() {
               variant="outline"
               :model-value="mentionView"
               aria-label="Mention view"
-              @update:model-value="(value) => value && (mentionView = value as 'flat' | 'groups')"
+              @update:model-value="
+                (value) => value && (mentionView = value as 'flat' | 'groups' | 'document' | 'page')
+              "
             >
               <ToggleGroupItem value="flat">Flat</ToggleGroupItem>
-              <ToggleGroupItem value="groups">Exact appearance</ToggleGroupItem>
+              <ToggleGroupItem value="document">Document</ToggleGroupItem>
+              <ToggleGroupItem value="page">Page</ToggleGroupItem>
+              <ToggleGroupItem value="groups">Mention</ToggleGroupItem>
             </ToggleGroup>
             <SortControl
-              v-if="mentionView === 'groups'"
+              v-if="mentionView !== 'flat'"
               v-model="groupSort"
               :options="MENTION_GROUP_SORTS"
               label="Sort groups"
@@ -345,12 +349,13 @@ function retrySearch() {
             <SortControl
               v-model="mentionSort"
               :options="MENTION_SORTS"
-              :label="mentionView === 'groups' ? 'Sort occurrences' : 'Sort mentions'"
+              :label="mentionView !== 'flat' ? 'Sort occurrences' : 'Sort mentions'"
             />
           </div>
           <PersonMentionGroups
-            v-if="mentionView === 'groups'"
+            v-if="mentionView !== 'flat'"
             :filters="mentionFilters"
+            :mode="mentionView === 'groups' ? 'mention' : mentionView"
             :group-sort="groupSort"
             :occurrence-sort="mentionSort"
             :person-id="personId"
@@ -359,10 +364,8 @@ function retrySearch() {
             @broaden="evidence.clear()"
           />
           <div v-else class="divide-y">
-            <PersonMentionEntry
-              v-for="mention in mentions"
-              :key="mention.id"
-              :mention="mention"
+            <PersonMentionReviewList
+              :mentions="mentions"
               :person-id="personId"
               :link-states="linkStates"
             />
@@ -393,7 +396,7 @@ function retrySearch() {
 
         <TabsContent value="details">
           <PersonEditableDetails
-        hide-statistics
+            hide-statistics
             :model-value="profile"
             :person-id="personId"
             :thumbnail-face-id="portraitFaceId"

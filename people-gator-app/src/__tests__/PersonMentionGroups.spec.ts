@@ -82,15 +82,15 @@ describe('exact appearance mention groups', () => {
     expect(mocks.groups.mock.calls[0]![0]).toMatchObject({
       query: { 'filter.entity_id': ['person-ada'], sort: 'count', sort_direction: 'desc' },
     })
-    expect(wrapper.text()).toContain('“Ada Novak”')
+    expect(wrapper.text()).toContain('Ada Novak')
     expect(wrapper.text()).toContain('3 occurrences')
-    expect(wrapper.text()).toContain('“ADA NOVAK”')
+    expect(wrapper.text()).toContain('ADA NOVAK')
     expect(wrapper.text()).toContain('Showing 2 of 2 groups')
     expect(mocks.mentions).not.toHaveBeenCalled()
 
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes('“Ada Novak”'))!
+      .find((button) => button.text().includes('Ada Novak'))!
       .trigger('click')
     await flushPromises()
     expect(mocks.mentions.mock.calls[0]![0]).toMatchObject({
