@@ -69,4 +69,5 @@ dev = [
     "pyright>=1.1.409",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
+    "pytest-xdist>=3.8,<4",
 ]

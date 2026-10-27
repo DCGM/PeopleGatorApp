@@ -2,6 +2,7 @@
 
 import json
 import os
+from contextlib import ExitStack
 
 import pytest
 import pytest_asyncio
@@ -25,6 +26,61 @@ SETTINGS_ENVIRONMENT = {
 # Initialize settings before older media tests set their legacy environment
 # defaults during collection. Each test receives the original environment below.
 import people_gator_api.schemas  # noqa: E402, F401
+
+
+WORKER_STORES = pytest.StashKey[ExitStack]()
+DATABASE_URL_VARIABLES = ("PEOPLE_GATOR_POSTGRES_TEST_URL", "PEOPLE_GATOR_SCHEMA_TEST_URL")
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    worker = getattr(config, "workerinput", None)
+    if worker is None:
+        config.stash[WORKER_STORES] = ExitStack()
+        if config.getoption("numprocesses", default=0) and any(
+            os.getenv(name) for name in (
+                "PEOPLE_GATOR_WEAVIATE_TEST_HTTP_PORT", "PEOPLE_GATOR_WEAVIATE_TEST_GRPC_PORT",
+            )
+        ):
+            raise pytest.UsageError("Run live Weaviate tests sequentially (-n 0)")
+        return
+
+    # This runs before test-module collection (which snapshots integration URLs).
+    urls = worker["people_gator_database_urls"]
+    os.environ.update(urls)
+    repository_url = urls.get("PEOPLE_GATOR_POSTGRES_TEST_URL")
+    if repository_url:
+        from sqlalchemy.engine import make_url
+        from people_gator_api.settings import PersistenceSettings, settings
+
+        url = make_url(repository_url)
+        settings.persistence = PersistenceSettings(postgres={
+            "host": url.host, "port": url.port, "user": url.username,
+            "password": url.password, "database": url.database,
+        })
+        # Nested CI env overrides must not send application connections back to
+        # the controller's database. Keep the autouse settings snapshot in sync.
+        for name in list(os.environ):
+            if name.startswith("PEOPLE_GATOR_API__PERSISTENCE"):
+                del os.environ[name]
+                SETTINGS_ENVIRONMENT.pop(name, None)
+        value = settings.persistence.model_dump_json()
+        os.environ["PEOPLE_GATOR_API__PERSISTENCE"] = value
+        SETTINGS_ENVIRONMENT["PEOPLE_GATOR_API__PERSISTENCE"] = value
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_configure_node(node) -> None:
+    from postgres_workers import worker_databases
+
+    urls = {name: os.environ[name] for name in DATABASE_URL_VARIABLES if os.getenv(name)}
+    node.workerinput["people_gator_database_urls"] = node.config.stash[WORKER_STORES].enter_context(
+        worker_databases(urls)
+    )
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    if WORKER_STORES in config.stash:
+        config.stash[WORKER_STORES].close()
 
 
 @pytest.fixture(autouse=True)
