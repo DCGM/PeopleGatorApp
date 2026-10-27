@@ -1752,6 +1752,25 @@ async def test_card_and_statistics_entry_points_resolve_attributed_evidence_and_
 
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
+    hover = urlsplit(seed.filter_examples['scan-annotation-hover'])
+    hover_page = await db.sources.get_page(seed.pages['provenance-a-1'])
+    assert hover.path == (
+        f'/libraries/{hover_page.library}/documents/{hover_page.document_id}'
+        f'/pages/{hover_page.page_id}'
+    )
+    assert not hover.query  # Open every annotation, without hiding states.
+    hover_faces = (await db.faces.list(FaceListRequest(
+        limit=100, filter_=FaceListFilter(source_id=[hover_page.source_id]),
+    ))).items
+    assert {face.detection_id for face in hover_faces} == {
+        seed.faces['provenance-auto'], seed.faces['provenance-authority'],
+    }
+    assert {face.entity_link_state.value for face in hover_faces} == {'automatic', 'verified'}
+    hover_spans = await get_text_mention_spans(
+        db, hover_page.source_id, library=hover_page.library,
+        document_id=hover_page.document_id, page_id=hover_page.page_id,
+    )
+    assert hover_spans and all(span.entity_id == seed.entities['provenance-review'] for span in hover_spans)
     cards = urlsplit(seed.filter_examples['person-evidence-cards'])
     person_id = seed.entities['provenance-review']
     comparison = urlsplit(seed.filter_examples['person-face-style-comparison'])

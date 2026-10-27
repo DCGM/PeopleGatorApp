@@ -419,6 +419,14 @@ Internal fixture keys are stable for retained preview compatibility. Integration
 coverage checks equivalent repository matches, unchanged times on rerun and
 identical verification, plus upgrades from the previously deployed revision.
 
+The `scan-annotation-hover` example opens the same ledger with all annotations
+visible. Move between the automatic and verified face regions, transcription
+mentions and Page faces badges: no annotation status/type tooltip should cover
+content. State icons, accessible annotation names and selection remain available.
+Check Enter/Space selection and mobile touch selection; use the link-state scan
+examples for manual and unassigned faces. This entry point reuses existing local
+media and stable records and leaves review edits and timestamps unchanged.
+
 The `page-activity` example opens the annotation review ledger directly with
 `panel=activity`. Its two faces and one mention have two importer edits and one
 later reviewer verification. In the scan sidebar, choose Activity, then By user:
