@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import UiTooltip from './UiTooltip.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
@@ -37,10 +36,6 @@ const emit = defineEmits<{
 
 const entityClasses = {
   person: 'border-b-2 border-secondary/60 text-secondary',
-} satisfies Record<EntityType, string>
-
-const entityLabels = {
-  person: 'Person',
 } satisfies Record<EntityType, string>
 
 const hoveredEntityKey = ref<string | null>(null)
@@ -168,16 +163,13 @@ watch(
           </small>
           <p class="font-serif leading-[1.75em]">
             <template v-for="(segment, segmentIndex) in transcriptionSegments(line)" :key="segmentIndex">
-              <UiTooltip v-if="segment.entity" :text="linkTooltip(segment.entity)">
-              <mark tabindex="0" role="button" :aria-label="`${entityText(segment.entity)}: ${linkTooltip(segment.entity)}`" class="transcription-entity cursor-pointer"
+              <mark v-if="segment.entity" tabindex="0" role="button" :aria-label="`${entityText(segment.entity)}: ${linkTooltip(segment.entity)}`" class="transcription-entity cursor-pointer"
                 :class="entityClasses[segment.entity.label]" :style="entityStyle(segment.entity)"
-                :title="`${entityLabels[segment.entity.label]}: ${entityText(segment.entity)}`"
                 @mouseenter="hoveredEntityKey = entityKey(segment.entity)" @mouseleave="hoveredEntityKey = null"
                 @keydown.enter.stop.prevent="emit('select-entity', index, segment.entity)" @keydown.space.stop.prevent="emit('select-entity', index, segment.entity)"
                 @click.stop="emit('select-entity', index, segment.entity)">
-                {{ segment.text }}<EntityLinkStateBadge v-if="segment.entity.firstFragment !== false" v-bind="segment.entity" :focusable="false" compact class="ml-1 inline-flex select-none align-middle" />
+                {{ segment.text }}<EntityLinkStateBadge v-if="segment.entity.firstFragment !== false" v-bind="segment.entity" :focusable="false" :tooltip="false" compact class="ml-1 inline-flex select-none align-middle" />
               </mark>
-              </UiTooltip>
               <template v-else>{{ segment.text }}</template>
             </template>
           </p>

@@ -250,7 +250,7 @@ describe('entity link review', () => {
     expect(ranked.cursor).toBeNull()
   })
 
-  it('renders one icon per multiline mention and keeps different mentions to the same entity separate', () => {
+  it('keeps multiline mentions accessible and selectable without hover tooltips', async () => {
     const wrapper = mount(DocumentTeleprompter, {
       props: {
         selectedLineIndex: 0,
@@ -314,7 +314,22 @@ describe('entity link review', () => {
       'Novak',
       'Ada Novak',
     ])
-    expect(wrapper.findAll('mark')[2]!.attributes('title')).toContain('Ada Novak')
+    expect(wrapper.find('[title]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'UiTooltip' }).exists()).toBe(false)
+    const mention = wrapper.findAll('mark')[2]!
+    expect(mention.attributes('aria-label')).toContain('Ada Novak:')
+    expect(mention.attributes('tabindex')).toBe('0')
+    await mention.trigger('mouseenter')
+    expect(mention.attributes('style')).toContain('outline:')
+    await mention.trigger('mouseleave')
+    for (const event of ['click', 'keydown.enter', 'keydown.space']) {
+      await mention.trigger(event)
+    }
+    expect(wrapper.emitted('select-entity')).toHaveLength(3)
+    expect(wrapper.emitted('select-entity')![0]![0]).toBe(1)
+    expect(wrapper.emitted('select-entity')![0]![1]).toMatchObject({ mention_id: 'm2' })
+    await wrapper.setProps({ selectedEntityKey: 'm2' })
+    expect(mention.attributes('style')).toContain('outline:')
   })
 
   it('invalidates evidence, sources and statistics after verification and preserves the badge on failure', async () => {

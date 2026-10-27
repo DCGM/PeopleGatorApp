@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import UiTooltip from './UiTooltip.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
 import type { CSSProperties } from 'vue'
@@ -101,22 +100,22 @@ function regionStyle(position: Face['position']): CSSProperties {
       @click.stop="emit('selectLine', index)"
     />
 
-    <UiTooltip v-for="face in faces" :key="face.id" :text="linkTooltip(face)">
-    <button
-      v-if="face.position.width > 0 && face.position.height > 0"
-      :key="face.id"
-      type="button"
-      data-region-type="face"
-      class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      :class="faceSelectionClasses[faceSelectionState(face)]"
-      :style="regionStyle(face.position)"
-      :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
-      :aria-pressed="face.id === selectedFaceId"
-      @click.stop="emit('selectFace', face.id)"
-    >
-      <EntityLinkStateBadge v-bind="face" :focusable="false" :compact="!showBadgeNames" :label="face.name"
-        class="absolute -left-1 -top-7 h-6 rounded-full shadow-xs" :class="showBadgeNames ? 'max-w-40' : 'size-6'" />
-    </button>
-    </UiTooltip>
+    <template v-for="face in faces" :key="face.id">
+      <button
+        v-if="face.position.width > 0 && face.position.height > 0"
+        :key="face.id"
+        type="button"
+        data-region-type="face"
+        class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        :class="faceSelectionClasses[faceSelectionState(face)]"
+        :style="regionStyle(face.position)"
+        :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
+        :aria-pressed="face.id === selectedFaceId"
+        @click.stop="emit('selectFace', face.id)"
+      >
+        <EntityLinkStateBadge v-bind="face" :focusable="false" :tooltip="false" :compact="!showBadgeNames" :label="face.name"
+          class="absolute -left-1 -top-7 h-6 rounded-full shadow-xs" :class="showBadgeNames ? 'max-w-40' : 'size-6'" />
+      </button>
+    </template>
   </div>
 </template>

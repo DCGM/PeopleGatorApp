@@ -6,22 +6,22 @@ import { Badge } from '@/components/ui/badge'
 import UiTooltip from './UiTooltip.vue'
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
-  defineProps<LinkMetadata & { compact?: boolean; label?: string; focusable?: boolean }>(),
-  { focusable: true },
+  defineProps<LinkMetadata & { compact?: boolean; label?: string; focusable?: boolean; tooltip?: boolean }>(),
+  { focusable: true, tooltip: true },
 )
 const visual = computed(() => linkStateVisuals[props.linkState ?? 'unassigned'])
 </script>
 <template>
   <component
-    :is="focusable ? UiTooltip : 'span'"
-    :text="focusable ? linkTooltip(props) : undefined"
+    :is="tooltip && focusable ? UiTooltip : 'span'"
+    :text="tooltip && focusable ? linkTooltip(props) : undefined"
   >
     <Badge
       v-bind="$attrs"
       data-face-status-badge
       :tabindex="focusable === false ? undefined : 0"
       :aria-label="linkTooltip(props)"
-      :title="linkTooltip(props)"
+      :title="tooltip ? linkTooltip(props) : undefined"
       class="border-0 font-normal focus-visible:outline-2 focus-visible:outline-ring"
       :class="[
         visual.classes,
