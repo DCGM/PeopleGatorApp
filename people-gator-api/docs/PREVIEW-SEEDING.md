@@ -843,3 +843,13 @@ The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
 combined counts 9/3/2/2/2. Counts include direct document mentions and every
 registered page, even when evidence filters select the document. The mirror
 has zero in every field. Switching columns adds no requests or local sorting.
+
+### Detection actions (#49)
+
+Open **Detection action practice** in `preview-mzk`. Its first page has an
+unverified face linked to Lina Actions and an obvious **NOT A FACE** false positive.
+Select either box to use the icon button group; Link/Reassign, Unlink and Verify
+also share the current-face card actions. Delete is available only with the
+existing `people-gator:admin` scope and requires confirmation. Deleted fixtures
+stay deleted on rerun; verifying or reassigning the linked face is also preserved.
+Deleting a selected person portrait uses the existing automatic portrait fallback.

@@ -26,6 +26,7 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("actions", "Lina Actions", (), "Synthetic detection action practice.", "importer"),
     Person("table-tereza", "Tereza Columns", (), "Synthetic document table subject.", "importer"),
     Person("table-oskar", "Oskar Rows", (), "Synthetic document table reviewer subject.", "reviewer"),
     Person("provenance-review", "Irena Evidence", (),
@@ -130,6 +131,7 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("table-ledger", "preview-table", "Document table ledger"),
     Document("table-mirror", "preview-table-mirror", "Document table mirror", "table-ledger"),
     Document("provenance-a", "preview-mzk", "Annotation review ledger"),
@@ -215,6 +217,10 @@ PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
+    Page("detection-actions-1", "detection-actions", 1, (
+        Face("actions-linked", "actions", 0, 0, embedded=False),
+        Face("actions-false-positive", None, 1, 0, embedded=False),
+    )),
     Page("table-1", "table-ledger", 1,
          (Face("table-auto", "table-tereza", 0, 2), Face("table-manual", "table-oskar", 1, 3, "manual")),
          (Mention("table-auto-mention", "table-tereza", "Tereza Columns indexed the document table."),

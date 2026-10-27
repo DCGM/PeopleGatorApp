@@ -80,6 +80,10 @@ def page_image(page: Page, document: Document) -> bytes:
     for face in page.faces:
         box = face_box(face)
         x, y = box.x, box.y
+        if face.key == "actions-false-positive":
+            draw.rectangle((x, y, x + box.width, y + box.height), outline="#555555", width=3)
+            draw.text((x + 10, y + 70), "NOT A FACE", fill="#303030", font=font)
+            continue
         colors = ("#e6bd99", "#c99d80", "#efd3b8", "#bfa58c")
         draw.ellipse((x, y, x + box.width, y + box.height), fill=colors[face.group % len(colors)])
         if face.box is not None:

@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (33, 61, 43)
-    assert len(result.documents) == 41 and len(result.pages) == 77
+    assert await counts(database) == (34, 63, 43)
+    assert len(result.documents) == 42 and len(result.pages) == 78
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -144,7 +144,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     for filters, expected in (
         (
             EntityListFilter(has_detections=True, has_mentions=False),
-            {"emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana"},
+            {"actions", "emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana"},
 
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", *(f"pagination-{i}" for i in range(1, 15))}),
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (33, 61, 43)
+    assert await counts(database) == (34, 63, 43)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (33, 61, 43)
+    assert await counts(database) == (34, 63, 43)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (34, 61, 43)
+    assert await counts(database) == (35, 63, 43)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 33 and len(result.faces) == 61
-    assert await counts(database) == (33, 61, 43)
+    assert len(result.entities) == 34 and len(result.faces) == 63
+    assert await counts(database) == (34, 63, 43)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (32, 60, 42)
+    assert await counts(database) == (33, 62, 42)
 
 
 
@@ -3342,3 +3342,29 @@ async def test_archive_links_use_each_evidence_page_and_containing_document(seed
     before = await db.entities.get(person.entity_id)
     assert await preview.seed_preview(db, filesystem) == first
     assert await db.entities.get(person.entity_id) == before
+
+
+@pytest.mark.asyncio
+async def test_detection_actions_delete_and_verify_survive_rerun(seed_target):
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    linked_id = seeded.faces["actions-linked"]
+    false_id = seeded.faces["actions-false-positive"]
+    linked = await database.faces.get(linked_id)
+    false = await database.faces.get(false_id)
+    assert linked.entity_id == seeded.entities["actions"]
+    assert linked.entity_link_state == "automatic"
+    assert false.entity_id is None and not false.embeddings
+    source = await database.sources.get_page(linked.source_id)
+    content = await get_page_image(source.library, source.document_id, source.page_id)
+    with Image.open(io.BytesIO(content.content)) as image:
+        assert image.size == (800, 1100)
+    actor = await database.users.get(seeded.users["reviewer"])
+    await database.faces.patch(linked_id, FacePatchRequest(entity_link_state="verified"), actor)
+    await database.faces.delete(false_id, context=actor)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert "actions-false-positive" not in rerun.faces
+    assert await database.faces.get(false_id) is None
+    faces = await database.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[linked.source_id])))
+    assert [face.detection_id for face in faces.items] == [linked_id]
+    assert (await database.faces.get(linked_id)).entity_link_state == "verified"
