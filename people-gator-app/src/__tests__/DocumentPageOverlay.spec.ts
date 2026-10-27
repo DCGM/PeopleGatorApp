@@ -23,7 +23,12 @@ describe('DocumentPageOverlay', () => {
         transcription: [
           { id: 'selected', text: 'Ada', position, entities: [span('person-1')] },
           { id: 'mention-1', text: 'Ada', position, entities: [span('person-1')] },
-          { id: 'mention-2', text: 'Ada', position, entities: [span('person-2'), span('person-1')] },
+          {
+            id: 'mention-2',
+            text: 'Ada',
+            position,
+            entities: [span('person-2'), span('person-1')],
+          },
           { id: 'other-person', text: 'Ada', position, entities: [span('person-2')] },
           { id: 'unlinked', text: 'Ada', position, entities: [span()] },
           { id: 'no-spans', text: 'Ada', position },
@@ -207,20 +212,36 @@ describe('DocumentPageOverlay', () => {
   })
 })
 
-
 it('opens actions from a detection, closes with Escape and returns keyboard focus', async () => {
-  vi.stubGlobal('ResizeObserver', class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
   const wrapper = mount(DocumentPageOverlay, {
     attachTo: document.body,
     props: {
-      pageBounds: { left: 0, top: 0, width: 500, height: 800 }, transcription: [],
-      faces: [{ id: 'one', personId: null, name: 'Unknown', confidence: 99, status: 'unassigned',
-        position: { left: 10, top: 10, width: 20, height: 20 }, portrait: '', portraitLoading: false }],
-      selectedLineIndex: 0, selectedFaceId: null, selectedPersonId: null, selectedCandidateFaceId: null,
+      pageBounds: { left: 0, top: 0, width: 500, height: 800 },
+      transcription: [],
+      faces: [
+        {
+          id: 'one',
+          personId: null,
+          name: 'Unknown',
+          confidence: 99,
+          status: 'unassigned',
+          position: { left: 10, top: 10, width: 20, height: 20 },
+          portrait: '',
+          portraitLoading: false,
+        },
+      ],
+      selectedLineIndex: 0,
+      selectedFaceId: null,
+      selectedPersonId: null,
+      selectedCandidateFaceId: null,
     },
     slots: { actions: () => h('button', { type: 'button' }, 'Link') },
   })
@@ -235,7 +256,7 @@ it('opens actions from a detection, closes with Escape and returns keyboard focu
     expect(panel!.contains(document.activeElement)).toBe(true)
     panel!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
     expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
     expect(document.activeElement).toBe(detection.element)
   } finally {
