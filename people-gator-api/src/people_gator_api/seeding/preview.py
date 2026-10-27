@@ -506,6 +506,18 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # #75 reuses linked local media and the saved portrait without changing review edits.
+            "archive-links-faces": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
+                "tab": "faces", "origin_matched_face": active_faces.get("provenance-auto", ""),
+            }),
+            "archive-links-discover": f"/people/{manifest.entities['discovery']}?" + urlencode({
+                "tab": "discover", "discovery_model": DISCOVERY_MODEL,
+                "discovery_annotations": "faces",
+            }),
+            "archive-links-scan": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}"
+            ),
             # Workspace criteria stay in navigation; the scan panel uses page membership or global search.
             "global-discovery-scan": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"

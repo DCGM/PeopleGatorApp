@@ -3059,3 +3059,41 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
         monkeypatch.setattr(jwk_service, "_now", lambda: expires + 1)
         monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
         assert (await client.get("/whoami", headers=bearer)).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_archive_links_use_each_evidence_page_and_containing_document(seed_target):
+    from people_gator_api.schemas.search import EntitySearchQuery
+    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
+
+    db, filesystem, _ = seed_target
+    first = await preview.seed_preview(db, filesystem)
+    person = await db.entities.get(first.entities["provenance-review"])
+    assert person.thumbnail_face_id in {
+        face.detection_id for face in (await db.faces.list(FaceListRequest(
+            limit=100, filter_=FaceListFilter(entity_id=[person.entity_id]),
+        ))).items
+    }
+    faces_path = urlsplit(first.filter_examples["archive-links-faces"])
+    assert faces_path.path == f"/people/{person.entity_id}"
+    assert parse_qs(faces_path.query)["origin_matched_face"] == [str(first.faces["provenance-auto"])]
+    hits = await db.faces.search(SearchFacesRequest(limit=40, query=EntitySearchQuery(
+        entity_id=first.entities["discovery"], entity_annotations=["faces"],
+        face_embedding_model=DISCOVERY_MODEL,
+    )))
+    outside = {first.faces["discovery-global-assigned"], first.faces["discovery-global-unassigned"]}
+    assert outside <= {face.detection_id for face in hits.items}
+    for face in hits.items:
+        page = await db.sources.get_page(face.source_id)
+        document = await db.sources.lookup_document(DocumentLookupRequest(
+            library=page.library, document_id=page.document_id,
+        ))
+        assert str(page.url) == f"{document.url}?page=uuid:{page.page_id}"
+        assert not urlsplit(str(document.url)).query
+        if face.detection_id in outside:
+            assert page.library == "preview-nlk"
+    page = await db.sources.get_page(first.pages["discovery-1"])
+    assert first.filter_examples["archive-links-scan"].endswith(f"/pages/{page.page_id}")
+    before = await db.entities.get(person.entity_id)
+    assert await preview.seed_preview(db, filesystem) == first
+    assert await db.entities.get(person.entity_id) == before
