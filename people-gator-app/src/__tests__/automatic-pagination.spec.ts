@@ -155,7 +155,7 @@ for (const screen of screens)
             DocumentTable: {
               props: ['documents'],
               template:
-                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span><slot name="end" /></div>',
+                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span></div>',
             },
             PeopleCard: { props: ['name'], template: '<span class="result">{{ name }}</span>' },
             DocumentCard: { props: ['library'], template: '<span class="result">scan</span>' },

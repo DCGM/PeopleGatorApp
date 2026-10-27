@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed, h, ref } from 'vue'
+import { usePageTableHeader } from '@/composables/page-table-header'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   columnVisibilityFeature,
@@ -32,6 +33,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+
+const tableFrame = ref<HTMLElement | null>(null)
+const headerOffset = usePageTableHeader(tableFrame)
 
 const props = defineProps<{ documents: DocumentResponse[] }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
@@ -183,9 +187,12 @@ const table = useTable({
       Counts cover the entire registered document. Annotations include unassigned faces and
       mentions. Pages counts registered pages only. Unknown means no recorded value.
     </p>
-    <div class="w-full min-w-0 max-w-full">
-      <Table aria-describedby="document-table-counts" container-class="max-h-[70dvh]">
-        <TableHeader class="sticky top-0 z-10 bg-background">
+    <div ref="tableFrame" class="w-full min-w-0 max-w-full">
+      <Table aria-describedby="document-table-counts">
+        <TableHeader
+          class="relative z-10 bg-background"
+          :style="{ transform: `translateY(${headerOffset}px)` }"
+        >
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
               v-for="header in group.headers"
@@ -223,7 +230,6 @@ const table = useTable({
             </TableCell>
           </TableRow>
         </TableBody>
-        <template #after><slot name="end" /></template>
       </Table>
     </div>
   </div>

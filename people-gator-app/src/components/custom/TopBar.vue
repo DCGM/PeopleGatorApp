@@ -92,6 +92,7 @@ const isPeopleRoute = computed(
 
 <template>
   <nav
+    data-page-navigation
     class="sticky top-0 z-50 flex h-13 w-full items-center gap-2 border-b bg-background px-2 sm:gap-3 sm:px-4"
   >
     <div class="flex shrink-0 items-center gap-2">

@@ -81,11 +81,7 @@ useAutomaticPagination({
       v-model:sort="sort"
       :documents="documents"
       class="pt-4"
-    >
-      <template #end>
-        <div ref="listEnd" class="sticky left-0 h-px w-full" aria-hidden="true" />
-      </template>
-    </DocumentTable>
+    />
     <p
       v-if="isLoading || isFetchingNextPage"
       class="py-6 text-center text-sm text-muted-foreground"
@@ -109,6 +105,8 @@ useAutomaticPagination({
           : 'No documents have been registered yet.'
       }}
     </p>
+
+    <div ref="listEnd" class="h-px" aria-hidden="true" />
 
     <div v-if="hasNextPage && !error" class="flex justify-center pt-6">
       <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{

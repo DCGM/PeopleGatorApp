@@ -781,12 +781,13 @@ scroll to verify ascending order across the cursor boundary. Relevance remains
 available in the selector during text search. Other metadata/count headings have
 no sort action because their fields are not supported by the API.
 
-The `document-table-sticky-header` link opens the 14 pagination ledgers. Enable
-**First page** so these rows exceed the scroll area even on a tall desktop. The
-table scrolls within 70% of the viewport height, keeping its column headings
-pinned at the top. Scroll down and sideways to verify aligned headings and
-automatic loading at the final row; the loading marker remains reachable at
-every horizontal position. Sort buttons stay keyboard accessible while pinned.
+The `document-table-page-header` link (also available as the older
+`document-table-sticky-header` link) opens the 14 pagination ledgers. Enable
+**First page** for taller rows, then scroll the full page. The table has no
+separate vertical scroll area: headings remain beneath the page navigation
+while its rows pass below, and stop following at the table's end. Scroll sideways
+to verify heading/column alignment and automatic loading at any horizontal
+position. Sort buttons remain keyboard accessible in the pinned header.
 
 The `document-table-unknown-names` link (also available as the older
 `document-table-name-fallback` link) sorts `preview-mzk` by Document name.

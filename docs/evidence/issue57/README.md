@@ -11,7 +11,7 @@ store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
 - `name-hidden-*`: document identity remains visible and linked with Document name hidden.
 - `attribution-*`: user/key label columns enabled and horizontally scrolled into view.
 - `loading-end-*`: all 14 pagination ledgers appended through the existing opaque cursor.
-- `sticky-header-*`: pinned headings partway down the table, with First page enabled.
+- `sticky-header-*`: headings pinned beneath page navigation during full-page scrolling, with First page enabled.
 - `sticky-header-right-*`: pinned headings aligned with the final columns after horizontal scrolling and cursor loading.
 - `sticky-header-dark-*`: pinned headings and sort direction in the dark theme.
 - `unnamed-sort-ascending-*` / `unnamed-sort-descending-*`: unknown names compare as empty strings, appearing first ascending and last descending.
@@ -33,14 +33,13 @@ The production build uses only TanStack v9's column visibility feature; Vue Quer
 and the existing route filters/sort still own the remote result sequence. There
 is no client pagination, filtering or sorting; first-page media is the only
 optional per-row request.
-The table-only production build measures 825.78 kB minified JS (247.69 kB gzip).
+The table-only production build measures 826.57 kB minified JS (248.11 kB gzip).
 The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
 Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.
 
-Sticky-header checks at both sizes verify header/container top positions after
-vertical scrolling, header/body alignment at the rightmost columns, no premature
-cursor request before the final row enters the scroll area, loading the second
-batch at the far right, and keyboard sorting from the pinned header. Light and
+Sticky-header checks at both sizes verify header/navigation edge alignment after
+full-page scrolling, header/body alignment at the rightmost columns, no separate vertical table scroll area, no premature cursor request before the
+final row enters the viewport, loading the second batch at the far right, and keyboard sorting from the pinned header. Light and
 dark screenshots use the same synthetic pagination documents and local media.
 
 Unnamed-sort checks verify complete loaded name order and the legacy document's
