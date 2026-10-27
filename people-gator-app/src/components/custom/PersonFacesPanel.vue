@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { BadgeCheck, Image, Unlink } from '@lucide/vue'
+import { useElementSize } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
@@ -10,12 +11,29 @@ import { useReviewFacesMutation } from '@/query/faces'
 import { usePatchEntityMutation } from '@/query/entities'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
+  collapsible?: boolean
+  hasMore?: boolean
   faces: PersonFace[]
   personName: string
   personId: string
   thumbnailFaceId?: string | null
   thumbnailMode?: 'automatic' | 'manual'
 }>()
+const grid = ref<HTMLElement | null>(null)
+const { width } = useElementSize(grid)
+const expanded = ref(false)
+// This matches the grid's 140px minimum track plus its 12px gap.
+const rowCapacity = computed(() => Math.max(1, Math.floor((width.value + 12) / 152)))
+const visibleFaces = computed(() =>
+  props.collapsible && !expanded.value ? props.faces.slice(0, rowCapacity.value * 2) : props.faces,
+)
+const canExpand = computed(() => props.hasMore || props.faces.length > rowCapacity.value * 2)
+watch(
+  () => props.personId,
+  () => {
+    expanded.value = false
+  },
+)
 const allowed = useCanAnnotate()
 const mutation = useReviewFacesMutation()
 const portraitMutation = usePatchEntityMutation()
@@ -33,6 +51,10 @@ const currentPortrait = computed(
 )
 const failed = ref(false)
 const feedback = ref('')
+function toggleExpansion() {
+  expanded.value = !expanded.value
+  clear()
+}
 function clear() {
   selectedIds.value = new Set()
   anchor.value = null
@@ -107,12 +129,10 @@ watch(
 </script>
 <template>
   <div
-    class="col-span-full grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+    ref="grid"
+    class="col-span-full grid grid-cols-[repeat(auto-fill,minmax(min(100%,140px),1fr))] gap-3"
     :class="selected.length > 0 && 'pb-40 sm:pb-24'"
   >
-    <p v-if="allowed && faces.length" class="col-span-full text-sm text-muted-foreground">
-      Select faces for actions. Shift-click selects a range.
-    </p>
     <p
       v-if="feedback && !selected.length"
       class="col-span-full text-sm"
@@ -121,7 +141,7 @@ watch(
       {{ feedback }}
     </p>
     <PersonFaceCard
-      v-for="face in faces"
+      v-for="face in visibleFaces"
       :key="face.id"
       :face="face"
       :person-name="personName"
@@ -133,6 +153,15 @@ watch(
       @toggle="select(face.id, $event)"
       @add="select(face.id, $event, true)"
     />
+    <div v-if="collapsible && canExpand" class="col-span-full flex flex-wrap gap-2">
+      <Button
+        variant="outline"
+        :aria-expanded="expanded"
+        @click="toggleExpansion"
+        >{{ expanded ? 'Show less' : 'Show all faces' }}</Button
+      >
+      <slot v-if="expanded" name="pagination" />
+    </div>
     <SelectedFaceActions
       v-if="selected.length"
       :count="selected.length"

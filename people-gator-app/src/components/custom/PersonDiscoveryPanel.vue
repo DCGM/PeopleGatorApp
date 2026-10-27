@@ -350,7 +350,7 @@ watch(
       <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
           <small class="font-semibold uppercase text-secondary">Face similarity</small>
-          <h3 id="similar-faces-heading">Similar faces to review</h3>
+          <h3 id="similar-faces-heading">Found faces to review</h3>
           <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
             Matches from the selected reference inputs for {{ props.currentName }}.
           </p>
@@ -537,7 +537,7 @@ watch(
       <div class="flex w-full flex-row flex-wrap gap-4">
         <div>
           <small class="font-semibold uppercase text-secondary">Identity similarity</small>
-          <h3 id="similar-people-heading">Other similar people</h3>
+          <h3 id="similar-people-heading">Similar people</h3>
           <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
             Review possible duplicates before merging.
           </p>

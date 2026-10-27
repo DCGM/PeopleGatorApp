@@ -102,18 +102,9 @@ describe('PersonDetailView', () => {
       return typeof target !== 'string' && target?.name === 'document-page'
     })
 
-    const stats = wrapper.get('aside[aria-label="Person statistics"]')
-    expect(stats.text()).toContain('Last change')
-    expect(stats.text()).toContain('Not recorded')
-    expect(stats.text()).not.toContain('Last processed')
-    expect(stats.find('button[aria-label*="processing information"]').exists()).toBe(false)
-    expect(stats.find('details').exists()).toBe(false)
-    expect(stats.text()).not.toContain('Identity creation')
-    expect(stats.findAll('dd').length).toBeGreaterThanOrEqual(4)
-    for (const value of stats.findAll('dd'))
-      expect(value.classes()).toEqual(expect.arrayContaining(['font-mono']))
-    for (const title of stats.findAll('dt'))
-      expect(title.classes()).toEqual(['text-muted-foreground'])
+    expect(wrapper.get('[aria-label="Person identity"]').classes()).toContain('sticky')
+    expect(wrapper.find('aside[aria-label="Person statistics"]').exists()).toBe(false)
+    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Faces 0', 'Mentions 1', 'Details', 'Statistics'])
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
