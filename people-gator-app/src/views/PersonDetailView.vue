@@ -3,7 +3,6 @@ import SharedFilterControls from '@/components/custom/SharedFilterControls.vue'
 import SharedFilterTags from '@/components/custom/SharedFilterTags.vue'
 import SearchFilterPanel from '@/components/custom/SearchFilterPanel.vue'
 import { useSharedFilters, queryValues } from '@/viewmodels/shared-filters'
-import { Image, ScanFace } from '@lucide/vue'
 import { useDebounce } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -13,6 +12,7 @@ import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
 import { Button } from '@/components/ui/button'
 import PersonPortrait from '@/components/custom/PersonPortrait.vue'
 import PersonEditableDetails from '@/components/custom/PersonEditableDetails.vue'
+import PersonLibraryCount from '@/components/custom/PersonLibraryCount.vue'
 import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails.vue'
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
 import PersonFacesPanel from '@/components/custom/PersonFacesPanel.vue'
@@ -213,7 +213,7 @@ function retrySearch() {
 </script>
 
 <template>
-  <main class="mx-auto w-full max-w-6xl px-4 pb-12 pt-7 sm:px-6">
+  <main class="mx-auto w-full max-w-6xl [&_*]:scroll-mt-28 px-4 pb-12 pt-7 sm:px-6">
     <p v-if="error" class="py-16 text-center text-destructive">Could not load this person.</p>
     <template v-else>
       <header
@@ -236,13 +236,13 @@ function retrySearch() {
       <Tabs :model-value="activeTab" class="mt-4" @update:model-value="selectTab">
         <TabsList aria-label="Person record sections" class="max-w-full flex-wrap h-auto">
           <TabsTrigger value="faces">
-            <ScanFace class="size-4" aria-hidden="true" /> Faces
+            Faces
             <span class="font-mono">{{
               entity?.entity_link_stats?.faces?.total ?? faceCount
             }}</span>
           </TabsTrigger>
           <TabsTrigger value="mentions">
-            <Image class="size-4" aria-hidden="true" /> Mentions
+            Mentions
             <span class="font-mono">{{
               entity?.entity_link_stats?.mentions?.total ?? mentionCount
             }}</span>
@@ -345,11 +345,13 @@ function retrySearch() {
               v-model="groupSort"
               :options="MENTION_GROUP_SORTS"
               label="Sort groups"
+              prefix="Groups"
             />
             <SortControl
               v-model="mentionSort"
               :options="MENTION_SORTS"
               :label="mentionView !== 'flat' ? 'Sort occurrences' : 'Sort mentions'"
+              :prefix="mentionView !== 'flat' ? 'Occurrences' : 'Sort'"
             />
           </div>
           <PersonMentionGroups
@@ -411,7 +413,7 @@ function retrySearch() {
           </PersonEditableDetails>
         </TabsContent>
         <TabsContent value="statistics" class="space-y-4 pt-4">
-          <p>Libraries {{ libraryCount }}</p>
+          <PersonLibraryCount :person-id="personId" />
           <EntityLinkStatistics :stats="entity?.entity_link_stats" layout="person" />
           <PersonProcessingDetails v-if="entity" :key="personId" :processing="processing" />
         </TabsContent>

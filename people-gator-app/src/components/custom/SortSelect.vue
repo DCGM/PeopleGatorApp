@@ -7,10 +7,11 @@ export type SortSelectStrategy = { value: string; label: string }
 const props = withDefaults(
   defineProps<{
     strategies: readonly SortSelectStrategy[]
+    prefix?: string
     label?: string
     size?: 'sm' | 'default'
   }>(),
-  { label: 'Sort by', size: 'default' },
+  { label: 'Sort by', prefix: 'Sort', size: 'default' },
 )
 const value = defineModel<string>({ required: true })
 const selected = computed(
@@ -26,7 +27,7 @@ function select(next: unknown) {
 <template>
   <Select :model-value="selected?.value" @update:model-value="select">
     <SelectTrigger :aria-label="label" :size="size" class="min-w-0 max-w-full flex-none">
-      <span class="min-w-0 truncate">Sort: {{ selected?.label }}</span>
+      <span class="min-w-0 truncate">{{ prefix }}: {{ selected?.label }}</span>
     </SelectTrigger>
     <SelectContent>
       <SelectItem v-for="strategy in strategies" :key="strategy.value" :value="strategy.value">
