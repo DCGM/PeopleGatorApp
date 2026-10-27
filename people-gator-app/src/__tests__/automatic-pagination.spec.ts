@@ -126,7 +126,6 @@ const screens = [
   { name: 'people', view: PeopleSearchView, sort: 'name' },
   { name: 'scans', view: DocumentSearchView, sort: 'page_id' },
   { name: 'documents', view: DocumentListView, sort: 'name' },
-  { name: 'document table', view: DocumentListView, sort: 'name', table: true },
 ]
 for (const screen of screens)
   describe(`automatic ${screen.name} pagination`, () => {
@@ -143,9 +142,7 @@ for (const screen of screens)
           },
         ],
       })
-      await router.push(
-        '/' + (screen.table ? (query ? query + '&view=table' : '?view=table') : query),
-      )
+      await router.push('/' + query)
       const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
       const wrapper = mount(screen.view, {
         attachTo: document.body,
@@ -155,7 +152,6 @@ for (const screen of screens)
             PeopleSearchBar: true,
             DocumentSearchBar: true,
             DocumentListSearchBar: true,
-            ToggleGroup: true,
             DocumentTable: {
               props: ['documents'],
               template:
@@ -163,10 +159,6 @@ for (const screen of screens)
             },
             PeopleCard: { props: ['name'], template: '<span class="result">{{ name }}</span>' },
             DocumentCard: { props: ['library'], template: '<span class="result">scan</span>' },
-            DocumentPageGroup: {
-              props: ['document'],
-              template: '<span class="result">{{ document.name }}</span>',
-            },
           },
         },
       })

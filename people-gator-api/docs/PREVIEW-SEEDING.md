@@ -70,7 +70,7 @@ This does not automatically seed the actual staging environment.
 
 | Scenario | Example |
 | --- | --- |
-| Default Documents landing | Open `default-documents` (the application root): Documents is current, with named document groups and linked page thumbnails. Find **Portrait album**, open a page, then use the PeopleGator logo or first breadcrumb to return. `default-documents-scans` opens the same album in explicit Scan search. |
+| Default Documents landing | Open `default-documents` (the application root): Documents is current, with named document rows. Find **Portrait album**, click its name to browse pages, then use the PeopleGator logo or first breadcrumb to return. `default-documents-scans` opens the same album in explicit Scan search. |
 | Mobile filtering | Open the printed mobile-filters link on a narrow viewport; only search and the sliders toggle show until expanded |
 | Identity editing and aliases | Ada Novak, alias A. Novak; six people in total |
 | Faces and mentions together | Ada Novak across Portrait album and Research notes |
@@ -162,13 +162,13 @@ candidate image supplies the fixture code.
 Successful preview state includes a `seeded_version` marker; after a host upgrade,
 rerunning the same deployment can seed previews created by older controllers.
 
-## Grouped documents and scans
+## Documents and scans
 
 Open `/documents?library=preview-mzk` to explore **Named preview album** with two
 scans and **Document awaiting scans** with no pages. **Album in another library**
 in `preview-nlk` deliberately shares the album's document UUID; its single page
-must stay in its own group. **Legacy unnamed document** has one scan and no stored
-name, demonstrating the `Document <document_id>` heading fallback on fresh previews.
+must stay scoped to its own document row. **Legacy unnamed document** has one scan and no stored
+name, demonstrating the `Document <document_id>` name fallback on fresh previews.
 `/scans` also includes **Unregistered scan collection**,
 which has local media but no registered document and is absent from Documents.
 The seed CLI prints `grouped-documents` and `unregistered-scan` links.
@@ -177,7 +177,7 @@ Existing document identities are retained. New registrations receive their fixtu
 titles; documents already seeded without names keep their nullable name and use the
 UI's `Document <document_id>` fallback. Reregistration never overwrites a name.
 The added scenario keys demonstrate names even in retained preview databases.
-Integration coverage checks names, empty groups, library isolation, page cursors,
+Integration coverage checks names, empty documents, library isolation, page cursors,
 scan-only media, repeat registration and legacy requests without a name.
 
 ### Entity link review (#6)
@@ -285,15 +285,11 @@ at the right end of the search input group, after the clear-search button. Remov
 to update both the URL and results. The `rounded-filter-removal` link demonstrates
 circular X buttons for library, link-state and unassigned-face badges. Hover or
 keyboard-focus one, then remove its filter while preserving the search text.
-In the document information, registered
-page count precedes processing time, user and API key (each on its own line),
-followed by face and mention statistics. A `+N` link with a right chevron follows
-the last preview and opens the remaining scans in the same document scope.
-The `document-preview-remainder` link shows six registered pages with four
-previews and `+2` (two previews and `+4` on mobile). Hover the `+N` link to see
-its underline and small rightward chevron movement, without a background
-change. `+N` is orange and the chevron uses the standard text color. Page labels show standard UUIDs with an ellipsis when needed; hover
-the label to read the full UUID.
+The document table shows registered page counts, modification metadata and
+annotation statistics in configurable columns. Click a document name to open its
+scan list. The existing `document-preview-remainder` link now demonstrates a
+six-page document through its Pages total; enable First page for one optional
+thumbnail, or open the name link to browse all six scans.
 
 The document API accepts `filter.last_touched_from` and `filter.last_touched_to`
 (inclusive, timezone-aware), repeated `filter.last_touched_by_user_id`,
@@ -745,7 +741,7 @@ database context after login.
 
 ## Document table (#57)
 
-Open `/documents?view=table&library=preview-table` (the `document-table` manifest
+Open `/documents?library=preview-table` (the `document-table` manifest
 entry). **Document table ledger** has two registered pages, four faces and five
 mentions including one direct document mention: three automatic, two verified,
 two manual and two unassigned annotations, linked to just two distinct entities.
@@ -755,8 +751,9 @@ The same archive ID in `preview-table-mirror` has no pages or evidence; Document
 awaiting scans also demonstrates zero counts and unknown modification history.
 Direct annotation ledger demonstrates a user-only modification without a key.
 
-Switch Items/Table without changing search, filters or server sorting. Columns
-can hide each data field, including Document name, and restore defaults. Document
+Documents uses the table only; the Items listing and view switch are removed.
+Existing links with `view=items` or `view=table` also open the table. Search,
+filters and server sorting retain their existing behavior. Columns can hide each data field, including Document name, and restore defaults. Document
 name is the first default column and links to the document page. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.

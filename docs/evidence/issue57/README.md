@@ -17,7 +17,8 @@ store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
 Browser checks passed at both sizes: one row per document, no per-row page/media
 requests when First page is hidden, one image request with no page-list/name
 requests when enabled, show/hide name and restore defaults, preserve field choices
-through Items/Table switches, bounded page width, horizontal scroll plus automatic
+while filtering and sorting, default and legacy presentation URLs rendering the
+table, bounded page width, horizontal scroll plus automatic
 cursor loading/exhaustion, keyboard horizontal scrolling when fields overflow,
 click/Enter/Space sorting, direction reversal and history restoration, supported-only header actions,
 and no browser runtime errors. The preview-table scenario has 2 registered pages,
@@ -28,7 +29,6 @@ The production build uses only TanStack v9's column visibility feature; Vue Quer
 and the existing route filters/sort still own the remote result sequence. There
 is no client pagination, filtering or sorting; first-page media is the only
 optional per-row request.
-Against base `02dc110`, the same Vite installation measured minified JS increasing
-from 790.75 kB (236.59 kB gzip) to 831.46 kB (249.09 kB gzip): +40.71 kB / +12.50 kB
-gzip for the table, checkbox and integration. Both builds already exceed Vite's
-500 kB advisory. These are bundle measurements, not a runtime benchmark.
+The table-only production build measures 825.53 kB minified JS (247.61 kB gzip).
+The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
+Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.

@@ -2,11 +2,9 @@
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
 import { defaultDocumentColumns } from '@/viewmodels/document-table'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import DocumentPageGroup from '@/components/custom/DocumentPageGroup.vue'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
@@ -19,14 +17,6 @@ import {
   scoredOptions,
 } from '@/viewmodels/sort-options'
 const route = useRoute()
-const router = useRouter()
-const presentation = computed({
-  get: () => (route.query.view === 'table' ? 'table' : 'items'),
-  set: (view: string) => {
-    if (view)
-      void router.push({ query: { ...route.query, view: view === 'table' ? 'table' : undefined } })
-  },
-})
 const visibility = ref(defaultDocumentColumns())
 const shared = useSharedFilters()
 const { searchTerm, unassigned } = useDocumentFilters()
@@ -86,36 +76,12 @@ useAutomaticPagination({
     <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
       Search reports a bounded set of ranked document candidates.
     </p>
-    <div class="flex flex-wrap items-center gap-2 pt-4">
-      <ToggleGroup
-        v-model="presentation"
-        type="single"
-        variant="outline"
-        aria-label="Document view"
-      >
-        <ToggleGroupItem value="items" aria-label="Items view">Items</ToggleGroupItem>
-        <ToggleGroupItem value="table" aria-label="Table view">Table</ToggleGroupItem>
-      </ToggleGroup>
-    </div>
     <DocumentTable
-      v-if="presentation === 'table'"
       v-model:visibility="visibility"
       v-model:sort="sort"
       :documents="documents"
       class="pt-4"
     />
-    <section
-      v-else
-      class="document-pages flex w-full min-w-0 flex-col gap-4 pt-4"
-      aria-label="Registered documents"
-      aria-live="polite"
-    >
-      <DocumentPageGroup
-        v-for="document in documents"
-        :key="document.source_id"
-        :document="document"
-      />
-    </section>
     <p
       v-if="isLoading || isFetchingNextPage"
       class="py-6 text-center text-sm text-muted-foreground"

@@ -3133,7 +3133,7 @@ async def test_document_table_sort_example_uses_server_cursor_order(seed_target)
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
     demo = parse_qs(urlsplit(seeded.filter_examples["document-table-sort"]).query)
-    assert demo["view"] == ["table"]
+    assert "view" not in demo
     query = DocumentListRequest(
         limit=12, return_total_count=True,
         filter_=DocumentListFilter(library=demo["library"]),
@@ -3155,7 +3155,7 @@ async def test_document_table_unnamed_link_resolves_and_preserves_identity(seed_
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
     demo = parse_qs(urlsplit(seeded.filter_examples["document-table-unnamed"]).query)
-    assert demo["view"] == ["table"]
+    assert "view" not in demo
     result = await database.sources.list_documents(DocumentListRequest(
         limit=12, filter_=DocumentListFilter(source_id=demo["document"]),
     ))
@@ -3173,3 +3173,25 @@ async def test_document_table_unnamed_link_resolves_and_preserves_identity(seed_
     assert reviewed.source_id == document.source_id
     assert reviewed.document_id == document.document_id
     assert reviewed.first_page_source_id == document.first_page_source_id
+
+
+@pytest.mark.asyncio
+async def test_document_table_default_link_has_usable_rows_and_media(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    url = urlsplit(seeded.filter_examples["document-table"])
+    query = parse_qs(url.query)
+    assert url.path == "/documents" and "view" not in query
+    rows = await database.sources.list_documents(DocumentListRequest(
+        limit=12, filter_=DocumentListFilter(library=query["library"]),
+    ))
+    assert [row.source_id for row in rows.items] == [seeded.documents["table-ledger"]]
+    row = rows.items[0]
+    assert row.name == "Document table ledger" and row.registered_page_count == 2
+    page = await database.sources.get_page(row.first_page_source_id)
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    assert image.content
+    await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(row.source_id) == row

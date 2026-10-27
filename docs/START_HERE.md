@@ -13,8 +13,8 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    and OCR mentions. Other fixtures include faces-only, mentions-only and
    evidence-free people.
 3. Open the application root to land on **Documents** and explore registered
-   documents, including document groups across libraries. Switch to **Table** to
-   compare document-wide page/evidence totals and last-change metadata. Use
+   documents in the table across libraries. Compare document-wide page/evidence
+   totals and last-change metadata. Use
    **Columns** to choose fields, including the optional **First page** thumbnail.
    Click a sortable heading to sort; click again to reverse the order. Horizontal
    scrolling keeps the page width bounded, and reaching the final row loads the
