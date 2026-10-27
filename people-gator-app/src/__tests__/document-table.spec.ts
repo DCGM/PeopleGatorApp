@@ -192,6 +192,25 @@ describe('document table', () => {
     expect(wrapper.text()).toContain('No pages')
     expect(media.image).toHaveBeenCalledTimes(1)
   })
+  it('overlays the source link as NDK and expands its name on keyboard focus', async () => {
+    const { wrapper, router } = await render()
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), first_page: true } })
+    await flushPromises()
+    const link = wrapper.get('[data-slot="document-source-link"]')
+    expect(link.text()).toBe('NDK')
+    expect(link.attributes('href')).toBe(documents[0]!.url)
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('rel')).toBe('noopener noreferrer')
+    expect(link.attributes('aria-label')).toContain('Národní digitální knihovna')
+    await link.trigger('focus')
+    await flushPromises()
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+      'Národní digitální knihovna',
+    )
+    expect(router.currentRoute.value.path).toBe('/documents')
+    expect(wrapper.get('tbody td:first-child a').attributes('href')).toContain('/scans?')
+    expect(media.image).toHaveBeenCalledTimes(1)
+  })
   it('shows a short fallback when the registered first page has no stored image', async () => {
     media.image.mockRejectedValue({ isAxiosError: true, response: { status: 404 } })
     const { wrapper } = await render()

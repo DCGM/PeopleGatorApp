@@ -3233,3 +3233,25 @@ async def test_document_table_unknown_name_sorts_at_directional_edge(seed_target
     assert [row.source_id for row in search.items] == [row.source_id for row in rows]
     await preview.seed_preview(database, filesystem)
     assert (await database.sources.get_document(seeded.documents["legacy-document"])).name is None
+
+
+@pytest.mark.asyncio
+async def test_document_table_ndk_link_keeps_source_and_thumbnail_paired(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter, document_url
+
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    query = parse_qs(urlsplit(seeded.filter_examples["document-table-ndk-link"]).query)
+    rows = await database.sources.list_documents(DocumentListRequest(
+        limit=12, filter_=DocumentListFilter(source_id=query["document"]),
+    ))
+    assert len(rows.items) == 1
+    row = rows.items[0]
+    assert row.source_id == seeded.documents["table-ledger"]
+    assert str(row.url) == document_url(row.library, row.document_id)
+    page = await database.sources.get_page(row.first_page_source_id)
+    assert (page.library, page.document_id) == (row.library, row.document_id)
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    assert image.content
+    await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(row.source_id) == row

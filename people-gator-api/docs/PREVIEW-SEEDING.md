@@ -803,3 +803,10 @@ continuously: headings should follow directly below navigation without waiting
 for Vue rendering. Layout is measured on resize/content changes; ordinary scroll
 events only move the original header using cached bounds. No inference service
 or additional fixture records are required.
+
+Open `document-table-ndk-link` and enable First page. The thumbnail carries a
+small **NDK** link on a slightly translucent background. Hover or keyboard-focus
+it for **Národní digitální knihovna**; it opens the document's stored source URL
+in a new tab. The document-name column still opens the application's document
+page. The linked source and preview image belong to the same archive document,
+and existing fixture/source identities are unchanged.

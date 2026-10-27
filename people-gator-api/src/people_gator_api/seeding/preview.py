@@ -766,6 +766,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-table-page-header": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-sticky-header": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-sort": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name", "dir": "desc"}),
+            "document-table-ndk-link": "/documents?" + urlencode({"document": documents["table-ledger"]}),
             "document-table-first-page": "/documents?" + urlencode({"document": documents["table-ledger"]}),
             "document-table": "/documents?" + urlencode({"library": "preview-table"}),
             "mobile-filters": "/people?"
