@@ -147,7 +147,11 @@ const isPeopleRoute = computed(
       </Breadcrumb>
     </div>
 
-    <ArchiveLink v-if="route.name === 'document-page'" :url="pageQuery.data.value?.url" />
+    <ArchiveLink
+      v-if="route.name === 'document-page'"
+      :url="pageQuery.data.value?.url"
+      class="self-center"
+    />
 
     <div class="flex shrink-0 items-center gap-3 sm:gap-6">
       <slot name="navigation">
