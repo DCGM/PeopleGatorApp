@@ -3128,23 +3128,24 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
 
 
 @pytest.mark.asyncio
-async def test_document_table_sort_example_uses_server_cursor_order(seed_target):
+@pytest.mark.parametrize("example,direction", [("document-table-sort", "desc"), ("document-table-sticky-header", "asc")])
+async def test_document_table_sort_example_uses_server_cursor_order(seed_target, example, direction):
     from people_gator_api.schemas.sources import DocumentListFilter
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
-    demo = parse_qs(urlsplit(seeded.filter_examples["document-table-sort"]).query)
+    demo = parse_qs(urlsplit(seeded.filter_examples[example]).query)
     assert "view" not in demo
     query = DocumentListRequest(
         limit=12, return_total_count=True,
         filter_=DocumentListFilter(library=demo["library"]),
-        sort=demo["sort"][0], sort_direction=demo["dir"][0],
+        sort=demo["sort"][0], sort_direction=demo.get("dir", ["asc"])[0],
     )
     first = await database.sources.list_documents(query)
     second = await database.sources.list_documents(query.model_copy(update={"cursor": first.cursor}))
     assert first.total_count == 14 and len(first.items) == 12 and first.cursor
     assert len(second.items) == 2 and second.cursor is None
     assert [item.name for item in [*first.items, *second.items]] == [
-        f"Pagination ledger {i:02}" for i in range(14, 0, -1)
+        f"Pagination ledger {i:02}" for i in (range(14, 0, -1) if direction == "desc" else range(1, 15))
     ]
 
 

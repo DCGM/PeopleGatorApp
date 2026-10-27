@@ -2,7 +2,7 @@
 
 Real Chromium captures of this issue branch running with its isolated PostgreSQL
 store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
-390 × 844 CSS pixels. Full-page captures retain those viewport widths.
+390 × 844 CSS pixels. Full-page captures retain those viewport widths; sticky-header captures show the scrolled viewport.
 
 - `table-*`: default columns; all document-wide totals are visible by horizontal scrolling.
 - `columns-*`: standard Columns popover with individually configurable fields.
@@ -11,6 +11,9 @@ store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
 - `name-hidden-*`: document identity remains visible and linked with Document name hidden.
 - `attribution-*`: user/key label columns enabled and horizontally scrolled into view.
 - `loading-end-*`: all 14 pagination ledgers appended through the existing opaque cursor.
+- `sticky-header-*`: pinned headings partway down the table, with First page enabled.
+- `sticky-header-right-*`: pinned headings aligned with the final columns after horizontal scrolling and cursor loading.
+- `sticky-header-dark-*`: pinned headings and sort direction in the dark theme.
 - `filters-mobile`: existing mobile settings expanded above the table. The default
   desktop captures show the corresponding always-available settings.
 
@@ -29,6 +32,12 @@ The production build uses only TanStack v9's column visibility feature; Vue Quer
 and the existing route filters/sort still own the remote result sequence. There
 is no client pagination, filtering or sorting; first-page media is the only
 optional per-row request.
-The table-only production build measures 825.53 kB minified JS (247.61 kB gzip).
+The table-only production build measures 825.78 kB minified JS (247.69 kB gzip).
 The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
 Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.
+
+Sticky-header checks at both sizes verify header/container top positions after
+vertical scrolling, header/body alignment at the rightmost columns, no premature
+cursor request before the final row enters the scroll area, loading the second
+batch at the far right, and keyboard sorting from the pinned header. Light and
+dark screenshots use the same synthetic pagination documents and local media.

@@ -780,3 +780,10 @@ opens the 14 pagination ledgers by name descending; reverse Document name and
 scroll to verify ascending order across the cursor boundary. Relevance remains
 available in the selector during text search. Other metadata/count headings have
 no sort action because their fields are not supported by the API.
+
+The `document-table-sticky-header` link opens the 14 pagination ledgers. Enable
+**First page** so these rows exceed the scroll area even on a tall desktop. The
+table scrolls within 70% of the viewport height, keeping its column headings
+pinned at the top. Scroll down and sideways to verify aligned headings and
+automatic loading at the final row; the loading marker remains reachable at
+every horizontal position. Sort buttons stay keyboard accessible while pinned.

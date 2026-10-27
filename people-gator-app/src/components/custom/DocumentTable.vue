@@ -184,8 +184,8 @@ const table = useTable({
       mentions. Pages counts registered pages only. Unknown means no recorded value.
     </p>
     <div class="w-full min-w-0 max-w-full">
-      <Table aria-describedby="document-table-counts">
-        <TableHeader>
+      <Table aria-describedby="document-table-counts" container-class="max-h-[70dvh]">
+        <TableHeader class="sticky top-0 z-10 bg-background">
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
               v-for="header in group.headers"
@@ -223,6 +223,7 @@ const table = useTable({
             </TableCell>
           </TableRow>
         </TableBody>
+        <template #after><slot name="end" /></template>
       </Table>
     </div>
   </div>

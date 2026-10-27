@@ -760,6 +760,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 item.document_id for item in DOCUMENTS if item.key == "scan-only"
             )}),
             "document-table-unnamed": "/documents?" + urlencode({"document": documents["legacy-document"]}),
+            "document-table-sticky-header": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-sort": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name", "dir": "desc"}),
             "document-table-first-page": "/documents?" + urlencode({"document": documents["table-ledger"]}),
             "document-table": "/documents?" + urlencode({"library": "preview-table"}),
