@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useCanAnnotate } from '@/composables/can-annotate'
 
 import CurrentFacePanel from '@/components/custom/CurrentFacePanel.vue'
 import SimilarPeopleResults from '@/components/custom/SimilarPeopleResults.vue'
@@ -7,6 +8,8 @@ import SimilarPeopleSearch from '@/components/custom/SimilarPeopleSearch.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
+
+const canAnnotate = useCanAnnotate()
 
 const props = defineProps<{
   people: SimilarPersonCandidate[]
@@ -23,6 +26,7 @@ const emit = defineEmits<{
   assign: [person: SimilarPersonCandidate]
   create: [person: SimilarPersonCandidate]
   unassign: []
+  verify: []
   loadMore: []
 }>()
 
@@ -61,10 +65,12 @@ defineExpose({ focusSearch })
   >
     <CurrentFacePanel
       :face="props.selectedFace"
+      :can-annotate="canAnnotate"
       :assignment-pending="props.assignmentPending"
       @find-profile="focusSearch"
       @create="createPerson"
       @unassign="emit('unassign')"
+      @verify="emit('verify')"
     />
     <SimilarPeopleSearch
       ref="search"

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
-import type { CSSProperties } from 'vue'
+import { ref, watch, type CSSProperties } from 'vue'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 
 import { lineMentionsEntity } from '@/viewmodels/document-workspace.types'
 import type {
@@ -20,8 +21,10 @@ const props = withDefaults(
     selectedPersonId: string | null
     selectedCandidateFaceId: string | null
     showBadgeNames?: boolean
+    viewer?: HTMLElement | null
+    actionsEnabled?: boolean
   }>(),
-  { showBadgeNames: true },
+  { showBadgeNames: true, actionsEnabled: true },
 )
 
 const emit = defineEmits<{
@@ -29,7 +32,29 @@ const emit = defineEmits<{
   selectFace: [faceId: string]
 }>()
 
+const openFaceId = ref<string | null>(null)
+watch(
+  () => props.selectedFaceId,
+  (id) => {
+    if (id !== openFaceId.value) openFaceId.value = null
+  },
+)
+watch(
+  () => props.faces,
+  (faces) => {
+    if (!faces.some((face) => face.id === openFaceId.value)) openFaceId.value = null
+  },
+)
 
+const overlay = ref<HTMLElement | null>(null)
+function returnFocus(event: Event, faceId: string) {
+  event.preventDefault()
+  const active = document.activeElement
+  if (active !== document.body && !(event.target as HTMLElement).contains(active)) return
+  overlay.value
+    ?.querySelector<HTMLButtonElement>(`[data-detection-id="${faceId}"]`)
+    ?.focus({ preventScroll: true })
+}
 
 const faceSelectionClasses = {
   selected: 'z-10 border-secondary bg-secondary/25 ring-2 ring-secondary/70',
@@ -84,6 +109,7 @@ function regionStyle(position: Face['position']): CSSProperties {
 
 <template>
   <div
+    ref="overlay"
     data-slot="document-page-overlay"
     class="pointer-events-none absolute inset-0 z-10 overflow-hidden"
   >
@@ -100,22 +126,53 @@ function regionStyle(position: Face['position']): CSSProperties {
       @click.stop="emit('selectLine', index)"
     />
 
-    <template v-for="face in faces" :key="face.id">
-      <button
-        v-if="face.position.width > 0 && face.position.height > 0"
-        :key="face.id"
-        type="button"
-        data-region-type="face"
-        class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        :class="faceSelectionClasses[faceSelectionState(face)]"
-        :style="regionStyle(face.position)"
-        :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
-        :aria-pressed="face.id === selectedFaceId"
-        @click.stop="emit('selectFace', face.id)"
+    <Popover
+      v-for="face in faces"
+      :key="face.id"
+      :open="openFaceId === face.id"
+      @update:open="openFaceId = $event && actionsEnabled ? face.id : null"
+    >
+      <PopoverTrigger as-child>
+        <button
+          v-if="face.position.width > 0 && face.position.height > 0"
+          :key="face.id"
+          type="button"
+          data-region-type="face"
+          :data-detection-id="face.id"
+          class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          :class="faceSelectionClasses[faceSelectionState(face)]"
+          :style="regionStyle(face.position)"
+          :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
+          :aria-pressed="face.id === selectedFaceId"
+          @pointerdown.stop
+          @click.stop="emit('selectFace', face.id)"
+        >
+          <EntityLinkStateBadge
+            v-bind="face"
+            :focusable="false"
+            :tooltip="false"
+            :compact="!showBadgeNames"
+            :label="face.name"
+            class="absolute -left-1 -top-7 h-6 rounded-full shadow-xs"
+            :class="showBadgeNames ? 'max-w-40' : 'size-6'"
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        v-if="$slots.actions"
+        side="top"
+        class="w-auto p-1"
+        :collision-boundary="viewer ?? undefined"
+        :collision-padding="8"
+        sticky="always"
+        update-position-strategy="always"
+        hide-when-detached
+        @close-auto-focus="returnFocus($event, face.id)"
+        @pointerdown.stop
+        @wheel.stop
       >
-        <EntityLinkStateBadge v-bind="face" :focusable="false" :tooltip="false" :compact="!showBadgeNames" :label="face.name"
-          class="absolute -left-1 -top-7 h-6 rounded-full shadow-xs" :class="showBadgeNames ? 'max-w-40' : 'size-6'" />
-      </button>
-    </template>
+        <slot name="actions" :face="face" :close="() => (openFaceId = null)" />
+      </PopoverContent>
+    </Popover>
   </div>
 </template>

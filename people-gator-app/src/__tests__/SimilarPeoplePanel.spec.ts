@@ -1,9 +1,12 @@
+import { ref } from 'vue'
 import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
+
+vi.mock('@/composables/can-annotate', () => ({ useCanAnnotate: () => ref(true) }))
 
 const people: SimilarPersonCandidate[] = [
   {
@@ -186,18 +189,18 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.get('[data-slot="item-actions"]').text()).toContain('Current')
     expect(wrapper.findAll('[data-slot="item"]')[0]!.classes()).toContain('items-start')
     expect(wrapper.findAll('[data-slot="item-media"]')[0]!.classes()).toContain('self-start')
-    const reassignButton = wrapper.get('[aria-label="Reassign to another profile"]')
-    expect(reassignButton.attributes('data-size')).toBe('xs')
+    const reassignButton = wrapper.get('[aria-label="Reassign"]')
+    expect(reassignButton.attributes('data-size')).toBe('icon-xs')
     expect(reassignButton.element.closest('[data-slot="item-footer"]')).not.toBeNull()
     expect(wrapper.text()).toContain('Reassign to similar')
     expect(
       wrapper.get('[aria-label="Assigned to Anna Nováková"]').attributes('disabled'),
     ).toBeDefined()
     expect(wrapper.get('[aria-label="Reassign to Marie Dvořáková"]').text()).toBe('Reassign')
-    expect(wrapper.get('[aria-label="Reassign to another profile"]')).toBeDefined()
-    expect(wrapper.get('[aria-label="Create and assign a new profile"]')).toBeDefined()
+    expect(wrapper.get('[aria-label="Reassign"]')).toBeDefined()
+    expect(wrapper.get('[aria-label="New person"]')).toBeDefined()
 
-    await wrapper.get('[aria-label="Unassign current profile"]').trigger('click')
+    await wrapper.get('[aria-label="Unlink"]').trigger('click')
     expect(wrapper.emitted('unassign')).toHaveLength(1)
   })
 
@@ -263,7 +266,7 @@ describe('SimilarPeoplePanel', () => {
     await wrapper
       .get('input[placeholder="Search by name or alias"]')
       .setValue('  Max von Gallwitz  ')
-    await wrapper.get('button[aria-label="Create and assign a new profile"]').trigger('click')
+    await wrapper.get('button[aria-label="New person"]').trigger('click')
 
     const nameField = wrapper.get('[aria-label="New person name"]')
     const descriptionField = wrapper.get('[aria-label="New person short description"]')
@@ -432,18 +435,18 @@ describe('SimilarPeoplePanel', () => {
     }
   })
 
-  it('reveals and scrolls the selected person into view', async () => {
+  it('reveals the selected person and scrolls only the candidate viewport', async () => {
     const extendedPeople = [
       ...people,
       { ...people[1]!, id: 'josef-svoboda', name: 'Josef Svoboda' },
       { ...people[1]!, id: 'alena-horakova', name: 'Alena Horáková' },
       { ...people[1]!, id: 'jan-novak', name: 'Jan Novák' },
     ]
-    const scrollIntoView = vi.fn()
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    const scrollBy = vi.fn()
+    const originalScrollIntoView = HTMLElement.prototype.scrollBy
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
       configurable: true,
-      value: scrollIntoView,
+      value: scrollBy,
     })
 
     const wrapper = mount(SimilarPeoplePanel, {
@@ -462,16 +465,16 @@ describe('SimilarPeoplePanel', () => {
       await wrapper.vm.$nextTick()
 
       expect(wrapper.get('[aria-label="Preview Jan Novák on this page"]')).toBeDefined()
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' })
+      expect(scrollBy).toHaveBeenCalledWith({ behavior: 'smooth', top: 0 })
     } finally {
       wrapper.unmount()
       if (originalScrollIntoView) {
-        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
           configurable: true,
           value: originalScrollIntoView,
         })
       } else {
-        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollBy')
       }
     }
   })

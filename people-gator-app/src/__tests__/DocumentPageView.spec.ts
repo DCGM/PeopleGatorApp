@@ -1,3 +1,4 @@
+import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 import { shallowMount, flushPromises } from '@vue/test-utils'
 import { reactive, ref, nextTick, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,8 +12,23 @@ const mocks = vi.hoisted(() => ({
   pan: vi.fn(),
   reset: vi.fn(),
   gallery: vi.fn(),
+  replace: vi.fn(),
+  deleteFace: vi.fn(),
+  patchFace: vi.fn(),
 }))
-vi.mock('vue-router', () => ({ useRoute: mocks.route, useRouter: () => ({ replace: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRoute: mocks.route,
+  useRouter: () => ({ replace: mocks.replace }),
+}))
+vi.mock('@/client', async (original) => ({
+  ...(await original<typeof import('@/client')>()),
+  deleteFaceRouteApiV1FacesDetectionIdDelete: mocks.deleteFace,
+  patchFaceRouteApiV1FacesDetectionIdPatch: mocks.patchFace,
+}))
+vi.mock('@/composables/can-annotate', () => ({
+  useCanAnnotate: () => ref(true),
+  useCanDeleteDetection: () => ref(true),
+}))
 vi.mock('@/composables/link-state-filter', () => ({ useLinkStateFilter: () => ref([]) }))
 vi.mock('@/query/media', () => ({
   useDocumentLookupQuery: () => ({ isPending: ref(false), error: ref(null), data: ref(null) }),
@@ -85,6 +101,8 @@ beforeEach(() => {
   )
   mocks.workspace.mockReturnValue({
     faces,
+    assignmentStatus: ref('idle'),
+    assignmentError: ref(null),
     referenceFace: ref(null),
     transcription: lines,
     page: ref({ page_id: 'one' }),
@@ -119,7 +137,16 @@ async function settleFocus() {
 async function mountView() {
   const wrapper = shallowMount(DocumentPageView, {
     global: {
+      plugins: [
+        [
+          VueQueryPlugin,
+          { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+        ],
+      ],
       stubs: {
+        AlertDialog: { name: 'AlertDialog', props: ['open'], template: '<div><slot /></div>' },
+        AlertDialogContent: { template: '<div><slot /></div>' },
+        AlertDialogFooter: { template: '<div><slot /></div>' },
         Tabs: { template: '<div><slot /></div>' },
         TabsContent: { template: '<div><slot /></div>' },
       },
@@ -225,12 +252,70 @@ describe('document page gallery navigation', () => {
 it('keeps the selected reference and assignment panel when workspace filters hide its gallery entry', async () => {
   route.query = { person: 'a', candidate_mode: 'face' }
   const reference = ref<Face | null>(face('a'))
-  mocks.workspace.mockReturnValue({ ...mocks.workspace.getMockImplementation()!(), referenceFace: reference })
+  mocks.workspace.mockReturnValue({
+    ...mocks.workspace.getMockImplementation()!(),
+    referenceFace: reference,
+  })
   const wrapper = await mountView()
   faces.value = []
   await flushPromises()
-  expect(wrapper.findComponent({ name: 'CurrentFacePanel' }).props('face')).toMatchObject({ id: 'a' })
-  expect(wrapper.findComponent({ name: 'SimilarPeopleSearch' }).props('selectedFace')).toMatchObject({ id: 'a' })
+  expect(wrapper.findComponent({ name: 'CurrentFacePanel' }).props('face')).toMatchObject({
+    id: 'a',
+  })
+  expect(
+    wrapper.findComponent({ name: 'SimilarPeopleSearch' }).props('selectedFace'),
+  ).toMatchObject({ id: 'a' })
   expect(route.query.person).toBe('a')
   wrapper.unmount()
+})
+
+describe('shared detection actions', () => {
+  it('confirms deletion, preserves a rejected detection and clears selection/route only on success', async () => {
+    mocks.deleteFace
+      .mockRejectedValueOnce(new Error('Forbidden'))
+      .mockResolvedValueOnce({ data: null })
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    await flushPromises()
+    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+    card.vm.$emit('delete')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
+    expect(mocks.deleteFace).not.toHaveBeenCalled()
+    await wrapper.findComponent({ name: 'AlertDialogAction' }).trigger('click')
+    await flushPromises()
+    expect(card.props('face')).toMatchObject({ id: 'a' })
+    expect(card.props('actionError')).toBe('Could not delete detection.')
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
+    await wrapper.findComponent({ name: 'AlertDialogAction' }).trigger('click')
+    await flushPromises()
+    expect(mocks.deleteFace).toHaveBeenLastCalledWith({
+      path: { detection_id: 'a' },
+      throwOnError: true,
+    })
+    expect(card.props('face')).toBeNull()
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+    expect(mocks.replace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ person: undefined, selectedPerson: undefined }),
+      }),
+    )
+    wrapper.unmount()
+  })
+  it('routes card verification through the existing verify mutation', async () => {
+    mocks.patchFace.mockResolvedValue({
+      data: { detection_id: 'a', entity_link_state: 'verified' },
+    })
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    await flushPromises()
+    wrapper.findComponent({ name: 'CurrentFacePanel' }).vm.$emit('verify')
+    await flushPromises()
+    expect(mocks.patchFace).toHaveBeenCalledWith({
+      path: { detection_id: 'a' },
+      body: { entity_link_state: 'verified' },
+      throwOnError: true,
+    })
+    wrapper.unmount()
+  })
 })

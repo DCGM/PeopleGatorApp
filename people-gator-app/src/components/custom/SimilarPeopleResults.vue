@@ -71,10 +71,18 @@ watch(
       Math.ceil((personIndex + 1) / pageSize.value),
     )
     await nextTick()
-    const selected = resultsElement.value?.querySelector<HTMLElement>(
-      '[data-person-viewed="true"]',
+    const selected = resultsElement.value?.querySelector<HTMLElement>('[data-person-viewed="true"]')
+    const viewport = resultsElement.value?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
     )
-    selected?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+    if (selected && viewport) {
+      const item = selected.getBoundingClientRect()
+      const bounds = viewport.getBoundingClientRect()
+      const top =
+        item.top < bounds.top ? item.top - bounds.top : Math.max(0, item.bottom - bounds.bottom)
+      // Keep the candidate visible without scrolling the scan's action panel offscreen.
+      viewport.scrollBy?.({ top, behavior: 'smooth' })
+    }
   },
   { immediate: true, flush: 'post' },
 )

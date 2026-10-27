@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
+  deleteFaceRouteApiV1FacesDetectionIdDelete,
   createFaceRouteApiV1FacesPost,
   createFaceBatchRouteApiV1FacesBatchPost,
   getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet,
@@ -242,6 +243,35 @@ export function useReviewFacesMutation() {
           queryKeys.images.all,
           queryKeys.search.all,
         ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      )
+    },
+  })
+}
+
+export function useDeleteFaceMutation() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (detectionId: string) =>
+      responseData(
+        deleteFaceRouteApiV1FacesDetectionIdDelete({
+          path: { detection_id: detectionId },
+          throwOnError: true,
+        }),
+      ),
+    onSuccess: async (_data, detectionId) => {
+      // A deleted detail must not remain available as a selected reference face.
+      client.removeQueries({ queryKey: queryKeys.faces.detail(detectionId), exact: true })
+      client.removeQueries({ queryKey: ['face-crops', 'aligned', detectionId] })
+      await Promise.all(
+        [
+          queryKeys.faces.all,
+          queryKeys.entities.all,
+          queryKeys.pages.all,
+          queryKeys.documents.all,
+          queryKeys.sources.all,
+          queryKeys.images.all,
+          queryKeys.search.all,
+        ].map((queryKey) => client.invalidateQueries({ queryKey })),
       )
     },
   })

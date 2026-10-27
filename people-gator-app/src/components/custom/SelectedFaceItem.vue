@@ -1,20 +1,10 @@
 <script setup lang="ts">
+import FaceActionButtons from './FaceActionButtons.vue'
 import { useRoute } from 'vue-router'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 const route = useRoute()
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
-import {
-  Check,
-  ChevronRight,
-  ExternalLink,
-  Link,
-  Link2,
-  RefreshCw,
-  Unlink,
-  UserPlus,
-  UserRoundX,
-  X,
-} from '@lucide/vue'
+import { Check, ChevronRight, ExternalLink, Link, UserRoundX, X } from '@lucide/vue'
 import { ref, watch } from 'vue'
 
 import ContentEditable from '@/components/custom/ContentEditable.vue'
@@ -34,12 +24,17 @@ import {
 const props = defineProps<{
   face: Face
   assignmentPending?: boolean
+  canAnnotate?: boolean
+  canDelete?: boolean
+  actionError?: string
 }>()
 
 const emit = defineEmits<{
   findProfile: []
   createProfile: [profile: { name: string; shortDescription?: string }]
   unassign: []
+  verify: []
+  delete: []
 }>()
 
 const isCreating = ref(false)
@@ -197,7 +192,6 @@ watch(() => props.face.id, cancelCreating)
           title="Create and assign profile"
         >
           <Check aria-hidden="true" />
-          Save
         </Button>
         <Button
           type="button"
@@ -209,66 +203,23 @@ watch(() => props.face.id, cancelCreating)
           @click="cancelCreating"
         >
           <X aria-hidden="true" />
-          Cancel
         </Button>
       </div>
 
-      <div v-else class="flex shrink-0 items-center gap-1 w-max">
-        <Button
-          v-if="face.personId"
-          type="button"
-          size="xs"
-          variant="outline"
-          :disabled="props.assignmentPending"
-          aria-label="Reassign to another profile"
-          title="Reassign to another profile"
-          @click="emit('findProfile')"
-        >
-          <RefreshCw aria-hidden="true" />
-          Reassign
-        </Button>
-        <Button
-          v-else
-          type="button"
-          size="xs"
-          variant="outline"
-          :disabled="props.assignmentPending"
-          class="text-accent hover:text-accent"
-          aria-label="Link to an existing profile"
-          title="Link to an existing profile"
-          @click="emit('findProfile')"
-        >
-          <Link2 aria-hidden="true" />
-          Link
-        </Button>
-        <Button
-          type="button"
-          size="xs"
-          variant="outline"
-          class="text-accent hover:text-accent"
-          :disabled="props.assignmentPending"
-          aria-label="Create and assign a new profile"
-          title="Create and assign a new profile"
-          @click="startCreating"
-        >
-          <UserPlus aria-hidden="true" />
-          New
-        </Button>
-        <Button
-          v-if="face.personId"
-          type="button"
-          size="xs"
-          variant="outline"
-          class="text-destructive hover:text-destructive"
-          :disabled="props.assignmentPending"
-          aria-label="Unassign current profile"
-          title="Unassign current profile"
-          @click="emit('unassign')"
-        >
-          <Unlink aria-hidden="true" />
-          Unlink
-        </Button>
-      </div>
+      <FaceActionButtons
+        v-else
+        :face="face"
+        :busy="assignmentPending"
+        :can-annotate="Boolean(canAnnotate)"
+        :can-delete="Boolean(canDelete)"
+        show-create
+        @find-profile="emit('findProfile')"
+        @create="startCreating"
+        @unassign="emit('unassign')"
+        @verify="emit('verify')"
+        @delete="emit('delete')"
+      />
     </ItemFooter>
+    <p v-if="actionError" role="alert" class="text-xs text-destructive">{{ actionError }}</p>
   </Item>
 </template>

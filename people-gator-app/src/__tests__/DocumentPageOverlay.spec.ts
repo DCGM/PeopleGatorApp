@@ -1,6 +1,7 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 
+import { h } from 'vue'
 import UiTooltip from '@/components/custom/UiTooltip.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import type { TranscriptionEntitySpan } from '@/viewmodels/document-workspace.types'
@@ -204,4 +205,41 @@ describe('DocumentPageOverlay', () => {
     expect(faces[0]?.classes()).not.toContain('z-10')
     expect(faces[1]?.classes()).toContain('z-10')
   })
+})
+
+
+it('opens actions from a detection, closes with Escape and returns keyboard focus', async () => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  })
+  const wrapper = mount(DocumentPageOverlay, {
+    attachTo: document.body,
+    props: {
+      pageBounds: { left: 0, top: 0, width: 500, height: 800 }, transcription: [],
+      faces: [{ id: 'one', personId: null, name: 'Unknown', confidence: 99, status: 'unassigned',
+        position: { left: 10, top: 10, width: 20, height: 20 }, portrait: '', portraitLoading: false }],
+      selectedLineIndex: 0, selectedFaceId: null, selectedPersonId: null, selectedCandidateFaceId: null,
+    },
+    slots: { actions: () => h('button', { type: 'button' }, 'Link') },
+  })
+  try {
+    const detection = wrapper.get('[data-region-type="face"]')
+    await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
+    await flushPromises()
+    const panel = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+    expect(panel).not.toBeNull()
+    expect(wrapper.emitted('selectFace')).toEqual([['one']])
+    expect(panel!.contains(document.activeElement)).toBe(true)
+    panel!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
+    expect(document.activeElement).toBe(detection.element)
+  } finally {
+    wrapper.unmount()
+    vi.unstubAllGlobals()
+  }
 })

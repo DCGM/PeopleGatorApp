@@ -2,6 +2,14 @@ import { onMounted, ref } from 'vue'
 import { getAccessToken } from '@/query/client'
 
 export function useCanAnnotate() {
+  return useHasScope('people-gator:annotate')
+}
+
+export function useCanDeleteDetection() {
+  return useHasScope('people-gator:admin')
+}
+
+function useHasScope(scope: string) {
   const allowed = ref(false)
   onMounted(async () => {
     try {
@@ -10,7 +18,7 @@ export function useCanAnnotate() {
       const claims = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')))
       const granted = claims.scopes ?? claims.scope
       const scopes = Array.isArray(granted) ? granted : String(granted ?? '').split(' ')
-      allowed.value = scopes.includes('people-gator:annotate')
+      allowed.value = scopes.includes(scope)
     } catch {
       allowed.value = false
     }
