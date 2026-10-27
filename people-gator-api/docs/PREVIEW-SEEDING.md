@@ -781,13 +781,12 @@ scroll to verify ascending order across the cursor boundary. Relevance remains
 available in the selector during text search. Other metadata/count headings have
 no sort action because their fields are not supported by the API.
 
-The `document-table-page-header` link (also available as the older
-`document-table-sticky-header` link) opens the 14 pagination ledgers. Enable
-**First page** for taller rows, then scroll the full page. The table has no
-separate vertical scroll area: headings remain beneath the page navigation
-while its rows pass below, and stop following at the table's end. Scroll sideways
-to verify heading/column alignment and automatic loading at any horizontal
-position. Sort buttons remain keyboard accessible in the pinned header.
+The `document-table-scroll` link opens the 14 pagination ledgers. Enable First
+page for taller rows, then scroll the full page: the table headings scroll away
+with the rows. There is no sticky table header or separate vertical table scroll
+area. Horizontal scrolling and automatic cursor loading still work. The earlier
+`document-table-page-header`, `document-table-sticky-header` and
+`document-table-scroll-performance` links remain aliases for this same scenario.
 
 The `document-table-unknown-names` link (also available as the older
 `document-table-name-fallback` link) sorts `preview-mzk` by Document name.
@@ -797,12 +796,6 @@ descending, including across cursor batches and during search. The UUID label is
 display-only. Its stored name remains null; reruns preserve this fixture and its
 stable identity. Multiple unknown names tie-break by source UUID ascending.
 
-Use `document-table-scroll-performance` for the same 14 synthetic pagination
-ledgers with local First page media. Enable First page and scroll the page
-continuously: headings should follow directly below navigation without waiting
-for Vue rendering. Layout is measured on resize/content changes; ordinary scroll
-events only move the original header using cached bounds. No inference service
-or additional fixture records are required.
 
 Open `document-table-ndk-column` (the earlier `document-table-ndk-link` alias
 still works). **NDK** is a default column immediately after Document name: a

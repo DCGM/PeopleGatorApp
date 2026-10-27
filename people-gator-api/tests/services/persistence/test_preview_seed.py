@@ -3128,12 +3128,12 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("example,direction", [("document-table-sort", "desc"), ("document-table-page-header", "asc")])
+@pytest.mark.parametrize("example,direction", [("document-table-sort", "desc"), ("document-table-scroll", "asc")])
 async def test_document_table_sort_example_uses_server_cursor_order(seed_target, example, direction):
     from people_gator_api.schemas.sources import DocumentListFilter
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
-    assert seeded.filter_examples["document-table-scroll-performance"] == seeded.filter_examples["document-table-page-header"] == seeded.filter_examples["document-table-sticky-header"]
+    assert seeded.filter_examples["document-table-scroll"] == seeded.filter_examples["document-table-scroll-performance"] == seeded.filter_examples["document-table-page-header"] == seeded.filter_examples["document-table-sticky-header"]
     demo = parse_qs(urlsplit(seeded.filter_examples[example]).query)
     assert "view" not in demo
     query = DocumentListRequest(
