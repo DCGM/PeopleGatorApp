@@ -29,22 +29,8 @@ from people_gator_api.schemas.users import UserCreateRequest
 MODEL = "discovery-regression-2d"
 
 
-@pytest.fixture
-def isolated_discovery_indexes():
-    from people_gator_api.persistence.postgres.models import (
-        FaceEmbedding as EmbeddingRow,
-    )
-
-    # Model registration attaches dynamic indexes to process-wide metadata.
-    # Keep private-schema tests from leaking definitions into bootstrap tests.
-    table = EmbeddingRow.__table__
-    original_indexes = set(table.indexes)
-    yield
-    table.indexes.difference_update(table.indexes - original_indexes)
-
-
 @pytest_asyncio.fixture
-async def discovery(migrated_postgres, isolated_discovery_indexes):
+async def discovery(migrated_postgres):
     async with async_sessionmaker(
         migrated_postgres, expire_on_commit=False
     )() as session:
