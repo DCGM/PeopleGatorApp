@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 const route = useRoute()
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import IdentityFacePreview from './IdentityFacePreview.vue'
 import {
   Check,
   ChevronRight,
@@ -174,6 +175,9 @@ watch(() => props.face.id, cancelCreating)
       </p>
     </ItemContent>
 
+    <div v-if="face.personId && !isCreating" class="w-full">
+      <IdentityFacePreview :key="face.personId" :person-id="face.personId" :name="face.name" />
+    </div>
     <ItemFooter class="w-full shrink-0 items-center border-t pt-2 text-muted-foreground">
       <a
         v-if="!isCreating && face.wikidataId"

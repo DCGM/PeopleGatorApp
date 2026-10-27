@@ -1,0 +1,247 @@
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import IdentityFacePreview from '@/components/custom/IdentityFacePreview.vue'
+import SimilarPersonItem from '@/components/custom/SimilarPersonItem.vue'
+import { queryKeys } from '@/query/keys'
+
+const mocks = vi.hoisted(() => ({ list: vi.fn(), crop: vi.fn() }))
+vi.mock('@/client', async (original) => ({
+  ...(await original<typeof import('@/client')>()),
+  listFacesRouteApiV1FacesGet: mocks.list,
+  getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet: mocks.crop,
+}))
+const face = (id: string, entity = 'ada') => ({ detection_id: id, entity_id: entity })
+const batch = (
+  items: ReturnType<typeof face>[],
+  cursor: string | null = null,
+  total = items.length,
+) => ({ data: { items, cursor, total_count: total } })
+let mounted: ReturnType<typeof mount>
+let client: QueryClient
+function setup() {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+  mounted = mount(IdentityFacePreview, {
+    props: { personId: 'ada', name: 'Ada Novak' },
+    attachTo: document.body,
+    global: { plugins: [[VueQueryPlugin, { queryClient: client }]] },
+  })
+  return mounted
+}
+async function click(label: string) {
+  const button = [...document.querySelectorAll('button')].find(
+    (b) => b.textContent?.trim() === label || b.getAttribute('aria-label') === label,
+  )!
+  expect(button, label).toBeTruthy()
+  button.click()
+  await flushPromises()
+}
+beforeEach(() => {
+  mocks.list.mockReset().mockResolvedValue(batch([]))
+  mocks.crop.mockReset().mockResolvedValue({ data: new Blob(['face']) })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  vi.stubGlobal('URL', { createObjectURL: () => 'blob:face', revokeObjectURL: vi.fn() })
+})
+afterEach(() => {
+  mounted?.unmount()
+  client?.clear()
+  document.body.innerHTML = ''
+  vi.unstubAllGlobals()
+})
+
+describe('in-place identity faces', () => {
+  it('keeps candidate preview, profile navigation and assignment independent of reference browsing', async () => {
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    mounted = mount(SimilarPersonItem, {
+      props: {
+        person: {
+          id: 'ada',
+          name: 'Ada Novak',
+          score: 1,
+          nerMentions: 0,
+          detections: 1,
+          source: 'page',
+        },
+      },
+      attachTo: document.body,
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: client }]],
+        stubs: { RouterLink: RouterLinkStub, PersonPortrait: true },
+      },
+    })
+    await click('View faces')
+    expect(mounted.emitted('preview')).toBeUndefined()
+    expect(mounted.emitted('assign')).toBeUndefined()
+    expect(mounted.getComponent(RouterLinkStub).props('to')).toEqual(
+      expect.objectContaining({ params: { personId: 'ada' } }),
+    )
+    await click('Close faces')
+    await mounted.get('[aria-label="Assign to Ada Novak"]').trigger('click')
+    expect(mounted.emitted('assign')).toHaveLength(1)
+    await mounted.get('[aria-label="Preview Ada Novak on this page"]').trigger('click')
+    expect(mounted.emitted('preview')).toHaveLength(1)
+  })
+
+  it('loads only when opened, scopes solely to the identity, and pages without duplicates', async () => {
+    mocks.list
+      .mockResolvedValueOnce(
+        batch(
+          Array.from({ length: 6 }, (_, i) => face(`a${i}`)),
+          'next',
+          7,
+        ),
+      )
+      .mockResolvedValueOnce(batch([face('a5'), face('a6'), face('other', 'emil')], null, 7))
+    const wrapper = setup()
+    await flushPromises()
+    expect(mocks.list).not.toHaveBeenCalled()
+    await click('View faces')
+    expect(mocks.list.mock.calls[0]![0].query).toEqual({
+      'filter.entity_id': ['ada'],
+      limit: 6,
+      return_total_count: true,
+      sort: 'detection_id',
+      sort_direction: 'asc',
+      cursor: null,
+    })
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('true')
+    const dialog = document.getElementById(wrapper.get('button').attributes('aria-controls')!)!
+    expect(dialog.getAttribute('role')).toBe('dialog')
+    expect(dialog.getAttribute('aria-labelledby')).toBe(wrapper.get('button').attributes('id'))
+    expect(document.body.textContent).toContain('6 of 7 faces')
+    await click('Load more faces')
+    expect(mocks.list.mock.calls[1]![0].query.cursor).toBe('next')
+    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(7)
+    expect(mocks.crop).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: { detection_id: 'other' } }),
+    )
+    expect(document.body.textContent).toContain('7 of 7 faces')
+    await click('Close faces')
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(wrapper.get('button').element)
+    mocks.list.mockImplementation(({ query }) =>
+      Promise.resolve(
+        query.cursor
+          ? batch([face('a6')], null, 7)
+          : batch(
+              Array.from({ length: 6 }, (_, i) => face(`a${i}`)),
+              'next',
+              7,
+            ),
+      ),
+    )
+    await click('View faces')
+    expect(document.body.textContent).toContain('7 of 7 faces')
+    expect(mocks.crop).toHaveBeenCalledTimes(7)
+  })
+
+  it('reports loading, list failure, retry and empty evidence', async () => {
+    let reject!: (e: Error) => void
+    mocks.list.mockImplementationOnce(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail
+        }),
+    )
+    setup()
+    await click('View faces')
+    expect(document.body.textContent).toContain('Loading faces')
+    reject(new Error('offline'))
+    await flushPromises()
+    expect(document.body.textContent).toContain('Could not load faces')
+    await click('Retry')
+    expect(document.body.textContent).toContain('No linked faces')
+  })
+
+  it('retains loaded evidence after a continuation failure and retries the same cursor', async () => {
+    mocks.list
+      .mockResolvedValueOnce(batch([face('a')], 'next', 2))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(batch([face('b')], null, 2))
+    setup()
+    await click('View faces')
+    await click('Load more faces')
+    expect(document.body.textContent).toContain('Could not load more faces')
+    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(1)
+    await click('Retry')
+    expect(mocks.list.mock.calls[2]![0].query.cursor).toBe('next')
+    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(2)
+  })
+
+  it('isolates late responses when the identity changes and refreshes invalidated membership', async () => {
+    let finish!: (value: ReturnType<typeof batch>) => void
+    mocks.list
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      .mockResolvedValueOnce(batch([face('emil-1', 'emil')]))
+    const wrapper = setup()
+    await click('View faces')
+    await wrapper.setProps({ personId: 'emil', name: 'Emil' })
+    await click('View faces')
+    finish(batch([face('ada-late')]))
+    await flushPromises()
+    expect(mocks.crop.mock.calls.map(([arg]) => arg.path.detection_id)).toEqual(['emil-1'])
+    mocks.list.mockResolvedValue(batch([]))
+    await client.invalidateQueries({ queryKey: queryKeys.faces.lists() })
+    await flushPromises()
+    expect(document.body.textContent).toContain('No linked faces')
+  })
+
+  it('opens on mouse hover without moving focus, closes on leave, and keeps clicked content open', async () => {
+    const wrapper = setup()
+    const trigger = wrapper.get('button')
+    await trigger.trigger('pointerenter', { pointerType: 'mouse' })
+    await new Promise((resolve) => setTimeout(resolve, 330))
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(document.activeElement).not.toBe(document.querySelector('[role="dialog"]'))
+    await trigger.trigger('pointerleave')
+    await new Promise((resolve) => setTimeout(resolve, 280))
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    await click('View faces')
+    await trigger.trigger('pointerleave')
+    await new Promise((resolve) => setTimeout(resolve, 280))
+    await flushPromises()
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+  })
+
+  it('handles Escape within the gallery while stopping scan navigation shortcuts', async () => {
+    const wrapper = setup()
+    await click('View faces')
+    const dialog = document.querySelector('[role="dialog"]')!
+    const navigation = vi.fn()
+    window.addEventListener('keydown', navigation)
+    try {
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      expect(navigation).not.toHaveBeenCalled()
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flushPromises()
+      expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
+      expect(document.activeElement).toBe(wrapper.get('button').element)
+    } finally {
+      window.removeEventListener('keydown', navigation)
+    }
+  })
+
+  it('keeps other crops accessible when one authenticated crop fails', async () => {
+    mocks.list.mockResolvedValue(batch([face('bad'), face('good')]))
+    mocks.crop.mockRejectedValueOnce(new Error('missing media'))
+    setup()
+    await click('View faces')
+    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(2)
+    expect(document.body.textContent).toContain('crop unavailable')
+    expect(mocks.crop).toHaveBeenCalledTimes(2)
+  })
+})
