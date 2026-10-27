@@ -96,6 +96,11 @@ def validate(value, environment, path, *, inputs=False):
                 raise problem(environment, path, "runtime_file", str(error)) from None
             require(not any(key.startswith("PEOPLE_GATOR_API__PERSISTENCE") for key in keys),
                     "runtime_file", "persistence settings are managed by staging; remove them")
+        require(not ("snapshot" in value and "snapshot_source_file" in value), "snapshot_source_file",
+                "choose automatic snapshot_source_file or legacy snapshot, not both")
+        if "snapshot_source_file" in value:
+            # Resolve/read backup credentials only for snapshot operations.
+            absolute("snapshot_source_file", value["snapshot_source_file"])
         if "snapshot" in value:
             from .staging import validate_snapshot
             try:
@@ -166,6 +171,8 @@ def configure(environment, path, changes, *, dry_run=False, expected=None):
     if environment == "staging" and "runtime_file" in changes:
         for field in ("storage", "backup_source", "media_source", "accounts", "media_transfer"):
             candidate.pop(field, None)
+    if environment == "staging" and "snapshot_source_file" in changes:
+        candidate.pop("snapshot", None)
     validate(candidate, environment, path)
     # Data identities cannot change while an environment is installed.
     if previous and (Path(previous.get("state_dir", "/nonexistent")) / "owned.json").exists():

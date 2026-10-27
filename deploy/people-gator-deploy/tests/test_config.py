@@ -93,6 +93,27 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in path.parent.glob("config.backup-*.json")))
 
+    def test_automatic_source_transition_removes_fixed_selection_and_keeps_state(self):
+        path = self.path.parent.parent / "staging/config.json"
+        value = {**self.value, "host": "staging.example.invalid", "state_dir": str(self.root / "state/staging"),
+                 "infrastructure": {**self.value["infrastructure"], "mode": "external"},
+                 "runtime_file": str(self.root / "runtime.env"),
+                 "snapshot": {"path": "/private/old.dump", "sha256": "a" * 64, "application_revision": "b" * 40}}
+        Path(value["runtime_file"]).write_text("PEOPLE_GATOR_API__OTEL__ENABLED=false\n")
+        Path(value["runtime_file"]).chmod(0o600)
+        config.configure("staging", path, value)
+        state = Path(value["state_dir"])
+        write_json(state / "owned.json", {"environment": "staging"})
+        write_json(state / "state.json", {"generation": "retained"})
+        with self.assertRaisesRegex(DeployError, "absolute path"):
+            config.configure("staging", path, {"snapshot_source_file": "relative"})
+        config.configure("staging", path, {"snapshot_source_file": str(self.root / "private/source.json")})
+        current = config.read("staging", path, inputs=True)
+        self.assertNotIn("snapshot", current)
+        self.assertEqual(json.loads((state / "state.json").read_text()), {"generation": "retained"})
+        with self.assertRaisesRegex(DeployError, "not both"):
+            config.configure("staging", path, {"snapshot": value["snapshot"]})
+
     def test_external_runtime_configuration_removes_obsolete_staging_sections(self):
         path = self.path.parent.parent / "staging/config.json"
         value = {**self.value, "schema_version": 1, "environment": "staging", "host": "staging.example.invalid",

@@ -2,7 +2,7 @@
 
 Normal deployments retain the active database and never restore or seed. Only
 explicit ``snapshot-init``/``refresh`` prepare an independent database from an
-operator-supplied local archive. Storage, media and authentication objects are
+verified latest S3 backup (or an explicitly configured legacy local archive). Storage, media and authentication objects are
 managed externally; deployment never copies, provisions or validates them.
 """
 from __future__ import annotations
@@ -14,6 +14,9 @@ from pathlib import Path
 import re
 import secrets
 import stat
+import tempfile
+
+from . import snapshots
 
 from .core import DeployError
 from .config import private_file
@@ -70,8 +73,10 @@ class Staging(Host):
             raise DeployError(f"{runtime}: persistence settings are managed by staging; remove them from runtime_file")
 
     def snapshot_input(self):
+        if "snapshot_source_file" in self.config:
+            return snapshots.read_source(self.config["snapshot_source_file"])
         if "snapshot" not in self.config:
-            raise StagingConfigurationError("The staging descriptor needs snapshot for snapshot-init/refresh; "
+            raise StagingConfigurationError("The staging descriptor needs snapshot for snapshot-init/refresh (prefer snapshot_source_file); "
                                            "run people-gator-deploy staging configure --input <private-json>")
         return validate_snapshot(self.config["snapshot"], inputs=True)
 
@@ -165,7 +170,37 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         return self.private_command(args)
 
     def prepare(self, generation, values, directory):
-        snapshot = self.snapshot_input()
+        source = self.snapshot_input()
+        if "snapshot_source_file" not in self.config:
+            return self.prepare_archive(generation, values, directory, source)
+        # No persistent archive cache: every snapshot operation resolves anew.
+        # TemporaryDirectory is mode 700; the streamed archive is mode 600.
+        with tempfile.TemporaryDirectory(prefix="snapshot-", dir=self.staging_root) as temporary:
+            try:
+                client = snapshots.client_for(source)
+                key = snapshots.select_backup(client, source)
+                path = Path(temporary) / "snapshot.dump"
+                provenance = snapshots.download(client, source, key, path)
+            except DeployError:
+                raise
+            except Exception:
+                # SDK errors may contain private endpoints or identifiers.
+                raise DeployError("Snapshot gathering failed; check source read-only ListBucket/GetObject/GetObjectVersion "
+                                  "access, endpoint connectivity and available private disk space") from None
+            self.prepare_archive(generation, values, directory,
+                {"path": str(path), "sha256": provenance["sha256"],
+                 "application_revision": provenance["application_revision"]})
+            try:
+                snapshots.unchanged(client, source, provenance)
+            except DeployError:
+                raise
+            except Exception:
+                raise DeployError("Cannot recheck backup identity after restore; check source read access and connectivity") from None
+            generation["provenance"].pop("path", None)
+            generation["provenance"].update(provenance)
+            write_private(directory / "provenance.json", json.dumps(generation["provenance"]))
+
+    def prepare_archive(self, generation, values, directory, snapshot):
         path = Path(snapshot["path"])
         # Hold one inode throughout checksum verification, archive inspection and
         # restore. Replacing the path cannot change the selected archive; writes
