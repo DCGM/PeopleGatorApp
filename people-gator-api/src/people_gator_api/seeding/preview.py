@@ -584,6 +584,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "touched_by": actors["importer"].user_id,
                 "api_key": registered_keys["importer"],
             }),
+            # Hover-free scan review reuses the linked importer/verified faces,
+            # OCR mention and local page media without rewriting retained edits.
+            "scan-annotation-hover": (
+                f"/libraries/{activity_document.library}/documents/{activity_document.document_id}"
+                f"/pages/{activity_page.page_id}"
+            ),
             # Open Irena's scan, then search for Ada as an assignment candidate
             # outside that page. Opening a result must not invent evidence scope.
             "scan-assignment-search": "/scans?" + urlencode({"document": documents[activity_document.key]}),
