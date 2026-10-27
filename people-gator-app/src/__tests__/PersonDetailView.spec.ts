@@ -2,6 +2,7 @@ import { mount, RouterLinkStub } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
+import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 
 import PersonDetailView from '@/views/PersonDetailView.vue'
 
@@ -83,12 +84,21 @@ describe('PersonDetailView', () => {
 
     const wrapper = mount(PersonDetailView, {
       global: {
-        plugins: [router],
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
         stubs: {
           RouterLink: RouterLinkStub,
           PersonPortrait: true,
           VerifyEntityLink: true,
           PersonFacesPanel: true,
+          PersonMentionReviewList: {
+            template:
+              '<div><PersonMentionEntry v-for="mention in mentions" :key="mention.id" :mention="mention" :person-id="personId" :link-states="[]" /></div>',
+            props: ['mentions', 'personId'],
+            components: {
+              PersonMentionEntry: (await import('@/components/custom/PersonMentionEntry.vue'))
+                .default,
+            },
+          },
           SharedFilterControls: true,
           SharedFilterTags: true,
         },
@@ -104,7 +114,12 @@ describe('PersonDetailView', () => {
 
     expect(wrapper.get('[aria-label="Person identity"]').classes()).toContain('sticky')
     expect(wrapper.find('aside[aria-label="Person statistics"]').exists()).toBe(false)
-    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Faces 0', 'Mentions 1', 'Details', 'Statistics'])
+    expect(wrapper.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
+      'Faces 0',
+      'Mentions 1',
+      'Details',
+      'Statistics',
+    ])
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
@@ -127,7 +142,7 @@ it('clears discovery source/model overrides together while keeping search and ev
   await router.isReady()
   const wrapper = mount(PersonDetailView, {
     global: {
-      plugins: [router],
+      plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
       stubs: {
         RouterLink: RouterLinkStub,
         PersonPortrait: true,

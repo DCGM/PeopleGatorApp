@@ -349,11 +349,7 @@ watch(
     <section aria-labelledby="similar-faces-heading">
       <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <small class="font-semibold uppercase text-secondary">Face similarity</small>
-          <h3 id="similar-faces-heading">Found faces to review</h3>
-          <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Matches from the selected reference inputs for {{ props.currentName }}.
-          </p>
+          <h3 id="similar-faces-heading">Found faces</h3>
         </div>
         <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
       </div>
@@ -536,11 +532,7 @@ watch(
     <section class="border-t pt-8" aria-labelledby="similar-people-heading">
       <div class="flex w-full flex-row flex-wrap gap-4">
         <div>
-          <small class="font-semibold uppercase text-secondary">Identity similarity</small>
           <h3 id="similar-people-heading">Similar people</h3>
-          <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Review possible duplicates before merging.
-          </p>
         </div>
         <SearchFilterPanel label="Discovery people" filters-only>
           <SortControl
