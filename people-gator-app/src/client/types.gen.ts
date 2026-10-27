@@ -2332,9 +2332,29 @@ export type TextMentionGroup = {
     /**
      * Name
      *
-     * Exact recorded mention text; never normalized.
+     * Exact recorded text, or source display label for source groups.
      */
     name: string;
+    /**
+     * Source Id
+     */
+    source_id?: string | null;
+    /**
+     * Source Kind
+     */
+    source_kind?: 'document' | 'page' | 'source' | null;
+    /**
+     * Library
+     */
+    library?: string | null;
+    /**
+     * Document Id
+     */
+    document_id?: string | null;
+    /**
+     * Page Id
+     */
+    page_id?: string | null;
     /**
      * Occurrence Count
      *
@@ -4455,6 +4475,10 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Group By
+         */
+        group_by?: 'mention' | 'document' | 'page';
         /**
          * Filter.Entity Id
          *

@@ -369,3 +369,25 @@ async def test_unknown_document_names_agree_in_paged_browse_and_search(collectio
     edge = browse[:2] if direction == "asc" else browse[-2:]
     assert [row.source_id for row in edge] == sorted(row.source_id for row in unknowns)
     assert len(unknowns) == 2
+
+
+@pytest.mark.parametrize("mode,expected", [("document", 3), ("page", 7)])
+async def test_mention_source_groups_cover_all_pages_with_stable_identity(collection, mode, expected):
+    c = collection
+    groups, total = await pages(c.r.db.text_mentions.list_groups, TextMentionGroupListRequest,
+                               filter_=TextMentionListFilter(entity_id=[c.person]),
+                               group_by=mode, limit=1)
+    assert total == expected
+    assert len({g.source_id for g in groups}) == expected
+    assert sum(g.occurrence_count for g in groups) == len(c.mentions)
+    for group in groups:
+        scope = ({"document_source_id": [group.source_id]} if mode == "document"
+                 else {"source_id": [group.source_id]})
+        occurrences, count = await pages(c.r.db.text_mentions.list, TextMentionListRequest,
+                                        filter_=TextMentionListFilter(entity_id=[c.person], **scope))
+        assert count == group.occurrence_count
+        assert all(m.source_id in {p.source_id for p in c.pages} for m in occurrences)
+    filtered, _ = await pages(c.r.db.text_mentions.list_groups, TextMentionGroupListRequest,
+                             group_by=mode, filter_=TextMentionListFilter(
+                                 entity_id=[c.person], source_id=[c.pages[0].source_id]))
+    assert len(filtered) == 1 and filtered[0].occurrence_count == 1
