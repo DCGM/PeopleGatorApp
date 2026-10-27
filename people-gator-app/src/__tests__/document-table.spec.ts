@@ -95,6 +95,9 @@ describe('document table', () => {
     )
     expect(link.attributes('aria-label')).toContain('archive-id')
     expect(wrapper.get('[role="region"]').attributes('tabindex')).toBe('0')
+    const description = wrapper.get('table').attributes('aria-describedby')
+    expect(wrapper.get(`[id="${description}"]`).text()).toContain('Counts cover')
+    expect(wrapper.get('[role="region"]').attributes('aria-describedby')).toBeUndefined()
   })
   it('shows and hides every data field including name, retains identity navigation and restores defaults', async () => {
     const { wrapper, visibility } = await render()

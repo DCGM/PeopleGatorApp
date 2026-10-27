@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 const props = defineProps<{
   class?: HTMLAttributes['class']
 }>()
+// Attributes such as aria-describedby describe the table, not its scroll region.
+defineOptions({ inheritAttrs: false })
 </script>
 
 <template>
@@ -15,7 +17,11 @@ const props = defineProps<{
     role="region"
     aria-label="Table, scroll for more columns"
   >
-    <table data-slot="table" :class="cn('w-full caption-bottom text-sm', props.class)">
+    <table
+      v-bind="$attrs"
+      data-slot="table"
+      :class="cn('w-full caption-bottom text-sm', props.class)"
+    >
       <slot />
     </table>
   </div>
