@@ -759,5 +759,6 @@ existing local media, stable source identities and portrait choices without
 rewriting any records on retained previews.
 
 Archive badges read **NDK**, with **Digitální knihovna** in the hover tooltip.
+On phones, the header badge shows only its external-link icon.
 On Faces and Discover, the badge overlays the top-left of the thumbnail with a
 nearly opaque theme background; selection remains at the top-right.

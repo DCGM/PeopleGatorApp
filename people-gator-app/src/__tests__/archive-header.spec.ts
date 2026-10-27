@@ -38,9 +38,11 @@ it('uses the API page URL and clears it while navigating or when the source is u
     global: { plugins: [router, [VueQueryPlugin, { queryClient: client }]] },
   })
   await flushPromises()
-  expect(wrapper.get('a[target="_blank"]').attributes('href')).toBe(
-    'https://archive.example/canonical-page-one',
-  )
+  const header = wrapper.get('a[target="_blank"]')
+  expect(header.attributes('href')).toBe('https://archive.example/canonical-page-one')
+  // Phone headers keep only the icon; the name still includes the visible NDK label.
+  expect(header.get('span').classes()).toContain('max-sm:sr-only')
+  expect(header.attributes('aria-label')).toMatch(/^NDK: open page/)
   await router.push('/other-library/other-document/two')
   await flushPromises()
   expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
