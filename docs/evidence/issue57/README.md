@@ -7,8 +7,8 @@ store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
 - `table-*`: default columns; all document-wide totals are visible by horizontal scrolling.
 - `columns-*`: standard Columns popover with individually configurable fields.
 - `sort-ascending-*` / `sort-descending-*`: clickable Document name header with its active direction and server-ordered rows.
-- `first-page-*`: optional First page enabled, with the translucent NDK source link over each thumbnail.
-- `first-page-dark-*`: the same NDK overlay in dark theme.
+- `first-page-*`: optional First page enabled separately from the default NDK source column.
+- `first-page-dark-*`: the default NDK link and optional image in dark theme.
 - `ndk-tooltip-*`: expanded Národní digitální knihovna tooltip on keyboard focus.
 - `name-hidden-*`: document identity remains visible and linked with Document name hidden.
 - `attribution-*`: user/key label columns enabled and horizontally scrolled into view.
@@ -35,7 +35,7 @@ The production build uses only TanStack v9's column visibility feature; Vue Quer
 and the existing route filters/sort still own the remote result sequence. There
 is no client pagination, filtering or sorting; first-page media is the only
 optional per-row request.
-The table-only production build measures 827.04 kB minified JS (248.32 kB gzip).
+The table-only production build measures 827.15 kB minified JS (248.31 kB gzip).
 The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
 Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.
 
@@ -59,9 +59,10 @@ instrumented Vue render functions and the table's `getBoundingClientRect` after
 images/layout settled; consecutive steps advanced 15px and waited two animation frames.
 These are work counts, not an FPS benchmark. See `header-scroll-work.json`.
 
-NDK overlay checks at both sizes verify that the link stays within the image
-bounds, shows the short NDK label, expands its name on keyboard focus, and opens
-the exact stored source URL in a new tab. External navigation uses an intercepted
-synthetic response; no external archive data is fetched. Hidden thumbnails still
-request no media, enabling First page requests one image per document, and the
-page stays within its viewport width. Light/dark captures include the overlay.
+NDK column checks at both sizes verify that the link follows Document name,
+shows NDK with an external-link icon, expands its name on keyboard focus and
+opens the stored source URL in a new tab. It is shown by default with no thumbnail
+request. External navigation uses an intercepted synthetic response; no external
+archive data is fetched. Enabling First page requests one image and leaves the
+NDK link in its own column. The thumbnail has no overlay link. Light/dark captures
+include this arrangement, with page width bounded and standard focus states.

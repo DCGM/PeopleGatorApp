@@ -76,6 +76,7 @@ describe('document table', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.findAll('tbody td').map((cell) => cell.text())).toEqual([
       'Document archive-id',
+      'NDK',
       'Archive',
       '2',
       'Unknown',
@@ -87,8 +88,8 @@ describe('document table', () => {
       '1',
     ])
     expect(wrapper.findAll('th')[0]!.text()).toBe('Document name')
-    expect(wrapper.findAll('tbody a')).toHaveLength(1)
-    const link = wrapper.get('tbody a')
+    expect(wrapper.findAll('tbody a[href^="/scans"]')).toHaveLength(1)
+    const link = wrapper.get('tbody a[href^="/scans"]')
     expect(link.attributes('href')).toBe(
       '/scans?library=Archive&link_state=verified&document=source-a',
     )
@@ -105,7 +106,7 @@ describe('document table', () => {
     await flushPromises()
     expect(visibility.value.name).toBe(false)
     expect(wrapper.findAll('th').map((cell) => cell.text())).not.toContain('Document name')
-    expect(wrapper.get('tbody a').text()).toBe('Archive · archive-id')
+    expect(wrapper.get('tbody a[href^="/scans"]').text()).toBe('Archive · archive-id')
     for (const label of labels()) {
       const checkbox = label.querySelector('[role="checkbox"]') as HTMLElement
       if (checkbox.getAttribute('data-state') === 'checked') {
@@ -115,7 +116,7 @@ describe('document table', () => {
     }
     await flushPromises()
     expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual(['Document'])
-    expect(wrapper.get('tbody a').attributes('aria-label')).toContain('Archive')
+    expect(wrapper.get('tbody a[href^="/scans"]').attributes('aria-label')).toContain('Archive')
     const restore = [...document.querySelectorAll('button')].find(
       (button) => button.textContent === 'Restore defaults',
     )!
@@ -136,9 +137,9 @@ describe('document table', () => {
       visibility: { ...defaultDocumentColumns(), name: false, document_id: true },
     })
     expect(wrapper.findAll('th').map((cell) => cell.text())).not.toContain('Document')
-    expect(wrapper.findAll('tbody a')).toHaveLength(1)
-    expect(wrapper.get('tbody a').text()).toBe('archive-id')
-    await wrapper.get('tbody a').trigger('click')
+    expect(wrapper.findAll('tbody a[href^="/scans"]')).toHaveLength(1)
+    expect(wrapper.get('tbody a[href^="/scans"]').text()).toBe('archive-id')
+    await wrapper.get('tbody a[href^="/scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({
       library: ['Archive'],
@@ -192,11 +193,16 @@ describe('document table', () => {
     expect(wrapper.text()).toContain('No pages')
     expect(media.image).toHaveBeenCalledTimes(1)
   })
-  it('overlays the source link as NDK and expands its name on keyboard focus', async () => {
+  it('shows a simple external NDK link immediately after the name without enabling thumbnails', async () => {
     const { wrapper, router } = await render()
-    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), first_page: true } })
-    await flushPromises()
-    const link = wrapper.get('[data-slot="document-source-link"]')
+    expect(
+      wrapper
+        .findAll('th')
+        .slice(0, 2)
+        .map((cell) => cell.text()),
+    ).toEqual(['Document name', 'NDK'])
+    const link = wrapper.get('tbody td:nth-child(2) [data-slot="document-source-link"]')
+    expect(link.find('svg[aria-hidden="true"]').exists()).toBe(true)
     expect(link.text()).toBe('NDK')
     expect(link.attributes('href')).toBe(documents[0]!.url)
     expect(link.attributes('target')).toBe('_blank')
@@ -209,7 +215,7 @@ describe('document table', () => {
     )
     expect(router.currentRoute.value.path).toBe('/documents')
     expect(wrapper.get('tbody td:first-child a').attributes('href')).toContain('/scans?')
-    expect(media.image).toHaveBeenCalledTimes(1)
+    expect(media.image).not.toHaveBeenCalled()
   })
   it('shows a short fallback when the registered first page has no stored image', async () => {
     media.image.mockRejectedValue({ isAxiosError: true, response: { status: 404 } })

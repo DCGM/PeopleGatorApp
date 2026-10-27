@@ -15,6 +15,7 @@ import { defaultDirection, type SortState } from '@/lib/sorting'
 import { DOCUMENT_BROWSE_DEFAULT } from '@/viewmodels/sort-options'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
+import DocumentSourceLink from './DocumentSourceLink.vue'
 import { documentTitle } from '@/viewmodels/document-list'
 import {
   annotationCount,
@@ -86,6 +87,11 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: 'Document name',
     accessorFn: documentTitle,
     cell: ({ row }) => link(row.original, documentTitle(row.original)),
+  },
+  {
+    id: 'ndk',
+    header: 'NDK',
+    cell: ({ row }) => h(DocumentSourceLink, { url: row.original.url }),
   },
   {
     id: 'first_page',

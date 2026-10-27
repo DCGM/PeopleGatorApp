@@ -3236,12 +3236,13 @@ async def test_document_table_unknown_name_sorts_at_directional_edge(seed_target
 
 
 @pytest.mark.asyncio
-async def test_document_table_ndk_link_keeps_source_and_thumbnail_paired(seed_target):
+async def test_document_table_ndk_column_keeps_canonical_source_and_optional_media(seed_target):
     from people_gator_api.schemas.sources import DocumentListFilter, document_url
 
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
-    query = parse_qs(urlsplit(seeded.filter_examples["document-table-ndk-link"]).query)
+    assert seeded.filter_examples["document-table-ndk-column"] == seeded.filter_examples["document-table-ndk-link"]
+    query = parse_qs(urlsplit(seeded.filter_examples["document-table-ndk-column"]).query)
     rows = await database.sources.list_documents(DocumentListRequest(
         limit=12, filter_=DocumentListFilter(source_id=query["document"]),
     ))

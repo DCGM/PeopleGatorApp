@@ -804,9 +804,11 @@ for Vue rendering. Layout is measured on resize/content changes; ordinary scroll
 events only move the original header using cached bounds. No inference service
 or additional fixture records are required.
 
-Open `document-table-ndk-link` and enable First page. The thumbnail carries a
-small **NDK** link on a slightly translucent background. Hover or keyboard-focus
-it for **Národní digitální knihovna**; it opens the document's stored source URL
-in a new tab. The document-name column still opens the application's document
-page. The linked source and preview image belong to the same archive document,
-and existing fixture/source identities are unchanged.
+Open `document-table-ndk-column` (the earlier `document-table-ndk-link` alias
+still works). **NDK** is a default column immediately after Document name: a
+simple source link with an external-link icon. Hover or keyboard-focus it for
+**Národní digitální knihovna**; it opens the stored source URL in a new tab. It is
+independent of the optional First page thumbnail, which has no overlay link. The
+document-name column still opens the application's document page. The canonical
+source and optional image belong to the same archive document, and reruns retain
+existing identities and edits.

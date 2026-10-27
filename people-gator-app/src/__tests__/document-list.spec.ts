@@ -106,10 +106,9 @@ describe('document table results', () => {
       'Album',
       'Document shared',
     ])
-    expect(wrapper.findAll('tbody a').map((link) => link.attributes('href'))).toEqual([
-      '/scans?document=a-shared',
-      '/scans?document=b-shared',
-    ])
+    expect(
+      wrapper.findAll('tbody a[href^="/scans"]').map((link) => link.attributes('href')),
+    ).toEqual(['/scans?document=a-shared', '/scans?document=b-shared'])
     expect(wrapper.get('[data-slot="input-group"] [role="status"]').text()).toBe('2 results')
     expect(api.pages).not.toHaveBeenCalled()
     expect(api.entities).not.toHaveBeenCalled()
