@@ -115,7 +115,7 @@ def install(source: Path, revision: str, *, scope="user", prefix=None, run_as=No
                     write_json(package / "src/people_gator_deploy/build.json", {"revision": revision})
                     venv.EnvBuilder(with_pip=True).create(temporary)
                     environment = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PIP_DISABLE_PIP_VERSION_CHECK="1")
-                    run([temporary / "bin/python", "-m", "pip", "install", "--no-deps", "--no-compile", str(package)], env=environment, timeout=300)
+                    run([temporary / "bin/python", "-m", "pip", "install", "--no-compile", str(package)], env=environment, timeout=300)
                 for cache in temporary.rglob("__pycache__"):
                     shutil.rmtree(cache)
                 # Resolve the default bin symlink before locating this version's

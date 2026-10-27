@@ -7,7 +7,12 @@ name = "people-gator-deploy"
 version = "1.0.1"
 description = "Trusted PeopleGator deployment lifecycles"
 requires-python = ">=3.11"
-dependencies = []
+# Pin the complete small S3 client dependency set, matching the backend lock.
+dependencies = [
+  "boto3==1.40.61", "botocore==1.40.61", "jmespath==1.1.0",
+  "python-dateutil==2.9.0.post0", "s3transfer==0.14.0", "six==1.17.0",
+  "urllib3==2.6.3",
+]
 
 [project.scripts]
 people-gator-deploy = "people_gator_deploy.cli:main"
