@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/table'
 
 const tableFrame = ref<HTMLElement | null>(null)
-const headerOffset = usePageTableHeader(tableFrame)
+usePageTableHeader(tableFrame)
 
 const props = defineProps<{ documents: DocumentResponse[] }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
@@ -189,10 +189,7 @@ const table = useTable({
     </p>
     <div ref="tableFrame" class="w-full min-w-0 max-w-full">
       <Table aria-describedby="document-table-counts">
-        <TableHeader
-          class="relative z-10 bg-background"
-          :style="{ transform: `translateY(${headerOffset}px)` }"
-        >
+        <TableHeader class="relative z-10 bg-background will-change-transform">
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
               v-for="header in group.headers"

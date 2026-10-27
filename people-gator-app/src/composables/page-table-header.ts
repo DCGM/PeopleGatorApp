@@ -1,55 +1,72 @@
-import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
+import { onBeforeUnmount, onMounted, type Ref } from 'vue'
 
-// A native sticky thead sticks to the horizontal overflow wrapper, not the page.
-// Move the original semantic header so its sort buttons stay usable and aligned.
+// Horizontal overflow prevents native page-sticky positioning. Keep the original
+// header, but measure only on layout changes: scrolling must not trigger Vue
+// renders, layout reads, or an extra animation-frame delay.
 export function usePageTableHeader(frame: Ref<HTMLElement | null>) {
-  const offset = ref(0)
+  let table: HTMLTableElement | null = null
+  let header: HTMLTableSectionElement | null = null
+  let navigation: Element | null = null
+  let originTop = 0
+  let maximumOffset = 0
+  let navigationBottom = 0
+  let lastOffset = Number.NaN
   let animation: number | undefined
   let resize: ResizeObserver | undefined
+  let active = false
 
-  function update() {
-    const table = frame.value?.querySelector('table')
-    const header = table?.tHead
-    if (!table || !header) return
-    const bounds = table.getBoundingClientRect()
-    const navigation = document.querySelector('[data-page-navigation]')
-    const top = navigation?.getBoundingClientRect().bottom ?? 0
-    offset.value = Math.max(0, Math.min(top - bounds.top, bounds.height - header.offsetHeight))
+  function position() {
+    if (!header) return
+    const offset = Math.max(
+      0,
+      Math.min(window.scrollY + navigationBottom - originTop, maximumOffset),
+    )
+    if (offset === lastOffset) return
+    lastOffset = offset
+    header.style.transform = `translate3d(0, ${offset}px, 0)`
   }
 
-  function schedule() {
-    if (animation !== undefined) return
+  function measure() {
+    if (!table || !header) return
+    const bounds = table.getBoundingClientRect()
+    originTop = bounds.top + window.scrollY
+    maximumOffset = Math.max(0, bounds.height - header.offsetHeight)
+    navigationBottom = navigation?.getBoundingClientRect().bottom ?? 0
+    position()
+  }
+
+  function scheduleMeasurement() {
+    if (!active || animation !== undefined) return
     animation = requestAnimationFrame(() => {
       animation = undefined
-      update()
+      measure()
     })
   }
 
   onMounted(() => {
-    update()
-    window.addEventListener('scroll', schedule, { passive: true, capture: true })
-    window.addEventListener('resize', schedule)
+    table = frame.value?.querySelector('table') ?? null
+    header = table?.tHead ?? null
+    navigation = document.querySelector('[data-page-navigation]')
+    active = true
+    measure()
+    window.addEventListener('scroll', position, { passive: true, capture: true })
+    window.addEventListener('resize', scheduleMeasurement)
     if (typeof ResizeObserver !== 'undefined') {
-      resize = new ResizeObserver(schedule)
-      // Ancestors can move the table when filters or content above it expand.
+      resize = new ResizeObserver(scheduleMeasurement)
+      // Filters and other ancestors can move the table without changing its size.
       for (let element = frame.value; element; element = element.parentElement) {
         resize.observe(element)
       }
-      for (const element of [
-        frame.value?.querySelector('table'),
-        frame.value?.querySelector('thead'),
-        document.querySelector('[data-page-navigation]'),
-      ]) {
+      for (const element of [table, header, navigation]) {
         if (element) resize.observe(element)
       }
     }
   })
   onBeforeUnmount(() => {
-    window.removeEventListener('scroll', schedule, true)
-    window.removeEventListener('resize', schedule)
+    active = false
+    window.removeEventListener('scroll', position, true)
+    window.removeEventListener('resize', scheduleMeasurement)
     resize?.disconnect()
     if (animation !== undefined) cancelAnimationFrame(animation)
   })
-
-  return offset
 }

@@ -3,7 +3,8 @@ import { defineComponent, h, ref } from 'vue'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { usePageTableHeader } from '@/composables/page-table-header'
 
-let tableTop: number
+let originTop: number
+let scroll: number
 let tableHeight: number
 let navBottom: number
 let pending: FrameRequestCallback | undefined
@@ -17,14 +18,19 @@ function flushFrame() {
   callback?.(0)
 }
 beforeEach(() => {
-  tableTop = 120
+  originTop = 120
+  scroll = 0
   tableHeight = 600
   navBottom = 52
   pending = undefined
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-    pending = callback
-    return 1
-  })
+  vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => scroll)
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameRequestCallback) => {
+      pending = callback
+      return 1
+    }),
+  )
   vi.stubGlobal('cancelAnimationFrame', cancel)
   vi.stubGlobal(
     'ResizeObserver',
@@ -40,8 +46,10 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     return {
-      top: this.tagName === 'TABLE' ? tableTop : 0,
-      bottom: this.hasAttribute('data-page-navigation') ? navBottom : tableTop + tableHeight,
+      top: this.tagName === 'TABLE' ? originTop - scroll : 0,
+      bottom: this.hasAttribute('data-page-navigation')
+        ? navBottom
+        : originTop - scroll + tableHeight,
       height: tableHeight,
     } as DOMRect
   })
@@ -61,54 +69,69 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 function render() {
-  let offset!: ReturnType<typeof usePageTableHeader>
   const wrapper = mount(
     defineComponent({
       setup() {
         const frame = ref<HTMLElement | null>(null)
-        offset = usePageTableHeader(frame)
+        usePageTableHeader(frame)
         return () =>
           h('div', { ref: frame }, [h('table', [h('thead', [h('tr', [h('th', 'Name')])])])])
       },
     }),
   )
   cleanups.push(() => wrapper.unmount())
-  return { wrapper, offset }
+  return { wrapper, header: wrapper.get('thead').element }
 }
-it('pins below page navigation and releases at the table end', () => {
-  const { offset } = render()
-  expect(offset.value).toBe(0)
-  tableTop = -200
+it('pins immediately below navigation and releases at the table end', () => {
+  const { header } = render()
+  expect(header.style.transform).toBe('translate3d(0, 0px, 0)')
+  scroll = 320
   window.dispatchEvent(new Event('scroll'))
-  flushFrame()
-  expect(tableTop + offset.value).toBe(navBottom)
-  tableTop = -570
+  expect(header.style.transform).toBe('translate3d(0, 252px, 0)')
+  expect(pending).toBeUndefined()
+  scroll = 690
   window.dispatchEvent(new Event('scroll'))
-  flushFrame()
-  expect(offset.value).toBe(560)
-  expect(tableTop + offset.value + 40).toBe(tableTop + tableHeight)
+  expect(header.style.transform).toBe('translate3d(0, 560px, 0)')
 })
-it('recalculates after pagination, header/navigation resizing and viewport changes', () => {
-  const { offset } = render()
-  tableTop = -570
+it('does not read layout, query the DOM or schedule animation frames while scrolling', () => {
+  const { header } = render()
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+  const lookup = vi.spyOn(document, 'querySelector')
+  const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+  bounds.mockClear()
+  height.mockClear()
+  for (let i = 1; i <= 30; i++) {
+    scroll = 120 + i * 10
+    window.dispatchEvent(new Event('scroll'))
+  }
+  expect(header.style.transform).toBe('translate3d(0, 352px, 0)')
+  expect(bounds).not.toHaveBeenCalled()
+  expect(height).not.toHaveBeenCalled()
+  expect(lookup).not.toHaveBeenCalled()
+  expect(requestAnimationFrame).not.toHaveBeenCalled()
+})
+it('remeasures after pagination, ancestor/header/navigation resizing and viewport changes', () => {
+  const { header } = render()
+  scroll = 690
   tableHeight = 1200
   navBottom = 64
   resized([], {} as ResizeObserver)
   flushFrame()
-  expect(tableTop + offset.value).toBe(64)
-  tableTop = 200
+  expect(header.style.transform).toBe('translate3d(0, 634px, 0)')
+  originTop = 900
   window.dispatchEvent(new Event('resize'))
   flushFrame()
-  expect(offset.value).toBe(0)
+  expect(header.style.transform).toBe('translate3d(0, 0px, 0)')
 })
-it('disconnects observers, listeners and a pending animation on unmount', () => {
+it('disconnects observers, listeners and pending measurement on unmount', () => {
   const { wrapper } = render()
-  window.dispatchEvent(new Event('scroll'))
+  resized([], {} as ResizeObserver)
   expect(pending).toBeDefined()
   wrapper.unmount()
   expect(disconnect).toHaveBeenCalledOnce()
   expect(cancel).toHaveBeenCalledWith(1)
   pending = undefined
   window.dispatchEvent(new Event('scroll'))
+  window.dispatchEvent(new Event('resize'))
   expect(pending).toBeUndefined()
 })

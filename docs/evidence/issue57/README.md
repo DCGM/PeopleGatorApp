@@ -33,7 +33,7 @@ The production build uses only TanStack v9's column visibility feature; Vue Quer
 and the existing route filters/sort still own the remote result sequence. There
 is no client pagination, filtering or sorting; first-page media is the only
 optional per-row request.
-The table-only production build measures 826.57 kB minified JS (248.11 kB gzip).
+The table-only production build measures 826.61 kB minified JS (248.16 kB gzip).
 The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
 Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.
 
@@ -46,3 +46,13 @@ Unnamed-sort checks verify complete loaded name order and the legacy document's
 position first ascending and last descending, at desktop and mobile sizes. In
 `preview-mzk`, its positions are 1 of 17 ascending and 17 of 17 descending; the stored name remains null. Regression tests cover one-row cursor
 batches and the same order in ordinary browsing and bounded text search.
+
+Header scroll work was measured in Chromium on the Vite development instance
+at 1440 × 900, with 14 loaded
+synthetic pagination rows and First page enabled. The same 30 page-scroll steps
+triggered 660 header-subtree component renders and 30 table layout reads before
+the optimization, versus zero renders and zero table layout reads afterwards.
+The header finished at 52px, aligned with navigation, in both runs. Measurements
+instrumented Vue render functions and the table's `getBoundingClientRect` after
+images/layout settled; consecutive steps advanced 15px and waited two animation frames.
+These are work counts, not an FPS benchmark. See `header-scroll-work.json`.

@@ -796,3 +796,10 @@ but its unknown name compares as an empty string: first ascending and last
 descending, including across cursor batches and during search. The UUID label is
 display-only. Its stored name remains null; reruns preserve this fixture and its
 stable identity. Multiple unknown names tie-break by source UUID ascending.
+
+Use `document-table-scroll-performance` for the same 14 synthetic pagination
+ledgers with local First page media. Enable First page and scroll the page
+continuously: headings should follow directly below navigation without waiting
+for Vue rendering. Layout is measured on resize/content changes; ordinary scroll
+events only move the original header using cached bounds. No inference service
+or additional fixture records are required.
