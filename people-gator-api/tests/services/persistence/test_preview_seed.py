@@ -3256,3 +3256,32 @@ async def test_document_table_ndk_column_keeps_canonical_source_and_optional_med
     assert image.content
     await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(row.source_id) == row
+
+
+@pytest.mark.asyncio
+async def test_document_table_annotation_groups_have_independent_full_scope_counts(seed_target):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.search import SearchDocumentsRequest
+
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    query = parse_qs(urlsplit(seeded.filter_examples["document-table-annotation-groups"]).query)
+    scope = DocumentListFilter(library=query["library"])
+    listed = await database.sources.list_documents(DocumentListRequest(limit=12, filter_=scope))
+    searched = await database.sources.search_documents(SearchDocumentsRequest(
+        limit=12, filter_=scope, query=QueryBase(text=query["library"]),
+    ))
+    expected = {
+        seeded.documents["table-ledger"]: {
+            "faces": dict(total=4, automatic=1, manual=1, verified=1, unassigned=1),
+            "mentions": dict(total=5, automatic=2, manual=1, verified=1, unassigned=1),
+        },
+        seeded.documents["table-mirror"]: {kind: dict(total=0, automatic=0, manual=0, verified=0, unassigned=0) for kind in ("faces", "mentions")},
+    }
+    for response in (listed, searched):
+        assert {row.source_id: row.entity_link_stats.model_dump() for row in response.items} == expected
+    stats = expected[seeded.documents["table-ledger"]]
+    assert {state: stats["faces"][state] + stats["mentions"][state] for state in stats["faces"]} == dict(total=9, automatic=3, manual=2, verified=2, unassigned=2)
+    await preview.seed_preview(database, filesystem)
+    again = await database.sources.list_documents(DocumentListRequest(limit=12, filter_=scope))
+    assert again.items == listed.items

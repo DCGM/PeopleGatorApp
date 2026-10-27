@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed, h, useId } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   columnVisibilityFeature,
@@ -18,6 +18,9 @@ import DocumentSourceLink from './DocumentSourceLink.vue'
 import { documentTitle } from '@/viewmodels/document-list'
 import {
   annotationCount,
+  annotationColumnId,
+  DOCUMENT_ANNOTATION_GROUPS,
+  DOCUMENT_ANNOTATION_STATES,
   defaultDocumentColumns,
   DOCUMENT_COLUMN_SORTS,
 } from '@/viewmodels/document-table'
@@ -33,6 +36,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+
+const tableId = useId()
+const columnHeaderId = (id: string) => `${tableId}-${id}`
 
 const props = defineProps<{ documents: DocumentResponse[] }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
@@ -122,17 +128,15 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: 'API key',
     accessorFn: (d) => d.last_touched_by_api_key_name || d.last_touched_by_api_key_id || '—',
   },
-  ...(['total', 'automatic', 'verified', 'manual', 'unassigned'] as const).map((state) => ({
-    id: state,
-    header: {
-      total: 'Annotations',
-      automatic: 'Automatic',
-      verified: 'Verified',
-      manual: 'Manual',
-      unassigned: 'Unassigned',
-    }[state],
-    accessorFn: (d: DocumentResponse) => annotationCount(d, state),
-    cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
+  ...DOCUMENT_ANNOTATION_GROUPS.map((group) => ({
+    id: group.id,
+    header: group.label,
+    columns: DOCUMENT_ANNOTATION_STATES.map((state) => ({
+      id: annotationColumnId(group.scope, state.id),
+      header: state.label,
+      accessorFn: (d: DocumentResponse) => annotationCount(d, state.id, group.scope),
+      cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
+    })),
   })),
   {
     accessorKey: 'linked_entity_count',
@@ -168,7 +172,7 @@ const table = useTable({
         >
           <div class="flex flex-col gap-3" aria-label="Shown document fields">
             <label
-              v-for="column in table.getAllLeafColumns().filter((c) => c.getCanHide())"
+              v-for="column in table.getAllLeafColumns().filter((c) => !c.parent && c.getCanHide())"
               :key="column.id"
               class="flex items-center gap-2"
             >
@@ -178,6 +182,25 @@ const table = useTable({
               />
               {{ column.columnDef.header }}
             </label>
+            <fieldset
+              v-for="group in table.getAllColumns().filter((c) => c.columns.length)"
+              :key="group.id"
+              class="flex flex-col gap-3"
+            >
+              <legend class="mb-3">{{ group.columnDef.header }}</legend>
+              <label
+                v-for="column in group.columns"
+                :key="column.id"
+                class="flex items-center gap-2"
+              >
+                <Checkbox
+                  :aria-label="`${group.columnDef.header}: ${column.columnDef.header}`"
+                  :model-value="column.getIsVisible()"
+                  @update:model-value="column.toggleVisibility($event === true)"
+                />
+                {{ column.columnDef.header }}
+              </label>
+            </fieldset>
             <Button variant="outline" @click="visibility = defaultDocumentColumns()"
               >Restore defaults</Button
             >
@@ -185,22 +208,26 @@ const table = useTable({
         </PopoverContent>
       </Popover>
     </div>
-    <p id="document-table-counts" class="sr-only">
-      Counts cover the entire registered document. Annotations include unassigned faces and
-      mentions. Pages counts registered pages only. Unknown means no recorded value.
+    <p :id="`${tableId}-counts`" class="sr-only">
+      Counts cover the entire registered document. All annotations combines faces and text mentions;
+      each group includes total, automatic, manual, verified and unassigned counts. Pages counts
+      registered pages only. Unknown means no recorded value.
     </p>
     <div class="w-full min-w-0 max-w-full">
-      <Table aria-describedby="document-table-counts">
+      <Table :aria-describedby="`${tableId}-counts`">
         <TableHeader>
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
-              v-for="header in group.headers"
+              v-for="header in group.headers.filter((h) => group.depth === 0 || h.column.parent)"
               :key="header.id"
-              scope="col"
+              :id="columnHeaderId(header.column.id)"
+              :colspan="header.colSpan"
+              :rowspan="header.isPlaceholder ? table.getHeaderGroups().length : undefined"
+              :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
             >
               <Button
-                v-if="!header.isPlaceholder && DOCUMENT_COLUMN_SORTS[header.column.id]"
+                v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
                 variant="ghost"
                 size="sm"
                 class="-ml-2.5"
@@ -215,7 +242,7 @@ const table = useTable({
                 />
               </Button>
               <FlexRender
-                v-else-if="!header.isPlaceholder"
+                v-else
                 :render="header.column.columnDef.header"
                 :props="header.getContext()"
               />
@@ -224,7 +251,16 @@ const table = useTable({
         </TableHeader>
         <TableBody>
           <TableRow v-for="row in table.getRowModel().rows" :key="row.id">
-            <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
+            <TableCell
+              v-for="cell in row.getVisibleCells()"
+              :key="cell.id"
+              :data-column="cell.column.id"
+              :headers="
+                cell.column.parent
+                  ? `${columnHeaderId(cell.column.parent.id)} ${columnHeaderId(cell.column.id)}`
+                  : columnHeaderId(cell.column.id)
+              "
+            >
               <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
             </TableCell>
           </TableRow>

@@ -226,6 +226,96 @@ describe('document table', () => {
     expect(wrapper.find('img').exists()).toBe(false)
     expect(media.image).toHaveBeenCalledTimes(1)
   })
+  it('groups annotation choices and shows independent face/mention counts', async () => {
+    const { wrapper, visibility } = await render()
+    expect(wrapper.findAll('th[scope="colgroup"]').map((h) => h.text())).toEqual([
+      'All annotations',
+    ])
+    await wrapper.setProps({
+      documents: [
+        {
+          ...documents[0]!,
+          entity_link_stats: {
+            faces: { total: 18, automatic: 2, manual: 3, verified: 5, unassigned: 8 },
+            mentions: { total: 25, automatic: 11, manual: 7, verified: 4, unassigned: 3 },
+          },
+        },
+      ],
+    })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect([...document.querySelectorAll('legend')].map((node) => node.textContent)).toEqual([
+      'All annotations',
+      'Faces',
+      'Text mentions',
+    ])
+    for (const scope of ['Faces', 'Text mentions']) {
+      for (const state of ['Total', 'Automatic', 'Manual', 'Verified', 'Unassigned']) {
+        ;(
+          document.querySelector(
+            `[role="checkbox"][aria-label="${scope}: ${state}"]`,
+          ) as HTMLElement
+        ).click()
+        await flushPromises()
+      }
+    }
+    expect(
+      wrapper.findAll('th[scope="colgroup"]').map((h) => [h.text(), h.attributes('colspan')]),
+    ).toEqual([
+      ['All annotations', '5'],
+      ['Faces', '5'],
+      ['Text mentions', '5'],
+    ])
+    for (const [prefix, expected] of [
+      ['', ['43', '13', '10', '9', '11']],
+      ['faces_', ['18', '2', '3', '5', '8']],
+      ['mentions_', ['25', '11', '7', '4', '3']],
+    ] as const) {
+      expect(
+        ['total', 'automatic', 'manual', 'verified', 'unassigned'].map((state) =>
+          wrapper.get(`td[data-column="${prefix}${state}"]`).text(),
+        ),
+      ).toEqual(expected)
+    }
+    const cell = wrapper.get('td[data-column="faces_total"]')
+    for (const id of cell.attributes('headers')!.split(' '))
+      expect(document.getElementById(id)).not.toBeNull()
+    expect(wrapper.get('th').attributes('rowspan')).toBe('2')
+    const selected = { ...visibility.value }
+    await wrapper.setProps({ documents: [...documents, { ...documents[0]!, source_id: 'second' }] })
+    expect(visibility.value).toEqual(selected)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(media.image).not.toHaveBeenCalled()
+    const restore = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Restore defaults',
+    )!
+    restore.click()
+    await flushPromises()
+    expect(visibility.value).toEqual(defaultDocumentColumns())
+    expect(wrapper.findAll('th[scope="colgroup"]').map((h) => h.text())).toEqual([
+      'All annotations',
+    ])
+  })
+  it('distinguishes zero counts from missing summaries for each annotation group', async () => {
+    const { wrapper } = await render()
+    await wrapper.setProps({
+      documents: [
+        { ...documents[0]!, entity_link_stats: undefined },
+        {
+          ...documents[0]!,
+          source_id: 'empty',
+          entity_link_stats: { faces: { total: 0 }, mentions: { total: 0 } },
+        },
+      ],
+      visibility: { ...defaultDocumentColumns(), faces_total: true, mentions_total: true },
+    })
+    for (const column of ['total', 'faces_total', 'mentions_total']) {
+      expect(wrapper.findAll(`td[data-column="${column}"]`).map((cell) => cell.text())).toEqual([
+        'Unknown',
+        '0',
+      ])
+    }
+  })
   it('offers only supported server sort fields and flips their indicated direction', async () => {
     const { wrapper } = await render()
     await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), document_id: true } })

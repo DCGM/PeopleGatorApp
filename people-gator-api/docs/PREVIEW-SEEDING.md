@@ -805,3 +805,13 @@ independent of the optional First page thumbnail, which has no overlay link. The
 document-name column still opens the application's document page. The canonical
 source and optional image belong to the same archive document, and reruns retain
 existing identities and edits.
+
+Open `document-table-annotation-groups` for the ledger and its empty same-ID
+mirror in another library. Columns groups counts under **All annotations**,
+**Faces** and **Text mentions**, each with Total, Automatic, Manual, Verified and
+Unassigned. Combined counts remain shown by default; choose individual face or
+mention fields to compare them. Selected groups also label the table headers.
+The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
+combined counts 9/3/2/2/2. Counts include direct document mentions and every
+registered page, even when evidence filters select the document. The mirror
+has zero in every field. Switching columns adds no requests or local sorting.

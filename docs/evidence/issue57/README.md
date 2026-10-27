@@ -5,7 +5,10 @@ store and synthetic preview seed. Desktop: 1440 × 900 CSS pixels. Mobile:
 390 × 844 CSS pixels. Full-page captures retain those viewport widths; scrolling captures show the scrolled viewport.
 
 - `table-*`: default columns; all document-wide totals are visible by horizontal scrolling.
-- `columns-*`: standard Columns popover with individually configurable fields.
+- `columns-*`: standard Columns popover with metadata fields and annotation-group choices.
+- `annotation-columns-*`: All annotations, Faces and Text mentions with independent state checkboxes.
+- `annotation-groups-*`: grouped count headers and values, including the empty library mirror; dark-theme captures are included.
+- `annotation-mentions-*`: horizontal scrolling reaches the Text mentions columns.
 - `sort-ascending-*` / `sort-descending-*`: clickable Document name header with its active direction and server-ordered rows.
 - `first-page-*`: optional First page enabled separately from the default NDK source column.
 - `first-page-dark-*`: the default NDK link and optional image in dark theme.
@@ -33,7 +36,7 @@ The production build uses only TanStack v9's column visibility feature; Vue Quer
 and the existing route filters/sort still own the remote result sequence. There
 is no client pagination, filtering or sorting; first-page media is the only
 optional per-row request.
-The table-only production build measures 826.07 kB minified JS (247.76 kB gzip).
+The table-only production build measures 827.45 kB minified JS (248.13 kB gzip).
 The earlier base measurement was 790.75 kB (236.59 kB gzip); both builds exceed
 Vite's 500 kB advisory. These are bundle measurements, not a runtime benchmark.
 
@@ -54,3 +57,11 @@ Ordinary-scroll checks verify that column headings move by the same amount as
 the page and leave the viewport. There is no sticky positioning or inline header
 transform, and the table has no vertical scroll area. Horizontal overflow,
 automatic loading at the far right and keyboard header sorting still work.
+
+Annotation-group checks at both viewport sizes verify all 15 values against
+independent faces/mentions summaries and the zero-count mirror. Group labels and
+column spans follow individual visibility changes, a checkbox toggles by keyboard,
+Restore defaults hides per-type fields, and changing columns adds no requests,
+local sorting or URL changes. Unit tests use unequal values for every state,
+verify unknown versus zero and header associations, and preserve selections
+while appending rows. Grouped counts reuse the existing API response.
