@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -27,6 +28,35 @@ def test_model_indexes_do_not_leak_between_cases(iteration):
     index = face_embedding_hnsw_index("worker-isolation-probe", 3)
     index.info["worker_isolation_probe"] = True
     assert index in indexes
+
+
+@pytest.mark.parametrize("variable", URLS)
+def test_worker_settings_replace_nested_controller_overrides(monkeypatch, variable):
+    import conftest
+    from people_gator_api.settings import Settings, settings
+
+    monkeypatch.setattr(conftest, "SETTINGS_ENVIRONMENT", dict(conftest.SETTINGS_ENVIRONMENT))
+    monkeypatch.setattr(settings, "persistence", settings.persistence)
+    monkeypatch.setenv("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE", "controller_store")
+    config = SimpleNamespace(workerinput={
+        "people_gator_database_urls": {variable: "postgresql+asyncpg://test:test@localhost/private_worker"},
+    })
+    conftest.pytest_configure(config)
+    assert settings.persistence.postgres.database == "private_worker"
+    assert settings.persistence.postgres.port == 5432
+    assert Settings(_env_file=None).persistence.postgres.database == "private_worker"
+    assert "PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE" not in os.environ
+    assert conftest.SETTINGS_ENVIRONMENT["PEOPLE_GATOR_API__PERSISTENCE"] == os.environ["PEOPLE_GATOR_API__PERSISTENCE"]
+
+
+def test_parallel_live_weaviate_is_rejected(monkeypatch):
+    import conftest
+
+    monkeypatch.setenv("PEOPLE_GATOR_WEAVIATE_TEST_HTTP_PORT", "8080")
+    config = SimpleNamespace(stash={}, getoption=lambda *args, **kwargs: 2)
+    with pytest.raises(pytest.UsageError, match="sequentially"):
+        conftest.pytest_configure(config)
+    conftest.pytest_unconfigure(config)
 
 
 def test_workers_and_store_types_receive_distinct_databases(monkeypatch):
