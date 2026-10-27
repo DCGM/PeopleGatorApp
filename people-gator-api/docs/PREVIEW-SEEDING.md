@@ -742,3 +742,18 @@ attribution, the user and touch filters, edit preservation and both
 PostgreSQL runs login, JWT-only requests, a mutation, deactivation, use of the
 existing token, rejected login/refresh and expiry. Authentication must enter no
 database context after login.
+
+### Archive links (#75)
+
+Open `filter_examples.archive-links-scan`: the header's **Digitální knihovna**
+link targets this exact page; the link beside **Document pages** targets its
+containing document. Navigate a thumbnail and check that the header target changes.
+Open `archive-links-faces` (Irena Evidence) for **Profile photo** and **Search hit**
+indicators and a page link on each face. Open `archive-links-discover` (Zora
+Cartographer, synthetic discovery model) for page links on assigned and unassigned
+matches, including the `preview-nlk` document outside her reference library.
+Links remain available while faces are selected. All targets come from canonical
+source responses; synthetic archive UUIDs demonstrate target structure and do not
+represent documents hosted by the external archive. These entry points reuse
+existing local media, stable source identities and portrait choices without
+rewriting any records on retained previews.
