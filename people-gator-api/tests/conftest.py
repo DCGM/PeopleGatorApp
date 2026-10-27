@@ -47,14 +47,14 @@ def pytest_configure(config: pytest.Config) -> None:
     # This runs before test-module collection (which snapshots integration URLs).
     urls = worker["people_gator_database_urls"]
     os.environ.update(urls)
-    repository_url = urls.get("PEOPLE_GATOR_POSTGRES_TEST_URL")
+    repository_url = urls.get("PEOPLE_GATOR_POSTGRES_TEST_URL") or urls.get("PEOPLE_GATOR_SCHEMA_TEST_URL")
     if repository_url:
         from sqlalchemy.engine import make_url
         from people_gator_api.settings import PersistenceSettings, settings
 
         url = make_url(repository_url)
         settings.persistence = PersistenceSettings(postgres={
-            "host": url.host, "port": url.port, "user": url.username,
+            "host": url.host, "port": url.port or 5432, "user": url.username,
             "password": url.password, "database": url.database,
         })
         # Nested CI env overrides must not send application connections back to
