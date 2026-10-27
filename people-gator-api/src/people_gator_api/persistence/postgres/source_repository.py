@@ -196,8 +196,16 @@ class PostgresSourceRepository(SourceRepository):
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
         elif model is Document:
+            # Match the table's documentTitle fallback instead of putting every
+            # unnamed record last in both directions. Reuse these expressions
+            # for list cursors and bounded search ordering.
+            fallback_name = func.concat("Document ", document.document_id)
             builders = {
-                "name": lambda desc: text_keys(document.name_normalized, document.name, desc),
+                "name": lambda desc: text_keys(
+                    func.coalesce(document.name_normalized, normalized_text(fallback_name)),
+                    func.coalesce(document.name, fallback_name),
+                    desc,
+                ),
                 "library": lambda desc: [
                     *text_keys(normalized_text(document.library), document.library, desc),
                     SortKey(document.document_id, "uuid", desc),

@@ -3196,3 +3196,39 @@ async def test_document_table_default_link_has_usable_rows_and_media(seed_target
     assert image.content
     await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(row.source_id) == row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", ["asc", "desc"])
+async def test_document_table_unnamed_sorts_by_visible_title(seed_target, direction):
+    import unicodedata
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.search import SearchDocumentsRequest
+
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    demo = parse_qs(urlsplit(seeded.filter_examples["document-table-name-fallback"]).query)
+    scope = DocumentListFilter(library=demo["library"])
+    request = DocumentListRequest(limit=2, filter_=scope, sort=demo["sort"][0], sort_direction=direction)
+    rows, cursor = [], None
+    while True:
+        batch = await database.sources.list_documents(request.model_copy(update={"cursor": cursor}))
+        rows.extend(batch.items)
+        cursor = batch.cursor
+        if cursor is None:
+            break
+    def key(row):
+        title = row.name or f"Document {row.document_id}"
+        normalized = "".join(char for char in unicodedata.normalize("NFD", title) if not unicodedata.combining(char)).lower()
+        return normalized, title
+    expected = sorted(sorted(rows, key=lambda row: row.source_id.int), key=key, reverse=direction == "desc")
+    assert [row.source_id for row in rows] == [row.source_id for row in expected]
+    position = next(i for i, row in enumerate(rows) if row.source_id == seeded.documents["legacy-document"])
+    assert 0 < position < len(rows) - 1
+    assert rows[position].name is None
+    search = await database.sources.search_documents(SearchDocumentsRequest(
+        limit=100, filter_=scope, query=QueryBase(text=demo["library"]), sort="name", sort_direction=direction,
+    ))
+    assert [row.source_id for row in search.items] == [row.source_id for row in rows]
+    await preview.seed_preview(database, filesystem)
+    assert (await database.sources.get_document(seeded.documents["legacy-document"])).name is None
