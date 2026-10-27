@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (33, 61, 43)
-    assert len(result.documents) == 41 and len(result.pages) == 77
+    assert await counts(database) == (35, 81, 70)
+    assert len(result.documents) == 44 and len(result.pages) == 87
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -144,7 +144,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     for filters, expected in (
         (
             EntityListFilter(has_detections=True, has_mentions=False),
-            {"emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana"},
+            {"emil", "ada-candidate", "discovery", "discovery-face", "discovery-name", "discovery-alias", "shared-hana", "review-candidate"},
 
         ),
         (EntityListFilter(has_detections=False, has_mentions=True), {"nora", "shared-ivo", "deactivated-olga", *(f"pagination-{i}" for i in range(1, 15))}),
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (33, 61, 43)
+    assert await counts(database) == (35, 81, 70)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (33, 61, 43)
+    assert await counts(database) == (35, 81, 70)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (34, 61, 43)
+    assert await counts(database) == (36, 81, 70)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 33 and len(result.faces) == 61
-    assert await counts(database) == (33, 61, 43)
+    assert len(result.entities) == 35 and len(result.faces) == 81
+    assert await counts(database) == (35, 81, 70)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (32, 60, 42)
+    assert await counts(database) == (34, 80, 69)
 
 
 
@@ -1279,9 +1279,11 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     third = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=second.cursor, return_total_count=True))
     fourth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=third.cursor, return_total_count=True))
     fifth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fourth.cursor, return_total_count=True))
-    assert first.total_count == 5 and fifth.cursor is None
-    assert [batch.items[0].library for batch in (first, second, third, fourth, fifth)] == [
-        'preview-mzk', 'preview-nlk', 'preview-pagination', 'preview-table', 'preview-table-mirror',
+    sixth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fifth.cursor, return_total_count=True))
+    seventh = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=sixth.cursor, return_total_count=True))
+    assert first.total_count == 7 and seventh.cursor is None
+    assert [batch.items[0].library for batch in (first, second, third, fourth, fifth, sixth, seventh)] == [
+        'preview-mzk', 'preview-nlk', 'preview-pagination', 'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
     ]
     with pytest.raises(ValueError, match='cursor'):
         await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, q='mzk'))
@@ -3342,3 +3344,36 @@ async def test_archive_links_use_each_evidence_page_and_containing_document(seed
     before = await db.entities.get(person.entity_id)
     assert await preview.seed_preview(db, filesystem) == first
     assert await db.entities.get(person.entity_id) == before
+
+
+@pytest.mark.asyncio
+async def test_person_review_groups_candidates_and_preservation(seed_target):
+    from people_gator_api.schemas.mentions import TextMentionGroupListRequest, TextMentionListFilter
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    person = seed.entities['review']
+    faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person])))
+    assert len(faces.items) == 18
+    assert {face.entity_link_state.value for face in faces.items} == {'automatic', 'manual', 'verified'}
+    scope = TextMentionListFilter(entity_id=[person])
+    for mode, expected in [('mention', 1), ('document', 3), ('page', 9)]:
+        groups = await db.text_mentions.list_groups(TextMentionGroupListRequest(
+            limit=20, group_by=mode, filter_=scope))
+        assert len(groups.items) == expected
+        assert sum(group.occurrence_count for group in groups.items) == 27
+        if mode == 'document':
+            assert [g.name for g in groups.items].count('Review ledger') == 2
+            assert len({g.source_id for g in groups.items}) == 3
+    candidates = await db.faces.search(SearchFacesRequest(limit=100,
+        query=QueryBase(face_id=[faces.items[0].detection_id], face_embedding_model=MODEL)))
+    assert {seed.faces['review-unassigned'], seed.faces['review-candidate']} <= {f.detection_id for f in candidates.items}
+    # The exact group exceeds the occurrence batch. A review edit survives reseeding.
+    mentions = await db.text_mentions.list(TextMentionListRequest(limit=20, return_total_count=True, filter_=scope))
+    assert mentions.total_count == 27 and mentions.cursor
+    actor = GenericActor(user_id=seed.users['reviewer'])
+    edited = await db.text_mentions.patch(mentions.items[0].mention_id, TextMentionPatchRequest(entity_id=None), actor)
+    again = await preview.seed_preview(db, filesystem)
+    assert again.mentions == seed.mentions
+    assert await db.text_mentions.get(edited.mention_id) == edited
+    groups = await db.text_mentions.list_groups(TextMentionGroupListRequest(limit=10, filter_=scope))
+    assert groups.items[0].occurrence_count == 26

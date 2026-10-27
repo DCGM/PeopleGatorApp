@@ -843,3 +843,24 @@ The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
 combined counts 9/3/2/2/2. Counts include direct document mentions and every
 registered page, even when evidence filters select the document. The mirror
 has zero in every field. Switching columns adds no requests or local sorting.
+
+### Person review (#80)
+
+Open **Lina Archivist** (`person-review-faces` in the seed summary). Eighteen
+linked faces span three documents; expand **Show all faces**, then inspect
+**Found faces** and **Similar people** with `preview-synthetic-8d-v1` selected.
+The candidate collection includes an unassigned face and Lina A.'s linked face.
+Details retains aliases and the full description; Statistics holds review totals
+and last-change information.
+
+In Mentions, switch between **Flat**, **Document**, **Page** and **Mention**.
+The 27 occurrences of `Lina Archivist` cover nine pages with automatic, manual
+and verified links. Two documents deliberately share `Review ledger` as a title;
+their source identities keep them separate. Select the exact-text group to verify
+or unlink all filtered occurrences, including those beyond its first 20 children.
+Local evidence filters do not restrict the global discovery searches.
+
+Unlink preserves the OCR mention. This page lists linked evidence only; assigning
+an unlinked OCR mention remains available in the existing scan workspace.
+New fixtures are additive and checkpointed independently, preserving reviewed
+assignments and timestamps when the seed runs again.

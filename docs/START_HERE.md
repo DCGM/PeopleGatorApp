@@ -12,7 +12,12 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
 2. Search people for **Ada Novak**. Inspect her profile, aliases, linked faces
    and OCR mentions. Other fixtures include faces-only, mentions-only and
    evidence-free people.
-3. Open the application root to land on **Documents** and explore registered
+3. Open **Lina Archivist** for the compact person review page. Faces starts with
+   two rows; expand for all linked faces, then review Found faces and Similar
+   people below. Mentions provides Flat, Document, Page and Mention views with
+   selection for Verify/Unlink. Details keeps profile editing and Statistics
+   shows link states and last changes.
+4. Open the application root to land on **Documents** and explore registered
    documents in the table across libraries. Compare document-wide page/evidence
    totals and last-change metadata. Use
    **Columns** to choose fields, including All annotations, Faces and Text mentions
@@ -23,7 +28,7 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    and first breadcrumb return here. Open **Scan search** for pages and evidence;
    follow a result into its page workspace and inspect the OCR/face overlays. Use the
    **Document pages** strip below the scan to open other pages of that document.
-4. On disposable data, change an identity field or assignment and inspect its
+5. On disposable data, change an identity field or assignment and inspect its
    last-processing metadata. Try link-state filters and the mobile filter toggle.
    Review fixture details in the
    [seed guide](../people-gator-api/docs/PREVIEW-SEEDING.md).

@@ -26,6 +26,9 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("review", "Lina Archivist", ("L. Archivist", "Lina of the reading room", "Lina Catalogue Editor"),
+           "Archivist and catalogue editor reviewing portraits and correspondence across collections.", "importer"),
+    Person("review-candidate", "Lina A.", (), "Possible duplicate of Lina Archivist.", "importer"),
     Person("table-tereza", "Tereza Columns", (), "Synthetic document table subject.", "importer"),
     Person("table-oskar", "Oskar Rows", (), "Synthetic document table reviewer subject.", "reviewer"),
     Person("provenance-review", "Irena Evidence", (),
@@ -130,6 +133,9 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("review-a", "preview-review-a", "Review ledger"),
+    Document("review-b", "preview-review-b", "Review ledger"),
+    Document("review-c", "preview-review-a", "Reading room notes"),
     Document("table-ledger", "preview-table", "Document table ledger"),
     Document("table-mirror", "preview-table-mirror", "Document table mirror", "table-ledger"),
     Document("provenance-a", "preview-mzk", "Annotation review ledger"),
@@ -215,6 +221,18 @@ PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
+    # Issue #80: >two rows of faces and >one page of exact-text occurrences.
+    *(Page(f"review-{i}", ("review-a", "review-b", "review-c")[i // 3], i % 3 + 1,
+           tuple(Face(f"review-face-{i}-{j}", "review", j, 6,
+                      ("automatic", "manual", "verified")[(i + j) % 3],
+                      models=(MODEL, DISCOVERY_MODEL)) for j in range(2)),
+           tuple(Mention(f"review-mention-{i}-{j}", "review",
+                         f"Lina Archivist reviewed entry {i * 3 + j + 1} in the catalogue.",
+                         ("automatic", "manual", "verified")[(i + j) % 3]) for j in range(3)))
+      for i in range(9)),
+    Page("review-candidates", "review-b", 4,
+         (Face("review-unassigned", None, 0, 6, models=(MODEL, DISCOVERY_MODEL)),
+          Face("review-candidate", "review-candidate", 1, 6, models=(MODEL, DISCOVERY_MODEL)))),
     Page("table-1", "table-ledger", 1,
          (Face("table-auto", "table-tereza", 0, 2), Face("table-manual", "table-oskar", 1, 3, "manual")),
          (Mention("table-auto-mention", "table-tereza", "Tereza Columns indexed the document table."),
