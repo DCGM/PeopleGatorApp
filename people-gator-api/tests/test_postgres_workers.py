@@ -37,6 +37,9 @@ def test_worker_settings_replace_nested_controller_overrides(monkeypatch, variab
 
     monkeypatch.setattr(conftest, "SETTINGS_ENVIRONMENT", dict(conftest.SETTINGS_ENVIRONMENT))
     monkeypatch.setattr(settings, "persistence", settings.persistence)
+    # The hook assigns integration URLs directly; restore the real worker URL
+    # too, so this regression test cannot redirect subsequently scheduled cases.
+    monkeypatch.setenv(variable, os.environ.get(variable, ""))
     monkeypatch.setenv("PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE", "controller_store")
     config = SimpleNamespace(workerinput={
         "people_gator_database_urls": {variable: "postgresql+asyncpg://test:test@localhost/private_worker"},
