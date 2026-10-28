@@ -15,6 +15,8 @@ import {
   UserRoundSearch,
 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import { FACE_GRID_CLASSES, useFaceGrid } from '@/composables/face-grid'
+import FaceGridAction from './FaceGridAction.vue'
 
 import PersonPortrait from './PersonPortrait.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -35,6 +37,10 @@ const route = useRoute()
 const router = useRouter()
 const props = defineProps<{
   faces: PersonDiscoveryFace[]
+  faceCount?: number
+  hasMoreFaces?: boolean
+  loadingMoreFaces?: boolean
+  moreFacesFailed?: boolean
   people: PersonDiscoveryCandidate[]
   currentName: string
   referenceFaceCount: number
@@ -66,6 +72,7 @@ const faceSort = defineModel<SortState<FaceSortField>>('faceSort')
 const peopleSort = defineModel<SortState<EntitySortField>>('peopleSort')
 
 const emit = defineEmits<{
+  loadMoreFaces: []
   retry: []
   clearFilters: []
   clearPeopleFilters: []
@@ -101,12 +108,45 @@ const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
   { value: 'unassigned', label: 'Unassigned' },
   { value: 'assigned', label: 'Assigned elsewhere' },
 ]
-const visibleFaces = computed(() =>
+const filteredFaces = computed(() =>
   props.faces.filter((face) => {
     if (faceFilter.value === 'unassigned') return !face.assignedEntityId
     if (faceFilter.value === 'assigned') return Boolean(face.assignedEntityId)
     return true
   }),
+)
+const { grid: foundGrid, columns: faceColumns, style: faceGridStyle } = useFaceGrid()
+const faceRows = ref(2)
+const faceSlots = computed(() => faceColumns.value * faceRows.value)
+const canShowMoreFaces = computed(
+  () => Boolean(props.hasMoreFaces) || filteredFaces.value.length > faceSlots.value,
+)
+const visibleFaces = computed(() =>
+  filteredFaces.value.slice(0, faceSlots.value - (canShowMoreFaces.value ? 1 : 0)),
+)
+function showMoreFaces() {
+  if (props.loadingMoreFaces || props.assigningFaces) return
+  if (!props.moreFacesFailed) faceRows.value += 2
+  if (props.hasMoreFaces && (props.moreFacesFailed || faceSlots.value > filteredFaces.value.length))
+    emit('loadMoreFaces')
+}
+watch(
+  () =>
+    JSON.stringify([
+      faceColumns.value,
+      route?.params.personId,
+      faceFilter.value,
+      faceModel.value,
+      annotations.value,
+      faceSearchTerm.value,
+      faceSort.value?.field,
+      faceSort.value?.direction,
+    ]),
+  () => {
+    faceRows.value = 2
+    clearFaceSelection()
+  },
+  { deep: true },
 )
 const selectedFaces = computed(() =>
   props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
@@ -130,8 +170,8 @@ function toggleFaceSelection(faceId: string, event: MouseEvent) {
 }
 
 function addFaceRangeToSelection(faceId: string) {
-  const faceIndex = props.faces.findIndex((face) => face.id === faceId)
-  const anchorIndex = props.faces.findIndex((face) => face.id === selectionAnchorId.value)
+  const faceIndex = visibleFaces.value.findIndex((face) => face.id === faceId)
+  const anchorIndex = visibleFaces.value.findIndex((face) => face.id === selectionAnchorId.value)
 
   if (anchorIndex < 0 || faceIndex < 0) return false
 
@@ -139,7 +179,7 @@ function addFaceRangeToSelection(faceId: string) {
   const rangeEnd = Math.max(anchorIndex, faceIndex)
   selectedFaceIds.value = new Set([
     ...selectedFaceIds.value,
-    ...props.faces.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
+    ...visibleFaces.value.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
   ])
   return true
 }
@@ -218,7 +258,7 @@ function assignSelectedFaces() {
 }
 
 watch(
-  () => props.faces.map((face) => face.id),
+  () => visibleFaces.value.map((face) => face.id),
   (availableFaceIds) => {
     const available = new Set(availableFaceIds)
     selectedFaceIds.value = new Set(
@@ -262,7 +302,9 @@ watch(
         <div>
           <h3 id="similar-faces-heading">Found faces</h3>
         </div>
-        <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
+        <Badge variant="outline" class="font-mono"
+          >{{ faceCount ?? filteredFaces.length }} matches</Badge
+        >
       </div>
 
       <PersonDiscoverySettings
@@ -314,14 +356,18 @@ watch(
       </SelectedFaceActions>
 
       <div
-        v-if="visibleFaces.length"
-        class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+        v-if="visibleFaces.length || canShowMoreFaces"
+        ref="foundGrid"
+        class="mt-4"
+        :class="FACE_GRID_CLASSES"
+        :style="faceGridStyle"
         aria-live="polite"
       >
         <Item
           v-for="face in visibleFaces"
           :key="face.id"
-          class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
+          data-found-face-card
+          class="group/face relative h-full min-h-[var(--face-card-height)] min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
           :class="
             selectedFaceIds.has(face.id) &&
             'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'
@@ -391,23 +437,30 @@ watch(
             >
               <LinkIcon v-if="face.assignedEntityId" class="size-4 shrink-0" aria-hidden="true" />
               <UserRoundX v-else class="size-4 shrink-0" aria-hidden="true" />
-              <b
-                class="min-w-0 flex-1 truncate"
-                :title="face.assignedEntityName || face.assignedEntityId || 'Unassigned'"
+              <component
+                :is="face.assignedEntityId ? 'RouterLink' : 'span'"
+                :to="
+                  face.assignedEntityId
+                    ? {
+                        name: 'person-detail',
+                        params: { personId: face.assignedEntityId },
+                        query: relatedQuery(route, { origin_matched_face: face.id }),
+                      }
+                    : undefined
+                "
+                class="relative z-20 min-w-0 flex-1 truncate"
+                :aria-label="
+                  face.assignedEntityId
+                    ? `Open matching person ${face.assignedEntityName || face.assignedEntityId}`
+                    : undefined
+                "
               >
-                {{ face.assignedEntityName || face.assignedEntityId || 'Unassigned' }}
-              </b>
-              <RouterLink
-                v-if="face.assignedEntityId"
-                :to="{
-                  name: 'person-detail',
-                  params: { personId: face.assignedEntityId },
-                  query: relatedQuery(route, { origin_matched_face: face.id }),
-                }"
-                class="relative z-20"
-                :aria-label="`Open matching person ${face.assignedEntityName || face.assignedEntityId}`"
-                >Profile</RouterLink
-              >
+                <b
+                  class="block min-w-0 truncate"
+                  :title="face.assignedEntityName || face.assignedEntityId || 'Unassigned'"
+                  >{{ face.assignedEntityName || face.assignedEntityId || 'Unassigned' }}</b
+                >
+              </component>
               <code class="ml-auto shrink-0 text-sm text-muted-foreground">
                 <template v-if="face.score != null">sim {{ face.score }}%</template>
                 <template v-else>Text match</template>
@@ -431,6 +484,19 @@ watch(
             Archive location unavailable
           </div>
         </Item>
+        <FaceGridAction
+          v-if="canShowMoreFaces"
+          data-found-faces-more
+          :label="moreFacesFailed ? 'Retry' : loadingMoreFaces ? 'Loading…' : 'Show more'"
+          :description="
+            moreFacesFailed
+              ? 'Could not load more faces'
+              : `${visibleFaces.length} of ${faceCount ?? filteredFaces.length} faces`
+          "
+          :loading="loadingMoreFaces"
+          :disabled="assigningFaces"
+          @activate="showMoreFaces"
+        />
       </div>
 
       <div
