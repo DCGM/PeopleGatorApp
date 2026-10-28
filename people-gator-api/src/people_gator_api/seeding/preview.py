@@ -738,6 +738,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             ),
             # Issue #33: every list sorts its complete result set before paging.
             # Existing portraits demonstrate the lightweight plus tile in either theme.
+            "person-review-found-faces": f"/people/{manifest.entities['review']}?discovery_model={DISCOVERY_MODEL}#similar-faces-heading",
             "person-review-overflow-card": f"/people/{manifest.entities['review']}",
             "person-review-faces": f"/people/{manifest.entities['review']}",
             "person-review-mentions": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=groups",

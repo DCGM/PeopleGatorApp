@@ -875,3 +875,19 @@ replacing earlier pages or annotations. At 1440px, Lina's collapsed overview sho
 13 of 42 faces plus the **Show all faces** card in two rows; expansion shows all
 42 faces. At 390px it shows three faces and the same action card. The last card
 contains the matching-face count; `person-review-overflow-card` opens this scenario. Existing review edits and interrupted upgrades survive reruns.
+
+
+### Found-face pagination (#80)
+
+Open `person-review-found-faces` for Lina Archivist. Found faces uses the same
+portrait/card size as the linked overview: two initial rows, with **Show more**
+as the final plus tile. Each activation reveals two additional rows and fetches
+another cursor page when needed. The synthetic 8D model has more than one
+14-record candidate page, including assigned and unassigned faces outside the
+reference documents. Assignment filtering applies before pagination, so the
+match count and loaded pages agree. Change the model or assignment to restart
+the overview; previously loaded choices are not left selected out of view.
+
+The seed integration regression walks assigned and unassigned cursor pages,
+checks disjoint complete coverage and confirms the reference person's own faces
+stay excluded. It reuses existing local media, models and checkpoint identities.
