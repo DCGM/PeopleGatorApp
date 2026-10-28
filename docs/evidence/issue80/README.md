@@ -8,9 +8,9 @@ shows the expanded below-640px controls.
 Checks executed against the seeded API:
 
 - Actual collapsed grid: 14 cards in two desktop rows, four in two mobile rows;
-  expansion shows all 18, collapse restores two rows, and resizing to 700px
+  expansion shows all 42, collapse restores two rows, and resizing to 700px
   recalculates two rows.
-- Identity remains at the viewport top deep in Faces. No horizontal overflow
+- Identity remains below the 52px sticky navigation deep in Faces. No horizontal overflow
   across captured states. Section tabs fit on one mobile row.
 - Keyboard Enter expands mobile filters; Space selects a mention independently
   of its scan link. Context and import metadata open from the ellipsis button.
@@ -22,8 +22,12 @@ Checks executed against the seeded API:
   including seven unloaded children. Unlink with one library selected removes
   nine links, retains the 18 outside scope and preserves all 27 OCR records.
   Unfiltered tab totals refresh after the write.
+- Found faces has no search input. Modalities, Face model and Assignment share
+  one desktop line in that order. Similar people has its own search and matching
+  selectors. Changes to either section preserve the other; typing people search
+  never sends a face text query. Independent choices survive reload.
 - Light and dark grouping captures; no browser page errors in the checked flow.
 
-Fixtures: Lina Archivist, 18 linked faces, 27 mentions in three documents;
+Fixtures: Lina Archivist, 42 linked faces, 27 mentions in three documents;
 Lina A. and an unassigned face provide discovery candidates. Statistics counts
 both linked-page libraries across all pages.
