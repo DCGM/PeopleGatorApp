@@ -272,8 +272,10 @@ it('removes reference tags, resets sources without clearing search, and retries 
     },
     global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
   })
-  expect(wrapper.get('[aria-label="Active discovery filters"]').findAll('small')).toHaveLength(2)
-  await wrapper.get('[aria-label="Remove reference faces"]').trigger('click')
+  expect(
+    wrapper.get('[aria-label="Active discovery faces filters"]').findAll('small'),
+  ).toHaveLength(2)
+  await wrapper.get('[aria-label="Remove modality faces"]').trigger('click')
   expect(wrapper.emitted('update:annotations')?.[0]).toEqual([['name']])
   await wrapper
     .findAll('button')
@@ -287,8 +289,8 @@ it('removes reference tags, resets sources without clearing search, and retries 
     .trigger('click')
   expect(wrapper.emitted('retry')).toHaveLength(1)
   await wrapper.setProps({ annotations: [], searchTerm: '', searchError: undefined })
-  expect(wrapper.text()).toContain('Choose a reference input or enter search text.')
-  expect(wrapper.find('[aria-label="Active discovery filters"]').exists()).toBe(false)
+  expect(wrapper.text()).toContain('Choose a modality.')
+  expect(wrapper.find('[aria-label="Active discovery faces filters"]').exists()).toBe(false)
 })
 
 it('labels text-only matches without inventing cosine percentages', () => {
@@ -320,7 +322,7 @@ it('shows and removes a model override with default sources, and clears both cho
     },
     global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
   })
-  expect(wrapper.get('[aria-label="Active discovery filters"]').text()).toContain(
+  expect(wrapper.get('[aria-label="Active discovery faces filters"]').text()).toContain(
     'Face model: Alternate model',
   )
   expect(wrapper.findAll('small[data-slot="badge"]')).toHaveLength(1)
@@ -333,7 +335,7 @@ it('shows and removes a model override with default sources, and clears both cho
   await wrapper.get('[aria-label="Remove face model"]').trigger('click')
   expect(wrapper.emitted('update:faceModel')).toEqual([['']])
   await wrapper.setProps({ faceModel: 'default' })
-  expect(wrapper.find('[aria-label="Active discovery filters"]').exists()).toBe(false)
+  expect(wrapper.find('[aria-label="Active discovery faces filters"]').exists()).toBe(false)
 })
 
 it('keeps failed action selections available for retry without offering a search retry', async () => {
@@ -366,4 +368,42 @@ it('keeps failed action selections available for retry without offering a search
   expect(wrapper.text()).not.toContain('Search failed.')
   await merge().trigger('click')
   expect(wrapper.emitted('mergePeople')).toEqual([[['retry-person']], [['retry-person']]])
+})
+
+it('keeps face modalities/model before assignment and gives people their own matching controls', () => {
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: {
+      faces: [],
+      people: [],
+      currentName: 'Lina',
+      referenceFaceCount: 42,
+      modelOptions: [{ value: 'model', label: 'Model' }],
+      faceModel: 'model',
+      peopleFaceModel: 'model',
+      faceSort: { field: 'confidence', direction: 'asc' },
+      peopleSort: { field: 'name', direction: 'asc' },
+      faceSortOptions: [{ value: 'confidence', label: 'Confidence', kind: 'number' }],
+      peopleSortOptions: [{ value: 'name', label: 'Name', kind: 'text' }],
+    },
+    global: {
+      stubs: {
+        RouterLink: RouterLinkStub,
+        PersonPortrait: true,
+        SearchFilterPanel: {
+          props: ['label', 'filtersOnly'],
+          template: '<div :aria-label="label"><input v-if="!filtersOnly" /><slot /></div>',
+        },
+      },
+    },
+  })
+  const faces = wrapper.get('[aria-label="Discovery faces"]')
+  const people = wrapper.get('[aria-label="Discovery people"]')
+  expect(faces.find('input').exists()).toBe(false)
+  expect(people.find('input').exists()).toBe(true)
+  expect(
+    faces.findAll('button[aria-label]').map((control) => control.attributes('aria-label')),
+  ).toEqual(['Modalities', 'Face model', 'Discovery assignment', 'Sort similar faces'])
+  expect(
+    people.findAll('button[aria-label]').map((control) => control.attributes('aria-label')),
+  ).toEqual(['Modalities', 'Face model', 'Sort similar people'])
 })

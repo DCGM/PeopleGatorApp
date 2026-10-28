@@ -139,7 +139,13 @@ const discoveryModel = computed({
       ? route.query.discovery_model
       : defaultDiscoveryModel.value,
   set: (value: string) =>
-    void router.replace({ query: { ...route.query, discovery_model: value || undefined } }),
+    void router.replace({
+      query: {
+        ...route.query,
+        people_model: peopleDiscoveryModel.value || undefined,
+        discovery_model: value || undefined,
+      },
+    }),
 })
 const discoveryAnnotations = computed<EntityAnnotation[]>({
   get: () =>
@@ -152,8 +158,37 @@ const discoveryAnnotations = computed<EntityAnnotation[]>({
     void router.replace({
       query: {
         ...route.query,
+        people_annotations: serializeAnnotations(peopleDiscoveryAnnotations.value),
         discovery_annotations: value.length === 3 ? undefined : value.length ? value : 'none',
       },
+    }),
+})
+
+// Old discovery URLs seed both sections. Each selector preserves the other
+// section's effective choices before changing its own URL state.
+function serializeAnnotations(value: EntityAnnotation[]) {
+  return value.length === 3 ? 'all' : value.length ? value : 'none'
+}
+const peopleDiscoveryModel = computed({
+  get: () =>
+    typeof route.query.people_model === 'string' ? route.query.people_model : discoveryModel.value,
+  set: (value: string) =>
+    void router.replace({
+      query: { ...route.query, people_model: value || defaultDiscoveryModel.value || undefined },
+    }),
+})
+const peopleDiscoveryAnnotations = computed<EntityAnnotation[]>({
+  get: () =>
+    route.query.people_annotations === undefined
+      ? discoveryAnnotations.value
+      : route.query.people_annotations === 'all'
+        ? [...DISCOVERY_ANNOTATIONS]
+        : DISCOVERY_ANNOTATIONS.filter((item) =>
+            queryValues(route.query.people_annotations).includes(item),
+          ),
+  set: (value) =>
+    void router.replace({
+      query: { ...route.query, people_annotations: serializeAnnotations(value) },
     }),
 })
 
@@ -183,11 +218,16 @@ const {
 } = usePersonDiscovery(
   personId,
   discoveryModel,
-  debouncedPersonSearchTerm,
+  '',
   computed(() => activeTab.value === 'faces'),
   similarFaceSort,
   similarPeopleSort,
   discoveryAnnotations,
+  computed(() => ({
+    model: peopleDiscoveryModel.value,
+    text: debouncedPersonSearchTerm.value,
+    annotations: peopleDiscoveryAnnotations.value,
+  })),
 )
 
 function selectTab(tab: string | number) {
@@ -202,7 +242,23 @@ function selectTab(tab: string | number) {
 
 function clearDiscoveryFilters() {
   void router.replace({
-    query: { ...route.query, discovery_model: undefined, discovery_annotations: undefined },
+    query: {
+      ...route.query,
+      people_model: peopleDiscoveryModel.value || undefined,
+      people_annotations: serializeAnnotations(peopleDiscoveryAnnotations.value),
+      discovery_model: undefined,
+      discovery_annotations: undefined,
+    },
+  })
+}
+
+function clearPeopleDiscoveryFilters() {
+  void router.replace({
+    query: {
+      ...route.query,
+      people_model: defaultDiscoveryModel.value || undefined,
+      people_annotations: 'all',
+    },
   })
 }
 
@@ -298,6 +354,8 @@ function retrySearch() {
           <PersonDiscoveryPanel
             v-model:search-term="personSearchTerm"
             v-model:annotations="discoveryAnnotations"
+            v-model:people-annotations="peopleDiscoveryAnnotations"
+            v-model:people-face-model="peopleDiscoveryModel"
             v-model:face-model="discoveryModel"
             :model-options="modelOptions"
             :default-face-model="defaultDiscoveryModel"
@@ -318,6 +376,7 @@ function retrySearch() {
             :loading-people="isLoadingPeople"
             :search-error="discoveryError ?? faceModels.error.value"
             @clear-filters="clearDiscoveryFilters"
+            @clear-people-filters="clearPeopleDiscoveryFilters"
             @retry="retrySearch"
             @assign-faces="assignFaces"
             @merge-people="mergePeople"

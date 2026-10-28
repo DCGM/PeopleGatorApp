@@ -4,10 +4,8 @@ import { relatedQuery } from '@/viewmodels/shared-filters'
 import ArchiveLink from './ArchiveLink.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
-import SearchFilterPanel from './SearchFilterPanel.vue'
-import FilterMultiSelect from './FilterMultiSelect.vue'
+import PersonDiscoverySettings from './PersonDiscoverySettings.vue'
 import {
-  X,
   Check,
   ChevronRight,
   CircleUserRound,
@@ -59,40 +57,17 @@ const annotations = defineModel<EntityAnnotation[]>('annotations', {
   default: () => ['faces', 'aliases', 'name'],
 })
 const faceModel = defineModel<string>('faceModel', { default: '' })
-const hasReferenceFilters = computed(
-  () => annotations.value.length > 0 && annotations.value.length < 3,
-)
-const hasModelOverride = computed(() =>
-  Boolean(faceModel.value && faceModel.value !== props.defaultFaceModel),
-)
-const modelLabel = computed(
-  () =>
-    props.modelOptions?.find((option) => option.value === faceModel.value)?.label ??
-    faceModel.value,
-)
-const inputSearch = ref('')
-const inputOptions = computed(() =>
-  [
-    { id: 'faces', label: 'Faces' },
-    { id: 'aliases', label: 'Aliases' },
-    { id: 'name', label: 'Name' },
-  ].filter((option) => option.label.toLowerCase().includes(inputSearch.value.toLowerCase())),
-)
-const selectedInputs = computed({
-  get: () => annotations.value,
-  set: (values: string[]) => {
-    annotations.value = values.filter((value): value is EntityAnnotation =>
-      ['faces', 'aliases', 'name'].includes(value),
-    )
-  },
+const peopleAnnotations = defineModel<EntityAnnotation[]>('peopleAnnotations', {
+  default: () => ['faces', 'aliases', 'name'],
 })
-const inputLabels = { faces: 'Faces', aliases: 'Aliases', name: 'Name' }
+const peopleFaceModel = defineModel<string>('peopleFaceModel', { default: '' })
 const faceSort = defineModel<SortState<FaceSortField>>('faceSort')
 const peopleSort = defineModel<SortState<EntitySortField>>('peopleSort')
 
 const emit = defineEmits<{
   retry: []
   clearFilters: []
+  clearPeopleFilters: []
   assignFaces: [faceIds: string[]]
   mergePeople: [entityIds: string[]]
 }>()
@@ -277,74 +252,9 @@ watch(
 
 <template>
   <div class="space-y-10 pt-6">
-    <div>
-      <SearchFilterPanel
-        v-model="searchTerm"
-        label="Discovery search"
-        placeholder="Add search text"
-        :result-count="props.faces.length + props.people.length"
-      >
-        <FilterMultiSelect
-          v-model="selectedInputs"
-          v-model:search="inputSearch"
-          label="Reference inputs"
-          :options="inputOptions"
-        />
-        <FilterSingleSelect
-          v-if="props.modelOptions?.length"
-          v-model="faceModel"
-          label="Face model"
-          :options="props.modelOptions"
-        />
-      </SearchFilterPanel>
-      <div
-        v-if="hasReferenceFilters || hasModelOverride"
-        class="mt-3 flex min-w-0 flex-wrap items-center gap-2"
-        aria-label="Active discovery filters"
-      >
-        <template v-if="hasReferenceFilters">
-          <Badge
-            v-for="input in annotations"
-            :key="input"
-            as="small"
-            variant="outline"
-            class="max-w-full gap-1"
-          >
-            <span class="min-w-0 break-all">Reference: {{ inputLabels[input] }}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              class="rounded-full"
-              :aria-label="`Remove reference ${inputLabels[input].toLowerCase()}`"
-              @click="annotations = annotations.filter((item) => item !== input)"
-              ><X aria-hidden="true"
-            /></Button>
-          </Badge>
-        </template>
-        <Badge v-if="hasModelOverride" as="small" variant="outline" class="max-w-full gap-1">
-          <span class="min-w-0 break-all">Face model: {{ modelLabel }}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            class="rounded-full"
-            aria-label="Remove face model"
-            @click="faceModel = ''"
-            ><X aria-hidden="true"
-          /></Button>
-        </Badge>
-        <Button type="button" variant="ghost" size="sm" @click="emit('clearFilters')"
-          >Clear filters</Button
-        >
-      </div>
-      <p v-if="!annotations.length && !searchTerm.trim()" role="status" class="mt-3">
-        Choose a reference input or enter search text.
-      </p>
-      <div v-if="props.searchError" role="alert" class="mt-3 flex flex-wrap items-center gap-2">
-        <p>Search failed. Choose other reference inputs or a face model, then retry.</p>
-        <Button type="button" variant="outline" size="sm" @click="emit('retry')">Retry</Button>
-      </div>
+    <div v-if="props.searchError" role="alert" class="flex flex-wrap items-center gap-2">
+      <p>Search failed. Check the modalities and model.</p>
+      <Button type="button" variant="outline" size="sm" @click="emit('retry')">Retry</Button>
     </div>
     <section aria-labelledby="similar-faces-heading">
       <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
@@ -354,7 +264,15 @@ watch(
         <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
       </div>
 
-      <SearchFilterPanel label="Discovery faces" filters-only class="mt-4">
+      <PersonDiscoverySettings
+        v-model:annotations="annotations"
+        v-model:face-model="faceModel"
+        label="Discovery faces"
+        :model-options="modelOptions"
+        :default-face-model="defaultFaceModel"
+        class="mt-4"
+        @clear-filters="emit('clearFilters')"
+      >
         <FilterSingleSelect
           v-model="faceFilter"
           label="Discovery assignment"
@@ -366,7 +284,7 @@ watch(
           :options="props.faceSortOptions"
           label="Sort similar faces"
         />
-      </SearchFilterPanel>
+      </PersonDiscoverySettings>
 
       <p v-if="props.assignmentFailed" role="alert" class="mt-3">
         Assignment failed. Select faces and try Assign again.
@@ -534,14 +452,24 @@ watch(
         <div>
           <h3 id="similar-people-heading">Similar people</h3>
         </div>
-        <SearchFilterPanel label="Discovery people" filters-only>
+        <PersonDiscoverySettings
+          v-model:search-term="searchTerm"
+          v-model:annotations="peopleAnnotations"
+          v-model:face-model="peopleFaceModel"
+          label="Discovery people"
+          searchable
+          :result-count="people.length"
+          :model-options="modelOptions"
+          :default-face-model="defaultFaceModel"
+          @clear-filters="emit('clearPeopleFilters')"
+        >
           <SortControl
             v-if="peopleSort && props.peopleSortOptions"
             v-model="peopleSort"
             :options="props.peopleSortOptions"
             label="Sort similar people"
           />
-        </SearchFilterPanel>
+        </PersonDiscoverySettings>
       </div>
 
       <p v-if="props.mergeFailed" role="alert" class="mt-3">

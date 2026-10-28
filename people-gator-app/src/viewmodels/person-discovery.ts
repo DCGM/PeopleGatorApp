@@ -44,6 +44,8 @@ export function personDiscoverySignals(
   }
 }
 
+type DiscoveryReference = { model: string | null; text: string; annotations: EntityAnnotation[] }
+
 export function usePersonDiscovery(
   personId: MaybeRefOrGetter<string>,
   referenceFaceModel: MaybeRefOrGetter<string | null>,
@@ -52,6 +54,7 @@ export function usePersonDiscovery(
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = RELEVANCE,
   peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
   annotations: MaybeRefOrGetter<EntityAnnotation[]> = DISCOVERY_ANNOTATIONS,
+  peopleReference?: MaybeRefOrGetter<DiscoveryReference>,
 ) {
   const signals = computed(() =>
     personDiscoverySignals(
@@ -65,6 +68,23 @@ export function usePersonDiscovery(
     () =>
       toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim())),
   )
+  const peopleSignals = computed(() => {
+    const reference = peopleReference && toValue(peopleReference)
+    return reference
+      ? personDiscoverySignals(
+          toValue(personId),
+          reference.model,
+          reference.text,
+          reference.annotations,
+        )
+      : signals.value
+  })
+  const canSearchPeople = computed(() => {
+    const reference = peopleReference && toValue(peopleReference)
+    return reference
+      ? toValue(enabled) && (reference.annotations.length > 0 || Boolean(reference.text.trim()))
+      : canSearch.value
+  })
   // Discovery searches all accessible data; shared browsing filters stay in the URL.
   const faceSearchQuery = useFaceSearchQuery(
     computed(() => ({ ...signals.value, ...sortParams(toValue(faceSort)) })),
@@ -169,11 +189,11 @@ export function usePersonDiscovery(
   )
 
   const entitySearchParams = computed(() => ({
-    ...signals.value,
+    ...peopleSignals.value,
     'filter.entity_type': ['person'] as Array<'person'>,
     ...sortParams(toValue(peopleSort)),
   }))
-  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearch)
+  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearchPeople)
   const entityMatches = computed(() =>
     (entitySearchQuery.data.value?.pages ?? [])
       .flatMap((page) => page.items)
@@ -225,7 +245,7 @@ export function usePersonDiscovery(
     ),
     isLoadingPeople: computed(
       () =>
-        canSearch.value &&
+        canSearchPeople.value &&
         (entitySearchQuery.isPending.value || entitySearchQuery.isFetching.value),
     ),
     retry: () => {
