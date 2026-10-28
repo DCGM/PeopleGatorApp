@@ -213,11 +213,11 @@ function retrySearch() {
 </script>
 
 <template>
-  <main class="mx-auto w-full max-w-6xl [&_*]:scroll-mt-28 px-4 pb-12 pt-7 sm:px-6">
+  <main class="mx-auto w-full max-w-6xl [&_*]:scroll-mt-40 px-4 pb-12 pt-7 sm:px-6">
     <p v-if="error" class="py-16 text-center text-destructive">Could not load this person.</p>
     <template v-else>
       <header
-        class="sticky top-0 z-30 flex min-w-0 items-center gap-3 border-b bg-background py-3"
+        class="sticky top-13 z-30 flex min-w-0 items-center gap-3 border-b bg-background py-3"
         aria-label="Person identity"
       >
         <PersonPortrait :name="profile.name" :face-id="portraitFaceId" class="size-12 shrink-0" />
