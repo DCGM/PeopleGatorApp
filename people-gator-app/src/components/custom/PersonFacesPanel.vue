@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BadgeCheck, Image, Unlink } from '@lucide/vue'
+import { BadgeCheck, Image, Minus, Plus, Unlink } from '@lucide/vue'
 import { useElementSize } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -162,7 +162,7 @@ watch(
       as="button"
       type="button"
       variant="outline"
-      class="min-w-0 justify-center gap-2 rounded-none bg-card p-2 text-center text-muted-foreground shadow-none hover:border-accent hover:text-primary disabled:opacity-50"
+      class="min-w-0 cursor-pointer justify-center gap-2 rounded-none border-dashed border-border/40 bg-transparent p-4 text-center text-muted-foreground shadow-none transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground disabled:cursor-default disabled:opacity-50"
       :class="expanded ? 'col-span-full flex-row' : 'h-full min-h-40 flex-col'"
       data-face-overview-toggle
       :aria-label="expanded ? 'Show less' : 'Show all faces'"
@@ -171,7 +171,13 @@ watch(
       :disabled="busy"
       @click="toggleExpansion"
     >
-      <span>{{ expanded ? 'Show less' : 'Show all faces' }}</span>
+      <component
+        :is="expanded ? Minus : Plus"
+        :class="expanded ? 'size-4' : 'size-10 text-muted-foreground/60'"
+        :stroke-width="1.25"
+        aria-hidden="true"
+      />
+      <span class="font-light">{{ expanded ? 'Show less' : 'Show all faces' }}</span>
       <small>{{ matchingCount ?? faces.length }} matching faces</small>
     </Item>
     <div v-if="expanded && hasMore" class="col-span-full flex flex-wrap gap-2">
