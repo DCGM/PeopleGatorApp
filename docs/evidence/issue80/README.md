@@ -28,6 +28,15 @@ Checks executed against the seeded API:
   one desktop line in that order. Similar people has its own search and matching
   selectors. Changes to either section preserve the other; typing people search
   never sends a face text query. Independent choices survive reload.
+- Found faces uses the same tracks and metadata space as assigned faces:
+  147.4 × 282px cards at desktop, 173 × 301px at mobile. It starts with 13/20
+  candidates plus the action tile on desktop and 3/20 plus the tile on mobile.
+  Show more reveals two rows at a time, fetching the next 14-record cursor page
+  only when needed. All 20 candidates were reached without duplicates.
+- Simulated next-page failures retain cards and selection; the tile changes to
+  Retry and successfully continues the same cursor. The assignment selector
+  starts a fresh server-filtered query; its count matches the returned records.
+  Both retry states, filtered results and loaded-more results are captured.
 - Light and dark grouping captures; no browser page errors in the checked flow.
 
 Fixtures: Lina Archivist, 42 linked faces, 27 mentions in three documents;
