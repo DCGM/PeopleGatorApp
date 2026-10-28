@@ -8,6 +8,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
+import { Button } from '@/components/ui/button'
 import FaceActionButtons from '@/components/custom/FaceActionButtons.vue'
 import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
@@ -20,7 +21,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
-  AlertDialogAction,
 } from '@/components/ui/alert-dialog'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import PageStatisticsPanel from '@/components/custom/PageStatisticsPanel.vue'
@@ -568,6 +568,7 @@ onMounted(async () => {
   if (!zoomElement.value) return
   panzoom = Panzoom(zoomElement.value, {
     canvas: true,
+    handleStartEvent: (event) => event.preventDefault(),
     maxScale: maximumZoomPercent / 100,
     minScale: minimumZoomPercent / 100,
     startScale: 0.82,
@@ -824,7 +825,7 @@ onBeforeUnmount(() => {
       :open="Boolean(deletionTarget)"
       @update:open="!$event && !deleteMutation.isPending.value && (deletionTarget = null)"
     >
-      <AlertDialogContent @pointerdown.stop>
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this detection?</AlertDialogTitle>
           <AlertDialogDescription
@@ -836,9 +837,7 @@ onBeforeUnmount(() => {
         </p>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleteMutation.isPending.value">Cancel</AlertDialogCancel>
-          <AlertDialogAction :disabled="actionBusy" @click.prevent="deleteDetection"
-            >Delete</AlertDialogAction
-          >
+          <Button :disabled="actionBusy" @click="deleteDetection">Delete</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

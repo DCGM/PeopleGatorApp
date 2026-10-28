@@ -168,8 +168,6 @@ function regionStyle(position: Face['position']): CSSProperties {
         update-position-strategy="always"
         hide-when-detached
         @close-auto-focus="returnFocus($event, face.id)"
-        @pointerdown.stop
-        @wheel.stop
       >
         <slot name="actions" :face="face" :close="() => (openFaceId = null)" />
       </PopoverContent>

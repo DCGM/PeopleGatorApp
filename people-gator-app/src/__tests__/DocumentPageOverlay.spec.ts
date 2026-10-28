@@ -212,7 +212,7 @@ describe('DocumentPageOverlay', () => {
   })
 })
 
-it('opens actions from a detection, closes with Escape and returns keyboard focus', async () => {
+it('opens actions, restores keyboard focus on Escape and dismisses the first outside click', async () => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -259,6 +259,16 @@ it('opens actions from a detection, closes with Escape and returns keyboard focu
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
     expect(document.activeElement).toBe(detection.element)
+    await detection.trigger('click')
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const reopened = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
+    reopened
+      .querySelector('button')!
+      .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
   } finally {
     wrapper.unmount()
     vi.unstubAllGlobals()

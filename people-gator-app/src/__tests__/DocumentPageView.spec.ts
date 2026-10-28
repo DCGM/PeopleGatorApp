@@ -282,12 +282,12 @@ describe('shared detection actions', () => {
     await flushPromises()
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
     expect(mocks.deleteFace).not.toHaveBeenCalled()
-    await wrapper.findComponent({ name: 'AlertDialogAction' }).trigger('click')
+    await wrapper.findComponent({ name: 'Button' }).trigger('click')
     await flushPromises()
     expect(card.props('face')).toMatchObject({ id: 'a' })
     expect(card.props('actionError')).toBe('Could not delete detection.')
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
-    await wrapper.findComponent({ name: 'AlertDialogAction' }).trigger('click')
+    await wrapper.findComponent({ name: 'Button' }).trigger('click')
     await flushPromises()
     expect(mocks.deleteFace).toHaveBeenLastCalledWith({
       path: { detection_id: 'a' },
