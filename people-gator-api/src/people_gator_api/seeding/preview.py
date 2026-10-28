@@ -737,6 +737,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}#link-statistics"
             ),
             # Issue #33: every list sorts its complete result set before paging.
+            "person-review-overflow-card": f"/people/{manifest.entities['review']}",
             "person-review-faces": f"/people/{manifest.entities['review']}",
             "person-review-mentions": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=groups",
             "person-review-documents": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=document",

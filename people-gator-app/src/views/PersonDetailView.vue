@@ -344,6 +344,7 @@ function retrySearch() {
             :key="personId"
             collapsible
             :has-more="hasMoreFaces"
+            :matching-count="faceCount"
             :faces="faces"
             :person-name="profile.name"
             :person-id="personId"
@@ -361,11 +362,10 @@ function retrySearch() {
             </template>
           </PersonFacesPanel>
           <PersonFaceCardSkeleton v-if="faceLoading" />
-          <div class="col-span-full text-sm">
+          <div v-if="faceError || (!faceLoading && !faces.length)" class="col-span-full text-sm">
             <p v-if="faceError" role="alert">
               Could not load faces. <Button variant="link" @click="retryFaces()">Retry</Button>
             </p>
-            <p v-else-if="!faceLoading">{{ faceCount }} matching faces</p>
             <p v-if="!faceError && !faceLoading && !faces.length">
               No faces match the filters.
               <Button variant="link" @click="evidence.clear()">Clear filters</Button>

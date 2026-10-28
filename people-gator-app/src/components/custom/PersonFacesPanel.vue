@@ -4,6 +4,7 @@ import { useElementSize } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import { Item } from '@/components/ui/item'
 import PersonFaceCard from './PersonFaceCard.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
 import { useCanAnnotate } from '@/composables/can-annotate'
@@ -13,6 +14,7 @@ import type { PersonFace } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   collapsible?: boolean
   hasMore?: boolean
+  matchingCount?: number
   faces: PersonFace[]
   personName: string
   personId: string
@@ -24,10 +26,12 @@ const { width } = useElementSize(grid)
 const expanded = ref(false)
 // This matches the grid's 140px minimum track plus its 12px gap.
 const rowCapacity = computed(() => Math.max(1, Math.floor((width.value + 12) / 152)))
-const visibleFaces = computed(() =>
-  props.collapsible && !expanded.value ? props.faces.slice(0, rowCapacity.value * 2) : props.faces,
-)
 const canExpand = computed(() => props.hasMore || props.faces.length > rowCapacity.value * 2)
+const visibleFaces = computed(() =>
+  props.collapsible && !expanded.value
+    ? props.faces.slice(0, rowCapacity.value * 2 - (canExpand.value ? 1 : 0))
+    : props.faces,
+)
 watch(
   () => props.personId,
   () => {
@@ -153,15 +157,25 @@ watch(
       @toggle="select(face.id, $event)"
       @add="select(face.id, $event, true)"
     />
-    <div v-if="collapsible && canExpand" class="col-span-full flex flex-wrap gap-2">
-      <Button
-        variant="outline"
-        :aria-expanded="expanded"
-        :disabled="busy"
-        @click="toggleExpansion"
-        >{{ expanded ? 'Show less' : 'Show all faces' }}</Button
-      >
-      <slot v-if="expanded" name="pagination" />
+    <Item
+      v-if="collapsible && canExpand"
+      as="button"
+      type="button"
+      variant="outline"
+      class="min-w-0 justify-center gap-2 rounded-none bg-card p-2 text-center text-muted-foreground shadow-none hover:border-accent hover:text-primary disabled:opacity-50"
+      :class="expanded ? 'col-span-full flex-row' : 'h-full min-h-40 flex-col'"
+      data-face-overview-toggle
+      :aria-label="expanded ? 'Show less' : 'Show all faces'"
+      :aria-description="`${matchingCount ?? faces.length} matching faces`"
+      :aria-expanded="expanded"
+      :disabled="busy"
+      @click="toggleExpansion"
+    >
+      <span>{{ expanded ? 'Show less' : 'Show all faces' }}</span>
+      <small>{{ matchingCount ?? faces.length }} matching faces</small>
+    </Item>
+    <div v-if="expanded && hasMore" class="col-span-full flex flex-wrap gap-2">
+      <slot name="pagination" />
     </div>
     <SelectedFaceActions
       v-if="selected.length"

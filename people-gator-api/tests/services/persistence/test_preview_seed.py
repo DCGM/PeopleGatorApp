@@ -3352,6 +3352,7 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
+    assert seed.filter_examples['person-review-overflow-card'] == f'/people/{person}'
     faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person])))
     assert len(faces.items) == 42
     assert {face.entity_link_state.value for face in faces.items} == {'automatic', 'manual', 'verified'}
