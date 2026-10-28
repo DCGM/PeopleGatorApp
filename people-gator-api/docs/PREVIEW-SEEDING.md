@@ -875,3 +875,9 @@ checking the card's compact footer: **View faces**, **Verify** and **Reassign**
 share one action row, followed by named icon buttons for **New** and **Unlink**.
 Controls wrap together on narrower panels. Verification errors appear inside the
 card below the actions; verified attribution stays available on the state badge.
+
+The `identity-reference-action-colors` alias opens the same card: sky for face
+references, green for verification/save, amber for reassignment/linking, violet
+for a new identity, and red for unlink/cancel. Only button text, icons and borders
+carry those colors; every action keeps the standard shadcn outline background.
+Check both light and dark themes.

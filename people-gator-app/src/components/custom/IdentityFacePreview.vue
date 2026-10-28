@@ -78,6 +78,7 @@ onBeforeUnmount(cancelTimer)
         type="button"
         variant="outline"
         size="xs"
+        class="border-sky-600 text-sky-700 hover:text-sky-700 dark:border-sky-500 dark:text-sky-400 dark:hover:text-sky-400"
         :aria-label="`View faces of ${name}`"
         @pointerenter="hover"
         @pointerleave="leave"

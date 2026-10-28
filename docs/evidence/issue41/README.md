@@ -35,3 +35,14 @@ heights, natural wrapping without overflow at 320px, accessible names for the
 New/Unlink icon buttons, creation/cancel behavior, reassignment search focus,
 error placement below the actions and verification details on the state badge.
 All gallery captures were refreshed after this layout change.
+
+## Outline action colors
+
+The action row uses sky (faces), emerald (verify/save), amber (reassign/link),
+violet (new identity) and destructive red (unlink/cancel) for text/icons and
+borders. Backgrounds, border width/style, sizing and layout remain standard
+shadcn outline controls. `*-actions-dark.png` shows the settled dark-theme colors;
+all other captures were refreshed too. Browser style checks verify five distinct
+text/border colors, shared neutral backgrounds, solid 1px borders, and a red
+unlink border matching its text in both themes. Save and Cancel also use outline
+variants. Theme captures wait for the standard color transitions to finish.

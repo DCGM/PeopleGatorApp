@@ -18,6 +18,10 @@ const allowed = useCanAnnotate()
       <Button
         variant="outline"
         size="xs"
+        :class="
+          inline &&
+          'border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400'
+        "
         :disabled="mutation.isPending.value"
         @click="mutation.mutate({ id, kind })"
         ><BadgeCheck class="size-3" aria-hidden="true" />{{

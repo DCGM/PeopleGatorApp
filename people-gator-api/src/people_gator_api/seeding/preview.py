@@ -537,6 +537,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             "identity-reference-faces": reference_actions_path,
             "identity-reference-actions": reference_actions_path,
+            "identity-reference-action-colors": reference_actions_path,
             "identity-reference-empty": reference_path + "?candidate_text=Nora",
             # #75 reuses linked local media and the saved portrait without changing review edits.
             "archive-links-faces": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
