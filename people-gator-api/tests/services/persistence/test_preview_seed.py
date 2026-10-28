@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (35, 81, 70)
-    assert len(result.documents) == 44 and len(result.pages) == 87
+    assert await counts(database) == (35, 105, 70)
+    assert len(result.documents) == 44 and len(result.pages) == 99
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (35, 81, 70)
+    assert await counts(database) == (35, 105, 70)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (35, 81, 70)
+    assert await counts(database) == (35, 105, 70)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (36, 81, 70)
+    assert await counts(database) == (36, 105, 70)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 35 and len(result.faces) == 81
-    assert await counts(database) == (35, 81, 70)
+    assert len(result.entities) == 35 and len(result.faces) == 105
+    assert await counts(database) == (35, 105, 70)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (34, 80, 69)
+    assert await counts(database) == (34, 104, 69)
 
 
 
@@ -3353,7 +3353,7 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
     faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person])))
-    assert len(faces.items) == 18
+    assert len(faces.items) == 42
     assert {face.entity_link_state.value for face in faces.items} == {'automatic', 'manual', 'verified'}
     scope = TextMentionListFilter(entity_id=[person])
     for mode, expected in [('mention', 1), ('document', 3), ('page', 9)]:
@@ -3377,3 +3377,41 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     assert await db.text_mentions.get(edited.mention_id) == edited
     groups = await db.text_mentions.list_groups(TextMentionGroupListRequest(limit=10, filter_=scope))
     assert groups.items[0].occurrence_count == 26
+
+
+@pytest.mark.asyncio
+async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(seed_target, monkeypatch):
+    db, filesystem, _ = seed_target
+    all_pages = preview.PAGES
+    monkeypatch.setattr(preview, 'PAGES', tuple(p for p in all_pages if not p.key.startswith('review-overflow-')))
+    first = await preview.seed_preview(db, filesystem)
+    actor = GenericActor(user_id=first.users['reviewer'])
+    edited = await db.faces.patch(first.faces['review-face-0-0'], FacePatchRequest(entity_id=None), actor)
+    monkeypatch.setattr(preview, 'PAGES', all_pages)
+    original_write = filesystem.write_bytes
+    interrupted = False
+
+    async def write(key, content):
+        nonlocal interrupted
+        if key == preview.MANIFEST_KEY and not interrupted and 'review-overflow-face-0-0' in json.loads(content)['faces']:
+            interrupted = True
+            raise OSError('interrupted overflow checkpoint')
+        await original_write(key, content)
+
+    monkeypatch.setattr(filesystem, 'write_bytes', write)
+    with pytest.raises(OSError, match='overflow checkpoint'):
+        await preview.seed_preview(db, filesystem)
+    grown = await preview.seed_preview(db, filesystem)
+    again = await preview.seed_preview(db, filesystem)
+    assert grown.faces == again.faces
+    assert all(grown.faces[key] == value for key, value in first.faces.items())
+    assert len(grown.faces) - len(first.faces) == 24
+    assert await counts(db) == (35, 105, 70)
+    assert await db.faces.get(edited.detection_id) == edited
+    linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
+    assert len(linked.items) == 41
+    for key in ('review-overflow-face-0-0', 'review-overflow-face-11-1'):
+        face = await db.faces.get(grown.faces[key])
+        source = await db.sources.get_page(face.source_id)
+        crop = await get_aligned_face_crop(actor.user_id, face, source, max_width=128)
+        assert crop.content

@@ -846,7 +846,7 @@ has zero in every field. Switching columns adds no requests or local sorting.
 
 ### Person review (#80)
 
-Open **Lina Archivist** (`person-review-faces` in the seed summary). Eighteen
+Open **Lina Archivist** (`person-review-faces` in the seed summary). Forty-two
 linked faces span three documents; expand **Show all faces**, then inspect
 **Found faces** and **Similar people** with `preview-synthetic-8d-v1` selected.
 The candidate collection includes an unassigned face and Lina A.'s linked face.
@@ -858,9 +858,17 @@ The 27 occurrences of `Lina Archivist` cover nine pages with automatic, manual
 and verified links. Two documents deliberately share `Review ledger` as a title;
 their source identities keep them separate. Select the exact-text group to verify
 or unlink all filtered occurrences, including those beyond its first 20 children.
-Local evidence filters do not restrict the global discovery searches.
+Found faces has no text search: modalities and face model precede the assignment
+filter. Similar people has its own search, modalities and face model; its settings
+stay independent from Found faces. Local evidence filters do not restrict either
+global discovery search.
 
 Unlink preserves the OCR mention. This page lists linked evidence only; assigning
 an unlinked OCR mention remains available in the existing scan workspace.
 New fixtures are additive and checkpointed independently, preserving reviewed
 assignments and timestamps when the seed runs again.
+
+The twelve `review-overflow-*` pages add 24 portraits to existing previews without
+replacing earlier pages or annotations. At 1440px, Lina's collapsed overview shows
+14 of 42 faces in two rows; expansion shows all six rows. At 390px it shows four
+faces until expanded. Existing review edits and interrupted upgrades survive reruns.
