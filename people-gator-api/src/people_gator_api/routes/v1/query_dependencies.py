@@ -322,6 +322,10 @@ def entity_list_filter_dependency(
 
 def face_list_filter_dependency(
     shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
+    is_assigned: Annotated[
+        bool | None,
+        _model_parameter(FaceListFilter, "is_assigned", "filter"),
+    ] = None,
     entity_id: Annotated[
         list[uuid.UUID] | None,
         _model_parameter(FaceListFilter, "entity_id", "filter"),
@@ -338,6 +342,7 @@ def face_list_filter_dependency(
     return _filter(
         FaceListFilter,
         **shared,
+        is_assigned=is_assigned,
         entity_id=entity_id,
         source_id=source_id,
         detection_id=detection_id,
