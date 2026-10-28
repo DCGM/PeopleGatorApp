@@ -53,6 +53,7 @@ const props = defineProps<{
 }>()
 
 const searchTerm = defineModel<string>('searchTerm', { default: '' })
+const faceSearchTerm = defineModel<string>('faceSearchTerm', { default: '' })
 const annotations = defineModel<EntityAnnotation[]>('annotations', {
   default: () => ['faces', 'aliases', 'name'],
 })
@@ -265,6 +266,7 @@ watch(
       </div>
 
       <PersonDiscoverySettings
+        v-model:search-term="faceSearchTerm"
         v-model:annotations="annotations"
         v-model:face-model="faceModel"
         label="Discovery faces"
@@ -273,11 +275,7 @@ watch(
         class="mt-4"
         @clear-filters="emit('clearFilters')"
       >
-        <FilterSingleSelect
-          v-model="faceFilter"
-          label="Discovery assignment"
-          :options="faceFilterOptions"
-        />
+        <FilterSingleSelect v-model="faceFilter" label="Assignment" :options="faceFilterOptions" />
         <SortControl
           v-if="faceSort && props.faceSortOptions"
           v-model="faceSort"

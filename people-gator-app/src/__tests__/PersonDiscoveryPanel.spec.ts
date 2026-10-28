@@ -402,8 +402,30 @@ it('keeps face modalities/model before assignment and gives people their own mat
   expect(people.find('input').exists()).toBe(true)
   expect(
     faces.findAll('button[aria-label]').map((control) => control.attributes('aria-label')),
-  ).toEqual(['Modalities', 'Face model', 'Discovery assignment', 'Sort similar faces'])
+  ).toEqual(['Modalities', 'Face model', 'Assignment', 'Sort similar faces'])
   expect(
     people.findAll('button[aria-label]').map((control) => control.attributes('aria-label')),
   ).toEqual(['Modalities', 'Face model', 'Sort similar people'])
+})
+
+it('keeps legacy face text removable without restoring a face search field', async () => {
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: {
+      faces: [],
+      people: [],
+      currentName: 'Lina',
+      referenceFaceCount: 42,
+      annotations: [],
+      faceSearchTerm: 'legacy identifier',
+      searchTerm: 'keep people text',
+    },
+    global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+  })
+  expect(wrapper.get('[aria-label="Discovery faces panel"]').find('input').exists()).toBe(false)
+  expect(wrapper.get('[aria-label="Active discovery faces filters"]').text()).toContain(
+    'Text: legacy identifier',
+  )
+  await wrapper.get('[aria-label="Remove face text"]').trigger('click')
+  expect(wrapper.emitted('update:faceSearchTerm')).toEqual([['']])
+  expect(wrapper.emitted('update:searchTerm')).toBeUndefined()
 })

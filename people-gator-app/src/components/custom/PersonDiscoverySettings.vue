@@ -69,7 +69,7 @@ const modelLabel = computed(
       <slot />
     </SearchFilterPanel>
     <div
-      v-if="hasReferenceFilters || hasModelOverride"
+      v-if="hasReferenceFilters || hasModelOverride || (!searchable && searchTerm)"
       class="mt-3 flex min-w-0 flex-wrap items-center gap-2"
       :aria-label="`Active ${label.toLowerCase()} filters`"
     >
@@ -91,6 +91,18 @@ const modelLabel = computed(
           ><X aria-hidden="true"
         /></Button>
       </Badge>
+      <Badge v-if="!searchable && searchTerm" as="small" variant="outline" class="max-w-full gap-1">
+        <span class="min-w-0 break-all">Text: {{ searchTerm }}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          class="rounded-full"
+          aria-label="Remove face text"
+          @click="searchTerm = ''"
+          ><X aria-hidden="true"
+        /></Button>
+      </Badge>
       <Badge v-if="hasModelOverride" as="small" variant="outline" class="max-w-full gap-1">
         <span class="min-w-0 break-all">Face model: {{ modelLabel }}</span>
         <Button
@@ -107,7 +119,7 @@ const modelLabel = computed(
         >Clear filters</Button
       >
     </div>
-    <p v-if="!annotations.length && (!searchable || !searchTerm.trim())" role="status" class="mt-3">
+    <p v-if="!annotations.length && !searchTerm.trim()" role="status" class="mt-3">
       {{ searchable ? 'Choose a modality or enter search text.' : 'Choose a modality.' }}
     </p>
   </div>
