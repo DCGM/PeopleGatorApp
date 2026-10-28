@@ -112,7 +112,7 @@ describe('PersonDetailView', () => {
       return typeof target !== 'string' && target?.name === 'document-page'
     })
 
-    expect(wrapper.get('[aria-label="Person identity"]').classes()).toContain('sticky')
+    expect(wrapper.get('[aria-label="Person identity"]').classes()).toEqual(expect.arrayContaining(['sticky', 'top-13']))
     expect(wrapper.find('aside[aria-label="Person statistics"]').exists()).toBe(false)
     expect(wrapper.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
       'Faces 0',
