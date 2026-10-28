@@ -230,6 +230,12 @@ PAGES = (
                          f"Lina Archivist reviewed entry {i * 3 + j + 1} in the catalogue.",
                          ("automatic", "manual", "verified")[(i + j) % 3]) for j in range(3)))
       for i in range(9)),
+    # Additive overflow pages: enough linked portraits for six desktop rows.
+    *(Page(f"review-overflow-{i}", "review-c", i + 4,
+           tuple(Face(f"review-overflow-face-{i}-{j}", "review", j, 6,
+                      ("automatic", "manual", "verified")[(i + j) % 3],
+                      models=(MODEL, DISCOVERY_MODEL)) for j in range(2)))
+      for i in range(12)),
     Page("review-candidates", "review-b", 4,
          (Face("review-unassigned", None, 0, 6, models=(MODEL, DISCOVERY_MODEL)),
           Face("review-candidate", "review-candidate", 1, 6, models=(MODEL, DISCOVERY_MODEL)))),
