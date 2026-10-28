@@ -1,5 +1,13 @@
 import { mount, RouterLinkStub } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@vueuse/core', async (original) => {
+  const { ref } = await import('vue')
+  return {
+    ...(await original<typeof import('@vueuse/core')>()),
+    useElementSize: () => ({ width: ref(1104), height: ref(0) }),
+  }
+})
 
 import PersonDiscoveryPanel from '@/components/custom/PersonDiscoveryPanel.vue'
 import type { PersonDiscoveryFace } from '@/viewmodels/person-detail.types'
@@ -428,4 +436,40 @@ it('keeps legacy face text removable without restoring a face search field', asy
   await wrapper.get('[aria-label="Remove face text"]').trigger('click')
   expect(wrapper.emitted('update:faceSearchTerm')).toEqual([['']])
   expect(wrapper.emitted('update:searchTerm')).toBeUndefined()
+})
+
+it('bounds found faces to two rows, uses cached results first and keeps retry in the plus tile', async () => {
+  const records = Array.from({ length: 30 }, (_, i) => face(`paged-${i}`))
+  const wrapper = mount(PersonDiscoveryPanel, {
+    props: {
+      faces: records.slice(0, 14),
+      people: [],
+      currentName: 'Lina',
+      referenceFaceCount: 42,
+      faceCount: 30,
+      hasMoreFaces: true,
+    },
+    global: { stubs: { RouterLink: RouterLinkStub, PersonPortrait: true } },
+  })
+  expect(wrapper.findAll('[data-found-face-card]')).toHaveLength(13)
+  await wrapper.get('[aria-label="Select face paged-0 for assignment"]').trigger('click')
+  await wrapper.get('[data-found-faces-more]').trigger('click')
+  expect(wrapper.emitted('loadMoreFaces')).toHaveLength(1)
+  await wrapper.setProps({ loadingMoreFaces: true })
+  expect(wrapper.get('[data-found-faces-more]').attributes('disabled')).toBeDefined()
+  await wrapper.setProps({ loadingMoreFaces: false, moreFacesFailed: true })
+  expect(wrapper.get('[data-found-faces-more]').attributes('aria-label')).toBe('Retry')
+  await wrapper.get('[data-found-faces-more]').trigger('click')
+  expect(wrapper.emitted('loadMoreFaces')).toHaveLength(2)
+  await wrapper.setProps({ faces: records, hasMoreFaces: false, moreFacesFailed: false })
+  expect(wrapper.findAll('[data-found-face-card]')).toHaveLength(27)
+  expect(wrapper.get('[role="toolbar"]').text()).toContain('1 face selected')
+  await wrapper.get('[data-found-faces-more]').trigger('click')
+  expect(wrapper.findAll('[data-found-face-card]')).toHaveLength(30)
+  expect(wrapper.find('[data-found-faces-more]').exists()).toBe(false)
+  expect(wrapper.emitted('loadMoreFaces')).toHaveLength(2)
+  await wrapper.setProps({ faceModel: 'other' })
+  expect(wrapper.findAll('[data-found-face-card]')).toHaveLength(13)
+  expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+  wrapper.unmount()
 })

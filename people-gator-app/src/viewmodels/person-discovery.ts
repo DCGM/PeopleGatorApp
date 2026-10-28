@@ -16,6 +16,7 @@ import { useObjectUrlMap } from '@/composables/object-url'
 import { useEntitySearchQuery, useFaceSearchQuery } from '@/query/search'
 
 const DISCOVERY_LIMIT = 40
+const FACE_DISCOVERY_BATCH = 14
 const DISCOVERY_GC_TIME = 60 * 60_000
 
 function percentage(value: number) {
@@ -55,6 +56,7 @@ export function usePersonDiscovery(
   peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
   annotations: MaybeRefOrGetter<EntityAnnotation[]> = DISCOVERY_ANNOTATIONS,
   peopleReference?: MaybeRefOrGetter<DiscoveryReference>,
+  faceAssignment: MaybeRefOrGetter<'all' | 'assigned' | 'unassigned'> = 'all',
 ) {
   const signals = computed(() =>
     personDiscoverySignals(
@@ -87,7 +89,15 @@ export function usePersonDiscovery(
   })
   // Discovery searches all accessible data; shared browsing filters stay in the URL.
   const faceSearchQuery = useFaceSearchQuery(
-    computed(() => ({ ...signals.value, ...sortParams(toValue(faceSort)) })),
+    computed(() => ({
+      ...signals.value,
+      ...sortParams(toValue(faceSort)),
+      limit: FACE_DISCOVERY_BATCH,
+      return_total_count: true,
+      ...(toValue(faceAssignment) !== 'all' && {
+        'filter.is_assigned': toValue(faceAssignment) === 'assigned',
+      }),
+    })),
     canSearch,
   )
 
@@ -238,7 +248,11 @@ export function usePersonDiscovery(
       })
     },
     mergeStatus: mergeEntitiesMutation.status,
-    searchError: computed(() => faceSearchQuery.error.value ?? entitySearchQuery.error.value),
+    searchError: computed(
+      () =>
+        (faceSearchQuery.isFetchNextPageError?.value ? null : faceSearchQuery.error.value) ??
+        entitySearchQuery.error.value,
+    ),
     isLoadingFaces: computed(
       () =>
         canSearch.value && (faceSearchQuery.isPending.value || faceSearchQuery.isFetching.value),
@@ -253,6 +267,13 @@ export function usePersonDiscovery(
       void entitySearchQuery.refetch()
     },
     similarFaces,
+    hasMoreFaces: faceSearchQuery.hasNextPage,
+    loadingMoreFaces: faceSearchQuery.isFetchingNextPage,
+    moreFacesFailed: faceSearchQuery.isFetchNextPageError,
+    foundFaceCount: computed(
+      () => faceSearchQuery.data.value?.pages[0]?.totalCount ?? similarFaces.value.length,
+    ),
+    loadMoreFaces: () => faceSearchQuery.fetchNextPage(),
     similarPeople,
   }
 }

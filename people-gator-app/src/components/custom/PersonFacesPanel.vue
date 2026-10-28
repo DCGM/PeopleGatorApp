@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { BadgeCheck, Image, Minus, Plus, Unlink } from '@lucide/vue'
-import { useElementSize } from '@vueuse/core'
+import { BadgeCheck, Image, Unlink } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { Item } from '@/components/ui/item'
+import FaceGridAction from './FaceGridAction.vue'
+import { FACE_GRID_CLASSES, useFaceGrid } from '@/composables/face-grid'
 import PersonFaceCard from './PersonFaceCard.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
 import { useCanAnnotate } from '@/composables/can-annotate'
@@ -21,11 +21,8 @@ const props = defineProps<{
   thumbnailFaceId?: string | null
   thumbnailMode?: 'automatic' | 'manual'
 }>()
-const grid = ref<HTMLElement | null>(null)
-const { width } = useElementSize(grid)
+const { grid, columns: rowCapacity, style: faceGridStyle } = useFaceGrid()
 const expanded = ref(false)
-// This matches the grid's 140px minimum track plus its 12px gap.
-const rowCapacity = computed(() => Math.max(1, Math.floor((width.value + 12) / 152)))
 const canExpand = computed(() => props.hasMore || props.faces.length > rowCapacity.value * 2)
 const visibleFaces = computed(() =>
   props.collapsible && !expanded.value
@@ -134,8 +131,9 @@ watch(
 <template>
   <div
     ref="grid"
-    class="col-span-full grid grid-cols-[repeat(auto-fill,minmax(min(100%,140px),1fr))] gap-3"
-    :class="selected.length > 0 && 'pb-40 sm:pb-24'"
+    class="col-span-full"
+    :class="[FACE_GRID_CLASSES, selected.length > 0 && 'pb-40 sm:pb-24']"
+    :style="faceGridStyle"
   >
     <p
       v-if="feedback && !selected.length"
@@ -157,29 +155,16 @@ watch(
       @toggle="select(face.id, $event)"
       @add="select(face.id, $event, true)"
     />
-    <Item
+    <FaceGridAction
       v-if="collapsible && canExpand"
-      as="button"
-      type="button"
-      variant="outline"
-      class="min-w-0 cursor-pointer justify-center gap-2 rounded-none border-dashed border-border/40 bg-transparent p-4 text-center text-muted-foreground shadow-none transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground disabled:cursor-default disabled:opacity-50"
-      :class="expanded ? 'col-span-full flex-row' : 'h-full min-h-40 flex-col'"
       data-face-overview-toggle
-      :aria-label="expanded ? 'Show less' : 'Show all faces'"
-      :aria-description="`${matchingCount ?? faces.length} matching faces`"
-      :aria-expanded="expanded"
+      :label="expanded ? 'Show less' : 'Show all faces'"
+      :description="`${matchingCount ?? faces.length} matching faces`"
+      :expanded="expanded"
+      :full-width="expanded"
       :disabled="busy"
-      @click="toggleExpansion"
-    >
-      <component
-        :is="expanded ? Minus : Plus"
-        :class="expanded ? 'size-4' : 'size-10 text-muted-foreground/60'"
-        :stroke-width="1.25"
-        aria-hidden="true"
-      />
-      <span class="font-light">{{ expanded ? 'Show less' : 'Show all faces' }}</span>
-      <small>{{ matchingCount ?? faces.length }} matching faces</small>
-    </Item>
+      @activate="toggleExpansion"
+    />
     <div v-if="expanded && hasMore" class="col-span-full flex flex-wrap gap-2">
       <slot name="pagination" />
     </div>

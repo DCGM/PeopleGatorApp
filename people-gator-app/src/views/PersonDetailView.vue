@@ -232,6 +232,11 @@ const {
   mergePeople,
   mergeStatus,
   similarFaces,
+  hasMoreFaces: hasMoreFoundFaces,
+  loadingMoreFaces: loadingMoreFoundFaces,
+  moreFacesFailed,
+  foundFaceCount,
+  loadMoreFaces: loadMoreFoundFaces,
   similarPeople,
 } = usePersonDiscovery(
   personId,
@@ -246,6 +251,12 @@ const {
     text: debouncedPersonSearchTerm.value,
     annotations: peopleDiscoveryAnnotations.value,
   })),
+  computed(() =>
+    route.query.discovery_assignment === 'assigned' ||
+    route.query.discovery_assignment === 'unassigned'
+      ? route.query.discovery_assignment
+      : 'all',
+  ),
 )
 
 function selectTab(tab: string | number) {
@@ -385,6 +396,11 @@ function retrySearch() {
             :face-sort-options="FACE_SORTS"
             :people-sort-options="PEOPLE_SORTS"
             :faces="similarFaces"
+            :face-count="foundFaceCount"
+            :has-more-faces="hasMoreFoundFaces"
+            :loading-more-faces="loadingMoreFoundFaces"
+            :more-faces-failed="moreFacesFailed"
+            @load-more-faces="loadMoreFoundFaces"
             :people="similarPeople"
             :current-name="profile.name"
             :reference-face-count="entity?.entity_link_stats?.faces?.total ?? faceCount"
