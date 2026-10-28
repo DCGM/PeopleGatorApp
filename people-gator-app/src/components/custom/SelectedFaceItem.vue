@@ -175,23 +175,19 @@ watch(() => props.face.id, cancelCreating)
       </p>
     </ItemContent>
 
-    <div v-if="face.personId && !isCreating" class="w-full">
-      <IdentityFacePreview :key="face.personId" :person-id="face.personId" :name="face.name" />
-    </div>
-    <ItemFooter class="w-full shrink-0 items-center border-t pt-2 text-muted-foreground">
+    <ItemFooter class="w-full shrink-0 flex-wrap items-center justify-start gap-2 border-t pt-2">
       <a
         v-if="!isCreating && face.wikidataId"
         :href="wikidataHref(face.wikidataId)"
         target="_blank"
         rel="noopener noreferrer"
-        class="flex min-w-0 flex-1 items-center gap-1 text-xs underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
+        class="flex min-w-0 basis-full items-center gap-1 text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
       >
         <span class="truncate">Wikidata</span>
         <ExternalLink class="size-3 shrink-0" aria-hidden="true" />
       </a>
-      <span v-else class="min-w-0 flex-1" aria-hidden="true"></span>
 
-      <div v-if="isCreating" class="flex shrink-0 items-center gap-1 w-max">
+      <div v-if="isCreating" class="flex min-w-0 flex-wrap items-center gap-1">
         <Button
           type="submit"
           size="xs"
@@ -217,7 +213,14 @@ watch(() => props.face.id, cancelCreating)
         </Button>
       </div>
 
-      <div v-else class="flex shrink-0 items-center gap-1 w-max">
+      <div v-else class="flex min-w-0 w-full flex-wrap items-center gap-1">
+        <IdentityFacePreview
+          v-if="face.personId"
+          :key="face.personId"
+          :person-id="face.personId"
+          :name="face.name"
+        />
+        <slot name="actions" />
         <Button
           v-if="face.personId"
           type="button"
@@ -247,30 +250,28 @@ watch(() => props.face.id, cancelCreating)
         </Button>
         <Button
           type="button"
-          size="xs"
+          :size="face.personId ? 'icon-xs' : 'xs'"
           variant="outline"
-          class="text-accent hover:text-accent"
           :disabled="props.assignmentPending"
           aria-label="Create and assign a new profile"
           title="Create and assign a new profile"
           @click="startCreating"
         >
           <UserPlus aria-hidden="true" />
-          New
+          <span :class="face.personId && 'sr-only'">New</span>
         </Button>
         <Button
           v-if="face.personId"
           type="button"
-          size="xs"
+          size="icon-xs"
           variant="outline"
-          class="text-destructive hover:text-destructive"
           :disabled="props.assignmentPending"
           aria-label="Unassign current profile"
           title="Unassign current profile"
           @click="emit('unassign')"
         >
           <Unlink aria-hidden="true" />
-          Unlink
+          <span class="sr-only">Unlink</span>
         </Button>
       </div>
     </ItemFooter>

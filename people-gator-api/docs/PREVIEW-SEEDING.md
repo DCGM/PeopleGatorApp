@@ -868,3 +868,10 @@ unchanged. Stable keys and checkpoints preserve earlier examples, review edits,
 assignments and processing timestamps. Integration coverage traverses six-item cursor batches,
 checks exact membership and cross-library sources, reads every aligned crop,
 checks Nora's empty gallery and preserves a reviewed assignment on rerun.
+
+
+The `identity-reference-actions` link opens the same assigned manual face for
+checking the card's compact footer: **View faces**, **Verify** and **Reassign**
+share one action row, followed by named icon buttons for **New** and **Unlink**.
+Controls wrap together on narrower panels. Verification errors appear inside the
+card below the actions; verified attribution stays available on the state badge.

@@ -21,3 +21,17 @@ light/dark rendering and viewport width. Gallery requests used only the exact
 identity with six-item batches; inherited library/link-state filters were absent.
 No mutation requests occurred; the scan URL, selection and pan/zoom transform
 remained unchanged through reference browsing.
+
+## Assigned-person footer follow-up
+
+The `*-actions.png` captures show all five controls aligned in the card footer
+at the desktop/mobile sizes above. `*-create.png`, `*-verification-error.png`
+and `*-verified.png` show creation/cancel, a failed verification inside the card,
+and the already-verified state. The error capture uses an intercepted synthetic
+503 response; no verification change is persisted.
+
+Additional browser checks confirm a shared baseline and standard 24px button
+heights, natural wrapping without overflow at 320px, accessible names for the
+New/Unlink icon buttons, creation/cancel behavior, reassignment search focus,
+error placement below the actions and verification details on the state badge.
+All gallery captures were refreshed after this layout change.

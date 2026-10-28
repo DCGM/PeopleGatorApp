@@ -3348,6 +3348,10 @@ async def test_archive_links_use_each_evidence_page_and_containing_document(seed
 async def test_identity_reference_gallery_pages_cross_library_crops_and_preserves_review(seed_target):
     database, filesystem, _ = seed_target
     seed = await preview.seed_preview(database, filesystem)
+    assert seed.filter_examples['identity-reference-actions'] == seed.filter_examples['identity-reference-faces']
+    action_query = parse_qs(urlsplit(seed.filter_examples['identity-reference-actions']).query)
+    assert action_query['person'] == [str(seed.faces['reference-ada-manual'])]
+    assert (await database.faces.get(seed.faces['reference-ada-manual'])).entity_link_state == 'manual'
     ada = seed.entities['ada']
     expected = {
         seed.faces[face.key]
