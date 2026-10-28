@@ -3416,3 +3416,36 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
         source = await db.sources.get_page(face.source_id)
         crop = await get_aligned_face_crop(actor.user_id, face, source, max_width=128)
         assert crop.content
+
+
+@pytest.mark.asyncio
+async def test_found_faces_assignment_pages_cover_the_complete_seed_candidates(seed_target):
+    from people_gator_api.seeding.fixtures import DISCOVERY_MODEL
+    from people_gator_api.schemas.search import EntitySearchQuery
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    person = seed.entities['review']
+    query = EntitySearchQuery(entity_id=person, entity_annotations=['faces'], face_embedding_model=DISCOVERY_MODEL)
+    whole = await db.faces.search(SearchFacesRequest(limit=100, query=query, return_total_count=True))
+    assert whole.total_count > 14
+    assert all(face.entity_id != person for face in whole.items)
+    partitions = []
+    for assigned in (True, False):
+        cursor, records, totals = None, [], set()
+        while True:
+            batch = await db.faces.search(SearchFacesRequest(limit=1 if not assigned else 3,
+                query=query, filter_=FaceListFilter(is_assigned=assigned), cursor=cursor, return_total_count=True))
+            records.extend(batch.items)
+            totals.add(batch.total_count)
+            cursor = batch.cursor
+            if cursor is None:
+                break
+        assert len(totals) == 1 and totals.pop() == len(records)
+        assert len({face.detection_id for face in records}) == len(records)
+        assert all((face.entity_id is not None) is assigned for face in records)
+        partitions.append({face.detection_id for face in records})
+    assert not (partitions[0] & partitions[1])
+    assert partitions[0] | partitions[1] == {face.detection_id for face in whole.items}
+    assert seed.faces['review-unassigned'] in partitions[1]
+    assert seed.faces['review-candidate'] in partitions[0]
+    assert 'person-review-found-faces' in seed.filter_examples

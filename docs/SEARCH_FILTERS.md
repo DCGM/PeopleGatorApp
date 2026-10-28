@@ -65,17 +65,22 @@ share the same fingerprint. Stored-input edits can change subsequent rankings.
 Entity references require PostgreSQL; Weaviate returns 501 unsupported_operation
 instead of silently ignoring them. Other explicit Weaviate behavior is unchanged.
 
-Discover uses this compact contract for both result lists. **Reference inputs**
-selects sources; **Face model** chooses a registered embedding model (listing
-models requires browse scope; registration remains admin-only). Optional search
-text adds another signal. Choices are shareable through `discovery_annotations`,
-`discovery_model` and `discovery_text`; changes restart pagination. Selected source
-tags remain available with mobile controls collapsed. Nondefault Face model
-choices have a removable tag; Clear filters resets reference inputs and the
-model override together while preserving search text and evidence settings.
-Assignment and merge failures retain selections and direct recovery through
-their corresponding action; Retry only repeats searches and model loading. Empty/error states allow
-changing inputs and retrying without resetting evidence filters or assignments.
+Found faces and Similar people use this compact contract with independent
+**Modalities** and **Face model** selectors. Faces uses `discovery_annotations`
+and `discovery_model`; people uses `people_annotations`, `people_model` and
+`people_text`. Legacy `discovery_text` remains a removable face filter tag.
+Changing a section's settings restarts its pagination without changing the other
+section or shared evidence filters. Active tags remain accessible when mobile
+controls are collapsed; Clear filters preserves the people search text.
+
+Found faces initially occupies two rows with the same card dimensions as linked
+faces. Its final plus tile reveals two more rows, fetching another 14-record
+cursor page only when needed. Assignment is evaluated by the repository before
+pagination: face lists/searches accept `filter.is_assigned=true` for assigned
+records, `false` for unassigned records, or omission for both. Counts cover the
+complete filtered search result set. Failed loads retain existing cards and
+selection; Retry appears on the same tile. Assignment and merge failures retain
+their selections and use the corresponding action for recovery.
 
 Reference vectors are already stored; this search does not require an inference
 service. Large reference sets use bounded representative/candidate retrieval as
