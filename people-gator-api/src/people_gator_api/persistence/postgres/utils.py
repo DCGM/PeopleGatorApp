@@ -789,6 +789,9 @@ def face_filters(
     filters: list[ColumnElement[bool]] = []
     filters.extend(annotation_conditions(Face, filter_values))
     filters.extend(touch_conditions(Face, filter_values))
+    assigned = missing_to_none(filter_values.is_assigned)
+    if assigned is not None:
+        filters.append(Face.entity_id.is_not(None) if assigned else Face.entity_id.is_(None))
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Face.entity_id.in_(entity_ids))

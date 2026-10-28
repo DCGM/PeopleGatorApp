@@ -3014,6 +3014,12 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          */
         'query.score_fusion'?: ScoreFusion;
         /**
+         * Filter.Is Assigned
+         *
+         * Include only assigned faces when true, or only unassigned faces when false.
+         */
+        'filter.is_assigned'?: boolean | null;
+        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -3927,6 +3933,12 @@ export type ListFacesRouteApiV1FacesGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter.Is Assigned
+         *
+         * Include only assigned faces when true, or only unassigned faces when false.
+         */
+        'filter.is_assigned'?: boolean | null;
         /**
          * Filter.Entity Id
          *
