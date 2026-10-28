@@ -2326,7 +2326,7 @@ export type TextMentionCreateRequest = {
 /**
  * TextMentionGroup
  *
- * Every matching mention with exactly the same recorded text.
+ * A complete filtered group identified by recorded text or source identity.
  */
 export type TextMentionGroup = {
     /**
