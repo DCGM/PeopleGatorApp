@@ -160,7 +160,7 @@ it('clears discovery source/model overrides together while keeping search and ev
   await flushPromises()
   expect(router.currentRoute.value.query).toEqual({
     tab: 'discover',
-    discovery_text: 'extra',
+    people_text: 'extra',
     link_state: 'automatic',
     discovery_assignment: 'unassigned',
     people_annotations: ['faces'],

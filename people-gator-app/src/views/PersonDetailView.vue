@@ -116,7 +116,11 @@ const activeTab = computed(() => {
   return 'faces'
 })
 const personSearchTerm = ref(
-  typeof route.query.discovery_text === 'string' ? route.query.discovery_text : '',
+  typeof route.query.people_text === 'string'
+    ? route.query.people_text
+    : typeof route.query.discovery_text === 'string'
+      ? route.query.discovery_text
+      : '',
 )
 const debouncedPersonSearchTerm = useDebounce(personSearchTerm, 300)
 const faceModels = useFaceModels(computed(() => activeTab.value === 'faces'))
@@ -192,16 +196,30 @@ const peopleDiscoveryAnnotations = computed<EntityAnnotation[]>({
     }),
 })
 
+// Legacy face text remains a removable tag, without restoring a search field.
+const legacyFaceText = computed({
+  get: () => (typeof route.query.discovery_text === 'string' ? route.query.discovery_text : ''),
+  set: (value: string) =>
+    void router.replace({
+      query: {
+        ...route.query,
+        people_text: personSearchTerm.value || undefined,
+        discovery_text: value || undefined,
+      },
+    }),
+})
 watch(
-  () => route.query.discovery_text,
-  (text) => {
-    personSearchTerm.value = typeof text === 'string' ? text : ''
+  () => [route.query.people_text, route.query.discovery_text],
+  ([peopleText, legacyText]) => {
+    personSearchTerm.value =
+      typeof peopleText === 'string' ? peopleText : typeof legacyText === 'string' ? legacyText : ''
   },
 )
-
 watch(personSearchTerm, (text) => {
   if (activeTab.value === 'faces')
-    void router.replace({ query: { ...route.query, discovery_text: text || undefined } })
+    void router.replace({
+      query: { ...route.query, people_text: text || (legacyFaceText.value ? '' : undefined) },
+    })
 })
 
 const {
@@ -218,7 +236,7 @@ const {
 } = usePersonDiscovery(
   personId,
   discoveryModel,
-  '',
+  legacyFaceText,
   computed(() => activeTab.value === 'faces'),
   similarFaceSort,
   similarPeopleSort,
@@ -246,6 +264,8 @@ function clearDiscoveryFilters() {
       ...route.query,
       people_model: peopleDiscoveryModel.value || undefined,
       people_annotations: serializeAnnotations(peopleDiscoveryAnnotations.value),
+      people_text: personSearchTerm.value || undefined,
+      discovery_text: undefined,
       discovery_model: undefined,
       discovery_annotations: undefined,
     },
@@ -353,6 +373,7 @@ function retrySearch() {
           </div>
           <PersonDiscoveryPanel
             v-model:search-term="personSearchTerm"
+            v-model:face-search-term="legacyFaceText"
             v-model:annotations="discoveryAnnotations"
             v-model:people-annotations="peopleDiscoveryAnnotations"
             v-model:people-face-model="peopleDiscoveryModel"

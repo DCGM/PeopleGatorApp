@@ -149,6 +149,7 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     'query.entity_id': 'current',
     'query.entity_annotations': ['faces'],
     'query.face_embedding_model': 'chosen',
+    'query.text': ['extra'],
     limit: 40,
     cursor: null,
   }
@@ -227,7 +228,7 @@ it('discovers globally while preserving local state, explicit criteria, cache is
   expect(api.faces.mock.lastCall?.[0].query).toMatchObject({
     'query.face_embedding_model': 'faces-only',
   })
-  expect(api.faces.mock.lastCall?.[0].query).not.toHaveProperty('query.text')
+  expect(api.faces.mock.lastCall?.[0].query).toHaveProperty('query.text', ['extra'])
   expect(api.people.mock.lastCall?.[0].query).toMatchObject({
     'query.face_embedding_model': 'people-only',
   })
