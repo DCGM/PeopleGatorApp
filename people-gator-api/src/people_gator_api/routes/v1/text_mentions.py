@@ -71,7 +71,7 @@ async def list_text_mention_groups_route(
     sort: TextMentionGroupSortDependency = DEFAULT_SORT,
     group_by: Literal["mention", "document", "page"] = "mention",
 ) -> TextMentionGroupListResponse:
-    """Group the complete filtered mention set by exact recorded text."""
+    """Group the complete filtered mention set by text, document or page."""
     del user
     try:
         return await database.text_mentions.list_groups(

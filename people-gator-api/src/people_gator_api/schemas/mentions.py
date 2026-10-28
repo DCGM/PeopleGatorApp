@@ -101,7 +101,7 @@ class TextMentionListResponse(GenericListResponse[TextMentionResponse]):
 
 
 class TextMentionGroup(BaseModel):
-    """Every matching mention with exactly the same recorded text."""
+    """A complete filtered group identified by recorded text or source identity."""
 
     name: str = Field(description="Exact recorded text, or source display label for source groups.")
     source_id: uuid.UUID | None = None
@@ -116,9 +116,9 @@ class TextMentionGroup(BaseModel):
 
 
 class TextMentionGroupListRequest(GenericListRequest, SortableRequest[TextMentionGroupSortField]):
-    """Group the complete filtered mention set by exact recorded text.
+    """Group the complete filtered mention set by text, document or page.
 
-    The default order is text ascending. Exact text is the canonical tie-breaker.
+    The default order is text ascending. Exact text or source UUID breaks ties.
     """
 
     group_by: Literal["mention", "document", "page"] = "mention"
