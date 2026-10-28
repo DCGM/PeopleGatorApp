@@ -10,7 +10,8 @@ Checks executed against the seeded API:
 - Actual collapsed grid: 13 faces and an action card in two desktop rows, three
   faces and an action card in two mobile rows;
   expansion shows all 42, collapse restores two rows, and resizing to 700px
-  recalculates two rows.
+  recalculates two rows. The action tile has a transparent background, a subtle
+  dashed outline, a thin plus icon and muted text in light and dark themes.
 - Identity remains below the 52px sticky navigation deep in Faces. No horizontal overflow
   across captured states. Section tabs fit on one mobile row.
 - Keyboard Enter expands mobile filters; Space selects a mention independently
