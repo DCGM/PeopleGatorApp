@@ -112,7 +112,9 @@ describe('PersonDetailView', () => {
       return typeof target !== 'string' && target?.name === 'document-page'
     })
 
-    expect(wrapper.get('[aria-label="Person identity"]').classes()).toEqual(expect.arrayContaining(['sticky', 'top-13']))
+    expect(wrapper.get('[aria-label="Person identity"]').classes()).toEqual(
+      expect.arrayContaining(['sticky', 'top-13']),
+    )
     expect(wrapper.find('aside[aria-label="Person statistics"]').exists()).toBe(false)
     expect(wrapper.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
       'Faces 0',
@@ -161,6 +163,8 @@ it('clears discovery source/model overrides together while keeping search and ev
     discovery_text: 'extra',
     link_state: 'automatic',
     discovery_assignment: 'unassigned',
+    people_annotations: ['faces'],
+    people_model: 'alternate',
   })
   expect(wrapper.getComponent(PersonDiscoveryPanel).props('annotations')).toEqual([
     'faces',

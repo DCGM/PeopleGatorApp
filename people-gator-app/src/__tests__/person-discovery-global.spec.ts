@@ -149,7 +149,6 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     'query.entity_id': 'current',
     'query.entity_annotations': ['faces'],
     'query.face_embedding_model': 'chosen',
-    'query.text': ['extra'],
     limit: 40,
     cursor: null,
   }
@@ -160,6 +159,7 @@ it('discovers globally while preserving local state, explicit criteria, cache is
   })
   expect(api.people.mock.lastCall?.[0].query).toEqual({
     ...signals,
+    'query.text': ['extra'],
     'filter.entity_type': ['person'],
     sort: 'name',
     sort_direction: 'desc',
@@ -210,6 +210,32 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     cursor: null,
   })
   expect(keys()).toHaveLength(originalKeys.length + 2)
+  // The two visible selector rows now control independent searches.
+  const faceRequests = api.faces.mock.calls.length
+  panel().vm.$emit('update:peopleFaceModel', 'people-only')
+  await flushPromises()
+  panel().vm.$emit('update:peopleAnnotations', ['name'])
+  await flushPromises()
+  expect(api.faces.mock.calls).toHaveLength(faceRequests)
+  expect(api.people.mock.lastCall?.[0].query).toMatchObject({
+    'query.face_embedding_model': 'people-only',
+    'query.entity_annotations': ['name'],
+    'query.text': ['extra'],
+  })
+  panel().vm.$emit('update:faceModel', 'faces-only')
+  await flushPromises()
+  expect(api.faces.mock.lastCall?.[0].query).toMatchObject({
+    'query.face_embedding_model': 'faces-only',
+  })
+  expect(api.faces.mock.lastCall?.[0].query).not.toHaveProperty('query.text')
+  expect(api.people.mock.lastCall?.[0].query).toMatchObject({
+    'query.face_embedding_model': 'people-only',
+  })
+  expect(router.currentRoute.value.query).toMatchObject({
+    people_model: 'people-only',
+    people_annotations: ['name'],
+    discovery_model: 'faces-only',
+  })
   wrapper.unmount()
   client.clear()
 })
