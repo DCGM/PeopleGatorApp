@@ -872,5 +872,6 @@ assignments and timestamps when the seed runs again.
 
 The twelve `review-overflow-*` pages add 24 portraits to existing previews without
 replacing earlier pages or annotations. At 1440px, Lina's collapsed overview shows
-14 of 42 faces in two rows; expansion shows all six rows. At 390px it shows four
-faces until expanded. Existing review edits and interrupted upgrades survive reruns.
+13 of 42 faces plus the **Show all faces** card in two rows; expansion shows all
+42 faces. At 390px it shows three faces and the same action card. The last card
+contains the matching-face count; `person-review-overflow-card` opens this scenario. Existing review edits and interrupted upgrades survive reruns.
