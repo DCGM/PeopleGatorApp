@@ -355,3 +355,9 @@ scope, mixed selects all, and checked clears it. Individual checkboxes update
 the parent state. New cursor pages inherit a selected group's state. Group review
 resolves all cursor pages before writing and excludes explicitly deselected
 children; individual selections can be reviewed alongside complete groups.
+
+Mention checkbox selection also supports additive Shift-click ranges in current
+display order, forward or backward. Individual ranges include loaded occurrences
+across expanded groups; compact group ranges include each group's full filtered
+scope. Clear or a scope/sort change resets the anchor. Shift-clicking with no
+anchor behaves like an ordinary checkbox click.

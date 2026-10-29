@@ -3353,6 +3353,7 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
     assert seed.filter_examples['person-review-overflow-card'] == f'/people/{person}'
+    assert seed.filter_examples['person-review-shift-selection'] == f'/people/{person}?tab=mentions&mention_view=page'
     assert seed.filter_examples['person-review-compact'] == f'/people/{person}?tab=mentions&mention_view=groups&mention_density=compact'
     faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person])))
     assert len(faces.items) == 42
@@ -3363,6 +3364,8 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
             limit=20, group_by=mode, filter_=scope))
         assert len(groups.items) == expected
         assert sum(group.occurrence_count for group in groups.items) == 27
+        if mode == 'page':
+            assert all(g.occurrence_count == 3 for g in groups.items)
         if mode == 'document':
             assert [g.name for g in groups.items].count('Review ledger') == 2
             assert len({g.source_id for g in groups.items}) == 3
