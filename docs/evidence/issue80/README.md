@@ -52,3 +52,9 @@ shows a minus; changing density retains that state. Compact URL reload, orange
 underlined spans in serif context, library labels, metadata hover/keyboard and no
 horizontal overflow passed at both viewport sizes. `mentions-compact-*` records
 the new global collapsed state; group/flat/document/page/dark/info pairs are refreshed.
+
+Expanded mention groups retain separators between occurrences, but omit the
+last child border and the load-more wrapper divider so only the outer group
+separator marks the bottom. The Flat view also uses separators only between items.
+Browser computed-border checks passed for Mention, Document and Page on
+desktop and mobile.

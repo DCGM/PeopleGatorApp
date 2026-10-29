@@ -33,7 +33,7 @@ const mentions = useMentionViews(records)
 </script>
 
 <template>
-  <div class="divide-y">
+  <div>
     <PersonMentionReviewList
       :mentions="mentions"
       :person-id="personId"
