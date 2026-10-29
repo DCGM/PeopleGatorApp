@@ -101,7 +101,7 @@ watch(
     <div
       v-for="mention in mentions"
       :key="mention.id"
-      class="flex min-w-0 items-start gap-3 border-b py-2"
+      class="flex min-w-0 items-start gap-3 border-b py-2 last:border-b-0"
     >
       <Checkbox
         v-if="allowed"
