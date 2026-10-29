@@ -18,21 +18,37 @@ const props = defineProps<{
   selection?: { all: boolean; ids: string[] }
   disabled?: boolean
 }>()
-const emit = defineEmits<{ selectMention: [id: string, value: boolean] }>()
+const emit = defineEmits<{ selectMention: [id: string, value: boolean, shift: boolean] }>()
 const selected = ref(new Set<string>())
+const anchor = ref<string | null>(null)
+const shiftSelecting = ref(false)
+function clear() {
+  selected.value = new Set()
+  anchor.value = null
+}
 const allowed = useCanAnnotate()
 const mutation = useReviewMentionsMutation()
 const route = useRoute()
 const feedback = ref('')
 const selectedMentions = computed(() => props.mentions.filter((m) => selected.value.has(m.id)))
 function toggle(id: string, value: boolean | 'indeterminate') {
+  const shift = shiftSelecting.value
+  shiftSelecting.value = false
   if (props.selection) {
-    emit('selectMention', id, value === true)
+    emit('selectMention', id, value === true, shift)
     return
   }
   const next = new Set(selected.value)
-  if (value === true) next.add(id)
-  else next.delete(id)
+  const start = props.mentions.findIndex((mention) => mention.id === anchor.value)
+  const end = props.mentions.findIndex((mention) => mention.id === id)
+  if (shift && start >= 0 && end >= 0) {
+    for (const mention of props.mentions.slice(Math.min(start, end), Math.max(start, end) + 1))
+      next.add(mention.id)
+  } else {
+    if (value === true) next.add(id)
+    else next.delete(id)
+    anchor.value = id
+  }
   selected.value = next
   feedback.value = ''
 }
@@ -44,7 +60,7 @@ async function review(action: 'verify' | 'unlink') {
   try {
     const count = await mutation.mutateAsync({ targets: { ids }, action })
     feedback.value = `${count} mentions ${action === 'verify' ? 'verified' : 'unlinked'}.`
-    selected.value = new Set()
+    clear()
   } catch (error) {
     feedback.value = error instanceof Error ? error.message : 'Update failed.'
   }
@@ -56,7 +72,7 @@ watch(
       Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'mention_density')),
     ]),
   () => {
-    selected.value = new Set()
+    clear()
     feedback.value = ''
   },
 )
@@ -64,6 +80,7 @@ watch(
   () => props.mentions,
   (mentions) => {
     const available = new Set(mentions.map((m) => m.id))
+    if (anchor.value && !available.has(anchor.value)) anchor.value = null
     selected.value = new Set([...selected.value].filter((id) => available.has(id)))
   },
 )
@@ -77,7 +94,7 @@ watch(
       singular="mention"
       plural="mentions"
       label="Selected mention actions"
-      @clear="selected = new Set()"
+      @clear="clear"
     >
       <template #description>
         <p v-if="feedback" :role="mutation.isError.value ? 'alert' : 'status'">{{ feedback }}</p>
@@ -117,6 +134,7 @@ watch(
             : selected.has(mention.id)
         "
         :disabled="disabled || mutation.isPending.value"
+        @click.capture="shiftSelecting = $event.shiftKey"
         @update:model-value="toggle(mention.id, $event)"
       />
       <PersonMentionEntry

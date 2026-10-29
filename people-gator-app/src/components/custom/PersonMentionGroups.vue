@@ -50,6 +50,15 @@ const mutation = useReviewMentionsMutation()
 const route = useRoute()
 type Selection = { all: boolean; ids: string[] }
 const selected = ref<Record<string, Selection>>({})
+const groupAnchor = ref<string | null>(null)
+const mentionAnchor = ref<string | null>(null)
+const shiftSelecting = ref(false)
+const loadedMentions = ref<Record<string, string[]>>({})
+function clear() {
+  selected.value = {}
+  groupAnchor.value = null
+  mentionAnchor.value = null
+}
 const emptySelection: Selection = { all: false, ids: [] }
 const selection = (group: TextMentionGroup) => selected.value[key(group)] ?? emptySelection
 const selectionCount = (group: TextMentionGroup) => {
@@ -77,10 +86,37 @@ function scope(group: TextMentionGroup): TextMentionListParams {
   }
 }
 function select(group: TextMentionGroup, value: boolean | 'indeterminate') {
-  selected.value = { ...selected.value, [key(group)]: { all: value === true, ids: [] } }
+  const start = groups.value.findIndex((item) => key(item) === groupAnchor.value)
+  const end = groups.value.findIndex((item) => key(item) === key(group))
+  const range = shiftSelecting.value && start >= 0 && end >= 0
+  const targets = range
+    ? groups.value.slice(Math.min(start, end), Math.max(start, end) + 1)
+    : [group]
+  selected.value = {
+    ...selected.value,
+    ...Object.fromEntries(
+      targets.map((item) => [key(item), { all: range || value === true, ids: [] }]),
+    ),
+  }
+  if (!range) groupAnchor.value = key(group)
+  shiftSelecting.value = false
   feedback.value = ''
 }
-function selectMention(group: TextMentionGroup, id: string, value: boolean) {
+function selectMention(group: TextMentionGroup, id: string, value: boolean, shift = false) {
+  const ordered = groups.value.flatMap((item) =>
+    (loadedMentions.value[key(item)] ?? []).map((id) => ({ id, group: item })),
+  )
+  const start = ordered.findIndex((item) => item.id === mentionAnchor.value)
+  const end = ordered.findIndex((item) => item.id === id)
+  if (shift && start >= 0 && end >= 0) {
+    for (const item of ordered.slice(Math.min(start, end), Math.max(start, end) + 1))
+      setMention(item.group, item.id, true)
+  } else {
+    setMention(group, id, value)
+    mentionAnchor.value = id
+  }
+}
+function setMention(group: TextMentionGroup, id: string, value: boolean) {
   const state = selection(group)
   const ids = new Set(state.ids)
   if (value !== state.all) ids.add(id)
@@ -102,7 +138,7 @@ async function review(action: 'verify' | 'unlink') {
       action,
     })
     feedback.value = `${count} mentions ${action === 'verify' ? 'verified' : 'unlinked'}.`
-    selected.value = {}
+    clear()
   } catch (error) {
     feedback.value = error instanceof Error ? error.message : 'Update failed.'
   }
@@ -119,13 +155,22 @@ watch(
       props.occurrenceSort,
     ]),
   () => {
-    selected.value = {}
+    clear()
     feedback.value = ''
   },
 )
 // Retain selection while new group pages arrive, but discard removed groups.
 watch(groups, (items) => {
   const names = new Set(items.map(key))
+  loadedMentions.value = Object.fromEntries(
+    Object.entries(loadedMentions.value).filter(([name]) => names.has(name)),
+  )
+  if (groupAnchor.value && !names.has(groupAnchor.value)) groupAnchor.value = null
+  if (
+    mentionAnchor.value &&
+    !Object.values(loadedMentions.value).flat().includes(mentionAnchor.value)
+  )
+    mentionAnchor.value = null
   selected.value = Object.fromEntries(
     Object.entries(selected.value).filter(([name]) => names.has(name)),
   )
@@ -141,7 +186,7 @@ watch(groups, (items) => {
       singular="mention"
       plural="mentions"
       label="Selected group actions"
-      @clear="selected = {}"
+      @clear="clear"
     >
       <template #description>
         <span>Filtered scope</span>
@@ -175,6 +220,7 @@ watch(groups, (items) => {
             :aria-label="`Select group ${group.name}`"
             :model-value="checked(group)"
             :disabled="mutation.isPending.value"
+            @click.capture="shiftSelecting = $event.shiftKey"
             @update:model-value="select(group, $event)"
             ><Minus v-if="checked(group) === 'indeterminate'" class="size-3.5" /><Check
               v-else
@@ -204,7 +250,8 @@ watch(groups, (items) => {
             :compact="compact"
             :selection="selection(group)"
             :disabled="mutation.isPending.value"
-            @select-mention="(id, value) => selectMention(group, id, value)"
+            @loaded="loadedMentions[key(group)] = $event"
+            @select-mention="(id, value, shift) => selectMention(group, id, value, shift)"
             :filters="scope(group)"
             :sort="occurrenceSort"
             :person-id="personId"

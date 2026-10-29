@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import type { EntityLinkState, TextMentionSortField } from '@/client'
 import { Button } from '@/components/ui/button'
 import PersonMentionReviewList from './PersonMentionReviewList.vue'
@@ -18,7 +18,10 @@ const props = defineProps<{
   personId: string
   linkStates: EntityLinkState[]
 }>()
-const emit = defineEmits<{ selectMention: [id: string, value: boolean] }>()
+const emit = defineEmits<{
+  selectMention: [id: string, value: boolean, shift: boolean]
+  loaded: [ids: string[]]
+}>()
 const query = useTextMentionListQuery(
   computed(() => ({
     ...props.filters,
@@ -30,6 +33,11 @@ const query = useTextMentionListQuery(
 )
 const records = computed(() => (query.data.value?.pages ?? []).flatMap((page) => page.items))
 const mentions = useMentionViews(records)
+watch(
+  () => records.value.map((record) => record.mention_id),
+  (ids) => emit('loaded', ids),
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -41,7 +49,7 @@ const mentions = useMentionViews(records)
       :compact="compact"
       :selection="selection"
       :disabled="disabled"
-      @select-mention="(id, value) => emit('selectMention', id, value)"
+      @select-mention="(id, value, shift) => emit('selectMention', id, value, shift)"
     />
     <PersonMentionItemSkeleton v-if="query.isPending.value" />
     <p v-if="query.error.value" role="alert" class="py-3 text-sm">
