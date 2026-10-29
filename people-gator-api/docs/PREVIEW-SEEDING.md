@@ -926,3 +926,16 @@ selections remain selected. Clear, person/filter/grouping and sorting changes
 reset the anchor; a Shift-click without an anchor selects just that item. The
 same behavior works in Flat and Mention views, and updates tri-state parents
 and the shared action bar. This scenario reuses stable records and local media.
+
+### Mention loading layouts (#80)
+
+Open `person-review-loading` with browser network throttling to inspect three
+placeholder groups. **Expand** shows a checkbox/name/count header and two nested
+source/context/info rows in each group; **Compact** shows only the headers.
+Document/Page headings also reserve library/source space. Flat view and nested
+occurrence requests use three matching row placeholders. Fetching another cursor
+page keeps loaded records and appends two placeholders until the new records
+arrive. Skeletons follow density changes during a pending request and expose one
+loading status per list without interactive dummy controls. The existing three
+documents, nine pages and 27 occurrences demonstrate all states with local data;
+the seed adds a named link without modifying evidence or review edits.

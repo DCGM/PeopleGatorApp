@@ -70,3 +70,10 @@ ranges, anchor reset after Clear, ranges spanning newly fetched cursor pages,
 individual ranges across Document/Page boundaries with mixed parent checkboxes,
 and compact whole-group ranges. `mentions-shift-flat-*`,
 `mentions-shift-group-*` and `mentions-shift-compact-*` capture these selections.
+
+Mention skeleton captures delay actual local API requests: three expanded groups
+with two nested rows, three compact headers, dark theme, three pending nested/Flat
+rows and two appended cursor rows. Desktop/mobile checks toggle density while
+pending, confirm placeholders have no focusable controls, retain all 20 existing
+occurrences during the next request and replace placeholders with all 27 records
+on completion. `mentions-loading-*` provides each paired state.

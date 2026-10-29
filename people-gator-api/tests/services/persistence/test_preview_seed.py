@@ -3353,6 +3353,7 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
     assert seed.filter_examples['person-review-overflow-card'] == f'/people/{person}'
+    assert seed.filter_examples['person-review-loading'] == f'/people/{person}?tab=mentions&mention_view=document'
     assert seed.filter_examples['person-review-shift-selection'] == f'/people/{person}?tab=mentions&mention_view=page'
     assert seed.filter_examples['person-review-compact'] == f'/people/{person}?tab=mentions&mention_view=groups&mention_density=compact'
     faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person])))

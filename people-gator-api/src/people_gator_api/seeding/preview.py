@@ -741,6 +741,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "person-review-found-faces": f"/people/{manifest.entities['review']}?discovery_model={DISCOVERY_MODEL}#similar-faces-heading",
             "person-review-overflow-card": f"/people/{manifest.entities['review']}",
             "person-review-faces": f"/people/{manifest.entities['review']}",
+            "person-review-loading": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=document",
             "person-review-shift-selection": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=page",
             "person-review-compact": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=groups&mention_density=compact",
             "person-review-mentions": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=groups",
