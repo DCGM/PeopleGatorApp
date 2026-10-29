@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { ScanFace, X } from '@lucide/vue'
+import { ScanFace } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import IdentityFaceGallery from './IdentityFaceGallery.vue'
@@ -107,19 +107,13 @@ onBeforeUnmount(cancelTimer)
       @pointerdown.stop
       @click.stop
     >
-      <div class="flex items-center justify-between gap-2">
-        <h4 class="min-w-0 break-words text-sm font-medium">Faces of {{ name }}</h4>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Close faces"
-          @click="close"
-        >
-          <X aria-hidden="true" />
-        </Button>
-      </div>
-      <IdentityFaceGallery v-if="open" :key="personId" :person-id="personId" :name="name" />
+      <IdentityFaceGallery
+        v-if="open"
+        :key="personId"
+        :person-id="personId"
+        :name="name"
+        @close="close"
+      />
     </PopoverContent>
   </Popover>
 </template>

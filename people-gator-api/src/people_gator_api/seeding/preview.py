@@ -539,6 +539,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "identity-reference-actions": reference_actions_path,
             "identity-reference-action-colors": reference_actions_path,
             "identity-reference-empty": reference_path + "?candidate_text=Nora",
+            "identity-reference-scroll": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "person": active_faces.get("discovery-reference-0", ""),
+                })
+            ),
             # #75 reuses linked local media and the saved portrait without changing review edits.
             "archive-links-faces": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "tab": "faces", "origin_matched_face": active_faces.get("provenance-auto", ""),

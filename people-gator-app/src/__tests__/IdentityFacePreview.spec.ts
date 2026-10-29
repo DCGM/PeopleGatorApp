@@ -89,16 +89,14 @@ describe('in-place identity faces', () => {
     expect(mounted.emitted('preview')).toHaveLength(1)
   })
 
-  it('loads only when opened, scopes solely to the identity, and pages without duplicates', async () => {
-    mocks.list
-      .mockResolvedValueOnce(
-        batch(
-          Array.from({ length: 6 }, (_, i) => face(`a${i}`)),
-          'next',
-          7,
-        ),
-      )
-      .mockResolvedValueOnce(batch([face('a5'), face('a6'), face('other', 'emil')], null, 7))
+  it('loads only when opened, scopes solely to the identity, and reuses cached crops', async () => {
+    mocks.list.mockResolvedValue(
+      batch(
+        Array.from({ length: 6 }, (_, i) => face(`a${i}`)),
+        'next',
+        7,
+      ),
+    )
     const wrapper = setup()
     await flushPromises()
     expect(mocks.list).not.toHaveBeenCalled()
@@ -115,31 +113,15 @@ describe('in-place identity faces', () => {
     const dialog = document.getElementById(wrapper.get('button').attributes('aria-controls')!)!
     expect(dialog.getAttribute('role')).toBe('dialog')
     expect(dialog.getAttribute('aria-labelledby')).toBe(wrapper.get('button').attributes('id'))
-    expect(document.body.textContent).toContain('6 of 7 faces')
-    await click('Load more faces')
-    expect(mocks.list.mock.calls[1]![0].query.cursor).toBe('next')
-    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(7)
-    expect(mocks.crop).not.toHaveBeenCalledWith(
-      expect.objectContaining({ path: { detection_id: 'other' } }),
-    )
-    expect(document.body.textContent).toContain('7 of 7 faces')
+    expect(document.querySelector('h4')?.textContent).toBe('7 faces')
+    expect(document.body.textContent).not.toContain('6 of 7')
+    expect(document.body.textContent).not.toContain('Load more faces')
     await click('Close faces')
     expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(wrapper.get('button').element)
-    mocks.list.mockImplementation(({ query }) =>
-      Promise.resolve(
-        query.cursor
-          ? batch([face('a6')], null, 7)
-          : batch(
-              Array.from({ length: 6 }, (_, i) => face(`a${i}`)),
-              'next',
-              7,
-            ),
-      ),
-    )
     await click('View faces')
-    expect(document.body.textContent).toContain('7 of 7 faces')
-    expect(mocks.crop).toHaveBeenCalledTimes(7)
+    expect(document.querySelector('h4')?.textContent).toBe('7 faces')
+    expect(mocks.crop).toHaveBeenCalledTimes(6)
   })
 
   it('reports loading, list failure, retry and empty evidence', async () => {
@@ -158,21 +140,6 @@ describe('in-place identity faces', () => {
     expect(document.body.textContent).toContain('Could not load faces')
     await click('Retry')
     expect(document.body.textContent).toContain('No linked faces')
-  })
-
-  it('retains loaded evidence after a continuation failure and retries the same cursor', async () => {
-    mocks.list
-      .mockResolvedValueOnce(batch([face('a')], 'next', 2))
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce(batch([face('b')], null, 2))
-    setup()
-    await click('View faces')
-    await click('Load more faces')
-    expect(document.body.textContent).toContain('Could not load more faces')
-    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(1)
-    await click('Retry')
-    expect(mocks.list.mock.calls[2]![0].query.cursor).toBe('next')
-    expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(2)
   })
 
   it('isolates late responses when the identity changes and refreshes invalidated membership', async () => {

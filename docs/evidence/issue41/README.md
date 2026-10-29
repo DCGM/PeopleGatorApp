@@ -46,3 +46,17 @@ all other captures were refreshed too. Browser style checks verify five distinct
 text/border colors, shared neutral backgrounds, solid 1px borders, and a red
 unlink border matching its text in both themes. Save and Cancel also use outline
 variants. Theme captures wait for the standard color transitions to finish.
+
+## Sentinel loading and total-only title
+
+The hover gallery now shows only **N faces** as its heading. Its end sentinel
+loads the next six-face batch automatically inside the existing scroll area;
+there is no normal load-more button or loaded/total counter. Failed requests
+retain the loaded evidence and offer Retry without an automatic retry loop.
+
+The `*-sentinel-start.png`, `*-sentinel-end.png` and `*-sentinel-dark.png`
+captures show Zora Cartographer's existing 15-face fixture. Browser checks verify
+lazy opening, initial 6→12 loading while the sentinel remains visible, keyboard
+scrolling to fetch the third batch, three distinct cursors and exhaustion at 15.
+The title stays **15 faces** throughout. Both viewport sizes preserve scan state,
+focus return and read-only behavior; the earlier gallery captures are refreshed.

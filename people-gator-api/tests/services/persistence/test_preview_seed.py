@@ -3389,6 +3389,24 @@ async def test_identity_reference_gallery_pages_cross_library_crops_and_preserve
     assert seed.faces['reference-emil'] not in expected
     assert seed.faces['unassigned-ada'] not in expected
 
+    scroll_query = parse_qs(urlsplit(seed.filter_examples['identity-reference-scroll']).query)
+    assert scroll_query['person'] == [str(seed.faces['discovery-reference-0'])]
+    scroll_faces = []
+    cursor = None
+    while True:
+        batch = await database.faces.list(FaceListRequest(
+            filter_=FaceListFilter(entity_id=[seed.entities['discovery']]),
+            limit=6, return_total_count=True, sort='detection_id', cursor=cursor,
+        ))
+        assert batch.total_count == 15
+        scroll_faces.extend(batch.items)
+        if batch.cursor is None:
+            break
+        assert batch.cursor != cursor
+        cursor = batch.cursor
+    assert len(scroll_faces) == len({face.detection_id for face in scroll_faces}) == 15
+    assert all(face.entity_id == seed.entities['discovery'] for face in scroll_faces)
+
     actor = GenericActor(user_id=seed.users['reviewer'])
     reviewed = await database.faces.patch(
         seed.faces['reference-ada-manual'], FacePatchRequest(entity_id=None, entity_link_state=None), actor,
