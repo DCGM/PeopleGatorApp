@@ -158,7 +158,7 @@ Browser URLs keep one independent choice per panel, omitting defaults:
 | --- | --- |
 | People, Documents, Scans | `sort`, `dir` |
 | Person faces / scan page faces | `face_sort`, `face_dir` |
-| Person mentions and group occurrences | `mention_sort`, `mention_dir`; `mention_view=groups` |
+| Person mentions and group occurrences | `mention_sort`, `mention_dir`; `mention_view=groups|document|page`; `mention_density=compact` |
 | Exact appearance groups | `group_sort`, `group_dir` |
 | Discover similar faces / people | `similar_sort`, `similar_dir` / `people_sort`, `people_dir` |
 | Scan gallery / candidates | `gallery_sort`, `gallery_dir` / `candidate_sort`, `candidate_dir` |
@@ -342,3 +342,16 @@ search. Text lookup works without selecting a face. The explicit page annotation
 link-state control uses `page_link_state`; it affects annotation display rather
 than the page's identity membership or global candidates. The workspace's
 `link_state` remains separate. Page navigation drops the page-specific setting.
+
+### Person mention display and selection
+
+`mention_view` chooses Flat, Document, Page or Mention (`groups`). Mentions are
+expanded by default. `mention_density=compact` selects the whole-view Compact
+option; removing it restores Expand. Changing density preserves selection, while
+changing evidence filters, grouping or sorting clears it.
+
+Each group has a tri-state checkbox: unchecked selects its complete filtered
+scope, mixed selects all, and checked clears it. Individual checkboxes update
+the parent state. New cursor pages inherit a selected group's state. Group review
+resolves all cursor pages before writing and excludes explicitly deselected
+children; individual selections can be reviewed alongside complete groups.
