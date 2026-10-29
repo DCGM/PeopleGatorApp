@@ -15,7 +15,8 @@ Checks executed against the seeded API:
 - Identity remains below the 52px sticky navigation deep in Faces. No horizontal overflow
   across captured states. Section tabs fit on one mobile row.
 - Keyboard Enter expands mobile filters; Space selects a mention independently
-  of its scan link. Context and import metadata open from the ellipsis button.
+  of its scan link. The info icon opens the shared two-line relative last-change
+  and user display on hover, click or keyboard activation.
 - Document/Page groups cover three distinct documents and nine pages; duplicate
   document titles stay separate. Grouping survives reload. Browser Back restores
   prior URL choices; old Discover URLs activate Faces and retain discovery text,
@@ -42,3 +43,12 @@ Checks executed against the seeded API:
 Fixtures: Lina Archivist, 42 linked faces, 27 mentions in three documents;
 Lina A. and an unassigned face provide discovery candidates. Statistics counts
 both linked-page libraries across all pages.
+
+Mention follow-up: default expanded groups and the global Expand/Compact option
+were checked in all four views. Compact groups retain selection controls; group
+checkboxes cycle through none/some/all via the standard parent/child behavior.
+Selecting all 27 also selects the seven children loaded later. Deselecting a child
+shows a minus; changing density retains that state. Compact URL reload, orange
+underlined sans serif spans, library labels, metadata hover/keyboard and no
+horizontal overflow passed at both viewport sizes. `mentions-compact-*` records
+the new global collapsed state; group/flat/document/page/dark/info pairs are refreshed.
