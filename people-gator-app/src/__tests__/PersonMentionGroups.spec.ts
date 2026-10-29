@@ -59,7 +59,7 @@ describe('exact appearance mention groups', () => {
     })
   })
 
-  it('shows distinct spellings with full counts and loads exact occurrences on demand', async () => {
+  it('expands groups by default, retains full counts and applies the compact option globally', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/', component: { template: '<div />' } }],
@@ -86,7 +86,18 @@ describe('exact appearance mention groups', () => {
     expect(wrapper.text()).toContain('3 occurrences')
     expect(wrapper.text()).toContain('ADA NOVAK')
     expect(wrapper.text()).toContain('Showing 2 of 2 groups')
-    expect(mocks.mentions).not.toHaveBeenCalled()
+    expect(mocks.mentions).toHaveBeenCalled()
+    expect(
+      wrapper
+        .findAll('[data-slot=collapsible-trigger]')
+        .every((button) => button.attributes('aria-expanded') === 'true'),
+    ).toBe(true)
+    await wrapper.setProps({ compact: true })
+    expect(
+      wrapper
+        .findAll('[data-slot=collapsible-trigger]')
+        .every((button) => button.attributes('aria-expanded') === 'false'),
+    ).toBe(true)
 
     await wrapper
       .findAll('button')
@@ -101,7 +112,7 @@ describe('exact appearance mention groups', () => {
         sort_direction: 'asc',
       },
     })
-    expect(wrapper.text()).toContain('Letters')
+    expect(wrapper.text()).toContain('p1')
     expect(wrapper.findComponent(RouterLinkStub).props('to')).toMatchObject({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'p1' },

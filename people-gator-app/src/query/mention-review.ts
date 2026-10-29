@@ -7,11 +7,12 @@ import { responseData } from './api'
 import { fetchTextMentions, type TextMentionListParams } from './text-mentions'
 import { queryKeys } from './keys'
 
-export type MentionReviewTargets = { ids: string[] } | { scopes: TextMentionListParams[] }
+export type MentionReviewTargets =
+  { ids: string[] } | { scopes: TextMentionListParams[]; ids?: string[]; excludeIds?: string[] }
 
 /** Resolve every cursor before writes: review can change the active filter itself. */
 export async function resolveMentionTargets(targets: MentionReviewTargets) {
-  if ('ids' in targets) return [...new Set(targets.ids)]
+  if (!('scopes' in targets)) return [...new Set(targets.ids)]
   const records = new Map<string, TextMentionResponse>()
   for (const scope of targets.scopes) {
     let cursor: string | null = null
@@ -21,7 +22,8 @@ export async function resolveMentionTargets(targets: MentionReviewTargets) {
       cursor = page.cursor ?? null
     } while (cursor)
   }
-  return [...records.keys()]
+  const excluded = new Set(targets.excludeIds)
+  return [...new Set([...records.keys(), ...(targets.ids ?? [])])].filter((id) => !excluded.has(id))
 }
 
 export function useReviewMentionsMutation() {
