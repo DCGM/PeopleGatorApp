@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ChevronRight, Minus, Check } from '@lucide/vue'
+import { Minus, Check } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useCanAnnotate } from '@/composables/can-annotate'
 import { useReviewMentionsMutation } from '@/query/mention-review'
@@ -13,7 +13,6 @@ import type {
 } from '@/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import PersonMentionOccurrences from './PersonMentionOccurrences.vue'
 import PersonMentionItemSkeleton from './PersonMentionItemSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
@@ -123,25 +122,11 @@ watch(
     feedback.value = ''
   },
 )
-const overrides = ref<Record<string, boolean>>({})
-const isOpen = (group: TextMentionGroup) => overrides.value[key(group)] ?? !props.compact
-function toggle(name: string, value: boolean) {
-  overrides.value = { ...overrides.value, [name]: value }
-}
-watch(
-  () => props.compact,
-  () => {
-    overrides.value = {}
-  },
-)
 // Retain selection while new group pages arrive, but discard removed groups.
 watch(groups, (items) => {
   const names = new Set(items.map(key))
   selected.value = Object.fromEntries(
     Object.entries(selected.value).filter(([name]) => names.has(name)),
-  )
-  overrides.value = Object.fromEntries(
-    Object.entries(overrides.value).filter(([name]) => names.has(name)),
   )
 })
 </script>
@@ -176,63 +161,48 @@ watch(groups, (items) => {
     <p v-if="feedback" :role="mutation.isError.value ? 'alert' : 'status'">{{ feedback }}</p>
     <ul class="divide-y" :aria-label="`${mode} groups`">
       <li v-for="group in groups" :key="key(group)">
-        <Collapsible :open="isOpen(group)" @update:open="toggle(key(group), $event)">
-          <div class="flex min-w-0 items-center gap-2">
-            <Checkbox
-              v-if="allowed"
-              :aria-label="`Select group ${group.name}`"
-              :model-value="checked(group)"
-              :disabled="mutation.isPending.value"
-              @update:model-value="select(group, $event)"
-              ><Minus v-if="checked(group) === 'indeterminate'" class="size-3.5" /><Check
-                v-else
-                class="size-3.5"
-            /></Checkbox>
-            <CollapsibleTrigger as-child>
-              <Button
-                type="button"
-                variant="ghost"
-                class="h-auto min-w-0 flex-1 justify-start gap-3 py-3 text-left whitespace-normal"
+        <div class="flex min-w-0 items-center gap-2">
+          <Checkbox
+            v-if="allowed"
+            :aria-label="`Select group ${group.name}`"
+            :model-value="checked(group)"
+            :disabled="mutation.isPending.value"
+            @update:model-value="select(group, $event)"
+            ><Minus v-if="checked(group) === 'indeterminate'" class="size-3.5" /><Check
+              v-else
+              class="size-3.5"
+          /></Checkbox>
+          <div class="flex min-w-0 flex-1 items-center gap-3 py-3">
+            <span class="min-w-0 flex-1 break-words font-sans"
+              ><span :class="mode === 'mention' && 'text-secondary underline underline-offset-2'">{{
+                group.name
+              }}</span>
+              <small v-if="mode !== 'mention'" class="block text-muted-foreground"
+                >{{ group.library }} · {{ (group.document_id ?? group.source_id)?.slice(0, 8)
+                }}<template v-if="group.page_id">
+                  · {{ group.page_id.slice(0, 8) }}</template
+                ></small
               >
-                <ChevronRight
-                  class="size-4 shrink-0 transition-transform"
-                  :class="isOpen(group) && 'rotate-90'"
-                  aria-hidden="true"
-                />
-                <span class="min-w-0 flex-1 break-words font-sans"
-                  ><span
-                    :class="mode === 'mention' && 'text-secondary underline underline-offset-2'"
-                    >{{ group.name }}</span
-                  >
-                  <small v-if="mode !== 'mention'" class="block text-muted-foreground"
-                    >{{ group.library }} · {{ (group.document_id ?? group.source_id)?.slice(0, 8)
-                    }}<template v-if="group.page_id">
-                      · {{ group.page_id.slice(0, 8) }}</template
-                    ></small
-                  >
-                </span>
-                <Badge variant="outline" class="font-mono">
-                  {{ group.occurrence_count }}
-                  {{ group.occurrence_count === 1 ? 'occurrence' : 'occurrences' }}
-                </Badge>
-              </Button>
-            </CollapsibleTrigger>
+            </span>
+            <Badge variant="outline" class="font-mono">
+              {{ group.occurrence_count }}
+              {{ group.occurrence_count === 1 ? 'occurrence' : 'occurrences' }}
+            </Badge>
           </div>
-          <CollapsibleContent class="pl-7">
-            <PersonMentionOccurrences
-              v-if="isOpen(group)"
-              :name="mode === 'mention' ? group.name : undefined"
-              :compact="compact"
-              :selection="selection(group)"
-              :disabled="mutation.isPending.value"
-              @select-mention="(id, value) => selectMention(group, id, value)"
-              :filters="scope(group)"
-              :sort="occurrenceSort"
-              :person-id="personId"
-              :link-states="linkStates"
-            />
-          </CollapsibleContent>
-        </Collapsible>
+        </div>
+        <div v-if="!compact" class="pl-7">
+          <PersonMentionOccurrences
+            :name="mode === 'mention' ? group.name : undefined"
+            :compact="compact"
+            :selection="selection(group)"
+            :disabled="mutation.isPending.value"
+            @select-mention="(id, value) => selectMention(group, id, value)"
+            :filters="scope(group)"
+            :sort="occurrenceSort"
+            :person-id="personId"
+            :link-states="linkStates"
+          />
+        </div>
       </li>
     </ul>
     <PersonMentionItemSkeleton v-if="query.isPending.value && enabled" />

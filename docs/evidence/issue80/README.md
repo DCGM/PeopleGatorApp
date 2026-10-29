@@ -45,7 +45,7 @@ Lina A. and an unassigned face provide discovery candidates. Statistics counts
 both linked-page libraries across all pages.
 
 Mention follow-up: default expanded groups and the global Expand/Compact option
-were checked in all four views. Compact groups retain selection controls; group
+were checked in all four views. Group headings have no individual expand controls. Compact groups retain selection controls; group
 checkboxes cycle through none/some/all via the standard parent/child behavior.
 Selecting all 27 also selects the seven children loaded later. Deselecting a child
 shows a minus; changing density retains that state. Compact URL reload, orange

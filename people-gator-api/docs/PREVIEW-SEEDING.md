@@ -896,7 +896,8 @@ stay excluded. It reuses existing local media, models and checkpoint identities.
 
 Open `person-review-mentions` for Lina Archivist's 27 occurrences, expanded by
 default, or `person-review-compact` for the collapsed view. **Expand / Compact**
-applies to the whole view and survives reload. Document, Page and Mention group
+applies to the whole view and survives reload; group headings have no individual
+expand controls. Document, Page and Mention group
 checkboxes select every matching occurrence, including the seven beyond the
 first page. Deselect one child to see the group become indeterminate; selecting
 the group again selects all children. Switching density retains selection.
