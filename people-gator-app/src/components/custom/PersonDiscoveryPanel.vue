@@ -137,8 +137,6 @@ watch(
       route?.params.personId,
       faceFilter.value,
       faceModel.value,
-      annotations.value,
-      faceSearchTerm.value,
       faceSort.value?.field,
       faceSort.value?.direction,
     ]),
@@ -311,6 +309,7 @@ watch(
         v-model:search-term="faceSearchTerm"
         v-model:annotations="annotations"
         v-model:face-model="faceModel"
+        face-only
         label="Discovery faces"
         :model-options="modelOptions"
         :default-face-model="defaultFaceModel"

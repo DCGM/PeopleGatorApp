@@ -10,6 +10,7 @@ import FilterSingleSelect from './FilterSingleSelect.vue'
 const props = defineProps<{
   label: string
   searchable?: boolean
+  faceOnly?: boolean
   resultCount?: number
   modelOptions?: { value: string; label: string }[]
   defaultFaceModel?: string
@@ -34,7 +35,7 @@ const selectedInputs = computed({
   },
 })
 const hasReferenceFilters = computed(
-  () => annotations.value.length > 0 && annotations.value.length < 3,
+  () => !props.faceOnly && annotations.value.length > 0 && annotations.value.length < 3,
 )
 const hasModelOverride = computed(() =>
   Boolean(faceModel.value && faceModel.value !== props.defaultFaceModel),
@@ -55,6 +56,7 @@ const modelLabel = computed(
       :result-count="resultCount"
     >
       <FilterMultiSelect
+        v-if="!faceOnly"
         v-model="selectedInputs"
         v-model:search="inputSearch"
         label="Modalities"
@@ -69,7 +71,7 @@ const modelLabel = computed(
       <slot />
     </SearchFilterPanel>
     <div
-      v-if="hasReferenceFilters || hasModelOverride || (!searchable && searchTerm)"
+      v-if="hasReferenceFilters || hasModelOverride || (!faceOnly && !searchable && searchTerm)"
       class="mt-3 flex min-w-0 flex-wrap items-center gap-2"
       :aria-label="`Active ${label.toLowerCase()} filters`"
     >
@@ -91,7 +93,12 @@ const modelLabel = computed(
           ><X aria-hidden="true"
         /></Button>
       </Badge>
-      <Badge v-if="!searchable && searchTerm" as="small" variant="outline" class="max-w-full gap-1">
+      <Badge
+        v-if="!faceOnly && !searchable && searchTerm"
+        as="small"
+        variant="outline"
+        class="max-w-full gap-1"
+      >
         <span class="min-w-0 break-all">Text: {{ searchTerm }}</span>
         <Button
           type="button"
@@ -119,7 +126,7 @@ const modelLabel = computed(
         >Clear filters</Button
       >
     </div>
-    <p v-if="!annotations.length && !searchTerm.trim()" role="status" class="mt-3">
+    <p v-if="!faceOnly && !annotations.length && !searchTerm.trim()" role="status" class="mt-3">
       {{ searchable ? 'Choose a modality or enter search text.' : 'Choose a modality.' }}
     </p>
   </div>

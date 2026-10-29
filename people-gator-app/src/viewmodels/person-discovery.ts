@@ -59,17 +59,9 @@ export function usePersonDiscovery(
   faceAssignment: MaybeRefOrGetter<'all' | 'assigned' | 'unassigned'> = 'all',
 ) {
   const signals = computed(() =>
-    personDiscoverySignals(
-      toValue(personId),
-      toValue(referenceFaceModel),
-      toValue(extraText),
-      toValue(annotations),
-    ),
+    personDiscoverySignals(toValue(personId), toValue(referenceFaceModel), '', ['faces']),
   )
-  const canSearch = computed(
-    () =>
-      toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim())),
-  )
+  const canSearch = computed(() => toValue(enabled) && Boolean(toValue(personId)))
   const peopleSignals = computed(() => {
     const reference = peopleReference && toValue(peopleReference)
     return reference
@@ -79,13 +71,18 @@ export function usePersonDiscovery(
           reference.text,
           reference.annotations,
         )
-      : signals.value
+      : personDiscoverySignals(
+          toValue(personId),
+          toValue(referenceFaceModel),
+          toValue(extraText),
+          toValue(annotations),
+        )
   })
   const canSearchPeople = computed(() => {
     const reference = peopleReference && toValue(peopleReference)
     return reference
       ? toValue(enabled) && (reference.annotations.length > 0 || Boolean(reference.text.trim()))
-      : canSearch.value
+      : toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim()))
   })
   // Discovery searches all accessible data; shared browsing filters stay in the URL.
   const faceSearchQuery = useFaceSearchQuery(

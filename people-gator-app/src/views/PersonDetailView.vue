@@ -176,8 +176,8 @@ const discoveryAnnotations = computed<EntityAnnotation[]>({
     }),
 })
 
-// Old discovery URLs seed both sections. Each selector preserves the other
-// section's effective choices before changing its own URL state.
+// Legacy modalities and text seed Similar people; Found faces always uses faces.
+// Model selectors preserve the other section's effective choice.
 function serializeAnnotations(value: EntityAnnotation[]) {
   return value.length === 3 ? 'all' : value.length ? value : 'none'
 }
@@ -204,7 +204,7 @@ const peopleDiscoveryAnnotations = computed<EntityAnnotation[]>({
     }),
 })
 
-// Legacy face text remains a removable tag, without restoring a search field.
+// Preserve legacy discovery text as a Similar people input.
 const legacyFaceText = computed({
   get: () => (typeof route.query.discovery_text === 'string' ? route.query.discovery_text : ''),
   set: (value: string) =>
