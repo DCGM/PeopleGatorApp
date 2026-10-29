@@ -64,3 +64,9 @@ matching position, responsive layout and Clear/Unlink/Verify controls. Browser
 checks compare its CSS classes and bottom offset to Faces, clear selection in
 all four mention views and exercise grouped selection through the same bar.
 Expanded/compact, Flat/Document/Page/Mention and dark screenshots show the bar.
+
+Shift-click checks passed at both viewport sizes: forward/reverse additive Flat
+ranges, anchor reset after Clear, ranges spanning newly fetched cursor pages,
+individual ranges across Document/Page boundaries with mixed parent checkboxes,
+and compact whole-group ranges. `mentions-shift-flat-*`,
+`mentions-shift-group-*` and `mentions-shift-compact-*` capture these selections.

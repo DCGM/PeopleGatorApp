@@ -915,3 +915,14 @@ bar used for Faces. It shows the selected mention count, **Clear**, **Unlink**
 and **Verify**; grouped actions retain their complete filtered scope. The same
 bar is available in Flat, Document, Page and Mention views. These interactions
 reuse the existing 27-occurrence scenario and do not change seed identities.
+
+### Shift-select mention ranges (#80)
+
+Open `person-review-shift-selection` for nine page groups with three occurrences
+each. Select a checkbox, then Shift-click another to add the inclusive range in
+display order. Expanded ranges can span document/page groups and loaded cursor
+pages; compact group ranges select every occurrence in those groups. Existing
+selections remain selected. Clear, person/filter/grouping and sorting changes
+reset the anchor; a Shift-click without an anchor selects just that item. The
+same behavior works in Flat and Mention views, and updates tri-state parents
+and the shared action bar. This scenario reuses stable records and local media.
