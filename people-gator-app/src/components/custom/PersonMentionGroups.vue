@@ -112,6 +112,7 @@ watch(
     JSON.stringify([
       props.personId,
       route.params.personId,
+      route.query.mention_view,
       props.filters,
       props.mode,
       props.groupSort,
