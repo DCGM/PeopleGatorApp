@@ -91,7 +91,7 @@ it.each(['mention', 'document', 'page'] as const)(
     expect(child('m1').attributes('aria-checked')).toBe('false')
     await child('m1').trigger('click')
     expect(parent().attributes('aria-checked')).toBe('mixed')
-    expect(wrapper.get('[role=toolbar]').text()).toContain('1 occurrences')
+    expect(wrapper.get('[role=toolbar]').text()).toContain('1 mention selected')
     await parent().trigger('click')
     expect(parent().attributes('aria-checked')).toBe('true')
     expect(child('m1').attributes('aria-checked')).toBe('true')

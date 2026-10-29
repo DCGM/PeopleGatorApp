@@ -58,3 +58,9 @@ last child border and the load-more wrapper divider so only the outer group
 separator marks the bottom. The Flat view also uses separators only between items.
 Browser computed-border checks passed for Mention, Document and Page on
 desktop and mobile.
+
+Mention selection uses the shared floating face-action bar in every mode, with
+matching position, responsive layout and Clear/Unlink/Verify controls. Browser
+checks compare its CSS classes and bottom offset to Faces, clear selection in
+all four mention views and exercise grouped selection through the same bar.
+Expanded/compact, Flat/Document/Page/Mention and dark screenshots show the bar.

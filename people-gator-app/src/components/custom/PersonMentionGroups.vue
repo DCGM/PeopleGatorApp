@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Minus, Check } from '@lucide/vue'
+import { Minus, Check, BadgeCheck, Unlink } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useCanAnnotate } from '@/composables/can-annotate'
 import { useReviewMentionsMutation } from '@/query/mention-review'
@@ -13,6 +13,7 @@ import type {
 } from '@/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import SelectedEvidenceActions from './SelectedEvidenceActions.vue'
 import PersonMentionOccurrences from './PersonMentionOccurrences.vue'
 import PersonMentionItemSkeleton from './PersonMentionItemSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
@@ -132,33 +133,40 @@ watch(groups, (items) => {
 </script>
 
 <template>
-  <div>
-    <div
+  <div :class="selectedCount && 'pb-40 sm:pb-24'">
+    <SelectedEvidenceActions
       v-if="allowed && selectedCount"
-      role="toolbar"
-      aria-label="Selected group actions"
-      class="flex flex-wrap items-center gap-2 py-2"
+      :count="selectedCount"
+      :busy="mutation.isPending.value"
+      singular="mention"
+      plural="mentions"
+      label="Selected group actions"
+      @clear="selected = {}"
     >
-      <span>{{ selectedCount }} occurrences · filtered scope</span>
+      <template #description>
+        <span>Filtered scope</span>
+        <p v-if="feedback" :role="mutation.isError.value ? 'alert' : 'status'">{{ feedback }}</p>
+      </template>
       <Button
         size="sm"
         variant="outline"
         :disabled="mutation.isPending.value"
-        @click="review('verify')"
-        >Verify</Button
-      >
-      <Button
-        size="sm"
-        variant="outline"
-        :disabled="mutation.isPending.value"
+        class="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive dark:hover:bg-destructive/10"
         @click="review('unlink')"
-        >Unlink</Button
+        ><Unlink aria-hidden="true" />Unlink</Button
       >
-      <Button size="sm" variant="ghost" :disabled="mutation.isPending.value" @click="selected = {}"
-        >Clear</Button
+      <Button
+        size="sm"
+        variant="outline"
+        :disabled="mutation.isPending.value"
+        class="border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950 dark:hover:text-emerald-300"
+        @click="review('verify')"
+        ><BadgeCheck aria-hidden="true" />Verify</Button
       >
-    </div>
-    <p v-if="feedback" :role="mutation.isError.value ? 'alert' : 'status'">{{ feedback }}</p>
+    </SelectedEvidenceActions>
+    <p v-if="feedback && !selectedCount" :role="mutation.isError.value ? 'alert' : 'status'">
+      {{ feedback }}
+    </p>
     <ul class="divide-y" :aria-label="`${mode} groups`">
       <li v-for="group in groups" :key="key(group)">
         <div class="flex min-w-0 items-center gap-2">

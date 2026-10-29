@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { BadgeCheck, Unlink } from '@lucide/vue'
 import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import SelectedEvidenceActions from './SelectedEvidenceActions.vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import PersonMentionEntry from './PersonMentionEntry.vue'
 import { useCanAnnotate } from '@/composables/can-annotate'
@@ -67,37 +69,39 @@ watch(
 )
 </script>
 <template>
-  <div class="min-w-0">
-    <div
+  <div class="min-w-0" :class="!selection && selected.size && 'pb-40 sm:pb-24'">
+    <SelectedEvidenceActions
       v-if="!selection && selected.size && allowed"
-      role="toolbar"
-      aria-label="Selected mention actions"
-      class="flex flex-wrap items-center gap-2 py-2"
+      :count="selected.size"
+      :busy="mutation.isPending.value"
+      singular="mention"
+      plural="mentions"
+      label="Selected mention actions"
+      @clear="selected = new Set()"
     >
-      <span>{{ selected.size }} selected</span>
+      <template #description>
+        <p v-if="feedback" :role="mutation.isError.value ? 'alert' : 'status'">{{ feedback }}</p>
+      </template>
       <Button
         size="sm"
         variant="outline"
         :disabled="mutation.isPending.value"
-        @click="review('verify')"
-        >Verify</Button
-      >
-      <Button
-        size="sm"
-        variant="outline"
-        :disabled="mutation.isPending.value"
+        class="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive dark:hover:bg-destructive/10"
         @click="review('unlink')"
-        >Unlink</Button
+        ><Unlink aria-hidden="true" />Unlink</Button
       >
       <Button
         size="sm"
-        variant="ghost"
+        variant="outline"
         :disabled="mutation.isPending.value"
-        @click="selected = new Set()"
-        >Clear</Button
+        class="border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950 dark:hover:text-emerald-300"
+        @click="review('verify')"
+        ><BadgeCheck aria-hidden="true" />Verify</Button
       >
-    </div>
-    <p v-if="feedback" :role="mutation.isError.value ? 'alert' : 'status'">{{ feedback }}</p>
+    </SelectedEvidenceActions>
+    <p v-if="feedback && !selected.size" :role="mutation.isError.value ? 'alert' : 'status'">
+      {{ feedback }}
+    </p>
     <div
       v-for="mention in mentions"
       :key="mention.id"

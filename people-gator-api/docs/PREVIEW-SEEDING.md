@@ -909,3 +909,9 @@ two-line relative last-change/user display. These records already carry syntheti
 actors and timestamps; the scenario adds a named link without replacing evidence
 or resetting existing review edits. Seed coverage checks both cursor batches,
 source/library labels, attribution and reseed preservation through repositories.
+
+Select an occurrence or a compact group to open the same floating bottom action
+bar used for Faces. It shows the selected mention count, **Clear**, **Unlink**
+and **Verify**; grouped actions retain their complete filtered scope. The same
+bar is available in Flat, Document, Page and Mention views. These interactions
+reuse the existing 27-occurrence scenario and do not change seed identities.

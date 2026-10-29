@@ -69,7 +69,7 @@ it('selects exact text independently of expansion and reviews unloaded occurrenc
   })
   await flushPromises()
   await wrapper.get('[aria-label="Select group Ada"]').trigger('click')
-  expect(wrapper.get('[role="toolbar"]').text()).toContain('102 occurrences')
+  expect(wrapper.get('[role="toolbar"]').text()).toContain('102 mentions selected')
   expect(api.list).not.toHaveBeenCalled()
   await wrapper
     .findAll('button')
