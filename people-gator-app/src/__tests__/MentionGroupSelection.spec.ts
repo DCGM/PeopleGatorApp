@@ -144,3 +144,142 @@ it('combines selected groups and individual occurrences, applying exclusions aft
   expect(ids).toEqual(['m1', 'm3', 'standalone'])
   expect(api.list.mock.calls).toHaveLength(2)
 })
+
+it('adds forward and reverse flat ranges, includes appended rows and clears stale anchors', async () => {
+  const { default: ReviewList } = await import('@/components/custom/PersonMentionReviewList.vue')
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: { template: '<div />' } }],
+  })
+  await router.push('/')
+  const client = new QueryClient()
+  const mentions = (ids: string[]) =>
+    ids.map((id) => ({
+      id,
+      excerpt: 'Ada signed',
+      matchedText: 'Ada',
+      pageId: '',
+    })) as import('@/viewmodels/person-detail.types').PersonMention[]
+  const wrapper = mount(ReviewList, {
+    props: {
+      mentions: mentions(['m1', 'm2', 'm3', 'm4', 'm5']),
+      personId: 'person',
+      linkStates: [],
+    },
+    global: { plugins: [router, [VueQueryPlugin, { queryClient: client }]] },
+  })
+  const click = (id: string, shiftKey = false) =>
+    wrapper.get(`[aria-label="Select mention ${id}"]`).trigger('click', { shiftKey })
+  const ids = () =>
+    wrapper
+      .findAll('[aria-checked=true]')
+      .map((node) => node.attributes('aria-label')!.replace('Select mention ', ''))
+  await click('m2')
+  await click('m5', true)
+  expect(ids()).toEqual(['m2', 'm3', 'm4', 'm5'])
+  await click('m1', true)
+  expect(ids()).toEqual(['m1', 'm2', 'm3', 'm4', 'm5'])
+  await wrapper
+    .get('[role=toolbar]')
+    .findAll('button')
+    .find((b) => b.text() === 'Clear')!
+    .trigger('click')
+  await click('m4', true)
+  expect(ids()).toEqual(['m4'])
+  await wrapper.setProps({ mentions: mentions(['m1', 'm2', 'm3', 'm4', 'm5', 'm6']) })
+  await click('m6', true)
+  expect(ids()).toEqual(['m4', 'm5', 'm6'])
+  await wrapper.setProps({ mentions: mentions(['m1', 'm2', 'm3', 'm5', 'm6']) })
+  await click('m1', true)
+  expect(ids()).toEqual(['m1', 'm5', 'm6'])
+  await router.push('/?mention_sort=source')
+  await flushPromises()
+  await click('m2', true)
+  expect(ids()).toEqual(['m2'])
+  wrapper.unmount()
+  client.clear()
+})
+
+it.each(['mention', 'document', 'page'] as const)(
+  'selects occurrence ranges across %s boundaries and whole compact group ranges',
+  async (mode) => {
+    api.groups.mockResolvedValue({
+      data: {
+        items: ['a', 'b'].map((name) => ({
+          name,
+          source_id: mode === 'mention' ? null : name,
+          source_kind: mode,
+          occurrence_count: 2,
+        })),
+        limit: 25,
+        cursor: null,
+        total_count: 2,
+      },
+    })
+    api.list.mockImplementation(async ({ query }) => {
+      const name = (query['filter.name'] ??
+        query['filter.source_id'] ??
+        query['filter.document_source_id'])[0]
+      return {
+        data: {
+          items: [1, 2].map((i) => ({ mention_id: `${name}${i}` })),
+          cursor: null,
+          limit: 20,
+        },
+      }
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const client = new QueryClient()
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode,
+        personId: 'person',
+        filters: { 'filter.entity_id': ['person'] },
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'text', direction: 'asc' },
+        linkStates: [],
+      },
+      global: { plugins: [router, [VueQueryPlugin, { queryClient: client }]] },
+    })
+    await flushPromises()
+    const click = (kind: string, id: string, shiftKey = false) =>
+      wrapper.get(`[aria-label="Select ${kind} ${id}"]`).trigger('click', { shiftKey })
+    const ids = () =>
+      wrapper
+        .findAll('[aria-label^="Select mention"][aria-checked=true]')
+        .map((node) => node.attributes('aria-label')!.replace('Select mention ', ''))
+    const clear = () =>
+      wrapper
+        .get('[role=toolbar]')
+        .findAll('button')
+        .find((b) => b.text() === 'Clear')!
+        .trigger('click')
+    await click('mention', 'a2')
+    await click('mention', 'b2', true)
+    expect(ids()).toEqual(['a2', 'b1', 'b2'])
+    expect(wrapper.get('[aria-label="Select group a"]').attributes('aria-checked')).toBe('mixed')
+    expect(wrapper.get('[aria-label="Select group b"]').attributes('aria-checked')).toBe('true')
+    await clear()
+    await click('mention', 'b2')
+    await click('mention', 'a2', true)
+    expect(ids()).toEqual(['a2', 'b1', 'b2'])
+    await clear()
+    await wrapper.setProps({ compact: true })
+    await click('group', 'a')
+    await click('group', 'b', true)
+    expect(wrapper.get('[role=toolbar]').text()).toContain('4 mentions selected')
+    await wrapper.setProps({ compact: false })
+    await flushPromises()
+    expect(ids()).toEqual(['a1', 'a2', 'b1', 'b2'])
+    await wrapper.setProps({ occurrenceSort: { field: 'source', direction: 'asc' } })
+    await flushPromises()
+    await click('mention', 'b2', true)
+    expect(ids()).toEqual(['b2'])
+    wrapper.unmount()
+    client.clear()
+  },
+)
