@@ -4,7 +4,7 @@ import { expect, it } from 'vitest'
 import PersonMentionEntry from '@/components/custom/PersonMentionEntry.vue'
 import AnnotationLastChange from '@/components/custom/AnnotationLastChange.vue'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
-it('uses the shared last-change popover and orange underlined sans serif mention text', async () => {
+it('uses the shared last-change popover and orange underlined serif context', async () => {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: { template: '<div />' } }],
@@ -32,6 +32,7 @@ it('uses the shared last-change popover and orange underlined sans serif mention
     },
   })
   expect(wrapper.classes()).toContain('font-sans')
+  expect(wrapper.get('p[title]').classes()).toContain('font-serif')
   expect(wrapper.get('mark').text()).toBe('Ada')
   expect(wrapper.get('mark').classes()).toEqual(
     expect.arrayContaining(['bg-transparent', 'text-secondary', 'underline']),

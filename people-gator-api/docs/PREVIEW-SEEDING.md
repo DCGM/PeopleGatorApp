@@ -902,7 +902,7 @@ first page. Deselect one child to see the group become indeterminate; selecting
 the group again selects all children. Switching density retains selection.
 
 Document headings include their library and stable source identity. Occurrence
-text uses the application's orange underline, and the info icon opens the shared
+context uses the application's newspaper-style serif font and orange underline, and the info icon opens the shared
 two-line relative last-change/user display. These records already carry synthetic
 actors and timestamps; the scenario adds a named link without replacing evidence
 or resetting existing review edits. Seed coverage checks both cursor batches,
