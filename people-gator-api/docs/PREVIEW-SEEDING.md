@@ -849,7 +849,8 @@ has zero in every field. Switching columns adds no requests or local sorting.
 Open **Detection action practice** in `preview-mzk`. Its first page has an
 unverified face linked to Lina Actions and an obvious **NOT A FACE** false positive.
 Select either box to use the icon button group; Link/Reassign, Unlink and Verify
-also share the current-face card actions. Delete is available only with the
+also share the current-face card actions. Magenta identifies Link/New, emerald
+identifies Verify, and red identifies Unlink/Delete. Delete is available only with the
 existing `people-gator:admin` scope and requires confirmation. Deleted fixtures
 stay deleted on rerun; verifying or reassigning the linked face is also preserved.
 Deleting a selected person portrait uses the existing automatic portrait fallback.
