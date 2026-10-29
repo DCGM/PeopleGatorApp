@@ -38,7 +38,7 @@ import {
   SIMILAR_PEOPLE_SORT_KEYS,
   scoredOptions,
 } from '@/viewmodels/sort-options'
-import PersonMentionItemSkeleton from '@/components/custom/PersonMentionItemSkeleton.vue'
+import PersonMentionListSkeleton from '@/components/custom/PersonMentionListSkeleton.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { usePersonDiscovery, DISCOVERY_ANNOTATIONS } from '@/viewmodels/person-discovery'
 import { useFaceModels } from '@/query/face-models'
@@ -487,7 +487,11 @@ function retrySearch() {
               :person-id="personId"
               :link-states="linkStates"
             />
-            <PersonMentionItemSkeleton v-if="mentionLoading" />
+            <PersonMentionListSkeleton
+              v-if="mentionLoading || loadingMoreMentions"
+              :compact="mentionCompact"
+              :count="mentionLoading ? 3 : 2"
+            />
             <div class="py-3 text-sm">
               <p v-if="mentionError" role="alert">
                 Could not load mentions.
