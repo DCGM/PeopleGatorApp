@@ -87,22 +87,14 @@ describe('exact appearance mention groups', () => {
     expect(wrapper.text()).toContain('ADA NOVAK')
     expect(wrapper.text()).toContain('Showing 2 of 2 groups')
     expect(mocks.mentions).toHaveBeenCalled()
-    expect(
-      wrapper
-        .findAll('[data-slot=collapsible-trigger]')
-        .every((button) => button.attributes('aria-expanded') === 'true'),
-    ).toBe(true)
+    expect(wrapper.find('[data-slot=collapsible-trigger]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'PersonMentionOccurrences' }).exists()).toBe(true)
     await wrapper.setProps({ compact: true })
-    expect(
-      wrapper
-        .findAll('[data-slot=collapsible-trigger]')
-        .every((button) => button.attributes('aria-expanded') === 'false'),
-    ).toBe(true)
-
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('Ada Novak'))!
-      .trigger('click')
+    expect(wrapper.findComponent({ name: 'PersonMentionOccurrences' }).exists()).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text().includes('Ada Novak'))).toBe(
+      false,
+    )
+    await wrapper.setProps({ compact: false })
     await flushPromises()
     expect(mocks.mentions.mock.calls[0]![0]).toMatchObject({
       query: {
