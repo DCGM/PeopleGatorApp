@@ -133,7 +133,7 @@ watch(groups, (items) => {
 </script>
 
 <template>
-  <div :class="selectedCount && 'pb-40 sm:pb-24'">
+  <div :class="selectedCount > 0 && 'pb-40 sm:pb-24'">
     <SelectedEvidenceActions
       v-if="allowed && selectedCount"
       :count="selectedCount"

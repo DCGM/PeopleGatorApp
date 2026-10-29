@@ -69,7 +69,7 @@ watch(
 )
 </script>
 <template>
-  <div class="min-w-0" :class="!selection && selected.size && 'pb-40 sm:pb-24'">
+  <div class="min-w-0" :class="!selection && selected.size > 0 && 'pb-40 sm:pb-24'">
     <SelectedEvidenceActions
       v-if="!selection && selected.size && allowed"
       :count="selected.size"
