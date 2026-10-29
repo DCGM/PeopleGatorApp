@@ -49,6 +49,6 @@ were checked in all four views. Compact groups retain selection controls; group
 checkboxes cycle through none/some/all via the standard parent/child behavior.
 Selecting all 27 also selects the seven children loaded later. Deselecting a child
 shows a minus; changing density retains that state. Compact URL reload, orange
-underlined sans serif spans, library labels, metadata hover/keyboard and no
+underlined spans in serif context, library labels, metadata hover/keyboard and no
 horizontal overflow passed at both viewport sizes. `mentions-compact-*` records
 the new global collapsed state; group/flat/document/page/dark/info pairs are refreshed.

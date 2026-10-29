@@ -73,7 +73,7 @@ const parts = computed(() => {
         <EntityLinkStateBadge v-bind="mention" class="shrink-0" />
       </div>
       <p
-        class="min-w-0 break-words"
+        class="min-w-0 break-words font-serif"
         :class="compact && 'basis-full truncate sm:basis-0 sm:flex-1'"
         :title="mention.excerpt"
       >
