@@ -572,7 +572,7 @@ Explore the seed report's `sorting-*` links: `sorting-documents` (Documents by
 page count), `sorting-document-names` (search with an explicit name order),
 `sorting-people`, `sorting-scans` (one document's pages by page ID descending),
 `sorting-faces` (Marta's faces by confidence), `sorting-mention-groups`
-(Mentions → Exact appearance by occurrence count; expand a group to see its
+(Mentions → Mention by occurrence count; expanded groups show their
 occurrences, sorted independently) and `sorting-similar-faces` (Discover). Choose
 a strategy (field and direction, such as *Pages · Highest first*) in a panel's
 single **Sort** select, reload, copy the link and use Back/Forward; each panel
@@ -891,3 +891,19 @@ the overview; previously loaded choices are not left selected out of view.
 The seed integration regression walks assigned and unassigned cursor pages,
 checks disjoint complete coverage and confirms the reference person's own faces
 stay excluded. It reuses existing local media, models and checkpoint identities.
+
+### Expanded and compact mentions (#80)
+
+Open `person-review-mentions` for Lina Archivist's 27 occurrences, expanded by
+default, or `person-review-compact` for the collapsed view. **Expand / Compact**
+applies to the whole view and survives reload. Document, Page and Mention group
+checkboxes select every matching occurrence, including the seven beyond the
+first page. Deselect one child to see the group become indeterminate; selecting
+the group again selects all children. Switching density retains selection.
+
+Document headings include their library and stable source identity. Occurrence
+text uses the application's orange underline, and the info icon opens the shared
+two-line relative last-change/user display. These records already carry synthetic
+actors and timestamps; the scenario adds a named link without replacing evidence
+or resetting existing review edits. Seed coverage checks both cursor batches,
+source/library labels, attribution and reseed preservation through repositories.

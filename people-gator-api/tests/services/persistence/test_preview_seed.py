@@ -3353,6 +3353,7 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
     assert seed.filter_examples['person-review-overflow-card'] == f'/people/{person}'
+    assert seed.filter_examples['person-review-compact'] == f'/people/{person}?tab=mentions&mention_view=groups&mention_density=compact'
     faces = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[person])))
     assert len(faces.items) == 42
     assert {face.entity_link_state.value for face in faces.items} == {'automatic', 'manual', 'verified'}
@@ -3365,12 +3366,17 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
         if mode == 'document':
             assert [g.name for g in groups.items].count('Review ledger') == 2
             assert len({g.source_id for g in groups.items}) == 3
+            assert all(g.library and g.document_id for g in groups.items)
     candidates = await db.faces.search(SearchFacesRequest(limit=100,
         query=QueryBase(face_id=[faces.items[0].detection_id], face_embedding_model=MODEL)))
     assert {seed.faces['review-unassigned'], seed.faces['review-candidate']} <= {f.detection_id for f in candidates.items}
     # The exact group exceeds the occurrence batch. A review edit survives reseeding.
     mentions = await db.text_mentions.list(TextMentionListRequest(limit=20, return_total_count=True, filter_=scope))
     assert mentions.total_count == 27 and mentions.cursor
+    assert all(m.last_touched_at and m.last_touched_by_user_id for m in mentions.items)
+    remainder = await db.text_mentions.list(TextMentionListRequest(limit=20, cursor=mentions.cursor, return_total_count=True, filter_=scope))
+    assert len(remainder.items) == 7
+    assert not ({m.mention_id for m in mentions.items} & {m.mention_id for m in remainder.items})
     actor = GenericActor(user_id=seed.users['reviewer'])
     edited = await db.text_mentions.patch(mentions.items[0].mention_id, TextMentionPatchRequest(entity_id=None), actor)
     again = await preview.seed_preview(db, filesystem)
