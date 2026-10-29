@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import type { EntityLinkState, TextMentionSortField } from '@/client'
 import { Button } from '@/components/ui/button'
 import PersonMentionReviewList from './PersonMentionReviewList.vue'
-import PersonMentionItemSkeleton from './PersonMentionItemSkeleton.vue'
+import PersonMentionListSkeleton from './PersonMentionListSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
 import { useTextMentionListQuery, type TextMentionListParams } from '@/query/text-mentions'
 import { useMentionViews } from '@/viewmodels/person-mentions'
@@ -51,7 +51,12 @@ watch(
       :disabled="disabled"
       @select-mention="(id, value, shift) => emit('selectMention', id, value, shift)"
     />
-    <PersonMentionItemSkeleton v-if="query.isPending.value" />
+    <PersonMentionListSkeleton
+      v-if="query.isPending.value || query.isFetchingNextPage.value"
+      :compact="compact"
+      :class="records.length > 0 && 'border-t'"
+      :count="query.isPending.value ? 3 : 2"
+    />
     <p v-if="query.error.value" role="alert" class="py-3 text-sm">
       Could not load occurrences.
       <Button variant="link" @click="query.refetch()">Retry</Button>

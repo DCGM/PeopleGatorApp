@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import SelectedEvidenceActions from './SelectedEvidenceActions.vue'
 import PersonMentionOccurrences from './PersonMentionOccurrences.vue'
-import PersonMentionItemSkeleton from './PersonMentionItemSkeleton.vue'
+import PersonMentionListSkeleton from './PersonMentionListSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
 import { useTextMentionGroupsQuery, type TextMentionListParams } from '@/query/text-mentions'
 
@@ -260,7 +260,13 @@ watch(groups, (items) => {
         </div>
       </li>
     </ul>
-    <PersonMentionItemSkeleton v-if="query.isPending.value && enabled" />
+    <PersonMentionListSkeleton
+      v-if="enabled && (query.isPending.value || query.isFetchingNextPage.value)"
+      :mode="mode"
+      :class="groups.length > 0 && 'border-t'"
+      :compact="compact"
+      :count="query.isPending.value ? 3 : 2"
+    />
     <div class="py-3 text-sm">
       <p v-if="query.error.value" role="alert">
         Could not load mention groups.

@@ -110,4 +110,66 @@ describe('exact appearance mention groups', () => {
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'p1' },
     })
   })
+  it('keeps pending group skeletons in sync with density and replaces them with loaded records', async () => {
+    let resolve!: (value: unknown) => void
+    mocks.groups.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode: 'document',
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: [],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: client }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    expect(wrapper.get('[role=status]').attributes('aria-label')).toBe('Loading mention groups')
+    expect(wrapper.findAll('[data-mention-group-skeleton]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-mention-skeleton]')).toHaveLength(6)
+    expect(wrapper.findAll('[data-mention-group-skeleton] button')).toHaveLength(0)
+    await wrapper.setProps({ compact: true })
+    expect(wrapper.findAll('[data-mention-group-skeleton]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-mention-skeleton]')).toHaveLength(0)
+    await wrapper.setProps({ compact: false })
+    expect(wrapper.findAll('[data-mention-skeleton]')).toHaveLength(6)
+    resolve({
+      data: {
+        items: [
+          {
+            name: 'Letters',
+            source_kind: 'document',
+            source_id: 'doc-source',
+            library: 'lib',
+            document_id: 'doc',
+            occurrence_count: 3,
+          },
+        ],
+        cursor: null,
+        limit: 25,
+        total_count: 1,
+      },
+    })
+    await flushPromises()
+    expect(wrapper.find('[aria-label="Loading mention groups"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Letters')
+    expect(wrapper.text()).toContain('Ada Novak signed the letter.')
+    wrapper.unmount()
+    client.clear()
+  })
 })
