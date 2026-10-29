@@ -65,10 +65,13 @@ share the same fingerprint. Stored-input edits can change subsequent rankings.
 Entity references require PostgreSQL; Weaviate returns 501 unsupported_operation
 instead of silently ignoring them. Other explicit Weaviate behavior is unchanged.
 
-Found faces and Similar people use this compact contract with independent
-**Modalities** and **Face model** selectors. Faces uses `discovery_annotations`
-and `discovery_model`; people uses `people_annotations`, `people_model` and
-`people_text`. Legacy `discovery_text` remains a removable face filter tag.
+Found faces uses only stored face vectors and exposes **Face model**, then
+**Assignment** and sorting. It has no modality selector or text filter.
+`discovery_model` selects its model; legacy `discovery_annotations` and
+`discovery_text` do not affect face requests. Similar people retains **Modalities**,
+**Face model** and search through `people_annotations`, `people_model` and
+`people_text`; legacy modality/text values only seed that section when its own
+settings are absent.
 Changing a section's settings restarts its pagination without changing the other
 section or shared evidence filters. Active tags remain accessible when mobile
 controls are collapsed; Clear filters preserves the people search text.

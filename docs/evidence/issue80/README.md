@@ -25,12 +25,12 @@ Checks executed against the seeded API:
   including seven unloaded children. Unlink with one library selected removes
   nine links, retains the 18 outside scope and preserves all 27 OCR records.
   Unfiltered tab totals refresh after the write.
-- Found faces has no search input. Modalities, Face model and Assignment share
-  one desktop line in that order. Similar people has its own search and matching
+- Found faces has no search input or modality selector. Face model and Assignment
+  share one desktop line in that order. Similar people has its own search and matching
   selectors. Changes to either section preserve the other; typing people search
   never sends a face text query. Independent choices survive reload.
 - Found faces uses the same tracks and metadata space as assigned faces:
-  147.4 × 282px cards at desktop, 173 × 301px at mobile. It starts with 13/20
+  147.4 × 275.4px cards at desktop, 173 × 301px at mobile. It starts with 13/20
   candidates plus the action tile on desktop and 3/20 plus the tile on mobile.
   Show more reveals two rows at a time, fetching the next 14-record cursor page
   only when needed. All 20 candidates were reached without duplicates.
@@ -77,3 +77,9 @@ rows and two appended cursor rows. Desktop/mobile checks toggle density while
 pending, confirm placeholders have no focusable controls, retain all 20 existing
 occurrences during the next request and replace placeholders with all 27 records
 on completion. `mentions-loading-*` provides each paired state.
+
+Face-only discovery checks use a legacy URL containing name-only modalities and
+text. Every Found faces request still sends only `query.entity_annotations=faces`
+and omits text. Similar people retains its modality control and name/text query.
+Desktop/mobile captures in `found-faces-face-only-*` show the simplified controls;
+existing found-face pagination/retry/filter/theme evidence is refreshed.

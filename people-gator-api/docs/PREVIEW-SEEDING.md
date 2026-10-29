@@ -593,8 +593,8 @@ The additive `discovery` fixture has its own registered synthetic 8D model, stab
 keys and ten pages in **Entity discovery practice**. Existing records, timestamps,
 reviewed aliases, assignments and checkpoints are retained on reruns. No retained
 vectors or user edits are rewritten. Open the printed `entity-discovery` link,
-choose individual **Modalities** or combinations, and compare both result
-lists on desktop and mobile. Faces-only also finds `discovery-unassigned` for
+choose individual **Modalities** or combinations in Similar people, and compare
+its results on desktop and mobile. Found faces always uses faces and also finds `discovery-unassigned` for
 manual linking. Zero embeddings remain stored as realistic degenerate fixtures;
 search excludes undefined cosine contributions rather than assigning fake scores.
 
@@ -607,8 +607,9 @@ Existing interrupted-checkpoint and edit-preservation checks cover the added key
 PR #59 review follow-up: `entity-discovery-identifier` opens text-only discovery
 for the existing unassigned face's `preview-seed/discovery-unassigned` identifier.
 Its exact text hit has no invented face score and retains working local media.
-This legacy URL exposes text as a removable tag; new face searches use modalities
-and the model rather than a text field.
+The API still supports this indexed text query, but the person page now searches
+Found faces only by face vectors. Legacy text/modality URL choices seed Similar
+people and do not filter Found faces.
 The seeded integration regression exercises this indexed identifier path as well
 as name/alias input selection and preserves reviewed assignments on two reruns.
 Use `entity-discovery` to inspect the removable nondefault Face model tag with
@@ -860,8 +861,8 @@ The 27 occurrences of `Lina Archivist` cover nine pages with automatic, manual
 and verified links. Two documents deliberately share `Review ledger` as a title;
 their source identities keep them separate. Select the exact-text group to verify
 or unlink all filtered occurrences, including those beyond its first 20 children.
-Found faces has no text search: modalities and face model precede the assignment
-filter. Similar people has its own search, modalities and face model; its settings
+Found faces searches only by face vectors: face model precedes the assignment
+filter, with no modality selector or text filter. Similar people has its own search, modalities and face model; its settings
 stay independent from Found faces. Local evidence filters do not restrict either
 global discovery search.
 
@@ -879,7 +880,8 @@ contains the matching-face count; `person-review-overflow-card` opens this scena
 
 ### Found-face pagination (#80)
 
-Open `person-review-found-faces` for Lina Archivist. Found faces uses the same
+Open `person-review-found-faces` for Lina Archivist; the link explicitly keeps
+all Similar people modalities while Found faces uses only face vectors. Found faces uses the same
 portrait/card size as the linked overview: two initial rows, with **Show more**
 as the final plus tile. Each activation reveals two additional rows and fetches
 another cursor page when needed. The synthetic 8D model has more than one

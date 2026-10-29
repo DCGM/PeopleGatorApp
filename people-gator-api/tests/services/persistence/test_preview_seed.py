@@ -3435,6 +3435,7 @@ async def test_found_faces_assignment_pages_cover_the_complete_seed_candidates(s
     db, filesystem, _ = seed_target
     seed = await preview.seed_preview(db, filesystem)
     person = seed.entities['review']
+    assert 'people_annotations=all' in seed.filter_examples['person-review-found-faces']
     query = EntitySearchQuery(entity_id=person, entity_annotations=['faces'], face_embedding_model=DISCOVERY_MODEL)
     whole = await db.faces.search(SearchFacesRequest(limit=100, query=query, return_total_count=True))
     assert whole.total_count > 14
