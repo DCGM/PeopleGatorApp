@@ -63,6 +63,7 @@ it('selects exact text independently of expansion and reviews unloaded occurrenc
       occurrenceSort: { field: 'text', direction: 'asc' },
       personId: 'person',
       linkStates: [],
+      compact: true,
     },
     global: { plugins: [router, [VueQueryPlugin, { queryClient: client }]] },
   })

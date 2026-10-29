@@ -13,7 +13,10 @@ const props = defineProps<{
   personId: string
   linkStates: EntityLinkState[]
   compact?: boolean
+  selection?: { all: boolean; ids: string[] }
+  disabled?: boolean
 }>()
+const emit = defineEmits<{ selectMention: [id: string, value: boolean] }>()
 const selected = ref(new Set<string>())
 const allowed = useCanAnnotate()
 const mutation = useReviewMentionsMutation()
@@ -21,6 +24,10 @@ const route = useRoute()
 const feedback = ref('')
 const selectedMentions = computed(() => props.mentions.filter((m) => selected.value.has(m.id)))
 function toggle(id: string, value: boolean | 'indeterminate') {
+  if (props.selection) {
+    emit('selectMention', id, value === true)
+    return
+  }
   const next = new Set(selected.value)
   if (value === true) next.add(id)
   else next.delete(id)
@@ -41,7 +48,11 @@ async function review(action: 'verify' | 'unlink') {
   }
 }
 watch(
-  () => route.fullPath,
+  () =>
+    JSON.stringify([
+      route.params,
+      Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'mention_density')),
+    ]),
   () => {
     selected.value = new Set()
     feedback.value = ''
@@ -58,7 +69,7 @@ watch(
 <template>
   <div class="min-w-0">
     <div
-      v-if="selected.size && allowed"
+      v-if="!selection && selected.size && allowed"
       role="toolbar"
       aria-label="Selected mention actions"
       class="flex flex-wrap items-center gap-2 py-2"
@@ -96,8 +107,12 @@ watch(
         v-if="allowed"
         class="mt-1 shrink-0"
         :aria-label="`Select mention ${mention.id}`"
-        :model-value="selected.has(mention.id)"
-        :disabled="mutation.isPending.value"
+        :model-value="
+          selection
+            ? selection.all !== selection.ids.includes(mention.id)
+            : selected.has(mention.id)
+        "
+        :disabled="disabled || mutation.isPending.value"
         @update:model-value="toggle(mention.id, $event)"
       />
       <PersonMentionEntry

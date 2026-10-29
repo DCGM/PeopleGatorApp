@@ -59,6 +59,14 @@ const mentionSort = useRouteSort(MENTION_SORT_KEYS, MENTION_SORTS, MENTION_DEFAU
 const groupSort = useRouteSort(MENTION_GROUP_SORT_KEYS, MENTION_GROUP_SORTS, MENTION_GROUP_DEFAULT)
 const similarFaceSort = useRouteSort(DISCOVERY_FACE_SORT_KEYS, FACE_SORTS, RELEVANCE)
 const similarPeopleSort = useRouteSort(SIMILAR_PEOPLE_SORT_KEYS, PEOPLE_SORTS, RELEVANCE)
+const mentionCompact = computed({
+  get: () => route.query.mention_density === 'compact',
+  set: (value: boolean) => {
+    void router.replace({
+      query: { ...route.query, mention_density: value ? 'compact' : undefined },
+    })
+  },
+})
 const mentionView = computed<'flat' | 'groups' | 'document' | 'page'>({
   get: () => {
     const mode = route.query.mention_view
@@ -436,6 +444,16 @@ function retrySearch() {
               <ToggleGroupItem value="page">Page</ToggleGroupItem>
               <ToggleGroupItem value="groups">Mention</ToggleGroupItem>
             </ToggleGroup>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              :model-value="mentionCompact ? 'compact' : 'expand'"
+              aria-label="Mention display"
+              @update:model-value="(value) => value && (mentionCompact = value === 'compact')"
+            >
+              <ToggleGroupItem value="expand">Expand</ToggleGroupItem>
+              <ToggleGroupItem value="compact">Compact</ToggleGroupItem>
+            </ToggleGroup>
             <SortControl
               v-if="mentionView !== 'flat'"
               v-model="groupSort"
@@ -453,6 +471,7 @@ function retrySearch() {
           <PersonMentionGroups
             v-if="mentionView !== 'flat'"
             :filters="mentionFilters"
+            :compact="mentionCompact"
             :mode="mentionView === 'groups' ? 'mention' : mentionView"
             :group-sort="groupSort"
             :occurrence-sort="mentionSort"
@@ -464,6 +483,7 @@ function retrySearch() {
           <div v-else class="divide-y">
             <PersonMentionReviewList
               :mentions="mentions"
+              :compact="mentionCompact"
               :person-id="personId"
               :link-states="linkStates"
             />

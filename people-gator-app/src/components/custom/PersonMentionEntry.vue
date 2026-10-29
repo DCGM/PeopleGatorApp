@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import { Ellipsis } from '@lucide/vue'
+import { Info } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
-import CreationDetails from './CreationDetails.vue'
+import AnnotationLastChange from './AnnotationLastChange.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -16,6 +16,18 @@ const props = defineProps<{
   compact?: boolean
 }>()
 const route = useRoute()
+const infoOpen = ref(false)
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+function openInfo() {
+  clearTimeout(closeTimer)
+  infoOpen.value = true
+}
+function closeInfo() {
+  closeTimer = setTimeout(() => {
+    infoOpen.value = false
+  }, 150)
+}
+onBeforeUnmount(() => clearTimeout(closeTimer))
 const parts = computed(() => {
   const index = props.mention.excerpt.indexOf(props.mention.matchedText)
   return index < 0
@@ -28,7 +40,7 @@ const parts = computed(() => {
 })
 </script>
 <template>
-  <div class="flex min-w-0 items-start gap-2">
+  <div class="flex min-w-0 items-start gap-2 font-sans">
     <div class="min-w-0 flex-1" :class="compact && 'flex flex-wrap items-center gap-x-2 gap-y-1'">
       <div class="flex min-w-0 items-center gap-2" :class="compact && 'max-w-full shrink-0'">
         <RouterLink
@@ -52,7 +64,7 @@ const parts = computed(() => {
           {{
             compact
               ? mention.pageLabel.slice(0, 8)
-              : `${mention.documentTitle} · ${mention.pageLabel.slice(0, 8)}`
+              : `${mention.library} · ${mention.documentTitle} · ${mention.pageLabel.slice(0, 8)}`
           }}
         </RouterLink>
         <span v-else class="text-sm text-muted-foreground">{{
@@ -66,25 +78,39 @@ const parts = computed(() => {
         :title="mention.excerpt"
       >
         <template v-if="parts"
-          >{{ parts[0] }}<mark>{{ parts[1] }}</mark
+          >{{ parts[0]
+          }}<mark class="bg-transparent text-secondary underline underline-offset-2">{{
+            parts[1]
+          }}</mark
           >{{ parts[2] }}</template
         >
         <template v-else
-          ><mark>{{ mention.matchedText }}</mark> · {{ mention.excerpt }}</template
+          ><mark class="bg-transparent text-secondary underline underline-offset-2">{{
+            mention.matchedText
+          }}</mark>
+          · {{ mention.excerpt }}</template
         >
       </p>
     </div>
-    <Popover>
+    <Popover v-model:open="infoOpen">
       <PopoverTrigger as-child
-        ><Button variant="ghost" size="icon-sm" :aria-label="`Details for mention ${mention.id}`"
-          ><Ellipsis class="size-4" aria-hidden="true" /></Button
+        ><Button
+          variant="ghost"
+          size="icon-sm"
+          @mouseenter="openInfo"
+          @mouseleave="closeInfo"
+          :aria-label="`Details for mention ${mention.id}`"
+          ><Info class="size-4" aria-hidden="true" /></Button
       ></PopoverTrigger>
-      <PopoverContent class="max-w-[calc(100vw-2rem)] space-y-3 break-words">
-        <p>{{ mention.excerpt }}</p>
-        <CreationDetails
-          v-if="mention.metadata"
-          :record="mention.metadata"
-          label="Creation / import"
+      <PopoverContent
+        class="w-auto max-w-[calc(100vw-2rem)] break-words"
+        @mouseenter="openInfo"
+        @mouseleave="closeInfo"
+        @open-auto-focus.prevent
+      >
+        <AnnotationLastChange
+          :touched-at="mention.metadata?.last_touched_at"
+          :user-id="mention.metadata?.last_touched_by_user_id"
         />
       </PopoverContent>
     </Popover>

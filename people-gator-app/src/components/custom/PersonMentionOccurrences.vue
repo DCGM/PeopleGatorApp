@@ -11,11 +11,14 @@ import { useMentionViews } from '@/viewmodels/person-mentions'
 const props = defineProps<{
   name?: string
   compact?: boolean
+  selection?: { all: boolean; ids: string[] }
+  disabled?: boolean
   filters: TextMentionListParams
   sort: SortState<TextMentionSortField>
   personId: string
   linkStates: EntityLinkState[]
 }>()
+const emit = defineEmits<{ selectMention: [id: string, value: boolean] }>()
 const query = useTextMentionListQuery(
   computed(() => ({
     ...props.filters,
@@ -36,6 +39,9 @@ const mentions = useMentionViews(records)
       :person-id="personId"
       :link-states="linkStates"
       :compact="compact"
+      :selection="selection"
+      :disabled="disabled"
+      @select-mention="(id, value) => emit('selectMention', id, value)"
     />
     <PersonMentionItemSkeleton v-if="query.isPending.value" />
     <p v-if="query.error.value" role="alert" class="py-3 text-sm">
