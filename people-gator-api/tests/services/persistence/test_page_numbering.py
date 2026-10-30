@@ -61,6 +61,25 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
             known = sorted([p for p in records if p.page_number is not None], key=lambda p: ((-p.page_number if direction == 'desc' else p.page_number), p.source_id))
             unknown = sorted([p for p in records if p.page_number is None], key=lambda p: p.source_id)
             assert [p.source_id for p in ordered] == [p.source_id for p in known+unknown]
+        # Global numeric order compares local positions, retaining membership.
+        global_scope = PageListFilter(library=['numbers'])
+        global_order = await db.sources.list_pages(PageListRequest(filter_=global_scope, sort='page_number', limit=100))
+        assert [p.page_number for p in global_order.items] == [1, 1, 2, 2, 10, None, None]
+        assert sorted(p.registered_page_count for p in global_order.items) == [1, 6, 6, 6, 6, 6, 6]
+        # Counts are one grouped query per response, regardless of page size.
+        from sqlalchemy import event
+        statements = []
+        def capture(*args):
+            statements.append(args[2])
+        event.listen(migrated_postgres.sync_engine, 'before_cursor_execute', capture)
+        try:
+            await db.sources.list_pages(PageListRequest(filter_=scope, limit=1))
+            small_query_count = len(statements)
+            statements.clear()
+            await db.sources.list_pages(PageListRequest(filter_=scope, limit=6))
+            assert len(statements) == small_query_count
+        finally:
+            event.remove(migrated_postgres.sync_engine, 'before_cursor_execute', capture)
         batch = await db.sources.list_pages(PageListRequest(filter_=scope, sort='page_number', limit=2))
         with pytest.raises(ValueError):
             await db.sources.list_pages(PageListRequest(filter_=scope, sort='page_number', sort_direction='desc', cursor=batch.cursor))
