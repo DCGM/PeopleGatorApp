@@ -231,11 +231,9 @@ watch(groups, (items) => {
               ><span :class="mode === 'mention' && 'text-secondary underline underline-offset-2'">{{
                 group.name
               }}</span>
-              <small v-if="mode !== 'mention'" class="block text-muted-foreground"
-                >{{ group.library }} · {{ (group.document_id ?? group.source_id)?.slice(0, 8)
-                }}<template v-if="group.page_id">
-                  · {{ group.page_id.slice(0, 8) }}</template
-                ></small
+              <small v-if="mode !== 'mention'" class="block text-muted-foreground wrap-anywhere"
+                >{{ group.library }} · {{ group.document_id ?? group.source_id
+                }}<template v-if="group.page_id"> · {{ group.page_id }}</template></small
               >
             </span>
             <Badge variant="outline" class="font-mono">
