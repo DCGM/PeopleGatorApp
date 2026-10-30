@@ -43,6 +43,11 @@ async function click(label: string) {
   await flushPromises()
 }
 beforeEach(() => {
+  // Vue skips an event stamped no later than its listener's attachment, which
+  // happens when a test dispatches within the same millisecond as rendering.
+  const now = Date.now.bind(Date)
+  let clock = now()
+  vi.spyOn(Date, 'now').mockImplementation(() => (clock = Math.max(now(), clock + 1)))
   mocks.list.mockReset().mockResolvedValue(batch([]))
   mocks.crop.mockReset().mockResolvedValue({ data: new Blob(['face']) })
   vi.stubGlobal(
@@ -60,6 +65,7 @@ afterEach(() => {
   client?.clear()
   document.body.innerHTML = ''
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('in-place identity faces', () => {
