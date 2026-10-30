@@ -102,3 +102,9 @@ Mention view group headings show the exact text in the same serif as the mention
 context, in the default text color without the orange underline. Computed styles
 match the context (font family, color, 16px, no decoration) at both viewport
 sizes. `mentions-group-*` and `mentions-compact-*` are refreshed.
+
+Group occurrences load automatically: there is no Load more button. The 27-occurrence
+Mention group starts with 20; no further request is made until the last loaded
+occurrence is shown, then two placeholders appear and the remaining seven load
+(27 total) at both viewport sizes, without overflow or page errors. The next-page
+request was delayed for `mentions-auto-load-*`.
