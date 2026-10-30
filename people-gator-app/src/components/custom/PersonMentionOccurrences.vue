@@ -20,7 +20,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   selectMention: [id: string, value: boolean, shift: boolean]
-  loaded: [ids: string[]]
+  loaded: [ids: string[], verifiedIds: string[]]
 }>()
 const query = useTextMentionListQuery(
   computed(() => ({
@@ -34,8 +34,13 @@ const query = useTextMentionListQuery(
 const records = computed(() => (query.data.value?.pages ?? []).flatMap((page) => page.items))
 const mentions = useMentionViews(records)
 watch(
-  () => records.value.map((record) => record.mention_id),
-  (ids) => emit('loaded', ids),
+  () => records.value.map((record) => [record.mention_id, record.entity_link_state] as const),
+  (items) =>
+    emit(
+      'loaded',
+      items.map(([id]) => id),
+      items.filter(([, state]) => state === 'verified').map(([id]) => id),
+    ),
   { immediate: true },
 )
 </script>

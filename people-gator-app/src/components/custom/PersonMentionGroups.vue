@@ -54,6 +54,7 @@ const groupAnchor = ref<string | null>(null)
 const mentionAnchor = ref<string | null>(null)
 const shiftSelecting = ref(false)
 const loadedMentions = ref<Record<string, string[]>>({})
+const verifiedMentions = ref<Record<string, string[]>>({})
 function clear() {
   selected.value = {}
   groupAnchor.value = null
@@ -134,6 +135,7 @@ async function review(action: 'verify' | 'unlink') {
         excludeIds: selectedGroups.value
           .filter((g) => selection(g).all)
           .flatMap((g) => selection(g).ids),
+        verifiedIds: Object.values(verifiedMentions.value).flat(),
       },
       action,
     })
@@ -164,6 +166,9 @@ watch(groups, (items) => {
   const names = new Set(items.map(key))
   loadedMentions.value = Object.fromEntries(
     Object.entries(loadedMentions.value).filter(([name]) => names.has(name)),
+  )
+  verifiedMentions.value = Object.fromEntries(
+    Object.entries(verifiedMentions.value).filter(([name]) => names.has(name)),
   )
   if (groupAnchor.value && !names.has(groupAnchor.value)) groupAnchor.value = null
   if (
@@ -248,7 +253,12 @@ watch(groups, (items) => {
             :compact="compact"
             :selection="selection(group)"
             :disabled="mutation.isPending.value"
-            @loaded="loadedMentions[key(group)] = $event"
+            @loaded="
+              (ids, verified) => {
+                loadedMentions[key(group)] = ids
+                verifiedMentions[key(group)] = verified
+              }
+            "
             @select-mention="(id, value, shift) => selectMention(group, id, value, shift)"
             :filters="scope(group)"
             :sort="occurrenceSort"

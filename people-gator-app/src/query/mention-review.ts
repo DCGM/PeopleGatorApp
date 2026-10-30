@@ -8,10 +8,20 @@ import { fetchTextMentions, type TextMentionListParams } from './text-mentions'
 import { queryKeys } from './keys'
 
 export type MentionReviewTargets =
-  { ids: string[] } | { scopes: TextMentionListParams[]; ids?: string[]; excludeIds?: string[] }
+  | { ids: string[] }
+  | {
+      scopes: TextMentionListParams[]
+      ids?: string[]
+      excludeIds?: string[]
+      /** Loaded explicit selections already verified; skipped by Verify. */
+      verifiedIds?: string[]
+    }
 
 /** Resolve every cursor before writes: review can change the active filter itself. */
-export async function resolveMentionTargets(targets: MentionReviewTargets) {
+export async function resolveMentionTargets(
+  targets: MentionReviewTargets,
+  action: 'verify' | 'unlink' = 'unlink',
+) {
   if (!('scopes' in targets)) return [...new Set(targets.ids)]
   const records = new Map<string, TextMentionResponse>()
   for (const scope of targets.scopes) {
@@ -23,6 +33,12 @@ export async function resolveMentionTargets(targets: MentionReviewTargets) {
     } while (cursor)
   }
   const excluded = new Set(targets.excludeIds)
+  // Verify reports changed occurrences: already-verified records are no-ops.
+  if (action === 'verify') {
+    for (const [id, record] of records)
+      if (record.entity_link_state === 'verified') excluded.add(id)
+    for (const id of targets.verifiedIds ?? []) excluded.add(id)
+  }
   return [...new Set([...records.keys(), ...(targets.ids ?? [])])].filter((id) => !excluded.has(id))
 }
 
@@ -36,7 +52,7 @@ export function useReviewMentionsMutation() {
       targets: MentionReviewTargets
       action: 'verify' | 'unlink'
     }) => {
-      const ids = await resolveMentionTargets(targets)
+      const ids = await resolveMentionTargets(targets, action)
       let completed = 0
       try {
         // Stay below the API's default batch limit and report confirmed chunks on failure.
