@@ -4024,12 +4024,13 @@ async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target,
     db, fs, _ = seed_target
     original_create = db.sources.get_or_create_page
     original_patch = db.sources.patch_page
-    first_id = None
+    first_id = legacy = None
 
     async def legacy_create(spec):
-        nonlocal first_id
+        nonlocal first_id, legacy
         result = await original_create(spec.model_copy(update={'page_number': None}))
         first_id = result[0].source_id
+        legacy = result[0]
         return result
 
     async def interrupted_patch(*args, **kwargs):
@@ -4042,7 +4043,9 @@ async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target,
         with pytest.raises(RuntimeError, match='after page number write'):
             await preview.seed_preview(db, fs)
     saved = await db.sources.get_page(first_id)
-    assert saved.page_number is not None and saved.last_touched_at is not None
+    assert saved.page_number is not None
+    # Upgraded previews keep the attribution a fresh seed would have.
+    assert (saved.last_touched_at, saved.last_touched_by_user_id) == (legacy.last_touched_at, legacy.last_touched_by_user_id)
     recovery_writes = []
     async def track_patch(source_id, *args, **kwargs):
         recovery_writes.append(source_id)

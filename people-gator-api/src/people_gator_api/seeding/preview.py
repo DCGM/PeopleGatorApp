@@ -263,6 +263,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         )
         # Upgrade legacy synthetic pages once, only while still unannotated.
         # Persist precondition before the write; recovery preserves later edits.
+        # The write leaves last-touched attribution as a fresh seed would.
         upgrade_key = "page-number-v1/" + page.key
         if page.key != "page-gallery-9":
             edit = upgrades.page_numbers.get(upgrade_key)
@@ -272,7 +273,13 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 await checkpoint_upgrades()
             if not edit.complete:
                 if source.page_number is None and source.last_touched_at == edit.expected_touched_at:
-                    source = await database.sources.patch_page(source.source_id, PagePatchRequest(page_number=page.number), context=actors["reviewer"])
+                    patched = await database.sources.patch_page(
+                        source.source_id, PagePatchRequest(page_number=page.number),
+                        context=actors["reviewer"], touch=False,
+                    )
+                    if patched is None:
+                        raise RuntimeError(f"preview page {page.key} disappeared during its numbering upgrade")
+                    source = patched
                 edit.complete = True
                 await checkpoint_upgrades()
         pages[page.key] = source.source_id

@@ -1062,5 +1062,6 @@ gaps or partial imports can therefore show, for example, `10/3`.
 
 Existing unnumbered synthetic pages receive a one-time additive numbering
 upgrade, checkpointed before writing and guarded by their annotation timestamp.
-Reruns preserve changed numbers and explicit clears, including after interrupted
-writes. Page 9 remains a usable legacy/unknown example.
+The upgrade leaves last-touched time and modifier unchanged, as a fresh seed
+would. Reruns preserve changed numbers and explicit clears, including after
+interrupted writes. Page 9 remains a usable legacy/unknown example.

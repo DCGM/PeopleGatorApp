@@ -719,11 +719,15 @@ class SourceRepository(ABC):
             cls=DocumentResponse,
         )
 
-    async def patch_page(self, source_id: uuid.UUID, payload: "PagePatchRequest", *, context: GenericActor) -> PageResponse | None:
+    async def patch_page(
+        self, source_id: uuid.UUID, payload: "PagePatchRequest", *, context: GenericActor, touch: bool = True,
+    ) -> PageResponse | None:
         """Edit numbering with actor attribution; omission preserves, null clears.
 
         Duplicate numbers and gaps are allowed; other pages never renumber.
         Imports preserve all existing annotations, including conflicting values.
+        ``touch=False`` is for additive data upgrades that must keep the page's
+        and document's last-touched time and modifier unchanged.
         """
         raise NotImplementedError
 

@@ -108,6 +108,36 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
 
 
 @pytest.mark.asyncio
+async def test_number_edits_lock_only_when_writing_and_batches_share_totals(migrated_postgres):
+    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+        db = postgres_database(session)
+        user = await db.users.get_or_create(UserCreateRequest(display_name='Upgrade', is_active=True, external_subject='upgrade', external_issuer='issue53'))
+        actor = AuthContext(user_id=user.user_id, api_key_id=None, authentication_method='bearer', scopes=set())
+        doc = uuid.uuid4()
+        parent, _ = await db.sources.get_or_create_document(DocumentCreateRequest(library='locks', document_id=doc))
+        # One stats pass after the batch reports the same complete total on every new page.
+        created = await db.sources.get_or_create_page_batch([
+            PageCreateRequest(library='locks', document_id=doc, page_id=uuid.uuid4(), page_number=number)
+            for number in (None, 2, 3)
+        ])
+        assert [page.registered_page_count for page, _ in created] == [3, 3, 3]
+        page = created[0][0]
+        async def graph_lock_free():
+            async with migrated_postgres.connect() as other:
+                return await other.scalar(text('SELECT pg_try_advisory_lock(817308, 8)')) and await other.scalar(text('SELECT pg_advisory_unlock(817308, 8)'))
+        for payload in (PagePatchRequest(), PagePatchRequest(page_number=None)):
+            unchanged = await db.sources.patch_page(page.source_id, payload, context=actor)
+            assert unchanged.page_number is None and unchanged.last_touched_at is None
+            assert await graph_lock_free()
+        # Additive data upgrades number a page without becoming its last edit.
+        upgraded = await db.sources.patch_page(page.source_id, PagePatchRequest(page_number=1), context=actor, touch=False)
+        assert upgraded.page_number == 1
+        assert upgraded.last_touched_at is None and upgraded.last_touched_by_user_id is None
+        assert (await db.sources.get_document(parent.source_id)).last_touched_at is None
+        assert await graph_lock_free()
+
+
+@pytest.mark.asyncio
 async def test_migration_retains_legacy_identity_and_unknowns(migrated_postgres):
     from alembic import command
     from people_gator_api.persistence.postgres.schema import migration_config, validate_schema

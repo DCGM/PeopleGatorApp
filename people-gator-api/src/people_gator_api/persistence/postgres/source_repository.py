@@ -367,15 +367,32 @@ class PostgresSourceRepository(SourceRepository):
             for item in outcomes
         ]
 
-    async def patch_page(self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor) -> PageResponse | None:
-        await lock_annotation_graph(self._session)
-        page = await self._session.scalar(select(Page).where(Page.id == source_id).with_for_update())
-        if page is None:
+    async def patch_page(
+        self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor, touch: bool = True,
+    ) -> PageResponse | None:
+        row = (await self._session.execute(select(Page.page_number).where(Page.id == source_id))).first()
+        if row is None:
             return None
-        if "page_number" in payload.model_fields_set and page.page_number != payload.page_number:
-            page.page_number = payload.page_number
-            await touch_sources(self._session, [source_id], context)
-            await commit(self._session, "page number update failed")
+        current = row[0]
+        if "page_number" in payload.model_fields_set and current != payload.page_number:
+            # Touching the parent document locks further sources, so touching
+            # edits keep the graph lock order shared with merges and deletes.
+            if touch:
+                await lock_annotation_graph(self._session)
+            page = await self._session.scalar(
+                select(Page).where(Page.id == source_id).with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if page is None:
+                await self._session.rollback()
+                return None
+            if page.page_number != payload.page_number:
+                page.page_number = payload.page_number
+                if touch:
+                    await touch_sources(self._session, [source_id], context)
+                await commit(self._session, "page number update failed")
+            else:
+                await self._session.rollback()
         return await self.get_page(source_id)
 
     async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
