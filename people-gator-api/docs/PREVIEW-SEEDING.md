@@ -859,9 +859,11 @@ existing `people-gator:admin` scope and requires confirmation. Deleted fixtures
 stay deleted on rerun; verifying or reassigning the linked face is also preserved.
 Deleting a selected person portrait uses the existing automatic portrait fallback.
 
-Detection actions stay open while a face is selected, including during pan/zoom;
-they stay inside the viewer even when the face moves offscreen. Escape clears
-the face selection. Selecting another face moves the actions to that face.
+Detection actions stay open while a face is selected, including while dragging
+or zooming the scan; they stay inside the viewer even when the face moves offscreen.
+A click outside closes them and keeps the face selected; click the box to reopen.
+Escape clears the face selection. Selecting another face moves the actions to that
+face. Arrow keys keep moving between faces and lines from a box or its actions.
 
 ### Person review (#80)
 

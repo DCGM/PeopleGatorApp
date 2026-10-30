@@ -502,9 +502,11 @@ function handleNavigationKeydown(event: KeyboardEvent) {
   if (
     event.target instanceof HTMLElement &&
     (event.target.isContentEditable ||
-      event.target.closest(
+      (event.target.closest(
         'input, select, textarea, button, a, [role=tablist], [role=dialog], [role=alertdialog]',
-      ))
+      ) &&
+        // Detection boxes and their action panel keep face and line navigation.
+        !event.target.closest('[data-region-type="face"], [data-detection-actions]')))
   )
     return
   const navigate = {

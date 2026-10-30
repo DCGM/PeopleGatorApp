@@ -212,7 +212,7 @@ describe('DocumentPageOverlay', () => {
   })
 })
 
-it('keeps selected-face actions through viewport movement and outside clicks until selection clears', async () => {
+it('keeps selected-face actions through viewport movement and closes them on an outside click, not a drag', async () => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -221,23 +221,22 @@ it('keeps selected-face actions through viewport movement and outside clicks unt
       disconnect() {}
     },
   )
+  const detectionFace = (id: string, width = 20) => ({
+    id,
+    personId: null,
+    name: 'Unknown',
+    confidence: 99,
+    status: 'unassigned' as const,
+    position: { left: 10, top: 10, width, height: 20 },
+    portrait: '',
+    portraitLoading: false,
+  })
   const wrapper = mount(DocumentPageOverlay, {
     attachTo: document.body,
     props: {
       pageBounds: { left: 0, top: 0, width: 500, height: 800 },
       transcription: [],
-      faces: [
-        {
-          id: 'one',
-          personId: null,
-          name: 'Unknown',
-          confidence: 99,
-          status: 'unassigned',
-          position: { left: 10, top: 10, width: 20, height: 20 },
-          portrait: '',
-          portraitLoading: false,
-        },
-      ],
+      faces: [detectionFace('one'), detectionFace('two'), detectionFace('hidden', 0)],
       selectedLineIndex: 0,
       selectedFaceId: null,
       selectedPersonId: null,
@@ -245,39 +244,68 @@ it('keeps selected-face actions through viewport movement and outside clicks unt
     },
     slots: { actions: () => h('button', { type: 'button' }, 'Link') },
   })
+  const panel = () => document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  const settle = async () => {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  const press = (target: EventTarget, type: string, clientX = 0) =>
+    target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX, clientY: 0 }))
   try {
-    const detection = wrapper.get('[data-region-type="face"]')
+    const detection = wrapper.get('[data-detection-id="one"]')
+    ;(detection.element as HTMLElement).focus()
     await detection.trigger('click')
     await wrapper.setProps({ selectedFaceId: 'one' })
-    await flushPromises()
-    const panel = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
-    expect(panel).not.toBeNull()
+    await settle()
+    expect(panel()).not.toBeNull()
     expect(wrapper.emitted('selectFace')).toEqual([['one']])
-    expect(panel!.contains(document.activeElement)).toBe(true)
-    panel!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(panel()!.contains(document.activeElement)).toBe(true)
+    panel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
     expect(wrapper.emitted('clearFace')).toEqual([[]])
     await wrapper.setProps({ selectedFaceId: null })
-    await flushPromises()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
+    await settle()
+    expect(panel()).toBeNull()
     expect(document.activeElement).toBe(detection.element)
+
+    // Keyboard shortcuts, the toolbar and the gallery select without moving focus.
+    ;(document.activeElement as HTMLElement).blur()
+    await wrapper.setProps({ selectedFaceId: 'two' })
+    await settle()
+    expect(panel()).not.toBeNull()
+    expect(panel()!.contains(document.activeElement)).toBe(false)
+
     await detection.trigger('click')
     await wrapper.setProps({ selectedFaceId: 'one' })
+    await settle()
+    const reopened = panel()!
+    press(reopened.querySelector('button')!, 'pointerdown')
+    press(reopened.querySelector('button')!, 'pointerup')
     await flushPromises()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    const reopened = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
-    reopened
-      .querySelector('button')!
-      .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
-    await flushPromises()
-    expect(document.querySelector('[data-slot="popover-content"]')).toBe(reopened)
+    expect(panel()).toBe(reopened)
+    // Dragging the scan keeps the actions; viewport movement keeps them too.
+    press(document.body, 'pointerdown', 10)
+    press(window, 'pointerup', 60)
+    await settle()
+    expect(panel()).toBe(reopened)
     await wrapper.setProps({ pageBounds: { left: -900, top: -800, width: 1000, height: 1600 } })
-    expect(document.querySelector('[data-slot="popover-content"]')).toBe(reopened)
-    await wrapper.setProps({ selectedFaceId: null })
-    await flushPromises()
-    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
+    expect(panel()).toBe(reopened)
+    // A click outside closes the actions but keeps the face selected.
+    press(document.body, 'pointerdown', 10)
+    press(window, 'pointerup', 12)
+    await settle()
+    expect(panel()).toBeNull()
+    expect(wrapper.emitted('clearFace')).toHaveLength(1)
+    expect(detection.attributes('aria-pressed')).toBe('true')
+    expect(detection.attributes('aria-expanded')).toBe('false')
+    await detection.trigger('click')
+    await settle()
+    expect(panel()).not.toBeNull()
+
+    // A face without a drawable box never gets an unanchored panel.
+    await wrapper.setProps({ selectedFaceId: 'hidden' })
+    await settle()
+    expect(panel()).toBeNull()
   } finally {
     wrapper.unmount()
     vi.unstubAllGlobals()

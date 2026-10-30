@@ -302,6 +302,42 @@ describe('shared detection actions', () => {
     )
     wrapper.unmount()
   })
+  it('keeps face and line navigation from detection boxes and their actions', async () => {
+    const wrapper = await mountView()
+    const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+    const container = document.createElement('div')
+    container.innerHTML = `
+      <button data-region-type="face"></button>
+      <div data-detection-actions role="dialog"><button id="action"></button></div>
+      <button id="other"></button>`
+    document.body.append(container)
+    const key = (selector: string, key: string) =>
+      container
+        .querySelector(selector)!
+        .dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+    try {
+      overlay.vm.$emit('select-face', 'a')
+      await flushPromises()
+      key('#action', 'ArrowRight')
+      await flushPromises()
+      expect(overlay.props('selectedFaceId')).toBe('b')
+      key('[data-region-type="face"]', 'ArrowLeft')
+      await flushPromises()
+      expect(overlay.props('selectedFaceId')).toBe('a')
+      key('#action', 'ArrowDown')
+      await flushPromises()
+      expect(
+        wrapper.findComponent({ name: 'DocumentTeleprompter' }).props('selectedLineIndex'),
+      ).toBe(1)
+      // Ordinary buttons keep their own arrow keys.
+      key('#other', 'ArrowRight')
+      await flushPromises()
+      expect(overlay.props('selectedFaceId')).toBe('a')
+    } finally {
+      container.remove()
+      wrapper.unmount()
+    }
+  })
 })
 
 it('clears the selected face and route when the overlay requests Escape dismissal', async () => {
