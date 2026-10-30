@@ -87,6 +87,9 @@ LIST_FILTERS = {
     },
 }
 LIST_FILTERS["/documents"].add("has_unassigned_faces")
+from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+for path in ("/documents", "/pages"):
+    LIST_FILTERS[path].update("min_" + field for field in ANNOTATION_COUNT_FIELDS)
 
 # Every source, annotation and entity list shares one canonical scope and
 # latest-modification vocabulary (#52).
@@ -173,6 +176,8 @@ def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
 ])
 def test_sort_fields_are_resource_allowlists(openapi: dict[str, Any], path: str, values: list[str]) -> None:
     """Relevance is offered only where a search score exists."""
+    if path in {"/documents", "/search-documents", "/pages", "/search-pages"}:
+        values = [*ANNOTATION_COUNT_FIELDS, *values]
     assert _sort_values(openapi, path) == values
 
 

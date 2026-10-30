@@ -14,6 +14,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Query, Request
 from pydantic import AnyUrl, BaseModel
 
+from people_gator_api.schemas.annotation_counts import MinimumCount
 from people_gator_api.schemas.common import (
     GenericListRequest,
     ListFilterBase,
@@ -445,7 +446,28 @@ def source_list_filter_dependency(
     )
 
 
+def annotation_count_filter_dependency(
+    min_annotations_total_count: Annotated[MinimumCount | None, Query(alias="filter.min_annotations_total_count", description="Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.")] = None,
+    min_annotations_automatic_count: Annotated[MinimumCount | None, Query(alias="filter.min_annotations_automatic_count", description="Inclusive minimum annotations automatic count; non-negative integer, zero imposes no restriction.")] = None,
+    min_annotations_manual_count: Annotated[MinimumCount | None, Query(alias="filter.min_annotations_manual_count", description="Inclusive minimum annotations manual count; non-negative integer, zero imposes no restriction.")] = None,
+    min_annotations_verified_count: Annotated[MinimumCount | None, Query(alias="filter.min_annotations_verified_count", description="Inclusive minimum annotations verified count; non-negative integer, zero imposes no restriction.")] = None,
+    min_annotations_unassigned_count: Annotated[MinimumCount | None, Query(alias="filter.min_annotations_unassigned_count", description="Inclusive minimum annotations unassigned count; non-negative integer, zero imposes no restriction.")] = None,
+    min_faces_total_count: Annotated[MinimumCount | None, Query(alias="filter.min_faces_total_count", description="Inclusive minimum faces total count; non-negative integer, zero imposes no restriction.")] = None,
+    min_faces_automatic_count: Annotated[MinimumCount | None, Query(alias="filter.min_faces_automatic_count", description="Inclusive minimum faces automatic count; non-negative integer, zero imposes no restriction.")] = None,
+    min_faces_manual_count: Annotated[MinimumCount | None, Query(alias="filter.min_faces_manual_count", description="Inclusive minimum faces manual count; non-negative integer, zero imposes no restriction.")] = None,
+    min_faces_verified_count: Annotated[MinimumCount | None, Query(alias="filter.min_faces_verified_count", description="Inclusive minimum faces verified count; non-negative integer, zero imposes no restriction.")] = None,
+    min_faces_unassigned_count: Annotated[MinimumCount | None, Query(alias="filter.min_faces_unassigned_count", description="Inclusive minimum faces unassigned count; non-negative integer, zero imposes no restriction.")] = None,
+    min_mentions_total_count: Annotated[MinimumCount | None, Query(alias="filter.min_mentions_total_count", description="Inclusive minimum mentions total count; non-negative integer, zero imposes no restriction.")] = None,
+    min_mentions_automatic_count: Annotated[MinimumCount | None, Query(alias="filter.min_mentions_automatic_count", description="Inclusive minimum mentions automatic count; non-negative integer, zero imposes no restriction.")] = None,
+    min_mentions_manual_count: Annotated[MinimumCount | None, Query(alias="filter.min_mentions_manual_count", description="Inclusive minimum mentions manual count; non-negative integer, zero imposes no restriction.")] = None,
+    min_mentions_verified_count: Annotated[MinimumCount | None, Query(alias="filter.min_mentions_verified_count", description="Inclusive minimum mentions verified count; non-negative integer, zero imposes no restriction.")] = None,
+    min_mentions_unassigned_count: Annotated[MinimumCount | None, Query(alias="filter.min_mentions_unassigned_count", description="Inclusive minimum mentions unassigned count; non-negative integer, zero imposes no restriction.")] = None,
+) -> dict[str, object]:
+    return {name: value for name, value in locals().items() if value is not None}
+
+
 def page_list_filter_dependency(
+    counts: Annotated[dict[str, object], Depends(annotation_count_filter_dependency)],
     shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     url: Annotated[
         list[AnyUrl] | None,
@@ -491,6 +513,7 @@ def page_list_filter_dependency(
     return _filter(
         PageListFilter,
         **shared,
+        **counts,
 
         url=url,
         document_id=document_id,
@@ -506,6 +529,7 @@ def page_list_filter_dependency(
 
 
 def document_list_filter_dependency(
+    counts: Annotated[dict[str, object], Depends(annotation_count_filter_dependency)],
     shared: Annotated[dict[str, object], Depends(shared_filter_dependency)],
     url: Annotated[
         list[AnyUrl] | None,
@@ -536,6 +560,7 @@ def document_list_filter_dependency(
     return _filter(
         DocumentListFilter,
         **shared,
+        **counts,
         has_unassigned_faces=has_unassigned_faces,
 
         url=url,

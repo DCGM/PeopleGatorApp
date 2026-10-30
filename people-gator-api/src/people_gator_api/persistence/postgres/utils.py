@@ -856,11 +856,19 @@ def user_filters(filter_: UserListFilter | MissingType) -> list[ColumnElement[bo
 
 def source_filters(
     filter_: GenericSourceListFilter | MissingType,
+    *, counts=None,
 ) -> list[ColumnElement[bool]]:
     filter_values = missing_to_none(filter_)
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = touch_conditions(Source, filter_values)
+    from .annotation_counts import minimum_count_predicate, count_minima, count_column
+    if counts is not None:
+        filters.extend(count_column(counts, field) >= value for field, value in count_minima(filter_values).items())
+    else:
+        minimum = minimum_count_predicate(filter_values)
+        if minimum is not None:
+            filters.append(minimum)
     # A document scope includes its registered pages. A page scope matches
     # only those pages, without expanding to their containing documents.
     documents = missing_to_none(filter_values.document_source_id)
