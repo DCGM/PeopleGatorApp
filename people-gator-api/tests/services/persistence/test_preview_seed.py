@@ -3092,7 +3092,7 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
     def summary(item):
         return (item.registered_page_count, item.linked_entity_count, item.entity_link_stats, item.first_page_source_id)
     assert document.registered_page_count == 2
-    first_fixture = min((page for page in PAGES if page.document == "table-ledger"), key=lambda page: page.page_id)
+    first_fixture = min((page for page in PAGES if page.document == "table-ledger"), key=lambda page: page.number)
     assert document.first_page_source_id == seeded.pages[first_fixture.key]
     # The preview is usable media and the same choice even under evidence filters.
     first_page = await database.sources.get_page(document.first_page_source_id)
@@ -3992,3 +3992,66 @@ async def test_annotation_count_aggregate_plan_with_larger_scope(seed_target):
             }
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_page_number_seed_order_totals_and_clear_preservation(seed_target):
+    from people_gator_api.schemas.sources import PagePatchRequest
+    from people_gator_api.services.auth_service import AuthContext
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    spec = next(item for item in DOCUMENTS if item.key == 'page-gallery')
+    scope = PageListFilter(library=[spec.library], document_id=[spec.document_id])
+    collected, cursor = [], None
+    while True:
+        batch = await db.sources.list_pages(PageListRequest(limit=3, filter_=scope, sort='page_number', cursor=cursor))
+        collected.extend(batch.items)
+        cursor = batch.cursor
+        if cursor is None:
+            break
+    assert [p.page_number for p in collected] == [*range(1, 9), *range(10, 15), None]
+    assert all(p.registered_page_count == 14 for p in collected)
+    actor = AuthContext(user_id=seed.users['reviewer'], api_key_id=None, authentication_method='bearer', scopes=set())
+    edited = await db.sources.patch_page(collected[0].source_id, PagePatchRequest(page_number=None), context=actor)
+    await preview.seed_preview(db, fs)
+    after = await db.sources.get_page(edited.source_id)
+    assert after.page_number is None
+    assert after.last_touched_at == edited.last_touched_at
+
+
+@pytest.mark.asyncio
+async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target, monkeypatch):
+    db, fs, _ = seed_target
+    original_create = db.sources.get_or_create_page
+    original_patch = db.sources.patch_page
+    first_id = None
+
+    async def legacy_create(spec):
+        nonlocal first_id
+        result = await original_create(spec.model_copy(update={'page_number': None}))
+        first_id = result[0].source_id
+        return result
+
+    async def interrupted_patch(*args, **kwargs):
+        await original_patch(*args, **kwargs)
+        raise RuntimeError('interrupted after page number write')
+
+    with monkeypatch.context() as context:
+        context.setattr(db.sources, 'get_or_create_page', legacy_create)
+        context.setattr(db.sources, 'patch_page', interrupted_patch)
+        with pytest.raises(RuntimeError, match='after page number write'):
+            await preview.seed_preview(db, fs)
+    saved = await db.sources.get_page(first_id)
+    assert saved.page_number is not None and saved.last_touched_at is not None
+    recovery_writes = []
+    async def track_patch(source_id, *args, **kwargs):
+        recovery_writes.append(source_id)
+        return await original_patch(source_id, *args, **kwargs)
+    with monkeypatch.context() as context:
+        context.setattr(db.sources, 'patch_page', track_patch)
+        await preview.seed_preview(db, fs)
+    recovered = await db.sources.get_page(first_id)
+    assert recovered.page_number == saved.page_number
+    # Recovery may add the linked evidence that had not yet been seeded.
+    # It must not repeat the numbering edit.
+    assert first_id not in recovery_writes

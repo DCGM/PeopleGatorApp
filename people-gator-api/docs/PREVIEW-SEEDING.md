@@ -1049,3 +1049,18 @@ all fifteen sorts and minima on browse/search for both resources, traverses
 cursors with ties and zeros, and checks response scope and constant query counts.
 The recovery test edits/deletes these fixtures, reruns the seed, and recovers a
 lost face checkpoint without replacing reviewed state, timestamps or identities.
+
+### Page numbers (#53)
+
+Open the page-gallery document: its 14 synthetic pages use stored positions
+1–14 except page 9, which stays unknown. UUID order differs from numeric order;
+the gallery loads multiple batches, placing the unknown page last. Cards,
+document previews and scan detail show `n/total` with a dash for unknown values.
+`total` counts registered pages in exactly the same library/document, regardless
+of evidence filters. It does not assert the original archive document length;
+gaps or partial imports can therefore show, for example, `10/3`.
+
+Existing unnumbered synthetic pages receive a one-time additive numbering
+upgrade, checkpointed before writing and guarded by their annotation timestamp.
+Reruns preserve changed numbers and explicit clears, including after interrupted
+writes. Page 9 remains a usable legacy/unknown example.
