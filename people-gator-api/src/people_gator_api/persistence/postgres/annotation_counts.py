@@ -4,14 +4,21 @@ This projection uses the response summaries' source scope. Only count-aware
 queries pay for it; no evidence filter can narrow the counted annotations.
 """
 
-from sqlalchemy import func, literal, select, union_all
-from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+import uuid
+from collections.abc import Sequence
+
+from sqlalchemy import BigInteger, ColumnElement, func, literal, select, union_all
+from sqlalchemy.sql.selectable import CTE
+from people_gator_api.schemas.annotation_counts import (
+    ANNOTATION_COUNT_FIELDS,
+    AnnotationCountFilter,
+)
 from people_gator_api.schemas.missing import missing_to_none
 from .entity_link_queries import source_scope
 from .models import Source, ImageOccurrence, TextMention
 
 
-def annotation_counts():
+def annotation_counts(owner_ids: Sequence[uuid.UUID] | None = None) -> CTE:
     evidence = union_all(
         select(
             ImageOccurrence.source_id,
@@ -34,25 +41,26 @@ def annotation_counts():
                 else evidence.c.state == state
             )
         columns.append(
-            func.count().filter(*conditions).label(field)
+            func.count(type_=BigInteger).filter(*conditions).label(field)
             if conditions
-            else func.count().label(field)
+            else func.count(type_=BigInteger).label(field)
         )
     return (
         select(scope.c.owner_id, *columns)
         .select_from(scope)
         .join(evidence, evidence.c.source_id == scope.c.source_id)
+        .where(scope.c.owner_id.in_(owner_ids) if owner_ids is not None else True)
         .group_by(scope.c.owner_id)
         .cte()
     )
 
 
-def count_column(counts, field):
+def count_column(counts: CTE, field: str) -> ColumnElement[int]:
     # No evidence means a known zero, including for empty documents/pages.
     return func.coalesce(counts.c[field], 0)
 
 
-def count_minima(values):
+def count_minima(values: AnnotationCountFilter | None) -> dict[str, int]:
     if values is None:
         return {}
     return {
@@ -63,7 +71,9 @@ def count_minima(values):
     }
 
 
-def minimum_count_predicate(values):
+def minimum_count_predicate(
+    values: AnnotationCountFilter,
+) -> ColumnElement[bool] | None:
     minima = count_minima(values)
     if not minima:
         return None
