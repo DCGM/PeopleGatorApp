@@ -522,7 +522,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         f"/libraries/{reference_document.library}/documents/{reference_document.document_id}"
         f"/pages/{next(item.page_id for item in PAGES if item.key == 'reference-faces-1')}"
     )
-    reference_actions_path = reference_path + "?" + urlencode({
+    reference_faces_path = reference_path + "?" + urlencode({
         "person": active_faces.get("reference-ada-manual", ""),
         "library": "preview-nlk", "link_state": "verified",
     })
@@ -535,11 +535,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
-            "identity-reference-faces": reference_actions_path,
-            "identity-reference-actions": reference_actions_path,
-            "identity-reference-compact": reference_actions_path,
-            "identity-reference-dismiss": reference_actions_path,
-            "identity-reference-action-colors": reference_actions_path,
+            "identity-reference-faces": reference_faces_path,
             "identity-reference-empty": reference_path + "?candidate_text=Nora",
             "identity-reference-scroll": (
                 f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"

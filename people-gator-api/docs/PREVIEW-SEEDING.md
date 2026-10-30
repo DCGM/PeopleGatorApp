@@ -848,13 +848,14 @@ has zero in every field. Switching columns adds no requests or local sorting.
 
 Open `identity-reference-faces` for **Reference appearances** in `preview-nlk`.
 Hover **View faces** on Ada Novak's candidate card, or click/tap to keep it open.
-The same control is available on the currently assigned identity. The shadcn
+The same control is available on the currently assigned identity. Only one
+gallery is shown at a time: clicking another **View faces** replaces it, and
+hovering other cards never replaces a clicked gallery. The shadcn
 popover contains just a compact grid of faces with small margins; it has no
 close button, title or count. Reaching the end of the bounded
 scroll area automatically loads the next six-face batch, without a loading button.
-Open `identity-reference-compact` for this layout. Dismiss with Escape, a click
-outside or the View faces trigger. `identity-reference-dismiss` opens the same
-scenario for checking dismissal after clicking or scrolling inside the gallery.
+Dismiss with Escape, a click outside or the View faces trigger, including after
+clicking or scrolling inside the gallery.
 Keyboard users can open with Enter/Space, Tab to the scroll area and scroll with
 arrow keys. A failed continuation keeps the loaded faces and offers **Retry**.
 Open `identity-reference-scroll` for **Zora Cartographer**: her 15 existing local
@@ -878,14 +879,13 @@ checks exact membership and cross-library sources, reads every aligned crop,
 checks Nora's empty gallery and preserves a reviewed assignment on rerun.
 
 
-The `identity-reference-actions` link opens the same assigned manual face for
-checking the card's compact footer: **View faces**, **Verify** and **Reassign**
-share one action row, followed by named icon buttons for **New** and **Unlink**.
+`identity-reference-faces` also selects an assigned manual face for checking the
+card's compact footer: **View faces**, **Verify** and **Reassign** share one
+action row, followed by named icon buttons for **New** and **Unlink**.
 Controls wrap together on narrower panels. Verification errors appear inside the
 card below the actions; verified attribution stays available on the state badge.
 
-The `identity-reference-action-colors` alias opens the same card: sky for face
-references, green for verification/save, amber for reassignment/linking, violet
-for a new identity, and red for unlink/cancel. Only button text, icons and borders
+Action colors: sky for face references, green for verification/save, amber for
+reassignment/linking, violet for a new identity, and red for unlink/cancel. Only button text, icons and borders
 carry those colors; every action keeps the standard shadcn outline background.
 Check both light and dark themes.
