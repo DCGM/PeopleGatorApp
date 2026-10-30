@@ -97,3 +97,8 @@ Document view group headings use the occurrence-link style at normal text size: 
 `library · document name` link that opens the document's scans
 (`/scans?document=…`), without the document UUID. `mentions-document-*` is
 refreshed; the link was followed at both viewport sizes without page errors.
+
+Mention view group headings show the exact text in the same serif as the mention
+context, in the default text color without the orange underline. Computed styles
+match the context (font family, color, 16px, no decoration) at both viewport
+sizes. `mentions-group-*` and `mentions-compact-*` are refreshed.
