@@ -75,6 +75,8 @@ let ready: Ref<boolean>
 let faces: Ref<Face[]>
 let lines: Ref<TranscriptionLine[]>
 let route: { params: Record<string, string>; query: Record<string, string> }
+let assignmentError: Ref<Error | null>
+let referenceFace: Ref<Face | null>
 beforeEach(() => {
   vi.clearAllMocks()
   route = reactive({ params: { libraryId: 'lib', documentId: 'doc', pageId: 'one' }, query: {} })
@@ -90,6 +92,8 @@ beforeEach(() => {
     retry: vi.fn(),
   })
   ready = ref(true)
+  assignmentError = ref(null)
+  referenceFace = ref(null)
   faces = ref([face('a'), face('b')])
   lines = ref(
     ['l1', 'l2'].map((id, index) => ({
@@ -102,8 +106,9 @@ beforeEach(() => {
   mocks.workspace.mockReturnValue({
     faces,
     assignmentStatus: ref('idle'),
-    assignmentError: ref(null),
-    referenceFace: ref(null),
+    assignmentError,
+    resetAssignment: vi.fn(() => (assignmentError.value = null)),
+    referenceFace,
     transcription: lines,
     page: ref({ page_id: 'one' }),
     pageImageReady: ready,
@@ -285,7 +290,9 @@ describe('shared detection actions', () => {
     await wrapper.findComponent({ name: 'Button' }).trigger('click')
     await flushPromises()
     expect(card.props('face')).toMatchObject({ id: 'a' })
-    expect(card.props('actionError')).toBe('Could not delete detection.')
+    // The dialog alone reports the failure and stays open for a retry.
+    expect(card.props('actionError')).toBe('')
+    expect(wrapper.text()).toContain('Could not delete detection. Try again.')
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
     await wrapper.findComponent({ name: 'Button' }).trigger('click')
     await flushPromises()
@@ -300,6 +307,46 @@ describe('shared detection actions', () => {
         query: expect.objectContaining({ person: undefined, selectedPerson: undefined }),
       }),
     )
+    wrapper.unmount()
+  })
+  it('clears a failed delete when the confirmation closes', async () => {
+    mocks.deleteFace.mockRejectedValueOnce(new Error('Forbidden'))
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    await flushPromises()
+    wrapper.findComponent({ name: 'CurrentFacePanel' }).vm.$emit('delete')
+    await flushPromises()
+    await wrapper.findComponent({ name: 'Button' }).trigger('click')
+    await flushPromises()
+    wrapper.findComponent({ name: 'AlertDialog' }).vm.$emit('update:open', false)
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+    expect(wrapper.text()).not.toContain('Could not delete detection')
+    wrapper.unmount()
+  })
+  it('offers Delete only for a face on this scan, not an off-page reference', async () => {
+    referenceFace.value = face('elsewhere')
+    route.query = { person: 'elsewhere' }
+    const wrapper = await mountView()
+    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+    expect(card.props('face')).toMatchObject({ id: 'elsewhere' })
+    expect(card.props('canDelete')).toBe(false)
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    await flushPromises()
+    expect(card.props('canDelete')).toBe(true)
+    wrapper.unmount()
+  })
+  it('clears a failed link update when another face is selected', async () => {
+    const wrapper = await mountView()
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    await flushPromises()
+    assignmentError.value = new Error('Forbidden')
+    await flushPromises()
+    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+    expect(card.props('actionError')).toBe('Could not update link.')
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'b')
+    await flushPromises()
+    expect(card.props('actionError')).toBe('')
     wrapper.unmount()
   })
   it('keeps face and line navigation from detection boxes and their actions', async () => {

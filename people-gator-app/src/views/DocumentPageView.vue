@@ -108,6 +108,7 @@ const {
   assignFace,
   assignmentStatus,
   assignmentError,
+  resetAssignment,
   createAndAssign,
   error,
   faces,
@@ -281,19 +282,27 @@ const actionBusy = computed(
     verifyMutation.isPending.value ||
     deleteMutation.isPending.value,
 )
+// Delete errors stay in the confirmation dialog, which remains open for a retry.
 const actionError = computed(() =>
   verifyMutation.error.value
     ? 'Could not verify link.'
-    : deleteMutation.error.value
-      ? 'Could not delete detection.'
-      : assignmentError.value
-        ? 'Could not update link.'
-        : '',
+    : assignmentError.value
+      ? 'Could not update link.'
+      : '',
+)
+// Only a face drawn on this scan can be deleted from here, not an off-page reference.
+const selectedFaceOnPage = computed(() =>
+  faces.value.some((face) => face.id === selectedFace.value?.id),
 )
 watch(selectedFaceId, () => {
   if (!verifyMutation.isPending.value) verifyMutation.reset()
-  if (!deleteMutation.isPending.value) deleteMutation.reset()
+  if (assignmentStatus.value !== 'pending') resetAssignment()
 })
+function closeDeletion(open: boolean) {
+  if (open || deleteMutation.isPending.value) return
+  deletionTarget.value = null
+  deleteMutation.reset()
+}
 function verifyFace(face: Face) {
   verifyMutation.mutate({ id: face.id, kind: 'face' })
 }
@@ -303,7 +312,7 @@ async function deleteDetection() {
   try {
     await deleteMutation.mutateAsync(face.id)
     clearFace()
-    deletionTarget.value = null
+    closeDeletion(false)
     viewerElement.value?.focus()
   } catch {
     // Keep the detection and confirmation available for retry.
@@ -777,7 +786,7 @@ onBeforeUnmount(() => {
           class="p-5"
           :face="selectedFace ?? null"
           :assignment-pending="actionBusy"
-          :can-delete="canDelete"
+          :can-delete="canDelete && selectedFaceOnPage"
           :action-error="actionError"
           @delete="deletionTarget = selectedFace"
           @find-profile="focusSimilarPeopleSearch"
@@ -834,10 +843,7 @@ onBeforeUnmount(() => {
         />
       </TabsContent>
     </Tabs>
-    <AlertDialog
-      :open="Boolean(deletionTarget)"
-      @update:open="!$event && !deleteMutation.isPending.value && (deletionTarget = null)"
-    >
+    <AlertDialog :open="Boolean(deletionTarget)" @update:open="closeDeletion">
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this detection?</AlertDialogTitle>
@@ -850,7 +856,9 @@ onBeforeUnmount(() => {
         </p>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleteMutation.isPending.value">Cancel</AlertDialogCancel>
-          <Button :disabled="actionBusy" @click="deleteDetection">Delete</Button>
+          <Button variant="destructive" :disabled="actionBusy" @click="deleteDetection"
+            >Delete</Button
+          >
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
