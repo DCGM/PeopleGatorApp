@@ -5,6 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
 from people_gator_api.routes.v1 import router
 from people_gator_api.routes.v1.query_dependencies import (
     FaceListFilterDependency,
@@ -87,7 +88,6 @@ LIST_FILTERS = {
     },
 }
 LIST_FILTERS["/documents"].add("has_unassigned_faces")
-from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
 for path in ("/documents", "/pages"):
     LIST_FILTERS[path].update("min_" + field for field in ANNOTATION_COUNT_FIELDS)
 

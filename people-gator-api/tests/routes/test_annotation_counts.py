@@ -35,7 +35,7 @@ def client():
 )
 def test_minimum_contract(client, model, path, field):
     name = "min_" + field
-    for value in (0, 1, 10):
+    for value in (0, 1, 10, 9_007_199_254_740_991):
         assert getattr(model(**{name: value}).to_generic(), name) == value
         response = client.get(path, params={"filter." + name: str(value)})
         assert response.status_code == 200, response.text

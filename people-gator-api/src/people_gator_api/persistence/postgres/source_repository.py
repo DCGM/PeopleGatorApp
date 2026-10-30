@@ -93,6 +93,7 @@ def document_page_count() -> ColumnElement[int]:
 from people_gator_api.schemas.sorting import RELEVANCE, SortDirection
 from .annotation_counts import annotation_counts, count_column, count_minima
 from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+from sqlalchemy.sql.selectable import CTE
 from .sorting import (
     Builders,
     SortKey,
@@ -180,7 +181,7 @@ class PostgresSourceRepository(SourceRepository):
         model: type[Page] | type[Document] | None,
         field: str | None,
         direction: SortDirection,
-        counts=None,
+        counts: CTE | None = None,
     ) -> SortSpec:
         # Table columns keep the polymorphic source query to a single FROM.
         page, document = Page.__table__.c, Document.__table__.c
@@ -218,8 +219,10 @@ class PostgresSourceRepository(SourceRepository):
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
         if counts is not None:
-            builders.update({key: (lambda desc, key=key: [SortKey(count_column(counts, key), "number", desc)])
-                             for key in ANNOTATION_COUNT_FIELDS})
+            builders.update({
+                key: (lambda desc, key=key: [SortKey(count_column(counts, key), "number", desc)])
+                for key in ANNOTATION_COUNT_FIELDS
+            })
         return build_spec(field, direction, Source.id, builders, "source_id")
 
     @staticmethod
@@ -235,10 +238,17 @@ class PostgresSourceRepository(SourceRepository):
         raise ValueError("sorting requires a page or document list")
 
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
-        counts = annotation_counts() if query.sort in ANNOTATION_COUNT_FIELDS or count_minima(missing_to_none(query.filter_)) else None
+        counts = (
+            annotation_counts()
+            if query.sort in ANNOTATION_COUNT_FIELDS or count_minima(missing_to_none(query.filter_))
+            else None
+        )
         filters = source_filters(query.filter_, counts=counts)
         fingerprint = cursor_fingerprint(query)
-        source = self._source if counts is None else inspect(self._source).selectable.outerjoin(counts, counts.c.owner_id == Source.id)
+        source = (
+            self._source if counts is None
+            else inspect(self._source).selectable.outerjoin(counts, counts.c.owner_id == Source.id)
+        )
         spec = self._sort_spec(self._sorted_model(query), *query.effective_sort(), counts)
         after = decode_keyset(query.cursor, spec, fingerprint)
         total = None
@@ -539,7 +549,10 @@ class PostgresSourceRepository(SourceRepository):
             await self._source_face_scores(model, query, filters),
         )
         field, direction = query.effective_sort()
-        counts = annotation_counts() if field in ANNOTATION_COUNT_FIELDS else None
+        counts = (
+            annotation_counts([item[0] for item in ranked])
+            if field in ANNOTATION_COUNT_FIELDS else None
+        )
         spec = None if field == RELEVANCE else self._sort_spec(model, field, direction, counts)
         values: dict[uuid.UUID, tuple[object, ...]] = {}
         if spec is not None and ranked:
