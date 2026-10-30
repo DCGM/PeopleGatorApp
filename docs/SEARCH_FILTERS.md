@@ -381,8 +381,8 @@ Minima combine with AND, including existing library, source, actor/date, content
 and same-annotation evidence constraints. Zero imposes no restriction. Omission
 also imposes no restriction; negative, fractional, null, boolean and malformed
 values are rejected. Values must fit an exact JSON integer (0–9007199254740991).
-POST search bodies use the same names inside `filter_`, without the `filter.`
-prefix. GET names and bounds are documented in the locally exported OpenAPI/SDK.
+GET parameter names and bounds are documented in the locally exported
+OpenAPI/SDK.
 
 A document counts its direct annotations plus annotations on registered pages
 with the same library and archive document ID. A page counts only its own
