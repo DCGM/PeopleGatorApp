@@ -29,9 +29,9 @@ export type PageGalleryItem = {
   thumbnailFailed: boolean
 }
 
-/** A short, truthful identifier: the archive page UUID prefix, not a page number. */
-export function pageGalleryLabel(pageId: string) {
-  return pageId.slice(0, 8)
+/** Stored position when known; archive UUID prefix otherwise. */
+export function pageGalleryLabel(pageId: string, number?: number | null) {
+  return number == null ? pageId.slice(0, 8) : String(number)
 }
 
 /** Keep workspace settings and evidence filters; drop page-specific selections. */
@@ -43,8 +43,7 @@ export function pageGalleryQuery(query: LocationQuery): LocationQuery {
 
 /**
  * Registered pages of exactly one library/document in the selected API order:
- * archive page ID (default) or last change. Neither is the physical page
- * sequence, which is not recorded. Evidence filters deliberately do not apply:
+ * stored page number (default), unknowns last. Evidence filters do not apply:
  * every registered page stays reachable.
  */
 export function useDocumentPageGallery(
@@ -130,7 +129,7 @@ export function useDocumentPageGallery(
       library: page.library,
       documentId: page.document_id,
       pageId: page.page_id,
-      label: pageGalleryLabel(page.page_id),
+      label: pageGalleryLabel(page.page_id, page.page_number),
       current: page.page_id === toValue(currentPageId),
       thumbnailUrl: thumbnailUrls.value.get(page.source_id) ?? '',
       thumbnailLoading: thumbnailQueries.value[index]?.isPending ?? false,

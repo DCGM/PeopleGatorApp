@@ -12,6 +12,8 @@ export type DocumentSearchCard = {
   library: string
   documentId: string
   pageId: string
+  pageNumber?: number | null
+  registeredPageCount?: number | null
   names: string[]
   thumbnailUrl: string
   thumbnailLoading: boolean
@@ -81,6 +83,8 @@ export function usePageCards(pages: MaybeRefOrGetter<PageResponse[]>) {
         library: resolvedPage.library,
         documentId: resolvedPage.document_id,
         pageId: resolvedPage.page_id,
+        pageNumber: resolvedPage.page_number,
+        registeredPageCount: resolvedPage.registered_page_count,
         names,
         thumbnailUrl: imageUrls.value.get(sourceId) ?? '',
         thumbnailLoading: imageQueries.value[index]?.isPending ?? false,

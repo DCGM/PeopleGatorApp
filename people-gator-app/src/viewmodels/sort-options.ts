@@ -39,6 +39,7 @@ export const DOCUMENT_BROWSE_DEFAULT: SortState<DocumentSortField> = {
 }
 
 export const PAGE_SORTS: SortOption<PageSortField>[] = [
+  { value: 'page_number', label: 'Page number', kind: 'number' },
   { value: 'relevance', label: 'Relevance', kind: 'relevance' },
   { value: 'library', label: 'Library', kind: 'text' },
   { value: 'document_id', label: 'Document ID', kind: 'id' },
@@ -50,11 +51,12 @@ export const PAGE_BROWSE_DEFAULT: SortState<PageSortField> = { field: 'library',
 
 /** The gallery holds one document, so library/document order adds nothing. */
 export const GALLERY_SORTS: SortOption<PageSortField>[] = [
+  { value: 'page_number', label: 'Page number', kind: 'number' },
   { value: 'page_id', label: 'Page ID', kind: 'id' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },
   ...COUNT_OPTIONS,
 ]
-export const GALLERY_DEFAULT: SortState<PageSortField> = { field: 'page_id', direction: 'asc' }
+export const GALLERY_DEFAULT: SortState<PageSortField> = { field: 'page_number', direction: 'asc' }
 export const GALLERY_SORT_KEYS: SortUrlKeys = { field: 'gallery_sort', direction: 'gallery_dir' }
 
 export const FACE_SORTS: SortOption<FaceSortField>[] = [

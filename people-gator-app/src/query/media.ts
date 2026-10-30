@@ -3,6 +3,8 @@ import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
+  patchPageRouteApiV1PagesPageSourceIdPatch,
+  type PagePatchRequest,
   createDocumentRouteApiV1DocumentsPost,
   createDocumentBatchRouteApiV1DocumentsBatchPost,
   createImageRouteApiV1ImagesPost,
@@ -422,5 +424,27 @@ export function useDeleteSourceMutation() {
         }),
       ),
     onSuccess: invalidate,
+  })
+}
+
+/** Discard ordered cursor chains after an annotation edit. */
+export function usePageNumberMutation() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sourceId, payload }: { sourceId: string; payload: PagePatchRequest }) =>
+      responseData(
+        patchPageRouteApiV1PagesPageSourceIdPatch({
+          path: { page_source_id: sourceId },
+          body: payload,
+          throwOnError: true,
+        }),
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        client.resetQueries({ queryKey: queryKeys.pages.all }),
+        client.resetQueries({ queryKey: queryKeys.documents.all }),
+        client.resetQueries({ queryKey: queryKeys.search.all }),
+      ])
+    },
   })
 }

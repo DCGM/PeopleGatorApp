@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { pagePosition } from '@/lib/page-position'
 import { ChevronRight, FileText } from '@lucide/vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -10,6 +11,8 @@ const props = withDefaults(
     library: string
     documentUuid: string
     pageUuid: string
+    pageNumber?: number | null
+    registeredPageCount?: number | null
     names: readonly string[]
     thumbnailUrl?: string
     thumbnailLoading?: boolean
@@ -41,6 +44,11 @@ const props = withDefaults(
       </AspectRatio>
     </CardHeader>
     <CardContent class="px-0">
+      <small
+        class="block tabular-nums"
+        :aria-label="`Page ${props.pageNumber ?? 'unknown'} of ${props.registeredPageCount ?? 'unknown'} registered pages`"
+        >{{ pagePosition(props.pageNumber, props.registeredPageCount) }}</small
+      >
       <small class="block truncate" :title="props.pageUuid">
         <span v-if="props.showLibrary" class="font-bold text-secondary"
           >{{ props.library }} ·
