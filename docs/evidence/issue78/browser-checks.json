@@ -1,0 +1,16 @@
+[
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "checks": "Count tags, header/selector synchronization, column visibility query preservation, whole-number validation, AND minima, Back/Forward, clear search/all, reload, keyboard Select/Escape focus, contained horizontal table scrolling, responsive collapse, light/dark and zero console errors passed."
+  },
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "checks": "Count tags, header/selector synchronization, column visibility query preservation, whole-number validation, AND minima, Back/Forward, clear search/all, reload, keyboard Select/Escape focus, contained horizontal table scrolling, responsive collapse, light/dark and zero console errors passed."
+  }
+]

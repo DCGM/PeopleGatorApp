@@ -1,4 +1,4 @@
-"""The same strict count contract on HTTP, typed filters and POST search bodies."""
+"""The same strict count contract on HTTP and typed list/search requests."""
 
 import pytest
 from fastapi import FastAPI
@@ -50,7 +50,7 @@ def test_minimum_contract(client, model, path, field):
 
 @pytest.mark.parametrize("request_type", [SearchDocumentsRequest, SearchPagesRequest])
 @pytest.mark.parametrize("field", ANNOTATION_COUNT_FIELDS)
-def test_search_body_count_contract_and_default_direction(request_type, field):
+def test_search_request_count_contract_and_default_direction(request_type, field):
     result = request_type.model_validate(
         {
             "limit": 12,

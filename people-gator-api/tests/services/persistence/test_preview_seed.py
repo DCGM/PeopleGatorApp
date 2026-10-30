@@ -3588,6 +3588,8 @@ async def test_found_faces_assignment_pages_cover_the_complete_seed_candidates(s
     assert seed.faces['review-unassigned'] in partitions[1]
     assert seed.faces['review-candidate'] in partitions[0]
     assert 'person-review-found-faces' in seed.filter_examples
+
+
 @pytest.mark.asyncio
 async def test_annotation_count_matrix_orders_filters_and_pages_before_cursors(
     seed_target,
@@ -3858,11 +3860,18 @@ async def test_count_preview_mutations_preservation_and_interrupted_recovery(
     assert await membership("unassigned", 2) == (True, True)
     await db.faces.patch(
         original.faces["count-face-0"],
-        FacePatchRequest(entity_id=original.entities["table-tereza"]),
+        FacePatchRequest(
+            entity_id=original.entities["table-tereza"], entity_link_state="manual"
+        ),
         actor,
     )
     assert await membership("unassigned", 2) == (False, False)
+    assert await membership("manual", 2) == (True, True)
+    assert await membership("total", 4) == (True, True)
     await db.faces.delete(original.faces["count-face-0"], context=actor)
+    assert await membership("total", 4) == (True, False)
+    assert await membership("total", 5) == (False, False)
+    assert await membership("manual", 2) == (True, False)
     await db.text_mentions.patch(
         original.mentions["count-mention-0"],
         TextMentionPatchRequest(entity_link_state="verified"),
@@ -3879,6 +3888,16 @@ async def test_count_preview_mutations_preservation_and_interrupted_recovery(
     )
     assert len(mentions.items) == 1
     await db.text_mentions.delete(original.mentions["count-mention-0"], context=actor)
+    mentions = await db.sources.list_pages(
+        PageListRequest(
+            limit=12,
+            filter_=PageListFilter(
+                min_mentions_verified_count=2,
+                source_id=[original.pages["count-mentions-1"]],
+            ),
+        )
+    )
+    assert not mentions.items
     before = await db.sources.get_document(doc_id)
     await preview.seed_preview(db, fs)
     assert await db.sources.get_document(doc_id) == before
