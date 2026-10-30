@@ -47,6 +47,32 @@ it('resolves every filtered cursor and deduplicates before any review write', as
   expect(api.list.mock.calls[1]![0].query).toMatchObject({ ...scope, cursor: 'next' })
   expect(api.patch).not.toHaveBeenCalled()
 })
+it('skips already-verified occurrences only when verifying', async () => {
+  api.list.mockResolvedValueOnce({
+    data: {
+      items: [
+        { mention_id: 'auto', entity_link_state: 'automatic' },
+        { mention_id: 'done', entity_link_state: 'verified' },
+      ],
+      cursor: null,
+      limit: 100,
+    },
+  })
+  const targets = {
+    scopes: [{ 'filter.name': ['Ada'] }],
+    ids: ['picked', 'loaded-done'],
+    verifiedIds: ['loaded-done'],
+  }
+  expect(await resolveMentionTargets(targets, 'verify')).toEqual(['auto', 'picked'])
+  api.list.mockResolvedValueOnce({
+    data: {
+      items: [{ mention_id: 'done', entity_link_state: 'verified' }],
+      cursor: null,
+      limit: 100,
+    },
+  })
+  expect(await resolveMentionTargets(targets, 'unlink')).toEqual(['done', 'picked', 'loaded-done'])
+})
 it('selects exact text independently of expansion and reviews unloaded occurrences', async () => {
   const router = createRouter({
     history: createMemoryHistory(),
