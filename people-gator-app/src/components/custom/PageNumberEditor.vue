@@ -5,7 +5,6 @@ import type { PageResponse } from '@/client'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { usePageNumberMutation } from '@/query/media'
-import { pagePosition } from '@/lib/page-position'
 const props = defineProps<{ page: PageResponse }>()
 const allowed = useCanAnnotate()
 const value = ref('')
@@ -30,9 +29,6 @@ function save() {
 </script>
 <template>
   <form v-if="allowed" class="mb-4 flex flex-wrap items-center gap-2" @submit.prevent="save">
-    <small class="tabular-nums">{{
-      pagePosition(page.page_number, page.registered_page_count)
-    }}</small>
     <Input
       v-model="value"
       class="w-28"

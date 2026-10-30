@@ -35,8 +35,10 @@ describe('page numbering', () => {
         registeredPageCount: 3,
       },
     })
-    expect(card.text()).toContain('10/3')
-    expect(card.get('[aria-label]').attributes('aria-label')).toBe('Page 10 of 3 registered pages')
+    // The compact form is hidden from assistive tech; the spoken form is sr-only text.
+    expect(card.get('small > span[aria-hidden="true"]').text()).toBe('10/3')
+    expect(card.get('.sr-only').text()).toBe('Page 10 of 3 registered pages')
+    expect(card.find('small[aria-label]').exists()).toBe(false)
   })
   it('validates edits and sends explicit clears without changing page identity', async () => {
     const page = { source_id: 'source', page_number: 10, registered_page_count: 3 } as PageResponse

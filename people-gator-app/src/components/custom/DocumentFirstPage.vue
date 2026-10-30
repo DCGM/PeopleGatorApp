@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { pagePosition } from '@/lib/page-position'
 import type { DocumentResponse } from '@/client'
 import { usePageImageQuery } from '@/query/media'
 import { useObjectUrl } from '@/composables/object-url'
 import { documentTitle } from '@/viewmodels/document-list'
 import LoadableImage from './LoadableImage.vue'
+import PagePosition from './PagePosition.vue'
 
 const props = defineProps<{ document: DocumentResponse }>()
 const image = usePageImageQuery(() => props.document.first_page_source_id ?? '', 256)
@@ -26,11 +26,10 @@ const url = useObjectUrl(() => image.data.value)
         }}</span>
       </template>
     </LoadableImage>
-    <small
+    <PagePosition
       v-if="document.first_page_source_id"
-      class="tabular-nums"
-      aria-label="Page position among registered pages"
-      >{{ pagePosition(document.first_page_number, document.registered_page_count) }}</small
-    >
+      :number="document.first_page_number"
+      :total="document.registered_page_count"
+    />
   </div>
 </template>
