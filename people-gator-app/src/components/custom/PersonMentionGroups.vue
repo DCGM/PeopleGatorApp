@@ -18,6 +18,7 @@ import PersonMentionOccurrences from './PersonMentionOccurrences.vue'
 import PersonMentionListSkeleton from './PersonMentionListSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
 import { useTextMentionGroupsQuery, type TextMentionListParams } from '@/query/text-mentions'
+import { relatedQuery } from '@/viewmodels/shared-filters'
 
 const props = withDefaults(
   defineProps<{
@@ -232,7 +233,20 @@ watch(groups, (items) => {
               class="size-3.5"
           /></Checkbox>
           <div class="flex min-w-0 flex-1 items-center gap-3 py-3">
-            <span class="min-w-0 flex-1 break-words font-sans"
+            <span
+              v-if="mode === 'document' && group.source_kind === 'document'"
+              class="min-w-0 flex-1 font-sans"
+              ><RouterLink
+                :to="{
+                  name: 'document-search',
+                  query: relatedQuery(route, { document: group.source_id! }),
+                }"
+                class="text-sm underline wrap-anywhere"
+                :title="`${group.library} · ${group.document_id}`"
+                >{{ group.library }} · {{ group.name }}</RouterLink
+              ></span
+            >
+            <span v-else class="min-w-0 flex-1 break-words font-sans"
               ><span :class="mode === 'mention' && 'text-secondary underline underline-offset-2'">{{
                 group.name
               }}</span>

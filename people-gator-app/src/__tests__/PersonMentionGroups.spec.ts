@@ -172,4 +172,52 @@ describe('exact appearance mention groups', () => {
     wrapper.unmount()
     client.clear()
   })
+
+  it('labels document groups as a library · name link to the document without its UUID', async () => {
+    mocks.groups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            name: 'Letters',
+            source_id: 'doc-source',
+            source_kind: 'document',
+            library: 'lib',
+            document_id: '8e788655-2993-58e1-99d6-0bc49c31891f',
+            occurrence_count: 1,
+          },
+        ],
+        limit: 25,
+        total_count: 1,
+        cursor: null,
+      },
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode: 'document',
+        compact: true,
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: [],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    const link = wrapper.getComponent(RouterLinkStub)
+    expect(link.text()).toBe('lib · Letters')
+    expect(link.props('to')).toMatchObject({
+      name: 'document-search',
+      query: { document: 'doc-source' },
+    })
+    expect(wrapper.text()).not.toContain('8e788655')
+  })
 })
