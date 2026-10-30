@@ -33,6 +33,16 @@ from people_gator_api.schemas.sorting import (
 from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 
 
+type PageNumber = Annotated[int, Field(strict=True, ge=1, le=2147483647)]
+
+
+class PagePatchRequest(BaseModel):
+    """Omission preserves numbering; null explicitly clears it."""
+
+    model_config = ConfigDict(extra="forbid")
+    page_number: PageNumber | None = None
+
+
 type DocumentName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
@@ -93,6 +103,7 @@ class GenericSourceCreateRequest(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+    page_number: PageNumber | None = None
     name: DocumentName | None = None
     library: str | MissingType = Field(
         default=MISSING,
@@ -115,6 +126,8 @@ class GenericSourceCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_type_specific_fields(self) -> Self:
+        if self.page_number is not None and self.source_type != SourceKind.page:
+            raise ValueError("page_number belongs only to page sources")
         if self.name is not None and self.source_type != SourceKind.document:
             raise ValueError("name belongs only to document sources")
         has_library = self.library is not MISSING
@@ -171,12 +184,14 @@ class PageCreateRequest(SourceCreateRequestBase):
     library: str = Field(min_length=1)
     document_id: uuid.UUID
     page_id: uuid.UUID
+    page_number: PageNumber | None = Field(default=None, description="1-based document position; null means unknown. Reimports preserve existing annotations.")
 
     def to_generic(self) -> GenericSourceCreateRequest:
         return GenericSourceCreateRequest(
             library=self.library,
             document_id=self.document_id,
             page_id=self.page_id,
+            page_number=self.page_number,
             source_type=SourceKind.page,
             url=AnyUrl(page_url(self.library, self.document_id, self.page_id)),
         )
@@ -393,11 +408,13 @@ class GenericSourceResponse(SourceResponseBase):
 
     model_config = ConfigDict(extra="forbid")
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
-    first_page_source_id: uuid.UUID | None = Field(default=None, description="First registered page by archive page ID, independent of evidence filters; null when no registered page is available.")
+    first_page_number: PageNumber | None = None
+    first_page_source_id: uuid.UUID | None = Field(default=None, description="First registered page by page number, unknowns last and source UUID ascending; independent of evidence filters.")
     registered_page_count: int | None = Field(default=None, ge=0, description="All registered pages in this library/document, independent of evidence filters.")
     linked_entity_count: int | None = Field(default=None, ge=0, description="Distinct assigned entities across direct and page faces/mentions.")
     last_touched_by_user_name: str | None = None
     last_touched_by_api_key_name: str | None = None
+    page_number: PageNumber | None = None
     name: str | None = None
     library: str | None = Field(
         default=None,
@@ -453,6 +470,8 @@ class PageResponse(SourceResponseBase):
     library: str = Field(min_length=1)
     document_id: uuid.UUID
     page_id: uuid.UUID
+    page_number: PageNumber | None = None
+    registered_page_count: int | None = Field(default=None, ge=0, description="Registered pages in this library/document, not the original document length.")
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> PageResponse:
@@ -474,6 +493,8 @@ class PageResponse(SourceResponseBase):
             library=generic.library,
             document_id=generic.document_id,
             page_id=generic.page_id,
+            page_number=generic.page_number,
+            registered_page_count=generic.registered_page_count,
         )
 
 
@@ -483,7 +504,8 @@ class DocumentResponse(SourceResponseBase):
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
     library: str = Field(min_length=1)
     document_id: uuid.UUID
-    first_page_source_id: uuid.UUID | None = Field(default=None, description="First registered page by archive page ID, independent of evidence filters; null when no registered page is available.")
+    first_page_number: PageNumber | None = None
+    first_page_source_id: uuid.UUID | None = Field(default=None, description="First registered page by page number, unknowns last and source UUID ascending; independent of evidence filters.")
     registered_page_count: int | None = Field(default=None, ge=0, description="All registered pages in this library/document, independent of evidence filters.")
     linked_entity_count: int | None = Field(default=None, ge=0, description="Distinct assigned entities across direct and page faces/mentions.")
     last_touched_by_user_name: str | None = None
@@ -509,6 +531,7 @@ class DocumentResponse(SourceResponseBase):
             library=generic.library,
             document_id=generic.document_id,
             first_page_source_id=generic.first_page_source_id,
+            first_page_number=generic.first_page_number,
             registered_page_count=generic.registered_page_count,
             linked_entity_count=generic.linked_entity_count,
             last_touched_by_user_name=generic.last_touched_by_user_name,
@@ -928,6 +951,8 @@ __all__ = [
 
     "GenericSourceCreateRequest",
     "PageCreateRequest",
+    "PagePatchRequest",
+    "PageNumber",
     "DocumentCreateRequest",
     "ImageCreateRequest",
 

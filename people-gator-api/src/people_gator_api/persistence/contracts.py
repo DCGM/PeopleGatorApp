@@ -108,6 +108,7 @@ from people_gator_api.schemas.sources import (
     PageListResponse,
     PageLookupRequest,
     PageResponse,
+    PagePatchRequest,
     SourceCreateRequestBase,
     SourceListRequest,
     SourceListResponse,
@@ -717,6 +718,14 @@ class SourceRepository(ABC):
             specs=specs,
             cls=DocumentResponse,
         )
+
+    async def patch_page(self, source_id: uuid.UUID, payload: "PagePatchRequest", *, context: GenericActor) -> PageResponse | None:
+        """Edit numbering with actor attribution; omission preserves, null clears.
+
+        Duplicate numbers and gaps are allowed; other pages never renumber.
+        Imports preserve all existing annotations, including conflicting values.
+        """
+        raise NotImplementedError
 
     async def get_or_create_page_batch(
         self, specs: Sequence[PageCreateRequest]

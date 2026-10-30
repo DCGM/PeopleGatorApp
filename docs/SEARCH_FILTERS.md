@@ -133,8 +133,8 @@ Semantics shared by every resource:
 | --- | --- | --- | --- |
 | People browse/search, Discover people, scan candidates (`/entities`, `/search-entities`) | `relevance` (search), `name`, `last_touched_at`, `created_at`, `entity_id` | UUID / relevance | Name A–Z; Relevance while a query or face signal exists |
 | Documents (`/documents`, `/search-documents`) | `relevance` (search), `name`, `library` (then archive ID), `document_id`, `page_count` (registered pages with the same library/archive ID), `last_touched_at` (document processing) | UUID / relevance | Name A–Z (unknown names first); Relevance while searching |
-| Scans (`/pages`, `/search-pages`) | `relevance` (search), `library` (then document, page ID), `document_id` (then page ID), `page_id`, `last_touched_at` | UUID / relevance | Library A–Z; Relevance while searching |
-| Document page gallery and scan lists (`/pages`) | `page_id`, `last_touched_at` | UUID | Page ID ascending. No physical page sequence is recorded; page IDs are never shown as page numbers |
+| Scans (`/pages`, `/search-pages`) | `relevance` (search), `library` (then document, page ID), `document_id` (then page ID), `page_id`, `page_number`, `last_touched_at` | UUID / relevance | Library A–Z; Relevance while searching |
+| Document page gallery and scan lists (`/pages`) | `page_number`, `page_id`, `last_touched_at` | UUID | Stored page number ascending, unknowns last; explicit user choices take precedence |
 | Person faces, scan page faces, Discover similar faces (`/faces`, `/search-faces`) | `relevance` (similarity, search), `last_touched_at`, `link_state`, `confidence`, `source` (library, document, page), `detection_id` | UUID / relevance | Face ID; Similarity in Discover. Scan page faces omit Source |
 | Person mentions, group occurrences (`/text-mentions`) | `text`, `last_touched_at`, `link_state`, `source`, `mention_id` | UUID | Text A–Z |
 | Exact appearance groups (`/text-mention-groups`) | `text`, `count`, `last_touched_at` (latest edit in the group) | Text A–Z | Text A–Z; groups and occurrences sort independently |

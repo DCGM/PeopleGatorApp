@@ -49,6 +49,7 @@ from people_gator_api.schemas.sources import (
     GenericSourceLookupRequest,
     GenericSourceResponse,
     PageResponse,
+    PagePatchRequest,
     DocumentLibraryOptionsRequest, DocumentLibraryOptionsResponse, DocumentLibraryOption,
 )
 from people_gator_api.persistence.postgres.models import (
@@ -197,6 +198,7 @@ class PostgresSourceRepository(SourceRepository):
                     SortKey(page.document_id, "uuid", desc),
                     SortKey(page.page_id, "uuid", desc),
                 ],
+                "page_number": lambda desc: [SortKey(page.page_number, "number", desc)],
                 "page_id": lambda desc: [SortKey(page.page_id, "uuid", desc)],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
@@ -295,6 +297,7 @@ class PostgresSourceRepository(SourceRepository):
                 library=spec.library,
                 document_id=spec.document_id,
                 page_id=spec.page_id,
+                page_number=spec.page_number,
             )
         if spec.source_type == SourceKind.document:
             assert isinstance(spec.library, str)
@@ -342,6 +345,7 @@ class PostgresSourceRepository(SourceRepository):
         source = self._new(spec)
         self._session.add(source)
         await commit(self._session, "source create violates a persistence constraint")
+        await load_link_stats(self._session, [source])
         return source_response(source), CreateResult.CREATED
 
     async def get_or_create_batch(
@@ -351,6 +355,17 @@ class PostgresSourceRepository(SourceRepository):
         for spec in specs:
             results.append(await self.get_or_create(spec))
         return results
+
+    async def patch_page(self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor) -> PageResponse | None:
+        await lock_annotation_graph(self._session)
+        page = await self._session.scalar(select(Page).where(Page.id == source_id).with_for_update())
+        if page is None:
+            return None
+        if "page_number" in payload.model_fields_set and page.page_number != payload.page_number:
+            page.page_number = payload.page_number
+            await touch_sources(self._session, [source_id], context)
+            await commit(self._session, "page number update failed")
+        return await self.get_page(source_id)
 
     async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
         return bool(await self.delete_batch([source_id], context=context))

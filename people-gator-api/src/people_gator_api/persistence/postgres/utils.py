@@ -688,6 +688,8 @@ def source_response(source: Source) -> GenericSourceResponse:
             library=source.library,
             document_id=source.document_id,
             page_id=source.page_id,
+            page_number=source.page_number,
+            registered_page_count=getattr(source, "_registered_page_count", None),
         )
     elif isinstance(source, Document):
         common.update(library=source.library, document_id=source.document_id, name=source.name,
