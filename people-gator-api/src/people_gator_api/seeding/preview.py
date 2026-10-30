@@ -823,6 +823,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-table-ndk-column": "/documents?" + urlencode({"document": documents["table-ledger"]}),
             "document-table-ndk-link": "/documents?" + urlencode({"document": documents["table-ledger"]}),
             "document-table-first-page": "/documents?" + urlencode({"document": documents["table-ledger"]}),
+            "annotation-count-documents": "/documents?" + urlencode({"library": ["preview-counts", "preview-table", "preview-table-mirror"], "min_faces_manual_count": "1", "min_mentions_total_count": "3", "sort": "annotations_verified_count", "dir": "desc"}, doseq=True),
+            "annotation-count-pages": "/scans?" + urlencode({"library": "preview-counts", "min_faces_unassigned_count": "1", "sort": "faces_total_count", "dir": "asc"}),
             "document-table": "/documents?" + urlencode({"library": "preview-table"}),
             "mobile-filters": "/people?"
             + urlencode(
