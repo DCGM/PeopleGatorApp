@@ -14,6 +14,7 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+from people_gator_api.schemas.annotation_counts import AnnotationCountFilter
 from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
 from people_gator_api.schemas.common import (
@@ -578,7 +579,7 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
 # ---------------------------------------------------------------------------
 
 
-class GenericSourceListFilter(ListFilterBase, SharedFilter):
+class GenericSourceListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
     """Filter for listing generic sources."""
 
     source_type: list[SourceKind] | MissingType = Field(
@@ -673,7 +674,7 @@ class SourceListFilter(ListFilterBase, SharedFilter):
         )
 
 
-class PageListFilter(ListFilterBase, SharedFilter):
+class PageListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
     """Filter for listing pages."""
 
     url: list[AnyUrl] | MissingType = Field(
@@ -723,6 +724,7 @@ class PageListFilter(ListFilterBase, SharedFilter):
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
             **self.shared_values(),
+            **self.count_values(),
             source_type=[SourceKind.page],
             url=self.url,
             document_id=self.document_id,
@@ -737,7 +739,7 @@ class PageListFilter(ListFilterBase, SharedFilter):
         )
 
 
-class DocumentListFilter(ListFilterBase, SharedFilter):
+class DocumentListFilter(ListFilterBase, SharedFilter, AnnotationCountFilter):
     """Filter for listing documents."""
 
     has_unassigned_faces: bool | MissingType = Field(default=MISSING, description="Whether any face in the document scope is unassigned; false includes documents without faces.")
@@ -769,6 +771,7 @@ class DocumentListFilter(ListFilterBase, SharedFilter):
     def to_generic(self) -> GenericSourceListFilter:
         return GenericSourceListFilter(
             **self.shared_values(),
+            **self.count_values(),
             has_unassigned_faces=self.has_unassigned_faces,
             source_type=[SourceKind.document],
             url=self.url,

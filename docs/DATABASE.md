@@ -107,3 +107,16 @@ bootstrap stores require the reviewed `migrate --adopt-bootstrap` procedure in
 [Database migrations](../people-gator-api/docs/DATABASE-MIGRATIONS.md).
 Never stamp `head` to suppress schema drift. Test migration changes in a separate
 disposable store before applying them to retained data.
+
+Annotation count sorts and minima (#78) reuse the document/page scope used by
+response summaries. Count-aware browse joins one grouped `UNION ALL` projection
+of face and text-mention annotations; conditional aggregates provide all fifteen
+category/state counts without multiplying faces by mentions. The projection
+joins to resources before filtering, total calculation and keyset pagination;
+missing groups coalesce to zero. Ordinary queries without count criteria do not
+build this projection. Search uses a grouped membership predicate and loads sort
+keys only for its bounded candidate IDs. These are live aggregates, so assignment,
+verification, unassignment and deletion immediately affect membership/order.
+No persisted counter, migration or additional index is required; existing source,
+state and library/document relationship indexes serve the scope. Responses retain
+their bounded batch summary queries, independent of result batch size.

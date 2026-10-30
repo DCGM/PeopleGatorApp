@@ -120,7 +120,7 @@ export type DocumentLibraryOption = {
 /**
  * DocumentListSortField
  */
-export type DocumentListSortField = 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
+export type DocumentListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
 
 export type DocumentName = string;
 
@@ -195,7 +195,7 @@ export type DocumentResponse = {
 /**
  * DocumentSortField
  */
-export type DocumentSortField = 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
+export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
 
 /**
  * EntityAnnotation
@@ -1994,6 +1994,8 @@ export type KeypointFaceKeypointType = {
  */
 export type Language = 'cs' | 'en' | 'de';
 
+export type MinimumCount = number;
+
 /**
  * ModelEmbedding[FaceModelStub]
  */
@@ -2093,7 +2095,7 @@ export type PageLayoutModel = {
 /**
  * PageListSortField
  */
-export type PageListSortField = 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
 
 /**
  * PageResponse
@@ -2140,7 +2142,7 @@ export type PageResponse = {
 /**
  * PageSortField
  */
-export type PageSortField = 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
 
 /**
  * RefreshTokenRequest
@@ -3234,6 +3236,96 @@ export type SearchPagesGetApiV1SearchPagesGetData = {
          */
         'filter.has_entities'?: boolean | null;
         /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Unassigned Count
+         *
+         * Inclusive minimum annotations unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Unassigned Count
+         *
+         * Inclusive minimum faces unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Unassigned Count
+         *
+         * Inclusive minimum mentions unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_unassigned_count'?: MinimumCount | null;
+        /**
          * Filter.Entity Link State
          *
          * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
@@ -3411,6 +3503,96 @@ export type SearchDocumentsGetApiV1SearchDocumentsGetData = {
          * Whether any face in the document scope is unassigned; false includes documents without faces.
          */
         'filter.has_unassigned_faces'?: boolean | null;
+        /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Unassigned Count
+         *
+         * Inclusive minimum annotations unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Unassigned Count
+         *
+         * Inclusive minimum faces unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Unassigned Count
+         *
+         * Inclusive minimum mentions unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_unassigned_count'?: MinimumCount | null;
         /**
          * Filter.Entity Link State
          *
@@ -5054,6 +5236,96 @@ export type ListDocumentsRouteApiV1DocumentsGetData = {
          */
         'filter.has_unassigned_faces'?: boolean | null;
         /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Unassigned Count
+         *
+         * Inclusive minimum annotations unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Unassigned Count
+         *
+         * Inclusive minimum faces unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Unassigned Count
+         *
+         * Inclusive minimum mentions unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_unassigned_count'?: MinimumCount | null;
+        /**
          * Filter.Entity Link State
          *
          * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
@@ -5366,6 +5638,96 @@ export type ListPagesRouteApiV1PagesGetData = {
          * Filter by whether the page has at least one entity assigned to a text mention or face detection.
          */
         'filter.has_entities'?: boolean | null;
+        /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Unassigned Count
+         *
+         * Inclusive minimum annotations unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_annotations_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Unassigned Count
+         *
+         * Inclusive minimum faces unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_faces_unassigned_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Unassigned Count
+         *
+         * Inclusive minimum mentions unassigned count; non-negative integer, zero imposes no restriction.
+         */
+        'filter.min_mentions_unassigned_count'?: MinimumCount | null;
         /**
          * Filter.Entity Link State
          *

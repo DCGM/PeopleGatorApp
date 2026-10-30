@@ -16,6 +16,7 @@ from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
+from .annotation_counts import ANNOTATION_COUNT_FIELDS
 
 
 class SortDirection(StrEnum):
@@ -32,6 +33,21 @@ class EntitySortField(StrEnum):
 
 
 class DocumentSortField(StrEnum):
+    ANNOTATIONS_TOTAL_COUNT = "annotations_total_count"
+    ANNOTATIONS_AUTOMATIC_COUNT = "annotations_automatic_count"
+    ANNOTATIONS_MANUAL_COUNT = "annotations_manual_count"
+    ANNOTATIONS_VERIFIED_COUNT = "annotations_verified_count"
+    ANNOTATIONS_UNASSIGNED_COUNT = "annotations_unassigned_count"
+    FACES_TOTAL_COUNT = "faces_total_count"
+    FACES_AUTOMATIC_COUNT = "faces_automatic_count"
+    FACES_MANUAL_COUNT = "faces_manual_count"
+    FACES_VERIFIED_COUNT = "faces_verified_count"
+    FACES_UNASSIGNED_COUNT = "faces_unassigned_count"
+    MENTIONS_TOTAL_COUNT = "mentions_total_count"
+    MENTIONS_AUTOMATIC_COUNT = "mentions_automatic_count"
+    MENTIONS_MANUAL_COUNT = "mentions_manual_count"
+    MENTIONS_VERIFIED_COUNT = "mentions_verified_count"
+    MENTIONS_UNASSIGNED_COUNT = "mentions_unassigned_count"
     RELEVANCE = "relevance"
     NAME = "name"
     DOCUMENT_ID = "document_id"
@@ -41,6 +57,21 @@ class DocumentSortField(StrEnum):
 
 
 class PageSortField(StrEnum):
+    ANNOTATIONS_TOTAL_COUNT = "annotations_total_count"
+    ANNOTATIONS_AUTOMATIC_COUNT = "annotations_automatic_count"
+    ANNOTATIONS_MANUAL_COUNT = "annotations_manual_count"
+    ANNOTATIONS_VERIFIED_COUNT = "annotations_verified_count"
+    ANNOTATIONS_UNASSIGNED_COUNT = "annotations_unassigned_count"
+    FACES_TOTAL_COUNT = "faces_total_count"
+    FACES_AUTOMATIC_COUNT = "faces_automatic_count"
+    FACES_MANUAL_COUNT = "faces_manual_count"
+    FACES_VERIFIED_COUNT = "faces_verified_count"
+    FACES_UNASSIGNED_COUNT = "faces_unassigned_count"
+    MENTIONS_TOTAL_COUNT = "mentions_total_count"
+    MENTIONS_AUTOMATIC_COUNT = "mentions_automatic_count"
+    MENTIONS_MANUAL_COUNT = "mentions_manual_count"
+    MENTIONS_VERIFIED_COUNT = "mentions_verified_count"
+    MENTIONS_UNASSIGNED_COUNT = "mentions_unassigned_count"
     RELEVANCE = "relevance"
     LIBRARY = "library"
     DOCUMENT_ID = "document_id"
@@ -74,7 +105,10 @@ class TextMentionGroupSortField(StrEnum):
 RELEVANCE = "relevance"
 
 # Fields whose natural first direction is descending: newest, largest, best.
-DESCENDING_BY_DEFAULT = frozenset({"relevance", "last_touched_at", "created_at", "page_count", "count"})
+DESCENDING_BY_DEFAULT = frozenset({
+    "relevance", "last_touched_at", "created_at", "page_count", "count",
+    *ANNOTATION_COUNT_FIELDS,
+})
 
 SORT_DESCRIPTION = (
     "Sort field. Ordinary lists default to canonical identity ascending; "

@@ -7,6 +7,7 @@ from typing import Any, cast as type_cast
 from sqlalchemy import (
     ColumnElement,
     Float,
+    inspect,
     column,
     delete,
     exists,
@@ -90,6 +91,8 @@ def document_page_count() -> ColumnElement[int]:
 
 
 from people_gator_api.schemas.sorting import RELEVANCE, SortDirection
+from .annotation_counts import annotation_counts, count_column, count_minima
+from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
 from .sorting import (
     Builders,
     SortKey,
@@ -177,6 +180,7 @@ class PostgresSourceRepository(SourceRepository):
         model: type[Page] | type[Document] | None,
         field: str | None,
         direction: SortDirection,
+        counts=None,
     ) -> SortSpec:
         # Table columns keep the polymorphic source query to a single FROM.
         page, document = Page.__table__.c, Document.__table__.c
@@ -213,6 +217,9 @@ class PostgresSourceRepository(SourceRepository):
                 "page_count": lambda desc: [SortKey(document_page_count(), "number", desc)],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
+        if counts is not None:
+            builders.update({key: (lambda desc, key=key: [SortKey(count_column(counts, key), "number", desc)])
+                             for key in ANNOTATION_COUNT_FIELDS})
         return build_spec(field, direction, Source.id, builders, "source_id")
 
     @staticmethod
@@ -228,16 +235,18 @@ class PostgresSourceRepository(SourceRepository):
         raise ValueError("sorting requires a page or document list")
 
     async def list(self, query: GenericSourceListRequest) -> GenericSourceListResponse:
-        filters = source_filters(query.filter_)
+        counts = annotation_counts() if query.sort in ANNOTATION_COUNT_FIELDS or count_minima(missing_to_none(query.filter_)) else None
+        filters = source_filters(query.filter_, counts=counts)
         fingerprint = cursor_fingerprint(query)
-        spec = self._sort_spec(self._sorted_model(query), *query.effective_sort())
+        source = self._source if counts is None else inspect(self._source).selectable.outerjoin(counts, counts.c.owner_id == Source.id)
+        spec = self._sort_spec(self._sorted_model(query), *query.effective_sort(), counts)
         after = decode_keyset(query.cursor, spec, fingerprint)
         total = None
         if query.return_total_count:
             total = (
                 await self._session.scalar(
                     select(func.count(Source.id))
-                    .select_from(self._source)
+                    .select_from(source)
                     .where(*filters)
                 )
                 or 0
@@ -249,6 +258,7 @@ class PostgresSourceRepository(SourceRepository):
             page_filters.append(after_predicate(spec, after))
         result = await self._session.execute(
             select(self._source, *sort_columns(spec))
+            .select_from(source)
             .where(*page_filters)
             .order_by(*order_by(spec))
             .limit(query.limit + 1)
@@ -529,11 +539,15 @@ class PostgresSourceRepository(SourceRepository):
             await self._source_face_scores(model, query, filters),
         )
         field, direction = query.effective_sort()
-        spec = None if field == RELEVANCE else self._sort_spec(model, field, direction)
+        counts = annotation_counts() if field in ANNOTATION_COUNT_FIELDS else None
+        spec = None if field == RELEVANCE else self._sort_spec(model, field, direction, counts)
         values: dict[uuid.UUID, tuple[object, ...]] = {}
         if spec is not None and ranked:
+            statement = select(model.id, *sort_columns(spec))
+            if counts is not None:
+                statement = statement.outerjoin(counts, counts.c.owner_id == Source.id)
             rows = await self._session.execute(
-                select(model.id, *sort_columns(spec)).where(model.id.in_([item[0] for item in ranked]))
+                statement.where(model.id.in_([item[0] for item in ranked]))
             )
             values = {row[0]: tuple(row[1:]) for row in rows.all()}
         ranked = sort_ranked(ranked, spec, direction, values)
