@@ -52,3 +52,16 @@ def test_shared_modification_bounds_are_validated_on_every_resource(path, params
     app.dependency_overrides[get_auth_context] = lambda: SimpleNamespace(user_id=uuid.uuid4())
     response = TestClient(app).get(path, params={**params, 'query.text': 'Irena'})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize('assigned', [True, False])
+@pytest.mark.parametrize('path,method', [('/api/v1/faces', 'list'), ('/api/v1/search-faces', 'search')])
+def test_face_assignment_filter_reaches_repository(path, method, assigned):
+    app = FastAPI()
+    app.include_router(router)
+    repository = SimpleNamespace(**{method: AsyncMock(return_value={'items': [], 'limit': 20, 'total_count': 0})})
+    app.dependency_overrides[get_database] = lambda: SimpleNamespace(faces=repository)
+    app.dependency_overrides[get_auth_context] = lambda: SimpleNamespace(user_id=uuid.uuid4())
+    response = TestClient(app).get(path, params={'query.text': 'Lina', 'filter.is_assigned': str(assigned).lower()})
+    assert response.status_code == 200
+    assert getattr(repository, method).await_args.args[0].filter_.is_assigned is assigned

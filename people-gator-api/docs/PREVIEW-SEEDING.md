@@ -79,7 +79,7 @@ This does not automatically seed the actual staging environment.
 | No evidence | Lenka Vesela, ready for manual linking |
 | Assigned-face selection and review | Open `person-face-review` (Irena Evidence): select automatic, manual and verified faces with checkboxes or Shift; Verify selected skips verified links, Unassign selected retains detection/media. Identity creation/import and Last processed start expanded. Use disposable data for mutations. |
 | Entity reference discovery (#58) | Open `entity-discovery`: **Zora Cartographer**, alias **Saffron Navigator**, has 15 linked faces: 12 usable vectors, one missing, one other-model and one zero vector. Choose `preview-discovery-8d-v1`; faces favor **Orion Portrait**, name favors **Zora Cartographer II**, aliases favor **Saffron Navigator**. An unassigned match and a zero-vector candidate exercise finite scoring and assignment recovery. All ten practice scans have local media. |
-| Identity discovery and merging | Open Ada Novak's Discover tab; A. Novak has nearby vectors |
+| Identity discovery and merging | Open Ada Novak's Faces tab; A. Novak appears under Similar people |
 | Unassigned face linking | Two unassigned album faces, including one close to Ada's vectors |
 | Document/page/library filters | Original three two-page documents and grouped browsing examples across preview-mzk and preview-nlk |
 | Page evidence filters | Mixed pages, a face-only page, a mention-only page and an empty page |
@@ -96,7 +96,7 @@ assignment, document, user and API-key filters. On screens narrower than 640px,
 filter controls are collapsed by default behind the search row's sliders
 button, while active badges remain visible below. Opening it reveals every
 filter; the sliders button collapses it without clearing the query. Desktop
-shows all selectors in one wrapping flex panel. In a person's detail view, the stats sidebar always shows **Last change**.
+shows all selectors in one wrapping flex panel. In a person's detail view, Statistics shows **Last change**.
 Edit a profile or assign a face to see processing attribution change. The two
 synthetic API-key registry entries demonstrate historical filtering and attribution;
 they cannot authenticate requests because no secret configuration is installed.
@@ -453,7 +453,7 @@ selected, and verification attribution remains available on the assignment row.
 Editor names are plain text; a TODO in `AnnotationLastChange.vue` defers user links
 until the user tab exists.
 The additive `person-face-style-comparison` entry point opens the same identity's
-Discover tab; switch to Faces to compare the card presentation and select faces
+Faces tab; compare Found faces below the linked overview and select linked faces
 for verification/unassignment. Verify selected uses a green outline; Unassign
 selected uses a red outline, with the same behavior in light/dark themes.
 Existing source identities, records/media and
@@ -518,7 +518,7 @@ missing records/media without rewriting existing reviewer edits or timestamps.
 ## Person sidebar statistics and Last change (#43)
 
 The CLI's `person-last-change` link opens **Ada Review**, reusing the Link state
-review fixtures. Her sidebar shows **Face annotations** and **Mention
+review fixtures. Her Statistics tab shows **Face annotations** and **Mention
 annotations** as automatic/manual/verified icon-value pairs (1 / 0 / 1 each),
 right to left, beside the existing Face detections, Document mentions and
 Libraries totals. **Last change** is always visible with the editor under
@@ -572,7 +572,7 @@ Explore the seed report's `sorting-*` links: `sorting-documents` (Documents by
 page count), `sorting-document-names` (search with an explicit name order),
 `sorting-people`, `sorting-scans` (one document's pages by page ID descending),
 `sorting-faces` (Marta's faces by confidence), `sorting-mention-groups`
-(Mentions → Exact appearance by occurrence count; expand a group to see its
+(Mentions → Mention by occurrence count; expanded groups show their
 occurrences, sorted independently) and `sorting-similar-faces` (Discover). Choose
 a strategy (field and direction, such as *Pages · Highest first*) in a panel's
 single **Sort** select, reload, copy the link and use Back/Forward; each panel
@@ -593,8 +593,8 @@ The additive `discovery` fixture has its own registered synthetic 8D model, stab
 keys and ten pages in **Entity discovery practice**. Existing records, timestamps,
 reviewed aliases, assignments and checkpoints are retained on reruns. No retained
 vectors or user edits are rewritten. Open the printed `entity-discovery` link,
-choose individual **Reference inputs** or combinations, and compare both result
-lists on desktop and mobile. Faces-only also finds `discovery-unassigned` for
+choose individual **Modalities** or combinations in Similar people, and compare
+its results on desktop and mobile. Found faces always uses faces and also finds `discovery-unassigned` for
 manual linking. Zero embeddings remain stored as realistic degenerate fixtures;
 search excludes undefined cosine contributions rather than assigning fake scores.
 
@@ -607,6 +607,9 @@ Existing interrupted-checkpoint and edit-preservation checks cover the added key
 PR #59 review follow-up: `entity-discovery-identifier` opens text-only discovery
 for the existing unassigned face's `preview-seed/discovery-unassigned` identifier.
 Its exact text hit has no invented face score and retains working local media.
+The API still supports this indexed text query, but the person page now searches
+Found faces only by face vectors. Legacy text/modality URL choices seed Similar
+people and do not filter Found faces.
 The seeded integration regression exercises this indexed identifier path as well
 as name/alias input selection and preserves reviewed assignments on two reruns.
 Use `entity-discovery` to inspect the removable nondefault Face model tag with
@@ -693,11 +696,11 @@ Open the seed report's `global-discovery` link for **Zora Cartographer**.
 The URL retains `preview-mzk`, **Entity discovery practice**, its first page,
 Verified, Preview reviewer and the OCR API key. Discover still shows **Orion
 Portrait** and two matching faces from **Discovery beyond the workspace** in
-`preview-nlk`, including one unassigned face. Reference inputs starts at Faces
+`preview-nlk`, including one unassigned face. Modalities starts at Faces
 with the synthetic 8D model; name, aliases, text and sorting remain available.
 
-Switch to Faces or Mentions to see the retained local criteria applied there;
-switch back to Discover or reload to find global candidates again. On disposable
+The linked Faces overview and Mentions retain the local criteria;
+Found faces and Similar people below the overview search globally. On disposable
 data, assign the outside unassigned face or merge the duplicate person. Candidate
 navigation also carries the original shared configuration. All searches retain
 normal API authorization. No optional face-scope control is introduced.
@@ -843,6 +846,101 @@ The ledger has faces 4/1/1/1/1 and mentions 5/2/1/1/1 in that order, giving
 combined counts 9/3/2/2/2. Counts include direct document mentions and every
 registered page, even when evidence filters select the document. The mirror
 has zero in every field. Switching columns adds no requests or local sorting.
+
+### Person review (#80)
+
+Open **Lina Archivist** (`person-review-faces` in the seed summary). Forty-two
+linked faces span three documents; expand **Show all faces**, then inspect
+**Found faces** and **Similar people** with `preview-synthetic-8d-v1` selected.
+The candidate collection includes an unassigned face and Lina A.'s linked face.
+Details retains aliases and the full description; Statistics holds review totals
+and last-change information.
+
+In Mentions, switch between **Flat**, **Document**, **Page** and **Mention**.
+The 27 occurrences of `Lina Archivist` cover nine pages with automatic, manual
+and verified links. Two documents deliberately share `Review ledger` as a title;
+their source identities keep them separate. Select the exact-text group to verify
+or unlink all filtered occurrences, including those beyond its first 20 children.
+Found faces searches only by face vectors: face model precedes the assignment
+filter, with no modality selector or text filter. Similar people has its own search, modalities and face model; its settings
+stay independent from Found faces. Local evidence filters do not restrict either
+global discovery search.
+
+Unlink preserves the OCR mention. This page lists linked evidence only; assigning
+an unlinked OCR mention remains available in the existing scan workspace.
+New fixtures are additive and checkpointed independently, preserving reviewed
+assignments and timestamps when the seed runs again.
+
+The twelve `review-overflow-*` pages add 24 portraits to existing previews without
+replacing earlier pages or annotations. At 1440px, Lina's collapsed overview shows
+13 of 42 faces plus the **Show all faces** card in two rows; expansion shows all
+42 faces. At 390px it shows three faces and the same action card. The last card
+contains the matching-face count; `person-review-overflow-card` opens this scenario. Existing review edits and interrupted upgrades survive reruns.
+
+
+### Found-face pagination (#80)
+
+Open `person-review-found-faces` for Lina Archivist; the link explicitly keeps
+all Similar people modalities while Found faces uses only face vectors. Found faces uses the same
+portrait/card size as the linked overview: two initial rows, with **Show more**
+as the final plus tile. Each activation reveals two additional rows and fetches
+another cursor page when needed. The synthetic 8D model has more than one
+14-record candidate page, including assigned and unassigned faces outside the
+reference documents. Assignment filtering applies before pagination, so the
+match count and loaded pages agree. Change the model or assignment to restart
+the overview; previously loaded choices are not left selected out of view.
+
+The seed integration regression walks assigned and unassigned cursor pages,
+checks disjoint complete coverage and confirms the reference person's own faces
+stay excluded. It reuses existing local media, models and checkpoint identities.
+
+### Expanded and compact mentions (#80)
+
+Open `person-review-mentions` for Lina Archivist's 27 occurrences, expanded by
+default, or `person-review-compact` for the collapsed view. **Expand / Compact**
+applies to the whole view and survives reload; group headings have no individual
+expand controls. Expanded occurrences retain their separators except for the last item,
+where only the outer group separator remains. Document, Page and Mention group
+checkboxes select every matching occurrence, including the seven beyond the
+first page. Deselect one child to see the group become indeterminate; selecting
+the group again selects all children. Switching density retains selection.
+
+Document headings include their library and stable source identity. Occurrence
+context uses the application's newspaper-style serif font and orange underline, and the info icon opens the shared
+two-line relative last-change/user display. These records already carry synthetic
+actors and timestamps; the scenario adds a named link without replacing evidence
+or resetting existing review edits. Seed coverage checks both cursor batches,
+source/library labels, attribution and reseed preservation through repositories.
+
+Select an occurrence or a compact group to open the same floating bottom action
+bar used for Faces. It shows the selected mention count, **Clear**, **Unlink**
+and **Verify**; grouped actions retain their complete filtered scope. The same
+bar is available in Flat, Document, Page and Mention views. These interactions
+reuse the existing 27-occurrence scenario and do not change seed identities.
+
+### Shift-select mention ranges (#80)
+
+Open `person-review-shift-selection` for nine page groups with three occurrences
+each. Select a checkbox, then Shift-click another to add the inclusive range in
+display order. Expanded ranges can span document/page groups and loaded cursor
+pages; compact group ranges select every occurrence in those groups. Existing
+selections remain selected. Clear, person/filter/grouping and sorting changes
+reset the anchor; a Shift-click without an anchor selects just that item. The
+same behavior works in Flat and Mention views, and updates tri-state parents
+and the shared action bar. This scenario reuses stable records and local media.
+
+### Mention loading layouts (#80)
+
+Open `person-review-loading` with browser network throttling to inspect three
+placeholder groups. **Expand** shows a checkbox/name/count header and two nested
+source/context/info rows in each group; **Compact** shows only the headers.
+Document/Page headings also reserve library/source space. Flat view and nested
+occurrence requests use three matching row placeholders. Fetching another cursor
+page keeps loaded records and appends two placeholders until the new records
+arrive. Skeletons follow density changes during a pending request and expose one
+loading status per list without interactive dummy controls. The existing three
+documents, nine pages and 27 occurrences demonstrate all states with local data;
+the seed adds a named link without modifying evidence or review edits.
 
 ## In-place identity face references (#41)
 

@@ -261,3 +261,33 @@ describe('assigned face selection and review', () => {
     expect(wrapper.get('[role="status"]').text()).toBe('Portrait saved.')
   })
 })
+
+it('collapses to two measured rows and exposes pagination only after expansion', async () => {
+  const { wrapper } = await render()
+  await wrapper.setProps({ collapsible: true, hasMore: true, matchingCount: 15 })
+  // A zero-width jsdom grid has one column; browser coverage exercises real widths.
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(1)
+  const toggle = wrapper.get('[data-face-overview-toggle]')
+  expect(toggle.text()).toContain('15 matching faces')
+  expect(toggle.element.previousElementSibling?.hasAttribute('data-person-face-card')).toBe(true)
+  expect(toggle.element.parentElement?.lastElementChild).toBe(toggle.element)
+  expect(toggle.attributes('aria-expanded')).toBe('false')
+  await toggle.trigger('click')
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(4)
+  expect(toggle.attributes('aria-expanded')).toBe('true')
+  await toggle.trigger('click')
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(1)
+  await wrapper.setProps({ faces: faces.slice(0, 2), hasMore: false })
+  expect(
+    wrapper
+      .findAll('button')
+      .some((button) => button.attributes('aria-label') === 'Show all faces'),
+  ).toBe(false)
+  await wrapper.setProps({ faces: faces.slice(0, 1) })
+  expect(wrapper.findAll('[data-person-face-card]')).toHaveLength(1)
+  expect(
+    wrapper
+      .findAll('button')
+      .some((button) => button.attributes('aria-label') === 'Show all faces'),
+  ).toBe(false)
+})

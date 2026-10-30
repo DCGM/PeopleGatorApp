@@ -4,7 +4,12 @@ import SortSelect from './SortSelect.vue'
 import { sortStrategies, type SortOption, type SortState } from '@/lib/sorting'
 
 const props = withDefaults(
-  defineProps<{ options: readonly SortOption<Field>[]; label?: string; size?: 'sm' | 'default' }>(),
+  defineProps<{
+    options: readonly SortOption<Field>[]
+    label?: string
+    prefix?: string
+    size?: 'sm' | 'default'
+  }>(),
   { label: 'Sort by', size: 'default' },
 )
 const sort = defineModel<SortState<Field>>({ required: true })
@@ -23,5 +28,11 @@ const value = computed({
 </script>
 
 <template>
-  <SortSelect v-model="value" :strategies="strategies" :label="label" :size="size" />
+  <SortSelect
+    v-model="value"
+    :strategies="strategies"
+    :label="label"
+    :prefix="prefix"
+    :size="size"
+  />
 </template>

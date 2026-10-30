@@ -1331,6 +1331,9 @@ class WeaviateFaceRepository(FaceRepository):
         if f is None or is_missing(f):
             return []
         r: list[FilterReturn] = []
+        if not is_missing(f.is_assigned):
+            count = Filter.by_ref_count("entity")
+            r.append(count.not_equal(0) if f.is_assigned else count.equal(0))
         if not is_missing(f.entity_link_state):
             r.append(
                 _property(

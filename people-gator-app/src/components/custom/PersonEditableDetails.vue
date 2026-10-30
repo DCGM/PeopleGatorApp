@@ -12,6 +12,7 @@ type EditableField = keyof PersonProfile | keyof PersonIdentifiers
 type ProfileTextField = Exclude<keyof PersonProfile, 'aliases'>
 
 const props = defineProps<{
+  hideStatistics?: boolean
   modelValue: PersonProfile
   personId: string
   thumbnailFaceId?: string | null
@@ -280,7 +281,7 @@ watch(
     </div>
   </header>
 
-  <section class="grid gap-5 border-b py-8 md:grid-cols-[minmax(0,1fr)_12rem]">
+  <section class="grid gap-5 border-b py-8">
     <div class="min-w-0">
       <div class="flex items-center justify-between gap-3">
         <h2>Detailed description</h2>
@@ -300,7 +301,7 @@ watch(
         :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'"
       />
     </div>
-    <aside aria-label="Person statistics" class="min-w-0 border-l-0 text-sm md:border-l md:pl-5">
+    <aside v-if="!hideStatistics" aria-label="Person statistics" class="min-w-0 border-l-0 text-sm md:border-l md:pl-5">
       <dl class="grid content-start gap-3">
         <div>
           <dt class="text-muted-foreground">Face detections</dt>

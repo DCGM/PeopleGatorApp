@@ -4,10 +4,8 @@ import { relatedQuery } from '@/viewmodels/shared-filters'
 import ArchiveLink from './ArchiveLink.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
-import SearchFilterPanel from './SearchFilterPanel.vue'
-import FilterMultiSelect from './FilterMultiSelect.vue'
+import PersonDiscoverySettings from './PersonDiscoverySettings.vue'
 import {
-  X,
   Check,
   ChevronRight,
   CircleUserRound,
@@ -17,6 +15,8 @@ import {
   UserRoundSearch,
 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import { FACE_GRID_CLASSES, useFaceGrid } from '@/composables/face-grid'
+import FaceGridAction from './FaceGridAction.vue'
 
 import PersonPortrait from './PersonPortrait.vue'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
@@ -37,6 +37,10 @@ const route = useRoute()
 const router = useRouter()
 const props = defineProps<{
   faces: PersonDiscoveryFace[]
+  faceCount?: number
+  hasMoreFaces?: boolean
+  loadingMoreFaces?: boolean
+  moreFacesFailed?: boolean
   people: PersonDiscoveryCandidate[]
   currentName: string
   referenceFaceCount: number
@@ -55,44 +59,23 @@ const props = defineProps<{
 }>()
 
 const searchTerm = defineModel<string>('searchTerm', { default: '' })
+const faceSearchTerm = defineModel<string>('faceSearchTerm', { default: '' })
 const annotations = defineModel<EntityAnnotation[]>('annotations', {
   default: () => ['faces', 'aliases', 'name'],
 })
 const faceModel = defineModel<string>('faceModel', { default: '' })
-const hasReferenceFilters = computed(
-  () => annotations.value.length > 0 && annotations.value.length < 3,
-)
-const hasModelOverride = computed(() =>
-  Boolean(faceModel.value && faceModel.value !== props.defaultFaceModel),
-)
-const modelLabel = computed(
-  () =>
-    props.modelOptions?.find((option) => option.value === faceModel.value)?.label ??
-    faceModel.value,
-)
-const inputSearch = ref('')
-const inputOptions = computed(() =>
-  [
-    { id: 'faces', label: 'Faces' },
-    { id: 'aliases', label: 'Aliases' },
-    { id: 'name', label: 'Name' },
-  ].filter((option) => option.label.toLowerCase().includes(inputSearch.value.toLowerCase())),
-)
-const selectedInputs = computed({
-  get: () => annotations.value,
-  set: (values: string[]) => {
-    annotations.value = values.filter((value): value is EntityAnnotation =>
-      ['faces', 'aliases', 'name'].includes(value),
-    )
-  },
+const peopleAnnotations = defineModel<EntityAnnotation[]>('peopleAnnotations', {
+  default: () => ['faces', 'aliases', 'name'],
 })
-const inputLabels = { faces: 'Faces', aliases: 'Aliases', name: 'Name' }
+const peopleFaceModel = defineModel<string>('peopleFaceModel', { default: '' })
 const faceSort = defineModel<SortState<FaceSortField>>('faceSort')
 const peopleSort = defineModel<SortState<EntitySortField>>('peopleSort')
 
 const emit = defineEmits<{
+  loadMoreFaces: []
   retry: []
   clearFilters: []
+  clearPeopleFilters: []
   assignFaces: [faceIds: string[]]
   mergePeople: [entityIds: string[]]
 }>()
@@ -125,12 +108,43 @@ const faceFilterOptions: Array<{ value: FaceFilter; label: string }> = [
   { value: 'unassigned', label: 'Unassigned' },
   { value: 'assigned', label: 'Assigned elsewhere' },
 ]
-const visibleFaces = computed(() =>
+const filteredFaces = computed(() =>
   props.faces.filter((face) => {
     if (faceFilter.value === 'unassigned') return !face.assignedEntityId
     if (faceFilter.value === 'assigned') return Boolean(face.assignedEntityId)
     return true
   }),
+)
+const { grid: foundGrid, columns: faceColumns, style: faceGridStyle } = useFaceGrid()
+const faceRows = ref(2)
+const faceSlots = computed(() => faceColumns.value * faceRows.value)
+const canShowMoreFaces = computed(
+  () => Boolean(props.hasMoreFaces) || filteredFaces.value.length > faceSlots.value,
+)
+const visibleFaces = computed(() =>
+  filteredFaces.value.slice(0, faceSlots.value - (canShowMoreFaces.value ? 1 : 0)),
+)
+function showMoreFaces() {
+  if (props.loadingMoreFaces || props.assigningFaces) return
+  if (!props.moreFacesFailed) faceRows.value += 2
+  if (props.hasMoreFaces && (props.moreFacesFailed || faceSlots.value > filteredFaces.value.length))
+    emit('loadMoreFaces')
+}
+watch(
+  () =>
+    JSON.stringify([
+      faceColumns.value,
+      route?.params.personId,
+      faceFilter.value,
+      faceModel.value,
+      faceSort.value?.field,
+      faceSort.value?.direction,
+    ]),
+  () => {
+    faceRows.value = 2
+    clearFaceSelection()
+  },
+  { deep: true },
 )
 const selectedFaces = computed(() =>
   props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
@@ -154,8 +168,8 @@ function toggleFaceSelection(faceId: string, event: MouseEvent) {
 }
 
 function addFaceRangeToSelection(faceId: string) {
-  const faceIndex = props.faces.findIndex((face) => face.id === faceId)
-  const anchorIndex = props.faces.findIndex((face) => face.id === selectionAnchorId.value)
+  const faceIndex = visibleFaces.value.findIndex((face) => face.id === faceId)
+  const anchorIndex = visibleFaces.value.findIndex((face) => face.id === selectionAnchorId.value)
 
   if (anchorIndex < 0 || faceIndex < 0) return false
 
@@ -163,7 +177,7 @@ function addFaceRangeToSelection(faceId: string) {
   const rangeEnd = Math.max(anchorIndex, faceIndex)
   selectedFaceIds.value = new Set([
     ...selectedFaceIds.value,
-    ...props.faces.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
+    ...visibleFaces.value.slice(rangeStart, rangeEnd + 1).map((face) => face.id),
   ])
   return true
 }
@@ -242,7 +256,7 @@ function assignSelectedFaces() {
 }
 
 watch(
-  () => props.faces.map((face) => face.id),
+  () => visibleFaces.value.map((face) => face.id),
   (availableFaceIds) => {
     const available = new Set(availableFaceIds)
     selectedFaceIds.value = new Set(
@@ -277,100 +291,39 @@ watch(
 
 <template>
   <div class="space-y-10 pt-6">
-    <div>
-      <SearchFilterPanel
-        v-model="searchTerm"
-        label="Discovery search"
-        placeholder="Add search text"
-        :result-count="props.faces.length + props.people.length"
-      >
-        <FilterMultiSelect
-          v-model="selectedInputs"
-          v-model:search="inputSearch"
-          label="Reference inputs"
-          :options="inputOptions"
-        />
-        <FilterSingleSelect
-          v-if="props.modelOptions?.length"
-          v-model="faceModel"
-          label="Face model"
-          :options="props.modelOptions"
-        />
-      </SearchFilterPanel>
-      <div
-        v-if="hasReferenceFilters || hasModelOverride"
-        class="mt-3 flex min-w-0 flex-wrap items-center gap-2"
-        aria-label="Active discovery filters"
-      >
-        <template v-if="hasReferenceFilters">
-          <Badge
-            v-for="input in annotations"
-            :key="input"
-            as="small"
-            variant="outline"
-            class="max-w-full gap-1"
-          >
-            <span class="min-w-0 break-all">Reference: {{ inputLabels[input] }}</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              class="rounded-full"
-              :aria-label="`Remove reference ${inputLabels[input].toLowerCase()}`"
-              @click="annotations = annotations.filter((item) => item !== input)"
-              ><X aria-hidden="true"
-            /></Button>
-          </Badge>
-        </template>
-        <Badge v-if="hasModelOverride" as="small" variant="outline" class="max-w-full gap-1">
-          <span class="min-w-0 break-all">Face model: {{ modelLabel }}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            class="rounded-full"
-            aria-label="Remove face model"
-            @click="faceModel = ''"
-            ><X aria-hidden="true"
-          /></Button>
-        </Badge>
-        <Button type="button" variant="ghost" size="sm" @click="emit('clearFilters')"
-          >Clear filters</Button
-        >
-      </div>
-      <p v-if="!annotations.length && !searchTerm.trim()" role="status" class="mt-3">
-        Choose a reference input or enter search text.
-      </p>
-      <div v-if="props.searchError" role="alert" class="mt-3 flex flex-wrap items-center gap-2">
-        <p>Search failed. Choose other reference inputs or a face model, then retry.</p>
-        <Button type="button" variant="outline" size="sm" @click="emit('retry')">Retry</Button>
-      </div>
+    <div v-if="props.searchError" role="alert" class="flex flex-wrap items-center gap-2">
+      <p>Search failed. Check the modalities and model.</p>
+      <Button type="button" variant="outline" size="sm" @click="emit('retry')">Retry</Button>
     </div>
     <section aria-labelledby="similar-faces-heading">
       <div class="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <small class="font-semibold uppercase text-secondary">Face similarity</small>
-          <h3 id="similar-faces-heading">Similar faces to review</h3>
-          <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Matches from the selected reference inputs for {{ props.currentName }}.
-          </p>
+          <h3 id="similar-faces-heading">Found faces</h3>
         </div>
-        <Badge variant="outline" class="font-mono">{{ props.faces.length }} matches</Badge>
+        <Badge variant="outline" class="font-mono"
+          >{{ faceCount ?? filteredFaces.length }} matches</Badge
+        >
       </div>
 
-      <SearchFilterPanel label="Discovery faces" filters-only class="mt-4">
-        <FilterSingleSelect
-          v-model="faceFilter"
-          label="Discovery assignment"
-          :options="faceFilterOptions"
-        />
+      <PersonDiscoverySettings
+        v-model:search-term="faceSearchTerm"
+        v-model:annotations="annotations"
+        v-model:face-model="faceModel"
+        face-only
+        label="Discovery faces"
+        :model-options="modelOptions"
+        :default-face-model="defaultFaceModel"
+        class="mt-4"
+        @clear-filters="emit('clearFilters')"
+      >
+        <FilterSingleSelect v-model="faceFilter" label="Assignment" :options="faceFilterOptions" />
         <SortControl
           v-if="faceSort && props.faceSortOptions"
           v-model="faceSort"
           :options="props.faceSortOptions"
           label="Sort similar faces"
         />
-      </SearchFilterPanel>
+      </PersonDiscoverySettings>
 
       <p v-if="props.assignmentFailed" role="alert" class="mt-3">
         Assignment failed. Select faces and try Assign again.
@@ -402,14 +355,18 @@ watch(
       </SelectedFaceActions>
 
       <div
-        v-if="visibleFaces.length"
-        class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+        v-if="visibleFaces.length || canShowMoreFaces"
+        ref="foundGrid"
+        class="mt-4"
+        :class="FACE_GRID_CLASSES"
+        :style="faceGridStyle"
         aria-live="polite"
       >
         <Item
           v-for="face in visibleFaces"
           :key="face.id"
-          class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
+          data-found-face-card
+          class="group/face relative h-full min-h-[var(--face-card-height)] min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
           :class="
             selectedFaceIds.has(face.id) &&
             'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'
@@ -479,23 +436,30 @@ watch(
             >
               <LinkIcon v-if="face.assignedEntityId" class="size-4 shrink-0" aria-hidden="true" />
               <UserRoundX v-else class="size-4 shrink-0" aria-hidden="true" />
-              <b
-                class="min-w-0 flex-1 truncate"
-                :title="face.assignedEntityName || face.assignedEntityId || 'Unassigned'"
+              <component
+                :is="face.assignedEntityId ? 'RouterLink' : 'span'"
+                :to="
+                  face.assignedEntityId
+                    ? {
+                        name: 'person-detail',
+                        params: { personId: face.assignedEntityId },
+                        query: relatedQuery(route, { origin_matched_face: face.id }),
+                      }
+                    : undefined
+                "
+                class="relative z-20 min-w-0 flex-1 truncate"
+                :aria-label="
+                  face.assignedEntityId
+                    ? `Open matching person ${face.assignedEntityName || face.assignedEntityId}`
+                    : undefined
+                "
               >
-                {{ face.assignedEntityName || face.assignedEntityId || 'Unassigned' }}
-              </b>
-              <RouterLink
-                v-if="face.assignedEntityId"
-                :to="{
-                  name: 'person-detail',
-                  params: { personId: face.assignedEntityId },
-                  query: relatedQuery(route, { origin_matched_face: face.id }),
-                }"
-                class="relative z-20"
-                :aria-label="`Open matching person ${face.assignedEntityName || face.assignedEntityId}`"
-                >Profile</RouterLink
-              >
+                <b
+                  class="block min-w-0 truncate"
+                  :title="face.assignedEntityName || face.assignedEntityId || 'Unassigned'"
+                  >{{ face.assignedEntityName || face.assignedEntityId || 'Unassigned' }}</b
+                >
+              </component>
               <code class="ml-auto shrink-0 text-sm text-muted-foreground">
                 <template v-if="face.score != null">sim {{ face.score }}%</template>
                 <template v-else>Text match</template>
@@ -519,6 +483,19 @@ watch(
             Archive location unavailable
           </div>
         </Item>
+        <FaceGridAction
+          v-if="canShowMoreFaces"
+          data-found-faces-more
+          :label="moreFacesFailed ? 'Retry' : loadingMoreFaces ? 'Loading…' : 'Show more'"
+          :description="
+            moreFacesFailed
+              ? 'Could not load more faces'
+              : `${visibleFaces.length} of ${faceCount ?? filteredFaces.length} faces`
+          "
+          :loading="loadingMoreFaces"
+          :disabled="assigningFaces"
+          @activate="showMoreFaces"
+        />
       </div>
 
       <div
@@ -536,20 +513,26 @@ watch(
     <section class="border-t pt-8" aria-labelledby="similar-people-heading">
       <div class="flex w-full flex-row flex-wrap gap-4">
         <div>
-          <small class="font-semibold uppercase text-secondary">Identity similarity</small>
-          <h3 id="similar-people-heading">Other similar people</h3>
-          <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Review possible duplicates before merging.
-          </p>
+          <h3 id="similar-people-heading">Similar people</h3>
         </div>
-        <SearchFilterPanel label="Discovery people" filters-only>
+        <PersonDiscoverySettings
+          v-model:search-term="searchTerm"
+          v-model:annotations="peopleAnnotations"
+          v-model:face-model="peopleFaceModel"
+          label="Discovery people"
+          searchable
+          :result-count="people.length"
+          :model-options="modelOptions"
+          :default-face-model="defaultFaceModel"
+          @clear-filters="emit('clearPeopleFilters')"
+        >
           <SortControl
             v-if="peopleSort && props.peopleSortOptions"
             v-model="peopleSort"
             :options="props.peopleSortOptions"
             label="Sort similar people"
           />
-        </SearchFilterPanel>
+        </PersonDiscoverySettings>
       </div>
 
       <p v-if="props.mergeFailed" role="alert" class="mt-3">

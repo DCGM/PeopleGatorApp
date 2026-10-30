@@ -65,17 +65,25 @@ share the same fingerprint. Stored-input edits can change subsequent rankings.
 Entity references require PostgreSQL; Weaviate returns 501 unsupported_operation
 instead of silently ignoring them. Other explicit Weaviate behavior is unchanged.
 
-Discover uses this compact contract for both result lists. **Reference inputs**
-selects sources; **Face model** chooses a registered embedding model (listing
-models requires browse scope; registration remains admin-only). Optional search
-text adds another signal. Choices are shareable through `discovery_annotations`,
-`discovery_model` and `discovery_text`; changes restart pagination. Selected source
-tags remain available with mobile controls collapsed. Nondefault Face model
-choices have a removable tag; Clear filters resets reference inputs and the
-model override together while preserving search text and evidence settings.
-Assignment and merge failures retain selections and direct recovery through
-their corresponding action; Retry only repeats searches and model loading. Empty/error states allow
-changing inputs and retrying without resetting evidence filters or assignments.
+Found faces uses only stored face vectors and exposes **Face model**, then
+**Assignment** and sorting. It has no modality selector or text filter.
+`discovery_model` selects its model; legacy `discovery_annotations` and
+`discovery_text` do not affect face requests. Similar people retains **Modalities**,
+**Face model** and search through `people_annotations`, `people_model` and
+`people_text`; legacy modality/text values only seed that section when its own
+settings are absent.
+Changing a section's settings restarts its pagination without changing the other
+section or shared evidence filters. Active tags remain accessible when mobile
+controls are collapsed; Clear filters preserves the people search text.
+
+Found faces initially occupies two rows with the same card dimensions as linked
+faces. Its final plus tile reveals two more rows, fetching another 14-record
+cursor page only when needed. Assignment is evaluated by the repository before
+pagination: face lists/searches accept `filter.is_assigned=true` for assigned
+records, `false` for unassigned records, or omission for both. Counts cover the
+complete filtered search result set. Failed loads retain existing cards and
+selection; Retry appears on the same tile. Assignment and merge failures retain
+their selections and use the corresponding action for recovery.
 
 Reference vectors are already stored; this search does not require an inference
 service. Large reference sets use bounded representative/candidate retrieval as
@@ -153,7 +161,7 @@ Browser URLs keep one independent choice per panel, omitting defaults:
 | --- | --- |
 | People, Documents, Scans | `sort`, `dir` |
 | Person faces / scan page faces | `face_sort`, `face_dir` |
-| Person mentions and group occurrences | `mention_sort`, `mention_dir`; `mention_view=groups` |
+| Person mentions and group occurrences | `mention_sort`, `mention_dir`; `mention_view=groups|document|page`; `mention_density=compact` |
 | Exact appearance groups | `group_sort`, `group_dir` |
 | Discover similar faces / people | `similar_sort`, `similar_dir` / `people_sort`, `people_dir` |
 | Scan gallery / candidates | `gallery_sort`, `gallery_dir` / `candidate_sort`, `candidate_dir` |
@@ -337,3 +345,22 @@ search. Text lookup works without selecting a face. The explicit page annotation
 link-state control uses `page_link_state`; it affects annotation display rather
 than the page's identity membership or global candidates. The workspace's
 `link_state` remains separate. Page navigation drops the page-specific setting.
+
+### Person mention display and selection
+
+`mention_view` chooses Flat, Document, Page or Mention (`groups`). Mentions are
+expanded by default. `mention_density=compact` selects the whole-view Compact
+option; removing it restores Expand. Changing density preserves selection, while
+changing evidence filters, grouping or sorting clears it.
+
+Each group has a tri-state checkbox: unchecked selects its complete filtered
+scope, mixed selects all, and checked clears it. Individual checkboxes update
+the parent state. New cursor pages inherit a selected group's state. Group review
+resolves all cursor pages before writing and excludes explicitly deselected
+children; individual selections can be reviewed alongside complete groups.
+
+Mention checkbox selection also supports additive Shift-click ranges in current
+display order, forward or backward. Individual ranges include loaded occurrences
+across expanded groups; compact group ranges include each group's full filtered
+scope. Clear or a scope/sort change resets the anchor. Shift-clicking with no
+anchor behaves like an ordinary checkbox click.

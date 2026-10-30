@@ -3,6 +3,8 @@ import { BadgeCheck, Image, Unlink } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import FaceGridAction from './FaceGridAction.vue'
+import { FACE_GRID_CLASSES, useFaceGrid } from '@/composables/face-grid'
 import PersonFaceCard from './PersonFaceCard.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
 import { useCanAnnotate } from '@/composables/can-annotate'
@@ -10,12 +12,29 @@ import { useReviewFacesMutation } from '@/query/faces'
 import { usePatchEntityMutation } from '@/query/entities'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
+  collapsible?: boolean
+  hasMore?: boolean
+  matchingCount?: number
   faces: PersonFace[]
   personName: string
   personId: string
   thumbnailFaceId?: string | null
   thumbnailMode?: 'automatic' | 'manual'
 }>()
+const { grid, columns: rowCapacity, style: faceGridStyle } = useFaceGrid()
+const expanded = ref(false)
+const canExpand = computed(() => props.hasMore || props.faces.length > rowCapacity.value * 2)
+const visibleFaces = computed(() =>
+  props.collapsible && !expanded.value
+    ? props.faces.slice(0, rowCapacity.value * 2 - (canExpand.value ? 1 : 0))
+    : props.faces,
+)
+watch(
+  () => props.personId,
+  () => {
+    expanded.value = false
+  },
+)
 const allowed = useCanAnnotate()
 const mutation = useReviewFacesMutation()
 const portraitMutation = usePatchEntityMutation()
@@ -33,6 +52,10 @@ const currentPortrait = computed(
 )
 const failed = ref(false)
 const feedback = ref('')
+function toggleExpansion() {
+  expanded.value = !expanded.value
+  clear()
+}
 function clear() {
   selectedIds.value = new Set()
   anchor.value = null
@@ -97,7 +120,7 @@ watch(
   },
 )
 watch(
-  () => props.faces.map((face) => face.id),
+  () => visibleFaces.value.map((face) => face.id),
   (ids) => {
     const available = new Set(ids)
     selectedIds.value = new Set([...selectedIds.value].filter((id) => available.has(id)))
@@ -107,12 +130,11 @@ watch(
 </script>
 <template>
   <div
-    class="col-span-full grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-    :class="selected.length > 0 && 'pb-40 sm:pb-24'"
+    ref="grid"
+    class="col-span-full"
+    :class="[FACE_GRID_CLASSES, selected.length > 0 && 'pb-40 sm:pb-24']"
+    :style="faceGridStyle"
   >
-    <p v-if="allowed && faces.length" class="col-span-full text-sm text-muted-foreground">
-      Select faces for actions. Shift-click selects a range.
-    </p>
     <p
       v-if="feedback && !selected.length"
       class="col-span-full text-sm"
@@ -121,7 +143,7 @@ watch(
       {{ feedback }}
     </p>
     <PersonFaceCard
-      v-for="face in faces"
+      v-for="face in visibleFaces"
       :key="face.id"
       :face="face"
       :person-name="personName"
@@ -133,6 +155,19 @@ watch(
       @toggle="select(face.id, $event)"
       @add="select(face.id, $event, true)"
     />
+    <FaceGridAction
+      v-if="collapsible && canExpand"
+      data-face-overview-toggle
+      :label="expanded ? 'Show less' : 'Show all faces'"
+      :description="`${matchingCount ?? faces.length} matching faces`"
+      :expanded="expanded"
+      :full-width="expanded"
+      :disabled="busy"
+      @activate="toggleExpansion"
+    />
+    <div v-if="expanded && hasMore" class="col-span-full flex flex-wrap gap-2">
+      <slot name="pagination" />
+    </div>
     <SelectedFaceActions
       v-if="selected.length"
       :count="selected.length"

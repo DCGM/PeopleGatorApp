@@ -16,6 +16,7 @@ import { useObjectUrlMap } from '@/composables/object-url'
 import { useEntitySearchQuery, useFaceSearchQuery } from '@/query/search'
 
 const DISCOVERY_LIMIT = 40
+const FACE_DISCOVERY_BATCH = 14
 const DISCOVERY_GC_TIME = 60 * 60_000
 
 function percentage(value: number) {
@@ -44,6 +45,8 @@ export function personDiscoverySignals(
   }
 }
 
+type DiscoveryReference = { model: string | null; text: string; annotations: EntityAnnotation[] }
+
 export function usePersonDiscovery(
   personId: MaybeRefOrGetter<string>,
   referenceFaceModel: MaybeRefOrGetter<string | null>,
@@ -52,22 +55,46 @@ export function usePersonDiscovery(
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = RELEVANCE,
   peopleSort: MaybeRefOrGetter<SortState<EntitySortField>> = RELEVANCE,
   annotations: MaybeRefOrGetter<EntityAnnotation[]> = DISCOVERY_ANNOTATIONS,
+  peopleReference?: MaybeRefOrGetter<DiscoveryReference>,
+  faceAssignment: MaybeRefOrGetter<'all' | 'assigned' | 'unassigned'> = 'all',
 ) {
   const signals = computed(() =>
-    personDiscoverySignals(
-      toValue(personId),
-      toValue(referenceFaceModel),
-      toValue(extraText),
-      toValue(annotations),
-    ),
+    personDiscoverySignals(toValue(personId), toValue(referenceFaceModel), '', ['faces']),
   )
-  const canSearch = computed(
-    () =>
-      toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim())),
-  )
+  const canSearch = computed(() => toValue(enabled) && Boolean(toValue(personId)))
+  const peopleSignals = computed(() => {
+    const reference = peopleReference && toValue(peopleReference)
+    return reference
+      ? personDiscoverySignals(
+          toValue(personId),
+          reference.model,
+          reference.text,
+          reference.annotations,
+        )
+      : personDiscoverySignals(
+          toValue(personId),
+          toValue(referenceFaceModel),
+          toValue(extraText),
+          toValue(annotations),
+        )
+  })
+  const canSearchPeople = computed(() => {
+    const reference = peopleReference && toValue(peopleReference)
+    return reference
+      ? toValue(enabled) && (reference.annotations.length > 0 || Boolean(reference.text.trim()))
+      : toValue(enabled) && (toValue(annotations).length > 0 || Boolean(toValue(extraText).trim()))
+  })
   // Discovery searches all accessible data; shared browsing filters stay in the URL.
   const faceSearchQuery = useFaceSearchQuery(
-    computed(() => ({ ...signals.value, ...sortParams(toValue(faceSort)) })),
+    computed(() => ({
+      ...signals.value,
+      ...sortParams(toValue(faceSort)),
+      limit: FACE_DISCOVERY_BATCH,
+      return_total_count: true,
+      ...(toValue(faceAssignment) !== 'all' && {
+        'filter.is_assigned': toValue(faceAssignment) === 'assigned',
+      }),
+    })),
     canSearch,
   )
 
@@ -169,11 +196,11 @@ export function usePersonDiscovery(
   )
 
   const entitySearchParams = computed(() => ({
-    ...signals.value,
+    ...peopleSignals.value,
     'filter.entity_type': ['person'] as Array<'person'>,
     ...sortParams(toValue(peopleSort)),
   }))
-  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearch)
+  const entitySearchQuery = useEntitySearchQuery(entitySearchParams, canSearchPeople)
   const entityMatches = computed(() =>
     (entitySearchQuery.data.value?.pages ?? [])
       .flatMap((page) => page.items)
@@ -218,14 +245,18 @@ export function usePersonDiscovery(
       })
     },
     mergeStatus: mergeEntitiesMutation.status,
-    searchError: computed(() => faceSearchQuery.error.value ?? entitySearchQuery.error.value),
+    searchError: computed(
+      () =>
+        (faceSearchQuery.isFetchNextPageError?.value ? null : faceSearchQuery.error.value) ??
+        entitySearchQuery.error.value,
+    ),
     isLoadingFaces: computed(
       () =>
         canSearch.value && (faceSearchQuery.isPending.value || faceSearchQuery.isFetching.value),
     ),
     isLoadingPeople: computed(
       () =>
-        canSearch.value &&
+        canSearchPeople.value &&
         (entitySearchQuery.isPending.value || entitySearchQuery.isFetching.value),
     ),
     retry: () => {
@@ -233,6 +264,13 @@ export function usePersonDiscovery(
       void entitySearchQuery.refetch()
     },
     similarFaces,
+    hasMoreFaces: faceSearchQuery.hasNextPage,
+    loadingMoreFaces: faceSearchQuery.isFetchingNextPage,
+    moreFacesFailed: faceSearchQuery.isFetchNextPageError,
+    foundFaceCount: computed(
+      () => faceSearchQuery.data.value?.pages[0]?.totalCount ?? similarFaces.value.length,
+    ),
+    loadMoreFaces: () => faceSearchQuery.fetchNextPage(),
     similarPeople,
   }
 }

@@ -44,7 +44,7 @@ const sourceTarget = computed(() =>
 
 <template>
   <Item
-    class="group/face relative h-full min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
+    class="group/face relative h-full min-h-[var(--face-card-height)] min-w-0 flex-col flex-nowrap items-stretch gap-2 overflow-hidden rounded-none border bg-card p-2 text-muted-foreground shadow-none transition-colors hover:border-accent hover:text-primary"
     :class="selected && 'border-secondary bg-secondary/20 text-primary hover:bg-secondary/20'"
     data-person-face-card
   >

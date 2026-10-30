@@ -350,7 +350,7 @@ export const createTextMentionRouteApiV1TextMentionsPost = <ThrowOnError extends
 /**
  * List Text Mention Groups Route
  *
- * Group the complete filtered mention set by exact recorded text.
+ * Group the complete filtered mention set by text, document or page.
  */
 export const listTextMentionGroupsRouteApiV1TextMentionGroupsGet = <ThrowOnError extends boolean = false>(options?: Options<ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData, ThrowOnError>) => (options?.client ?? client).get<ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponses, ListTextMentionGroupsRouteApiV1TextMentionGroupsGetErrors, ThrowOnError>({
     responseType: 'json',
