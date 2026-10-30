@@ -319,12 +319,8 @@ class Page(Source):
             name="uq_pg_demo_page_identity",
         ),
         CheckConstraint("page_number > 0", name="ck_pg_demo_pages_page_number"),
-        Index("ix_pg_demo_pages_number", "library", "document_id", "page_number", "id"),
-        Index(
-            INDEX_NAME_FORMAT.format("page_document"), 
-            "library", 
-            "document_id"
-        ),
+        # Also serves (library, document_id) lookups, which need no separate index.
+        Index(INDEX_NAME_FORMAT.format("pages_number"), "library", "document_id", "page_number", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
