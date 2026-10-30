@@ -343,10 +343,11 @@ view inside the strip. Selecting an item pushes the canonical page URL, so
 reload and Back/Forward restore it. Evidence, link-state and workspace settings
 are kept. Face, person and line selections are dropped, and pan/zoom resets.
 
-Pages appear in archive page-ID order by default, or by last change through the
-strip's **Sort pages** control (#33), 12 per request. Neither order is the
-physical page sequence: the archive does not record page numbers, so the gallery
-shows no ordinal and its UUID labels are not page numbers. The gallery loads further batches until the current page
+Pages appear in stored page-number order by default (#53), unknown numbers last,
+or by page ID or last change through the strip's **Sort pages** control (#33),
+12 per request. Pages without a stored number show the first eight characters of
+their UUID, which are not page numbers. Links saved before #53 that relied on the
+old page-ID default now open in page-number order. The gallery loads further batches until the current page
 appears. After that it loads when the strip's end is reached or **More pages**
 is activated. Evidence filters never apply to the gallery.
 
