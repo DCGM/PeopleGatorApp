@@ -1,6 +1,8 @@
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
+import { h } from 'vue'
 import { describe, expect, it } from 'vitest'
 import FaceActionButtons from '@/components/custom/FaceActionButtons.vue'
+import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 
 const face: Face = {
@@ -43,4 +45,34 @@ it('uses one icon group, emits actions, and respects link state and permissions'
   expect(wrapper.find('[aria-label="Unassign current profile"]').exists()).toBe(false)
   await wrapper.setProps({ canAnnotate: false })
   expect(wrapper.findAll('button')).toHaveLength(0)
+})
+
+it('orders the card actions like the scan action bar', () => {
+  const labels = (wrapper: ReturnType<typeof mount>) =>
+    wrapper.findAll('button[aria-label]').map((button) => button.attributes('aria-label')!)
+  const bar = labels(
+    mount(FaceActionButtons, { props: { face, canAnnotate: true, canDelete: true } }),
+  )
+  const card = labels(
+    mount(SelectedFaceItem, {
+      props: { face, canDelete: true },
+      // The page passes the inline Verify control through this slot.
+      slots: { actions: () => h('button', { 'aria-label': 'Verify this link' }) },
+      global: { stubs: { RouterLink: RouterLinkStub, IdentityFacePreview: true } },
+    }),
+  )
+  expect(bar).toEqual([
+    'Reassign to another profile',
+    'Unassign current profile',
+    'Verify this link',
+    'Delete detection',
+  ])
+  // New is card-only and sits beside the other assignment action.
+  expect(card).toEqual([
+    'Reassign to another profile',
+    'Create and assign a new profile',
+    'Unassign current profile',
+    'Verify this link',
+    'Delete detection',
+  ])
 })

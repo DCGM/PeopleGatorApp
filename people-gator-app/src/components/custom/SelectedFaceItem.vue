@@ -228,7 +228,6 @@ watch(() => props.face.id, cancelCreating)
           :name="face.name"
         />
         <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-          <slot name="actions" />
           <UiTooltip v-if="face.personId" text="Reassign to another profile">
             <Button
               type="button"
@@ -281,6 +280,8 @@ watch(() => props.face.id, cancelCreating)
               <Unlink aria-hidden="true" />
             </Button>
           </UiTooltip>
+          <!-- Same order as the scan action bar: link, unlink, verify, delete. -->
+          <slot name="actions" />
           <UiTooltip v-if="canDelete" text="Delete detection">
             <Button
               type="button"

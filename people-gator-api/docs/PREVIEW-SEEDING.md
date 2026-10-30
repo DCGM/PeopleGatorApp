@@ -998,8 +998,9 @@ checks Nora's empty gallery and preserves a reviewed assignment on rerun.
 
 `identity-reference-faces` also selects an assigned manual face for checking the
 card's compact footer: **View faces** stays on the left, and icon-only
-**Verify**, **Reassign**/**Link**, **New**, **Unlink** and (for admins)
+**Reassign**/**Link**, **New**, **Unlink**, **Verify** and (for admins)
 **Delete detection** buttons are grouped on the right, each with a hover tooltip.
+They follow the scan action bar's order, with the card-only New beside Link.
 The row keeps one line, so linking a face does not change the card height. Verification errors appear inside the
 card below the actions; verified attribution stays available on the state badge.
 
