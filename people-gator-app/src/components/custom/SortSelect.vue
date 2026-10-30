@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectGroup,
+  SelectLabel,
+} from '@/components/ui/select'
 
-export type SortSelectStrategy = { value: string; label: string }
+export type SortSelectStrategy = { value: string; label: string; group?: string }
 
 const props = withDefaults(
   defineProps<{
@@ -18,6 +25,13 @@ const selected = computed(
   () => props.strategies.find((item) => item.value === value.value) ?? props.strategies[0],
 )
 
+const groups = computed(() =>
+  [...new Set(props.strategies.map((item) => item.group))].map((label) => ({
+    label,
+    items: props.strategies.filter((item) => item.group === label),
+  })),
+)
+
 function select(next: unknown) {
   const strategy = props.strategies.find((item) => item.value === next)
   if (strategy) value.value = strategy.value
@@ -30,9 +44,12 @@ function select(next: unknown) {
       <span class="min-w-0 truncate">{{ prefix }}: {{ selected?.label }}</span>
     </SelectTrigger>
     <SelectContent>
-      <SelectItem v-for="strategy in strategies" :key="strategy.value" :value="strategy.value">
-        {{ strategy.label }}
-      </SelectItem>
+      <SelectGroup v-for="group in groups" :key="group.label ?? 'general'">
+        <SelectLabel v-if="group.label">{{ group.label }}</SelectLabel>
+        <SelectItem v-for="strategy in group.items" :key="strategy.value" :value="strategy.value">
+          {{ strategy.label }}
+        </SelectItem>
+      </SelectGroup>
     </SelectContent>
   </Select>
 </template>

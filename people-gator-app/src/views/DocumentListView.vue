@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAnnotationCounts } from '@/viewmodels/annotation-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
@@ -19,6 +20,8 @@ import {
 const route = useRoute()
 const visibility = ref(defaultDocumentColumns())
 const shared = useSharedFilters()
+const counts = useAnnotationCounts()
+const sourceParams = computed(() => ({ ...shared.params.value, ...counts.params.value }))
 const { searchTerm, unassigned } = useDocumentFilters()
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(DOCUMENT_SORTS, searching.value))
@@ -37,15 +40,18 @@ const {
   retry,
 } = useDocumentList(
   searchTerm,
-  shared.params,
+  sourceParams,
   unassigned,
   12,
-  computed(() => !shared.error.value),
+  computed(() => !shared.error.value && !counts.error.value),
   sort,
 )
 const filtered = computed(
   () =>
-    searchTerm.value.trim() || unassigned.value !== 'all' || hasSharedFilters(shared.filters.value),
+    counts.tags.value.length ||
+    searchTerm.value.trim() ||
+    unassigned.value !== 'all' ||
+    hasSharedFilters(shared.filters.value),
 )
 const listEnd = ref<HTMLElement | null>(null)
 useAutomaticPagination({
@@ -54,7 +60,7 @@ useAutomaticPagination({
   hasNextPage,
   isFetching,
   error,
-  enabled: computed(() => !shared.error.value),
+  enabled: computed(() => !shared.error.value && !counts.error.value),
   loadMore,
 })
 </script>
@@ -96,7 +102,7 @@ useAutomaticPagination({
       >
     </div>
     <p
-      v-else-if="!isLoading && !shared.error.value && documents.length === 0"
+      v-else-if="!isLoading && !shared.error.value && !counts.error.value && documents.length === 0"
       class="py-10 text-center text-sm text-muted-foreground"
     >
       {{
