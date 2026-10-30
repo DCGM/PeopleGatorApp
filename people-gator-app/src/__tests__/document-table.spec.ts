@@ -330,6 +330,9 @@ describe('document table', () => {
       'Sort by Document ID',
       'Sort by Pages',
       'Sort by Last modified',
+      ...['Total', 'Automatic', 'Manual', 'Verified', 'Unassigned'].map(
+        (state) => `Sort by All annotations: ${state}`,
+      ),
     ])
     expect(wrapper.get('th[aria-sort="ascending"]').text()).toBe('Document name')
     for (const [label, field, natural] of [
@@ -338,6 +341,11 @@ describe('document table', () => {
       ['Document ID', 'document_id', 'asc'],
       ['Last modified', 'last_touched_at', 'desc'],
       ['Document name', 'name', 'asc'],
+      ...['Total', 'Automatic', 'Manual', 'Verified', 'Unassigned'].map((state) => [
+        `All annotations: ${state}`,
+        `annotations_${state.toLowerCase()}_count`,
+        'desc',
+      ]),
     ]) {
       const button = wrapper.get(`button[aria-label="Sort by ${label}"]`)
       await button.trigger('click')

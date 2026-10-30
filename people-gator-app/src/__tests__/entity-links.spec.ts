@@ -9,6 +9,7 @@ import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
+import { queryKeys } from '@/query/keys'
 import { useFaceListQuery, useDeleteFaceMutation } from '@/query/faces'
 import { usePageResultsQuery } from '@/query/search/pages'
 import { usePersonDetail } from '@/viewmodels/person-detail'
@@ -219,6 +220,7 @@ describe('entity link review', () => {
   it('forwards link states through scan browsing/search and restarts their cursor chains', async () => {
     const states = ref<EntityLinkState[]>(['verified'])
     const term = ref('')
+    const minimum = ref(1)
     api.pagesList.mockResolvedValue({
       data: { items: [{ source_id: 'p1' }], limit: 1, total_count: 2, cursor: 'next' },
     })
@@ -228,7 +230,13 @@ describe('entity link review', () => {
     let query: ReturnType<typeof usePageResultsQuery>
     renderQuery(() => {
       query = usePageResultsQuery(
-        computed(() => ({ query: term.value, 'filter.entity_link_state': states.value, limit: 1 })),
+        computed(() => ({
+          query: term.value,
+          'filter.entity_link_state': states.value,
+          'filter.min_faces_verified_count': minimum.value,
+          sort: { field: 'annotations_verified_count' as const, direction: 'desc' as const },
+          limit: 1,
+        })),
       )
       return () => h('div')
     })
@@ -242,6 +250,13 @@ describe('entity link review', () => {
     const browse = api.pagesList.mock.calls[api.pagesList.mock.calls.length - 1]![0].query
     expect(browse['filter.entity_link_state']).toEqual(['manual'])
     expect(browse.cursor).toBeNull()
+    expect(browse['filter.min_faces_verified_count']).toBe(1)
+    expect(browse.sort).toBe('annotations_verified_count')
+    minimum.value = 2
+    await flushPromises()
+    const counted = api.pagesList.mock.calls.slice(-1)[0]![0].query
+    expect(counted['filter.min_faces_verified_count']).toBe(2)
+    expect(counted.cursor).toBeNull()
     term.value = 'Ada'
     await flushPromises()
     expect(api.pagesSearch.mock.calls[0]![0].query['filter.entity_link_state']).toEqual(['manual'])
@@ -250,6 +265,8 @@ describe('entity link review', () => {
     const ranked = api.pagesSearch.mock.calls[api.pagesSearch.mock.calls.length - 1]![0].query
     expect(ranked['filter.entity_link_state']).toEqual(['automatic', 'verified'])
     expect(ranked.cursor).toBeNull()
+    expect(ranked['filter.min_faces_verified_count']).toBe(2)
+    expect(ranked.sort).toBe('annotations_verified_count')
   })
 
   it('keeps multiline mentions accessible and selectable without hover tooltips', async () => {
@@ -343,6 +360,19 @@ describe('entity link review', () => {
       const { wrapper, queryClient } = renderQuery(
         () => () => h(VerifyEntityLink, { id: 'f1', kind: 'face', linkState: 'manual', inline }),
       )
+      const countParams = {
+        'filter.min_annotations_verified_count': 2,
+        sort: 'annotations_total_count',
+        sort_direction: 'desc',
+      }
+      const countKeys = [
+        queryKeys.documents.infinite(countParams),
+        queryKeys.pages.results(countParams),
+        queryKeys.search.infiniteDocuments(countParams),
+        queryKeys.search.infinitePages(countParams),
+      ]
+      for (const key of countKeys)
+        queryClient.setQueryData(key, { pages: [{ items: [], totalCount: 0 }], pageParams: [null] })
       const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
       await flushPromises()
       if (inline) {
@@ -356,8 +386,10 @@ describe('entity link review', () => {
       await flushPromises()
       expect(wrapper.get('[role="alert"]').text()).toContain('Could not verify')
       expect(invalidate).not.toHaveBeenCalled()
+      expect(countKeys.every((key) => !queryClient.getQueryState(key)?.isInvalidated)).toBe(true)
       await wrapper.get('button').trigger('click')
       await flushPromises()
+      expect(countKeys.every((key) => queryClient.getQueryState(key)?.isInvalidated)).toBe(true)
       const keys = invalidate.mock.calls.map(
         ([args]) => (typeof args === 'function' ? args() : args)?.queryKey?.[0],
       )

@@ -59,4 +59,12 @@ export const DOCUMENT_COLUMN_SORTS: Readonly<Partial<Record<string, DocumentSort
   document_id: 'document_id',
   registered_page_count: 'page_count',
   last_modified: 'last_touched_at',
+  ...Object.fromEntries(
+    DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
+      DOCUMENT_ANNOTATION_STATES.map((state) => [
+        annotationColumnId(group.scope, state.id),
+        `${group.scope === 'all' ? 'annotations' : group.scope}_${state.id}_count` as DocumentSortField,
+      ]),
+    ),
+  ),
 }

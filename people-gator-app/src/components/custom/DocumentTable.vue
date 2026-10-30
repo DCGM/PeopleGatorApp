@@ -231,7 +231,7 @@ const table = useTable({
                 variant="ghost"
                 size="sm"
                 class="-ml-2.5"
-                :aria-label="`Sort by ${header.column.columnDef.header}`"
+                :aria-label="`Sort by ${header.column.parent ? header.column.parent.columnDef.header + ': ' : ''}${header.column.columnDef.header}`"
                 @click="toggleSort(header.column.id)"
               >
                 <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />

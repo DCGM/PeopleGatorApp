@@ -11,6 +11,7 @@ export type SortKind = 'text' | 'time' | 'number' | 'id' | 'state' | 'relevance'
 export type SortOption<Field extends string = string> = {
   value: Field
   label: string
+  group?: string
   kind: SortKind
 }
 
@@ -34,7 +35,7 @@ const DESCENDING_FIRST = new Set([
 
 /** Mirrors the API: newest, largest and best first; otherwise ascending. */
 export function defaultDirection(field: string): SortDirection {
-  return DESCENDING_FIRST.has(field) ? 'desc' : 'asc'
+  return DESCENDING_FIRST.has(field) || field.endsWith('_count') ? 'desc' : 'asc'
 }
 
 const DIRECTION_LABELS: Record<SortKind, Record<SortDirection, string>> = {
@@ -54,6 +55,7 @@ export type SortStrategy<Field extends string = string> = SortState<Field> & {
   /** Stable select value, `field:direction`. */
   value: string
   label: string
+  group?: string
 }
 
 /**
@@ -66,6 +68,7 @@ export function sortStrategies<Field extends string>(
   return options.flatMap((option) => {
     const natural = defaultDirection(option.value)
     return ([natural, natural === 'asc' ? 'desc' : 'asc'] as const).map((direction) => ({
+      group: option.group,
       field: option.value,
       direction,
       value: `${option.value}:${direction}`,

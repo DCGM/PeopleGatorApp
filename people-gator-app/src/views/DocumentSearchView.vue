@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAnnotationCounts } from '@/viewmodels/annotation-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { relatedQuery, useSharedFilters, queryValues } from '@/viewmodels/shared-filters'
 import { useDocumentScopeResolution } from '@/viewmodels/document-scope'
@@ -23,6 +24,8 @@ import {
 const route = useRoute()
 const router = useRouter()
 const shared = useSharedFilters()
+const counts = useAnnotationCounts()
+const sourceParams = computed(() => ({ ...shared.params.value, ...counts.params.value }))
 const scope = useDocumentScopeResolution()
 const documentNames = useSourceLabels('document', () => shared.filters.value.documentIds)
 const scopeError = scope.error
@@ -67,8 +70,11 @@ const {
   searchTerm,
   assignment,
   resultsPerPage,
-  scope.apply(shared.params),
-  computed(() => !shared.error.value && !scope.resolving.value && !scope.error.value),
+  scope.apply(sourceParams),
+  computed(
+    () =>
+      !shared.error.value && !counts.error.value && !scope.resolving.value && !scope.error.value,
+  ),
   sort,
 )
 
@@ -97,7 +103,10 @@ useAutomaticPagination({
   hasNextPage,
   isFetching,
   error,
-  enabled: computed(() => !shared.error.value && !scope.resolving.value && !scope.error.value),
+  enabled: computed(
+    () =>
+      !shared.error.value && !counts.error.value && !scope.resolving.value && !scope.error.value,
+  ),
   loadMore,
 })
 </script>

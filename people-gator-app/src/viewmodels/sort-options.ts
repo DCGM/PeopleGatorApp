@@ -1,3 +1,4 @@
+import { COUNT_OPTIONS } from './annotation-counts'
 import type {
   DocumentSortField,
   EntitySortField,
@@ -30,6 +31,7 @@ export const DOCUMENT_SORTS: SortOption<DocumentSortField>[] = [
   { value: 'document_id', label: 'Document ID', kind: 'id' },
   { value: 'page_count', label: 'Pages', kind: 'number' },
   { value: 'last_touched_at', label: 'Last processing', kind: 'time' },
+  ...COUNT_OPTIONS,
 ]
 export const DOCUMENT_BROWSE_DEFAULT: SortState<DocumentSortField> = {
   field: 'name',
@@ -42,6 +44,7 @@ export const PAGE_SORTS: SortOption<PageSortField>[] = [
   { value: 'document_id', label: 'Document ID', kind: 'id' },
   { value: 'page_id', label: 'Page ID', kind: 'id' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },
+  ...COUNT_OPTIONS,
 ]
 export const PAGE_BROWSE_DEFAULT: SortState<PageSortField> = { field: 'library', direction: 'asc' }
 
@@ -49,6 +52,7 @@ export const PAGE_BROWSE_DEFAULT: SortState<PageSortField> = { field: 'library',
 export const GALLERY_SORTS: SortOption<PageSortField>[] = [
   { value: 'page_id', label: 'Page ID', kind: 'id' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },
+  ...COUNT_OPTIONS,
 ]
 export const GALLERY_DEFAULT: SortState<PageSortField> = { field: 'page_id', direction: 'asc' }
 export const GALLERY_SORT_KEYS: SortUrlKeys = { field: 'gallery_sort', direction: 'gallery_dir' }

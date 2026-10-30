@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AnnotationCountControl from './AnnotationCountControl.vue'
+import { COUNT_KEYS, useAnnotationCounts } from '@/viewmodels/annotation-counts'
 import { computed } from 'vue'
 import SharedFilterControls from './SharedFilterControls.vue'
 import SharedFilterTags from './SharedFilterTags.vue'
@@ -9,6 +11,8 @@ import type { UnassignedFilter } from '@/viewmodels/document-filters'
 import type { DocumentSortField } from '@/client'
 import SortControl from './SortControl.vue'
 import type { SortOption, SortState } from '@/lib/sorting'
+
+const counts = useAnnotationCounts()
 
 defineProps<{ resultCount: number; sortOptions?: SortOption<DocumentSortField>[] }>()
 const sort = defineModel<SortState<DocumentSortField>>('sort')
@@ -36,6 +40,7 @@ const specific = computed<ActiveFilter[]>(() =>
     :result-count="resultCount"
   >
     <SharedFilterControls />
+    <AnnotationCountControl />
     <FilterSingleSelect
       v-model="unassigned"
       label="Unassigned faces"
@@ -47,9 +52,10 @@ const specific = computed<ActiveFilter[]>(() =>
     />
     <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
   </SearchFilterPanel>
+  <p v-if="counts.error.value" role="alert">{{ counts.error.value }}</p>
   <SharedFilterTags
-    :specific-filters="specific"
-    :specific-keys="['unassigned']"
-    @remove-specific="unassigned = 'all'"
+    :specific-filters="[...specific, ...counts.tags.value]"
+    :specific-keys="['unassigned', ...COUNT_KEYS]"
+    @remove-specific="$event.key.startsWith('min_') ? counts.remove($event) : (unassigned = 'all')"
   />
 </template>

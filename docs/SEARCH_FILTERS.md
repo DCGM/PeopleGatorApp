@@ -364,3 +364,44 @@ display order, forward or backward. Individual ranges include loaded occurrences
 across expanded groups; compact group ranges include each group's full filtered
 scope. Clear or a scope/sort change resets the anchor. Shift-clicking with no
 anchor behaves like an ordinary checkbox click.
+
+### Annotation count ordering and minima (#78)
+
+Document and page browse and search accept the same fifteen numeric sort fields:
+`{annotations|faces|mentions}_{total|automatic|manual|verified|unassigned}_count`.
+For example, `sort=annotations_verified_count&sort_direction=desc` orders by
+verified faces plus verified text mentions. All count sorts start descending;
+`sort_direction=asc` reverses the numeric key. Canonical source UUID ascending
+breaks ties in either direction. Changing a filter, field or direction requires
+a new cursor; ordinary browse evaluates counts before keyset pagination.
+
+Each field has an optional inclusive `filter.min_<field>` integer minimum, for
+example `filter.min_faces_manual_count=2&filter.min_mentions_total_count=3`.
+Minima combine with AND, including existing library, source, actor/date, content
+and same-annotation evidence constraints. Zero imposes no restriction. Omission
+also imposes no restriction; negative, fractional, null, boolean and malformed
+values are rejected. Values must fit an exact JSON integer (0–9007199254740991).
+POST search bodies use the same names inside `filter_`, without the `filter.`
+prefix. GET names and bounds are documented in the locally exported OpenAPI/SDK.
+
+A document counts its direct annotations plus annotations on registered pages
+with the same library and archive document ID. A page counts only its own
+annotations. All annotations is faces plus text mentions for each state; total
+includes unassigned. States describe mutually exclusive annotation links, not a
+resource review state. Counts are independent of evidence filters and loaded
+previews; empty resources count as zero. Count sort/filter operations do not alter
+First page selection, which remains in archive page-ID order.
+
+Search keeps its existing bounded candidate retrieval and ranking semantics.
+Count minima constrain candidate retrieval; explicit count sorting orders the
+supported candidate set before search pagination. It does not perform an
+unbounded archive search.
+
+Documents and Scan search share a compact **Minimum annotations** control with
+category/state selectors and a whole-number minimum. Each applied minimum has
+an individually removable tag, even with mobile filters collapsed. Clear all
+preserves search and sort; clear search preserves minima. URL keys are
+`min_<field>` plus the existing `sort`/`dir`; reload and Back/Forward restore them.
+Invalid copied minima remain visible and block requests until corrected or
+removed. Showing a document count column never changes the active query; clicking
+its header selects the corresponding server sort.

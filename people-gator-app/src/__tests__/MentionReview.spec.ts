@@ -142,7 +142,7 @@ it('reports confirmed chunks on failure and invalidates counts and lists', async
   ).rejects.toThrow('50 of 60 updates confirmed')
   expect(
     invalidate.mock.calls.map(([arg]) => typeof arg === 'object' && arg?.queryKey?.[0]),
-  ).toEqual(expect.arrayContaining(['text-mentions', 'entities']))
+  ).toEqual(expect.arrayContaining(['text-mentions', 'entities', 'documents', 'pages', 'search']))
   wrapper.unmount()
   client.clear()
 })
