@@ -58,13 +58,13 @@ const parts = computed(() => {
               ...(linkStates.length && { link_state: linkStates }),
             },
           }"
-          class="min-w-0 truncate text-sm underline"
+          class="min-w-0 text-sm underline wrap-anywhere"
           :title="`${mention.library} · ${mention.documentId} · ${mention.pageId}`"
         >
           {{
             compact
-              ? mention.pageLabel.slice(0, 8)
-              : `${mention.library} · ${mention.documentTitle} · ${mention.pageLabel.slice(0, 8)}`
+              ? mention.pageLabel
+              : `${mention.library} · ${mention.documentTitle} · ${mention.pageLabel}`
           }}
         </RouterLink>
         <span v-else class="text-sm text-muted-foreground">{{
