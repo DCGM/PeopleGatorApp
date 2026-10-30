@@ -1,62 +1,39 @@
 # Issue #41 browser evidence
 
-Captured from this branch's running Vite/API application against a migrated,
-synthetic PostgreSQL store after running the real seed CLI twice. Desktop uses
-1440 × 900 CSS pixels; mobile uses 390 × 844 CSS pixels. Images contain synthetic
-illustrations and no private collection data.
+Real browser captures from the running Vite/API application with a migrated,
+synthetic PostgreSQL store and disposable local media. Desktop uses 1440 × 900
+CSS pixels; mobile uses 390 × 844. Images contain synthetic illustrations.
+
+The face popover is a compact 256px-wide grid with 8px outer padding, 4px gaps,
+a bounded 160px scroll area and a 24px circular outline close button at the
+corner. There is no title, count or normal loading button. The close button
+stays outside the crop area. The identity retains an accessible name.
 
 Each viewport includes:
 
-- `*-compact.png`: assigned identity and compact workspace cards.
-- `*-assigned-open.png`: the current identity's first six reference faces.
-- `*-candidate-more.png`: a candidate's eleven linked faces loaded, scrolled to
-  the end inside the bounded gallery.
+- `*-assigned-open.png`: reference faces from the currently assigned card.
+- `*-candidate-more.png`: a candidate's eleven linked faces loaded and scrolled.
 - `*-empty.png`: mention-only Nora Svoboda's explicit empty state.
-- `*-dark.png`: the expanded candidate gallery in dark mode.
+- `*-dark.png`: the compact candidate gallery in dark mode.
+- `*-sentinel-start.png`, `*-sentinel-end.png`, `*-sentinel-dark.png`: Zora
+  Cartographer's 15 existing faces, automatically loaded in three batches.
+- `*-compact.png`, `*-actions.png`, `*-actions-dark.png`: compact workspace cards
+  and the aligned action row in both themes.
+- `*-create.png`, `*-verification-error.png`, `*-verified.png`: creation/cancel,
+  a failed verification inside the card and the already-verified state. The error
+  capture uses an intercepted synthetic 503; no verification is persisted.
 
-Browser checks exercised mouse hover/leave, click pinning, touch opening,
-Enter/Space, arrow-key isolation, Escape with focus return, outside dismissal,
-progressive loading, scroll overflow, reopening cached evidence, empty states,
-light/dark rendering and viewport width. Gallery requests used only the exact
-identity with six-item batches; inherited library/link-state filters were absent.
-No mutation requests occurred; the scan URL, selection and pan/zoom transform
-remained unchanged through reference browsing.
+Gallery checks cover lazy opening, mouse hover/leave, click/touch pinning,
+Enter/Space, keyboard scrolling, Escape/focus return, outside dismissal, cached
+reopening, empty states, light/dark rendering and viewport width. A visible end
+sentinel loads 6→12; scrolling loads the final batch to 15. Three distinct
+cursors, no requests after exhaustion, no manual loading button, no title/counter,
+no mutations and unchanged scan route/selection/pan/zoom were verified in both
+viewports. Latest captures also check the padding/width and circular close button
+without crop overlap. Normal color transitions settle before theme captures.
 
-## Assigned-person footer follow-up
-
-The `*-actions.png` captures show all five controls aligned in the card footer
-at the desktop/mobile sizes above. `*-create.png`, `*-verification-error.png`
-and `*-verified.png` show creation/cancel, a failed verification inside the card,
-and the already-verified state. The error capture uses an intercepted synthetic
-503 response; no verification change is persisted.
-
-Additional browser checks confirm a shared baseline and standard 24px button
-heights, natural wrapping without overflow at 320px, accessible names for the
-New/Unlink icon buttons, creation/cancel behavior, reassignment search focus,
-error placement below the actions and verification details on the state badge.
-All gallery captures were refreshed after this layout change.
-
-## Outline action colors
-
-The action row uses sky (faces), emerald (verify/save), amber (reassign/link),
-violet (new identity) and destructive red (unlink/cancel) for text/icons and
-borders. Backgrounds, border width/style, sizing and layout remain standard
-shadcn outline controls. `*-actions-dark.png` shows the settled dark-theme colors;
-all other captures were refreshed too. Browser style checks verify five distinct
-text/border colors, shared neutral backgrounds, solid 1px borders, and a red
-unlink border matching its text in both themes. Save and Cancel also use outline
-variants. Theme captures wait for the standard color transitions to finish.
-
-## Sentinel loading and total-only title
-
-The hover gallery now shows only **N faces** as its heading. Its end sentinel
-loads the next six-face batch automatically inside the existing scroll area;
-there is no normal load-more button or loaded/total counter. Failed requests
-retain the loaded evidence and offer Retry without an automatic retry loop.
-
-The `*-sentinel-start.png`, `*-sentinel-end.png` and `*-sentinel-dark.png`
-captures show Zora Cartographer's existing 15-face fixture. Browser checks verify
-lazy opening, initial 6→12 loading while the sentinel remains visible, keyboard
-scrolling to fetch the third batch, three distinct cursors and exhaustion at 15.
-The title stays **15 faces** throughout. Both viewport sizes preserve scan state,
-focus return and read-only behavior; the earlier gallery captures are refreshed.
+Footer checks verify aligned 24px controls, natural wrapping at 320px, accessible
+New/Unlink names, creation/cancel, reassignment focus and errors below the actions.
+Only text/icons and borders carry sky (faces), emerald (verify/save), amber
+(reassign/link), violet (new identity) and red (unlink/cancel). Standard outline
+backgrounds, border geometry, sizing and focus states remain intact.

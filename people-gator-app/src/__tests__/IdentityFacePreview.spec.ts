@@ -104,7 +104,6 @@ describe('in-place identity faces', () => {
     expect(mocks.list.mock.calls[0]![0].query).toEqual({
       'filter.entity_id': ['ada'],
       limit: 6,
-      return_total_count: true,
       sort: 'detection_id',
       sort_direction: 'asc',
       cursor: null,
@@ -113,14 +112,14 @@ describe('in-place identity faces', () => {
     const dialog = document.getElementById(wrapper.get('button').attributes('aria-controls')!)!
     expect(dialog.getAttribute('role')).toBe('dialog')
     expect(dialog.getAttribute('aria-labelledby')).toBe(wrapper.get('button').attributes('id'))
-    expect(document.querySelector('h4')?.textContent).toBe('7 faces')
+    expect(document.querySelector('[role="dialog"] h4')).toBeNull()
     expect(document.body.textContent).not.toContain('6 of 7')
     expect(document.body.textContent).not.toContain('Load more faces')
     await click('Close faces')
     expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(wrapper.get('button').element)
     await click('View faces')
-    expect(document.querySelector('h4')?.textContent).toBe('7 faces')
+    expect(document.querySelector('[role="dialog"] h4')).toBeNull()
     expect(mocks.crop).toHaveBeenCalledTimes(6)
   })
 

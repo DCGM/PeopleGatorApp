@@ -18,7 +18,6 @@ const query = useFaceListQuery((): FaceListParams => ({
   sort: 'detection_id',
   sort_direction: 'asc',
   limit: 6,
-  return_total_count: true,
 }))
 const faces = computed(() => {
   const seen = new Set<string>()
@@ -28,7 +27,6 @@ const faces = computed(() => {
     return true
   })
 })
-const total = computed(() => query.data.value?.pages[0]?.total_count)
 useAutomaticPagination({
   target: end,
   hasNextPage: query.hasNextPage,
@@ -45,26 +43,24 @@ function retry() {
 </script>
 
 <template>
-  <div class="space-y-3" :aria-busy="query.isFetching.value" :aria-label="`Faces of ${name}`">
-    <div class="flex items-center justify-between gap-2">
-      <h4 class="text-sm font-medium">{{ total == null ? 'Faces' : `${total} faces` }}</h4>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Close faces"
-        @click="emit('close')"
-      >
-        <X aria-hidden="true" />
-      </Button>
-    </div>
-    <p v-if="query.isPending.value" role="status" class="text-sm">Loading faces…</p>
-    <div v-if="query.isPending.value" class="grid grid-cols-3 gap-2">
+  <div class="relative" :aria-busy="query.isFetching.value" :aria-label="`Faces of ${name}`">
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-xs"
+      class="absolute -right-3 -top-3 z-10 rounded-full"
+      aria-label="Close faces"
+      @click="emit('close')"
+    >
+      <X aria-hidden="true" />
+    </Button>
+    <p v-if="query.isPending.value" role="status" class="sr-only">Loading faces…</p>
+    <div v-if="query.isPending.value" class="grid grid-cols-3 gap-1">
       <Skeleton v-for="i in 6" :key="i" class="aspect-square w-full" />
     </div>
-    <ScrollArea v-if="faces.length" class="h-48 w-full" type="always">
+    <ScrollArea v-if="faces.length" class="h-40 w-full" type="always">
       <div
-        class="grid grid-cols-3 gap-2 pr-3"
+        class="grid grid-cols-3 gap-1 pr-3"
         role="list"
         :aria-label="`Reference faces of ${name}`"
       >
@@ -87,11 +83,11 @@ function retry() {
     <p
       v-if="!query.isPending.value && !query.isError.value && !faces.length"
       role="status"
-      class="text-sm"
+      class="py-2 text-sm"
     >
       No linked faces.
     </p>
-    <div v-if="query.isError.value" class="space-y-2" role="alert">
+    <div v-if="query.isError.value" class="space-y-2" :class="faces.length > 0 && 'mt-2'" role="alert">
       <p class="text-sm">Could not load {{ faces.length ? 'more ' : '' }}faces.</p>
       <Button
         type="button"

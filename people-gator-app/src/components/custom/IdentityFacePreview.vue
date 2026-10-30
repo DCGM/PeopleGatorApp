@@ -94,7 +94,7 @@ onBeforeUnmount(cancelTimer)
       tabindex="-1"
       align="start"
       :collision-padding="12"
-      class="w-80 max-w-[calc(100vw-1.5rem)] space-y-3"
+      class="w-64 max-w-[calc(100vw-1.5rem)] p-2"
       @open-auto-focus.prevent
       @close-auto-focus.prevent
       @escape-key-down="close"

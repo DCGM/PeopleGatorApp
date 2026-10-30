@@ -849,14 +849,16 @@ has zero in every field. Switching columns adds no requests or local sorting.
 Open `identity-reference-faces` for **Reference appearances** in `preview-nlk`.
 Hover **View faces** on Ada Novak's candidate card, or click/tap to keep it open.
 The same control is available on the currently assigned identity. The shadcn
-popover shows a bounded scroll area and a total-only **N faces** heading. Reaching
-the end automatically loads the next six-face batch; there is no loading button
-or loaded/total counter. Close with Escape, the close button or a click outside.
+popover contains just a compact grid of faces with small margins and a circular
+X button at the corner; it has no title or count. Reaching the end of the bounded
+scroll area automatically loads the next six-face batch, without a loading button.
+Open `identity-reference-compact` for this layout. Close with Escape, the corner
+button or a click outside.
 Keyboard users can open with Enter/Space, Tab to the scroll area and scroll with
 arrow keys. A failed continuation keeps the loaded faces and offers **Retry**.
 Open `identity-reference-scroll` for **Zora Cartographer**: her 15 existing local
 face crops exercise three cursor batches as the end sentinel comes into view.
-The title stays **15 faces** while additional batches append. This report link
+The compact gallery stays free of titles and counters as batches append. This report link
 reuses stable fixtures and does not alter embeddings, reviews or timestamps.
 
 Ada has more than six appearances across pages, documents and libraries, with

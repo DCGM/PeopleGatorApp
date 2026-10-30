@@ -83,7 +83,7 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
     this: HTMLElement,
   ) {
-    return this.getAttribute('data-slot') === 'scroll-area-viewport' ? 192 : 900
+    return this.getAttribute('data-slot') === 'scroll-area-viewport' ? 160 : 900
   })
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000)
 })
@@ -96,7 +96,7 @@ afterEach(() => {
 })
 
 describe('identity face sentinel loading', () => {
-  it('waits until the end is visible within the scroll area, deduplicates and keeps the total-only heading', async () => {
+  it('waits until the end is visible within the scroll area, deduplicates without a heading or counter', async () => {
     api.list
       .mockResolvedValueOnce(
         batch(
@@ -109,7 +109,7 @@ describe('identity face sentinel loading', () => {
     setup()
     await settle()
     expect(api.list).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('h4').text()).toBe('7 faces')
+    expect(wrapper.find('h4').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('6 of 7')
     expect(wrapper.text()).not.toContain('Load more faces')
     await showEnd()
@@ -117,7 +117,7 @@ describe('identity face sentinel loading', () => {
     expect(
       wrapper.findAll('[role="listitem"]').map((item) => item.attributes('data-face-id')),
     ).toEqual(['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
-    expect(wrapper.get('h4').text()).toBe('7 faces')
+    expect(wrapper.find('h4').exists()).toBe(false)
     await showEnd()
     expect(api.list).toHaveBeenCalledTimes(2)
   })
@@ -134,7 +134,7 @@ describe('identity face sentinel loading', () => {
     await settle()
     expect(api.list.mock.calls.map(([arg]) => arg.query.cursor)).toEqual([null, 'second', 'third'])
     expect(wrapper.findAll('[role="listitem"]')).toHaveLength(3)
-    expect(wrapper.get('h4').text()).toBe('3 faces')
+    expect(wrapper.find('h4').exists()).toBe(false)
     expect(wrapper.find('[data-face-gallery-end]').exists()).toBe(false)
   })
 
@@ -178,6 +178,6 @@ describe('identity face sentinel loading', () => {
     await settle()
     expect(api.list.mock.calls[2]![0].query.cursor).toBe('next')
     expect(wrapper.findAll('[role="listitem"]')).toHaveLength(2)
-    expect(wrapper.get('h4').text()).toBe('2 faces')
+    expect(wrapper.find('h4').exists()).toBe(false)
   })
 })
