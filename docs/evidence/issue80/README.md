@@ -93,7 +93,7 @@ headings show full document and page UUIDs, wrapping without horizontal overflow
 Group Verify now skips occurrences that are already verified, so its count reports
 only changed records. Other mention captures predate the full-UUID labels.
 
-Document view group headings use the occurrence-link style: an underlined
+Document view group headings use the occurrence-link style at normal text size: an underlined
 `library · document name` link that opens the document's scans
 (`/scans?document=…`), without the document UUID. `mentions-document-*` is
 refreshed; the link was followed at both viewport sizes without page errors.

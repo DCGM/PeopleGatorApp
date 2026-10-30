@@ -241,7 +241,7 @@ watch(groups, (items) => {
                   name: 'document-search',
                   query: relatedQuery(route, { document: group.source_id! }),
                 }"
-                class="text-sm underline wrap-anywhere"
+                class="underline wrap-anywhere"
                 :title="`${group.library} · ${group.document_id}`"
                 >{{ group.library }} · {{ group.name }}</RouterLink
               ></span
