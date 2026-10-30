@@ -173,6 +173,33 @@ describe('exact appearance mention groups', () => {
     client.clear()
   })
 
+  it('shows exact mention group text in plain serif without highlighting', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        compact: true,
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: [],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    const name = wrapper.findAll('li span span').find((item) => item.text() === 'Ada Novak')!
+    expect(name.classes()).toContain('font-serif')
+    expect(name.classes()).not.toContain('text-secondary')
+    expect(name.classes()).not.toContain('underline')
+  })
+
   it('labels document groups as a library · name link to the document without its UUID', async () => {
     mocks.groups.mockResolvedValue({
       data: {

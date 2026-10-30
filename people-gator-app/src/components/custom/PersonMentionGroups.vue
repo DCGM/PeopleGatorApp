@@ -247,9 +247,7 @@ watch(groups, (items) => {
               ></span
             >
             <span v-else class="min-w-0 flex-1 break-words font-sans"
-              ><span :class="mode === 'mention' && 'text-secondary underline underline-offset-2'">{{
-                group.name
-              }}</span>
+              ><span :class="mode === 'mention' && 'font-serif'">{{ group.name }}</span>
               <small v-if="mode !== 'mention'" class="block text-muted-foreground wrap-anywhere"
                 >{{ group.library }} · {{ group.document_id ?? group.source_id
                 }}<template v-if="group.page_id"> · {{ group.page_id }}</template></small
