@@ -3367,6 +3367,18 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
         assert sum(group.occurrence_count for group in groups.items) == 27
         if mode == 'page':
             assert all(g.occurrence_count == 3 for g in groups.items)
+            # Same-titled documents never interleave, including across cursor pages.
+            for sort in ({}, {'sort': 'text', 'sort_direction': 'desc'}, {'sort': 'count'}):
+                paged, cursor = [], None
+                while True:
+                    batch = await db.text_mentions.list_groups(TextMentionGroupListRequest(
+                        limit=2, group_by=mode, filter_=scope, cursor=cursor, **sort))
+                    paged.extend(batch.items)
+                    if not (cursor := batch.cursor):
+                        break
+                documents = [(g.library, g.document_id) for g in paged]
+                runs = [d for i, d in enumerate(documents) if i == 0 or documents[i - 1] != d]
+                assert len(paged) == 9 and len(runs) == len(set(runs)) == 3
         if mode == 'document':
             assert [g.name for g in groups.items].count('Review ledger') == 2
             assert len({g.source_id for g in groups.items}) == 3

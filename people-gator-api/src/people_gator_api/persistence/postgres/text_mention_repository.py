@@ -175,6 +175,10 @@ class PostgresTextMentionRepository(TextMentionRepository):
         keys = builders[field](descending) if field is not None else builders["text"](False)
         # Exact recorded text identifies a group and is its canonical tie-breaker.
         exact_descending = descending if field in (None, "text") else False
+        if query.group_by == "page":
+            # Pages share their document's title: keep each document's pages contiguous.
+            keys = [*keys, SortKey(grouped.c.library.collate("C"), "text"),
+                    SortKey(grouped.c.document_id, "uuid")]
         spec = SortSpec(
             f"{field or 'default'}:{direction.value}",
             (*keys, SortKey(identity.collate("C") if query.group_by == "mention" else identity,
