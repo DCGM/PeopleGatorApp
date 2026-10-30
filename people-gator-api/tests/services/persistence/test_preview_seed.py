@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (36, 110, 71)
-    assert len(result.documents) == 46 and len(result.pages) == 101
+    assert await counts(database) == (37, 119, 75)
+    assert len(result.documents) == 50 and len(result.pages) == 106
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (36, 110, 71)
+    assert await counts(database) == (37, 119, 75)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (36, 110, 71)
+    assert await counts(database) == (37, 119, 75)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (37, 110, 71)
+    assert await counts(database) == (38, 119, 75)
 
 
 
@@ -434,8 +434,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 36 and len(result.faces) == 110
-    assert await counts(database) == (36, 110, 71)
+    assert len(result.entities) == 37 and len(result.faces) == 119
+    assert await counts(database) == (37, 119, 75)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (35, 109, 70)
+    assert await counts(database) == (36, 118, 74)
 
 
 
@@ -1281,9 +1281,10 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     fifth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fourth.cursor, return_total_count=True))
     sixth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fifth.cursor, return_total_count=True))
     seventh = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=sixth.cursor, return_total_count=True))
-    assert first.total_count == 7 and seventh.cursor is None
-    assert [batch.items[0].library for batch in (first, second, third, fourth, fifth, sixth, seventh)] == [
-        'preview-mzk', 'preview-nlk', 'preview-pagination', 'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
+    eighth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=seventh.cursor, return_total_count=True))
+    assert first.total_count == 8 and eighth.cursor is None
+    assert [batch.items[0].library for batch in (first, second, third, fourth, fifth, sixth, seventh, eighth)] == [
+        'preview-counts', 'preview-mzk', 'preview-nlk', 'preview-pagination', 'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
     ]
     with pytest.raises(ValueError, match='cursor'):
         await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, q='mzk'))
@@ -3544,7 +3545,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (36, 110, 71)
+    assert await counts(db) == (37, 119, 75)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -3587,3 +3588,388 @@ async def test_found_faces_assignment_pages_cover_the_complete_seed_candidates(s
     assert seed.faces['review-unassigned'] in partitions[1]
     assert seed.faces['review-candidate'] in partitions[0]
     assert 'person-review-found-faces' in seed.filter_examples
+@pytest.mark.asyncio
+async def test_annotation_count_matrix_orders_filters_and_pages_before_cursors(
+    seed_target,
+):
+    """All 15 numeric keys, both directions, both resources and bounded search."""
+    from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.schemas.search import (
+        SearchDocumentsRequest,
+        SearchPagesRequest,
+    )
+    from sqlalchemy import event
+
+    db, fs, engine = seed_target
+    seeded = await preview.seed_preview(db, fs)
+    states = ("automatic", "manual", "verified", "unassigned")
+
+    def counts(faces, mentions):
+        result = {}
+        for kind, values in (
+            ("faces", faces),
+            ("mentions", mentions),
+            ("annotations", [a + b for a, b in zip(faces, mentions)]),
+        ):
+            result[f"{kind}_total_count"] = sum(values)
+            result.update(
+                {f"{kind}_{state}_count": value for state, value in zip(states, values)}
+            )
+        return result
+
+    zero = [0, 0, 0, 0]
+    expected_docs = {
+        seeded.documents["count-faces"]: counts([1, 2, 1, 1], zero),
+        seeded.documents["count-tie"]: counts([1, 1, 1, 1], zero),
+        seeded.documents["count-mentions"]: counts(zero, [1, 1, 1, 1]),
+        seeded.documents["count-empty"]: counts(zero, zero),
+        # Direct mention + two pages, mirror shares archive identity only.
+        seeded.documents["table-ledger"]: counts([1, 1, 1, 1], [2, 1, 1, 1]),
+        seeded.documents["table-mirror"]: counts(zero, zero),
+    }
+    expected_pages = {
+        seeded.pages["count-faces-1"]: counts([1, 1, 1, 1], zero),
+        seeded.pages["count-faces-2"]: counts([0, 1, 0, 0], zero),
+        seeded.pages["count-tie-1"]: counts([1, 1, 1, 1], zero),
+        seeded.pages["count-mentions-1"]: counts(zero, [1, 1, 1, 1]),
+        seeded.pages["count-empty-1"]: counts(zero, zero),
+        seeded.pages["table-1"]: counts([1, 1, 0, 0], [1, 1, 0, 0]),
+        seeded.pages["table-2"]: counts([0, 0, 1, 1], [0, 0, 1, 1]),
+    }
+
+    async def traverse(fetch, request, expected, **kwargs):
+        rows, cursor = [], None
+        while True:
+            page = await fetch(
+                request(limit=2, cursor=cursor, return_total_count=True, **kwargs)
+            )
+            assert page.total_count == len(expected)
+            rows.extend(page.items)
+            cursor = page.cursor
+            if cursor is None:
+                break
+        assert len(rows) == len({row.source_id for row in rows}) == len(expected)
+        assert {row.source_id for row in rows} == set(expected)
+        # Count scopes also agree with the full response summaries.
+        for row in rows:
+            for field, value in expected[row.source_id].items():
+                category, state, _ = field.split("_")
+                stats = row.entity_link_stats
+                actual = (
+                    getattr(stats.faces, state) + getattr(stats.mentions, state)
+                    if category == "annotations"
+                    else getattr(getattr(stats, category), state)
+                )
+                assert actual == value
+        return [row.source_id for row in rows]
+
+    for expected, filter_type, request, search_request, fetch, search in (
+        (
+            expected_docs,
+            DocumentListFilter,
+            DocumentListRequest,
+            SearchDocumentsRequest,
+            db.sources.list_documents,
+            db.sources.search_documents,
+        ),
+        (
+            expected_pages,
+            PageListFilter,
+            PageListRequest,
+            SearchPagesRequest,
+            db.sources.list_pages,
+            db.sources.search_pages,
+        ),
+    ):
+        base = dict(source_id=list(expected))
+        for field in ANNOTATION_COUNT_FIELDS:
+            for direction in ("asc", "desc"):
+                order = sorted(
+                    expected,
+                    key=lambda id: (
+                        expected[id][field] * (1 if direction == "asc" else -1),
+                        id.int,
+                    ),
+                )
+                for method, req, extra in (
+                    (fetch, request, {}),
+                    (
+                        search,
+                        search_request,
+                        {
+                            "query": QueryBase(
+                                text=[
+                                    "preview-counts",
+                                    "preview-table",
+                                    "preview-table-mirror",
+                                ]
+                            )
+                        },
+                    ),
+                ):
+                    ids = await traverse(
+                        method,
+                        req,
+                        expected,
+                        filter_=filter_type(**base),
+                        sort=field,
+                        sort_direction=direction,
+                        **extra,
+                    )
+                    assert ids == order
+            for minimum in (0, 1, 2, 9_007_199_254_740_991):
+                wanted = {
+                    id: values
+                    for id, values in expected.items()
+                    if values[field] >= minimum
+                }
+                scope = filter_type(**base, **{f"min_{field}": minimum})
+                await traverse(fetch, request, wanted, filter_=scope, sort=field)
+                await traverse(
+                    search,
+                    search_request,
+                    wanted,
+                    filter_=scope,
+                    sort=field,
+                    query=QueryBase(
+                        text=["preview-counts", "preview-table", "preview-table-mirror"]
+                    ),
+                )
+        # Unset and zero preserve empty resources; implicit count direction is descending.
+        assert await traverse(
+            fetch,
+            request,
+            expected,
+            filter_=filter_type(**base),
+            sort="faces_total_count",
+        ) == sorted(
+            expected, key=lambda id: (-expected[id]["faces_total_count"], id.int)
+        )
+        # Multiple count minima AND evidence constraints, counts themselves stay resource-wide.
+        wanted = {
+            id: values
+            for id, values in expected.items()
+            if values["faces_manual_count"] >= 1
+            and values["mentions_total_count"] >= 2
+            and values["annotations_verified_count"] >= 1
+        }
+        await traverse(
+            fetch,
+            request,
+            wanted,
+            filter_=filter_type(
+                **base,
+                min_faces_manual_count=1,
+                min_mentions_total_count=2,
+                entity_link_state=["verified"],
+            ),
+            sort="annotations_verified_count",
+        )
+        first = await fetch(
+            request(filter_=filter_type(**base), sort="faces_total_count", limit=1)
+        )
+        assert first.cursor
+        for changed in (
+            {"filter_": filter_type(**base, min_faces_total_count=1)},
+            {"sort": "mentions_total_count"},
+            {"sort_direction": "asc"},
+        ):
+            kwargs = dict(
+                filter_=filter_type(**base),
+                sort="faces_total_count",
+                cursor=first.cursor,
+                limit=1,
+            )
+            kwargs.update(changed)
+            with pytest.raises(ValueError, match="different query"):
+                await fetch(request(**kwargs))
+    # Aggregate query counts stay constant as response batches grow.
+    statements = []
+
+    def capture(*args):
+        statements.append(args[2])
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        query = DocumentListRequest(
+            limit=1,
+            filter_=DocumentListFilter(
+                source_id=list(expected_docs), min_annotations_total_count=1
+            ),
+            sort="faces_manual_count",
+        )
+        await db.sources.list_documents(query)
+        count = len(statements)
+        statements.clear()
+        await db.sources.list_documents(query.model_copy(update={"limit": 100}))
+        assert len(statements) == count
+        assert statements[0].count("counted_annotations AS") <= 1
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+
+
+@pytest.mark.asyncio
+async def test_count_preview_mutations_preservation_and_interrupted_recovery(
+    seed_target,
+):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.services.auth_service import AuthContext
+
+    db, fs, _ = seed_target
+    original = await preview.seed_preview(db, fs)
+    actor = AuthContext(
+        user_id=original.users["reviewer"],
+        authentication_method="bearer",
+        scopes={"people-gator:annotate"},
+    )
+    page_id, doc_id = original.pages["count-faces-1"], original.documents["count-faces"]
+
+    async def membership(state, minimum):
+        docs = await db.sources.list_documents(
+            DocumentListRequest(
+                limit=12,
+                filter_=DocumentListFilter(
+                    source_id=[doc_id], **{f"min_faces_{state}_count": minimum}
+                ),
+            )
+        )
+        pages = await db.sources.list_pages(
+            PageListRequest(
+                limit=12,
+                filter_=PageListFilter(
+                    source_id=[page_id], **{f"min_faces_{state}_count": minimum}
+                ),
+            )
+        )
+        return bool(docs.items), bool(pages.items)
+
+    assert await membership("verified", 2) == (False, False)
+    await db.faces.patch(
+        original.faces["count-face-0"],
+        FacePatchRequest(entity_link_state="verified"),
+        actor,
+    )
+    assert await membership("verified", 2) == (True, True)
+    await db.faces.patch(
+        original.faces["count-face-0"], FacePatchRequest(entity_id=None), actor
+    )
+    assert await membership("verified", 2) == (False, False)
+    assert await membership("unassigned", 2) == (True, True)
+    await db.faces.patch(
+        original.faces["count-face-0"],
+        FacePatchRequest(entity_id=original.entities["table-tereza"]),
+        actor,
+    )
+    assert await membership("unassigned", 2) == (False, False)
+    await db.faces.delete(original.faces["count-face-0"], context=actor)
+    await db.text_mentions.patch(
+        original.mentions["count-mention-0"],
+        TextMentionPatchRequest(entity_link_state="verified"),
+        actor,
+    )
+    mentions = await db.sources.list_pages(
+        PageListRequest(
+            limit=12,
+            filter_=PageListFilter(
+                min_mentions_verified_count=2,
+                source_id=[original.pages["count-mentions-1"]],
+            ),
+        )
+    )
+    assert len(mentions.items) == 1
+    await db.text_mentions.delete(original.mentions["count-mention-0"], context=actor)
+    before = await db.sources.get_document(doc_id)
+    await preview.seed_preview(db, fs)
+    assert await db.sources.get_document(doc_id) == before
+    assert await db.faces.get(original.faces["count-face-0"]) is None
+    assert await db.text_mentions.get(original.mentions["count-mention-0"]) is None
+    # Lose a checkpoint immediately after writing new evidence; retry must recover
+    # the durable synthetic identifier rather than inserting a duplicate.
+    raw = await fs.read_bytes(preview.MANIFEST_KEY)
+    manifest = json.loads(raw)
+    # Existing fixture keys are deliberately removed from the checkpoint only.
+    del manifest["faces"]["count-tie-face-0"]
+    await fs.write_bytes(preview.MANIFEST_KEY, json.dumps(manifest).encode())
+    recovered = await preview.seed_preview(db, fs)
+    assert recovered.faces["count-tie-face-0"] == original.faces["count-tie-face-0"]
+    assert recovered.filter_examples["annotation-count-documents"]
+    doc = await db.sources.get_document(original.documents["count-tie"])
+    assert doc.entity_link_stats.faces.total == 4
+
+
+@pytest.mark.asyncio
+async def test_annotation_count_aggregate_plan_with_larger_scope(seed_target):
+    """1,000 faces stay one grouped projection and a bounded response."""
+    from sqlalchemy import event
+    from people_gator_api.schemas.common import BoundingBox, Keypoint
+    from people_gator_api.schemas.enums import FaceKeypointType
+    from people_gator_api.schemas.sources import DocumentListFilter
+    from people_gator_api.services.auth_service import AuthContext
+
+    db, fs, engine = seed_target
+    seeded = await preview.seed_preview(db, fs)
+    actor = AuthContext(
+        user_id=seeded.users["reviewer"],
+        authentication_method="bearer",
+        scopes={"people-gator:annotate"},
+    )
+    await db.faces.create_batch(
+        [
+            FaceCreateRequest(
+                source_id=seeded.pages["count-empty-1"],
+                confidence=0.9,
+                bounding_box=BoundingBox(x=0, y=0, width=50, height=50),
+                keypoints=[
+                    Keypoint(type=kind, x=10 + i, y=10 + i)
+                    for i, kind in enumerate(FaceKeypointType)
+                ],
+            )
+            for _ in range(1000)
+        ],
+        actor,
+    )
+    captured = []
+
+    def capture(conn, cursor, statement, params, context, executemany):
+        captured.append((statement, params))
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        result = await db.sources.list_documents(
+            DocumentListRequest(
+                limit=1,
+                sort="faces_total_count",
+                filter_=DocumentListFilter(
+                    library=["preview-counts"], min_faces_unassigned_count=1000
+                ),
+            )
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+    assert [row.source_id for row in result.items] == [seeded.documents["count-empty"]]
+    assert result.items[0].entity_link_stats.faces.total == 1000
+    assert len(captured) == 6  # One result query + five bounded summary queries.
+    statement, params = captured[0]
+    assert "UNION ALL" in statement and "CROSS JOIN" not in statement
+    assert statement.count("GROUP BY annotation_scope.owner_id") == 1
+    async with engine.connect() as connection:
+        raw = await connection.exec_driver_sql(
+            "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + statement, params
+        )
+        plan = raw.scalar_one()
+    if isinstance(plan, str):
+        plan = json.loads(plan)
+    assert plan[0]["Plan"]["Actual Rows"] == 1
+    assert "Aggregate" in json.dumps(plan)
+    print(
+        "Annotation count plan:",
+        json.dumps(
+            {
+                "annotations_added": 1000,
+                "queries": len(captured),
+                "execution_ms": plan[0]["Execution Time"],
+                "planning_ms": plan[0]["Planning Time"],
+            }
+        ),
+    )

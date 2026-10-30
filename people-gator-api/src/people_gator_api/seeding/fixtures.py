@@ -27,6 +27,7 @@ PAGINATION_ITEMS = 14
 
 PEOPLE = (
     Person("actions", "Lina Actions", (), "Synthetic detection action practice.", "importer"),
+    Person("count-subject", "Mira Counts", (), "Synthetic annotation count study subject.", "importer"),
     Person("review", "Lina Archivist", ("L. Archivist", "Lina of the reading room", "Lina Catalogue Editor"),
            "Archivist and catalogue editor reviewing portraits and correspondence across collections.", "importer"),
     Person("review-candidate", "Lina A.", (), "Possible duplicate of Lina Archivist.", "importer"),
@@ -135,6 +136,10 @@ class Document:
 
 DOCUMENTS = (
     Document("detection-actions", "preview-mzk", "Detection action practice"),
+    Document("count-faces", "preview-counts", "Count study: faces"),
+    Document("count-mentions", "preview-counts", "Count study: mentions"),
+    Document("count-empty", "preview-counts", "Count study: empty"),
+    Document("count-tie", "preview-counts", "Count study: tied faces"),
     Document("review-a", "preview-review-a", "Review ledger"),
     Document("review-b", "preview-review-b", "Review ledger"),
     Document("review-c", "preview-review-a", "Reading room notes"),
@@ -246,6 +251,20 @@ PAGES = (
     Page("review-candidates", "review-b", 4,
          (Face("review-unassigned", None, 0, 6, models=(MODEL, DISCOVERY_MODEL)),
           Face("review-candidate", "review-candidate", 1, 6, models=(MODEL, DISCOVERY_MODEL)))),
+    Page("count-faces-1", "count-faces", 1,
+         tuple(Face(f"count-face-{i}", "count-subject" if state else None, i, 2, state or "automatic",
+                    box=(70 + (i % 2) * 250, 220 + (i // 2) * 280, 160, 190))
+               for i, state in enumerate(("automatic", "manual", "verified", None)))),
+    Page("count-faces-2", "count-faces", 2,
+         (Face("count-face-extra", "count-subject", 0, 3, "manual"),)),
+    Page("count-tie-1", "count-tie", 1,
+         tuple(Face(f"count-tie-face-{i}", "count-subject" if state else None, i, 2, state or "automatic",
+                    box=(70 + (i % 2) * 250, 220 + (i // 2) * 280, 160, 190))
+               for i, state in enumerate(("automatic", "manual", "verified", None)))),
+    Page("count-mentions-1", "count-mentions", 1, (),
+         tuple(Mention(f"count-mention-{i}", "count-subject", f"Mira Counts counted reference {i}.", state)
+               for i, state in enumerate(("automatic", "manual", "verified", None)))),
+    Page("count-empty-1", "count-empty", 1),
     Page("table-1", "table-ledger", 1,
          (Face("table-auto", "table-tereza", 0, 2), Face("table-manual", "table-oskar", 1, 3, "manual")),
          (Mention("table-auto-mention", "table-tereza", "Tereza Columns indexed the document table."),

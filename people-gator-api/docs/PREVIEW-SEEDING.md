@@ -1026,3 +1026,26 @@ Filter OpenObserve by `env=preview`, commit version and `pr_number`, then inspec
 an API resource and its backend trace ID. RUM introduces no database records,
 relationships or media changes; fixture identities/checkpoints and rerun/edit
 preservation remain unchanged. No external telemetry service is required to seed.
+
+### Annotation count controls (#78)
+
+The additive `preview-counts` library contains Count study: faces (two pages),
+Count study: tied faces, Count study: mentions and Count study: empty. It covers
+all four link states, numeric ties, empty resources and faces-only/mentions-only
+pages. Existing `preview-table` includes direct document mentions and two pages;
+`preview-table-mirror` shares its archive document ID with zero annotations in a
+separate library. Existing stable fixture keys and reviewed annotations are kept.
+
+Open the manifest's `annotation-count-documents` example to combine manual-face
+and total-mention minima and sort by verified All annotations. Open
+`annotation-count-pages` to select pages with an unassigned face and order total
+faces ascending. Inspect **Minimum annotations**, individual tags, document
+count-column headers and sort selectors. Try zero, multiple minima, clear search,
+clear all and Back/Forward; on mobile expand the filter toggle. Assignment,
+verification, unassignment and deletion update counts and matching results.
+
+The count matrix integration test compares independent expected counts against
+all fifteen sorts and minima on browse/search for both resources, traverses
+cursors with ties and zeros, and checks response scope and constant query counts.
+The recovery test edits/deletes these fixtures, reruns the seed, and recovers a
+lost face checkpoint without replacing reviewed state, timestamps or identities.
