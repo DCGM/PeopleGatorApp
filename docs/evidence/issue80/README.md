@@ -108,3 +108,11 @@ Mention group starts with 20; no further request is made until the last loaded
 occurrence is shown, then two placeholders appear and the remaining seven load
 (27 total) at both viewport sizes, without overflow or page errors. The next-page
 request was delayed for `mentions-auto-load-*`.
+
+Page and Document group headings share one style: a single-line, normal-size
+underlined link. Page headings read `library · document name · page UUID` and open
+that page (with the selected person and link states, as occurrence links do);
+Document headings read `library · document name`. Narrow screens truncate the line
+with an ellipsis; the full label remains in the tooltip. Checked at both viewport
+sizes (one line, 16px, link targets followed, no overflow or page errors);
+`mentions-page-*` and `mentions-document-*` are refreshed.

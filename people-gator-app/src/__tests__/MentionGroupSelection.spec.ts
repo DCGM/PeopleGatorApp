@@ -66,6 +66,7 @@ it.each(['mention', 'document', 'page'] as const)(
               source_id: 'source',
               library: 'NDK',
               document_id: 'doc',
+              ...(mode === 'page' && { page_id: 'page' }),
             }),
           },
         ],
@@ -79,6 +80,11 @@ it.each(['mention', 'document', 'page'] as const)(
       routes: [
         { path: '/', component: { template: '<div />' } },
         { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+        {
+          path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
+          name: 'document-page',
+          component: { template: '<div />' },
+        },
       ],
     })
     await router.push('/')
@@ -163,6 +169,11 @@ it('adds forward and reverse flat ranges, includes appended rows and clears stal
     routes: [
       { path: '/', component: { template: '<div />' } },
       { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      {
+        path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
+        name: 'document-page',
+        component: { template: '<div />' },
+      },
     ],
   })
   await router.push('/')
@@ -223,6 +234,8 @@ it.each(['mention', 'document', 'page'] as const)(
           name,
           source_id: mode === 'mention' ? null : name,
           source_kind: mode,
+          ...(mode !== 'mention' && { library: 'NDK', document_id: 'doc' }),
+          ...(mode === 'page' && { page_id: name }),
           occurrence_count: 2,
         })),
         limit: 25,
@@ -247,6 +260,11 @@ it.each(['mention', 'document', 'page'] as const)(
       routes: [
         { path: '/', component: { template: '<div />' } },
         { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+        {
+          path: '/libraries/:libraryId/documents/:documentId/pages/:pageId',
+          name: 'document-page',
+          component: { template: '<div />' },
+        },
       ],
     })
     await router.push('/')

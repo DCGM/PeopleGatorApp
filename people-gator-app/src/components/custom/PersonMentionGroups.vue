@@ -241,9 +241,31 @@ watch(groups, (items) => {
                   name: 'document-search',
                   query: relatedQuery(route, { document: group.source_id! }),
                 }"
-                class="underline wrap-anywhere"
+                class="block truncate underline"
                 :title="`${group.library} · ${group.document_id}`"
                 >{{ group.library }} · {{ group.name }}</RouterLink
+              ></span
+            >
+            <span
+              v-else-if="mode === 'page' && group.source_kind === 'page'"
+              class="min-w-0 flex-1 font-sans"
+              ><RouterLink
+                :to="{
+                  name: 'document-page',
+                  params: {
+                    libraryId: group.library!,
+                    documentId: group.document_id!,
+                    pageId: group.page_id!,
+                  },
+                  query: {
+                    ...relatedQuery(route),
+                    selectedPerson: personId,
+                    ...(linkStates.length && { link_state: linkStates }),
+                  },
+                }"
+                class="block truncate underline"
+                :title="`${group.library} · ${group.document_id} · ${group.page_id}`"
+                >{{ group.library }} · {{ group.name }} · {{ group.page_id }}</RouterLink
               ></span
             >
             <span v-else class="min-w-0 flex-1 break-words font-sans"
