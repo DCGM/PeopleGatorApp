@@ -702,7 +702,7 @@ onBeforeUnmount(() => {
       <DocumentPageOverlay
         :page-bounds="pageBounds"
         :viewer="viewerElement"
-        :actions-enabled="canAnnotate || canDelete"
+        :actions-enabled="(canAnnotate || canDelete) && !deletionTarget"
         :transcription="transcription"
         :faces="faces"
         :selected-line-index="selectedLineIndex"

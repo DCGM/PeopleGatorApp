@@ -283,9 +283,13 @@ describe('shared detection actions', () => {
     wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
     await flushPromises()
     const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+    const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+    expect(overlay.props('actionsEnabled')).toBe(true)
     card.vm.$emit('delete')
     await flushPromises()
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
+    // The scan actions stay hidden behind the confirmation.
+    expect(overlay.props('actionsEnabled')).toBe(false)
     expect(mocks.deleteFace).not.toHaveBeenCalled()
     await wrapper.findComponent({ name: 'Button' }).trigger('click')
     await flushPromises()
@@ -321,6 +325,9 @@ describe('shared detection actions', () => {
     wrapper.findComponent({ name: 'AlertDialog' }).vm.$emit('update:open', false)
     await flushPromises()
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+    expect(wrapper.findComponent({ name: 'DocumentPageOverlay' }).props('actionsEnabled')).toBe(
+      true,
+    )
     expect(wrapper.text()).not.toContain('Could not delete detection')
     wrapper.unmount()
   })

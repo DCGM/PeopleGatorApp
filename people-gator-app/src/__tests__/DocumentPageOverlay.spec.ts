@@ -260,6 +260,7 @@ it('keeps selected-face actions through viewport movement and closes them on an 
     expect(panel()).not.toBeNull()
     expect(wrapper.emitted('selectFace')).toEqual([['one']])
     expect(panel()!.contains(document.activeElement)).toBe(true)
+    expect(panel()!.getAttribute('aria-label')).toBe('Actions for Unknown')
     panel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
     expect(wrapper.emitted('clearFace')).toEqual([[]])

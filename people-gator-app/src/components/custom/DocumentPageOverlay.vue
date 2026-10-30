@@ -178,7 +178,6 @@ function regionStyle(position: Face['position']): CSSProperties {
       <PopoverAnchor as-child>
         <button
           type="button"
-          :id="`detection-${face.id}`"
           data-region-type="face"
           :data-detection-id="face.id"
           class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -214,7 +213,7 @@ function regionStyle(position: Face['position']): CSSProperties {
         sticky="always"
         update-position-strategy="always"
         prioritize-position
-        :aria-labelledby="`detection-${face.id}`"
+        :aria-label="`Actions for ${face.name}`"
         @open-auto-focus="openFocus($event, face.id)"
         @focus-outside.prevent
         @pointer-down-outside="pressOutside($event, face.id)"
