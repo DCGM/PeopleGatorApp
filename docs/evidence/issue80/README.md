@@ -83,3 +83,12 @@ text. Every Found faces request still sends only `query.entity_annotations=faces
 and omits text. Similar people retains its modality control and name/text query.
 Desktop/mobile captures in `found-faces-face-only-*` show the simplified controls;
 existing found-face pagination/retry/filter/theme evidence is refreshed.
+
+Review follow-up: Page groups keep each document's pages together. Pages of the
+two same-titled "Review ledger" documents no longer interleave, including across
+cursor pages and under text/count sorting. Mention links and document/page group
+headings show full document and page UUIDs, wrapping without horizontal overflow.
+`mentions-page-*`, `mentions-document-*` and `mentions-flat-*` are refreshed;
+`mentions-flat-compact-*` and `mentions-page-compact-*` show the compact labels.
+Group Verify now skips occurrences that are already verified, so its count reports
+only changed records. Other mention captures predate the full-UUID labels.
