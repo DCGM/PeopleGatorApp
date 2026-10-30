@@ -66,7 +66,10 @@ it.each(['mention', 'document', 'page'] as const)(
     })
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: [{ path: '/', component: { template: '<div />' } }],
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      ],
     })
     await router.push('/')
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -149,7 +152,10 @@ it('adds forward and reverse flat ranges, includes appended rows and clears stal
   const { default: ReviewList } = await import('@/components/custom/PersonMentionReviewList.vue')
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: { template: '<div />' } }],
+    routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+    ],
   })
   await router.push('/')
   const client = new QueryClient()
@@ -230,7 +236,10 @@ it.each(['mention', 'document', 'page'] as const)(
     })
     const router = createRouter({
       history: createMemoryHistory(),
-      routes: [{ path: '/', component: { template: '<div />' } }],
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/scans', name: 'document-search', component: { template: '<div />' } },
+      ],
     })
     await router.push('/')
     const client = new QueryClient()
