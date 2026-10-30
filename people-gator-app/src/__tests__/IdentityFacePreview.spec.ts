@@ -1,6 +1,7 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 import IdentityFacePreview from '@/components/custom/IdentityFacePreview.vue'
 import SimilarPersonItem from '@/components/custom/SimilarPersonItem.vue'
 import { queryKeys } from '@/query/keys'
@@ -28,6 +29,20 @@ function setup() {
   })
   return mounted
 }
+function setupPair() {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+  const Pair = defineComponent(() => () => [
+    h(IdentityFacePreview, { personId: 'ada', name: 'Ada Novak' }),
+    h(IdentityFacePreview, { personId: 'emil', name: 'Emil' }),
+  ])
+  mounted = mount(Pair, {
+    attachTo: document.body,
+    global: { plugins: [[VueQueryPlugin, { queryClient: client }]] },
+  })
+  const [ada, emil] = mounted.findAll('button')
+  return { ada: ada!, emil: emil! }
+}
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 async function dismiss() {
   document
     .querySelector('[role="dialog"]')!
@@ -204,8 +219,16 @@ describe('in-place identity faces', () => {
     try {
       dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
       expect(navigation).not.toHaveBeenCalled()
-      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      })
+      dialog.dispatchEvent(escape)
       await flushPromises()
+      // One dismissal path: the popover handles Escape and suppresses Reka's own dismiss.
+      expect(escape.defaultPrevented).toBe(true)
+      expect(navigation).toHaveBeenCalledTimes(1)
       expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
       expect(document.activeElement).toBe(wrapper.get('button').element)
     } finally {
@@ -238,5 +261,41 @@ describe('in-place identity faces', () => {
     expect(document.querySelectorAll('[role="listitem"]')).toHaveLength(2)
     expect(document.body.textContent).toContain('crop unavailable')
     expect(mocks.crop).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows a single gallery: a click replaces the open one', async () => {
+    const { ada, emil } = setupPair()
+    await click('View faces of Ada Novak')
+    expect(ada.attributes('aria-expanded')).toBe('true')
+    await click('View faces of Emil')
+    expect(ada.attributes('aria-expanded')).toBe('false')
+    expect(emil.attributes('aria-expanded')).toBe('true')
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+    expect(mocks.list.mock.calls.map(([arg]) => arg.query['filter.entity_id'])).toEqual([
+      ['ada'],
+      ['emil'],
+    ])
+  })
+
+  it('lets hover move between galleries but never replace a clicked one', async () => {
+    const { ada, emil } = setupPair()
+    await ada.trigger('pointerenter', { pointerType: 'mouse' })
+    await wait(330)
+    await ada.trigger('pointerleave')
+    await emil.trigger('pointerenter', { pointerType: 'mouse' })
+    await wait(330)
+    await flushPromises()
+    expect(ada.attributes('aria-expanded')).toBe('false')
+    expect(emil.attributes('aria-expanded')).toBe('true')
+    await emil.trigger('pointerleave')
+    await wait(280)
+    await click('View faces of Ada Novak')
+    await ada.trigger('pointerleave')
+    await emil.trigger('pointerenter', { pointerType: 'mouse' })
+    await wait(330)
+    await flushPromises()
+    expect(ada.attributes('aria-expanded')).toBe('true')
+    expect(emil.attributes('aria-expanded')).toBe('false')
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
   })
 })
