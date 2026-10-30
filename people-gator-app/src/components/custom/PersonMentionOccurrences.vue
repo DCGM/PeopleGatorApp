@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { EntityLinkState, TextMentionSortField } from '@/client'
 import { Button } from '@/components/ui/button'
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import PersonMentionReviewList from './PersonMentionReviewList.vue'
 import PersonMentionListSkeleton from './PersonMentionListSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
@@ -32,6 +33,16 @@ const query = useTextMentionListQuery(
   })),
 )
 const records = computed(() => (query.data.value?.pages ?? []).flatMap((page) => page.items))
+// Fetch the next occurrence page as soon as the last loaded occurrence is shown.
+const listEnd = ref<HTMLElement | null>(null)
+useAutomaticPagination({
+  target: listEnd,
+  hasNextPage: query.hasNextPage,
+  isFetching: query.isFetching,
+  error: query.error,
+  enabled: true,
+  loadMore: () => query.fetchNextPage(),
+})
 const mentions = useMentionViews(records)
 watch(
   () => records.value.map((record) => [record.mention_id, record.entity_link_state] as const),
@@ -56,6 +67,7 @@ watch(
       :disabled="disabled"
       @select-mention="(id, value, shift) => emit('selectMention', id, value, shift)"
     />
+    <div v-if="query.hasNextPage.value" ref="listEnd" class="h-px" aria-hidden="true" />
     <PersonMentionListSkeleton
       v-if="query.isPending.value || query.isFetchingNextPage.value"
       :compact="compact"
@@ -66,13 +78,5 @@ watch(
       Could not load occurrences.
       <Button variant="link" @click="query.refetch()">Retry</Button>
     </p>
-    <Button
-      v-if="query.hasNextPage.value"
-      variant="outline"
-      class="my-3"
-      :disabled="query.isFetchingNextPage.value"
-      @click="query.fetchNextPage()"
-      >Load more occurrences</Button
-    >
   </div>
 </template>

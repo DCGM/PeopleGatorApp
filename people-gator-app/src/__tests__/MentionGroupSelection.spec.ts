@@ -5,6 +5,16 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import PersonMentionGroups from '@/components/custom/PersonMentionGroups.vue'
 import { resolveMentionTargets } from '@/query/mention-review'
 const api = vi.hoisted(() => ({ list: vi.fn(), groups: vi.fn(), patch: vi.fn() }))
+// jsdom has no layout: reveal each list end by invoking its automatic pagination.
+const pagination = vi.hoisted(
+  () => [] as Array<{ hasNextPage: { value: boolean }; loadMore: () => Promise<unknown> }>,
+)
+vi.mock('@/composables/automatic-pagination', () => ({
+  useAutomaticPagination: (options: (typeof pagination)[number]) => pagination.push(options),
+}))
+async function revealListEnds() {
+  await Promise.all(pagination.filter((o) => o.hasNextPage.value).map((o) => o.loadMore()))
+}
 vi.mock('@/composables/can-annotate', async () => {
   const { ref } = await import('vue')
   return { useCanAnnotate: () => ref(true) }
@@ -99,10 +109,8 @@ it.each(['mention', 'document', 'page'] as const)(
     expect(parent().attributes('aria-checked')).toBe('true')
     expect(child('m1').attributes('aria-checked')).toBe('true')
     expect(child('m2').attributes('aria-checked')).toBe('true')
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Load more occurrences')!
-      .trigger('click')
+    expect(wrapper.findAll('button').some((b) => b.text().startsWith('Load more'))).toBe(false)
+    await revealListEnds()
     await flushPromises()
     expect(child('m3').attributes('aria-checked')).toBe('true')
     await child('m2').trigger('click')
