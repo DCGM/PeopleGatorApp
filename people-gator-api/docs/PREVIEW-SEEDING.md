@@ -996,9 +996,10 @@ checks Nora's empty gallery and preserves a reviewed assignment on rerun.
 
 
 `identity-reference-faces` also selects an assigned manual face for checking the
-card's compact footer: **View faces**, **Verify** and **Reassign** share one
-action row, followed by named icon buttons for **New** and **Unlink**.
-Controls wrap together on narrower panels. Verification errors appear inside the
+card's compact footer: **View faces** stays on the left, and **Verify**,
+**Reassign** and named icon buttons for **New**, **Unlink** and (for admins)
+**Delete detection** are grouped on the right. On narrow panels the action group
+wraps below View faces and stays right-aligned. Verification errors appear inside the
 card below the actions; verified attribution stays available on the state badge.
 
 Action colors: sky for face references, green for verification/save, amber for

@@ -226,75 +226,77 @@ watch(() => props.face.id, cancelCreating)
           :person-id="face.personId"
           :name="face.name"
         />
-        <slot name="actions" />
-        <Button
-          v-if="face.personId"
-          type="button"
-          size="xs"
-          variant="outline"
-          class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
-          :disabled="props.assignmentPending"
-          aria-label="Reassign to another profile"
-          title="Reassign to another profile"
-          @click="emit('findProfile')"
-        >
-          <RefreshCw aria-hidden="true" />
-          Reassign
-        </Button>
-        <Button
-          v-else
-          type="button"
-          size="xs"
-          variant="outline"
-          :disabled="props.assignmentPending"
-          class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
-          aria-label="Link to an existing profile"
-          title="Link to an existing profile"
-          @click="emit('findProfile')"
-        >
-          <Link2 aria-hidden="true" />
-          Link
-        </Button>
-        <Button
-          type="button"
-          :size="face.personId ? 'icon-xs' : 'xs'"
-          variant="outline"
-          class="border-violet-600 text-violet-700 hover:text-violet-700 dark:border-violet-500 dark:text-violet-400 dark:hover:text-violet-400"
-          :disabled="props.assignmentPending"
-          aria-label="Create and assign a new profile"
-          title="Create and assign a new profile"
-          @click="startCreating"
-        >
-          <UserPlus aria-hidden="true" />
-          <span :class="face.personId && 'sr-only'">New</span>
-        </Button>
-        <Button
-          v-if="face.personId"
-          type="button"
-          size="icon-xs"
-          variant="outline"
-          class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
-          :disabled="props.assignmentPending"
-          aria-label="Unassign current profile"
-          title="Unassign current profile"
-          @click="emit('unassign')"
-        >
-          <Unlink aria-hidden="true" />
-          <span class="sr-only">Unlink</span>
-        </Button>
-        <Button
-          v-if="canDelete"
-          type="button"
-          size="icon-xs"
-          variant="outline"
-          class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
-          :disabled="props.assignmentPending"
-          aria-label="Delete detection"
-          title="Delete detection"
-          @click="emit('delete')"
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
+        <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+          <slot name="actions" />
+          <Button
+            v-if="face.personId"
+            type="button"
+            size="xs"
+            variant="outline"
+            class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
+            :disabled="props.assignmentPending"
+            aria-label="Reassign to another profile"
+            title="Reassign to another profile"
+            @click="emit('findProfile')"
+          >
+            <RefreshCw aria-hidden="true" />
+            Reassign
+          </Button>
+          <Button
+            v-else
+            type="button"
+            size="xs"
+            variant="outline"
+            :disabled="props.assignmentPending"
+            class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
+            aria-label="Link to an existing profile"
+            title="Link to an existing profile"
+            @click="emit('findProfile')"
+          >
+            <Link2 aria-hidden="true" />
+            Link
+          </Button>
+          <Button
+            type="button"
+            :size="face.personId ? 'icon-xs' : 'xs'"
+            variant="outline"
+            class="border-violet-600 text-violet-700 hover:text-violet-700 dark:border-violet-500 dark:text-violet-400 dark:hover:text-violet-400"
+            :disabled="props.assignmentPending"
+            aria-label="Create and assign a new profile"
+            title="Create and assign a new profile"
+            @click="startCreating"
+          >
+            <UserPlus aria-hidden="true" />
+            <span :class="face.personId && 'sr-only'">New</span>
+          </Button>
+          <Button
+            v-if="face.personId"
+            type="button"
+            size="icon-xs"
+            variant="outline"
+            class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
+            :disabled="props.assignmentPending"
+            aria-label="Unassign current profile"
+            title="Unassign current profile"
+            @click="emit('unassign')"
+          >
+            <Unlink aria-hidden="true" />
+            <span class="sr-only">Unlink</span>
+          </Button>
+          <Button
+            v-if="canDelete"
+            type="button"
+            size="icon-xs"
+            variant="outline"
+            class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
+            :disabled="props.assignmentPending"
+            aria-label="Delete detection"
+            title="Delete detection"
+            @click="emit('delete')"
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       <p v-if="actionError" role="alert" class="basis-full text-xs text-destructive">
         {{ actionError }}

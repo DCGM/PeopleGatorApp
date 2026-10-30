@@ -189,6 +189,15 @@ describe('SimilarPeoplePanel', () => {
     const reassignButton = wrapper.get('[aria-label="Reassign to another profile"]')
     expect(reassignButton.attributes('data-size')).toBe('xs')
     expect(reassignButton.element.closest('[data-slot="item-footer"]')).not.toBeNull()
+    // View faces stays on the left; the actions are grouped on the right.
+    const actions = reassignButton.element.parentElement!
+    expect(actions.classList).toContain('ml-auto')
+    expect(actions.classList).toContain('justify-end')
+    const viewFaces = wrapper.get('button[aria-label*="faces" i]').element
+    expect(actions.contains(viewFaces)).toBe(false)
+    expect(
+      viewFaces.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(wrapper.text()).toContain('Reassign to similar')
     expect(
       wrapper.get('[aria-label="Assigned to Anna Nováková"]').attributes('disabled'),
