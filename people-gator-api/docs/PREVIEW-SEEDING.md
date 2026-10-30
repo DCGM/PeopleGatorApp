@@ -941,3 +941,49 @@ arrive. Skeletons follow density changes during a pending request and expose one
 loading status per list without interactive dummy controls. The existing three
 documents, nine pages and 27 occurrences demonstrate all states with local data;
 the seed adds a named link without modifying evidence or review edits.
+
+## In-place identity face references (#41)
+
+Open `identity-reference-faces` for **Reference appearances** in `preview-nlk`.
+Hover **View faces** on Ada Novak's candidate card, or click/tap to keep it open.
+The same control is available on the currently assigned identity. Only one
+gallery is shown at a time: clicking another **View faces** replaces it, and
+hovering other cards never replaces a clicked gallery. The shadcn
+popover contains just a compact grid of faces with small margins; it has no
+close button, title or count. Reaching the end of the bounded
+scroll area automatically loads the next six-face batch, without a loading button.
+Dismiss with Escape, a click outside or the View faces trigger, including after
+clicking or scrolling inside the gallery.
+Keyboard users can open with Enter/Space, Tab to the scroll area and scroll with
+arrow keys. A failed continuation keeps the loaded faces and offers **Retry**.
+Open `identity-reference-scroll` for **Zora Cartographer**: her 15 existing local
+face crops exercise three cursor batches as the end sentinel comes into view.
+The compact gallery stays free of titles and counters as batches append. This report link
+reuses stable fixtures and does not alter embeddings, reviews or timestamps.
+
+Ada has more than six appearances across pages, documents and libraries, with
+manual, automatic and verified links. Reference membership uses only her exact
+identity, independently of workspace filters and candidate search. Emil's faces
+and similar unassigned faces stay excluded. `identity-reference-empty` finds
+mention-only Nora Svoboda and demonstrates **No linked faces**. Browsing crops
+preserves the selected scan annotation, viewer position and assignments.
+
+The additive `reference-faces` document/page and three linked faces reuse the
+existing synthetic identities, deterministic geometry and generated local media.
+The added faces need no embeddings, so existing similarity-ranking examples stay
+unchanged. Stable keys and checkpoints preserve earlier examples, review edits,
+assignments and processing timestamps. Integration coverage traverses six-item cursor batches,
+checks exact membership and cross-library sources, reads every aligned crop,
+checks Nora's empty gallery and preserves a reviewed assignment on rerun.
+
+
+`identity-reference-faces` also selects an assigned manual face for checking the
+card's compact footer: **View faces**, **Verify** and **Reassign** share one
+action row, followed by named icon buttons for **New** and **Unlink**.
+Controls wrap together on narrower panels. Verification errors appear inside the
+card below the actions; verified attribution stays available on the state badge.
+
+Action colors: sky for face references, green for verification/save, amber for
+reassignment/linking, violet for a new identity, and red for unlink/cancel. Only button text, icons and borders
+carry those colors; every action keeps the standard shadcn outline background.
+Check both light and dark themes.

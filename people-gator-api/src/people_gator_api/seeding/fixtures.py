@@ -172,6 +172,7 @@ DOCUMENTS = (
     Document("deactivated-ledger", "preview-mzk", "Deactivated reviewer ledger"),
     *(Document(f"pagination-{i}", "preview-pagination", f"Pagination ledger {i:02}")
       for i in range(1, PAGINATION_ITEMS + 1)),
+    Document("reference-faces", "preview-nlk", "Reference appearances"),
     Document("alignment", "preview-mzk", "Face alignment recovery"),
 )
 
@@ -454,6 +455,12 @@ PAGES = (
            mentions=(Mention(f"pagination-{i}", f"pagination-{i}",
                              f"Pagination Person {i:02} recorded this ledger."),))
       for i in range(1, PAGINATION_ITEMS + 1)),
+    # #41: independent cross-library appearances and a mention-only candidate.
+    Page("reference-faces-1", "reference-faces", 1, (
+        Face("reference-ada-manual", "ada", 0, 0, "manual", embedded=False),
+        Face("reference-ada-automatic", "ada", 1, 0, embedded=False),
+        Face("reference-emil", "emil", 2, 1, "manual", embedded=False),
+    ), (Mention("reference-nora", "nora", "Nora Svoboda compared the reference appearances."),)),
     # Issue #64: stored, finite geometry that cannot be aligned, beside a valid
     # control. Independent keys keep existing media, reviews and timestamps intact.
     Page("alignment-1", "alignment", 1, (

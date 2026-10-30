@@ -699,6 +699,7 @@ onBeforeUnmount(() => {
             v-bind="selectedFace"
             :id="selectedFace.id"
             kind="face"
+            inline
           />
         </CurrentFacePanel>
         <SimilarPeopleSearch

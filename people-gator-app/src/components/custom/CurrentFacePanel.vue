@@ -36,8 +36,9 @@ function createPerson(profile: { name: string; shortDescription?: string }) {
       {{ props.face ? "Current face" : "Select someone first" }}
     </p>
     <SelectedFaceItem v-if="props.face" :face="props.face" :assignment-pending="props.assignmentPending"
-      @find-profile="emit('findProfile')" @create-profile="createPerson" @unassign="emit('unassign')" />
-    <slot v-if="props.face" />
+      @find-profile="emit('findProfile')" @create-profile="createPerson" @unassign="emit('unassign')">
+      <template #actions><slot /></template>
+    </SelectedFaceItem>
     <Item v-else variant="outline" class="w-full items-start gap-x-4 gap-y-2 bg-none px-3 py-3">
       <ItemMedia class="self-start">
         <div class="relative size-15 overflow-hidden bg-none">
