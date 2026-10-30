@@ -427,7 +427,19 @@ export function useDeleteSourceMutation() {
   })
 }
 
-/** Discard ordered cursor chains after an annotation edit. */
+/** Query keys whose cursor chains depend on page order. */
+const PAGE_ORDERED_LISTS = [
+  queryKeys.pages.lists(),
+  ['pages', 'results'],
+  ['search', 'pages'],
+  queryKeys.documents.lists(),
+  ['search', 'documents'],
+] as const
+
+/**
+ * Discard ordered cursor chains after a numbering edit; keep the edited page,
+ * images, layouts and spans cached so the workspace does not reload.
+ */
 export function usePageNumberMutation() {
   const client = useQueryClient()
   return useMutation({
@@ -439,11 +451,16 @@ export function usePageNumberMutation() {
           throwOnError: true,
         }),
       ),
-    onSuccess: async () => {
+    onSuccess: async (page) => {
+      client.setQueryData(queryKeys.pages.detail(page.source_id), page)
+      client.setQueryData(
+        queryKeys.pages.lookup(page.library, page.document_id, page.page_id),
+        page,
+      )
       await Promise.all([
-        client.resetQueries({ queryKey: queryKeys.pages.all }),
-        client.resetQueries({ queryKey: queryKeys.documents.all }),
-        client.resetQueries({ queryKey: queryKeys.search.all }),
+        ...PAGE_ORDERED_LISTS.map((queryKey) => client.resetQueries({ queryKey })),
+        client.invalidateQueries({ queryKey: ['documents', 'detail'] }),
+        client.invalidateQueries({ queryKey: ['documents', 'lookup'] }),
       ])
     },
   })
