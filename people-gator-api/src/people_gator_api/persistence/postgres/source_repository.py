@@ -318,6 +318,13 @@ class PostgresSourceRepository(SourceRepository):
     async def get_or_create(
         self, spec: GenericSourceCreateRequest
     ) -> tuple[GenericSourceResponse, CreateResult]:
+        [result] = await self.get_or_create_batch([spec])
+        return result
+
+    async def _existing_or_created(
+        self, spec: GenericSourceCreateRequest
+    ) -> GenericSourceResponse | Source:
+        """Existing sources come back as responses; new ones as committed rows."""
         key = str(spec.url)
         await self._session.execute(
             select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
@@ -339,22 +346,26 @@ class PostgresSourceRepository(SourceRepository):
                 )
             if by_url is not None and by_url.id != by_identity.source_id:
                 raise ValueError("source URL conflicts with another source identity")
-            return by_identity, CreateResult.EXISTING
+            return by_identity
         if by_url is not None:
             raise ValueError("source URL is already registered with another identity")
         source = self._new(spec)
         self._session.add(source)
         await commit(self._session, "source create violates a persistence constraint")
-        await load_link_stats(self._session, [source])
-        return source_response(source), CreateResult.CREATED
+        return source
 
     async def get_or_create_batch(
         self, specs: Sequence[GenericSourceCreateRequest]
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
-        results: list[tuple[GenericSourceResponse, CreateResult]] = []
-        for spec in specs:
-            results.append(await self.get_or_create(spec))
-        return results
+        outcomes = [await self._existing_or_created(spec) for spec in specs]
+        # One bounded stats pass for the whole batch, never a pass per created source.
+        await load_link_stats(self._session, [item for item in outcomes if isinstance(item, Source)])
+        return [
+            (source_response(item), CreateResult.CREATED)
+            if isinstance(item, Source)
+            else (item, CreateResult.EXISTING)
+            for item in outcomes
+        ]
 
     async def patch_page(self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor) -> PageResponse | None:
         await lock_annotation_graph(self._session)
