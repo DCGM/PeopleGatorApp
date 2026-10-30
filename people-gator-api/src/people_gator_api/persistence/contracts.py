@@ -946,7 +946,7 @@ class TextMentionRepository(ABC):
         self, query: TextMentionGroupListRequest
     ) -> TextMentionGroupListResponse:
         """
-        Group the complete filtered mention set by exact recorded text.
+        Group the complete filtered mention set by exact recorded text or stable document/page identity.
 
         Text is never normalized for grouping: spelling, case, accents and
         punctuation variants form separate groups. Counts cover every matching

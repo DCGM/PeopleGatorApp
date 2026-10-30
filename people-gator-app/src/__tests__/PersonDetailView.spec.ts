@@ -2,6 +2,7 @@ import { mount, RouterLinkStub } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
+import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 
 import PersonDetailView from '@/views/PersonDetailView.vue'
 
@@ -83,12 +84,21 @@ describe('PersonDetailView', () => {
 
     const wrapper = mount(PersonDetailView, {
       global: {
-        plugins: [router],
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
         stubs: {
           RouterLink: RouterLinkStub,
           PersonPortrait: true,
           VerifyEntityLink: true,
           PersonFacesPanel: true,
+          PersonMentionReviewList: {
+            template:
+              '<div><PersonMentionEntry v-for="mention in mentions" :key="mention.id" :mention="mention" :person-id="personId" :link-states="[]" /></div>',
+            props: ['mentions', 'personId'],
+            components: {
+              PersonMentionEntry: (await import('@/components/custom/PersonMentionEntry.vue'))
+                .default,
+            },
+          },
           SharedFilterControls: true,
           SharedFilterTags: true,
         },
@@ -102,18 +112,16 @@ describe('PersonDetailView', () => {
       return typeof target !== 'string' && target?.name === 'document-page'
     })
 
-    const stats = wrapper.get('aside[aria-label="Person statistics"]')
-    expect(stats.text()).toContain('Last change')
-    expect(stats.text()).toContain('Not recorded')
-    expect(stats.text()).not.toContain('Last processed')
-    expect(stats.find('button[aria-label*="processing information"]').exists()).toBe(false)
-    expect(stats.find('details').exists()).toBe(false)
-    expect(stats.text()).not.toContain('Identity creation')
-    expect(stats.findAll('dd').length).toBeGreaterThanOrEqual(4)
-    for (const value of stats.findAll('dd'))
-      expect(value.classes()).toEqual(expect.arrayContaining(['font-mono']))
-    for (const title of stats.findAll('dt'))
-      expect(title.classes()).toEqual(['text-muted-foreground'])
+    expect(wrapper.get('[aria-label="Person identity"]').classes()).toEqual(
+      expect.arrayContaining(['sticky', 'top-13']),
+    )
+    expect(wrapper.find('aside[aria-label="Person statistics"]').exists()).toBe(false)
+    expect(wrapper.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
+      'Faces 0',
+      'Mentions 1',
+      'Details',
+      'Statistics',
+    ])
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
@@ -136,7 +144,7 @@ it('clears discovery source/model overrides together while keeping search and ev
   await router.isReady()
   const wrapper = mount(PersonDetailView, {
     global: {
-      plugins: [router],
+      plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
       stubs: {
         RouterLink: RouterLinkStub,
         PersonPortrait: true,
@@ -152,9 +160,11 @@ it('clears discovery source/model overrides together while keeping search and ev
   await flushPromises()
   expect(router.currentRoute.value.query).toEqual({
     tab: 'discover',
-    discovery_text: 'extra',
+    people_text: 'extra',
     link_state: 'automatic',
     discovery_assignment: 'unassigned',
+    people_annotations: ['faces'],
+    people_model: 'alternate',
   })
   expect(wrapper.getComponent(PersonDiscoveryPanel).props('annotations')).toEqual([
     'faces',

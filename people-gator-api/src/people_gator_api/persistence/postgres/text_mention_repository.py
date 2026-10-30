@@ -6,6 +6,10 @@ from people_gator_api.schemas.missing import is_missing
 from collections.abc import Sequence
 
 from sqlalchemy import (
+    String,
+    cast,
+    case,
+    and_,
     delete,
     func,
     select,
@@ -28,6 +32,8 @@ from people_gator_api.schemas.mentions import (
     TextMentionGroupListResponse,
 )
 from people_gator_api.persistence.postgres.models import (
+    Document,
+    Page,
     Entity,
     Source,
     TextMention,
@@ -123,17 +129,42 @@ class PostgresTextMentionRepository(TextMentionRepository):
     async def list_groups(self, query: TextMentionGroupListRequest) -> TextMentionGroupListResponse:
         filters = mention_filters(query.filter_)
         fingerprint = cursor_fingerprint(query)
-        grouped = (
-            select(
-                TextMention.mention.label("name"),
-                func.min(TextMention.mention_normalized).label("name_normalized"),
-                func.count(TextMention.id).label("occurrence_count"),
-                func.max(TextMention.last_touched_at).label("last_touched_at"),
+        if query.group_by == "mention":
+            grouped = (
+                select(
+                    TextMention.mention.label("name"),
+                    func.min(TextMention.mention_normalized).label("name_normalized"),
+                    func.count(TextMention.id).label("occurrence_count"),
+                    func.max(TextMention.last_touched_at).label("last_touched_at"),
+                ).where(*filters).group_by(TextMention.mention).subquery("mention_groups")
             )
-            .where(*filters)
-            .group_by(TextMention.mention)
-            .subquery("mention_groups")
-        )
+            identity = grouped.c.name
+        else:
+            # Join subtype tables explicitly: repeated titles never identify a group.
+            page = Page.__table__.alias("group_page")
+            document = Document.__table__.alias("group_document")
+            source_id = (func.coalesce(document.c.id, TextMention.source_id)
+                         if query.group_by == "document" else TextMention.source_id)
+            label = func.coalesce(document.c.name, cast(page.c.document_id, String), cast(TextMention.source_id, String))
+            kind = (case((document.c.id.is_not(None), "document"), else_="source")
+                    if query.group_by == "document"
+                    else case((page.c.id.is_not(None), "page"), else_="source"))
+            columns = [source_id.label("source_id"), label.label("name"),
+                       kind.label("source_kind"), page.c.library.label("library"),
+                       page.c.document_id.label("document_id")]
+            if query.group_by == "page":
+                columns.append(page.c.page_id.label("page_id"))
+            grouped = (
+                select(*columns, func.lower(label).label("name_normalized"),
+                       func.count(TextMention.id).label("occurrence_count"),
+                       func.max(TextMention.last_touched_at).label("last_touched_at"))
+                .select_from(TextMention)
+                .outerjoin(page, page.c.id == TextMention.source_id)
+                .outerjoin(document, and_(document.c.library == page.c.library,
+                                           document.c.document_id == page.c.document_id))
+                .where(*filters).group_by(*columns).subquery("mention_groups")
+            )
+            identity = grouped.c.source_id
         field, direction = query.effective_sort()
         descending = direction == SortDirection.DESC
         builders: Builders = {
@@ -144,9 +175,14 @@ class PostgresTextMentionRepository(TextMentionRepository):
         keys = builders[field](descending) if field is not None else builders["text"](False)
         # Exact recorded text identifies a group and is its canonical tie-breaker.
         exact_descending = descending if field in (None, "text") else False
+        if query.group_by == "page":
+            # Pages share their document's title: keep each document's pages contiguous.
+            keys = [*keys, SortKey(grouped.c.library.collate("C"), "text"),
+                    SortKey(grouped.c.document_id, "uuid")]
         spec = SortSpec(
             f"{field or 'default'}:{direction.value}",
-            (*keys, SortKey(grouped.c.name.collate("C"), "text", exact_descending)),
+            (*keys, SortKey(identity.collate("C") if query.group_by == "mention" else identity,
+                               "text" if query.group_by == "mention" else "uuid", exact_descending)),
         )
         after = decode_keyset(query.cursor, spec, fingerprint)
         total = None
@@ -162,6 +198,9 @@ class PostgresTextMentionRepository(TextMentionRepository):
         rows = [
             (
                 TextMentionGroup(
+                    **({key: getattr(row, key) for key in ("source_id", "source_kind", "library", "document_id")}
+                       if query.group_by != "mention" else {}),
+                    **({"page_id": row.page_id} if query.group_by == "page" else {}),
                     name=row.name,
                     occurrence_count=row.occurrence_count,
                     last_touched_at=row.last_touched_at,

@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { ScanFace } from '@lucide/vue'
-import { Item, ItemContent, ItemFooter, ItemMedia, ItemTitle } from '@/components/ui/item'
+import {
+  Item,
+  ItemContent,
+  ItemFooter,
+  ItemMedia,
+  ItemTitle,
+} from '@/components/ui/item'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 
 const props = defineProps<{
   face: Face | null
   assignmentPending?: boolean
-  canAnnotate?: boolean
   canDelete?: boolean
   actionError?: string
 }>()
@@ -16,7 +21,6 @@ const emit = defineEmits<{
   findProfile: []
   create: [profile: { name: string; shortDescription?: string }]
   unassign: []
-  verify: []
   delete: []
 }>()
 
@@ -31,26 +35,15 @@ function createPerson(profile: { name: string; shortDescription?: string }) {
 
 <template>
   <section aria-labelledby="current-face-title">
-    <p
-      id="current-face-title"
-      class="font-mono text-xs font-semibold uppercase text-secondary mb-2"
-    >
-      {{ props.face ? 'Current face' : 'Select someone first' }}
+    <p id="current-face-title" class="font-mono text-xs font-semibold uppercase text-secondary mb-2">
+      {{ props.face ? "Current face" : "Select someone first" }}
     </p>
-    <SelectedFaceItem
-      v-if="props.face"
-      :face="props.face"
-      :assignment-pending="props.assignmentPending"
-      :can-annotate="canAnnotate"
-      :can-delete="canDelete"
-      :action-error="actionError"
-      @find-profile="emit('findProfile')"
-      @create-profile="createPerson"
-      @unassign="emit('unassign')"
-      @verify="emit('verify')"
-      @delete="emit('delete')"
-    />
-    <slot v-if="props.face" />
+    <SelectedFaceItem v-if="props.face" :face="props.face" :assignment-pending="props.assignmentPending"
+      :can-delete="canDelete" :action-error="actionError"
+      @find-profile="emit('findProfile')" @create-profile="createPerson" @unassign="emit('unassign')"
+      @delete="emit('delete')">
+      <template #actions><slot /></template>
+    </SelectedFaceItem>
     <Item v-else variant="outline" class="w-full items-start gap-x-4 gap-y-2 bg-none px-3 py-3">
       <ItemMedia class="self-start">
         <div class="relative size-15 overflow-hidden bg-none">
@@ -59,16 +52,12 @@ function createPerson(profile: { name: string; shortDescription?: string }) {
       </ItemMedia>
       <ItemContent class="min-w-0 gap-1 overflow-hidden">
         <ItemTitle class="min-w-0 w-full max-w-full">
-          <h4
-            class="min-h-8 w-full truncate rounded-sm border border-transparent px-1 py-0.5 text-muted-foreground"
-          >
+          <h4 class="min-h-8 w-full truncate rounded-sm border border-transparent px-1 py-0.5 text-muted-foreground">
             No face selected
           </h4>
         </ItemTitle>
-        <p
-          class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
-          title="Select a face to view details"
-        >
+        <p class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
+          title="Select a face to view details">
           Select a face to view details
         </p>
       </ItemContent>

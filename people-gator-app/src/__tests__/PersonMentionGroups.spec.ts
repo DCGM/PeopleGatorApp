@@ -59,7 +59,7 @@ describe('exact appearance mention groups', () => {
     })
   })
 
-  it('shows distinct spellings with full counts and loads exact occurrences on demand', async () => {
+  it('expands groups by default, retains full counts and applies the compact option globally', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/', component: { template: '<div />' } }],
@@ -82,16 +82,19 @@ describe('exact appearance mention groups', () => {
     expect(mocks.groups.mock.calls[0]![0]).toMatchObject({
       query: { 'filter.entity_id': ['person-ada'], sort: 'count', sort_direction: 'desc' },
     })
-    expect(wrapper.text()).toContain('“Ada Novak”')
+    expect(wrapper.text()).toContain('Ada Novak')
     expect(wrapper.text()).toContain('3 occurrences')
-    expect(wrapper.text()).toContain('“ADA NOVAK”')
+    expect(wrapper.text()).toContain('ADA NOVAK')
     expect(wrapper.text()).toContain('Showing 2 of 2 groups')
-    expect(mocks.mentions).not.toHaveBeenCalled()
-
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('“Ada Novak”'))!
-      .trigger('click')
+    expect(mocks.mentions).toHaveBeenCalled()
+    expect(wrapper.find('[data-slot=collapsible-trigger]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'PersonMentionOccurrences' }).exists()).toBe(true)
+    await wrapper.setProps({ compact: true })
+    expect(wrapper.findComponent({ name: 'PersonMentionOccurrences' }).exists()).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text().includes('Ada Novak'))).toBe(
+      false,
+    )
+    await wrapper.setProps({ compact: false })
     await flushPromises()
     expect(mocks.mentions.mock.calls[0]![0]).toMatchObject({
       query: {
@@ -101,10 +104,258 @@ describe('exact appearance mention groups', () => {
         sort_direction: 'asc',
       },
     })
-    expect(wrapper.text()).toContain('Letters')
+    expect(wrapper.text()).toContain('p1')
     expect(wrapper.findComponent(RouterLinkStub).props('to')).toMatchObject({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'p1' },
     })
+  })
+  it('keeps pending group skeletons in sync with density and replaces them with loaded records', async () => {
+    let resolve!: (value: unknown) => void
+    mocks.groups.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode: 'document',
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: [],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: client }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    expect(wrapper.get('[role=status]').attributes('aria-label')).toBe('Loading mention groups')
+    expect(wrapper.findAll('[data-mention-group-skeleton]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-mention-skeleton]')).toHaveLength(6)
+    expect(wrapper.findAll('[data-mention-group-skeleton] button')).toHaveLength(0)
+    await wrapper.setProps({ compact: true })
+    expect(wrapper.findAll('[data-mention-group-skeleton]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-mention-skeleton]')).toHaveLength(0)
+    await wrapper.setProps({ compact: false })
+    expect(wrapper.findAll('[data-mention-skeleton]')).toHaveLength(6)
+    resolve({
+      data: {
+        items: [
+          {
+            name: 'Letters',
+            source_kind: 'document',
+            source_id: 'doc-source',
+            library: 'lib',
+            document_id: 'doc',
+            occurrence_count: 3,
+          },
+        ],
+        cursor: null,
+        limit: 25,
+        total_count: 1,
+      },
+    })
+    await flushPromises()
+    expect(wrapper.find('[aria-label="Loading mention groups"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Letters')
+    expect(wrapper.text()).toContain('Ada Novak signed the letter.')
+    wrapper.unmount()
+    client.clear()
+  })
+
+  it('shows exact mention group text in plain serif without highlighting', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        compact: true,
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: [],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    const name = wrapper.findAll('li span span').find((item) => item.text() === 'Ada Novak')!
+    expect(name.classes()).toContain('font-serif')
+    expect(name.classes()).not.toContain('text-secondary')
+    expect(name.classes()).not.toContain('underline')
+  })
+
+  it('labels document groups as a library · name link to the document without its UUID', async () => {
+    mocks.groups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            name: 'Letters',
+            source_id: 'doc-source',
+            source_kind: 'document',
+            library: 'lib',
+            document_id: '8e788655-2993-58e1-99d6-0bc49c31891f',
+            occurrence_count: 1,
+          },
+        ],
+        limit: 25,
+        total_count: 1,
+        cursor: null,
+      },
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode: 'document',
+        compact: true,
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: [],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    const link = wrapper.getComponent(RouterLinkStub)
+    expect(link.text()).toBe('lib · Letters')
+    expect(link.props('to')).toMatchObject({
+      name: 'document-search',
+      query: { document: 'doc-source' },
+    })
+    expect(wrapper.text()).not.toContain('8e788655')
+  })
+
+  it('labels page groups as a library · document name · page UUID link to the page', async () => {
+    mocks.groups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            name: 'Letters',
+            source_id: 'page-source',
+            source_kind: 'page',
+            library: 'lib',
+            document_id: 'doc-uuid',
+            page_id: '27dc15af-7658-5d33-9a8e-4ca8af2a16ff',
+            occurrence_count: 1,
+          },
+        ],
+        limit: 25,
+        total_count: 1,
+        cursor: null,
+      },
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode: 'page',
+        compact: true,
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: ['manual'],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    const link = wrapper.getComponent(RouterLinkStub)
+    expect(link.text()).toBe('lib · Letters · 27dc15af-7658-5d33-9a8e-4ca8af2a16ff')
+    expect(link.classes()).not.toContain('text-sm')
+    expect(link.props('to')).toMatchObject({
+      name: 'document-page',
+      params: {
+        libraryId: 'lib',
+        documentId: 'doc-uuid',
+        pageId: '27dc15af-7658-5d33-9a8e-4ca8af2a16ff',
+      },
+      query: { selectedPerson: 'person-ada', link_state: ['manual'] },
+    })
+    expect(wrapper.find('li small').exists()).toBe(false)
+  })
+
+  it('labels page groups as one line: library · document name · page UUID linking to the page', async () => {
+    mocks.groups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            name: 'Letters',
+            source_id: 'page-source',
+            source_kind: 'page',
+            library: 'lib',
+            document_id: 'doc-uuid',
+            page_id: '27dc15af-7658-5d33-9a8e-4ca8af2a16ff',
+            occurrence_count: 1,
+          },
+        ],
+        limit: 25,
+        total_count: 1,
+        cursor: null,
+      },
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    const wrapper = mount(PersonMentionGroups, {
+      props: {
+        mode: 'page',
+        compact: true,
+        filters,
+        groupSort: { field: 'text', direction: 'asc' },
+        occurrenceSort: { field: 'source', direction: 'asc' },
+        personId: 'person-ada',
+        linkStates: ['manual'],
+      },
+      global: {
+        plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: { RouterLink: RouterLinkStub },
+      },
+    })
+    await flushPromises()
+    const link = wrapper.getComponent(RouterLinkStub)
+    expect(link.text()).toBe('lib · Letters · 27dc15af-7658-5d33-9a8e-4ca8af2a16ff')
+    expect(link.classes()).toEqual(expect.arrayContaining(['block', 'truncate']))
+    expect(link.classes()).not.toContain('text-sm')
+    expect(link.props('to')).toMatchObject({
+      name: 'document-page',
+      params: {
+        libraryId: 'lib',
+        documentId: 'doc-uuid',
+        pageId: '27dc15af-7658-5d33-9a8e-4ca8af2a16ff',
+      },
+      query: { selectedPerson: 'person-ada', link_state: ['manual'] },
+    })
+    expect(wrapper.find('li small').exists()).toBe(false)
   })
 })

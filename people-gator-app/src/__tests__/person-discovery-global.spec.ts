@@ -109,7 +109,7 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     query: {
       ...workspace,
       tab: 'discover',
-      discovery_annotations: 'faces',
+      discovery_annotations: 'name',
       discovery_model: 'chosen',
       discovery_text: 'extra',
       similar_sort: 'confidence',
@@ -149,17 +149,20 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     'query.entity_id': 'current',
     'query.entity_annotations': ['faces'],
     'query.face_embedding_model': 'chosen',
-    'query.text': ['extra'],
     limit: 40,
     cursor: null,
   }
   expect(api.faces.mock.lastCall?.[0].query).toEqual({
     ...signals,
+    limit: 14,
+    return_total_count: true,
     sort: 'confidence',
     sort_direction: 'asc',
   })
   expect(api.people.mock.lastCall?.[0].query).toEqual({
     ...signals,
+    'query.entity_annotations': ['name'],
+    'query.text': ['extra'],
     'filter.entity_type': ['person'],
     sort: 'name',
     sort_direction: 'desc',
@@ -210,6 +213,105 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     cursor: null,
   })
   expect(keys()).toHaveLength(originalKeys.length + 2)
+  // The two visible selector rows now control independent searches.
+  const faceRequests = api.faces.mock.calls.length
+  panel().vm.$emit('update:peopleFaceModel', 'people-only')
+  await flushPromises()
+  panel().vm.$emit('update:peopleAnnotations', ['name'])
+  await flushPromises()
+  expect(api.faces.mock.calls).toHaveLength(faceRequests)
+  expect(api.people.mock.lastCall?.[0].query).toMatchObject({
+    'query.face_embedding_model': 'people-only',
+    'query.entity_annotations': ['name'],
+    'query.text': ['extra'],
+  })
+  panel().vm.$emit('update:faceModel', 'faces-only')
+  await flushPromises()
+  expect(api.faces.mock.lastCall?.[0].query).toMatchObject({
+    'query.face_embedding_model': 'faces-only',
+  })
+  expect(api.faces.mock.lastCall?.[0].query).not.toHaveProperty('query.text')
+  expect(api.people.mock.lastCall?.[0].query).toMatchObject({
+    'query.face_embedding_model': 'people-only',
+  })
+  expect(router.currentRoute.value.query).toMatchObject({
+    people_model: 'people-only',
+    people_annotations: ['name'],
+    discovery_model: 'faces-only',
+  })
+  wrapper.unmount()
+  client.clear()
+})
+
+it('loads the next face cursor, keeps prior results on failure and restarts assignment searches', async () => {
+  const { defineComponent, ref } = await import('vue')
+  const { usePersonDiscovery } = await import('@/viewmodels/person-discovery')
+  const assigned = ref<'all' | 'unassigned'>('all')
+  const response = ({ query }: { query: Record<string, unknown> }) =>
+    Promise.resolve({
+      data: {
+        items: Array.from({ length: query.cursor ? 6 : 14 }, (_, i) => ({
+          detection_id: `candidate-${query.cursor ? i + 14 : i}`,
+          entity_id: null,
+        })),
+        total_count: 20,
+        limit: 14,
+        cursor: query.cursor ? null : 'opaque-next',
+      },
+    })
+  api.faces.mockReset().mockImplementation(response)
+  api.people.mockReset().mockResolvedValue({ data: { items: [], cursor: null } })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  let result!: ReturnType<typeof usePersonDiscovery>
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        result = usePersonDiscovery(
+          'current',
+          'model',
+          '',
+          true,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          assigned,
+        )
+        return () => null
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+  )
+  await flushPromises()
+  expect(result.similarFaces.value).toHaveLength(14)
+  expect(result.foundFaceCount.value).toBe(20)
+  expect(result.hasMoreFaces.value).toBe(true)
+  await result.loadMoreFaces()
+  await flushPromises()
+  expect(api.faces.mock.lastCall?.[0].query).toMatchObject({
+    cursor: 'opaque-next',
+    limit: 14,
+    return_total_count: true,
+  })
+  expect(new Set(result.similarFaces.value.map((face) => face.id)).size).toBe(20)
+  expect(result.hasMoreFaces.value).toBe(false)
+  assigned.value = 'unassigned'
+  await flushPromises()
+  expect(api.faces.mock.lastCall?.[0].query).toMatchObject({
+    'filter.is_assigned': false,
+    cursor: null,
+  })
+  expect(result.similarFaces.value).toHaveLength(14)
+  api.faces.mockRejectedValueOnce(new Error('network'))
+  await result.loadMoreFaces()
+  await flushPromises()
+  expect(result.moreFacesFailed.value).toBe(true)
+  expect(result.similarFaces.value).toHaveLength(14)
+  expect(result.searchError.value).toBeNull()
+  await result.loadMoreFaces()
+  await flushPromises()
+  expect(result.moreFacesFailed.value).toBe(false)
+  expect(result.similarFaces.value).toHaveLength(20)
   wrapper.unmount()
   client.clear()
 })

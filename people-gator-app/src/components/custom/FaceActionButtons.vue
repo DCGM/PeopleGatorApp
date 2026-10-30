@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BadgeCheck, Link2, RefreshCw, Trash2, Unlink, UserPlus } from '@lucide/vue'
+import { BadgeCheck, Link2, RefreshCw, Trash2, Unlink } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import type { Face } from '@/viewmodels/document-workspace.types'
@@ -9,9 +9,8 @@ defineProps<{
   canAnnotate: boolean
   canDelete: boolean
   busy?: boolean
-  showCreate?: boolean
 }>()
-defineEmits<{ findProfile: []; create: []; unassign: []; verify: []; delete: [] }>()
+defineEmits<{ findProfile: []; unassign: []; verify: []; delete: [] }>()
 </script>
 
 <template>
@@ -21,7 +20,7 @@ defineEmits<{ findProfile: []; create: []; unassign: []; verify: []; delete: [] 
         variant="outline"
         size="icon-xs"
         :disabled="busy"
-        class="border-fuchsia-600 text-fuchsia-700 hover:bg-fuchsia-50 hover:text-fuchsia-800 dark:border-fuchsia-500 dark:text-fuchsia-400 dark:hover:bg-fuchsia-950 dark:hover:text-fuchsia-300"
+        class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
         :aria-label="face.personId ? 'Reassign' : 'Link'"
         :title="face.personId ? 'Reassign' : 'Link'"
         @click="$emit('findProfile')"
@@ -29,22 +28,11 @@ defineEmits<{ findProfile: []; create: []; unassign: []; verify: []; delete: [] 
         <RefreshCw v-if="face.personId" aria-hidden="true" /><Link2 v-else aria-hidden="true" />
       </Button>
       <Button
-        v-if="showCreate"
-        variant="outline"
-        size="icon-xs"
-        :disabled="busy"
-        class="border-fuchsia-600 text-fuchsia-700 hover:bg-fuchsia-50 hover:text-fuchsia-800 dark:border-fuchsia-500 dark:text-fuchsia-400 dark:hover:bg-fuchsia-950 dark:hover:text-fuchsia-300"
-        aria-label="New person"
-        title="New person"
-        @click="$emit('create')"
-        ><UserPlus aria-hidden="true"
-      /></Button>
-      <Button
         v-if="face.personId"
         variant="outline"
         size="icon-xs"
         :disabled="busy"
-        class="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive dark:hover:bg-destructive/10"
+        class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
         aria-label="Unlink"
         title="Unlink"
         @click="$emit('unassign')"
@@ -55,7 +43,7 @@ defineEmits<{ findProfile: []; create: []; unassign: []; verify: []; delete: [] 
         variant="outline"
         size="icon-xs"
         :disabled="busy"
-        class="border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950 dark:hover:text-emerald-300"
+        class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
         aria-label="Verify"
         title="Verify"
         @click="$emit('verify')"
@@ -67,7 +55,7 @@ defineEmits<{ findProfile: []; create: []; unassign: []; verify: []; delete: [] 
       variant="outline"
       size="icon-xs"
       :disabled="busy"
-      class="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive dark:hover:bg-destructive/10"
+      class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
       aria-label="Delete detection"
       title="Delete detection"
       @click="$emit('delete')"

@@ -39,7 +39,7 @@ LIST_FILTERS = {
         "last_touched_from", "last_touched_to", "document_source_id",
         "last_touched_by_user_id", "last_touched_by_api_key_id",
     },
-    "/faces": {"entity_id", "source_id", "detection_id"},
+    "/faces": {"entity_id", "source_id", "detection_id", "is_assigned"},
     "/text-mentions": {"entity_id", "source_id", "name"},
     "/users": {
         "display_name",

@@ -150,6 +150,9 @@ class FaceListFilter(ListFilterBase, SharedFilter):
     Lists of criteria in each field are combined using logical OR.
     """
 
+    is_assigned: bool | MissingType = Field(
+        default=MISSING, description="Include only assigned faces when true, or only unassigned faces when false."
+    )
     entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="Filter by entity IDs."
     )

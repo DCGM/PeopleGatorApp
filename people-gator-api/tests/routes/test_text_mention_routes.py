@@ -28,3 +28,12 @@ def test_text_mention_list_exposes_source_and_entity_filters() -> None:
         "return_total_count",
         "cursor",
     } <= parameters
+
+
+def test_mention_groups_expose_complete_dataset_source_modes() -> None:
+    app = FastAPI()
+    app.include_router(router)
+    operation = app.openapi()["paths"]["/text-mention-groups"]["get"]
+    parameters = {p["name"]: p for p in operation["parameters"]}
+    assert parameters["group_by"]["schema"]["enum"] == ["mention", "document", "page"]
+    assert {"filter.document_source_id", "filter.page_source_id", "filter.entity_id", "filter.name"} <= parameters.keys()

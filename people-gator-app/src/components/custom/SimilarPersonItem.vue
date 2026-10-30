@@ -17,6 +17,7 @@ import type {
   SimilarPersonMatchSource,
 } from '@/viewmodels/similar-people.types'
 import PersonPortrait from './PersonPortrait.vue'
+import IdentityFacePreview from './IdentityFacePreview.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -161,7 +162,8 @@ function formatTextScore(score: number) {
     <ItemFooter
       class="relative z-20 w-full shrink-0 items-center border-t pt-2 text-muted-foreground"
     >
-      <div class="flex min-w-0 flex-1 items-center gap-3">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <IdentityFacePreview :person-id="person.id" :name="person.name" />
         <a
           v-if="person.wikidataId"
           :href="wikidataHref(person.wikidataId)"

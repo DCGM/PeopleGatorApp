@@ -4,7 +4,7 @@ from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPa
 import uuid
 
 from pydantic import AwareDatetime, BaseModel, Field
-from typing import Annotated
+from typing import Annotated, Literal
 
 from people_gator_api.settings import settings
 from people_gator_api.schemas.sorting import SortableRequest, TextMentionGroupSortField, TextMentionSortField
@@ -101,9 +101,14 @@ class TextMentionListResponse(GenericListResponse[TextMentionResponse]):
 
 
 class TextMentionGroup(BaseModel):
-    """Every matching mention with exactly the same recorded text."""
+    """A complete filtered group identified by recorded text or source identity."""
 
-    name: str = Field(description="Exact recorded mention text; never normalized.")
+    name: str = Field(description="Exact recorded text, or source display label for source groups.")
+    source_id: uuid.UUID | None = None
+    source_kind: Literal["document", "page", "source"] | None = None
+    library: str | None = None
+    document_id: uuid.UUID | None = None
+    page_id: uuid.UUID | None = None
     occurrence_count: int = Field(ge=1, description="Matching occurrences in the complete filtered set.")
     last_touched_at: AwareDatetime | None = Field(
         default=None, description="Latest annotation edit among the group's matching occurrences."
@@ -111,11 +116,12 @@ class TextMentionGroup(BaseModel):
 
 
 class TextMentionGroupListRequest(GenericListRequest, SortableRequest[TextMentionGroupSortField]):
-    """Group the complete filtered mention set by exact recorded text.
+    """Group the complete filtered mention set by text, document or page.
 
-    The default order is text ascending. Exact text is the canonical tie-breaker.
+    The default order is text ascending. Exact text or source UUID breaks ties.
     """
 
+    group_by: Literal["mention", "document", "page"] = "mention"
     filter_: TextMentionListFilter | MissingType = Field(default=MISSING)
 
 

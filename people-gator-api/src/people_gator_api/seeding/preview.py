@@ -517,6 +517,15 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     activity_document = next(item for item in DOCUMENTS if item.key == activity_page.document)
     discovery_page = next(item for item in PAGES if item.key == "discovery-1")
     discovery_document = next(item for item in DOCUMENTS if item.key == discovery_page.document)
+    reference_document = next(item for item in DOCUMENTS if item.key == "reference-faces")
+    reference_path = (
+        f"/libraries/{reference_document.library}/documents/{reference_document.document_id}"
+        f"/pages/{next(item.page_id for item in PAGES if item.key == 'reference-faces-1')}"
+    )
+    reference_faces_path = reference_path + "?" + urlencode({
+        "person": active_faces.get("reference-ada-manual", ""),
+        "library": "preview-nlk", "link_state": "verified",
+    })
     return SeedResult(
         entities=active_entities,
         documents=documents,
@@ -526,6 +535,14 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "identity-reference-faces": reference_faces_path,
+            "identity-reference-empty": reference_path + "?candidate_text=Nora",
+            "identity-reference-scroll": (
+                f"/libraries/{discovery_document.library}/documents/{discovery_document.document_id}"
+                f"/pages/{discovery_page.page_id}?" + urlencode({
+                    "person": active_faces.get("discovery-reference-0", ""),
+                })
+            ),
             # #75 reuses linked local media and the saved portrait without changing review edits.
             "archive-links-faces": f"/people/{manifest.entities['provenance-review']}?" + urlencode({
                 "tab": "faces", "origin_matched_face": active_faces.get("provenance-auto", ""),
@@ -737,6 +754,15 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}#link-statistics"
             ),
             # Issue #33: every list sorts its complete result set before paging.
+            # Existing portraits demonstrate the lightweight plus tile in either theme.
+            "person-review-found-faces": f"/people/{manifest.entities['review']}?discovery_model={DISCOVERY_MODEL}&people_annotations=all#similar-faces-heading",
+            "person-review-overflow-card": f"/people/{manifest.entities['review']}",
+            "person-review-faces": f"/people/{manifest.entities['review']}",
+            "person-review-loading": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=document",
+            "person-review-shift-selection": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=page",
+            "person-review-compact": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=groups&mention_density=compact",
+            "person-review-mentions": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=groups",
+            "person-review-documents": f"/people/{manifest.entities['review']}?tab=mentions&mention_view=document",
             "sorting-documents": "/documents?sort=page_count",
             "sorting-document-names": "/documents?" + urlencode({"q": "radkova", "sort": "name"}),
             "sorting-people": "/people?sort=last_touched_at",

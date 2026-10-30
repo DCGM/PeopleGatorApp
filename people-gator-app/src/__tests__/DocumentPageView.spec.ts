@@ -302,22 +302,6 @@ describe('shared detection actions', () => {
     )
     wrapper.unmount()
   })
-  it('routes card verification through the existing verify mutation', async () => {
-    mocks.patchFace.mockResolvedValue({
-      data: { detection_id: 'a', entity_link_state: 'verified' },
-    })
-    const wrapper = await mountView()
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
-    await flushPromises()
-    wrapper.findComponent({ name: 'CurrentFacePanel' }).vm.$emit('verify')
-    await flushPromises()
-    expect(mocks.patchFace).toHaveBeenCalledWith({
-      path: { detection_id: 'a' },
-      body: { entity_link_state: 'verified' },
-      throwOnError: true,
-    })
-    wrapper.unmount()
-  })
 })
 
 it('clears the selected face and route when the overlay requests Escape dismissal', async () => {

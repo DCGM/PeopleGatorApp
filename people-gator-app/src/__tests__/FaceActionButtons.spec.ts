@@ -16,12 +16,11 @@ const face: Face = {
 }
 it('uses one icon group, emits actions, and respects link state and permissions', async () => {
   const wrapper = mount(FaceActionButtons, {
-    props: { face, canAnnotate: true, canDelete: true, showCreate: true },
+    props: { face, canAnnotate: true, canDelete: true },
   })
   expect(wrapper.get('[role="group"]').attributes('data-slot')).toBe('button-group')
   for (const [label, event] of [
     ['Reassign', 'findProfile'],
-    ['New person', 'create'],
     ['Unlink', 'unassign'],
     ['Verify', 'verify'],
     ['Delete detection', 'delete'],

@@ -1,12 +1,9 @@
-import { ref } from 'vue'
 import { mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import SimilarPeoplePanel from '@/components/custom/SimilarPeoplePanel.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
-
-vi.mock('@/composables/can-annotate', () => ({ useCanAnnotate: () => ref(true) }))
 
 const people: SimilarPersonCandidate[] = [
   {
@@ -189,18 +186,18 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.get('[data-slot="item-actions"]').text()).toContain('Current')
     expect(wrapper.findAll('[data-slot="item"]')[0]!.classes()).toContain('items-start')
     expect(wrapper.findAll('[data-slot="item-media"]')[0]!.classes()).toContain('self-start')
-    const reassignButton = wrapper.get('[aria-label="Reassign"]')
-    expect(reassignButton.attributes('data-size')).toBe('icon-xs')
+    const reassignButton = wrapper.get('[aria-label="Reassign to another profile"]')
+    expect(reassignButton.attributes('data-size')).toBe('xs')
     expect(reassignButton.element.closest('[data-slot="item-footer"]')).not.toBeNull()
     expect(wrapper.text()).toContain('Reassign to similar')
     expect(
       wrapper.get('[aria-label="Assigned to Anna Nováková"]').attributes('disabled'),
     ).toBeDefined()
     expect(wrapper.get('[aria-label="Reassign to Marie Dvořáková"]').text()).toBe('Reassign')
-    expect(wrapper.get('[aria-label="Reassign"]')).toBeDefined()
-    expect(wrapper.get('[aria-label="New person"]')).toBeDefined()
+    expect(wrapper.get('[aria-label="Reassign to another profile"]')).toBeDefined()
+    expect(wrapper.get('[aria-label="Create and assign a new profile"]')).toBeDefined()
 
-    await wrapper.get('[aria-label="Unlink"]').trigger('click')
+    await wrapper.get('[aria-label="Unassign current profile"]').trigger('click')
     expect(wrapper.emitted('unassign')).toHaveLength(1)
   })
 
@@ -266,7 +263,7 @@ describe('SimilarPeoplePanel', () => {
     await wrapper
       .get('input[placeholder="Search by name or alias"]')
       .setValue('  Max von Gallwitz  ')
-    await wrapper.get('button[aria-label="New person"]').trigger('click')
+    await wrapper.get('button[aria-label="Create and assign a new profile"]').trigger('click')
 
     const nameField = wrapper.get('[aria-label="New person name"]')
     const descriptionField = wrapper.get('[aria-label="New person short description"]')

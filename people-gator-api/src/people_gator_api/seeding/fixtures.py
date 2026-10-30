@@ -27,6 +27,9 @@ PAGINATION_ITEMS = 14
 
 PEOPLE = (
     Person("actions", "Lina Actions", (), "Synthetic detection action practice.", "importer"),
+    Person("review", "Lina Archivist", ("L. Archivist", "Lina of the reading room", "Lina Catalogue Editor"),
+           "Archivist and catalogue editor reviewing portraits and correspondence across collections.", "importer"),
+    Person("review-candidate", "Lina A.", (), "Possible duplicate of Lina Archivist.", "importer"),
     Person("table-tereza", "Tereza Columns", (), "Synthetic document table subject.", "importer"),
     Person("table-oskar", "Oskar Rows", (), "Synthetic document table reviewer subject.", "reviewer"),
     Person("provenance-review", "Irena Evidence", (),
@@ -132,6 +135,9 @@ class Document:
 
 DOCUMENTS = (
     Document("detection-actions", "preview-mzk", "Detection action practice"),
+    Document("review-a", "preview-review-a", "Review ledger"),
+    Document("review-b", "preview-review-b", "Review ledger"),
+    Document("review-c", "preview-review-a", "Reading room notes"),
     Document("table-ledger", "preview-table", "Document table ledger"),
     Document("table-mirror", "preview-table-mirror", "Document table mirror", "table-ledger"),
     Document("provenance-a", "preview-mzk", "Annotation review ledger"),
@@ -168,6 +174,7 @@ DOCUMENTS = (
     Document("deactivated-ledger", "preview-mzk", "Deactivated reviewer ledger"),
     *(Document(f"pagination-{i}", "preview-pagination", f"Pagination ledger {i:02}")
       for i in range(1, PAGINATION_ITEMS + 1)),
+    Document("reference-faces", "preview-nlk", "Reference appearances"),
     Document("alignment", "preview-mzk", "Face alignment recovery"),
 )
 
@@ -221,6 +228,24 @@ PAGES = (
         Face("actions-linked", "actions", 0, 0, embedded=False),
         Face("actions-false-positive", None, 1, 0, embedded=False),
     )),
+    # Issue #80: >two rows of faces and >one page of exact-text occurrences.
+    *(Page(f"review-{i}", ("review-a", "review-b", "review-c")[i // 3], i % 3 + 1,
+           tuple(Face(f"review-face-{i}-{j}", "review", j, 6,
+                      ("automatic", "manual", "verified")[(i + j) % 3],
+                      models=(MODEL, DISCOVERY_MODEL)) for j in range(2)),
+           tuple(Mention(f"review-mention-{i}-{j}", "review",
+                         f"Lina Archivist reviewed entry {i * 3 + j + 1} in the catalogue.",
+                         ("automatic", "manual", "verified")[(i + j) % 3]) for j in range(3)))
+      for i in range(9)),
+    # Additive overflow pages: enough linked portraits for six desktop rows.
+    *(Page(f"review-overflow-{i}", "review-c", i + 4,
+           tuple(Face(f"review-overflow-face-{i}-{j}", "review", j, 6,
+                      ("automatic", "manual", "verified")[(i + j) % 3],
+                      models=(MODEL, DISCOVERY_MODEL)) for j in range(2)))
+      for i in range(12)),
+    Page("review-candidates", "review-b", 4,
+         (Face("review-unassigned", None, 0, 6, models=(MODEL, DISCOVERY_MODEL)),
+          Face("review-candidate", "review-candidate", 1, 6, models=(MODEL, DISCOVERY_MODEL)))),
     Page("table-1", "table-ledger", 1,
          (Face("table-auto", "table-tereza", 0, 2), Face("table-manual", "table-oskar", 1, 3, "manual")),
          (Mention("table-auto-mention", "table-tereza", "Tereza Columns indexed the document table."),
@@ -436,6 +461,12 @@ PAGES = (
            mentions=(Mention(f"pagination-{i}", f"pagination-{i}",
                              f"Pagination Person {i:02} recorded this ledger."),))
       for i in range(1, PAGINATION_ITEMS + 1)),
+    # #41: independent cross-library appearances and a mention-only candidate.
+    Page("reference-faces-1", "reference-faces", 1, (
+        Face("reference-ada-manual", "ada", 0, 0, "manual", embedded=False),
+        Face("reference-ada-automatic", "ada", 1, 0, embedded=False),
+        Face("reference-emil", "emil", 2, 1, "manual", embedded=False),
+    ), (Mention("reference-nora", "nora", "Nora Svoboda compared the reference appearances."),)),
     # Issue #64: stored, finite geometry that cannot be aligned, beside a valid
     # control. Independent keys keep existing media, reviews and timestamps intact.
     Page("alignment-1", "alignment", 1, (

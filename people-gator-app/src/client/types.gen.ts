@@ -2326,15 +2326,35 @@ export type TextMentionCreateRequest = {
 /**
  * TextMentionGroup
  *
- * Every matching mention with exactly the same recorded text.
+ * A complete filtered group identified by recorded text or source identity.
  */
 export type TextMentionGroup = {
     /**
      * Name
      *
-     * Exact recorded mention text; never normalized.
+     * Exact recorded text, or source display label for source groups.
      */
     name: string;
+    /**
+     * Source Id
+     */
+    source_id?: string | null;
+    /**
+     * Source Kind
+     */
+    source_kind?: 'document' | 'page' | 'source' | null;
+    /**
+     * Library
+     */
+    library?: string | null;
+    /**
+     * Document Id
+     */
+    document_id?: string | null;
+    /**
+     * Page Id
+     */
+    page_id?: string | null;
     /**
      * Occurrence Count
      *
@@ -2993,6 +3013,12 @@ export type SearchFacesGetApiV1SearchFacesGetData = {
          * How independently ranked modality result lists are fused.
          */
         'query.score_fusion'?: ScoreFusion;
+        /**
+         * Filter.Is Assigned
+         *
+         * Include only assigned faces when true, or only unassigned faces when false.
+         */
+        'filter.is_assigned'?: boolean | null;
         /**
          * Filter.Entity Id
          *
@@ -3908,6 +3934,12 @@ export type ListFacesRouteApiV1FacesGetData = {
     path?: never;
     query?: {
         /**
+         * Filter.Is Assigned
+         *
+         * Include only assigned faces when true, or only unassigned faces when false.
+         */
+        'filter.is_assigned'?: boolean | null;
+        /**
          * Filter.Entity Id
          *
          * Filter by entity IDs.
@@ -4455,6 +4487,10 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Group By
+         */
+        group_by?: 'mention' | 'document' | 'page';
         /**
          * Filter.Entity Id
          *

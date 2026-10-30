@@ -9,6 +9,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { Button } from '@/components/ui/button'
+import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import FaceActionButtons from '@/components/custom/FaceActionButtons.vue'
 import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
@@ -774,15 +775,21 @@ onBeforeUnmount(() => {
           class="p-5"
           :face="selectedFace ?? null"
           :assignment-pending="actionBusy"
-          :can-annotate="canAnnotate"
           :can-delete="canDelete"
           :action-error="actionError"
-          @verify="selectedFace && verifyFace(selectedFace)"
           @delete="deletionTarget = selectedFace"
           @find-profile="focusSimilarPeopleSearch"
           @create="createSimilarPerson"
           @unassign="unassignSelectedFace"
-        />
+        >
+          <VerifyEntityLink
+            v-if="selectedFace"
+            v-bind="selectedFace"
+            :id="selectedFace.id"
+            kind="face"
+            inline
+          />
+        </CurrentFacePanel>
         <SimilarPeopleSearch
           :key="candidateSearchResetKey"
           ref="similarPeopleSearch"

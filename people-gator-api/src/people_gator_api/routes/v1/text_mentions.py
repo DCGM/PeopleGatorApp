@@ -1,6 +1,7 @@
 """Text mention endpoints backed only by persistence contracts."""
 
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, status
 
@@ -68,12 +69,14 @@ async def list_text_mention_groups_route(
     filter: TextMentionListFilterDependency,
     list_request: ListRequestDependency,
     sort: TextMentionGroupSortDependency = DEFAULT_SORT,
+    group_by: Literal["mention", "document", "page"] = "mention",
 ) -> TextMentionGroupListResponse:
-    """Group the complete filtered mention set by exact recorded text."""
+    """Group the complete filtered mention set by text, document or page."""
     del user
     try:
         return await database.text_mentions.list_groups(
             TextMentionGroupListRequest(
+                group_by=group_by,
                 filter_=filter,
                 limit=list_request.limit,
                 return_total_count=list_request.return_total_count,

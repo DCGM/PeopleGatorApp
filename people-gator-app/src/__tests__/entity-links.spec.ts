@@ -334,39 +334,65 @@ describe('entity link review', () => {
     expect(mention.attributes('style')).toContain('outline:')
   })
 
-  it('invalidates evidence, sources and statistics after verification and preserves the badge on failure', async () => {
-    api.patchFace
-      .mockRejectedValueOnce(new Error('Try again'))
-      .mockResolvedValueOnce({ data: { detection_id: 'f1', entity_link_state: 'verified' } })
-    const { wrapper, queryClient } = renderQuery(
-      () => () => h(VerifyEntityLink, { id: 'f1', kind: 'face', linkState: 'manual' }),
+  it.each([false, true])(
+    'verifies links and recovers from failure with inline=%s',
+    async (inline) => {
+      api.patchFace
+        .mockRejectedValueOnce(new Error('Try again'))
+        .mockResolvedValueOnce({ data: { detection_id: 'f1', entity_link_state: 'verified' } })
+      const { wrapper, queryClient } = renderQuery(
+        () => () => h(VerifyEntityLink, { id: 'f1', kind: 'face', linkState: 'manual', inline }),
+      )
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+      await flushPromises()
+      await wrapper.get('button').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[role="alert"]').text()).toContain('Could not verify')
+      expect(invalidate).not.toHaveBeenCalled()
+      await wrapper.get('button').trigger('click')
+      await flushPromises()
+      const keys = invalidate.mock.calls.map(
+        ([args]) => (typeof args === 'function' ? args() : args)?.queryKey?.[0],
+      )
+      expect(keys).toEqual(
+        expect.arrayContaining([
+          'faces',
+          'text-mentions',
+          'entities',
+          'pages',
+          'documents',
+          'sources',
+          'search',
+        ]),
+      )
+      expect(api.patchFace.mock.calls[api.patchFace.mock.calls.length - 1]![0].body).toEqual({
+        entity_link_state: 'verified',
+      })
+      expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    },
+  )
+
+  it('keeps a verified inline action empty while retaining verification details in ordinary use', async () => {
+    const inline = ref(true)
+    const { wrapper } = renderQuery(
+      () => () =>
+        h(VerifyEntityLink, {
+          id: 'f1',
+          kind: 'face',
+          linkState: 'verified',
+          inline: inline.value,
+          verifiedBy: 'reviewer',
+          verifiedAt: '2026-10-13T12:00:00Z',
+        }),
     )
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     await flushPromises()
-    await wrapper.get('button').trigger('click')
+    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.text()).toBe('')
+    expect(api.patchFace).not.toHaveBeenCalled()
+    inline.value = false
     await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toContain('Could not verify')
-    expect(invalidate).not.toHaveBeenCalled()
-    await wrapper.get('button').trigger('click')
-    await flushPromises()
-    const keys = invalidate.mock.calls.map(
-      ([args]) => (typeof args === 'function' ? args() : args)?.queryKey?.[0],
-    )
-    expect(keys).toEqual(
-      expect.arrayContaining([
-        'faces',
-        'text-mentions',
-        'entities',
-        'pages',
-        'documents',
-        'sources',
-        'search',
-      ]),
-    )
-    expect(api.patchFace.mock.calls[api.patchFace.mock.calls.length - 1]![0].body).toEqual({
-      entity_link_state: 'verified',
-    })
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Verified by reviewer')
+    expect(wrapper.text()).toContain('UTC: 2026-10-13T12:00:00Z')
   })
 
   it('displays server totals and unassigned counts independently of loaded thumbnails', () => {
