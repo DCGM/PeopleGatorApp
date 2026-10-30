@@ -851,8 +851,9 @@ has zero in every field. Switching columns adds no requests or local sorting.
 
 Open **Detection action practice** in `preview-mzk`. Its first page has an
 unverified face linked to Lina Actions and an obvious **NOT A FACE** false positive.
-Select either box to use the icon button group; Link/Reassign, Unlink and Verify
-match the current-face card actions, which also offer Delete. Amber identifies
+Select either box to use the icon button group; hover an icon for its tooltip.
+Link/Reassign, Unlink and Verify match the current-face card actions, which also
+offer Delete. Amber identifies
 Link/Reassign, emerald identifies Verify, and red identifies Unlink/Delete, as in the
 card. Delete is available only with the
 existing `people-gator:admin` scope and requires confirmation. Deleted fixtures
@@ -996,10 +997,10 @@ checks Nora's empty gallery and preserves a reviewed assignment on rerun.
 
 
 `identity-reference-faces` also selects an assigned manual face for checking the
-card's compact footer: **View faces** stays on the left, and **Verify**,
-**Reassign** and named icon buttons for **New**, **Unlink** and (for admins)
-**Delete detection** are grouped on the right. On narrow panels the action group
-wraps below View faces and stays right-aligned. Verification errors appear inside the
+card's compact footer: **View faces** stays on the left, and icon-only
+**Verify**, **Reassign**/**Link**, **New**, **Unlink** and (for admins)
+**Delete detection** buttons are grouped on the right, each with a hover tooltip.
+The row keeps one line, so linking a face does not change the card height. Verification errors appear inside the
 card below the actions; verified attribution stays available on the state badge.
 
 Action colors: sky for face references, green for verification/save, amber for

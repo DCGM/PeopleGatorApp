@@ -20,9 +20,9 @@ it('uses one icon group, emits actions, and respects link state and permissions'
   })
   expect(wrapper.get('[role="group"]').attributes('data-slot')).toBe('button-group')
   for (const [label, event] of [
-    ['Reassign', 'findProfile'],
-    ['Unlink', 'unassign'],
-    ['Verify', 'verify'],
+    ['Reassign to another profile', 'findProfile'],
+    ['Unassign current profile', 'unassign'],
+    ['Verify this link', 'verify'],
     ['Delete detection', 'delete'],
   ]) {
     const button = wrapper.get(`button[aria-label="${label}"]`)
@@ -36,11 +36,11 @@ it('uses one icon group, emits actions, and respects link state and permissions'
     wrapper.findAll('button').every((button) => button.attributes('disabled') !== undefined),
   ).toBe(true)
   await wrapper.setProps({ face: { ...face, linkState: 'verified' }, canDelete: false })
-  expect(wrapper.find('[aria-label="Verify"]').exists()).toBe(false)
+  expect(wrapper.find('[aria-label="Verify this link"]').exists()).toBe(false)
   expect(wrapper.find('[aria-label="Delete detection"]').exists()).toBe(false)
   await wrapper.setProps({ face: { ...face, personId: null } })
-  expect(wrapper.find('[aria-label="Link"]').exists()).toBe(true)
-  expect(wrapper.find('[aria-label="Unlink"]').exists()).toBe(false)
+  expect(wrapper.find('[aria-label="Link to an existing profile"]').exists()).toBe(true)
+  expect(wrapper.find('[aria-label="Unassign current profile"]').exists()).toBe(false)
   await wrapper.setProps({ canAnnotate: false })
   expect(wrapper.findAll('button')).toHaveLength(0)
 })

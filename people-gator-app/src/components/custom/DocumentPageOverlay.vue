@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
-import { computed, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 
 import { lineMentionsEntity } from '@/viewmodels/document-workspace.types'
@@ -55,8 +55,14 @@ function activateFace(faceId: string) {
 
 // Move focus into the actions only when the box itself was activated, so
 // selections from the keyboard shortcuts, toolbar or gallery keep their focus.
-function openFocus(event: Event, faceId: string) {
-  if (document.activeElement !== detectionButton(faceId)) event.preventDefault()
+// The panel itself takes focus, not its first button, so no tooltip pops up.
+async function openFocus(event: Event, faceId: string) {
+  event.preventDefault()
+  if (document.activeElement !== detectionButton(faceId)) return
+  await nextTick()
+  document
+    .querySelector<HTMLElement>(`[data-detection-actions="${faceId}"]`)
+    ?.focus({ preventScroll: true })
 }
 
 const dragThreshold = 6
@@ -191,6 +197,7 @@ function regionStyle(position: Face['position']): CSSProperties {
           :aria-haspopup="actionsEnabled ? 'dialog' : undefined"
           @pointerdown.stop
           @click.stop="activateFace(face.id)"
+          @keydown.esc="face.id === selectedFaceId && emit('clearFace')"
         >
           <EntityLinkStateBadge
             v-bind="face"
@@ -205,7 +212,7 @@ function regionStyle(position: Face['position']): CSSProperties {
       </PopoverAnchor>
       <PopoverContent
         v-if="$slots.actions"
-        data-detection-actions
+        :data-detection-actions="face.id"
         side="top"
         class="w-auto p-1"
         :collision-boundary="viewer ?? undefined"
@@ -217,7 +224,7 @@ function regionStyle(position: Face['position']): CSSProperties {
         @open-auto-focus="openFocus($event, face.id)"
         @focus-outside.prevent
         @pointer-down-outside="pressOutside($event, face.id)"
-        @escape-key-down="emit('clearFace')"
+        @keydown.esc="emit('clearFace')"
         @close-auto-focus="returnFocus($event, face.id)"
       >
         <slot name="actions" :face="face" />

@@ -4,6 +4,7 @@ import { relatedQuery } from '@/viewmodels/shared-filters'
 const route = useRoute()
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import IdentityFacePreview from './IdentityFacePreview.vue'
+import UiTooltip from './UiTooltip.vue'
 import {
   Check,
   ChevronRight,
@@ -228,74 +229,71 @@ watch(() => props.face.id, cancelCreating)
         />
         <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
           <slot name="actions" />
-          <Button
-            v-if="face.personId"
-            type="button"
-            size="xs"
-            variant="outline"
-            class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
-            :disabled="props.assignmentPending"
-            aria-label="Reassign to another profile"
-            title="Reassign to another profile"
-            @click="emit('findProfile')"
-          >
-            <RefreshCw aria-hidden="true" />
-            Reassign
-          </Button>
-          <Button
-            v-else
-            type="button"
-            size="xs"
-            variant="outline"
-            :disabled="props.assignmentPending"
-            class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
-            aria-label="Link to an existing profile"
-            title="Link to an existing profile"
-            @click="emit('findProfile')"
-          >
-            <Link2 aria-hidden="true" />
-            Link
-          </Button>
-          <Button
-            type="button"
-            :size="face.personId ? 'icon-xs' : 'xs'"
-            variant="outline"
-            class="border-violet-600 text-violet-700 hover:text-violet-700 dark:border-violet-500 dark:text-violet-400 dark:hover:text-violet-400"
-            :disabled="props.assignmentPending"
-            aria-label="Create and assign a new profile"
-            title="Create and assign a new profile"
-            @click="startCreating"
-          >
-            <UserPlus aria-hidden="true" />
-            <span :class="face.personId && 'sr-only'">New</span>
-          </Button>
-          <Button
-            v-if="face.personId"
-            type="button"
-            size="icon-xs"
-            variant="outline"
-            class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
-            :disabled="props.assignmentPending"
-            aria-label="Unassign current profile"
-            title="Unassign current profile"
-            @click="emit('unassign')"
-          >
-            <Unlink aria-hidden="true" />
-            <span class="sr-only">Unlink</span>
-          </Button>
-          <Button
-            v-if="canDelete"
-            type="button"
-            size="icon-xs"
-            variant="outline"
-            class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
-            :disabled="props.assignmentPending"
-            aria-label="Delete detection"
-            title="Delete detection"
-            @click="emit('delete')"
-          >
-            <Trash2 aria-hidden="true" />
-          </Button>
+          <UiTooltip v-if="face.personId" text="Reassign to another profile">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="outline"
+              class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
+              :disabled="props.assignmentPending"
+              aria-label="Reassign to another profile"
+              @click="emit('findProfile')"
+            >
+              <RefreshCw aria-hidden="true" />
+            </Button>
+          </UiTooltip>
+          <UiTooltip v-else text="Link to an existing profile">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="outline"
+              :disabled="props.assignmentPending"
+              class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
+              aria-label="Link to an existing profile"
+              @click="emit('findProfile')"
+            >
+              <Link2 aria-hidden="true" />
+            </Button>
+          </UiTooltip>
+          <UiTooltip text="Create and assign a new profile">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="outline"
+              class="border-violet-600 text-violet-700 hover:text-violet-700 dark:border-violet-500 dark:text-violet-400 dark:hover:text-violet-400"
+              :disabled="props.assignmentPending"
+              aria-label="Create and assign a new profile"
+              @click="startCreating"
+            >
+              <UserPlus aria-hidden="true" />
+            </Button>
+          </UiTooltip>
+          <UiTooltip v-if="face.personId" text="Unassign current profile">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="outline"
+              class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
+              :disabled="props.assignmentPending"
+              aria-label="Unassign current profile"
+              @click="emit('unassign')"
+            >
+              <Unlink aria-hidden="true" />
+            </Button>
+          </UiTooltip>
+          <UiTooltip v-if="canDelete" text="Delete detection">
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="outline"
+              class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
+              :disabled="props.assignmentPending"
+              aria-label="Delete detection"
+              @click="emit('delete')"
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </UiTooltip>
         </div>
       </div>
       <p v-if="actionError" role="alert" class="basis-full text-xs text-destructive">

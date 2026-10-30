@@ -345,6 +345,13 @@ describe('entity link review', () => {
       )
       const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
       await flushPromises()
+      if (inline) {
+        // The card action is icon-only; its name appears as a hover tooltip.
+        expect(wrapper.get('button').attributes('aria-label')).toBe('Verify this link')
+        expect(wrapper.get('button').text()).toBe('')
+      } else {
+        expect(wrapper.get('button').text()).toBe('Verify link')
+      }
       await wrapper.get('button').trigger('click')
       await flushPromises()
       expect(wrapper.get('[role="alert"]').text()).toContain('Could not verify')

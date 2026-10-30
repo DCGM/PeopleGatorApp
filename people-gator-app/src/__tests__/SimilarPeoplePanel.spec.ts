@@ -187,7 +187,9 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.findAll('[data-slot="item"]')[0]!.classes()).toContain('items-start')
     expect(wrapper.findAll('[data-slot="item-media"]')[0]!.classes()).toContain('self-start')
     const reassignButton = wrapper.get('[aria-label="Reassign to another profile"]')
-    expect(reassignButton.attributes('data-size')).toBe('xs')
+    // Card actions are icon-only; their names are shown as hover tooltips.
+    expect(reassignButton.attributes('data-size')).toBe('icon-xs')
+    expect(reassignButton.text()).toBe('')
     expect(reassignButton.element.closest('[data-slot="item-footer"]')).not.toBeNull()
     // View faces stays on the left; the actions are grouped on the right.
     const actions = reassignButton.element.parentElement!

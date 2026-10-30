@@ -3,6 +3,7 @@ import { BadgeCheck } from '@lucide/vue'
 import type { LinkMetadata } from '@/lib/entity-links'
 import { linkTooltip } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
+import UiTooltip from './UiTooltip.vue'
 import { useVerifyLinkMutation } from '@/query/entity-links'
 import { useCanAnnotate } from '@/composables/can-annotate'
 defineProps<LinkMetadata & { id: string; kind: 'face' | 'mention'; inline?: boolean }>()
@@ -15,17 +16,25 @@ const allowed = useCanAnnotate()
       {{ linkTooltip({ linkState, verifiedBy, verifiedAt }) }}
     </p>
     <template v-else-if="linkState !== 'verified' && allowed">
+      <UiTooltip v-if="inline" text="Verify this link">
+        <Button
+          variant="outline"
+          size="icon-xs"
+          class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
+          :disabled="mutation.isPending.value"
+          aria-label="Verify this link"
+          @click="mutation.mutate({ id, kind })"
+          ><BadgeCheck aria-hidden="true"
+        /></Button>
+      </UiTooltip>
       <Button
+        v-else
         variant="outline"
         size="xs"
-        :class="
-          inline &&
-          'border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400'
-        "
         :disabled="mutation.isPending.value"
         @click="mutation.mutate({ id, kind })"
         ><BadgeCheck class="size-3" aria-hidden="true" />{{
-          mutation.isPending.value ? 'Verifying…' : inline ? 'Verify' : 'Verify link'
+          mutation.isPending.value ? 'Verifying…' : 'Verify link'
         }}</Button
       >
       <p

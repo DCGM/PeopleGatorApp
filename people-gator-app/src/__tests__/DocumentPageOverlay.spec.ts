@@ -259,7 +259,8 @@ it('keeps selected-face actions through viewport movement and closes them on an 
     await settle()
     expect(panel()).not.toBeNull()
     expect(wrapper.emitted('selectFace')).toEqual([['one']])
-    expect(panel()!.contains(document.activeElement)).toBe(true)
+    // The panel itself takes focus, so no action tooltip pops up on open.
+    expect(document.activeElement).toBe(panel())
     expect(panel()!.getAttribute('aria-label')).toBe('Actions for Unknown')
     panel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
@@ -302,6 +303,10 @@ it('keeps selected-face actions through viewport movement and closes them on an 
     await detection.trigger('click')
     await settle()
     expect(panel()).not.toBeNull()
+
+    // Escape on the selected box clears the selection in one press.
+    await detection.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('clearFace')).toHaveLength(2)
 
     // A face without a drawable box never gets an unanchored panel.
     await wrapper.setProps({ selectedFaceId: 'hidden' })
