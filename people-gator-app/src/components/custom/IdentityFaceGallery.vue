@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { X } from '@lucide/vue'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -9,7 +8,6 @@ import { useFaceListQuery, type FaceListParams } from '@/query/faces'
 import IdentityReferenceFace from './IdentityReferenceFace.vue'
 
 const props = defineProps<{ personId: string; name: string }>()
-const emit = defineEmits<{ close: [] }>()
 const end = ref<HTMLElement | null>(null)
 // Reference evidence includes every link state and source, independently of scan
 // filters. ID ordering stays stable across cursor pages and review edits.
@@ -43,17 +41,7 @@ function retry() {
 </script>
 
 <template>
-  <div class="relative" :aria-busy="query.isFetching.value" :aria-label="`Faces of ${name}`">
-    <Button
-      type="button"
-      variant="outline"
-      size="icon-xs"
-      class="absolute -right-3 -top-3 z-10 rounded-full"
-      aria-label="Close faces"
-      @click="emit('close')"
-    >
-      <X aria-hidden="true" />
-    </Button>
+  <div :aria-busy="query.isFetching.value" :aria-label="`Faces of ${name}`">
     <p v-if="query.isPending.value" role="status" class="sr-only">Loading faces…</p>
     <div v-if="query.isPending.value" class="grid grid-cols-3 gap-1">
       <Skeleton v-for="i in 6" :key="i" class="aspect-square w-full" />
@@ -87,7 +75,12 @@ function retry() {
     >
       No linked faces.
     </p>
-    <div v-if="query.isError.value" class="space-y-2" :class="faces.length > 0 && 'mt-2'" role="alert">
+    <div
+      v-if="query.isError.value"
+      class="space-y-2"
+      :class="faces.length > 0 && 'mt-2'"
+      role="alert"
+    >
       <p class="text-sm">Could not load {{ faces.length ? 'more ' : '' }}faces.</p>
       <Button
         type="button"

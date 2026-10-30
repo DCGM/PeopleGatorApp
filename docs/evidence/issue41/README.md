@@ -5,9 +5,9 @@ synthetic PostgreSQL store and disposable local media. Desktop uses 1440 × 900
 CSS pixels; mobile uses 390 × 844. Images contain synthetic illustrations.
 
 The face popover is a compact 256px-wide grid with 8px outer padding, 4px gaps,
-a bounded 160px scroll area and a 24px circular outline close button at the
-corner. There is no title, count or normal loading button. The close button
-stays outside the crop area. The identity retains an accessible name.
+a bounded 160px scroll area. There is no close button, title, count or normal
+loading button. Clicking outside, pressing Escape or toggling View faces dismisses
+the gallery. The identity retains an accessible name.
 
 Each viewport includes:
 
@@ -29,8 +29,8 @@ reopening, empty states, light/dark rendering and viewport width. A visible end
 sentinel loads 6→12; scrolling loads the final batch to 15. Three distinct
 cursors, no requests after exhaustion, no manual loading button, no title/counter,
 no mutations and unchanged scan route/selection/pan/zoom were verified in both
-viewports. Latest captures also check the padding/width and circular close button
-without crop overlap. Normal color transitions settle before theme captures.
+viewports. Latest captures also check the padding/width, absence of a close
+button and dismissal on the first outside click after interacting with a crop. Normal color transitions settle before theme captures.
 
 Footer checks verify aligned 24px controls, natural wrapping at 320px, accessible
 New/Unlink names, creation/cancel, reassignment focus and errors below the actions.

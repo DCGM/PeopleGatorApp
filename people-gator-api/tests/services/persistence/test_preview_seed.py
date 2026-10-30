@@ -3348,7 +3348,7 @@ async def test_archive_links_use_each_evidence_page_and_containing_document(seed
 async def test_identity_reference_gallery_pages_cross_library_crops_and_preserves_review(seed_target):
     database, filesystem, _ = seed_target
     seed = await preview.seed_preview(database, filesystem)
-    for key in ('identity-reference-actions', 'identity-reference-action-colors', 'identity-reference-compact'):
+    for key in ('identity-reference-actions', 'identity-reference-action-colors', 'identity-reference-compact', 'identity-reference-dismiss'):
         assert seed.filter_examples[key] == seed.filter_examples['identity-reference-faces']
     action_query = parse_qs(urlsplit(seed.filter_examples['identity-reference-actions']).query)
     assert action_query['person'] == [str(seed.faces['reference-ada-manual'])]

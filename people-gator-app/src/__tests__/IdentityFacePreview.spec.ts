@@ -28,6 +28,12 @@ function setup() {
   })
   return mounted
 }
+async function dismiss() {
+  document
+    .querySelector('[role="dialog"]')!
+    .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await flushPromises()
+}
 async function click(label: string) {
   const button = [...document.querySelectorAll('button')].find(
     (b) => b.textContent?.trim() === label || b.getAttribute('aria-label') === label,
@@ -82,7 +88,7 @@ describe('in-place identity faces', () => {
     expect(mounted.getComponent(RouterLinkStub).props('to')).toEqual(
       expect.objectContaining({ params: { personId: 'ada' } }),
     )
-    await click('Close faces')
+    await dismiss()
     await mounted.get('[aria-label="Assign to Ada Novak"]').trigger('click')
     expect(mounted.emitted('assign')).toHaveLength(1)
     await mounted.get('[aria-label="Preview Ada Novak on this page"]').trigger('click')
@@ -115,7 +121,7 @@ describe('in-place identity faces', () => {
     expect(document.querySelector('[role="dialog"] h4')).toBeNull()
     expect(document.body.textContent).not.toContain('6 of 7')
     expect(document.body.textContent).not.toContain('Load more faces')
-    await click('Close faces')
+    await dismiss()
     expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(wrapper.get('button').element)
     await click('View faces')
@@ -199,6 +205,23 @@ describe('in-place identity faces', () => {
     } finally {
       window.removeEventListener('keydown', navigation)
     }
+  })
+
+  it('dismisses on the first outside pointer press after interacting with faces', async () => {
+    mocks.list.mockResolvedValue(batch([face('a')]))
+    const wrapper = setup()
+    await click('View faces')
+    const pointer = () => {
+      const event = new Event('pointerdown', { bubbles: true })
+      Object.defineProperty(event, 'pointerType', { value: 'mouse' })
+      return event
+    }
+    document.querySelector('[role="list"]')!.dispatchEvent(pointer())
+    await flushPromises()
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('true')
+    document.body.dispatchEvent(pointer())
+    await flushPromises()
+    expect(wrapper.get('button').attributes('aria-expanded')).toBe('false')
   })
 
   it('keeps other crops accessible when one authenticated crop fails', async () => {

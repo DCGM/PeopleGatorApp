@@ -849,11 +849,12 @@ has zero in every field. Switching columns adds no requests or local sorting.
 Open `identity-reference-faces` for **Reference appearances** in `preview-nlk`.
 Hover **View faces** on Ada Novak's candidate card, or click/tap to keep it open.
 The same control is available on the currently assigned identity. The shadcn
-popover contains just a compact grid of faces with small margins and a circular
-X button at the corner; it has no title or count. Reaching the end of the bounded
+popover contains just a compact grid of faces with small margins; it has no
+close button, title or count. Reaching the end of the bounded
 scroll area automatically loads the next six-face batch, without a loading button.
-Open `identity-reference-compact` for this layout. Close with Escape, the corner
-button or a click outside.
+Open `identity-reference-compact` for this layout. Dismiss with Escape, a click
+outside or the View faces trigger. `identity-reference-dismiss` opens the same
+scenario for checking dismissal after clicking or scrolling inside the gallery.
 Keyboard users can open with Enter/Space, Tab to the scroll area and scroll with
 arrow keys. A failed continuation keeps the loaded faces and offers **Retry**.
 Open `identity-reference-scroll` for **Zora Cartographer**: her 15 existing local

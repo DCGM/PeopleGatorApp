@@ -104,7 +104,6 @@ onBeforeUnmount(cancelTimer)
       @keydown.esc.stop.prevent="close"
       @keydown.stop
       @wheel.stop
-      @pointerdown.stop
       @click.stop
     >
       <IdentityFaceGallery
@@ -112,7 +111,6 @@ onBeforeUnmount(cancelTimer)
         :key="personId"
         :person-id="personId"
         :name="name"
-        @close="close"
       />
     </PopoverContent>
   </Popover>
