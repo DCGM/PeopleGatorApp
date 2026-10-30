@@ -301,9 +301,7 @@ async function deleteDetection() {
   if (!face) return
   try {
     await deleteMutation.mutateAsync(face.id)
-    selectedFaceId.value = null
-    selectedPersonId.value = null
-    syncRoute()
+    clearFace()
     deletionTarget.value = null
     viewerElement.value?.focus()
   } catch {
@@ -376,6 +374,12 @@ function selectFace(faceId: string) {
   selectedFaceId.value = faceId
   selectedPersonId.value = faces.value.find((face) => face.id === faceId)?.personId ?? null
   if (selectedPersonId.value) showOnPageEntities()
+  syncRoute()
+}
+
+function clearFace() {
+  selectedFaceId.value = null
+  selectedPersonId.value = null
   syncRoute()
 }
 
@@ -454,8 +458,7 @@ async function createSimilarPerson(person: { name: string; shortDescription?: st
   syncRoute()
 }
 
-async function focusSimilarPeopleSearch(close?: () => void) {
-  close?.()
+async function focusSimilarPeopleSearch() {
   await router.replace({ query: { ...route.query, panel: undefined }, hash: '' })
   await nextTick()
   similarPeopleSearch.value?.focus()
@@ -697,14 +700,15 @@ onBeforeUnmount(() => {
         :show-badge-names="showBadgeNames"
         @select-line="selectLine"
         @select-face="selectFace"
+        @clear-face="clearFace"
       >
-        <template #actions="{ face, close }">
+        <template #actions="{ face }">
           <FaceActionButtons
             :face="face"
             :can-annotate="canAnnotate"
             :can-delete="canDelete"
             :busy="actionBusy"
-            @find-profile="focusSimilarPeopleSearch(close)"
+            @find-profile="focusSimilarPeopleSearch"
             @unassign="unassignSelectedFace"
             @verify="verifyFace(face)"
             @delete="deletionTarget = face"

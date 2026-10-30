@@ -212,7 +212,7 @@ describe('DocumentPageOverlay', () => {
   })
 })
 
-it('opens actions, restores keyboard focus on Escape and dismisses the first outside click', async () => {
+it('keeps selected-face actions through viewport movement and outside clicks until selection clears', async () => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -256,10 +256,14 @@ it('opens actions, restores keyboard focus on Escape and dismisses the first out
     expect(panel!.contains(document.activeElement)).toBe(true)
     panel!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
+    expect(wrapper.emitted('clearFace')).toEqual([[]])
+    await wrapper.setProps({ selectedFaceId: null })
+    await flushPromises()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
     expect(document.activeElement).toBe(detection.element)
     await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
     await flushPromises()
     await new Promise((resolve) => setTimeout(resolve, 10))
     const reopened = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
@@ -267,6 +271,11 @@ it('opens actions, restores keyboard focus on Escape and dismisses the first out
       .querySelector('button')!
       .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
     document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(document.querySelector('[data-slot="popover-content"]')).toBe(reopened)
+    await wrapper.setProps({ pageBounds: { left: -900, top: -800, width: 1000, height: 1600 } })
+    expect(document.querySelector('[data-slot="popover-content"]')).toBe(reopened)
+    await wrapper.setProps({ selectedFaceId: null })
     await flushPromises()
     expect(document.querySelector('[data-slot="popover-content"]')).toBeNull()
   } finally {

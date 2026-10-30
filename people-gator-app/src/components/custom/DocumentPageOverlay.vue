@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
-import { ref, watch, type CSSProperties } from 'vue'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { ref, type CSSProperties } from 'vue'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 
 import { lineMentionsEntity } from '@/viewmodels/document-workspace.types'
 import type {
@@ -30,21 +30,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   selectLine: [index: number]
   selectFace: [faceId: string]
+  clearFace: []
 }>()
-
-const openFaceId = ref<string | null>(null)
-watch(
-  () => props.selectedFaceId,
-  (id) => {
-    if (id !== openFaceId.value) openFaceId.value = null
-  },
-)
-watch(
-  () => props.faces,
-  (faces) => {
-    if (!faces.some((face) => face.id === openFaceId.value)) openFaceId.value = null
-  },
-)
 
 const overlay = ref<HTMLElement | null>(null)
 function returnFocus(event: Event, faceId: string) {
@@ -129,14 +116,14 @@ function regionStyle(position: Face['position']): CSSProperties {
     <Popover
       v-for="face in faces"
       :key="face.id"
-      :open="openFaceId === face.id"
-      @update:open="openFaceId = $event && actionsEnabled ? face.id : null"
+      :open="actionsEnabled && selectedFaceId === face.id"
     >
-      <PopoverTrigger as-child>
+      <PopoverAnchor as-child>
         <button
           v-if="face.position.width > 0 && face.position.height > 0"
           :key="face.id"
           type="button"
+          :id="`detection-${face.id}`"
           data-region-type="face"
           :data-detection-id="face.id"
           class="pointer-events-auto absolute border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -144,6 +131,8 @@ function regionStyle(position: Face['position']): CSSProperties {
           :style="regionStyle(face.position)"
           :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
           :aria-pressed="face.id === selectedFaceId"
+          :aria-expanded="actionsEnabled ? face.id === selectedFaceId : undefined"
+          :aria-haspopup="actionsEnabled ? 'dialog' : undefined"
           @pointerdown.stop
           @click.stop="emit('selectFace', face.id)"
         >
@@ -157,7 +146,7 @@ function regionStyle(position: Face['position']): CSSProperties {
             :class="showBadgeNames ? 'max-w-40' : 'size-6'"
           />
         </button>
-      </PopoverTrigger>
+      </PopoverAnchor>
       <PopoverContent
         v-if="$slots.actions"
         side="top"
@@ -166,10 +155,13 @@ function regionStyle(position: Face['position']): CSSProperties {
         :collision-padding="8"
         sticky="always"
         update-position-strategy="always"
-        hide-when-detached
+        prioritize-position
+        :aria-labelledby="`detection-${face.id}`"
+        @interact-outside.prevent
+        @escape-key-down="emit('clearFace')"
         @close-auto-focus="returnFocus($event, face.id)"
       >
-        <slot name="actions" :face="face" :close="() => (openFaceId = null)" />
+        <slot name="actions" :face="face" />
       </PopoverContent>
     </Popover>
   </div>

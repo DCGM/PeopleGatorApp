@@ -854,3 +854,7 @@ identifies Verify, and red identifies Unlink/Delete. Delete is available only wi
 existing `people-gator:admin` scope and requires confirmation. Deleted fixtures
 stay deleted on rerun; verifying or reassigning the linked face is also preserved.
 Deleting a selected person portrait uses the existing automatic portrait fallback.
+
+Detection actions stay open while a face is selected, including during pan/zoom;
+they stay inside the viewer even when the face moves offscreen. Escape clears
+the face selection. Selecting another face moves the actions to that face.

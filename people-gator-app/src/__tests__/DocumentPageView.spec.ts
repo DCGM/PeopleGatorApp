@@ -319,3 +319,20 @@ describe('shared detection actions', () => {
     wrapper.unmount()
   })
 })
+
+it('clears the selected face and route when the overlay requests Escape dismissal', async () => {
+  const wrapper = await mountView()
+  const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+  overlay.vm.$emit('select-face', 'a')
+  await flushPromises()
+  expect(overlay.props('selectedFaceId')).toBe('a')
+  overlay.vm.$emit('clear-face')
+  await flushPromises()
+  expect(overlay.props('selectedFaceId')).toBeNull()
+  expect(mocks.replace).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      query: expect.objectContaining({ person: undefined, selectedPerson: undefined }),
+    }),
+  )
+  wrapper.unmount()
+})
