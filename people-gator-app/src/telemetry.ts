@@ -9,9 +9,10 @@ export function isApiUrl(value: string, base: string, origin: string): boolean {
   const api = new URL(base || '/', origin)
   const url = new URL(value, origin)
   const prefix = api.pathname.replace(/\/+$/, '')
-  return url.origin === api.origin && [
-    `${prefix}/api/`, `${prefix}/token/`,
-  ].some((path) => url.pathname.startsWith(path))
+  return (
+    url.origin === api.origin &&
+    [`${prefix}/api/`, `${prefix}/token/`].some((path) => url.pathname.startsWith(path))
+  )
 }
 
 export interface RumConfig {
@@ -55,10 +56,12 @@ export async function initializeTelemetry(): Promise<void> {
       defaultPrivacyLevel: 'mask',
       sessionSampleRate: config.sessionSampleRate,
       sessionReplaySampleRate: 0,
-      allowedTracingUrls: [{
-        match: (url: string) => isApiUrl(url, apiBaseUrl, window.location.origin),
-        propagatorTypes: ['tracecontext'],
-      }],
+      allowedTracingUrls: [
+        {
+          match: (url: string) => isApiUrl(url, apiBaseUrl, window.location.origin),
+          propagatorTypes: ['tracecontext'],
+        },
+      ],
     })
     openobserveRum.setGlobalContext(config.context)
     openobserveLogs.init({ ...common, forwardErrorsToLogs: true })
