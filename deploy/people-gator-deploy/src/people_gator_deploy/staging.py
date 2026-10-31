@@ -142,7 +142,9 @@ class Staging(Host):
                 "WEB_NETWORK": self.config.get("web_network", "web"),
                 "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
                 "CORS_ORIGIN_REGEX": f"^https://{re.escape(self.host)}$",
-                "FRONTEND_IMAGE": images["frontend"], "BACKEND_IMAGE": images["backend"]}
+                "FRONTEND_IMAGE": images["frontend"], "BACKEND_IMAGE": images["backend"],
+                "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
+                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web"))}
 
     def provision(self, values):
         name, password = values["DB_NAME"], values["DB_PASSWORD"]

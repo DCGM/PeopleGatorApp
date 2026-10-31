@@ -52,9 +52,19 @@ services:
 
   backend:
     <<: *backend
+    env_file:
+      - path: ${RUNTIME_FILE:?required}
+      - path: ${TELEMETRY_FILE:-/dev/null}
+        format: raw
     restart: unless-stopped
     command: [api]
-    networks: [database, web]
+    networks: [database, web, telemetry]
+    environment:
+      <<: *production
+      PEOPLE_GATOR_API__DEPLOYMENT__ENVIRONMENT: release
+      PEOPLE_GATOR_API__DEPLOYMENT__VERSION: ${RELEASE_TAG:?required}
+      PEOPLE_GATOR_API__DEPLOYMENT__COMMIT: ${COMMIT_SHA:-unknown}
+      PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER: ""
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
       interval: 10s
@@ -111,3 +121,6 @@ networks:
   web:
     external: true
     name: ${WEB_NETWORK:-web}
+  telemetry:
+    external: true
+    name: ${APPLICATION_OTEL_NETWORK:-${WEB_NETWORK:-web}}

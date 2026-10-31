@@ -120,7 +120,9 @@ class Release(Host):
                 "DATABASE_NETWORK": self.config["database_network"], "WEB_NETWORK": self.config["web_network"],
                 "CERTIFICATE_RESOLVER": self.config.get("certificate_resolver", "tlschallenge"),
                 "CORS_ORIGIN_REGEX": f"^https://{re.escape(self.host)}$",
-                "BACKEND_MEMORY": self.config.get("backend_memory", "4g")}
+                "BACKEND_MEMORY": self.config.get("backend_memory", "4g"),
+                "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
+                "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web"))}
 
     def state(self, name="state.json"):
         path = self.root / name
