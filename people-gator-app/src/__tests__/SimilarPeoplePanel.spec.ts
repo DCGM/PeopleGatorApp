@@ -187,8 +187,19 @@ describe('SimilarPeoplePanel', () => {
     expect(wrapper.findAll('[data-slot="item"]')[0]!.classes()).toContain('items-start')
     expect(wrapper.findAll('[data-slot="item-media"]')[0]!.classes()).toContain('self-start')
     const reassignButton = wrapper.get('[aria-label="Reassign to another profile"]')
-    expect(reassignButton.attributes('data-size')).toBe('xs')
+    // Card actions are icon-only; their names are shown as hover tooltips.
+    expect(reassignButton.attributes('data-size')).toBe('icon-xs')
+    expect(reassignButton.text()).toBe('')
     expect(reassignButton.element.closest('[data-slot="item-footer"]')).not.toBeNull()
+    // View faces stays on the left; the actions are grouped on the right.
+    const actions = reassignButton.element.parentElement!
+    expect(actions.classList).toContain('ml-auto')
+    expect(actions.classList).toContain('justify-end')
+    const viewFaces = wrapper.get('button[aria-label*="faces" i]').element
+    expect(actions.contains(viewFaces)).toBe(false)
+    expect(
+      viewFaces.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(wrapper.text()).toContain('Reassign to similar')
     expect(
       wrapper.get('[aria-label="Assigned to Anna Nováková"]').attributes('disabled'),
@@ -432,18 +443,18 @@ describe('SimilarPeoplePanel', () => {
     }
   })
 
-  it('reveals and scrolls the selected person into view', async () => {
+  it('reveals the selected person and scrolls only the candidate viewport', async () => {
     const extendedPeople = [
       ...people,
       { ...people[1]!, id: 'josef-svoboda', name: 'Josef Svoboda' },
       { ...people[1]!, id: 'alena-horakova', name: 'Alena Horáková' },
       { ...people[1]!, id: 'jan-novak', name: 'Jan Novák' },
     ]
-    const scrollIntoView = vi.fn()
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    const scrollBy = vi.fn()
+    const originalScrollIntoView = HTMLElement.prototype.scrollBy
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
       configurable: true,
-      value: scrollIntoView,
+      value: scrollBy,
     })
 
     const wrapper = mount(SimilarPeoplePanel, {
@@ -462,16 +473,16 @@ describe('SimilarPeoplePanel', () => {
       await wrapper.vm.$nextTick()
 
       expect(wrapper.get('[aria-label="Preview Jan Novák on this page"]')).toBeDefined()
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' })
+      expect(scrollBy).toHaveBeenCalledWith({ behavior: 'smooth', top: 0 })
     } finally {
       wrapper.unmount()
       if (originalScrollIntoView) {
-        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
           configurable: true,
           value: originalScrollIntoView,
         })
       } else {
-        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollBy')
       }
     }
   })

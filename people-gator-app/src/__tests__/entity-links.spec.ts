@@ -9,7 +9,7 @@ import EntityLinkStatistics from '@/components/custom/EntityLinkStatistics.vue'
 import DocumentTeleprompter from '@/components/custom/DocumentTeleprompter.vue'
 import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import { useFaceListQuery } from '@/query/faces'
+import { useFaceListQuery, useDeleteFaceMutation } from '@/query/faces'
 import { usePageResultsQuery } from '@/query/search/pages'
 import { usePersonDetail } from '@/viewmodels/person-detail'
 import type { EntityLinkState } from '@/client'
@@ -21,11 +21,13 @@ const api = vi.hoisted(() => ({
   mentions: vi.fn(),
   entity: vi.fn(),
   patchFace: vi.fn(),
+  deleteFace: vi.fn(),
   patchMention: vi.fn(),
   page: vi.fn(),
 }))
 vi.mock('@/client', () => ({
   listFacesRouteApiV1FacesGet: api.faces,
+  deleteFaceRouteApiV1FacesDetectionIdDelete: api.deleteFace,
   listPagesRouteApiV1PagesGet: api.pagesList,
   searchPagesGetApiV1SearchPagesGet: api.pagesSearch,
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
@@ -343,6 +345,13 @@ describe('entity link review', () => {
       )
       const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
       await flushPromises()
+      if (inline) {
+        // The card action is icon-only; its name appears as a hover tooltip.
+        expect(wrapper.get('button').attributes('aria-label')).toBe('Verify this link')
+        expect(wrapper.get('button').text()).toBe('')
+      } else {
+        expect(wrapper.get('button').text()).toBe('Verify link')
+      }
       await wrapper.get('button').trigger('click')
       await flushPromises()
       expect(wrapper.get('[role="alert"]').text()).toContain('Could not verify')
@@ -432,4 +441,48 @@ describe('entity link review', () => {
     expect(wrapper.text()).not.toContain('Total')
     wrapper.unmount()
   })
+})
+
+it('preserves a rejected deletion, then removes cached detail/crops and refreshes affected lists', async () => {
+  api.deleteFace.mockRejectedValueOnce(new Error('Forbidden')).mockResolvedValueOnce({ data: null })
+  const { wrapper, queryClient } = renderQuery(() => {
+    const mutation = useDeleteFaceMutation()
+    return () =>
+      h(
+        'button',
+        { onClick: () => mutation.mutate('f1') },
+        mutation.error.value ? 'Failed' : 'Delete',
+      )
+  })
+  queryClient.setQueryData(['faces', 'detail', 'f1'], { detection_id: 'f1' })
+  queryClient.setQueryData(['face-crops', 'aligned', 'f1', 128], new Blob())
+  queryClient.setQueryData(['faces', 'detail', 'other'], { detection_id: 'other' })
+  const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toBe('Failed')
+  expect(queryClient.getQueryData(['faces', 'detail', 'f1'])).toBeDefined()
+  expect(invalidate).not.toHaveBeenCalled()
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  expect(api.deleteFace).toHaveBeenLastCalledWith({
+    path: { detection_id: 'f1' },
+    throwOnError: true,
+  })
+  expect(queryClient.getQueryData(['faces', 'detail', 'f1'])).toBeUndefined()
+  expect(queryClient.getQueryData(['face-crops', 'aligned', 'f1', 128])).toBeUndefined()
+  expect(queryClient.getQueryData(['faces', 'detail', 'other'])).toBeDefined()
+  expect(
+    invalidate.mock.calls.map(([arg]) => (typeof arg === 'function' ? arg() : arg)?.queryKey?.[0]),
+  ).toEqual(
+    expect.arrayContaining([
+      'faces',
+      'entities',
+      'pages',
+      'documents',
+      'sources',
+      'images',
+      'search',
+    ]),
+  )
 })

@@ -102,6 +102,7 @@ vi.mock('@/viewmodels/document-workspace', () => ({
   useDocumentWorkspace: () => ({
     assignFace: vi.fn<() => void>(),
     assignmentStatus: ref('idle'),
+    assignmentError: ref(null),
     createAndAssign: vi.fn<() => void>(),
     error: ref(null),
     annotationsLoading: ref(false),

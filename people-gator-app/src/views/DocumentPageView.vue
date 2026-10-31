@@ -8,7 +8,23 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
-import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
+import { Button } from '@/components/ui/button'
+import { BadgeCheck } from '@lucide/vue'
+import UiTooltip from '@/components/custom/UiTooltip.vue'
+import FaceActionButtons from '@/components/custom/FaceActionButtons.vue'
+import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
+import { useVerifyLinkMutation } from '@/query/entity-links'
+import { useDeleteFaceMutation } from '@/query/faces'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
+import type { Face } from '@/viewmodels/document-workspace.types'
 import PageStatisticsPanel from '@/components/custom/PageStatisticsPanel.vue'
 import { useDocumentLookupQuery } from '@/query/media'
 import DocumentControls from '@/components/custom/DocumentControls.vue'
@@ -92,6 +108,8 @@ const {
   referenceFace,
   assignFace,
   assignmentStatus,
+  assignmentError,
+  resetAssignment,
   createAndAssign,
   error,
   faces,
@@ -254,6 +272,61 @@ watch([pageImageReady, faces, transcription, annotationsLoading], () => {
 const selectedFace = computed(
   () => faces.value.find((face) => face.id === selectedFaceId.value) ?? referenceFace.value,
 )
+const canAnnotate = useCanAnnotate()
+const canDelete = useCanDeleteDetection()
+const verifyMutation = useVerifyLinkMutation()
+const deleteMutation = useDeleteFaceMutation()
+const deletionTarget = ref<Face | null>(null)
+const creatingPerson = ref(false)
+const actionBusy = computed(
+  () =>
+    creatingPerson.value ||
+    assignmentStatus.value === 'pending' ||
+    verifyMutation.isPending.value ||
+    deleteMutation.isPending.value,
+)
+// Delete errors stay in the confirmation dialog, which remains open for a retry.
+const actionError = computed(() =>
+  verifyMutation.error.value
+    ? 'Could not verify link.'
+    : assignmentError.value
+      ? 'Could not update link.'
+      : '',
+)
+// Only a face drawn on this scan can be deleted from here, not an off-page reference.
+const selectedFaceOnPage = computed(() =>
+  faces.value.some((face) => face.id === selectedFace.value?.id),
+)
+watch(selectedFaceId, () => {
+  if (!verifyMutation.isPending.value) verifyMutation.reset()
+  if (assignmentStatus.value !== 'pending') resetAssignment()
+})
+function closeDeletion(open: boolean) {
+  if (open || deleteMutation.isPending.value) return
+  deletionTarget.value = null
+  deleteMutation.reset()
+}
+function requestDeletion(face: Face | null) {
+  if (!face || actionBusy.value) return
+  deletionTarget.value = face
+}
+function verifyFace(face: Face) {
+  if (actionBusy.value) return
+  verifyMutation.mutate({ id: face.id, kind: 'face' })
+}
+async function deleteDetection() {
+  const face = deletionTarget.value
+  if (!face || actionBusy.value) return
+  try {
+    await deleteMutation.mutateAsync(face.id)
+    clearFace()
+    closeDeletion(false)
+    viewerElement.value?.focus()
+  } catch {
+    // Keep the detection and confirmation available for retry.
+  }
+}
+
 const selectedPersonCandidate = computed(() =>
   similarPeople.value.find((person) => person.id === selectedPersonId.value),
 )
@@ -322,8 +395,14 @@ function selectFace(faceId: string) {
   syncRoute()
 }
 
+function clearFace() {
+  selectedFaceId.value = null
+  selectedPersonId.value = null
+  syncRoute()
+}
+
 function unassignSelectedFace() {
-  if (!selectedFace.value?.personId) return
+  if (!selectedFace.value?.personId || actionBusy.value) return
   unassignFace(selectedFace.value.id)
   selectedPersonId.value = null
   syncRoute()
@@ -384,20 +463,31 @@ function previewSimilarPerson(person: SimilarPersonCandidate) {
 }
 
 function assignSimilarPerson(person: SimilarPersonCandidate) {
-  if (!selectedFace.value) return
+  if (!selectedFace.value || actionBusy.value) return
   assignFace(selectedFace.value.id, person.id)
   selectedPersonId.value = person.id
   syncRoute()
 }
 
 async function createSimilarPerson(person: { name: string; shortDescription?: string }) {
-  if (!selectedFace.value) return
-  const entity = await createAndAssign(selectedFace.value.id, person.name, person.shortDescription)
-  selectedPersonId.value = entity.entity_id
-  syncRoute()
+  if (!selectedFace.value || actionBusy.value) return
+  creatingPerson.value = true
+  try {
+    const entity = await createAndAssign(
+      selectedFace.value.id,
+      person.name,
+      person.shortDescription,
+    )
+    selectedPersonId.value = entity.entity_id
+    syncRoute()
+  } finally {
+    creatingPerson.value = false
+  }
 }
 
-function focusSimilarPeopleSearch() {
+async function focusSimilarPeopleSearch() {
+  await router.replace({ query: { ...route.query, panel: undefined }, hash: '' })
+  await nextTick()
   similarPeopleSearch.value?.focus()
 }
 
@@ -438,7 +528,11 @@ function handleNavigationKeydown(event: KeyboardEvent) {
   if (
     event.target instanceof HTMLElement &&
     (event.target.isContentEditable ||
-      event.target.closest('input, select, textarea, button, a, [role=tablist]'))
+      (event.target.closest(
+        'input, select, textarea, button, a, [role=tablist], [role=dialog], [role=alertdialog]',
+      ) &&
+        // Detection boxes and their action panel keep face and line navigation.
+        !event.target.closest('[data-region-type="face"], [data-detection-actions]')))
   )
     return
   const navigate = {
@@ -506,6 +600,7 @@ onMounted(async () => {
   if (!zoomElement.value) return
   panzoom = Panzoom(zoomElement.value, {
     canvas: true,
+    handleStartEvent: (event) => event.preventDefault(),
     maxScale: maximumZoomPercent / 100,
     minScale: minimumZoomPercent / 100,
     startScale: 0.82,
@@ -567,6 +662,7 @@ onBeforeUnmount(() => {
       ref="viewerElement"
       class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
       aria-label="Pan and zoom document page"
+      tabindex="-1"
     >
       <DocumentControls
         class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
@@ -622,6 +718,8 @@ onBeforeUnmount(() => {
       </div>
       <DocumentPageOverlay
         :page-bounds="pageBounds"
+        :viewer="viewerElement"
+        :actions-enabled="(canAnnotate || canDelete) && !deletionTarget"
         :transcription="transcription"
         :faces="faces"
         :selected-line-index="selectedLineIndex"
@@ -631,7 +729,22 @@ onBeforeUnmount(() => {
         :show-badge-names="showBadgeNames"
         @select-line="selectLine"
         @select-face="selectFace"
-      />
+        @clear-face="clearFace"
+      >
+        <template #actions="{ face }">
+          <FaceActionButtons
+            :face="face"
+            :can-annotate="canAnnotate"
+            :can-delete="canDelete"
+            :busy="actionBusy"
+            @find-profile="focusSimilarPeopleSearch"
+            @unassign="unassignSelectedFace"
+            @verify="verifyFace(face)"
+            @delete="requestDeletion(face)"
+          />
+          <p v-if="actionError" role="alert" class="text-xs text-destructive">{{ actionError }}</p>
+        </template>
+      </DocumentPageOverlay>
     </section>
 
     <DocumentPageGallery
@@ -689,18 +802,28 @@ onBeforeUnmount(() => {
         <CurrentFacePanel
           class="p-5"
           :face="selectedFace ?? null"
-          :assignment-pending="assignmentStatus === 'pending'"
+          :assignment-pending="actionBusy"
+          :can-delete="canDelete && selectedFaceOnPage"
+          :action-error="actionError"
+          @delete="requestDeletion(selectedFace ?? null)"
           @find-profile="focusSimilarPeopleSearch"
           @create="createSimilarPerson"
           @unassign="unassignSelectedFace"
         >
-          <VerifyEntityLink
-            v-if="selectedFace"
-            v-bind="selectedFace"
-            :id="selectedFace.id"
-            kind="face"
-            inline
-          />
+          <UiTooltip
+            v-if="selectedFace?.personId && selectedFace.linkState !== 'verified' && canAnnotate"
+            text="Verify this link"
+          >
+            <Button
+              variant="outline"
+              size="icon-xs"
+              class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
+              :disabled="actionBusy"
+              aria-label="Verify this link"
+              @click="verifyFace(selectedFace)"
+              ><BadgeCheck aria-hidden="true"
+            /></Button>
+          </UiTooltip>
         </CurrentFacePanel>
         <SimilarPeopleSearch
           :key="candidateSearchResetKey"
@@ -724,7 +847,7 @@ onBeforeUnmount(() => {
           :is-fetching-next-page="isFetchingNextPage"
           :selected-face="selectedFace ?? null"
           :viewed-person-id="selectedPersonId"
-          :assignment-pending="assignmentStatus === 'pending'"
+          :assignment-pending="actionBusy"
           :search-term="`${candidateBrowseMode}:${candidateTerm}`"
           @load-more="loadMore()"
           @preview="previewSimilarPerson"
@@ -744,6 +867,25 @@ onBeforeUnmount(() => {
         />
       </TabsContent>
     </Tabs>
+    <AlertDialog :open="Boolean(deletionTarget)" @update:open="closeDeletion">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this detection?</AlertDialogTitle>
+          <AlertDialogDescription
+            >This cannot be undone. Any link to a person is removed.</AlertDialogDescription
+          >
+        </AlertDialogHeader>
+        <p v-if="deleteMutation.error.value" role="alert" class="text-sm text-destructive">
+          Could not delete detection. Try again.
+        </p>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="deleteMutation.isPending.value">Cancel</AlertDialogCancel>
+          <Button variant="destructive" :disabled="actionBusy" @click="deleteDetection"
+            >Delete</Button
+          >
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </main>
 </template>
 

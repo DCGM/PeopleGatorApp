@@ -13,12 +13,15 @@ import type { Face } from '@/viewmodels/document-workspace.types'
 const props = defineProps<{
   face: Face | null
   assignmentPending?: boolean
+  canDelete?: boolean
+  actionError?: string
 }>()
 
 const emit = defineEmits<{
   findProfile: []
   create: [profile: { name: string; shortDescription?: string }]
   unassign: []
+  delete: []
 }>()
 
 function createPerson(profile: { name: string; shortDescription?: string }) {
@@ -36,7 +39,9 @@ function createPerson(profile: { name: string; shortDescription?: string }) {
       {{ props.face ? "Current face" : "Select someone first" }}
     </p>
     <SelectedFaceItem v-if="props.face" :face="props.face" :assignment-pending="props.assignmentPending"
-      @find-profile="emit('findProfile')" @create-profile="createPerson" @unassign="emit('unassign')">
+      :can-delete="canDelete" :action-error="actionError"
+      @find-profile="emit('findProfile')" @create-profile="createPerson" @unassign="emit('unassign')"
+      @delete="emit('delete')">
       <template #actions><slot /></template>
     </SelectedFaceItem>
     <Item v-else variant="outline" class="w-full items-start gap-x-4 gap-y-2 bg-none px-3 py-3">

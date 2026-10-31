@@ -1,6 +1,7 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 
+import { h } from 'vue'
 import UiTooltip from '@/components/custom/UiTooltip.vue'
 import DocumentPageOverlay from '@/components/custom/DocumentPageOverlay.vue'
 import type { TranscriptionEntitySpan } from '@/viewmodels/document-workspace.types'
@@ -22,7 +23,12 @@ describe('DocumentPageOverlay', () => {
         transcription: [
           { id: 'selected', text: 'Ada', position, entities: [span('person-1')] },
           { id: 'mention-1', text: 'Ada', position, entities: [span('person-1')] },
-          { id: 'mention-2', text: 'Ada', position, entities: [span('person-2'), span('person-1')] },
+          {
+            id: 'mention-2',
+            text: 'Ada',
+            position,
+            entities: [span('person-2'), span('person-1')],
+          },
           { id: 'other-person', text: 'Ada', position, entities: [span('person-2')] },
           { id: 'unlinked', text: 'Ada', position, entities: [span()] },
           { id: 'no-spans', text: 'Ada', position },
@@ -204,4 +210,110 @@ describe('DocumentPageOverlay', () => {
     expect(faces[0]?.classes()).not.toContain('z-10')
     expect(faces[1]?.classes()).toContain('z-10')
   })
+})
+
+it('keeps selected-face actions through viewport movement and closes them on an outside click, not a drag', async () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+  const detectionFace = (id: string, width = 20) => ({
+    id,
+    personId: null,
+    name: 'Unknown',
+    confidence: 99,
+    status: 'unassigned' as const,
+    position: { left: 10, top: 10, width, height: 20 },
+    portrait: '',
+    portraitLoading: false,
+  })
+  const wrapper = mount(DocumentPageOverlay, {
+    attachTo: document.body,
+    props: {
+      pageBounds: { left: 0, top: 0, width: 500, height: 800 },
+      transcription: [],
+      faces: [detectionFace('one'), detectionFace('two'), detectionFace('hidden', 0)],
+      selectedLineIndex: 0,
+      selectedFaceId: null,
+      selectedPersonId: null,
+      selectedCandidateFaceId: null,
+    },
+    slots: { actions: () => h('button', { type: 'button' }, 'Link') },
+  })
+  const panel = () => document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  const settle = async () => {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  const press = (target: EventTarget, type: string, clientX = 0) =>
+    target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX, clientY: 0 }))
+  try {
+    const detection = wrapper.get('[data-detection-id="one"]')
+    ;(detection.element as HTMLElement).focus()
+    await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
+    await settle()
+    expect(panel()).not.toBeNull()
+    expect(wrapper.emitted('selectFace')).toEqual([['one']])
+    // The panel itself takes focus, so no action tooltip pops up on open.
+    expect(document.activeElement).toBe(panel())
+    expect(panel()!.getAttribute('aria-label')).toBe('Actions for Unknown')
+    panel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await flushPromises()
+    expect(wrapper.emitted('clearFace')).toEqual([[]])
+    await wrapper.setProps({ selectedFaceId: null })
+    await settle()
+    expect(panel()).toBeNull()
+    expect(document.activeElement).toBe(detection.element)
+
+    // Keyboard shortcuts, the toolbar and the gallery select without moving focus.
+    ;(document.activeElement as HTMLElement).blur()
+    await wrapper.setProps({ selectedFaceId: 'two' })
+    await settle()
+    expect(panel()).not.toBeNull()
+    expect(panel()!.contains(document.activeElement)).toBe(false)
+
+    await detection.trigger('click')
+    await wrapper.setProps({ selectedFaceId: 'one' })
+    await settle()
+    const reopened = panel()!
+    press(reopened.querySelector('button')!, 'pointerdown')
+    press(reopened.querySelector('button')!, 'pointerup')
+    await flushPromises()
+    expect(panel()).toBe(reopened)
+    // Dragging the scan keeps the actions; viewport movement keeps them too.
+    press(document.body, 'pointerdown', 10)
+    press(window, 'pointerup', 60)
+    await settle()
+    expect(panel()).toBe(reopened)
+    await wrapper.setProps({ pageBounds: { left: -900, top: -800, width: 1000, height: 1600 } })
+    expect(panel()).toBe(reopened)
+    // A click outside closes the actions but keeps the face selected.
+    press(document.body, 'pointerdown', 10)
+    press(window, 'pointerup', 12)
+    await settle()
+    expect(panel()).toBeNull()
+    expect(wrapper.emitted('clearFace')).toHaveLength(1)
+    expect(detection.attributes('aria-pressed')).toBe('true')
+    expect(detection.attributes('aria-expanded')).toBe('false')
+    await detection.trigger('click')
+    await settle()
+    expect(panel()).not.toBeNull()
+
+    // Escape on the selected box clears the selection in one press.
+    await detection.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('clearFace')).toHaveLength(2)
+
+    // A face without a drawable box never gets an unanchored panel.
+    await wrapper.setProps({ selectedFaceId: 'hidden' })
+    await settle()
+    expect(panel()).toBeNull()
+  } finally {
+    wrapper.unmount()
+    vi.unstubAllGlobals()
+  }
 })

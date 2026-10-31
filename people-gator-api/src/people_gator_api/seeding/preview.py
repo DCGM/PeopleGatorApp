@@ -504,6 +504,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
     upload_page = await database.sources.get_page(pages["media-upload-1"])
     if upload_page is None:
         raise ValueError("Media upload preview page is missing")
+    actions_page = next(item for item in PAGES if item.key == "detection-actions-1")
+    actions_document = next(item for item in DOCUMENTS if item.key == actions_page.document)
     activity_page = next(item for item in PAGES if item.key == "provenance-a-1")
     gallery_document = next(item for item in DOCUMENTS if item.key == "page-gallery")
     focus_document = next(item for item in DOCUMENTS if item.key == "focus")
@@ -535,6 +537,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "detection-actions": (
+                f"/libraries/{actions_document.library}/documents/{actions_document.document_id}"
+                f"/pages/{actions_page.page_id}?" + urlencode({
+                    "person": active_faces.get("actions-linked", ""),
+                })
+            ),
             "identity-reference-faces": reference_faces_path,
             "identity-reference-empty": reference_path + "?candidate_text=Nora",
             "identity-reference-scroll": (

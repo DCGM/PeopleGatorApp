@@ -423,6 +423,8 @@ export function useDocumentWorkspace(
     assignFace,
     unassignFace: (detectionId: string) => assignFace(detectionId, null),
     assignmentStatus: assignFaceMutation.status,
+    assignmentError: assignFaceMutation.error,
+    resetAssignment: assignFaceMutation.reset,
     createAndAssign,
     error: computed(
       () =>

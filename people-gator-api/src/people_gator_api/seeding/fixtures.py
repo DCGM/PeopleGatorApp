@@ -26,6 +26,7 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("actions", "Lina Actions", (), "Synthetic detection action practice.", "importer"),
     Person("review", "Lina Archivist", ("L. Archivist", "Lina of the reading room", "Lina Catalogue Editor"),
            "Archivist and catalogue editor reviewing portraits and correspondence across collections.", "importer"),
     Person("review-candidate", "Lina A.", (), "Possible duplicate of Lina Archivist.", "importer"),
@@ -133,6 +134,7 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("review-a", "preview-review-a", "Review ledger"),
     Document("review-b", "preview-review-b", "Review ledger"),
     Document("review-c", "preview-review-a", "Reading room notes"),
@@ -222,6 +224,10 @@ PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
+    Page("detection-actions-1", "detection-actions", 1, (
+        Face("actions-linked", "actions", 0, 0, embedded=False),
+        Face("actions-false-positive", None, 1, 0, embedded=False),
+    )),
     # Issue #80: >two rows of faces and >one page of exact-text occurrences.
     *(Page(f"review-{i}", ("review-a", "review-b", "review-c")[i // 3], i % 3 + 1,
            tuple(Face(f"review-face-{i}-{j}", "review", j, 6,
