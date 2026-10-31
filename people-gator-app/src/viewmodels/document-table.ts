@@ -69,9 +69,7 @@ export const DOCUMENT_COLUMN_SORTS: Readonly<Partial<Record<string, DocumentSort
   ),
 }
 
-/** Fixed CSS-pixel widths at every viewport; overflow belongs to the table region.
- * Bounds document the intended readable range for each column purpose.
- */
+/** Preferred CSS-pixel widths at every viewport; overflow belongs to the table region. */
 export function documentColumnSizing(id: string) {
   const widths: Record<string, number> = {
     identity: 280,
@@ -80,12 +78,15 @@ export function documentColumnSizing(id: string) {
     first_page: 144,
     library: 224,
     document_id: 320,
-    registered_page_count: 112,
+    registered_page_count: 128,
     last_modified: 208,
     modified_by: 224,
     api_key: 224,
-    linked_entity_count: 144,
+    linked_entity_count: 160,
   }
-  const size = widths[id] ?? 144 // Annotation counts include the longest label + arrow.
-  return { size, minSize: size, maxSize: size }
+  const size = widths[id] ?? 160 // Annotation counts include the longest label + arrow.
+  const minSize = id === 'name' || id === 'identity' || id === 'document_id' ? 200 : size
+  const maxSize =
+    id === 'name' || id === 'identity' || id === 'document_id' ? 720 : Math.max(size * 2, 240)
+  return { size, minSize, maxSize }
 }

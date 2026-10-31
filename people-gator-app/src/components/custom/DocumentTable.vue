@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { computed, h, useId } from 'vue'
+import { computed, h, ref, useId } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   columnVisibilityFeature,
   columnSizingFeature,
+  columnResizingFeature,
   tableFeatures,
   useTable,
   FlexRender,
   type ColumnDef,
   type ColumnVisibilityState,
+  type ColumnSizingState,
+  type Header,
 } from '@tanstack/vue-table'
-import { ArrowUp, ArrowDown } from '@lucide/vue'
+import { ArrowUp, ArrowDown, GripVertical } from '@lucide/vue'
 import { defaultDirection, type SortState } from '@/lib/sorting'
 import { DOCUMENT_BROWSE_DEFAULT } from '@/viewmodels/sort-options'
 import type { DocumentResponse, DocumentSortField } from '@/client'
@@ -68,7 +71,11 @@ function headerSort(columnId: string) {
     : undefined
 }
 const route = useRoute()
-const features = tableFeatures({ columnVisibilityFeature, columnSizingFeature })
+const features = tableFeatures({
+  columnVisibilityFeature,
+  columnSizingFeature,
+  columnResizingFeature,
+})
 const link = (document: DocumentResponse, text: string) =>
   h(
     RouterLink,
@@ -79,6 +86,7 @@ const link = (document: DocumentResponse, text: string) =>
     },
     () => text,
   )
+const sizing = ref<ColumnSizingState>({})
 const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   {
     id: 'identity',
@@ -160,18 +168,47 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
 const table = useTable({
   features,
   columns,
+  columnResizeMode: 'onChange',
   data: computed(() => props.documents),
   getRowId: (row: DocumentResponse) => row.source_id,
   state: computed(() => ({
+    columnSizing: sizing.value,
     columnVisibility: {
       ...visibility.value,
       identity: visibility.value.name === false && visibility.value.document_id !== true,
     },
   })),
+  onColumnSizingChange: (next) => {
+    const requested = typeof next === 'function' ? next(sizing.value) : next
+    sizing.value = Object.fromEntries(
+      Object.entries(requested).map(([id, value]) => {
+        const { minSize, maxSize } = documentColumnSizing(id)
+        return [id, Math.min(maxSize, Math.max(minSize, value))]
+      }),
+    )
+  },
   onColumnVisibilityChange: (next) => {
     visibility.value = typeof next === 'function' ? next(visibility.value) : next
   },
 })
+// Header-only keyboard sizing follows the same bounds/state as mouse and touch.
+function resizeKey(event: KeyboardEvent, header: Header<typeof features, DocumentResponse>) {
+  const { minSize, maxSize, size } = documentColumnSizing(header.column.id)
+  const step = event.shiftKey ? 40 : 10
+  const width = (
+    {
+      ArrowLeft: header.column.getSize() - step,
+      ArrowRight: header.column.getSize() + step,
+      Home: minSize,
+      End: maxSize,
+      Enter: size,
+    } as Record<string, number>
+  )[event.key]
+  if (width === undefined) return
+  event.preventDefault()
+  event.stopPropagation()
+  table.setColumnSizing((current) => ({ ...current, [header.column.id]: width }))
+}
 </script>
 
 <template>
@@ -220,6 +257,9 @@ const table = useTable({
           </div>
         </PopoverContent>
       </Popover>
+      <Button variant="outline" @click="table.resetColumnSizing(true)"
+        >Restore column widths</Button
+      >
     </div>
     <p :id="`${tableId}-counts`" class="sr-only">
       Counts cover the entire registered document. All annotations combines faces and text mentions;
@@ -251,6 +291,7 @@ const table = useTable({
               :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
               :style="{ width: `${header.getSize()}px` }"
+              class="relative pr-4"
             >
               <Button
                 v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
@@ -271,6 +312,27 @@ const table = useTable({
                 :render="header.column.columnDef.header"
                 :props="header.getContext()"
               />
+              <Button
+                v-if="!header.column.columns.length"
+                variant="ghost"
+                size="icon"
+                class="absolute inset-y-0 right-0 h-full w-3 cursor-col-resize touch-none select-none"
+                role="separator"
+                aria-orientation="vertical"
+                :aria-label="`Resize ${header.column.parent ? header.column.parent.columnDef.header + ': ' : ''}${header.column.columnDef.header} column`"
+                :aria-valuenow="header.column.getSize()"
+                :aria-valuemin="header.column.columnDef.minSize"
+                :aria-valuemax="header.column.columnDef.maxSize"
+                :aria-controls="columnHeaderId(header.column.id)"
+                title="Drag to resize; arrow keys adjust; Enter restores default"
+                @mousedown.stop.prevent="header.getResizeHandler()($event)"
+                @touchstart.stop="header.getResizeHandler()($event)"
+                @click.stop.prevent
+                @dblclick.stop.prevent="header.column.resetSize()"
+                @keydown="resizeKey($event, header)"
+              >
+                <GripVertical class="size-3" aria-hidden="true" />
+              </Button>
             </TableHead>
           </TableRow>
         </TableHeader>
