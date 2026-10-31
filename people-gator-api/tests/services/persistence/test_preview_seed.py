@@ -104,8 +104,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (37, 119, 75)
-    assert len(result.documents) == 50 and len(result.pages) == 106
+    assert await counts(database) == (37, 119, 76)
+    assert len(result.documents) == 52 and len(result.pages) == 107
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +366,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (37, 119, 75)
+    assert await counts(database) == (37, 119, 76)
 
 
 @pytest.mark.asyncio
@@ -386,7 +386,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (37, 119, 75)
+    assert await counts(database) == (37, 119, 76)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -435,7 +435,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
     assert len(result.entities) == 37 and len(result.faces) == 119
-    assert await counts(database) == (37, 119, 75)
+    assert await counts(database) == (37, 119, 76)
 
 
 
@@ -3545,7 +3545,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (37, 119, 75)
+    assert await counts(db) == (37, 119, 76)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -4086,3 +4086,41 @@ async def test_replay_journey_has_linked_person_page_and_local_media(seed_target
     assert await database.entities.get(person.entity_id) == edited
     assert await database.faces.get(face.detection_id) == face
     assert await database.sources.get_page(page.source_id) == page
+
+
+@pytest.mark.asyncio
+async def test_document_width_scenario_is_additive_readable_and_preserves_edits(seed_target, monkeypatch):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    database, filesystem, _ = seed_target
+    # Retained preview upgrade: existing fixtures and checkpoints remain intact.
+    with monkeypatch.context() as old:
+        old.setattr(preview, "DOCUMENTS", tuple(d for d in DOCUMENTS if not d.key.startswith("table-width-")))
+        old.setattr(preview, "PAGES", tuple(p for p in PAGES if not p.key.startswith("table-width-")))
+        # The manifest refers to libraries, so it remains usable before the additive upgrade.
+        previous = await preview.seed_preview(database, filesystem)
+    existing = await database.sources.get_document(previous.documents["table-ledger"])
+    seeded = await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(previous.documents["table-ledger"]) == existing
+    query = parse_qs(urlsplit(seeded.filter_examples["document-table-widths"]).query)
+    request = DocumentListRequest(limit=12, sort="name", filter_=DocumentListFilter(library=query["library"]))
+    first = await database.sources.list_documents(request)
+    second = await database.sources.list_documents(request.model_copy(update={"cursor": first.cursor}))
+    assert len(first.items) == 12 and first.cursor and len(second.items) == 5
+    assert second.cursor is None
+    rows = {row.source_id: row for row in [*first.items, *second.items]}
+    short = rows[seeded.documents["table-width-short"]]
+    long = rows[seeded.documents["table-width-long"]]
+    assert short.name == "A" and short.registered_page_count == 0
+    assert len(long.name) > 150 and len(long.library) > len(short.library)
+    assert long.registered_page_count == 1 and long.linked_entity_count == 1
+    assert long.entity_link_stats.mentions.total == 1
+    page = await database.sources.get_page(long.first_page_source_id)
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    assert Image.open(io.BytesIO(image.content)).width == 256
+    # A reviewed annotation and the document's last-processing metadata survive reruns.
+    actor = GenericActor(user_id=seeded.users["reviewer"])
+    await database.text_mentions.patch(seeded.mentions["table-width-long-mention"], TextMentionPatchRequest(entity_id=None), actor)
+    edited = await database.sources.get_document(long.source_id)
+    await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(long.source_id) == edited
+    assert (await database.text_mentions.get(seeded.mentions["table-width-long-mention"])).entity_id is None

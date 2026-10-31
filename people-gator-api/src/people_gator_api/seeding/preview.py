@@ -840,6 +840,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-table-unknown-names": "/documents?" + urlencode({"library": "preview-mzk", "sort": "name"}),
             "document-table-name-fallback": "/documents?" + urlencode({"library": "preview-mzk", "sort": "name"}),
             "document-table-unnamed": "/documents?" + urlencode({"document": documents["legacy-document"]}),
+            "document-table-widths": "/documents?" + urlencode({
+                "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
+                "sort": "name",
+            }, doseq=True),
             "document-table-scroll": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-scroll-performance": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-page-header": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),

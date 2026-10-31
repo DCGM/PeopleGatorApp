@@ -143,6 +143,11 @@ DOCUMENTS = (
     Document("review-a", "preview-review-a", "Review ledger"),
     Document("review-b", "preview-review-b", "Review ledger"),
     Document("review-c", "preview-review-a", "Reading room notes"),
+    # #93: additive contrasting content beside the unchanged pagination fixtures.
+    Document("table-width-short", "preview-table-widths", "A"),
+    Document("table-width-long", "preview-table-widths-long-archive-label",
+             "Z — A deliberately long synthetic catalogue title for document column width review "
+             "with uninterrupted ArchiveReference0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
     Document("table-ledger", "preview-table", "Document table ledger"),
     Document("table-mirror", "preview-table-mirror", "Document table mirror", "table-ledger"),
     Document("provenance-a", "preview-mzk", "Annotation review ledger"),
@@ -265,6 +270,8 @@ PAGES = (
          tuple(Mention(f"count-mention-{i}", "count-subject", f"Mira Counts counted reference {i}.", state)
                for i, state in enumerate(("automatic", "manual", "verified", None)))),
     Page("count-empty-1", "count-empty", 1),
+    Page("table-width-long-1", "table-width-long", 1,
+         mentions=(Mention("table-width-long-mention", "ada", "Ada Novak reviewed the wide catalogue."),)),
     Page("table-1", "table-ledger", 1,
          (Face("table-auto", "table-tereza", 0, 2), Face("table-manual", "table-oskar", 1, 3, "manual")),
          (Mention("table-auto-mention", "table-tereza", "Tereza Columns indexed the document table."),

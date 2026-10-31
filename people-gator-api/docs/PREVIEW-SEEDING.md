@@ -1075,3 +1075,32 @@ upgrade, checkpointed before writing and guarded by their annotation timestamp.
 The upgrade leaves last-touched time and modifier unchanged, as a fresh seed
 would. Reruns preserve changed numbers and explicit clears, including after
 interrupted writes. Page 9 remains a usable legacy/unknown example.
+
+### Stable document column widths (#93)
+
+Open the `document-table-widths` manifest link. It combines 14 unchanged
+pagination ledgers and the two-page annotated table ledger with two additive
+fixtures: `table-width-short` (title **A**, no pages) and `table-width-long`
+(a long title with an uninterrupted archive reference, a long library label,
+and a local page image with an Ada mention). Existing identities, checkpoints,
+reviewed assignments and last-processing timestamps are preserved on reruns.
+
+Sort Document name in both directions, then enable First page, Modified by,
+API key and the face/text-mention count groups. At desktop and mobile sizes,
+column widths stay constant while full titles and other long values wrap
+inside their cells; row heights grow with the text. The title width is 320 CSS
+pixels. All widths use the same fixed pixel policy at every viewport; unused
+parent space is left blank and excess columns scroll inside the keyboard-focusable
+table region. Hiding/restoring fields preserves every column's configured width.
+Drag the grip at a leaf header's right edge to resize that column with mouse or
+touch. Focus the grip and use Left/Right (10px), Shift+Left/Right (40px),
+Home/End (bounds), or Enter (that column's default); double-click also restores
+one column. Titles can range from 200 to 720px. Other columns retain readable
+header minima and purpose-specific maxima. Restore column widths resets widths
+only, preserving visibility, filters and sorting. Width choices survive row changes
+and hidden/restored columns within the mounted Documents view; reloads use defaults.
+No browser-local persistence is included.
+
+Scroll horizontally to the middle/far right and vertically to the final row to
+load the second cursor batch automatically; Load more documents is the keyboard
+fallback. Search/filter/sort URLs and counts retain their existing semantics.

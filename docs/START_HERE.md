@@ -107,3 +107,8 @@ Use several minima together, remove their tags individually, and sort by the
 same counts. Document count headers offer the same ordering as the selector.
 See [count rules and URL fields](SEARCH_FILTERS.md#annotation-count-ordering-and-minima-78)
 and the seed guide's `annotation-count-documents`/`annotation-count-pages` examples.
+
+Documents columns keep fixed widths when sorting, filtering or loading more rows.
+Full titles wrap over multiple lines within a row. Use the table's horizontal
+scroll region to reach additional fields on narrow screens. The preview manifest's
+`document-table-widths` link provides contrasting short/long titles and local media.
