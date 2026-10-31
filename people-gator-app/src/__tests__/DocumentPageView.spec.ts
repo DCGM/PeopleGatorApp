@@ -565,3 +565,71 @@ describe('detection mutation coordination', () => {
     wrapper.unmount()
   })
 })
+
+describe('teleprompter focus modes (#36)', () => {
+  function threeLines() {
+    lines.value = ['l1', 'l2', 'l3'].map((id, index) => ({
+      id,
+      text: index === 1 ? 'Plain context' : 'Ada',
+      position: { ...box, top: 20 + index * 30 },
+      entities: index === 1 ? [] : [span(id)],
+    }))
+  }
+
+  it('restores Person mode from the URL and navigates only its visible lines', async () => {
+    route.query = { lines: 'person', highlight: 'verified', selectedPerson: 'ada' }
+    threeLines()
+    const wrapper = await mountView()
+    const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    expect(teleprompter.props('lineVisibility')).toBe('person')
+    expect(teleprompter.props('annotationHighlight')).toBe('verified')
+    expect(teleprompter.props('included')).toEqual([true, false, true])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
+    await flushPromises()
+    expect(teleprompter.props('selectedLineIndex')).toBe(2)
+    expect(mocks.replace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ line: 'l3', lines: 'person', highlight: 'verified' }),
+      }),
+    )
+    // Toolbar navigation counts and boundaries follow the visible sequence.
+    const controls = wrapper.findComponent({ name: 'DocumentControls' })
+    expect(controls.props('lineCount')).toBe(2)
+    expect(controls.props('selectedLineIndex')).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('reveals a hidden overlay line, then Reset moves selection to the nearest mode line', async () => {
+    route.query = { lines: 'annotated' }
+    threeLines()
+    const wrapper = await mountView()
+    const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    wrapper.findComponent({ name: 'DocumentPageOverlay' }).vm.$emit('select-line', 1)
+    await flushPromises()
+    expect(teleprompter.props('included')).toEqual([true, true, true])
+    expect(teleprompter.props('hasExpansions')).toBe(true)
+    expect(teleprompter.props('selectedLineIndex')).toBe(1)
+    teleprompter.vm.$emit('reset')
+    await flushPromises()
+    expect(teleprompter.props('included')).toEqual([true, false, true])
+    expect(teleprompter.props('selectedLineIndex')).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('clears expansions when the mode changes and keeps the empty Person mode', async () => {
+    threeLines()
+    const wrapper = await mountView()
+    const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    teleprompter.vm.$emit('update:lineVisibility', 'annotated')
+    await flushPromises()
+    teleprompter.vm.$emit('expand', { start: 0, end: 0 }, 'after', 1)
+    await flushPromises()
+    expect(teleprompter.props('hasExpansions')).toBe(true)
+    teleprompter.vm.$emit('update:lineVisibility', 'person')
+    await flushPromises()
+    expect(teleprompter.props('hasExpansions')).toBe(false)
+    // No selected person: no fallback to full text.
+    expect(teleprompter.props('included')).toEqual([false, false, false])
+    wrapper.unmount()
+  })
+})
