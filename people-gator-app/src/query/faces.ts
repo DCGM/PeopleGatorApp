@@ -1,3 +1,4 @@
+import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -96,6 +97,7 @@ export function useCreateFaceMutation() {
         }),
       ),
     onSuccess: (face) => {
+      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
@@ -125,6 +127,7 @@ export function useCreateFacesMutation() {
         }),
       ),
     onSuccess: (faces) => {
+      restartPeoplePages(queryClient)
       for (const face of faces) {
         queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       }
@@ -154,6 +157,7 @@ export function useAssignFaceMutation() {
         }),
       ),
     onSuccess: (face) => {
+      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
@@ -184,12 +188,14 @@ export function useAssignFacesMutation() {
         }),
       ),
     onSuccess: (faces) => {
+      restartPeoplePages(queryClient)
       for (const face of faces) {
         if (!face) continue
         queryClient.setQueryData(queryKeys.faces.detail(face.detection_id), face)
       }
     },
     onSettled: async () => {
+      restartPeoplePages(queryClient)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.faces.lists() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
@@ -233,6 +239,7 @@ export function useReviewFacesMutation() {
       return faces
     },
     onSettled: async () => {
+      restartPeoplePages(queryClient)
       await Promise.all(
         [
           queryKeys.faces.all,
@@ -259,6 +266,7 @@ export function useDeleteFaceMutation() {
         }),
       ),
     onSuccess: async (_data, detectionId) => {
+      restartPeoplePages(client)
       // A deleted detail must not remain available as a selected reference face.
       client.removeQueries({ queryKey: queryKeys.faces.detail(detectionId), exact: true })
       client.removeQueries({ queryKey: ['face-crops', 'aligned', detectionId] })

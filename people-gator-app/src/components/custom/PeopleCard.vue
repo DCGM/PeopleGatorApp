@@ -7,8 +7,8 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 const props = defineProps<{
   thumbnailFaceId?: string | null
   name: string
-  faces: number
-  names: number
+  faces: number | null
+  names: number | null
 }>()
 </script>
 
@@ -28,12 +28,18 @@ const props = defineProps<{
       <h3 class="block max-w-full truncate" :title="props.name">
         {{ props.name }}
       </h3>
-      <p>
+      <p class="flex flex-wrap gap-x-2">
         <small
-          ><b>{{ props.faces }}</b> faces
+          ><b>{{ props.faces ?? '—' }}</b> faces
         </small>
         <small
-          ><b>{{ props.names }}</b> names</small
+          ><b>{{ props.names ?? '—' }}</b> text mentions</small
+        >
+        <small
+          ><b>{{
+            props.faces !== null && props.names !== null ? props.faces + props.names : '—'
+          }}</b>
+          all annotations</small
         >
       </p>
     </CardContent>

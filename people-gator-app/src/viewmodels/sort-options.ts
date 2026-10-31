@@ -16,6 +16,9 @@ import type { SortOption, SortState, SortUrlKeys } from '@/lib/sorting'
 export const RELEVANCE: SortState<'relevance'> = { field: 'relevance', direction: 'desc' }
 
 export const PEOPLE_SORTS: SortOption<EntitySortField>[] = [
+  { value: 'faces_total_count', label: 'Faces', kind: 'number' },
+  { value: 'mentions_total_count', label: 'Text mentions', kind: 'number' },
+  { value: 'annotations_total_count', label: 'All annotations', kind: 'number' },
   { value: 'relevance', label: 'Relevance', kind: 'relevance' },
   { value: 'name', label: 'Name', kind: 'text' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },

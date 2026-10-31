@@ -35,7 +35,7 @@ export type EntityResultsParams = {
   cursor?: string | null
   hasDetections?: boolean
   hasMentions?: boolean
-  processingFilters?: SharedQuery
+  processingFilters?: SharedQuery & Pick<EntitySearchParams, 'filter.entity_type'>
   limit?: number
   sort?: SortState<EntitySortField>
 }

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import PeopleCountControl from './PeopleCountControl.vue'
+import {
+  PEOPLE_COUNT_CATEGORIES,
+  PEOPLE_COUNT_KEYS,
+  usePeopleCounts,
+} from '@/viewmodels/people-counts'
 import { computed } from 'vue'
 import SharedFilterControls from './SharedFilterControls.vue'
 import SharedFilterTags from './SharedFilterTags.vue'
@@ -18,7 +24,8 @@ defineProps<{
 const sort = defineModel<SortState<EntitySortField>>('sort')
 const searchTerm = defineModel<string>('searchTerm', { required: true })
 const assignment = defineModel<AssignmentFilter>('assignment', { required: true })
-const specific = computed<ActiveFilter[]>(() =>
+const counts = usePeopleCounts()
+const assignmentTags = computed<ActiveFilter[]>(() =>
   assignment.value === 'all'
     ? []
     : [
@@ -29,6 +36,7 @@ const specific = computed<ActiveFilter[]>(() =>
         },
       ],
 )
+const specific = computed(() => [...assignmentTags.value, ...counts.tags.value])
 </script>
 
 <template>
@@ -49,11 +57,20 @@ const specific = computed<ActiveFilter[]>(() =>
         { value: 'mentions', label: 'Assigned mentions' },
       ]"
     />
+    <PeopleCountControl
+      v-for="category in PEOPLE_COUNT_CATEGORIES"
+      :key="category.value"
+      :category="category.value"
+      :label="category.label"
+    />
     <SortControl v-if="sort && sortOptions" v-model="sort" :options="sortOptions" />
   </SearchFilterPanel>
+  <p v-if="counts.error.value" role="alert">{{ counts.error.value }}</p>
   <SharedFilterTags
     :specific-filters="specific"
-    :specific-keys="['assignment', 'filters']"
-    @remove-specific="assignment = 'all'"
+    :specific-keys="['assignment', 'filters', ...PEOPLE_COUNT_KEYS]"
+    @remove-specific="
+      (tag) => (tag.key === 'assignment' ? (assignment = 'all') : counts.remove(tag))
+    "
   />
 </template>

@@ -380,6 +380,30 @@ export type EntityListFilter = {
      */
     last_touched_by_api_key_id?: Array<string>;
     /**
+     * Min Faces Total Count
+     *
+     * Inclusive minimum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_faces_total_count?: MinimumCount;
+    /**
+     * Max Faces Total Count
+     *
+     * Inclusive maximum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_faces_total_count?: MinimumCount;
+    /**
+     * Min Mentions Total Count
+     *
+     * Inclusive minimum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_mentions_total_count?: MinimumCount;
+    /**
+     * Max Mentions Total Count
+     *
+     * Inclusive maximum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_mentions_total_count?: MinimumCount;
+    /**
      * Entity Id
      *
      * The unique identifiers of the entities.
@@ -438,7 +462,7 @@ export type EntityListFilter = {
 /**
  * EntityListSortField
  */
-export type EntityListSortField = 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntityListSortField = 'faces_total_count' | 'mentions_total_count' | 'annotations_total_count' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityMergeBatchRequest
@@ -744,7 +768,7 @@ export type EntityResponse = {
 /**
  * EntitySortField
  */
-export type EntitySortField = 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntitySortField = 'faces_total_count' | 'mentions_total_count' | 'annotations_total_count' | 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityType
@@ -2887,6 +2911,30 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
          * Filter.Has Mentions
          *
          * Whether the entity has mentions.
@@ -3795,6 +3843,30 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * The mention identifiers associated with the entity.
          */
         'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
         /**
          * Filter.Has Mentions
          *

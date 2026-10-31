@@ -17,7 +17,11 @@ import {
   type SharedFilters,
 } from '@/viewmodels/shared-filters'
 
-function use(term: string | ReturnType<typeof ref<string>>, assignment: 'all' | 'mentions', filters: ReturnType<typeof ref<SharedFilters>>) {
+function use(
+  term: string | ReturnType<typeof ref<string>>,
+  assignment: 'all' | 'mentions',
+  filters: ReturnType<typeof ref<SharedFilters>>,
+) {
   return usePeopleSearch(
     term as never,
     assignment,
@@ -125,4 +129,78 @@ describe('people processing queries', () => {
     wrapper.unmount()
     queryClient.clear()
   })
+})
+
+it('sends count bounds to browse/search and restarts at the first cursor', async () => {
+  const term = ref(''),
+    counts = ref({ 'filter.max_faces_total_count': 0, 'filter.min_mentions_total_count': 3 })
+  let result!: ReturnType<typeof usePeopleSearch>
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  mocks.list.mockResolvedValue({
+    ...page('old-count-cursor'),
+    items: [
+      {
+        entity_id: 'nora',
+        name: 'Nora',
+        entity_link_stats: { faces: { total: 0 }, mentions: { total: 5 } },
+      },
+    ],
+  })
+  mocks.search.mockResolvedValue({ data: page() })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        result = usePeopleSearch(term, 'all', 12, counts, true, {
+          field: 'mentions_total_count',
+          direction: 'desc',
+        })
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+  )
+  await flushPromises()
+  expect(result.people.value[0]).toMatchObject({ faces: 0, names: 5 })
+  await result.loadMore()
+  expect(mocks.list.mock.lastCall?.[0]).toMatchObject({
+    ...counts.value,
+    cursor: 'old-count-cursor',
+    sort: 'mentions_total_count',
+    'filter.entity_type': ['person'],
+  })
+  counts.value = { 'filter.max_faces_total_count': 1, 'filter.min_mentions_total_count': 3 }
+  await flushPromises()
+  expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ ...counts.value, cursor: null })
+  term.value = 'Nora'
+  await flushPromises()
+  expect(mocks.search.mock.lastCall?.[0].query).toMatchObject({
+    ...counts.value,
+    cursor: null,
+    sort: 'mentions_total_count',
+  })
+  wrapper.unmount()
+  queryClient.clear()
+})
+
+it('keeps unavailable statistics unknown without per-person count queries', async () => {
+  let result!: ReturnType<typeof usePeopleSearch>
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  mocks.list.mockResolvedValue({
+    ...page(),
+    items: [{ entity_id: 'legacy', name: 'Unknown projection' }],
+  })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        result = usePeopleSearch('', 'all')
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+  )
+  await flushPromises()
+  expect(result.people.value[0]).toMatchObject({ faces: null, names: null })
+  expect(queryClient.getQueryCache().findAll()).toHaveLength(1)
+  wrapper.unmount()
+  queryClient.clear()
 })
