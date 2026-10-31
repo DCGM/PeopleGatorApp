@@ -63,6 +63,9 @@ def test_fastapi_continues_browser_trace():
 def test_export_endpoint_preserves_org_prefix_and_signal_override(monkeypatch):
     monkeypatch.setattr(settings.otel, 'http_endpoint', 'https://openobserve.example/api/default')
     monkeypatch.delenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', raising=False)
+    monkeypatch.delenv('OTEL_EXPORTER_OTLP_ENDPOINT', raising=False)
     assert signal_endpoint('traces') == 'https://openobserve.example/api/default/v1/traces'
-    monkeypatch.setenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'http://collector:4318/v1/traces')
+    monkeypatch.setenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://collector:4318')
     assert signal_endpoint('traces') == 'http://collector:4318/v1/traces'
+    monkeypatch.setenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'http://other-collector:4318/v1/traces')
+    assert signal_endpoint('traces') == 'http://other-collector:4318/v1/traces'

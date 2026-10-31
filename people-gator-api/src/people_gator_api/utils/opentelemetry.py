@@ -74,7 +74,7 @@ def telemetry_resource() -> Resource:
 def signal_endpoint(signal: str) -> str:
     # Preserve an OpenObserve organization prefix and standard signal overrides.
     return os.getenv(f"OTEL_EXPORTER_OTLP_{signal.upper()}_ENDPOINT") or urljoin(
-        settings.otel.http_endpoint.rstrip("/") + "/",
+        (os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or settings.otel.http_endpoint).rstrip("/") + "/",
         getattr(settings.otel, f"{signal}_path").lstrip("/"),
     )
 

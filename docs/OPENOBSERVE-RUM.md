@@ -116,7 +116,7 @@ The backend exports traces, metrics and logs when OTEL is enabled. Its collector
 must accept the configured signals. If server-side authorization is required,
 put standard `OTEL_EXPORTER_OTLP_HEADERS` or per-signal headers in the private
 telemetry file. Per-signal `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (and logs/metrics
-variants) override the API HTTP base; otherwise signal paths are appended while
+variants) override `OTEL_EXPORTER_OTLP_ENDPOINT`, then the API HTTP base; otherwise signal paths are appended while
 preserving any organization prefix. Prefer the existing collector for routing
 and OpenObserve credentials. Never use the browser RUM token as OTLP credentials.
 
