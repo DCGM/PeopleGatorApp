@@ -18,10 +18,13 @@ afterEach(() => {
 
 describe('API trace allowlist', () => {
   it.each([
-    ['/api/v1/entities', true], ['/token/login', true], ['/assets/image.png', false],
+    ['/api/v1/entities', true],
+    ['/token/login', true],
+    ['/assets/image.png', false],
     ['https://other.example/api/v1/entities', false],
     ['https://app.example.evil/api/v1/entities', false],
-    ['https://app.example@evil.example/api/v1/entities', false], ['/api-other', false],
+    ['https://app.example@evil.example/api/v1/entities', false],
+    ['/api-other', false],
   ])('matches only application API requests: %s', (url, allowed) => {
     expect(isApiUrl(url, '/', 'https://app.example')).toBe(allowed)
   })
@@ -35,26 +38,41 @@ describe('API trace allowlist', () => {
 
 it('initializes RUM and error logs with runtime metadata and no replay', async () => {
   const config = {
-    enabled: true, clientToken: 'synthetic-rum', site: 'collector.example',
-    organizationIdentifier: 'default', applicationId: 'people-gator-app',
-    service: 'people-gator-app', env: 'preview', version: 'abc123',
-    sessionSampleRate: 100, context: { pr_number: '94', commit: 'abc123' },
+    enabled: true,
+    clientToken: 'synthetic-rum',
+    site: 'collector.example',
+    organizationIdentifier: 'default',
+    applicationId: 'people-gator-app',
+    service: 'people-gator-app',
+    env: 'preview',
+    version: 'abc123',
+    sessionSampleRate: 100,
+    context: { pr_number: '94', commit: 'abc123' },
   }
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(config)))
   await initializeTelemetry()
-  expect(openobserveRum.init).toHaveBeenCalledWith(expect.objectContaining({
-    clientToken: 'synthetic-rum', env: 'preview', version: 'abc123',
-    defaultPrivacyLevel: 'mask', sessionReplaySampleRate: 0,
-    allowedTracingUrls: [{ match: expect.any(Function), propagatorTypes: ['tracecontext'] }],
-  }))
-  expect(openobserveLogs.init).toHaveBeenCalledWith(expect.objectContaining({
-    forwardErrorsToLogs: true, insecureHTTP: false,
-  }))
+  expect(openobserveRum.init).toHaveBeenCalledWith(
+    expect.objectContaining({
+      clientToken: 'synthetic-rum',
+      env: 'preview',
+      version: 'abc123',
+      defaultPrivacyLevel: 'mask',
+      sessionReplaySampleRate: 0,
+      allowedTracingUrls: [{ match: expect.any(Function), propagatorTypes: ['tracecontext'] }],
+    }),
+  )
+  expect(openobserveLogs.init).toHaveBeenCalledWith(
+    expect.objectContaining({
+      forwardErrorsToLogs: true,
+      insecureHTTP: false,
+    }),
+  )
   expect(openobserveRum.setGlobalContext).toHaveBeenCalledWith(config.context)
 })
 
 it.each([Response.json({ enabled: false }), new Response('', { status: 404 })])(
-  'keeps the app usable when telemetry is disabled or backend is older', async (response) => {
+  'keeps the app usable when telemetry is disabled or backend is older',
+  async (response) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response))
     await initializeTelemetry()
     expect(openobserveRum.init).not.toHaveBeenCalled()

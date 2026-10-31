@@ -119,7 +119,7 @@ can be maintained externally without switching the utility's resource identity.
 
 Common fields: `repository`, absolute `state_dir`, explicit `docker_context`,
 `web_network`, and the hostname (`domain` for previews, `host` otherwise).
-Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`,
+Optional: `certificate_resolver`, `otel_network`, `otel_http_endpoint`, `telemetry_file`,
 `preview_log_port`, `pgadmin_host`, `pgadmin_email`. Complete examples:
 [`pr`](examples/pr.json), [`staging`](examples/staging.json),
 [`release`](examples/release.json).
@@ -359,3 +359,11 @@ It runs both legacy local restore and latest-source discovery/download/restore
 against disposable TLS MinIO. It verifies the newest archive's actual records
 and that a corrupt newer archive creates no database. The backend environment
 supplies boto3 and application dependencies; no real operator source is read.
+
+## Browser RUM and API trace correlation
+
+See [OpenObserve runtime configuration](../../docs/OPENOBSERVE-RUM.md) for the
+operator-owned telemetry file shared across PR, staging and release descriptors,
+collector networking, credential boundaries and reviewed-main rollout. The
+browser receives a dedicated RUM client token through the API; backend OTLP
+authorization stays server-side. No frontend build secrets are required.

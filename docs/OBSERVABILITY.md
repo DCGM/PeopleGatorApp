@@ -90,14 +90,15 @@ Weaviate and system metrics instrumentation are initialized in
 SQLAlchemy instrumentation attaches to the selected async engine. The `trace`
 decorator provides custom async spans.
 
-SDK resources currently hardcode `service.name=dev.people-gator-api` and
-`service.version=0.1.0`, with hostname as instance ID. Do not assume these match
-the image SHA or collector labels. A log provider/exporter is initialized, but
+SDK resources use `service.name=people-gator-api`, deployment-supplied version,
+environment, commit and PR context, with hostname as instance ID. Container-log
+service names remain separate from SDK service names. A log provider/exporter is initialized, but
 `configure_logging()` installs only a stream handler; do not assume standard
 Python logs are directly exported by the SDK. Preview container logging remains
 the documented log path. There is no implemented profiling exporter despite a
-profiles-path setting, and no frontend trace instrumentation or `/metrics`
-Prometheus endpoint supplied here.
+profiles-path setting, and no `/metrics` Prometheus endpoint supplied here. Browser RUM and W3C
+trace propagation are configured through the
+[OpenObserve RUM guide](OPENOBSERVE-RUM.md).
 
 ## Add signals safely and validate them
 

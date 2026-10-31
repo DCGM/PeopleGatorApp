@@ -987,3 +987,14 @@ Action colors: sky for face references, green for verification/save, amber for
 reassignment/linking, violet for a new identity, and red for unlink/cancel. Only button text, icons and borders
 carry those colors; every action keeps the standard shadcn outline background.
 Check both light and dark themes.
+
+## OpenObserve RUM exploration (#94)
+
+RUM is configured independently of fixture data; never store client tokens or
+exporter credentials in the seed. Existing synthetic Documents, Ada Novak and
+page/media navigation provide the linked requests for the
+[trace-correlation walkthrough](../../docs/OPENOBSERVE-RUM.md#rollout-and-verification).
+Filter OpenObserve by `env=preview`, commit version and `pr_number`, then inspect
+an API resource and its backend trace ID. RUM introduces no database records,
+relationships or media changes; fixture identities/checkpoints and rerun/edit
+preservation remain unchanged. No external telemetry service is required to seed.
