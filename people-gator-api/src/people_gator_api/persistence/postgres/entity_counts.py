@@ -22,9 +22,13 @@ def entity_counts():
 
 
 def entity_count_predicate(values):
-    bounds = {name: value for kind in ("faces", "mentions") for bound in ("min", "max")
-              if (value := missing_to_none(getattr(values, name := f"{bound}_{kind}_total_count"))) is not None
-              and (bound == "max" or value > 0)}
+    bounds = {}
+    for kind in ("faces", "mentions"):
+        for bound in ("min", "max"):
+            name = f"{bound}_{kind}_total_count"
+            value = missing_to_none(getattr(values, name))
+            if value is not None and (bound == "max" or value > 0):
+                bounds[name] = value
     if not bounds:
         return None
     counts = entity_counts()

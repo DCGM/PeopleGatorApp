@@ -405,3 +405,46 @@ preserves search and sort; clear search preserves minima. URL keys are
 Invalid copied minima remain visible and block requests until corrected or
 removed. Showing a document count column never changes the active query; clicking
 its header selects the corresponding server sort.
+
+## People: assigned annotation counts
+
+Entity browse and search accept `filter.min_faces_total_count`,
+`filter.max_faces_total_count`, `filter.min_mentions_total_count` and
+`filter.max_mentions_total_count`. Bounds are independent, inclusive integers
+from **0 through 9007199254740991**. Omission is unbounded, minimum zero imposes
+no restriction, maximum zero selects zero, and equal bounds select an exact
+count. Negative, fractional, boolean, malformed, oversized and inverted ranges
+return validation errors. The four bounds combine with AND and retain existing
+presence and same-evidence membership semantics.
+
+Counts cover every face annotation and text-mention record currently assigned
+to the entity, across automatic, manual and verified links. Generic image
+occurrences and ownerless evidence contribute nothing. Repeated mention text
+still represents separate annotations. Library, document, source, link-state and
+actor/date filters select people according to their existing semantics; they do
+not narrow these totals. For example, Mira Counts matches the faces document
+but still has seven faces across documents and three mentions elsewhere.
+
+`sort=faces_total_count`, `sort=mentions_total_count` and
+`sort=annotations_total_count` order numerically, highest first by default;
+`sort_direction=asc` selects lowest first. All annotations is exactly Faces plus
+Text mentions. Zero is known and ties use canonical entity UUID ascending.
+Ordinary API identity defaults and search relevance defaults remain unchanged.
+Browse applies constraints and ordering before keyset pagination. Scored search
+retains the shared bounded text/similarity candidate retrieval described above:
+count constraints participate in retrieval and explicit sorts order the complete
+supported candidate set before pagination, without promising unbounded retrieval.
+Cursors are bound to filters and sort; incompatible cursors are rejected.
+
+People controls use URL keys `min_faces_total_count`, `max_faces_total_count`,
+`min_mentions_total_count`, `max_mentions_total_count` plus shared `sort`/`dir`.
+Blank control values omit a bound. Tags remove individual bounds, so exact zero
+appears as both ≥ 0 and ≤ 0. Clear all preserves search and sort; history and
+reload restore bounds. Invalid URLs show an error and suspend fetching until
+corrected. Assignment edits, review, unassignment, deletion and merge discard
+People continuation pages and refresh totals and membership, retaining query
+choices. Verification alone preserves assignment totals. Cards use the batched
+entity statistics and show an em dash if a projection is unavailable.
+
+Entity count filters and nondefault count sorts require PostgreSQL. The optional
+Weaviate adapter rejects them explicitly rather than returning unfiltered results.

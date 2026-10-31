@@ -35,3 +35,9 @@ def test_bounds(kind, bound):
 def test_sort_defaults(field):
     assert EntityListRequest(limit=12, sort=field).effective_sort() == (field, 'desc')
     assert SearchEntitiesRequest(limit=12, query={'text': ['Ada']}, sort=field).effective_sort() == (field, 'desc')
+
+
+def test_weaviate_rejects_count_filters_instead_of_ignoring_them():
+    from people_gator_api.persistence.weaviate import _require_default_sort
+    with pytest.raises(NotImplementedError, match="PostgreSQL"):
+        _require_default_sort(EntityListRequest(limit=12, filter_=EntityListFilter(max_faces_total_count=0)))

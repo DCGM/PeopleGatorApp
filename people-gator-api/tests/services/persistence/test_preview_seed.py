@@ -4058,3 +4058,134 @@ async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target,
     # Recovery may add the linked evidence that had not yet been seeded.
     # It must not repeat the numbering edit.
     assert first_id not in recovery_writes
+
+
+@pytest.mark.asyncio
+async def test_people_count_ranges_order_and_person_wide_scope(seed_target):
+    """Reuse retained synthetic identities, including zero/face-only/mention-only."""
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    ids = list(seed.entities.values())
+    baseline = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(entity_id=ids)))
+    stats = {p.entity_id: (p.entity_link_stats.faces.total, p.entity_link_stats.mentions.total) for p in baseline.items}
+    assert stats[seed.entities['lenka']] == (0, 0)
+    assert stats[seed.entities['emil']][0] > 0 and stats[seed.entities['emil']][1] == 0
+    assert stats[seed.entities['nora']][0] == 0 and stats[seed.entities['nora']][1] > 0
+    assert stats[seed.entities['count-subject']] == (7, 3)
+    for field, index in (('faces_total_count', 0), ('mentions_total_count', 1), ('annotations_total_count', None)):
+        for direction in ('asc', 'desc'):
+            cursor, observed = None, []
+            while True:
+                page = await db.entities.list(EntityListRequest(limit=3, cursor=cursor, sort=field,
+                    sort_direction=direction, return_total_count=True, filter_=EntityListFilter(entity_id=ids)))
+                assert page.total_count == len(ids)
+                observed.extend(p.entity_id for p in page.items)
+                cursor = page.cursor
+                if cursor is None:
+                    break
+            def value(id):
+                return sum(stats[id]) if index is None else stats[id][index]
+            expected = sorted(ids, key=lambda id: (value(id) * (-1 if direction == 'desc' else 1), id.int))
+            assert observed == expected
+            # Scored search sorts the complete bounded candidate set, not its first page.
+            search = await db.entities.search(SearchEntitiesRequest(limit=100, query=QueryBase(text=['Counts']),
+                filter_=EntityListFilter(entity_id=ids), sort=field, sort_direction=direction))
+            search_ids = [p.entity_id for p in search.items]
+            assert search_ids == [id for id in expected if id in search_ids]
+    for bounds in ({'max_faces_total_count': 0}, {'min_faces_total_count': 0},
+                   {'min_faces_total_count': 2, 'max_faces_total_count': 7, 'max_mentions_total_count': 3},
+                   {'min_faces_total_count': 0, 'max_faces_total_count': 0, 'min_mentions_total_count': 1},
+                   {'min_faces_total_count': 7, 'max_faces_total_count': 7}):
+        matching = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(entity_id=ids, **bounds)))
+        expected = {id for id, (faces, mentions) in stats.items()
+                    if all((faces if 'faces' in key else mentions) >= value if key.startswith('min_')
+                           else (faces if 'faces' in key else mentions) <= value for key, value in bounds.items())}
+        assert {p.entity_id for p in matching.items} == expected
+    # The selected document has four assigned faces, but Mira has seven globally
+    # and three mentions in another document. Scope must not narrow either total.
+    scoped = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        entity_id=ids, document_source_id=[seed.documents['count-faces']],
+        min_faces_total_count=7, min_mentions_total_count=3)))
+    assert [p.entity_id for p in scoped.items] == [seed.entities['count-subject']]
+    assert scoped.items[0].entity_link_stats.faces.total == 7
+    # Count sorting traverses scored candidate pages too, with identical membership.
+    search_members = None
+    for direction in ('asc', 'desc'):
+        cursor, observed = None, []
+        while True:
+            batch = await db.entities.search(SearchEntitiesRequest(limit=1, cursor=cursor,
+                query=QueryBase(text=['Lina']), filter_=EntityListFilter(entity_id=ids),
+                sort='annotations_total_count', sort_direction=direction))
+            observed.extend(p.entity_id for p in batch.items)
+            cursor = batch.cursor
+            if cursor is None:
+                break
+        assert len(observed) >= 3
+        if search_members is None:
+            search_members = set(observed)
+        assert set(observed) == search_members
+        assert observed == sorted(search_members, key=lambda id: (
+            sum(stats[id]) * (-1 if direction == 'desc' else 1), id.int))
+    # The number of database statements stays constant as the result page grows.
+    from sqlalchemy import event
+    statements = []
+    def record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+    event.listen(seed_target[2].sync_engine, 'before_cursor_execute', record_statement)
+    try:
+        sizes = []
+        for limit in (1, 30):
+            statements.clear()
+            await db.entities.list(EntityListRequest(limit=limit, sort='annotations_total_count',
+                filter_=EntityListFilter(entity_id=ids, max_faces_total_count=100)))
+            sizes.append(len(statements))
+        assert sizes[0] == sizes[1] == 4  # results, aliases, grouped face/mention stats
+    finally:
+        event.remove(seed_target[2].sync_engine, 'before_cursor_execute', record_statement)
+    # Incompatible count bounds cannot reuse a cursor; exact-zero is a real bound.
+    page = await db.entities.list(EntityListRequest(limit=1, sort='faces_total_count', filter_=EntityListFilter(entity_id=ids)))
+    with pytest.raises(ValueError, match='different query'):
+        await db.entities.list(EntityListRequest(limit=1, cursor=page.cursor, sort='faces_total_count',
+            filter_=EntityListFilter(entity_id=ids, max_faces_total_count=0)))
+    await preview.seed_preview(db, fs)
+    refreshed = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(entity_id=ids)))
+    assert {p.entity_id: (p.entity_link_stats.faces.total, p.entity_link_stats.mentions.total) for p in refreshed.items} == stats
+
+
+@pytest.mark.asyncio
+async def test_people_count_transitions_and_unchanged_verification_totals(seed_target):
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    actor = GenericActor(user_id=seed.users['reviewer'])
+    source, target = seed.entities['emil'], seed.entities['lenka']
+    face = (await db.faces.list(FaceListRequest(limit=1, filter_=FaceListFilter(entity_id=[source])))).items[0]
+    original = (await db.entities.get(source)).entity_link_stats.faces.total
+    async def zeros():
+        return {p.entity_id for p in (await db.entities.list(EntityListRequest(limit=20,
+            filter_=EntityListFilter(entity_id=[source, target], max_faces_total_count=0)))).items}
+    assert target in await zeros()
+    await db.faces.patch(face.detection_id, FacePatchRequest(entity_id=target, entity_link_state='manual'), actor)
+    assert (await db.entities.get(source)).entity_link_stats.faces.total == original - 1
+    assert target not in await zeros()
+    await db.faces.patch(face.detection_id, FacePatchRequest(entity_link_state='verified'), actor)
+    assert (await db.entities.get(target)).entity_link_stats.faces.total == 1
+    await db.faces.patch(face.detection_id, FacePatchRequest(entity_id=None), actor)
+    assert target in await zeros()
+    await db.faces.patch(face.detection_id, FacePatchRequest(entity_id=target, entity_link_state='manual'), actor)
+    await db.faces.delete(face.detection_id, context=actor)
+    assert target in await zeros()
+    # Move a mention, verify it and merge the new owner back into the old one.
+    from people_gator_api.schemas.mentions import TextMentionListFilter
+    nora = seed.entities['nora']
+    mention = (await db.text_mentions.list(TextMentionListRequest(limit=1, filter_=TextMentionListFilter(entity_id=[nora])))).items[0]
+    old = (await db.entities.get(nora)).entity_link_stats.mentions.total
+    await db.text_mentions.patch(mention.mention_id, TextMentionPatchRequest(entity_id=target, entity_link_state='manual'), actor)
+    assert (await db.entities.get(nora)).entity_link_stats.mentions.total == old - 1
+    assert (await db.entities.get(target)).entity_link_stats.mentions.total == 1
+    await db.text_mentions.patch(mention.mention_id, TextMentionPatchRequest(entity_link_state='verified'), actor)
+    assert (await db.entities.get(target)).entity_link_stats.mentions.total == 1
+    await db.entities.merge(nora, target, context=actor)
+    assert await db.entities.get(target) is None
+    assert (await db.entities.get(nora)).entity_link_stats.mentions.total == old
+    await db.text_mentions.delete(mention.mention_id, context=actor)
+    assert (await db.entities.get(nora)).entity_link_stats.mentions.total == old - 1

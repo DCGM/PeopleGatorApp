@@ -1066,3 +1066,24 @@ upgrade, checkpointed before writing and guarded by their annotation timestamp.
 The upgrade leaves last-touched time and modifier unchanged, as a fresh seed
 would. Reruns preserve changed numbers and explicit clears, including after
 interrupted writes. Page 9 remains a usable legacy/unknown example.
+
+### People count ranges and sorting (#92)
+
+The seed exposes `people-zero-faces`, `people-count-range` and
+`people-count-scope` links. These reuse stable synthetic identities and local
+media without modifying retained assignments: Lenka Vesela has zero evidence,
+Emil Dvorak has faces only, Nora Svoboda has mentions only, and Mira Counts has
+seven faces and three mentions across documents, with mixed assignment states.
+The pagination people provide tied counts spanning several cursor batches.
+
+Open **People**, set **Faces** minimum and maximum to `0`, and sort by
+**Text mentions · Highest first**. Nora appears ahead of the tied one-mention
+people; Lenka has explicit zeros. Try Faces `2` through `7` with Text mentions
+maximum `3`, then **All annotations** in both directions. Choose Mira's
+**Count study: faces** document and Faces minimum `7` plus Text mentions minimum
+`3`: she still matches because totals cover the person, including other documents.
+The mobile sliders button reveals both range controls; active tags remain visible
+while collapsed. Repository tests traverse tied count orders, check exact/open
+ranges and document-wide membership versus person-wide totals, repeat seeding,
+and exercise evidence transitions. Existing edit-preservation and interrupted
+checkpoint tests continue to protect retained previews.

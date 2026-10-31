@@ -628,6 +628,14 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"{key}-crop": f"/api/v1/faces/{active_faces[key]}/aligned_crop?max_width=256"
                 for key in ("alignment-coincident", "alignment-valid") if key in active_faces
             },
+            # Issue #92 reuses the preserved zero, face-only, mention-only and
+            # mixed fixtures; no reassignment of retained preview evidence.
+            "people-zero-faces": "/people?max_faces_total_count=0&sort=mentions_total_count&dir=desc",
+            "people-count-range": "/people?min_faces_total_count=2&max_faces_total_count=7&max_mentions_total_count=3&sort=annotations_total_count&dir=desc",
+            "people-count-scope": "/people?" + urlencode({
+                "document": documents["count-faces"], "min_faces_total_count": 7,
+                "min_mentions_total_count": 3, "sort": "annotations_total_count",
+            }),
             "pagination-people": "/people?q=Pagination&sort=name",
             "pagination-scans": "/scans?library=preview-pagination&q=Pagination",
             "pagination-browse-people": "/people?library=preview-pagination&sort=name",
