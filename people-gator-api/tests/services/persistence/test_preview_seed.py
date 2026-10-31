@@ -3347,7 +3347,8 @@ async def test_archive_links_use_each_evidence_page_and_containing_document(seed
 
 
 @pytest.mark.asyncio
-async def test_detection_actions_delete_and_verify_survive_rerun(seed_target):
+@pytest.mark.parametrize("review_action", ["verify", "reassign"])
+async def test_detection_actions_review_and_delete_survive_rerun(seed_target, review_action):
     database, filesystem, _ = seed_target
     seeded = await preview.seed_preview(database, filesystem)
     linked_id = seeded.faces["actions-linked"]
@@ -3362,14 +3363,24 @@ async def test_detection_actions_delete_and_verify_survive_rerun(seed_target):
     with Image.open(io.BytesIO(content.content)) as image:
         assert image.size == (800, 1100)
     actor = await database.users.get(seeded.users["reviewer"])
-    await database.faces.patch(linked_id, FacePatchRequest(entity_link_state="verified"), actor)
+    query = parse_qs(urlsplit(seeded.filter_examples["detection-actions"]).query)
+    assert query["person"] == [str(linked_id)]
+    assert urlsplit(seeded.filter_examples["detection-actions"]).path == (
+        f"/libraries/{source.library}/documents/{source.document_id}/pages/{source.page_id}"
+    )
+    patch = (
+        FacePatchRequest(entity_link_state="verified") if review_action == "verify"
+        else FacePatchRequest(entity_id=seeded.entities["ada"], entity_link_state="manual")
+    )
+    reviewed = await database.faces.patch(linked_id, patch, actor)
     await database.faces.delete(false_id, context=actor)
     rerun = await preview.seed_preview(database, filesystem)
     assert "actions-false-positive" not in rerun.faces
     assert await database.faces.get(false_id) is None
     faces = await database.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(source_id=[linked.source_id])))
     assert [face.detection_id for face in faces.items] == [linked_id]
-    assert (await database.faces.get(linked_id)).entity_link_state == "verified"
+    assert await database.faces.get(linked_id) == reviewed
+    assert rerun.filter_examples["detection-actions"] == seeded.filter_examples["detection-actions"]
 
 
 @pytest.mark.asyncio
