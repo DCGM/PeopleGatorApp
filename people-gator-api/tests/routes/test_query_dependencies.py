@@ -37,6 +37,8 @@ LIST_FILTERS = {
         "mention_id",
         "has_mentions",
         "has_detections",
+        "min_faces_total_count", "max_faces_total_count",
+        "min_mentions_total_count", "max_mentions_total_count",
         "last_touched_from", "last_touched_to", "document_source_id",
         "last_touched_by_user_id", "last_touched_by_api_key_id",
     },
@@ -178,6 +180,8 @@ def test_sort_fields_are_resource_allowlists(openapi: dict[str, Any], path: str,
     """Relevance is offered only where a search score exists."""
     if path in {"/documents", "/search-documents", "/pages", "/search-pages"}:
         values = [*ANNOTATION_COUNT_FIELDS, *values]
+    if path in {"/entities", "/search-entities"}:
+        values = ["faces_total_count", "mentions_total_count", "annotations_total_count", *values]
     assert _sort_values(openapi, path) == values
 
 
