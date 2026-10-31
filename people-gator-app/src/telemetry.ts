@@ -25,6 +25,7 @@ export interface RumConfig {
   env: string
   version: string
   sessionSampleRate: number
+  sessionReplaySampleRate?: number
   context: Record<string, string>
 }
 
@@ -47,6 +48,8 @@ export async function initializeTelemetry(): Promise<void> {
       insecureHTTP: false,
       apiVersion: 'v1',
     }
+    // Older backends omit replay sampling; preserve their disabled replay behavior.
+    const replaySampleRate = config.sessionReplaySampleRate ?? 0
     openobserveRum.init({
       ...common,
       applicationId: config.applicationId,
@@ -55,7 +58,7 @@ export async function initializeTelemetry(): Promise<void> {
       trackUserInteractions: true,
       defaultPrivacyLevel: 'mask',
       sessionSampleRate: config.sessionSampleRate,
-      sessionReplaySampleRate: 0,
+      sessionReplaySampleRate: replaySampleRate,
       allowedTracingUrls: [
         {
           match: (url: string) => isApiUrl(url, apiBaseUrl, window.location.origin),
@@ -64,6 +67,7 @@ export async function initializeTelemetry(): Promise<void> {
       ],
     })
     openobserveRum.setGlobalContext(config.context)
+    if (replaySampleRate > 0) openobserveRum.startSessionReplayRecording()
     openobserveLogs.init({ ...common, forwardErrorsToLogs: true })
     openobserveLogs.setGlobalContext(config.context)
   } catch {
