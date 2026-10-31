@@ -66,6 +66,7 @@ from people_gator_api.persistence.postgres.utils import (
 from people_gator_api.schemas.faces import FaceListFilter
 from .utils import face_filters
 from people_gator_api.schemas.sorting import RELEVANCE, SortDirection
+from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
 from .sorting import (
     Builders,
     SortKey,
@@ -111,7 +112,7 @@ class PostgresEntityRepository(EntityRepository):
             "last_touched_at": lambda desc: [SortKey(Entity.last_touched_at, "datetime", desc)],
             "created_at": lambda desc: [SortKey(Entity.created_at, "datetime", desc)],
         }
-        if field in ("faces_total_count", "mentions_total_count", "annotations_total_count"):
+        if field in ENTITY_COUNT_FIELDS:
             from .entity_counts import entity_counts
             from .annotation_counts import count_column
             counts = entity_counts()

@@ -1125,3 +1125,19 @@ No browser-local persistence is included.
 Scroll horizontally to the middle/far right and vertically to the final row to
 load the second cursor batch automatically; Load more documents is the keyboard
 fallback. Search/filter/sort URLs and counts retain their existing semantics.
+
+### People count states
+
+Open `people-count-states` for Mira Counts with at least three manual faces and
+one verified mention, sorted by verified annotations. Her seven faces comprise
+two automatic, three manual and two verified links; her three mentions include
+one of each state. The combined verified count is three. Switch each range's
+state selector between All, Verified, Manual and Automatic, combine bounds and
+remove tags. `people-zero-verified` demonstrates exact zero verified evidence
+and automatic-face sorting, including people without evidence.
+
+These links reuse preserved mixed-state fixtures and local media. State-count
+repository tests traverse all twelve orders in both directions and cursor batches,
+compare exact ranges to batched statistics, retain person-wide counts under
+source/state membership filters, and verify that reviewed assignments survive a
+second seed run. No preview edits or checkpoint identities are reset.

@@ -52,6 +52,7 @@ from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
 )
+from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
     EntityListFilter,
@@ -326,8 +327,8 @@ def _require_default_sort(query: object) -> None:
     """
     values = missing_to_none(getattr(query, "filter_", None))
     if isinstance(values, EntityListFilter) and any(
-        not is_missing(getattr(values, f"{bound}_{kind}_total_count"))
-        for kind in ("faces", "mentions") for bound in ("min", "max")
+        not is_missing(getattr(values, f"{bound}_{field}"))
+        for field in ENTITY_COUNT_FIELDS for bound in ("min", "max")
     ):
         raise NotImplementedError("entity count filters require the PostgreSQL backend")
     if getattr(query, "sort", None) is None:

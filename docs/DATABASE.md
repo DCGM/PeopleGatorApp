@@ -160,3 +160,8 @@ counter or schema migration is required. Evidence membership filters remain
 independent of the aggregate; the batched response link statistics use the same
 annotation definition. See [People counts](SEARCH_FILTERS.md#people-assigned-annotation-counts)
 for range, ordering and bounded-search semantics.
+
+Entity count ranges/orderings additionally derive automatic, manual and verified
+buckets from the same assigned evidence union, grouped by entity. Combined state
+counts sum faces and mentions of that state. Ownerless records have no entity
+bucket; no unassigned-person count, stored counter, index or migration is added.

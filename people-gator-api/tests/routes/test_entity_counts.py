@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from people_gator_api.routes.v1.query_dependencies import EntityListFilterDependency
 from people_gator_api.schemas.entities import EntityListFilter, EntityListRequest
+from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
 from people_gator_api.schemas.search import SearchEntitiesRequest
 
 app = FastAPI()
@@ -13,10 +14,10 @@ def entities(filters: EntityListFilterDependency):
     return filters.model_dump(exclude_unset=True)
 client = TestClient(app)
 
-@pytest.mark.parametrize('kind', ['faces', 'mentions'])
+@pytest.mark.parametrize('field', ENTITY_COUNT_FIELDS)
 @pytest.mark.parametrize('bound', ['min', 'max'])
-def test_bounds(kind, bound):
-    name = f'{bound}_{kind}_total_count'
+def test_bounds(field, bound):
+    name = f'{bound}_{field}'
     assert name not in client.get('/entities').json()
     for value in (0, 1, 9_007_199_254_740_991):
         assert getattr(EntityListFilter(**{name: value}), name) == value
@@ -28,10 +29,10 @@ def test_bounds(kind, bound):
     for value in (-1, 1.5, 1.0, True, False, None, 9_007_199_254_740_992):
         with pytest.raises(ValidationError):
             EntityListFilter(**{name: value})
-    assert client.get('/entities', params={f'filter.min_{kind}_total_count': 2, f'filter.max_{kind}_total_count': 1}).status_code == 422
-    assert client.get('/entities', params={f'filter.min_{kind}_total_count': 0, f'filter.max_{kind}_total_count': 0}).status_code == 200
+    assert client.get('/entities', params={f'filter.min_{field}': 2, f'filter.max_{field}': 1}).status_code == 422
+    assert client.get('/entities', params={f'filter.min_{field}': 0, f'filter.max_{field}': 0}).status_code == 200
 
-@pytest.mark.parametrize('field', ['faces_total_count', 'mentions_total_count', 'annotations_total_count'])
+@pytest.mark.parametrize('field', ENTITY_COUNT_FIELDS)
 def test_sort_defaults(field):
     assert EntityListRequest(limit=12, sort=field).effective_sort() == (field, 'desc')
     assert SearchEntitiesRequest(limit=12, query={'text': ['Ada']}, sort=field).effective_sort() == (field, 'desc')

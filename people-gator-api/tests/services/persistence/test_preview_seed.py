@@ -4257,3 +4257,79 @@ async def test_document_width_scenario_is_additive_readable_and_preserves_edits(
     await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(long.source_id) == edited
     assert (await database.text_mentions.get(seeded.mentions["table-width-long-mention"])).entity_id is None
+
+
+@pytest.mark.asyncio
+async def test_people_state_count_ranges_sorting_and_preserved_review(seed_target):
+    from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
+    from people_gator_api.schemas.mentions import TextMentionListFilter
+    db, fs, _ = seed_target
+    seed = await preview.seed_preview(db, fs)
+    ids = list(seed.entities.values())
+    baseline = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(entity_id=ids)))
+
+    def counts(person):
+        stats = person.entity_link_stats
+        values = {}
+        for field in ENTITY_COUNT_FIELDS:
+            category, state, _ = field.split('_')
+            faces, mentions = getattr(stats.faces, state), getattr(stats.mentions, state)
+            values[field] = faces + mentions if category == 'annotations' else faces if category == 'faces' else mentions
+        return values
+
+    expected = {person.entity_id: counts(person) for person in baseline.items}
+    mira = seed.entities['count-subject']
+    assert expected[mira] == {
+        'faces_total_count': 7, 'faces_verified_count': 2, 'faces_manual_count': 3, 'faces_automatic_count': 2,
+        'mentions_total_count': 3, 'mentions_verified_count': 1, 'mentions_manual_count': 1, 'mentions_automatic_count': 1,
+        'annotations_total_count': 10, 'annotations_verified_count': 3, 'annotations_manual_count': 4, 'annotations_automatic_count': 3,
+    }
+    for field in ENTITY_COUNT_FIELDS:
+        for direction in ('asc', 'desc'):
+            observed, cursor = [], None
+            while True:
+                page = await db.entities.list(EntityListRequest(limit=5, cursor=cursor,
+                    filter_=EntityListFilter(entity_id=ids), sort=field, sort_direction=direction))
+                observed.extend(person.entity_id for person in page.items)
+                cursor = page.cursor
+                if cursor is None:
+                    break
+            assert observed == sorted(ids, key=lambda id: (
+                expected[id][field] * (-1 if direction == 'desc' else 1), id.int))
+            search_ids, cursor = [], None
+            while True:
+                page = await db.entities.search(SearchEntitiesRequest(limit=2, cursor=cursor,
+                    query=QueryBase(text=['Counts']), filter_=EntityListFilter(entity_id=ids),
+                    sort=field, sort_direction=direction))
+                search_ids.extend(person.entity_id for person in page.items)
+                cursor = page.cursor
+                if cursor is None:
+                    break
+            assert mira in search_ids
+            assert search_ids == sorted(set(search_ids), key=lambda id: (
+                expected[id][field] * (-1 if direction == 'desc' else 1), id.int))
+        for value in (0, expected[mira][field]):
+            bounds = {f'min_{field}': value, f'max_{field}': value}
+            page = await db.entities.list(EntityListRequest(limit=100,
+                filter_=EntityListFilter(entity_id=ids, **bounds)))
+            assert {person.entity_id for person in page.items} == {
+                id for id in ids if expected[id][field] == value}
+            search = await db.entities.search(SearchEntitiesRequest(limit=100,
+                query=QueryBase(text=['Counts']), filter_=EntityListFilter(entity_id=ids, **bounds)))
+            assert all(counts(person)[field] == value for person in search.items)
+    # A verified face in one document selects Mira; manual counts still cover all documents.
+    scoped = await db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(
+        entity_id=ids, document_source_id=[seed.documents['count-faces']], entity_link_state=['verified'],
+        min_faces_manual_count=3, min_annotations_verified_count=3)))
+    assert [person.entity_id for person in scoped.items] == [mira]
+    actor = GenericActor(user_id=seed.users['reviewer'])
+    mention = (await db.text_mentions.list(TextMentionListRequest(limit=1, filter_=TextMentionListFilter(
+        entity_id=[mira], entity_link_state=['manual'])))).items[0]
+    await db.text_mentions.patch(mention.mention_id, TextMentionPatchRequest(entity_link_state='verified'), actor)
+    reviewed = counts(await db.entities.get(mira))
+    assert reviewed['mentions_verified_count'] == 2
+    assert reviewed['mentions_manual_count'] == 0
+    assert reviewed['annotations_total_count'] == 10
+    await preview.seed_preview(db, fs)
+    assert counts(await db.entities.get(mira)) == reviewed
+    assert seed.filter_examples['people-count-states'].endswith('sort=annotations_verified_count')

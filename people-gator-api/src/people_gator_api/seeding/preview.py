@@ -633,6 +633,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             },
             # Issue #92 reuses the preserved zero, face-only, mention-only and
             # mixed fixtures; no reassignment of retained preview evidence.
+            "people-count-states": "/people?min_faces_manual_count=3&min_mentions_verified_count=1&sort=annotations_verified_count",
+            "people-zero-verified": "/people?max_annotations_verified_count=0&sort=faces_automatic_count",
             "people-zero-faces": "/people?max_faces_total_count=0&sort=mentions_total_count&dir=desc",
             "people-count-range": "/people?min_faces_total_count=2&max_faces_total_count=7&max_mentions_total_count=3&sort=annotations_total_count&dir=desc",
             "people-count-scope": "/people?" + urlencode({

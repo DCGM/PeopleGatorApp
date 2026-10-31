@@ -448,3 +448,21 @@ entity statistics and show an em dash if a projection is unavailable.
 
 Entity count filters and nondefault count sorts require PostgreSQL. The optional
 Weaviate adapter rejects them explicitly rather than returning unfiltered results.
+
+### People count states
+
+People count ranges and sorts also support Verified, Manual and Automatic for
+Faces, Text mentions and All annotations. For example,
+`filter.min_faces_manual_count=3&filter.max_mentions_verified_count=1` combines
+two person-wide ranges, while `sort=annotations_verified_count` sorts by the sum
+of verified faces and mentions. `annotations_total_count` supports ranges too.
+All twelve category/state fields accept independent inclusive minimum/maximum
+bounds with the same strict integer and cursor rules as total counts. Existing
+`faces_total_count` and `mentions_total_count` URLs retain their meaning.
+
+Each category's range popover selects All, Verified, Manual or Automatic. Several
+states can be constrained together; tags identify and remove each bound. Result
+cards show the state counts used by the active filters/sort from batched entity
+statistics. Verification moves a link between state buckets without changing
+totals; review and verification mutations restart People continuation pages.
+Unassigned is intentionally absent: ownerless evidence cannot belong to a person.
