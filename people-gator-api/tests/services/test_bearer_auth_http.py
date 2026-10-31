@@ -19,7 +19,7 @@ from people_gator_api.services import auth_service, jwk_service
 from people_gator_api.auth import keys
 from people_gator_api.auth.settings import settings as issuer_settings
 from people_gator_api.services.database_service import get_database, get_database_context
-from people_gator_api.settings import JwkSettings, LocalStorageSettings, StorageSettings, settings
+from people_gator_api.settings import LocalStorageSettings, StorageSettings, settings
 
 # Claim values a test may sign, including deliberately invalid types.
 type ClaimValue = str | int | list[str] | datetime.datetime
@@ -164,6 +164,9 @@ def test_expired_token_is_rejected_without_database(
     pytest.param(lambda: sign(claims(uid=42)), id="non-string-uid"),
     pytest.param(lambda: sign(claims(scopes=["people-gator:browse"])), id="non-string-scopes"),
     pytest.param(lambda: sign(claims(sub=None)), id="missing-subject"),
+    pytest.param(lambda: sign(claims(token_use="refresh")), id="refresh-as-access"),
+    pytest.param(lambda: sign(claims(exp="tomorrow")), id="malformed-expiry"),
+    pytest.param(lambda: sign(claims(iat=None)), id="missing-issued-at"),
 ])
 def test_invalid_tokens_are_rejected_without_database(
     bearer_app: BearerApp, make_token: TokenFactory,

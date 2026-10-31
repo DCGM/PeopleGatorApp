@@ -20,6 +20,13 @@ case "$1" in
         # exec makes the API process receive container termination signals.
         exec people-gator-api
         ;;
+    auth)
+        exec people-gator-auth
+        ;;
+    auth-provision)
+        shift
+        exec people-gator-auth-provision "$@"
+        ;;
     migrate)
         shift
         exec python -m people_gator_api.cli.database migrate "$@"
@@ -33,7 +40,7 @@ case "$1" in
         exec python -m people_gator_api.cli.database check "$@"
         ;;
     *)
-        echo "Usage: container-entrypoint.sh [api|migrate|seed|check [--schema-only]]" >&2
+        echo "Usage: container-entrypoint.sh [api|auth|auth-provision|migrate|seed|check [--schema-only]]" >&2
         exit 2
         ;;
 esac

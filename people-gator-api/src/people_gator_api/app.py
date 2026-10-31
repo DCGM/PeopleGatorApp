@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from people_gator_api.services.embedding_service.http_service import (
     close_embedding_service,
     init_embedding_service,
@@ -24,25 +23,6 @@ from people_gator_api.utils.version_info import get_version_info
 import dotenv
 
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
-
-
-async def well_known_cors(
-    request: Request,
-    call_next: RequestResponseEndpoint,
-) -> Response:
-    if not request.url.path.startswith("/.well-known/"):
-        return await call_next(request)
-
-    if request.method == "OPTIONS":
-        response = Response(status_code=204)
-    else:
-        response = await call_next(request)
-
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Max-Age"] = "86400"
-    return response
 
 
 @asynccontextmanager

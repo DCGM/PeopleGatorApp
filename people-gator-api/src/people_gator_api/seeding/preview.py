@@ -831,6 +831,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "q": "pribehy", "library": "preview-mzk",
                 "link_state": ["automatic", "verified"], "unassigned": "no",
             }, doseq=True),
+            # Login at the same browser origin, then inspect existing linked evidence
+            # and the actor filter without embedding credentials in the fixture.
+            "auth-attribution-login": "/login.html?" + urlencode({
+                "return": f"/people/{manifest.entities['ada']}",
+            }),
+            "auth-attribution-review": "/people?touched_by=" + str(actors["reviewer"].user_id),
             "document-source-touch": "/documents?library=preview-mzk&touched_by=" + str(actors["reviewer"].user_id),
             "grouped-documents": "/documents?library=preview-mzk",
             "unregistered-scan": "/scans?"

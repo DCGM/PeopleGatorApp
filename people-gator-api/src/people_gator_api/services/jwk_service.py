@@ -23,15 +23,17 @@ async def _fetch_public_keys() -> KeySet:
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=config.timeout_seconds)) as client:
         async with client.get(config.jwks_url, allow_redirects=False) as response:
             response.raise_for_status()
-            data = await response.content.read(65537)
-            if len(data) > 65536:
-                raise ValueError("JWKS exceeds limit")
+            data = bytearray()
+            async for chunk in response.content.iter_chunked(8192):
+                data.extend(chunk)
+                if len(data) > 65536:
+                    raise ValueError("JWKS exceeds limit")
     import json
     jwks = json.loads(data)
-    if not jwks.get("keys") or len(jwks["keys"]) > 64:
+    if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list) or not 1 <= len(jwks["keys"]) <= 64:
         raise ValueError("Invalid JWKS")
     for key in jwks["keys"]:
-        if key.get("kty") not in ("RSA", "EC") or any(
+        if not isinstance(key, dict) or key.get("kty") not in ("RSA", "EC") or any(
             field in key for field in ("d", "p", "q", "dp", "dq", "qi", "oth", "k")
         ):
             raise ValueError("JWKS must contain public asymmetric keys only")
@@ -54,7 +56,7 @@ async def get_key_set(*, refresh_if: KeySet | None = None) -> KeySet:
         _last_attempt = now
         try:
             keys = await _fetch_public_keys()
-        except (aiohttp.ClientError, TimeoutError, ValueError, JoseError) as exc:
+        except (aiohttp.ClientError, TimeoutError, ValueError, JoseError, TypeError, KeyError) as exc:
             if fresh:
                 return _keyset
             raise HTTPException(503, "Authorization provider unavailable") from exc
@@ -131,8 +133,8 @@ async def verify_access_token(token: str) -> AccessTokenClaims:
             uid=ClaimsOption(allow_blank=False, essential=True),
             scopes=ClaimsOption(allow_blank=False, essential=True),
         ).validate(claims)
-        # Built-in refresh tokens lack uid/exp; explicit type also rejects future ones.
-        if claims.get("token_use", "access") != "access" or "jti" in claims:
+        # Built-in refresh tokens lack uid/exp; the type marker also separates them.
+        if claims.get("token_use", "access") != "access":
             raise ValueError("Not an access token")
         return access_token_claims(claims)
     except (JoseError, ValueError, TypeError, KeyError) as exc:

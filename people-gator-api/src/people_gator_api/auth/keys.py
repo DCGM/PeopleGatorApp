@@ -1,26 +1,22 @@
+import os
 import asyncio
 import datetime
 import time
 import json
 import uuid
-import logging
 from collections.abc import Mapping
 from typing import Any, TypedDict
-from botocore.exceptions import ClientError
 from fastapi import HTTPException
 from joserfc.errors import ClaimError, InvalidKeyIdError, JoseError
 from joserfc.jwk import (
     ECKey,
     KeySet,
-    KeySetSerialization,
 )
 from joserfc.jws import JWSRegistry
 from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, Token, encode, decode
 from starlette import status
 from people_gator_api.auth.settings import settings
 
-
-logger = logging.getLogger(__name__)
 
 _keyset: KeySet | None = None
 _last_fetch_time: float | None = None
@@ -69,8 +65,7 @@ async def get_key_set(*, refresh_if: KeySet | None = None) -> KeySet:
             jwks_data = KeySet([key]).as_dict(private=True)
             # Exclusive creation prevents concurrent first starts replacing a key.
             try:
-                with path.open("x") as stream:
-                    path.chmod(0o600)
+                with os.fdopen(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "w") as stream:
                     json.dump(jwks_data, stream)
             except FileExistsError:
                 jwks_data = json.loads(path.read_text())
@@ -154,6 +149,7 @@ async def issue_access_token(
         "exp": exp,
         "scopes": " ".join(scopes),
         "uid": str(user_id),
+        "token_use": "access",
     }
     protected = {"alg": "ES256"}
     key_set = await get_key_set()
@@ -181,6 +177,7 @@ async def issue_refresh_token(
         "iat": iat,
         "scopes": " ".join(scopes),
         "jti": jti,
+        "token_use": "refresh",
     }
     protected = {"alg": "ES256"}
     key_set = await get_key_set()

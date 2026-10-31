@@ -52,7 +52,7 @@ docker compose --env-file /path/to/pr/compose.env \
   -f deploy/people-gator-deploy/src/people_gator_deploy/assets/compose.pr.yaml run --rm --no-deps seed
 ```
 
-The CLI prints IDs and clickable person/page URLs using the configured JWK issuer
+The CLI prints IDs and clickable person/page URLs using the configured public token issuer (the browser origin in the maintained topology)
 as the application origin. PR deployments set this to their own preview hostname;
 for local use, set it to your local application URL if you want matching links.
 The public preview keeps its existing `test` / `test` login. Seed actors do not
@@ -1104,3 +1104,16 @@ No browser-local persistence is included.
 Scroll horizontally to the middle/far right and vertically to the final row to
 load the second cursor batch automatically; Load more documents is the keyboard
 fallback. Search/filter/sort URLs and counts retain their existing semantics.
+
+### Standalone login and actor attribution (#89)
+
+The `auth-attribution-login` link opens the separate browser gateway and returns
+to Ada Novak, whose linked faces and mentions are local synthetic fixtures.
+`auth-attribution-review` opens the reviewer attribution filter. Provision demo
+accounts separately with `people-gator-auth-provision`; the seed contains no
+credentials. After signing in, edit a synthetic profile and inspect its last
+changed user and the user filter. The signed `uid` is the explicitly provisioned
+persisted user UUID. Refresh retains it. Seed reruns retain the reviewed edit.
+The lifecycle integration test checks separate issuer/resource applications,
+mutation attribution, zero bearer database entries, provider disablement,
+refresh replay, and the independent domain profile flag.
