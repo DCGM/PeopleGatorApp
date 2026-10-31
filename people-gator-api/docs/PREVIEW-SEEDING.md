@@ -1028,6 +1028,15 @@ an API resource and its backend trace ID. RUM introduces no database records,
 relationships or media changes; fixture identities/checkpoints and rerun/edit
 preservation remain unchanged. No external telemetry service is required to seed.
 
+For session replay (#98), use the seed result's `openobserve-replay-person`
+(Ada Novak) then `openobserve-replay-page` (her linked reference-faces page).
+With RUM enabled and both backend sampling rates at 100, inspect the resulting
+session replay in OpenObserve; page content remains masked. The journey reuses
+existing synthetic linked face records and local page media. Repository/media
+coverage verifies these links and rerun preservation after a review edit; no
+additional records, credentials or external services are introduced by the seed.
+See the RUM guide for backend configuration, new-session sampling and rollout.
+
 ### Annotation count controls (#78)
 
 The additive `preview-counts` library contains Count study: faces (two pages),
