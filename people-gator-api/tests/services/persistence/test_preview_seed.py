@@ -409,7 +409,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (38, 119, 75)
+    assert await counts(database) == (38, 119, 76)
 
 
 
@@ -456,7 +456,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (36, 118, 74)
+    assert await counts(database) == (36, 118, 75)
 
 
 
@@ -1275,17 +1275,19 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     sources = await database.sources.list_sources(SourceListRequest(filter_=SourceListFilter(last_touched_by_api_key_id=[seeded.api_keys['importer']]), limit=100))
     assert {item.source_id for item in images.items} <= {item.source_id for item in sources.items}
     first = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, return_total_count=True))
-    second = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, return_total_count=True))
-    third = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=second.cursor, return_total_count=True))
-    fourth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=third.cursor, return_total_count=True))
-    fifth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fourth.cursor, return_total_count=True))
-    sixth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=fifth.cursor, return_total_count=True))
-    seventh = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=sixth.cursor, return_total_count=True))
-    eighth = await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=seventh.cursor, return_total_count=True))
-    assert first.total_count == 8 and eighth.cursor is None
-    assert [batch.items[0].library for batch in (first, second, third, fourth, fifth, sixth, seventh, eighth)] == [
-        'preview-counts', 'preview-mzk', 'preview-nlk', 'preview-pagination', 'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
+    batches = [first]
+    while batches[-1].cursor:
+        batches.append(await database.sources.document_library_filter_options(
+            DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
+        ))
+    expected_libraries = [
+        'preview-counts', 'preview-mzk', 'preview-nlk', 'preview-pagination',
+        'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
+        'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
+    assert first.total_count == len(expected_libraries) and batches[-1].cursor is None
+    assert all(len(batch.items) == 1 for batch in batches)
+    assert [batch.items[0].library for batch in batches] == expected_libraries
     with pytest.raises(ValueError, match='cursor'):
         await database.sources.document_library_filter_options(DocumentLibraryOptionsRequest(limit=1, cursor=first.cursor, q='mzk'))
 
