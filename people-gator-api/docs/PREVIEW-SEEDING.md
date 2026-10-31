@@ -88,6 +88,7 @@ This does not automatically seed the actual staging environment.
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
 | Multiple embedding models | Deterministic, normalized 8D and 4D synthetic vectors with registered models |
 | Processing filters and details | Reviewer activity without an API key, face-importer and OCR-linker attribution with different registered keys |
+| Teleprompter focus modes (#36) | Open `teleprompter-person`: Ada's lines of the 40-line **Teleprompter reading practice** page, with +1/+5 context, Reset and the page minimap. See [Teleprompter reading practice](#teleprompter-reading-practice-36). |
 | Scan document-page gallery | Open `document-page-gallery`: 14 evidence-free pages of **Page gallery navigation**, more than one 12-page gallery batch, one without media; `document-page-gallery-filtered` keeps all six Příběhy archivářů pages under an annotation filter |
 
 Open the people search page and try the assignment, document, user and API-key
@@ -1141,3 +1142,31 @@ repository tests traverse all twelve orders in both directions and cursor batche
 compare exact ranges to batched statistics, retain person-wide counts under
 source/state membership filters, and verify that reviewed assignments survive a
 second seed run. No preview edits or checkpoint identities are reset.
+
+
+## Teleprompter reading practice (#36)
+
+The additive **Teleprompter reading practice** document (`teleprompter`,
+`preview-mzk`) has one 40-line page (`teleprompter-1`). Ada Novak's automatic
+mention repeats on L3, L16 and L29 and spans L33–L34. Viktor Marek's verified
+mention is on L10 and L25 and Nora Svoboda's manual mention is on L20. The other
+lines stay unannotated. One unembedded Ada face sits beside the text.
+
+- Open `teleprompter` for full text. Select **Annotated** to collapse the
+  unannotated lines, then use **+1**/**+5** above or below a passage. **Reset**
+  clears the revealed context.
+- Open `teleprompter-person` for Ada's lines (L3, L16, L29, L33–L34) with
+  original numbers. Select Viktor's mention or the Ada face to change the person.
+  Arrow keys step through visible lines only.
+- Open `teleprompter-annotated` to see that **Verified** highlighting marks only
+  Viktor's mentions, while every annotated line stays visible.
+- The page-scoped minimap on the right grays hidden lines and colors highlighted
+  mentions. Click a gray gap to center the nearest passages without revealing it.
+
+The layout uses its own ordered lines with compact geometry inside the page,
+which leaves existing fixtures unchanged. New stable keys add the page, face and
+three mentions to retained previews. Reruns keep reviewer reassignments and page
+processing times. Integration tests resolve each identity's lines through the
+media services, including the two-line Ada span. They also check face and line
+geometry, preserve a reviewed reassignment across reruns and recover an
+interrupted upgrade checkpoint.

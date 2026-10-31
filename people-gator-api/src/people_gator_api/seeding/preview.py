@@ -536,6 +536,25 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         f"/libraries/{focus_document.library}/documents/{focus_document.document_id}"
         f"/pages/{next(item.page_id for item in PAGES if item.key == 'focus-1')}"
     )
+    teleprompter_document = next((item for item in DOCUMENTS if item.key == "teleprompter"), None)
+    teleprompter_page = next((item for item in PAGES if item.key == "teleprompter-1"), None)
+    # Issue #36: a 40-line page where Ada's repeated and two-line mentions
+    # sit between unannotated passages, beside Viktor and Nora.
+    teleprompter_examples: dict[str, str] = {}
+    if teleprompter_document and teleprompter_page and "ada" in manifest.entities:
+        teleprompter_path = (
+            f"/libraries/{teleprompter_document.library}/documents/"
+            f"{teleprompter_document.document_id}/pages/{teleprompter_page.page_id}"
+        )
+        teleprompter_examples = {
+            "teleprompter": teleprompter_path,
+            "teleprompter-person": teleprompter_path + "?" + urlencode({
+                "lines": "person", "selectedPerson": manifest.entities["ada"],
+            }),
+            "teleprompter-annotated": teleprompter_path + "?" + urlencode({
+                "lines": "annotated", "highlight": "verified",
+            }),
+        }
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")
@@ -771,6 +790,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 f"/pages/{statistics_page.page_id}?"
                 + urlencode({"selectedPerson": manifest.entities["link-ada"]})
             ),
+            **teleprompter_examples,
             # Fourteen evidence-free pages exceed one 12-page gallery batch and
             # page 9 has no media. List order follows internal source keys, so
             # any page may need a further batch; the gallery loads until found.

@@ -34,7 +34,38 @@ def face_keypoints(face: Face) -> list[FaceKeypoint]:
     ]
 
 
+def _ordered_page_lines(page: Page) -> list[TextLineModel]:
+    """Compact geometry for a page with its own ordered OCR lines (#36)."""
+    step = (1060 - 200) / len(page.lines)
+    return [
+        TextLineModel(
+            id=f"{page.key}-line-{index + 1:02}",
+            baseline=[[50, round(200 + index * step) + 14], [560, round(200 + index * step) + 14]],
+            polygon=[
+                [50, round(200 + index * step)], [560, round(200 + index * step)],
+                [560, round(200 + index * step) + 18], [50, round(200 + index * step) + 18],
+            ],
+            heights=[14, 4], transcription=transcription, index=index,
+            transcription_confidence=0.99,
+        )
+        for index, transcription in enumerate(page.lines)
+    ]
+
+
 def page_layout(page: Page) -> PageLayoutModel:
+    if page.lines:
+        ordered = _ordered_page_lines(page)
+        return PageLayoutModel(
+            id=str(page.page_id),
+            page_size=(PAGE_SIZE[1], PAGE_SIZE[0]),
+            regions=[RegionLayoutModel(
+                id="text",
+                polygon=[[40, 190], [570, 190], [570, 1080], [40, 1080]],
+                transcription="\n".join(line.transcription for line in ordered),
+                lines=ordered,
+            )],
+            reading_order={"text": 0},
+        )
     lines: list[TextLineModel] = []
     for mention in page.mentions:
         for fragment, transcription in enumerate(mention.text.split("\n")):
@@ -111,8 +142,9 @@ def page_image(page: Page, document: Document) -> bytes:
             fill="#303030",
             font=font,
         )
+    line_font = ImageFont.load_default(size=15) if page.lines else font
     for line in page_layout(page).regions[0].lines:
-        draw.text((50, line.polygon[0][1]), line.transcription, fill="#303030", font=font)
+        draw.text((50, line.polygon[0][1]), line.transcription, fill="#303030", font=line_font)
     if not page.faces and not page.mentions:
         draw.text(
             (50, 220),
