@@ -25,6 +25,9 @@ class SortDirection(StrEnum):
 
 
 class EntitySortField(StrEnum):
+    FACES_TOTAL_COUNT = "faces_total_count"
+    MENTIONS_TOTAL_COUNT = "mentions_total_count"
+    ANNOTATIONS_TOTAL_COUNT = "annotations_total_count"
     RELEVANCE = "relevance"
     NAME = "name"
     ENTITY_ID = "entity_id"

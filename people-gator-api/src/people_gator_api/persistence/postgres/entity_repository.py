@@ -78,6 +78,7 @@ from .sorting import (
     sort_columns,
     sort_ranked,
     text_keys,
+    with_sort_joins,
 )
 from .touch import creation_values, touch_values, touch_sources, lock_annotation_graph
 from .search_resolution import resolve_entity_search
@@ -110,6 +111,14 @@ class PostgresEntityRepository(EntityRepository):
             "last_touched_at": lambda desc: [SortKey(Entity.last_touched_at, "datetime", desc)],
             "created_at": lambda desc: [SortKey(Entity.created_at, "datetime", desc)],
         }
+        if field in ("faces_total_count", "mentions_total_count", "annotations_total_count"):
+            from .entity_counts import entity_counts
+            from .annotation_counts import count_column
+            counts = entity_counts()
+            builders[field] = lambda desc: [SortKey(
+                count_column(counts, field), "number", desc,
+                ((counts, counts.c.owner_id == Entity.id),),
+            )]
         return build_spec(field, direction, Entity.id, builders, "entity_id")
 
     async def list(self, query: EntityListRequest) -> EntityListResponse:
@@ -131,7 +140,7 @@ class PostgresEntityRepository(EntityRepository):
         if after is not None:
             page_filters.append(after_predicate(spec, after))
         result = await self._session.execute(
-            select(Entity, *sort_columns(spec))
+            with_sort_joins(select(Entity, *sort_columns(spec)), spec)
             .where(*page_filters)
             .options(selectinload(Entity.aliases))
             .order_by(*order_by(spec))
@@ -503,7 +512,7 @@ class PostgresEntityRepository(EntityRepository):
         values: dict[uuid.UUID, tuple[object, ...]] = {}
         if spec is not None and ranked:
             rows = await self._session.execute(
-                select(Entity.id, *sort_columns(spec)).where(Entity.id.in_([item[0] for item in ranked]))
+                with_sort_joins(select(Entity.id, *sort_columns(spec)), spec).where(Entity.id.in_([item[0] for item in ranked]))
             )
             values = {row[0]: tuple(row[1:]) for row in rows.all()}
         ranked = sort_ranked(ranked, spec, direction, values)
