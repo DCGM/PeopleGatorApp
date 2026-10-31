@@ -25,7 +25,9 @@ PEOPLE_GATOR_API__RUM__ORGANIZATION_IDENTIFIER=default
 PEOPLE_GATOR_API__RUM__APPLICATION_ID=people-gator-app
 PEOPLE_GATOR_API__RUM__SESSION_SAMPLE_RATE=100
 PEOPLE_GATOR_API__OTEL__ENABLED=true
-PEOPLE_GATOR_API__OTEL__HTTP_ENDPOINT=http://lgtm:4318
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://lgtm:4318/v1/traces
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://lgtm:4318/v1/logs
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://lgtm:4318/v1/metrics
 ```
 
 Use literal, unquoted `KEY=value` entries. The deployment telemetry file uses
@@ -58,7 +60,8 @@ is absent.
 The API serves an explicit allowlist of public RUM settings at
 `GET /api/v1/rum-config`, with `Cache-Control: no-store`. It is unauthenticated
 because monitoring starts before login; it exposes no backend OTLP credentials.
-It is an operational endpoint excluded from application OpenAPI/client generation.
+It is an operational endpoint excluded from application OpenAPI/client generation,
+owned by `routes/v1/rum_config.py` and registered through the v1 router.
 The frontend reads it before loading router/client modules. Disabled settings,
 older-backend 404s and failed requests leave the app usable; configuration fetch
 has a three-second timeout. A missing token with RUM enabled is a server
@@ -120,10 +123,23 @@ is separate; see [backend versus container logs](OBSERVABILITY.md#direct-backend
 for duplicate copies and the release diagnostic-log path. The collector must
 accept all configured signals. If server-side authorization is required,
 put standard `OTEL_EXPORTER_OTLP_HEADERS` or per-signal headers in the private
-telemetry file. Per-signal `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (and logs/metrics
-variants) override `OTEL_EXPORTER_OTLP_ENDPOINT`, then the API HTTP base; otherwise signal paths are appended while
-preserving any organization prefix. Prefer the existing collector for routing
-and OpenObserve credentials. Never use the browser RUM token as OTLP credentials.
+telemetry file. Endpoint settings contain complete URLs, passed unchanged to the
+exporters:
+
+| API setting | Standard environment alias | Default |
+| --- | --- | --- |
+| `PEOPLE_GATOR_API__OTEL__TRACES_ENDPOINT` | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `http://lgtm:4318/v1/traces` |
+| `PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT` | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `http://lgtm:4318/v1/logs` |
+| `PEOPLE_GATOR_API__OTEL__METRICS_ENDPOINT` | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `http://lgtm:4318/v1/metrics` |
+
+Settings resolve the aliases; exporters do not read or combine endpoint parts.
+The API setting takes priority when both environment names are supplied. The
+former `HTTP_ENDPOINT` plus signal paths, unused gRPC/profile settings and generic
+backend base-URL expansion are removed. Migrate existing backend telemetry files
+to the complete per-signal URLs above. The deployment utility's separate
+container-log collector retains its own standard OTLP base configuration.
+Prefer the existing LGTM collector for routing and OpenObserve credentials.
+Never use the browser RUM token as OTLP credentials.
 
 ## Rollout and verification
 

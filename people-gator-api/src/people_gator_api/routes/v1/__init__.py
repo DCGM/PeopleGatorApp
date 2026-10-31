@@ -6,6 +6,7 @@ from people_gator_api.routes.v1.face_models import router as face_models_router
 from people_gator_api.routes.v1.media import router as media_router
 from people_gator_api.routes.v1.users import router as users_router
 from people_gator_api.routes.v1.root import router as root_router
+from people_gator_api.routes.v1.rum_config import router as rum_config_router
 from people_gator_api.routes.v1.search import router as search_router
 from people_gator_api.routes.v1.sources import router as sources_router
 from people_gator_api.routes.v1.text_mentions import (
@@ -26,5 +27,6 @@ from people_gator_api.routes.v1.api_keys import router as api_keys_router
 router.include_router(api_keys_router)
 router.include_router(translation_router)
 router.include_router(root_router)
+router.include_router(rum_config_router)
 
 __all__ = ["router"]
