@@ -39,7 +39,9 @@ from people_gator_api.schemas.entities import (
     EntityPatchRequest,
 )
 from people_gator_api.schemas.faces import FaceResponse, FaceCreateRequest, FaceListFilter, FaceListRequest, FacePatchRequest
-from people_gator_api.schemas.mentions import TextMentionListRequest, TextMentionPatchRequest
+from people_gator_api.schemas.mentions import (
+    TextMentionListFilter, TextMentionListRequest, TextMentionPatchRequest,
+)
 from people_gator_api.schemas.sources import (
     PageResponse,
     DocumentListRequest,
@@ -104,8 +106,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (37, 119, 76)
-    assert len(result.documents) == 52 and len(result.pages) == 107
+    assert await counts(database) == (37, 120, 79)
+    assert len(result.documents) == 53 and len(result.pages) == 108
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -366,7 +368,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (37, 119, 76)
+    assert await counts(database) == (37, 120, 79)
 
 
 @pytest.mark.asyncio
@@ -386,7 +388,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (37, 119, 76)
+    assert await counts(database) == (37, 120, 79)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -409,7 +411,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (38, 119, 76)
+    assert await counts(database) == (38, 120, 79)
 
 
 
@@ -434,8 +436,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 37 and len(result.faces) == 119
-    assert await counts(database) == (37, 119, 76)
+    assert len(result.entities) == 37 and len(result.faces) == 120
+    assert await counts(database) == (37, 120, 79)
 
 
 
@@ -456,7 +458,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (36, 118, 75)
+    assert await counts(database) == (36, 119, 78)
 
 
 
@@ -3547,7 +3549,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (37, 119, 76)
+    assert await counts(db) == (37, 120, 79)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -4333,3 +4335,113 @@ async def test_people_state_count_ranges_sorting_and_preserved_review(seed_targe
     await preview.seed_preview(db, fs)
     assert counts(await db.entities.get(mira)) == reviewed
     assert seed.filter_examples['people-count-states'].endswith('sort=annotations_verified_count')
+
+
+TELEPROMPTER_LINE = "teleprompter-1-line-{:02}".format
+
+
+@pytest.mark.asyncio
+async def test_teleprompter_page_covers_sparse_repeated_and_multiline_mentions(seed_target):
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["teleprompter-1"])
+    path = f"/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}"
+    assert result.filter_examples["teleprompter"] == path
+    person = urlsplit(result.filter_examples["teleprompter-person"])
+    assert person.path == path
+    assert parse_qs(person.query) == {
+        "lines": ["person"], "selectedPerson": [str(result.entities["ada"])],
+    }
+    annotated = urlsplit(result.filter_examples["teleprompter-annotated"])
+    assert parse_qs(annotated.query) == {"lines": ["annotated"], "highlight": ["verified"]}
+
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    lines = [line for region in layout.regions for line in region.lines]
+    assert [line.id for line in lines] == [TELEPROMPTER_LINE(i) for i in range(1, 41)]
+    for line in lines:
+        assert all(0 <= x <= 800 and 0 <= y <= 1100 for x, y in line.polygon)
+    tops = [line.polygon[0][1] for line in lines]
+    assert tops == sorted(tops)
+
+    spans = await get_text_mention_spans(
+        database, page.source_id, library=page.library,
+        document_id=page.document_id, page_id=page.page_id,
+    )
+    ada, viktor, nora = (result.entities[key] for key in ("ada", "viktor", "nora"))
+    by_entity, _ = await _page_mention_lines(database, page)
+    # Ada repeats on L3, L16 and L29 and spans L33–L34; most lines stay unannotated.
+    assert by_entity == {
+        ada: {TELEPROMPTER_LINE(i) for i in (3, 16, 29, 33, 34)},
+        viktor: {TELEPROMPTER_LINE(i) for i in (10, 25)},
+        nora: {TELEPROMPTER_LINE(20)},
+    }
+    multiline = [span for span in spans if span.start_line_id != span.end_line_id]
+    assert [(span.entity_id, span.start_line_id, span.end_line_id) for span in multiline] == [
+        (ada, TELEPROMPTER_LINE(33), TELEPROMPTER_LINE(34)),
+    ]
+    assert {span.entity_link_state for span in spans if span.entity_id == viktor} == {"verified"}
+    assert {span.entity_link_state for span in spans if span.entity_id == nora} == {"manual"}
+    assert {span.entity_link_state for span in spans if span.entity_id == ada} == {"automatic"}
+
+    face = await database.faces.get(result.faces["teleprompter-ada"])
+    assert face.entity_id == ada
+    box = face.bounding_box
+    assert box.x + box.width <= 800 and box.y + box.height <= 1100
+    assert all(box.x <= point.x <= box.x + box.width and
+               box.y <= point.y <= box.y + box.height for point in face.keypoints)
+    image = await get_page_image(page.library, page.document_id, page.page_id)
+    with Image.open(io.BytesIO(image.content)) as scan:
+        assert scan.size == (800, 1100)
+
+    # A reviewer moves Nora's line to Lenka; reruns keep that edit and the page.
+    reviewed = await database.text_mentions.patch(
+        result.mentions["teleprompter-nora"],
+        TextMentionPatchRequest(entity_id=result.entities["lenka"]),
+        GenericActor(user_id=result.users["reviewer"]),
+    )
+    page_before = await database.sources.get_page(page.source_id)
+    for _ in range(2):
+        assert await preview.seed_preview(database, filesystem) == result
+    by_entity, _ = await _page_mention_lines(database, page)
+    assert by_entity[result.entities["lenka"]] == {TELEPROMPTER_LINE(20)}
+    assert nora not in by_entity
+    assert await database.text_mentions.get(reviewed.mention_id) == reviewed
+    assert await database.sources.get_page(page.source_id) == page_before
+
+
+@pytest.mark.asyncio
+async def test_teleprompter_upgrade_recovers_an_interrupted_checkpoint(seed_target, monkeypatch):
+    database, filesystem, _ = seed_target
+    with monkeypatch.context() as legacy:
+        for name in ("DOCUMENTS", "PAGES"):
+            legacy.setattr(preview, name, tuple(
+                item for item in getattr(preview, name)
+                if not item.key.startswith("teleprompter")
+            ))
+        old = await preview.seed_preview(database, filesystem)
+    assert "teleprompter-1" not in old.pages
+    original_write = filesystem.write_bytes
+    interrupted: uuid.UUID | None = None
+
+    async def write(key: str, content: bytes) -> None:
+        nonlocal interrupted
+        if key == preview.MANIFEST_KEY and interrupted is None:
+            identifier = json.loads(content)["mentions"].get("teleprompter-ada")
+            if identifier is not None:
+                interrupted = uuid.UUID(identifier)
+                raise OSError("interrupted teleprompter checkpoint")
+        await original_write(key, content)
+
+    monkeypatch.setattr(filesystem, "write_bytes", write)
+    with pytest.raises(OSError, match="interrupted teleprompter"):
+        await preview.seed_preview(database, filesystem)
+    seed = await preview.seed_preview(database, filesystem)
+    assert seed.mentions["teleprompter-ada"] == interrupted
+    for name in ("entities", "documents", "pages", "faces", "mentions"):
+        assert getattr(old, name).items() <= getattr(seed, name).items()
+    listed = (await database.text_mentions.list(TextMentionListRequest(
+        limit=100, filter_=TextMentionListFilter(source_id=[seed.pages["teleprompter-1"]]),
+    ))).items
+    assert sorted(mention.name for mention in listed) == [
+        "Ada Novak", "Nora Svoboda", "Viktor Marek",
+    ]

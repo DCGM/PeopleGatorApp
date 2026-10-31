@@ -186,6 +186,7 @@ DOCUMENTS = (
       for i in range(1, PAGINATION_ITEMS + 1)),
     Document("reference-faces", "preview-nlk", "Reference appearances"),
     Document("alignment", "preview-mzk", "Face alignment recovery"),
+    Document("teleprompter", "preview-mzk", "Teleprompter reading practice"),
 )
 
 
@@ -224,11 +225,56 @@ class Page:
     mentions: tuple[Mention, ...] = ()
     has_layout: bool = True
     has_image: bool = True
+    # Ordered OCR lines; when set, mentions resolve by name within them (#36).
+    lines: tuple[str, ...] = ()
 
     @property
     def page_id(self) -> UUID:
         return fixture_id("page/" + self.key)
 
+
+TELEPROMPTER_LINES = (
+    "Reading room register, autumn volume.",
+    "The weather was cold and the lamps were lit early.",
+    "Ada Novak opened the reading room.",
+    "She listed the boxes waiting on the long table.",
+    "Box one held letters tied with a faded ribbon.",
+    "Box two held receipts from the paper mill.",
+    "Box three was empty apart from a pressed leaf.",
+    "The clock in the hall ran ten minutes slow.",
+    "A visitor asked about the old harbour maps.",
+    "Viktor Marek brought the glass plates.",
+    "Each plate was wrapped in soft grey paper.",
+    "Two plates were cracked along one corner.",
+    "The rest were sorted by street and year.",
+    "Tea was served at four, as on every Tuesday.",
+    "Rain began shortly after the tea was cleared.",
+    "Ada Novak checked the plates against the ledger.",
+    "Three entries had no matching plate.",
+    "A note was added to search the attic shelves.",
+    "The porter locked the side door at six.",
+    "Nora Svoboda copied the index.",
+    "His copy kept the original page numbers.",
+    "Several names were spelled in two different ways.",
+    "A pencil sketch of the harbour was found inside.",
+    "It showed the crane that was removed long ago.",
+    "Viktor Marek photographed the sketch for the album.",
+    "The sketch was returned to its folder.",
+    "Wind rattled the tall windows all evening.",
+    "The fire in the stove was kept low.",
+    "Ada Novak compared the index with the plates.",
+    "The comparison took most of the next morning.",
+    "Only one plate remained without a description.",
+    "It showed a doorway with a carved stone lintel.",
+    "The final entry of the day was written by Ada",
+    "Novak before the room was closed.",
+    "The keys were left with the porter as usual.",
+    "Snow was expected before the end of the week.",
+    "The register was placed back on its shelf.",
+    "A reminder was pinned beside the door.",
+    "Next session: continue with box four.",
+    "End of the autumn register.",
+)
 
 PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
@@ -499,6 +545,14 @@ PAGES = (
         Face("alignment-coincident", None, 0, 2, embedded=False, coincident_keypoints=True),
         Face("alignment-valid", None, 1, 3, embedded=False),
     )),
+    # Issue #36: a long page with sparse, repeated and multiline mentions
+    # between unannotated passages, for focus modes, context and the minimap.
+    Page("teleprompter-1", "teleprompter", 1,
+         (Face("teleprompter-ada", "ada", 0, 0, embedded=False, box=(600, 200, 150, 175)),),
+         (Mention("teleprompter-ada", "ada", "Ada Novak opened the reading room."),
+          Mention("teleprompter-viktor", "viktor", "Viktor Marek brought the glass plates.", "verified"),
+          Mention("teleprompter-nora", "nora", "Nora Svoboda copied the index.", "manual")),
+         lines=TELEPROMPTER_LINES),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
