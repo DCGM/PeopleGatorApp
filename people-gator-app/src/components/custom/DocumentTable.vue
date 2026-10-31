@@ -291,7 +291,7 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
               :style="{ width: `${header.getSize()}px` }"
-              class="relative pr-4"
+              class="relative border-r pr-4 last:border-r-0"
             >
               <Button
                 v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
@@ -342,7 +342,7 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               v-for="cell in row.getVisibleCells()"
               :key="cell.id"
               :data-column="cell.column.id"
-              class="whitespace-normal [overflow-wrap:anywhere]"
+              class="border-r whitespace-normal last:border-r-0 [overflow-wrap:anywhere]"
               :style="{ width: `${cell.column.getSize()}px` }"
               :headers="
                 cell.column.parent
