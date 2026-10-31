@@ -14,3 +14,21 @@ query and sort, scored search, reload, no horizontal overflow, and no page error
 Mobile additionally exercised Enter on the Collapsible toggle, `aria-expanded`,
 and active-tag accessibility after collapsing. Captures show the implementation
 and standard light/dark controls; they do not substitute for these interaction checks.
+
+State-count extension: captures were refreshed from the local running PR
+application with the migrated, twice-seeded synthetic database. Desktop remains
+1440 × 900 CSS pixels; mobile remains 390 × 844.
+
+- `*-state-results.png`: mixed state ranges, verified combined sorting and the
+  corresponding state counts on Mira Counts' card (collapsed mobile filters).
+- `*-state-choices.png`: All, Verified, Manual and Automatic in the state picker;
+  Unassigned is absent because ownerless evidence has no person.
+- `*-state-range.png`: exact verified All annotations range in the standard popover.
+- `*-state-dark.png`: dark, expanded controls with automatic-face ascending sort.
+- `*-state-sort.png`: state-specific count strategies in the shared Sort control.
+
+Chromium checks cover selected-state API/URL submission, exact combined bounds,
+individual state-bound removal, Back/Forward, reload, clear-all retaining search
+and sort, scored search and browse, both sort directions, mobile keyboard toggle,
+parent-width overflow and light/dark rendering, with no page errors. The existing
+total-count browser checks were repeated and their screenshots refreshed.
