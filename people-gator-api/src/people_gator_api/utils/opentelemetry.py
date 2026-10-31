@@ -59,17 +59,30 @@ def trace(
     return decorator
 
 
-def initialize_opentelemetry():
-    resource = Resource.create(
+def telemetry_resource() -> Resource:
+    return Resource.create(
         {
-            "service.name": "dev.people-gator-api",
-            "service.version": "0.1.0",
+            "service.name": "people-gator-api",
+            "service.version": settings.deployment.version,
+            "deployment.environment.name": settings.deployment.environment,
+            "vcs.ref.head.revision": settings.deployment.commit,
+            "people-gator.preview.pr": settings.deployment.pr_number,
             "service.instance.id": os.uname().nodename,
         }
     )
 
+def signal_endpoint(signal: str) -> str:
+    # Preserve an OpenObserve organization prefix and standard signal overrides.
+    return os.getenv(f"OTEL_EXPORTER_OTLP_{signal.upper()}_ENDPOINT") or urljoin(
+        settings.otel.http_endpoint.rstrip("/") + "/",
+        getattr(settings.otel, f"{signal}_path").lstrip("/"),
+    )
+
+
+def initialize_opentelemetry():
+    resource = telemetry_resource()
     trace_exporter = OTLPSpanExporter(
-        endpoint=urljoin(settings.otel.http_endpoint, settings.otel.traces_path)
+        endpoint=signal_endpoint("traces")
     )
     trace_processor = BatchSpanProcessor(trace_exporter)
     trace_provider = TracerProvider(resource=resource)
@@ -77,14 +90,14 @@ def initialize_opentelemetry():
     otel_trace.set_tracer_provider(trace_provider)
 
     meter_exporter = OTLPMetricExporter(
-        endpoint=urljoin(settings.otel.http_endpoint, settings.otel.metrics_path)
+        endpoint=signal_endpoint("metrics")
     )
     meter_reader = PeriodicExportingMetricReader(meter_exporter)
     meter_provider = MeterProvider([meter_reader], resource=resource)
     metrics.set_meter_provider(meter_provider)
 
     log_exporter = OTLPLogExporter(
-        endpoint=urljoin(settings.otel.http_endpoint, settings.otel.logs_path)
+        endpoint=signal_endpoint("logs")
     )
     log_processor = BatchLogRecordProcessor(log_exporter)
     log_provider = LoggerProvider(resource=resource)
