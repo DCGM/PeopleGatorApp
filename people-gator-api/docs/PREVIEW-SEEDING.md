@@ -1028,6 +1028,15 @@ an API resource and its backend trace ID. RUM introduces no database records,
 relationships or media changes; fixture identities/checkpoints and rerun/edit
 preservation remain unchanged. No external telemetry service is required to seed.
 
+For session replay (#98), use the seed result's `openobserve-replay-person`
+(Ada Novak) then `openobserve-replay-page` (her linked reference-faces page).
+With RUM enabled and both backend sampling rates at 100, inspect the resulting
+session replay in OpenObserve; page content remains masked. The journey reuses
+existing synthetic linked face records and local page media. Repository/media
+coverage verifies these links and rerun preservation after a review edit; no
+additional records, credentials or external services are introduced by the seed.
+See the RUM guide for backend configuration, new-session sampling and rollout.
+
 ### Annotation count controls (#78)
 
 The additive `preview-counts` library contains Count study: faces (two pages),
@@ -1087,3 +1096,32 @@ while collapsed. Repository tests traverse tied count orders, check exact/open
 ranges and document-wide membership versus person-wide totals, repeat seeding,
 and exercise evidence transitions. Existing edit-preservation and interrupted
 checkpoint tests continue to protect retained previews.
+
+### Stable document column widths (#93)
+
+Open the `document-table-widths` manifest link. It combines 14 unchanged
+pagination ledgers and the two-page annotated table ledger with two additive
+fixtures: `table-width-short` (title **A**, no pages) and `table-width-long`
+(a long title with an uninterrupted archive reference, a long library label,
+and a local page image with an Ada mention). Existing identities, checkpoints,
+reviewed assignments and last-processing timestamps are preserved on reruns.
+
+Sort Document name in both directions, then enable First page, Modified by,
+API key and the face/text-mention count groups. At desktop and mobile sizes,
+column boundaries have vertical separators and widths stay constant while full titles and other long values wrap
+inside their cells; row heights grow with the text. The title width is 320 CSS
+pixels. All widths use the same fixed pixel policy at every viewport; unused
+parent space is left blank and excess columns scroll inside the keyboard-focusable
+table region. Hiding/restoring fields preserves every column's configured width.
+Drag the grip at a leaf header's right edge to resize that column with mouse or
+touch. Focus the grip and use Left/Right (10px), Shift+Left/Right (40px),
+Home/End (bounds), or Enter (that column's default); double-click also restores
+one column. Titles can range from 200 to 720px. Other columns retain readable
+header minima and purpose-specific maxima. Restore column widths resets widths
+only, preserving visibility, filters and sorting. Width choices survive row changes
+and hidden/restored columns within the mounted Documents view; reloads use defaults.
+No browser-local persistence is included.
+
+Scroll horizontally to the middle/far right and vertically to the final row to
+load the second cursor batch automatically; Load more documents is the keyboard
+fallback. Search/filter/sort URLs and counts retain their existing semantics.

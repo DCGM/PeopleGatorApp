@@ -6,7 +6,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 import pytest
 
 from people_gator_api.app import get_app
-from people_gator_api.settings import DeploymentSettings, RumSettings, settings
+from people_gator_api.settings import DeploymentSettings, RumSettings, Settings, settings
 from people_gator_api.utils.opentelemetry import telemetry_resource
 
 
@@ -25,6 +25,7 @@ def test_runtime_config_only_publishes_browser_fields(monkeypatch):
         'site': 'openobserve.capturemyhand.com', 'organizationIdentifier': 'default',
         'applicationId': 'people-gator-app', 'service': 'people-gator-app',
         'env': 'preview', 'version': 'abc123', 'sessionSampleRate': 100,
+        'sessionReplaySampleRate': 100,
         'context': {'commit': 'abc123', 'pr_number': '94'},
     }
     assert '/api/v1/rum-config' not in app.openapi()['paths']
@@ -58,3 +59,21 @@ def test_fastapi_continues_browser_trace():
     finally:
         FastAPIInstrumentor.uninstrument_app(app)
         provider.shutdown()
+
+
+@pytest.mark.parametrize('rate', [0, 25.5, 100])
+def test_replay_rate_environment_reaches_browser(monkeypatch, rate):
+    monkeypatch.setenv('PEOPLE_GATOR_API__RUM__ENABLED', 'true')
+    monkeypatch.setenv('PEOPLE_GATOR_API__RUM__CLIENT_TOKEN', 'synthetic-rum')
+    monkeypatch.setenv('PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE', str(rate))
+    monkeypatch.setattr(settings, 'rum', Settings(_env_file=None).rum)
+    config = TestClient(get_app()).get('/api/v1/rum-config').json()
+    assert config['sessionSampleRate'] == 100
+    assert config['sessionReplaySampleRate'] == rate
+
+
+@pytest.mark.parametrize('rate', [-1, 101, float('nan'), float('inf')])
+def test_invalid_replay_sampling_is_rejected(monkeypatch, rate):
+    monkeypatch.setenv('PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE', str(rate))
+    with pytest.raises(ValueError, match='session_replay_sample_rate'):
+        Settings(_env_file=None)

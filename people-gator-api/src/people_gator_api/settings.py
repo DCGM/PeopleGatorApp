@@ -197,6 +197,7 @@ class RumSettings(BaseModel):
     organization_identifier: str = "default"
     application_id: str = "people-gator-app"
     session_sample_rate: float = Field(default=100, ge=0, le=100)
+    session_replay_sample_rate: float = Field(default=100, ge=0, le=100)
 
     @model_validator(mode="after")
     def validate_enabled(self) -> Self:

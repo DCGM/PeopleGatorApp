@@ -257,3 +257,37 @@ screenshots as separate visual evidence, or explain an applicable exemption;
 blocked required captures keep the PR draft. Keep these results separate from
 proposed tests. Update this guide when the runner, coverage boundaries, live-test
 prerequisites or CI execution change.
+
+### Documents column geometry and header resizing (#93)
+
+`people-gator-app/scripts/check-document-widths.mjs` exercises actual Chromium
+layout against the running application and synthetic preview. It checks leaf,
+group and body widths, multiline titles (including uninterrupted text), loading,
+empty/error recovery, shared/header sorting and history, media, hidden/restored
+columns, mouse/touch/keyboard sizing and bounds/reset, bounded horizontal scroll,
+and automatic opaque-cursor loading from the middle/far right. Touch coverage
+uses browser TouchEvents with the actual resize handler, not a physical device.
+It runs separately from the jsdom unit suite and needs the seeded API and Vite.
+
+Use the disposable local setup in [Development](DEVELOPMENT.md), migrate and seed
+twice, and start the API. From `people-gator-app`, point Vite to that API:
+
+```sh
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev -- --host 127.0.0.1 --port 5193 --strictPort
+```
+
+In another shell in `people-gator-app`:
+
+```sh
+npm ci --prefer-offline --no-audit --no-fund
+npx playwright install chromium
+DOCUMENT_WIDTHS_ORIGIN=http://127.0.0.1:5193 \
+DOCUMENT_WIDTHS_EVIDENCE=/tmp/document-width-evidence npm run test:document-widths
+```
+
+Captures use desktop 1440 × 900 and mobile 390 × 844 CSS pixels. Width preferences
+are local to the mounted Documents view; there is no saved browser preference.
+For a before comparison, run the original table on the same fixture store and
+compare Document name sorting in both directions. Keep baseline captures separate
+from the script's after captures. Tests can fulfill requests with synthetic 503
+responses for error checks but do not change the seeded records.

@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed, h, useId } from 'vue'
+import { computed, h, ref, useId } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   columnVisibilityFeature,
+  columnSizingFeature,
+  columnResizingFeature,
   tableFeatures,
   useTable,
   FlexRender,
   type ColumnDef,
   type ColumnVisibilityState,
+  type ColumnSizingState,
+  type Header,
 } from '@tanstack/vue-table'
-import { ArrowUp, ArrowDown } from '@lucide/vue'
+import { ArrowUp, ArrowDown, GripVertical } from '@lucide/vue'
 import { defaultDirection, type SortState } from '@/lib/sorting'
 import { DOCUMENT_BROWSE_DEFAULT } from '@/viewmodels/sort-options'
 import type { DocumentResponse, DocumentSortField } from '@/client'
@@ -17,6 +21,7 @@ import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
 import { documentTitle } from '@/viewmodels/document-list'
 import {
+  documentColumnSizing,
   annotationCount,
   annotationColumnId,
   DOCUMENT_ANNOTATION_GROUPS,
@@ -66,7 +71,11 @@ function headerSort(columnId: string) {
     : undefined
 }
 const route = useRoute()
-const features = tableFeatures({ columnVisibilityFeature })
+const features = tableFeatures({
+  columnVisibilityFeature,
+  columnSizingFeature,
+  columnResizingFeature,
+})
 const link = (document: DocumentResponse, text: string) =>
   h(
     RouterLink,
@@ -77,42 +86,50 @@ const link = (document: DocumentResponse, text: string) =>
     },
     () => text,
   )
+const sizing = ref<ColumnSizingState>({})
 const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   {
     id: 'identity',
+    ...documentColumnSizing('identity'),
     header: 'Document',
     enableHiding: false,
     cell: ({ row }) => link(row.original, `${row.original.library} · ${row.original.document_id}`),
   },
   {
     id: 'name',
+    ...documentColumnSizing('name'),
     header: 'Document name',
     accessorFn: documentTitle,
     cell: ({ row }) => link(row.original, documentTitle(row.original)),
   },
   {
     id: 'ndk',
+    ...documentColumnSizing('ndk'),
     header: 'NDK',
     cell: ({ row }) => h(DocumentSourceLink, { url: row.original.url }),
   },
   {
     id: 'first_page',
+    ...documentColumnSizing('first_page'),
     header: 'First page',
     cell: ({ row }) => h(DocumentFirstPage, { document: row.original }),
   },
-  { accessorKey: 'library', header: 'Library' },
+  { accessorKey: 'library', header: 'Library', ...documentColumnSizing('library') },
   {
     accessorKey: 'document_id',
+    ...documentColumnSizing('document_id'),
     header: 'Document ID',
     cell: ({ row }) => link(row.original, row.original.document_id),
   },
   {
     accessorKey: 'registered_page_count',
+    ...documentColumnSizing('registered_page_count'),
     header: 'Pages',
     cell: ({ getValue }) => getValue() ?? 'Unknown',
   },
   {
     id: 'last_modified',
+    ...documentColumnSizing('last_modified'),
     header: 'Last modified',
     accessorFn: (d) => d.last_touched_at,
     cell: ({ getValue }) =>
@@ -120,16 +137,19 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   },
   {
     id: 'modified_by',
+    ...documentColumnSizing('modified_by'),
     header: 'Modified by',
     accessorFn: (d) => d.last_touched_by_user_name || d.last_touched_by_user_id || 'Unknown',
   },
   {
     id: 'api_key',
+    ...documentColumnSizing('api_key'),
     header: 'API key',
     accessorFn: (d) => d.last_touched_by_api_key_name || d.last_touched_by_api_key_id || '—',
   },
   {
     accessorKey: 'linked_entity_count',
+    ...documentColumnSizing('linked_entity_count'),
     header: 'Linked entities',
     cell: ({ getValue }) => getValue() ?? 'Unknown',
   },
@@ -138,6 +158,7 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: group.label,
     columns: DOCUMENT_ANNOTATION_STATES.map((state) => ({
       id: annotationColumnId(group.scope, state.id),
+      ...documentColumnSizing(annotationColumnId(group.scope, state.id)),
       header: state.label,
       accessorFn: (d: DocumentResponse) => annotationCount(d, state.id, group.scope),
       cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
@@ -147,18 +168,47 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
 const table = useTable({
   features,
   columns,
+  columnResizeMode: 'onChange',
   data: computed(() => props.documents),
   getRowId: (row: DocumentResponse) => row.source_id,
   state: computed(() => ({
+    columnSizing: sizing.value,
     columnVisibility: {
       ...visibility.value,
       identity: visibility.value.name === false && visibility.value.document_id !== true,
     },
   })),
+  onColumnSizingChange: (next) => {
+    const requested = typeof next === 'function' ? next(sizing.value) : next
+    sizing.value = Object.fromEntries(
+      Object.entries(requested).map(([id, value]) => {
+        const { minSize, maxSize } = documentColumnSizing(id)
+        return [id, Math.min(maxSize, Math.max(minSize, value))]
+      }),
+    )
+  },
   onColumnVisibilityChange: (next) => {
     visibility.value = typeof next === 'function' ? next(visibility.value) : next
   },
 })
+// Header-only keyboard sizing follows the same bounds/state as mouse and touch.
+function resizeKey(event: KeyboardEvent, header: Header<typeof features, DocumentResponse>) {
+  const { minSize, maxSize, size } = documentColumnSizing(header.column.id)
+  const step = event.shiftKey ? 40 : 10
+  const width = (
+    {
+      ArrowLeft: header.column.getSize() - step,
+      ArrowRight: header.column.getSize() + step,
+      Home: minSize,
+      End: maxSize,
+      Enter: size,
+    } as Record<string, number>
+  )[event.key]
+  if (width === undefined) return
+  event.preventDefault()
+  event.stopPropagation()
+  table.setColumnSizing((current) => ({ ...current, [header.column.id]: width }))
+}
 </script>
 
 <template>
@@ -207,6 +257,9 @@ const table = useTable({
           </div>
         </PopoverContent>
       </Popover>
+      <Button variant="outline" @click="table.resetColumnSizing(true)"
+        >Restore column widths</Button
+      >
     </div>
     <p :id="`${tableId}-counts`" class="sr-only">
       Counts cover the entire registered document. All annotations combines faces and text mentions;
@@ -214,7 +267,19 @@ const table = useTable({
       registered pages only. Unknown means no recorded value.
     </p>
     <div class="w-full min-w-0 max-w-full">
-      <Table :aria-describedby="`${tableId}-counts`">
+      <Table
+        :aria-describedby="`${tableId}-counts`"
+        class="table-fixed"
+        :style="{ width: `${table.getTotalSize()}px` }"
+      >
+        <colgroup>
+          <col
+            v-for="column in table.getVisibleLeafColumns()"
+            :key="column.id"
+            :data-column="column.id"
+            :style="{ width: `${column.getSize()}px` }"
+          />
+        </colgroup>
         <TableHeader>
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
@@ -225,6 +290,8 @@ const table = useTable({
               :rowspan="header.isPlaceholder ? table.getHeaderGroups().length : undefined"
               :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
+              :style="{ width: `${header.getSize()}px` }"
+              class="relative border-r pr-4 last:border-r-0"
             >
               <Button
                 v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
@@ -235,17 +302,37 @@ const table = useTable({
                 @click="toggleSort(header.column.id)"
               >
                 <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
-                <ArrowUp v-if="headerSort(header.column.id) === 'ascending'" aria-hidden="true" />
-                <ArrowDown
-                  v-else-if="headerSort(header.column.id) === 'descending'"
-                  aria-hidden="true"
-                />
+                <span class="inline-flex size-4 shrink-0" aria-hidden="true">
+                  <ArrowUp v-if="headerSort(header.column.id) === 'ascending'" />
+                  <ArrowDown v-else-if="headerSort(header.column.id) === 'descending'" />
+                </span>
               </Button>
               <FlexRender
                 v-else
                 :render="header.column.columnDef.header"
                 :props="header.getContext()"
               />
+              <Button
+                v-if="!header.column.columns.length"
+                variant="ghost"
+                size="icon"
+                class="absolute inset-y-0 right-0 h-full w-3 cursor-col-resize touch-none select-none"
+                role="separator"
+                aria-orientation="vertical"
+                :aria-label="`Resize ${header.column.parent ? header.column.parent.columnDef.header + ': ' : ''}${header.column.columnDef.header} column`"
+                :aria-valuenow="header.column.getSize()"
+                :aria-valuemin="header.column.columnDef.minSize"
+                :aria-valuemax="header.column.columnDef.maxSize"
+                :aria-controls="columnHeaderId(header.column.id)"
+                title="Drag to resize; arrow keys adjust; Enter restores default"
+                @mousedown.stop.prevent="header.getResizeHandler()($event)"
+                @touchstart.stop="header.getResizeHandler()($event)"
+                @click.stop.prevent
+                @dblclick.stop.prevent="header.column.resetSize()"
+                @keydown="resizeKey($event, header)"
+              >
+                <GripVertical class="size-3" aria-hidden="true" />
+              </Button>
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -255,6 +342,8 @@ const table = useTable({
               v-for="cell in row.getVisibleCells()"
               :key="cell.id"
               :data-column="cell.column.id"
+              class="border-r whitespace-normal last:border-r-0 [overflow-wrap:anywhere]"
+              :style="{ width: `${cell.column.getSize()}px` }"
               :headers="
                 cell.column.parent
                   ? `${columnHeaderId(cell.column.parent.id)} ${columnHeaderId(cell.column.id)}`

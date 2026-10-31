@@ -560,6 +560,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            # Replay a synthetic person-to-page journey without telemetry credentials.
+            "openobserve-replay-person": f"/people/{manifest.entities['ada']}",
+            "openobserve-replay-page": reference_path,
             "detection-actions": (
                 f"/libraries/{actions_document.library}/documents/{actions_document.document_id}"
                 f"/pages/{actions_page.page_id}?" + urlencode({
@@ -845,6 +848,10 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "document-table-unknown-names": "/documents?" + urlencode({"library": "preview-mzk", "sort": "name"}),
             "document-table-name-fallback": "/documents?" + urlencode({"library": "preview-mzk", "sort": "name"}),
             "document-table-unnamed": "/documents?" + urlencode({"document": documents["legacy-document"]}),
+            "document-table-widths": "/documents?" + urlencode({
+                "library": ["preview-table-widths", "preview-table-widths-long-archive-label", "preview-pagination", "preview-table"],
+                "sort": "name",
+            }, doseq=True),
             "document-table-scroll": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-scroll-performance": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),
             "document-table-page-header": "/documents?" + urlencode({"library": "preview-pagination", "sort": "name"}),

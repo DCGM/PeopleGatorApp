@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
-import { defaultDocumentColumns } from '@/viewmodels/document-table'
+import { defaultDocumentColumns, documentColumnSizing } from '@/viewmodels/document-table'
 import type { DocumentResponse } from '@/client'
 
 const media = vi.hoisted(() => ({ image: vi.fn() }))
@@ -71,6 +71,112 @@ async function render() {
   return { wrapper, router, visibility }
 }
 describe('document table', () => {
+  it('keeps one applied width model through data, sorting, media and visibility changes', async () => {
+    const { wrapper } = await render()
+    const widths = () =>
+      Object.fromEntries(
+        wrapper
+          .findAll('col')
+          .map((col) => [col.attributes('data-column')!, (col.element as HTMLElement).style.width]),
+      )
+    const original = widths()
+    const checkModel = () => {
+      const current = widths()
+      const total = Object.keys(current).reduce((sum, id) => sum + documentColumnSizing(id).size, 0)
+      expect((wrapper.get('table').element as HTMLElement).style.width).toBe(`${total}px`)
+      expect(wrapper.get('table').classes()).toContain('table-fixed')
+      for (const cell of wrapper.findAll('tbody td')) {
+        expect((cell.element as HTMLElement).style.width).toBe(
+          current[cell.attributes('data-column')!],
+        )
+        expect(cell.classes()).toContain('[overflow-wrap:anywhere]')
+      }
+    }
+    checkModel()
+    await wrapper.get('button[aria-label="Sort by Document name"]').trigger('click')
+    await wrapper.setProps({ documents: [] })
+    expect(widths()).toEqual(original)
+    checkModel()
+    await wrapper.setProps({
+      documents: [
+        {
+          ...documents[0]!,
+          name: 'ArchiveReference'.repeat(50),
+          library: 'Long archive'.repeat(20),
+        },
+      ],
+    })
+    expect(widths()).toEqual(original)
+    expect(wrapper.get('tbody td').text()).toBe('ArchiveReference'.repeat(50))
+    checkModel()
+    await wrapper.setProps({
+      visibility: {
+        ...defaultDocumentColumns(),
+        first_page: true,
+        faces_total: true,
+        faces_manual: true,
+      },
+    })
+    await flushPromises()
+    checkModel()
+    expect(widths().first_page).toBe('144px')
+    expect(
+      (wrapper.get('th[scope="colgroup"][colspan="2"]').element as HTMLElement).style.width,
+    ).toBe('320px')
+    for (const [id, width] of Object.entries(original)) expect(widths()[id]).toBe(width)
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), library: false } })
+    checkModel()
+    expect(widths().library).toBeUndefined()
+    await wrapper.setProps({
+      visibility: defaultDocumentColumns(),
+      documents: [...documents, { ...documents[0]!, source_id: 'appended' }],
+    })
+    expect(widths()).toEqual(original)
+    checkModel()
+    for (const button of wrapper.findAll('thead button[aria-label^="Sort by"]')) {
+      expect(button.get('span[aria-hidden="true"]').classes()).toContain('size-4')
+    }
+  })
+  it('resizes only through leaf headers, respects bounds and keeps sorting and visibility independent', async () => {
+    const { wrapper } = await render()
+    const handle = () => wrapper.get('[role="separator"][aria-label="Resize Document name column"]')
+    const width = () => (wrapper.get('col[data-column="name"]').element as HTMLElement).style.width
+    expect(wrapper.findAll('tbody [role="separator"]')).toHaveLength(0)
+    expect(wrapper.findAll('th[scope="colgroup"] [role="separator"]')).toHaveLength(0)
+    await handle().trigger('keydown', { key: 'ArrowRight' })
+    expect(width()).toBe('330px')
+    await handle().trigger('keydown', { key: 'ArrowLeft', shiftKey: true })
+    expect(width()).toBe('290px')
+    await handle().trigger('keydown', { key: 'Home' })
+    await handle().trigger('keydown', { key: 'ArrowLeft' })
+    expect(width()).toBe('200px')
+    await handle().trigger('keydown', { key: 'End' })
+    await handle().trigger('keydown', { key: 'ArrowRight' })
+    expect(width()).toBe('720px')
+    expect(handle().attributes('aria-valuenow')).toBe('720')
+    await handle().trigger('click')
+    expect(wrapper.emitted('update:sort')).toBeUndefined()
+    await wrapper.setProps({
+      documents: [],
+      visibility: { ...defaultDocumentColumns(), name: false },
+    })
+    await wrapper.setProps({ documents, visibility: defaultDocumentColumns() })
+    expect(width()).toBe('720px')
+    await handle().trigger('keydown', { key: 'Enter' })
+    expect(width()).toBe('320px')
+    await handle().trigger('keydown', { key: 'ArrowRight' })
+    await wrapper.get('button[aria-label="Sort by Document name"]').trigger('click')
+    expect(width()).toBe('330px')
+    const sortChanges = wrapper.emitted('update:sort')?.length
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), first_page: true } })
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Restore column widths')!
+      .trigger('click')
+    expect(width()).toBe('320px')
+    expect(wrapper.find('col[data-column="first_page"]').exists()).toBe(true)
+    expect(wrapper.emitted('update:sort')).toHaveLength(sortChanges!)
+  })
   it('renders one row per document, full summaries, unknowns and navigation', async () => {
     const { wrapper } = await render()
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
@@ -323,7 +429,9 @@ describe('document table', () => {
     const { wrapper } = await render()
     await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), document_id: true } })
     expect(
-      wrapper.findAll('thead button').map((button) => button.attributes('aria-label')),
+      wrapper
+        .findAll('thead button[aria-label^="Sort by"]')
+        .map((button) => button.attributes('aria-label')),
     ).toEqual([
       'Sort by Document name',
       'Sort by Library',
