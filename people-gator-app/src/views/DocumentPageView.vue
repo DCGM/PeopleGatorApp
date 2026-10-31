@@ -67,6 +67,14 @@ import {
   type PageGalleryItem,
 } from '@/viewmodels/document-page-gallery'
 import { useTranslationQuery } from '@/query/translation'
+import {
+  adjacentIncluded,
+  nearestIncluded,
+  parseAnnotationHighlight,
+  parseLineVisibility,
+  useTeleprompterLines,
+  type Passage,
+} from '@/viewmodels/teleprompter'
 
 const minimumZoomPercent = MINIMUM_ZOOM * 100
 const maximumZoomPercent = MAXIMUM_ZOOM * 100
@@ -166,9 +174,22 @@ const zoomElement = ref<HTMLElement | null>(null)
 const pageElement = ref<HTMLElement | null>(null)
 const pageBounds = ref<PageViewportBounds | null>(null)
 const similarPeopleSearch = ref<InstanceType<typeof SimilarPeopleSearch> | null>(null)
+const teleprompter = ref<InstanceType<typeof DocumentTeleprompter> | null>(null)
 let panzoom: PanzoomObject | undefined
 let pageResizeObserver: ResizeObserver | undefined
 const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
+const lineVisibility = ref(parseLineVisibility(route.query.lines))
+const annotationHighlight = ref(parseAnnotationHighlight(route.query.highlight))
+const teleprompterLines = useTeleprompterLines(
+  transcription,
+  lineVisibility,
+  selectedPersonId,
+  focusPageKey,
+)
+const includedLines = teleprompterLines.included
+const visibleLineIndices = computed(() =>
+  includedLines.value.flatMap((included, index) => (included ? [index] : [])),
+)
 type FocusTarget = { kind: 'face'; id: string } | { kind: 'line'; id: string; entityKey?: string }
 let focusFrame: number | undefined
 const pendingFocus = ref<{ page: string; target: FocusTarget } | null>(null)
@@ -366,6 +387,8 @@ function syncRoute() {
       person: selectedFaceId.value ?? undefined,
       selectedPerson: selectedPersonId.value ?? undefined,
       line: line?.id,
+      lines: lineVisibility.value === 'all' ? undefined : lineVisibility.value,
+      highlight: annotationHighlight.value === 'all' ? undefined : annotationHighlight.value,
       translate: isTranslationOpen.value ? 'on' : 'off',
     },
   })
@@ -411,6 +434,8 @@ function unassignSelectedFace() {
 
 function selectLine(index: number) {
   if (index < 0 || index >= transcription.value.length) return
+  // An overlay click on a hidden line reveals it as local context.
+  if (!includedLines.value[index]) teleprompterLines.reveal([index])
   selectedLineIndex.value = index
   selectedEntityKey.value = null
   requestFocus({ kind: 'line', id: transcription.value[index]!.id })
@@ -442,16 +467,27 @@ function previousFace() {
   selectFace(faces.value[selectedFaceIndex.value - 1]!.id)
 }
 
+// Explicit line navigation follows the visible sequence in original order.
 function nextLine() {
-  selectLine(Math.min(selectedLineIndex.value + 1, transcription.value.length - 1))
+  const index = adjacentIncluded(includedLines.value, selectedLineIndex.value, 'next')
+  if (index !== null) selectLine(index)
 }
 function previousLine() {
-  selectLine(Math.max(selectedLineIndex.value - 1, 0))
+  const index = adjacentIncluded(includedLines.value, selectedLineIndex.value, 'previous')
+  if (index !== null) selectLine(index)
 }
-function navigateLine(direction: 'next' | 'previous') {
-  if (direction === 'next') nextLine()
-  else previousLine()
+
+function expandContext(passage: Passage, direction: 'before' | 'after', count: number) {
+  teleprompterLines.expand(passage, direction, count)
 }
+
+watch([lineVisibility, annotationHighlight], syncRoute)
+// Mode changes and Reset move a newly hidden selection to the nearest available line.
+watch(includedLines, (included) => {
+  if (included[selectedLineIndex.value]) return
+  const nearest = nearestIncluded(included, selectedLineIndex.value)
+  if (nearest !== null) selectLine(nearest)
+})
 
 function previewSimilarPerson(person: SimilarPersonCandidate) {
   pendingFocus.value = null
@@ -541,6 +577,8 @@ function handleNavigationKeydown(event: KeyboardEvent) {
     ArrowDown: nextLine,
     ArrowLeft: previousFace,
     ArrowRight: nextFace,
+    PageDown: () => teleprompter.value?.scrollPage('next'),
+    PageUp: () => teleprompter.value?.scrollPage('previous'),
   }[event.key]
   if (!navigate) return
   event.preventDefault()
@@ -553,6 +591,13 @@ watch(
     selectedLineIndex.value = routeLineIndex(route.query.line)
   },
   { immediate: true },
+)
+watch(
+  () => [route.query.lines, route.query.highlight],
+  () => {
+    lineVisibility.value = parseLineVisibility(route.query.lines)
+    annotationHighlight.value = parseAnnotationHighlight(route.query.highlight)
+  },
 )
 watch(
   () => route.query.translate,
@@ -644,18 +689,24 @@ onBeforeUnmount(() => {
       aria-labelledby="page-transcription-title"
     >
       <DocumentTeleprompter
+        ref="teleprompter"
+        v-model:line-visibility="lineVisibility"
+        v-model:annotation-highlight="annotationHighlight"
         class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
         :transcription="transcription"
         :selected-line-index="selectedLineIndex"
         :selected-entity-key="selectedEntityKey"
         :related-entity-id="selectedPersonId"
+        :included="includedLines"
+        :has-expansions="teleprompterLines.hasExpansions.value"
         :is-translation-open="isTranslationOpen"
         :selected-language="selectedLanguage"
         :current-translation="currentTranslation"
         :translation-loading="translationLoading"
         @select-line="selectLine"
         @select-entity="selectEntity"
-        @navigate-line="navigateLine"
+        @expand="expandContext"
+        @reset="teleprompterLines.reset()"
       />
     </section>
 
@@ -676,8 +727,8 @@ onBeforeUnmount(() => {
         @wheel.stop
         @keydown.stop
         v-model:link-states="linkStates"
-        :selected-line-index="selectedLineIndex"
-        :line-count="transcription.length"
+        :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
+        :line-count="visibleLineIndices.length"
         :selected-face-index="selectedFaceIndex"
         :face-count="faces.length"
         :zoom-percent="zoomPercent"
