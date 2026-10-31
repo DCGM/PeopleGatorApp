@@ -4,7 +4,10 @@ import { listEntitiesRouteApiV1EntitiesGet } from '@/client'
 import { createClient } from '@/client/client'
 import { apiClient } from '@/query/client'
 
-afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals() })
+afterEach(() => {
+  sessionStorage.clear()
+  vi.unstubAllGlobals()
+})
 
 describe('generated client authentication alternatives', () => {
   it.each(['bearer', 'api-key'] as const)(
@@ -50,7 +53,12 @@ describe('generated client authentication alternatives', () => {
     const fresh = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
     sessionStorage.setItem('people-gator.access-token', legacy)
     sessionStorage.setItem('people-gator.refresh-token', 'refresh')
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ access_token: fresh, refresh_token: 'rotated' }) })
+    const fetch = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: fresh, refresh_token: 'rotated' }),
+      })
     vi.stubGlobal('fetch', fetch)
     const auth = apiClient.getConfig().auth
     if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')

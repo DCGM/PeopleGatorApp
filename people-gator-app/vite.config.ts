@@ -13,10 +13,14 @@ export default defineConfig(({ mode }) => {
     .filter(Boolean)
 
   return {
-    build: { rollupOptions: { input: {
-      app: fileURLToPath(new URL('./index.html', import.meta.url)),
-      login: fileURLToPath(new URL('./login.html', import.meta.url)),
-    } } },
+    build: {
+      rollupOptions: {
+        input: {
+          app: fileURLToPath(new URL('./index.html', import.meta.url)),
+          login: fileURLToPath(new URL('./login.html', import.meta.url)),
+        },
+      },
+    },
     plugins: [vue(), vueJsx(), tailwindcss(), vueDevTools()],
     resolve: {
       alias: {

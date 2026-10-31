@@ -1,18 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { login, logout, getAccessToken, safeReturnPath } from '@/query/auth'
 
-afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals() })
+afterEach(() => {
+  sessionStorage.clear()
+  vi.unstubAllGlobals()
+})
 
 describe('issuer session transport', () => {
-  it.each(['https://evil.test', '//evil.test', '/\\evil.test', '/login.html', '/staging-login.html'])('rejects unsafe return %s', (path) => {
+  it.each([
+    'https://evil.test',
+    '//evil.test',
+    '/\\evil.test',
+    '/login.html',
+    '/staging-login.html',
+  ])('rejects unsafe return %s', (path) => {
     expect(safeReturnPath(path)).toBe('/')
   })
   it('retains application query and fragment', () => {
     expect(safeReturnPath('/people?name=Ada#faces')).toBe('/people?name=Ada#faces')
   })
   it('logs in directly without bundled credentials and coalesces refresh', async () => {
-    const token = `h.${btoa(JSON.stringify({ exp: Date.now()/1000+3600, uid: 'actor' }))}.s`
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ access_token: token, refresh_token: 'refresh' }) })
+    const token = `h.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'actor' }))}.s`
+    const fetch = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: token, refresh_token: 'refresh' }),
+      })
     vi.stubGlobal('fetch', fetch)
     await login('alice', 'entered-password')
     expect(fetch.mock.calls[0]![0]).toContain('/token/login')
@@ -32,7 +46,10 @@ describe('issuer session transport', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
     // jsdom records unsupported navigation; session revocation still completes.
     await logout()
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/token/logout'), expect.objectContaining({ body: '{"refresh_token":"refresh"}' }))
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/token/logout'),
+      expect.objectContaining({ body: '{"refresh_token":"refresh"}' }),
+    )
     expect(sessionStorage.length).toBe(0)
   })
 })

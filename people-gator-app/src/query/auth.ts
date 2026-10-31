@@ -7,10 +7,13 @@ let pendingToken: Promise<string> | undefined
 let redirecting = false
 
 export function safeReturnPath(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value)) return '/'
+  if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value))
+    return '/'
   const url = new URL(value, window.location.origin)
-  return url.origin === window.location.origin && !['/login.html', '/staging-login.html'].includes(url.pathname)
-    ? url.pathname + url.search + url.hash : '/'
+  return url.origin === window.location.origin &&
+    !['/login.html', '/staging-login.html'].includes(url.pathname)
+    ? url.pathname + url.search + url.hash
+    : '/'
 }
 
 export function tokenExpiry(token: string): number {
@@ -19,7 +22,9 @@ export function tokenExpiry(token: string): number {
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
     const claims = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')))
     return typeof claims.uid === 'string' && typeof claims.exp === 'number' ? claims.exp * 1000 : 0
-  } catch { return 0 }
+  } catch {
+    return 0
+  }
 }
 
 export function persistTokens(tokens: Tokens): string {
@@ -31,12 +36,22 @@ export function persistTokens(tokens: Tokens): string {
 
 async function exchange(path: string, body: URLSearchParams | string): Promise<Tokens> {
   const response = await fetch(authBaseUrl + path, {
-    method: 'POST', cache: 'no-store', credentials: 'omit',
-    headers: { 'Content-Type': body instanceof URLSearchParams
-      ? 'application/x-www-form-urlencoded' : 'application/json' }, body,
+    method: 'POST',
+    cache: 'no-store',
+    credentials: 'omit',
+    signal: AbortSignal.timeout(10000),
+    headers: {
+      'Content-Type':
+        body instanceof URLSearchParams ? 'application/x-www-form-urlencoded' : 'application/json',
+    },
+    body,
   })
-  if (!response.ok) throw new Error(response.status === 401 || response.status === 403
-    ? 'Check your username and password.' : 'Sign-in service unavailable. Try again.')
+  if (!response.ok)
+    throw new Error(
+      response.status === 401 || response.status === 403
+        ? 'Check your username and password.'
+        : 'Sign-in service unavailable. Try again.',
+    )
   return response.json()
 }
 
@@ -50,7 +65,10 @@ export function requireLogin(expired = false): never {
   if (!redirecting) {
     redirecting = true
     const returnTo = safeReturnPath(location.pathname + location.search + location.hash)
-    location.assign('/login.html?' + new URLSearchParams({ return: returnTo, ...(expired ? { expired: '1' } : {}) }))
+    location.assign(
+      '/login.html?' +
+        new URLSearchParams({ return: returnTo, ...(expired ? { expired: '1' } : {}) }),
+    )
   }
   throw new Error('Sign in required')
 }
@@ -62,9 +80,15 @@ export async function getAccessToken(): Promise<string> {
     const refresh = sessionStorage.getItem(refreshTokenKey)
     if (!refresh) return requireLogin()
     try {
-      return persistTokens(await exchange('/token/refresh', JSON.stringify({ refresh_token: refresh })))
-    } catch { return requireLogin(true) }
-  })().finally(() => { pendingToken = undefined })
+      return persistTokens(
+        await exchange('/token/refresh', JSON.stringify({ refresh_token: refresh })),
+      )
+    } catch {
+      return requireLogin(true)
+    }
+  })().finally(() => {
+    pendingToken = undefined
+  })
   return pendingToken
 }
 
@@ -73,9 +97,16 @@ export async function logout() {
   sessionStorage.removeItem(accessTokenKey)
   sessionStorage.removeItem(refreshTokenKey)
   try {
-    if (refresh) await fetch(authBaseUrl + '/token/logout', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refresh }), credentials: 'omit', cache: 'no-store',
-    })
-  } finally { location.assign('/login.html') }
+    if (refresh)
+      await fetch(authBaseUrl + '/token/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refresh }),
+        credentials: 'omit',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      })
+  } finally {
+    location.assign('/login.html')
+  }
 }

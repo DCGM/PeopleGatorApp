@@ -19,7 +19,9 @@ async function submit() {
     location.replace(safeReturnPath(params.get('return')))
   } catch (error) {
     message.value = error instanceof Error ? error.message : 'Unable to sign in. Try again.'
-  } finally { busy.value = false }
+  } finally {
+    busy.value = false
+  }
 }
 </script>
 
@@ -31,11 +33,24 @@ async function submit() {
       <form class="flex flex-col gap-4" @submit.prevent="submit">
         <div class="flex flex-col gap-2">
           <Label for="username">Username</Label>
-          <Input id="username" v-model="username" name="username" autocomplete="username" required />
+          <Input
+            id="username"
+            v-model="username"
+            name="username"
+            autocomplete="username"
+            required
+          />
         </div>
         <div class="flex flex-col gap-2">
           <Label for="password">Password</Label>
-          <Input id="password" v-model="password" name="password" type="password" autocomplete="current-password" required />
+          <Input
+            id="password"
+            v-model="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
         </div>
         <p v-if="message" role="alert">{{ message }}</p>
         <Button type="submit" :disabled="busy">{{ busy ? 'Signing in…' : 'Sign in' }}</Button>

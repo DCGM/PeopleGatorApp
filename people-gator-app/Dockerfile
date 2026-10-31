@@ -11,6 +11,8 @@ COPY . .
 ARG VITE_API_BASE_URL
 RUN test -n "$VITE_API_BASE_URL" || (echo "VITE_API_BASE_URL must be set at build time" >&2; exit 1)
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_AUTH_BASE_URL=
+ENV VITE_AUTH_BASE_URL=$VITE_AUTH_BASE_URL
 
 RUN npm run build-only
 
