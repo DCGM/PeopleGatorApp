@@ -323,8 +323,8 @@ class PostgresSourceRepository(SourceRepository):
 
     async def _existing_or_created(
         self, spec: GenericSourceCreateRequest
-    ) -> GenericSourceResponse | Source:
-        """Existing sources come back as responses; new ones as committed rows."""
+    ) -> tuple[Source, CreateResult]:
+        """Retain rows until the complete batch is ready for projection."""
         key = str(spec.url)
         await self._session.execute(
             select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
@@ -346,25 +346,25 @@ class PostgresSourceRepository(SourceRepository):
                 )
             if by_url is not None and by_url.id != by_identity.source_id:
                 raise ValueError("source URL conflicts with another source identity")
-            return by_identity
+            assert by_url is not None
+            return by_url, CreateResult.EXISTING
         if by_url is not None:
             raise ValueError("source URL is already registered with another identity")
         source = self._new(spec)
         self._session.add(source)
         await commit(self._session, "source create violates a persistence constraint")
-        return source
+        return source, CreateResult.CREATED
 
     async def get_or_create_batch(
         self, specs: Sequence[GenericSourceCreateRequest]
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
         outcomes = [await self._existing_or_created(spec) for spec in specs]
-        # One bounded stats pass for the whole batch, never a pass per created source.
-        await load_link_stats(self._session, [item for item in outcomes if isinstance(item, Source)])
+        # Project every result after all inserts, including existing sources:
+        # their document totals may have changed during this batch too.
+        await load_link_stats(self._session, [item for item, _ in outcomes])
         return [
-            (source_response(item), CreateResult.CREATED)
-            if isinstance(item, Source)
-            else (item, CreateResult.EXISTING)
-            for item in outcomes
+            (source_response(item), result)
+            for item, result in outcomes
         ]
 
     async def patch_page(

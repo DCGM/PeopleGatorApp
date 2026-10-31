@@ -138,6 +138,8 @@ filters and loaded batches, and include all registered pages with the same
 library/document identity, even without a registered parent Document. They are
 not the original document's authoritative length or the largest number; partial
 imports and gaps can legitimately produce `10/3`. Unknown displays use `–`.
+Batch imports project totals after all inserts, for existing and newly created
+records alike, including repeated page identities within a batch.
 
 Shared `sort=page_number&sort_direction=asc|desc` compares numbers, unknowns last
 in both directions, then canonical source UUID ascending. Cross-document sorting

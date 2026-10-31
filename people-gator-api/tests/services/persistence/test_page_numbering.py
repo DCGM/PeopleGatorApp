@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from people_gator_api.persistence.contracts import CreateResult
 from people_gator_api.persistence.postgres import postgres_database
 from people_gator_api.schemas.sources import (
     PageCreateRequest, PagePatchRequest, PageListFilter, PageListRequest,
@@ -105,6 +106,40 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
         assert [p.page_number for p in search.items] == [2, 2, 1, None, None, None]
         assert all(p.registered_page_count == 6 for p in search.items)
         assert (await db.sources.get_page(first.source_id)).page_number is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('new_first', [False, True])
+async def test_mixed_import_batches_project_final_totals(migrated_postgres, new_first):
+    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+        db = postgres_database(session)
+        document = DocumentCreateRequest(library='mixed-import', document_id=uuid.uuid4())
+        await db.sources.get_or_create_document(document)
+        existing = PageCreateRequest(library=document.library, document_id=document.document_id, page_id=uuid.uuid4(), page_number=1)
+        original, _ = await db.sources.get_or_create_page(existing)
+        added = PageCreateRequest(library=document.library, document_id=document.document_id, page_id=uuid.uuid4(), page_number=2)
+        reimport = existing.model_copy(update={'page_number': 99})
+        specs = [added, reimport] if new_first else [reimport, added]
+        # Include an existing parent and a repeated page in the same generic batch.
+        results = await db.sources.get_or_create_batch([
+            document.to_generic(), *(spec.to_generic() for spec in specs), reimport.to_generic(),
+        ])
+        assert [item.registered_page_count for item, _ in results] == [2, 2, 2, 2]
+        assert [result for _, result in results] == [
+            CreateResult.EXISTING,
+            *([CreateResult.CREATED, CreateResult.EXISTING] if new_first else [CreateResult.EXISTING, CreateResult.CREATED]),
+            CreateResult.EXISTING,
+        ]
+        assert results[0][0].first_page_source_id == original.source_id
+        assert results[0][0].first_page_number == 1
+        for item, _ in results[1:]:
+            if item.source_id == original.source_id:
+                assert item.page_number == 1
+                assert item.last_touched_at == original.last_touched_at
+        # The typed endpoint uses the same final projections on an idempotent retry.
+        repeated = await db.sources.get_or_create_page_batch([reimport, added])
+        assert [item.registered_page_count for item, _ in repeated] == [2, 2]
+        assert all(result == CreateResult.EXISTING for _, result in repeated)
 
 
 @pytest.mark.asyncio
