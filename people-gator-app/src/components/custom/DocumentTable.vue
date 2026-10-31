@@ -3,6 +3,7 @@ import { computed, h, useId } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   columnVisibilityFeature,
+  columnSizingFeature,
   tableFeatures,
   useTable,
   FlexRender,
@@ -17,6 +18,7 @@ import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
 import { documentTitle } from '@/viewmodels/document-list'
 import {
+  documentColumnSizing,
   annotationCount,
   annotationColumnId,
   DOCUMENT_ANNOTATION_GROUPS,
@@ -66,7 +68,7 @@ function headerSort(columnId: string) {
     : undefined
 }
 const route = useRoute()
-const features = tableFeatures({ columnVisibilityFeature })
+const features = tableFeatures({ columnVisibilityFeature, columnSizingFeature })
 const link = (document: DocumentResponse, text: string) =>
   h(
     RouterLink,
@@ -80,39 +82,46 @@ const link = (document: DocumentResponse, text: string) =>
 const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   {
     id: 'identity',
+    ...documentColumnSizing('identity'),
     header: 'Document',
     enableHiding: false,
     cell: ({ row }) => link(row.original, `${row.original.library} · ${row.original.document_id}`),
   },
   {
     id: 'name',
+    ...documentColumnSizing('name'),
     header: 'Document name',
     accessorFn: documentTitle,
     cell: ({ row }) => link(row.original, documentTitle(row.original)),
   },
   {
     id: 'ndk',
+    ...documentColumnSizing('ndk'),
     header: 'NDK',
     cell: ({ row }) => h(DocumentSourceLink, { url: row.original.url }),
   },
   {
     id: 'first_page',
+    ...documentColumnSizing('first_page'),
     header: 'First page',
     cell: ({ row }) => h(DocumentFirstPage, { document: row.original }),
   },
-  { accessorKey: 'library', header: 'Library' },
+  { accessorKey: 'library', header: 'Library', ...documentColumnSizing('library') },
   {
     accessorKey: 'document_id',
+    ...documentColumnSizing('document_id'),
     header: 'Document ID',
     cell: ({ row }) => link(row.original, row.original.document_id),
   },
   {
     accessorKey: 'registered_page_count',
+    ...documentColumnSizing('registered_page_count'),
     header: 'Pages',
     cell: ({ getValue }) => getValue() ?? 'Unknown',
   },
   {
     id: 'last_modified',
+    ...documentColumnSizing('last_modified'),
     header: 'Last modified',
     accessorFn: (d) => d.last_touched_at,
     cell: ({ getValue }) =>
@@ -120,16 +129,19 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
   },
   {
     id: 'modified_by',
+    ...documentColumnSizing('modified_by'),
     header: 'Modified by',
     accessorFn: (d) => d.last_touched_by_user_name || d.last_touched_by_user_id || 'Unknown',
   },
   {
     id: 'api_key',
+    ...documentColumnSizing('api_key'),
     header: 'API key',
     accessorFn: (d) => d.last_touched_by_api_key_name || d.last_touched_by_api_key_id || '—',
   },
   {
     accessorKey: 'linked_entity_count',
+    ...documentColumnSizing('linked_entity_count'),
     header: 'Linked entities',
     cell: ({ getValue }) => getValue() ?? 'Unknown',
   },
@@ -138,6 +150,7 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: group.label,
     columns: DOCUMENT_ANNOTATION_STATES.map((state) => ({
       id: annotationColumnId(group.scope, state.id),
+      ...documentColumnSizing(annotationColumnId(group.scope, state.id)),
       header: state.label,
       accessorFn: (d: DocumentResponse) => annotationCount(d, state.id, group.scope),
       cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
@@ -214,7 +227,19 @@ const table = useTable({
       registered pages only. Unknown means no recorded value.
     </p>
     <div class="w-full min-w-0 max-w-full">
-      <Table :aria-describedby="`${tableId}-counts`">
+      <Table
+        :aria-describedby="`${tableId}-counts`"
+        class="table-fixed"
+        :style="{ width: `${table.getTotalSize()}px` }"
+      >
+        <colgroup>
+          <col
+            v-for="column in table.getVisibleLeafColumns()"
+            :key="column.id"
+            :data-column="column.id"
+            :style="{ width: `${column.getSize()}px` }"
+          />
+        </colgroup>
         <TableHeader>
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
@@ -225,6 +250,7 @@ const table = useTable({
               :rowspan="header.isPlaceholder ? table.getHeaderGroups().length : undefined"
               :scope="header.column.columns.length ? 'colgroup' : 'col'"
               :aria-sort="headerSort(header.column.id)"
+              :style="{ width: `${header.getSize()}px` }"
             >
               <Button
                 v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
@@ -235,11 +261,10 @@ const table = useTable({
                 @click="toggleSort(header.column.id)"
               >
                 <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
-                <ArrowUp v-if="headerSort(header.column.id) === 'ascending'" aria-hidden="true" />
-                <ArrowDown
-                  v-else-if="headerSort(header.column.id) === 'descending'"
-                  aria-hidden="true"
-                />
+                <span class="inline-flex size-4 shrink-0" aria-hidden="true">
+                  <ArrowUp v-if="headerSort(header.column.id) === 'ascending'" />
+                  <ArrowDown v-else-if="headerSort(header.column.id) === 'descending'" />
+                </span>
               </Button>
               <FlexRender
                 v-else
@@ -255,6 +280,8 @@ const table = useTable({
               v-for="cell in row.getVisibleCells()"
               :key="cell.id"
               :data-column="cell.column.id"
+              class="whitespace-normal [overflow-wrap:anywhere]"
+              :style="{ width: `${cell.column.getSize()}px` }"
               :headers="
                 cell.column.parent
                   ? `${columnHeaderId(cell.column.parent.id)} ${columnHeaderId(cell.column.id)}`
