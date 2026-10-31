@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button'
+import { logout } from '@/query/auth'
 import ArchiveLink from './ArchiveLink.vue'
 import { usePageLookupQuery } from '@/query/media'
 import { relatedQuery } from '@/viewmodels/shared-filters'
@@ -206,6 +208,7 @@ const isPeopleRoute = computed(
           </span>
         </RouterLink>
       </slot>
+      <Button variant="ghost" size="sm" @click="logout">Sign out</Button>
     </div>
   </nav>
 </template>

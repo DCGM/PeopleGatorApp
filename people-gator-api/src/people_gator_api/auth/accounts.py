@@ -62,7 +62,7 @@ async def login(username: str, password: str, scopes: list[str]) -> TokenRespons
     if not valid:
         raise HTTPException(401, "Invalid username or password")
     async with _lock:
-        return await exchange(username, scopes)
+        return await exchange(username, scopes or sorted(account.scopes))
 
 
 async def refresh(token: str) -> TokenResponse:

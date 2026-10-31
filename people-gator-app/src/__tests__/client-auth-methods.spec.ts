@@ -4,7 +4,7 @@ import { listEntitiesRouteApiV1EntitiesGet } from '@/client'
 import { createClient } from '@/client/client'
 import { apiClient } from '@/query/client'
 
-afterEach(() => sessionStorage.clear())
+afterEach(() => { sessionStorage.clear(); vi.unstubAllGlobals() })
 
 describe('generated client authentication alternatives', () => {
   it.each(['bearer', 'api-key'] as const)(
@@ -50,23 +50,12 @@ describe('generated client authentication alternatives', () => {
     const fresh = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
     sessionStorage.setItem('people-gator.access-token', legacy)
     sessionStorage.setItem('people-gator.refresh-token', 'refresh')
-    const adapter = vi.fn(async (config) => ({
-      data: { access_token: fresh, refresh_token: 'rotated', token_type: 'bearer' },
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    }))
-    const previous = apiClient.getConfig().axios
-    apiClient.setConfig({ axios: axios.create({ adapter }) })
-    try {
-      const auth = apiClient.getConfig().auth
-      if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
-      expect(await auth({ type: 'http', scheme: 'bearer' })).toBe(fresh)
-      expect(adapter.mock.calls[0]![0].url).toContain('/token/refresh')
-      expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('rotated')
-    } finally {
-      apiClient.setConfig({ axios: previous })
-    }
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ access_token: fresh, refresh_token: 'rotated' }) })
+    vi.stubGlobal('fetch', fetch)
+    const auth = apiClient.getConfig().auth
+    if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
+    expect(await auth({ type: 'http', scheme: 'bearer' })).toBe(fresh)
+    expect(fetch.mock.calls[0]![0]).toContain('/token/refresh')
+    expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('rotated')
   })
 })
