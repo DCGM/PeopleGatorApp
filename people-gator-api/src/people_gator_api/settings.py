@@ -5,6 +5,7 @@ from pydantic import (
     BaseModel,
     Field,
     model_validator,
+    SecretStr,
 )
 from pydantic_settings import (
     BaseSettings,
@@ -186,6 +187,32 @@ class OpenRouterSettings(BaseModel):
 # Logging and telemetry settings
 # --------------------------------------------------------------------------------------
 
+class RumSettings(BaseModel):
+    """Only these explicitly selected settings may be published to browsers."""
+
+    enabled: bool = False
+    client_token: SecretStr = SecretStr("")
+    site: str = "openobserve.capturemyhand.com"
+    organization_identifier: str = "default"
+    application_id: str = "people-gator-app"
+    session_sample_rate: float = Field(default=100, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validate_enabled(self) -> Self:
+        if self.enabled and not self.client_token.get_secret_value().strip():
+            raise ValueError("RUM requires a dedicated browser client token")
+        if not self.site or any(c in self.site for c in "/?#@"):
+            raise ValueError("RUM site must be an HTTPS hostname, optionally with a port")
+        return self
+
+
+class DeploymentSettings(BaseModel):
+    environment: str = "development"
+    version: str = "development"
+    commit: str = "unknown"
+    pr_number: str = ""
+
+
 class OpenTelemetrySettings(BaseModel):
     """OpenTelemetry configuration settings."""
 
@@ -253,6 +280,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     batch: BatchSettings = Field(default_factory=BatchSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)
+    rum: RumSettings = Field(default_factory=RumSettings)
+    deployment: DeploymentSettings = Field(default_factory=DeploymentSettings)
     otel: OpenTelemetrySettings = Field(default_factory=OpenTelemetrySettings)
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
