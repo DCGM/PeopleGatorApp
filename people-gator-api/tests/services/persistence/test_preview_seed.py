@@ -4058,3 +4058,31 @@ async def test_page_number_upgrade_recovers_write_before_checkpoint(seed_target,
     # Recovery may add the linked evidence that had not yet been seeded.
     # It must not repeat the numbering edit.
     assert first_id not in recovery_writes
+
+
+@pytest.mark.asyncio
+async def test_replay_journey_has_linked_person_page_and_local_media(seed_target):
+    database, filesystem, _ = seed_target
+    seeded = await preview.seed_preview(database, filesystem)
+    person_url = seeded.filter_examples['openobserve-replay-person']
+    assert person_url == f"/people/{seeded.entities['ada']}"
+    person = await database.entities.get(seeded.entities['ada'])
+    face = await database.faces.get(seeded.faces['reference-ada-manual'])
+    assert face.entity_id == person.entity_id
+    page = await database.sources.get_page(seeded.pages['reference-faces-1'])
+    assert face.source_id == page.source_id
+    assert seeded.filter_examples['openobserve-replay-page'] == (
+        f'/libraries/{page.library}/documents/{page.document_id}/pages/{page.page_id}'
+    )
+    image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    assert image.content
+    edited = await database.entities.patch(
+        person.entity_id, EntityPatchRequest(name='Reviewed replay person'),
+        GenericActor(user_id=seeded.users['reviewer']),
+    )
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.filter_examples['openobserve-replay-person'] == person_url
+    assert rerun.filter_examples['openobserve-replay-page'] == seeded.filter_examples['openobserve-replay-page']
+    assert await database.entities.get(person.entity_id) == edited
+    assert await database.faces.get(face.detection_id) == face
+    assert await database.sources.get_page(page.source_id) == page

@@ -24,6 +24,7 @@ PEOPLE_GATOR_API__RUM__SITE=openobserve.capturemyhand.com
 PEOPLE_GATOR_API__RUM__ORGANIZATION_IDENTIFIER=default
 PEOPLE_GATOR_API__RUM__APPLICATION_ID=people-gator-app
 PEOPLE_GATOR_API__RUM__SESSION_SAMPLE_RATE=100
+PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE=100
 PEOPLE_GATOR_API__OTEL__ENABLED=true
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://lgtm:4318/v1/traces
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://lgtm:4318/v1/logs
@@ -67,10 +68,29 @@ older-backend 404s and failed requests leave the app usable; configuration fetch
 has a three-second timeout. A missing token with RUM enabled is a server
 configuration error and fails settings validation.
 
-The frontend uses HTTPS ingestion, masks captured page content, records no
-session replays and does not identify users. Browser errors are forwarded to
-OpenObserve logs; console messages are not forwarded automatically. API paths,
-error messages and interaction metadata can still contain application information.
+The frontend uses HTTPS ingestion, masks captured page content (including replay),
+and does not identify users. With RUM enabled, both `SESSION_SAMPLE_RATE` and
+`SESSION_REPLAY_SAMPLE_RATE` default to **100**, so every newly sampled session
+is eligible for recording. The frontend starts the replay recorder after RUM
+initialization without forcing sessions into the sample.
+
+Set `PEOPLE_GATOR_API__RUM__SESSION_REPLAY_SAMPLE_RATE` to any percentage from
+0 to 100 (fractions allowed): 0 disables replay, 25 records approximately 25% of
+tracked sessions, and 100 records all tracked sessions. Replay sampling applies
+within the overall `SESSION_SAMPLE_RATE`; both must be 100 to record every
+session. RUM remains disabled by default and requires its dedicated client token.
+The public `/api/v1/rum-config` response includes `sessionReplaySampleRate` only
+when enabled. An older backend that omits this field keeps replay disabled.
+
+Change the operator-owned telemetry file and recreate the API runtime through
+the reviewed deployment lifecycle, then reload browser tabs to fetch the new
+settings; no credential-specific frontend rebuild is required. SDK sampling can
+persist for an existing session, so use a new browser session when verifying a
+changed rate. Do not change shared collectors or store telemetry tokens in fixtures.
+
+Browser errors are forwarded to OpenObserve logs; console messages are not
+forwarded automatically. API paths, error messages and interaction metadata can
+still contain application information.
 
 ## Deployment identity
 
@@ -159,7 +179,12 @@ Never use the browser RUM token as OTLP credentials.
    Do not share unredacted response bodies, HAR files or collector headers.
 5. Navigate synthetic Documents and search for **Ada Novak** in a PR preview.
    In OpenObserve RUM, filter service/environment/version and inspect its API
-   resources. Find the matching `trace_id` in backend traces and confirm the
+   resources. With both sampling rates at 100, open the seed manifest's
+   `openobserve-replay-person` (Ada Novak), then `openobserve-replay-page`
+   (her linked synthetic face page). Inspect the session's replay for navigation
+   and interactions with content masked. Repeat in another new browser session
+   to confirm full sampling, and verify rate 0 disables replay for a new session.
+   Find the matching `trace_id` in backend traces and confirm the
    server span continues the browser parent span. Check a second PR to verify
    PR-number separation, then staging and a tagged release for their metadata.
 6. Check failed telemetry does not prevent application navigation. To disable,
