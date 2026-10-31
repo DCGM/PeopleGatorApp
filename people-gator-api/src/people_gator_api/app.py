@@ -16,7 +16,6 @@ from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
 from people_gator_api.routes.v1 import router as v1_router
-from people_gator_api.routes.jwks import router as jwks_router
 from people_gator_api.services.database_service import (
     close_db,
     init_db,
@@ -74,7 +73,6 @@ def get_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(BaseHTTPMiddleware, dispatch=well_known_cors)
 
     if settings.otel.enabled:
         (
@@ -87,7 +85,6 @@ def get_app() -> FastAPI:
     else:
         configure_logging()
     app.include_router(v1_router)
-    app.include_router(jwks_router)
     def openapi():
         if app.openapi_schema is None:
             schema = get_openapi(title=app.title, version=app.version,

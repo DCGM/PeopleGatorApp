@@ -54,6 +54,8 @@ dependencies = [
 ]
 
 [project.scripts]
+people-gator-auth = "people_gator_api.auth.app:server"
+people-gator-auth-provision = "people_gator_api.auth.provision:main"
 people-gator-api = "people_gator_api.cli.server:server"
 people-gator-init-db = "people_gator_api.cli.server:init_db"
 people-gator-version = "people_gator_api.cli.version:write_version_file"

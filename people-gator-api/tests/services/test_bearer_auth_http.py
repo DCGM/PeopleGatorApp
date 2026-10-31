@@ -16,6 +16,8 @@ from joserfc.jwk import ECKey, Key, KeyParameters, KeySet
 from joserfc.jwt import encode
 
 from people_gator_api.services import auth_service, jwk_service
+from people_gator_api.auth import keys
+from people_gator_api.auth.settings import settings as issuer_settings
 from people_gator_api.services.database_service import get_database, get_database_context
 from people_gator_api.settings import JwkSettings, LocalStorageSettings, StorageSettings, settings
 
@@ -67,12 +69,17 @@ async def admin(actor: auth_service.AdminActorDependency) -> dict[str, str]:
 
 @pytest.fixture
 def bearer_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> BearerApp:
-    monkeypatch.setattr(settings, "storage", StorageSettings(local=LocalStorageSettings(root=tmp_path)))
-    monkeypatch.setattr(settings, "jwk", JwkSettings(key_path="auth/jwks.json"))
+    monkeypatch.setattr(issuer_settings, "state_dir", tmp_path)
+    monkeypatch.setattr(keys, "_keyset", None)
+    monkeypatch.setattr(keys, "_last_fetch_time", None)
+    monkeypatch.setattr(keys, "_keyset_lock", asyncio.Lock())
     monkeypatch.setattr(jwk_service, "_keyset", None)
-    monkeypatch.setattr(jwk_service, "_last_fetch_time", None)
+    monkeypatch.setattr(jwk_service, "_last_fetch_time", float("-inf"))
+    monkeypatch.setattr(jwk_service, "_last_attempt", float("-inf"))
     monkeypatch.setattr(jwk_service, "_keyset_lock", asyncio.Lock())
-    monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
+    async def public_keys():
+        return KeySet.import_key_set((await keys.get_key_set()).as_dict(private=False))
+    monkeypatch.setattr(jwk_service, "_fetch_public_keys", public_keys)
     database = ForbiddenDatabase()
     app = FastAPI()
     app.dependency_overrides[get_database_context] = database.context
@@ -83,20 +90,20 @@ def bearer_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> BearerApp:
 
 
 def issue(user_id: uuid.UUID, scopes: list[str] | None = None) -> str:
-    return asyncio.run(jwk_service.issue_access_token(
+    return asyncio.run(keys.issue_access_token(
         "alice", scopes or [auth_service.BROWSE_SCOPE], user_id,
     ))
 
 
 def sign(claims: dict[str, ClaimValue], key_set: KeySet | None = None) -> str:
-    return encode({"alg": "ES256"}, claims, key_set or asyncio.run(jwk_service.get_key_set()))
+    return encode({"alg": "ES256"}, claims, key_set or asyncio.run(keys.get_key_set()))
 
 
 def claims(**overrides: ClaimValue | None) -> dict[str, ClaimValue]:
     """Valid access-token claims; an override of None removes that claim."""
     now = datetime.datetime.now(datetime.timezone.utc)
     base: dict[str, ClaimValue | None] = {
-        "iss": jwk_service.TOKEN_ISSUER, "aud": jwk_service.TOKEN_AUDIENCE, "sub": "alice",
+        "iss": issuer_settings.issuer, "aud": issuer_settings.audience, "sub": "alice",
         "iat": now, "exp": now + datetime.timedelta(minutes=5),
         "scopes": auth_service.BROWSE_SCOPE, "uid": str(uuid.uuid4()),
     }
@@ -106,12 +113,12 @@ def claims(**overrides: ClaimValue | None) -> dict[str, ClaimValue]:
 
 def foreign_signature() -> str:
     """Sign with an unrelated key that reuses the trusted key ID."""
-    trusted_kid = next(iter(asyncio.run(jwk_service.get_key_set()).keys)).kid
+    trusted_kid = next(iter(asyncio.run(keys.get_key_set()).keys)).kid
     parameters: KeyParameters = {"alg": "ES256"}
     if trusted_kid is not None:
         parameters["kid"] = trusted_kid
-    keys: list[Key] = [ECKey.generate_key("P-256", parameters=parameters)]
-    return sign(claims(), KeySet(keys))
+    foreign_keys: list[Key] = [ECKey.generate_key("P-256", parameters=parameters)]
+    return sign(claims(), KeySet(foreign_keys))
 
 
 def test_valid_token_authorizes_without_database(bearer_app: BearerApp) -> None:
@@ -139,7 +146,6 @@ def test_expired_token_is_rejected_without_database(
     token = issue(uuid.uuid4())
     expires = asyncio.run(jwk_service.verify_access_token(token))["exp"]
     monkeypatch.setattr(jwk_service, "_now", lambda: expires + 1)
-    monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
     response = client.get("/browse", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"

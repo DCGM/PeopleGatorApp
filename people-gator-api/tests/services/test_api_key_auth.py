@@ -75,7 +75,7 @@ def authenticated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Authentica
         display_name="Robot",
         is_active=True,
         external_subject="robot",
-        external_issuer=settings.jwk.issuer,
+        external_issuer=settings.api_keys.identity_issuer,
         email=None,
     )
     store.users.records[user.user_id] = user
@@ -97,7 +97,7 @@ def authenticated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Authentica
         )
     )
     verify = FakeVerifier(AccessTokenClaims(
-        iss=settings.jwk.issuer, sub="robot", iat=0, exp=1,
+        iss=settings.api_keys.identity_issuer, sub="robot", iat=0, exp=1,
         scopes=[auth_service.BROWSE_SCOPE], uid=user.user_id,
     ))
     monkeypatch.setattr(auth_service, "verify_access_token", verify)
