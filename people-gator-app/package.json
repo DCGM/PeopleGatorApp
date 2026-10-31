@@ -22,6 +22,8 @@
     "@hey-api/openapi-ts": "^0.97.0",
     "@internationalized/date": "^3.12.4",
     "@lucide/vue": "^1.56.0",
+    "@openobserve/browser-logs": "0.4.3",
+    "@openobserve/browser-rum": "0.4.3",
     "@panzoom/panzoom": "^4.6.2",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/vue-query": "^5.102.8",

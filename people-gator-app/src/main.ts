@@ -1,14 +1,9 @@
-import { createApp } from 'vue'
-import { VueQueryPlugin } from '@tanstack/vue-query'
+import { initializeTelemetry } from './telemetry'
 
-import '@/query/client'
-import './style.css'
-import App from './App.vue'
-import router from './router'
+async function bootstrap() {
+  await initializeTelemetry()
+  // Router and client modules may issue requests during initialization.
+  await import('./mount')
+}
 
-const app = createApp(App)
-
-app.use(router)
-app.use(VueQueryPlugin, { enableDevtoolsV6Plugin: true })
-
-app.mount('#app')
+void bootstrap()
