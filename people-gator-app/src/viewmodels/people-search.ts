@@ -1,3 +1,4 @@
+import type { PeopleCountQuery } from './people-counts'
 import type { SharedQuery } from './shared-filters'
 import type { EntitySortField } from '@/client'
 import type { SortState } from '@/lib/sorting'
@@ -19,7 +20,7 @@ export function usePeopleSearch(
   searchTerm: MaybeRefOrGetter<string>,
   filter: MaybeRefOrGetter<AssignmentFilter>,
   pageSize = 12,
-  shared: MaybeRefOrGetter<SharedQuery> = {},
+  shared: MaybeRefOrGetter<SharedQuery & PeopleCountQuery> = {},
   enabled: MaybeRefOrGetter<boolean> = true,
   sort?: MaybeRefOrGetter<SortState<EntitySortField>>,
 ) {
