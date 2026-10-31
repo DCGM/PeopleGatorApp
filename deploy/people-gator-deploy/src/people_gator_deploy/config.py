@@ -77,6 +77,17 @@ def validate(value, environment, path, *, inputs=False):
     if environment in {"staging", "release"}:
         require(bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", str(value.get("project", "people-gator-" + environment)))),
                 "project", "invalid Compose project")
+    if "telemetry_file" in value:
+        telemetry = absolute("telemetry_file", value["telemetry_file"])
+        if inputs:
+            require(private_file(telemetry), "telemetry_file", "needs an owned mode-600 telemetry environment file")
+            for line in telemetry.read_text().splitlines():
+                if not line.strip() or line.lstrip().startswith("#"):
+                    continue
+                key, separator, _ = line.partition("=")
+                require(bool(separator) and bool(re.fullmatch(
+                    r"(?:PEOPLE_GATOR_API__(?:RUM|OTEL)__[A-Z0-9_]+|OTEL_EXPORTER_OTLP(?:_[A-Z0-9_]+)?)", key)),
+                    "telemetry_file", "only unquoted RUM, API OTEL and OTLP exporter KEY=value lines are permitted")
     if environment == "pr":
         users = absolute("users_file", value.get("users_file"))
         if inputs:

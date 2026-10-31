@@ -295,7 +295,7 @@ class StagingTests(unittest.TestCase):
         backend = rendered["services"]["backend"]
         self.assertIn("external-secret", backend["environment"]["PEOPLE_GATOR_API__STORAGE"])
         self.assertFalse(any("KEY_PREFIX" in key for key in backend["environment"]))
-        self.assertEqual(set(backend["networks"]), {"database", "web"})
+        self.assertEqual(set(backend["networks"]), {"database", "web", "telemetry"})
         self.assertNotIn("storage-init", rendered["services"])
         self.assertNotIn("seed", rendered["services"])
 

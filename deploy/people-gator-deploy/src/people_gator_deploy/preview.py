@@ -92,6 +92,8 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
     def env(self, number: int, state: PreviewState, images: dict[str, str], *, sha: str = "unknown") -> str:
         values = {
             "COMMIT_SHA": sha,
+            "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
+            "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web")),
             "PREVIEW_LOG_ADDRESS": f"127.0.0.1:{self.config.get('preview_log_port', 24224)}",
             "PR_NUMBER": str(number), "PREVIEW_HOST": f"pr-{number}.{self.domain}",
             "CORS_ORIGIN_REGEX": f"^https://{re.escape(f'pr-{number}.{self.domain}')}$",
