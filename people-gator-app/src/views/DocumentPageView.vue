@@ -482,10 +482,11 @@ function expandContext(passage: Passage, direction: 'before' | 'after', count: n
 }
 
 watch([lineVisibility, annotationHighlight], syncRoute)
-// Mode changes and Reset move a newly hidden selection to the nearest available line.
-watch(includedLines, (included) => {
-  if (included[selectedLineIndex.value]) return
-  const nearest = nearestIncluded(included, selectedLineIndex.value)
+// Mode changes, Reset and route restoration move a hidden selection to the
+// nearest available line.
+watch([includedLines, selectedLineIndex], ([included, index]) => {
+  if (included[index]) return
+  const nearest = nearestIncluded(included, index)
   if (nearest !== null) selectLine(nearest)
 })
 
@@ -588,7 +589,9 @@ function handleNavigationKeydown(event: KeyboardEvent) {
 watch(
   transcription,
   () => {
-    selectedLineIndex.value = routeLineIndex(route.query.line)
+    // A restored line hidden by the current mode starts at the nearest visible line.
+    const index = routeLineIndex(route.query.line)
+    selectedLineIndex.value = nearestIncluded(includedLines.value, index) ?? index
   },
   { immediate: true },
 )
@@ -972,7 +975,8 @@ onBeforeUnmount(() => {
 .workspace-teleprompter {
   grid-column: 1;
   grid-row: 1;
-  height: clamp(8rem, 22dvh, 12rem);
+  /* Room for the settings row plus several lines of text. */
+  height: clamp(11rem, 28dvh, 15rem);
 }
 
 .bg-viewer {
@@ -1014,7 +1018,8 @@ onBeforeUnmount(() => {
   .workspace-teleprompter {
     grid-column: 1;
     grid-row: 1;
-    height: auto;
+    /* Its content is absolutely positioned, so an auto row would collapse. */
+    height: clamp(12rem, 28dvh, 17rem);
   }
 
   .workspace-sidebar {
@@ -1047,6 +1052,7 @@ onBeforeUnmount(() => {
   .workspace-teleprompter {
     grid-column: 1;
     grid-row: 1 / 4;
+    height: auto;
     border-right-width: 1px;
     border-bottom-width: 0;
   }
