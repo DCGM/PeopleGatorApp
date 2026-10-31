@@ -153,6 +153,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         print(f"PR #{number}: seeding candidate data before application startup", flush=True)
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "seed"))
         print(f"PR #{number}: candidate seeding completed", flush=True)
+        self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "auth-provision"))
         # A PR can close or receive a new commit while migrations/seeding are running.
         if not self.current_pr(number, run["head_sha"]):
             if self.api(f"pulls/{number}")["state"] == "closed":
@@ -161,7 +162,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             return False
         self.command(self.compose(number, candidate,
                                   "up", "-d", "--wait", "--wait-timeout", "180", "--remove-orphans",
-                                  "backend", "frontend"))
+                                  "auth", "backend", "frontend"))
         candidate.replace(directory / "compose.env")
         # Success is recorded only once the routed preview responds.
         self.readiness(number)
@@ -177,7 +178,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         return f"pr-{positive_int(number)}.{self.domain}"
 
     def readiness(self, number: int) -> None:
-        routed_readiness(self.host(number))
+        routed_readiness(self.host(number), extra={"/login.html": b"<html", "/auth/health": b"ok"})
 
     def remove(self, number: int) -> None:
         number = positive_int(number)

@@ -370,7 +370,16 @@ class LifecycleTests(unittest.TestCase):
         commands = [call.args[0] for call in self.controller.command.call_args_list]
         self.assertIn("down", commands[0])
         self.assertEqual([command[-1] for command in commands[1:4]], ["storage-init", "migrate", "seed"])
-        self.assertIn("up", commands[4])
+        self.assertEqual(commands[4][-1], "auth-provision")
+        self.assertIn("up", commands[5])
+
+    def test_failed_account_provisioning_blocks_candidate_startup(self):
+        directory = self.seed_preview()
+        self.controller.command.side_effect = ["", "", "", "", RuntimeError("account provisioning failed")]
+        with self.assertRaisesRegex(RuntimeError, "account provisioning failed"):
+            self.controller.deploy_pr(123, RUN, IMAGES)
+        self.assertEqual((directory / "compose.env").read_text(), "placeholder")
+        self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
 
     def test_seed_failure_preserves_running_configuration_for_retry(self):
         directory = self.seed_preview()
@@ -480,12 +489,19 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("pr-123.preview.peoplegator.dev", labels["traefik.http.routers.pg-pr-123-api.rule"])
         self.assertTrue(config["networks"]["database"]["external"])
         self.assertFalse(config["services"]["backend"].get("ports"))
+        issuer = config["services"]["auth"]
+        self.assertEqual(set(issuer["networks"]), {"authorization", "web"})
+        self.assertEqual(issuer["networks"]["authorization"]["aliases"], ["auth-pr-123"])
+        self.assertTrue(config["networks"]["authorization"]["internal"])
+        self.assertEqual(config["services"]["backend"]["environment"]["PEOPLE_GATOR_API__AUTH__JWKS_URL"],
+                         "http://auth-pr-123:8002/.well-known/jwks.json")
+        self.assertFalse(any(key.startswith("PEOPLE_GATOR_API__") for key in issuer["environment"]))
         self.assertEqual(config["services"]["migrate"]["command"], ["migrate"])
         self.assertEqual(config["services"]["seed"]["command"], ["seed"])
         self.assertEqual(config["services"]["seed"]["user"], "10001:10001")
         self.assertEqual(set(config["services"]["seed"]["networks"]), {"database"})
         self.assertTrue(all(mount.startswith("/") for mount in config["services"]["backend"]["tmpfs"]))
-        for name in ("frontend", "backend", "migrate", "seed", "storage-init"):
+        for name in ("frontend", "auth", "auth-provision", "backend", "migrate", "seed", "storage-init"):
             service = config["services"][name]
             self.assertEqual(service["logging"]["driver"], "fluentd")
             self.assertEqual(service["logging"]["options"]["fluentd-async"], "true")

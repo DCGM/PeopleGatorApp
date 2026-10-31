@@ -326,11 +326,10 @@ An interruption before that commit preserves the older rollback target; after
 the commit, retries and recovery finish the remaining files from the journal.
 
 **Release access boundary.** The production stack has no reload, debug, seed or
-development mounts, but the current frontend build embeds demo auto-login
-credentials ([DEPLOYMENT.md](../../docs/DEPLOYMENT.md)). Browser-bundled
-credentials are not private authentication: place the release behind a
-reviewed access boundary (for example, proxy authentication or a private
-network) before setting `access_reviewed`.
+development mounts. Configure a separate trusted token issuer and public JWKS
+validation before rollout; the browser opens the login gateway and bundles no
+credentials. Preserve the existing `access_reviewed` operator review for the
+external proxy/network/provider configuration.
 
 ## CI/CD
 
@@ -367,3 +366,39 @@ operator-owned telemetry file shared across PR, staging and release descriptors,
 collector networking, credential boundaries and reviewed-main rollout. The
 browser receives a dedicated RUM client token through the API; backend OTLP
 authorization stays server-side. No frontend build secrets are required.
+
+### Standalone authorization rollout (#89)
+
+PR previews now run `auth` from the backend image, alongside the resource API.
+Storage initialization prepares a separate retained `auth-data` volume; migration
+and seed still precede account provisioning and all application startup. The
+explicit `auth-provision` job reads the externally managed users file, adds
+missing accounts with persisted actor UUIDs, and preserves existing provider
+account edits. A provisioning or seed failure blocks candidate success.
+The resource container no longer mounts that credential file. New preview issuer
+keys force re-login; copy retained keys explicitly before first startup if
+access-token continuity is required. Private keys never become resource API
+configuration. See [Authentication](../../docs/AUTHENTICATION.md).
+
+Staging runs a separate `auth` service. Before the first deployment, the operator
+must provision `accounts.json` (and optionally retained `jwks.json`) under the
+staging state directory's `auth/`, or set descriptor `auth_state_dir` to an
+absolute external directory. Use the explicit provisioning CLI with the retained
+issuer and target database, as documented in Authentication. Make the directory
+and files accessible to container UID 10001, with no public write access. This
+state is outside utility installations and is untouched by database refreshes.
+If actor UUIDs are absent from a newly restored database, provision/map identities
+against that database before enabling accounts; never manufacture UUIDs.
+`/auth/health` must succeed before frontend activation; routed readiness includes
+it and `/login.html`. Missing accounts therefore stop deployment. Login at
+`/login.html`; `/staging-login.html` is a same-origin compatibility redirect.
+
+Both environments route `/token/`, `/.well-known/` and `/auth/health` to the issuer,
+while resource paths route to the API. They use one browser origin and do not
+bundle credentials. The utility remains installed only from reviewed `main`.
+This PR cannot make its own controller code trusted: the new preview lifecycle
+requires the reviewed-main utility upgrade before it can activate this topology.
+Do not run PR controller code on a deployment host to bypass that requirement.
+Release environments must configure a separate trusted issuer and route it at
+the app origin (or build with an explicit CORS-enabled auth origin); release
+provider infrastructure is operator-owned.

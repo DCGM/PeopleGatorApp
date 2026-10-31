@@ -47,7 +47,7 @@ with httpx.Client(base_url="http://127.0.0.1:8000") as client:
     health = client.get("/api/v1/health")
     health.raise_for_status()
     assert health.json()["status"] == "ok"
-    login = client.post("/token/login", data={
+    login = httpx.post("http://127.0.0.1:8002/token/login", data={
         "username": "test", "password": "test", "scope": "people-gator:browse",
     })
     login.raise_for_status()

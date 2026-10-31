@@ -9,7 +9,7 @@ The API entry point is
 [`app.py`](../people-gator-api/src/people_gator_api/app.py). Its lifespan initializes
 the selected database and optional embedding/translation clients, then closes
 them on shutdown. Versioned resource routes live under `/api/v1`; token login,
-refresh and JWK discovery are separate routes. `/docs`, `/redoc` and
+refresh and public JWKS live in the independently started authorization service. `/docs`, `/redoc` and
 `/openapi.json` expose the current contract.
 
 | Boundary | Responsibility |
@@ -33,23 +33,14 @@ relationships. See [Database](DATABASE.md).
 
 Protected routes accept either a bearer JWT or `X-API-Key`. Sending both returns
 400; missing/invalid credentials return 401; insufficient scopes return 403.
-JWT login checks Argon2 hashes in the users JSON file in the configured storage.
-Refresh sessions rotate and live in process memory, so a restart invalidates
-them and multiple workers require routing to the issuing worker.
-
-Login and refresh resolve the persisted user (creating it on first login) and
-reject inactive users with 403 before issuing tokens; a refresh rejected this way
-also revokes its session. Identity resolution never reactivates a user. Access
-tokens carry the user UUID in a signed `uid` claim. Ordinary bearer requests
-check only the signature, expiry, issuer, audience, `sub`, `uid` and scopes, with
-no database access. Disabling a user therefore stops new logins and refreshes,
-while an issued access token keeps working until it expires after
-`JWK__ACCESS_TOKEN_LIFETIME_SECONDS` (default 7200). Routes that need profile data,
-such as `/api/v1/me`, load it explicitly without an active-state check. Access
-tokens issued before `uid` existed are rejected with 401; clients refresh or log
-in again, and the browser app refreshes such stored tokens automatically. API
-keys have no token exchange, so each API-key request still resolves its user,
-rejects inactive users and registers the key.
+The resource API consumes trusted public JWKS and signed actor claims, with no
+passwords, private keys, login endpoints or refresh sessions in its application.
+`people-gator-auth` runs an independent issuer with provider-owned accounts and
+signing keys. An explicit operator provisioning bridge preserves persisted actor
+UUIDs; ordinary bearer requests use no database lookups. Domain profiles and
+API-key revocation remain resource responsibilities. See
+[Authentication](AUTHENTICATION.md) for the claim contract, origin topology,
+cache/rotation policy, provider replacement and retained-data rollout.
 
 | Scope | Representative operations |
 | --- | --- |
@@ -64,10 +55,9 @@ carry the database user ID and optional registered API-key ID. API-key hashes an
 secrets stay in the credential file, never in the SQL registry; see
 [API-key authentication](../people-gator-api/docs/API-KEYS.md).
 
-The browser requests all four scopes and automatically uses `test` / `test`
-unless build-time variables override them. Tokens live in `sessionStorage`.
-`VITE_*` values are browser-visible; this mechanism is suitable for demo data and
-must not distribute a privileged production credential.
+The browser opens the separate `/login.html` gateway. The issuer grants the
+account's configured scopes; tokens live in sessionStorage. The frontend bundles
+no usernames or passwords.
 
 ## Search and annotation behavior
 

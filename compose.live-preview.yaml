@@ -40,14 +40,16 @@ services:
       PEOPLE_GATOR_API__STORAGE__S3__BUCKET_NAME: peoplegator-ingest
       PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ""
       PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["https://live-preview.peoplegator.dev"]'
-      PEOPLE_GATOR_API__JWK__ISSUER: https://live-preview.peoplegator.dev
-      PEOPLE_GATOR_API__JWK__AUDIENCE: live-preview.peoplegator.dev
+      PEOPLE_GATOR_API__AUTH__JWKS_URL: http://live-preview-auth:8002/.well-known/jwks.json
+      PEOPLE_GATOR_API__API_KEYS__IDENTITY_ISSUER: https://live-preview.peoplegator.dev
+      PEOPLE_GATOR_API__AUTH__ISSUER: https://live-preview.peoplegator.dev
+      PEOPLE_GATOR_API__AUTH__AUDIENCE: live-preview.peoplegator.dev
     # Replace localhost routers inherited from the development stack.
     labels: !override
       traefik.enable: "true"
       traefik.docker.network: web
       traefik.http.routers.people-gator-live-preview-api.entrypoints: websecure
-      traefik.http.routers.people-gator-live-preview-api.rule: 'Host(`live-preview.peoplegator.dev`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`) )'
+      traefik.http.routers.people-gator-live-preview-api.rule: 'Host(`live-preview.peoplegator.dev`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) )'
       traefik.http.routers.people-gator-live-preview-api.priority: "100"
       traefik.http.routers.people-gator-live-preview-api.service: people-gator-live-preview-api
       traefik.http.routers.people-gator-live-preview-api.tls: "true"
@@ -57,6 +59,38 @@ services:
       - default
       - web
 
+  auth-provision:
+    extends:
+      file: compose.dev.yaml
+      service: auth-provision
+    environment:
+      PEOPLE_GATOR_AUTH__ISSUER: https://live-preview.peoplegator.dev
+      PEOPLE_GATOR_AUTH__AUDIENCE: live-preview.peoplegator.dev
+    volumes: !override
+      - auth-data:/auth
+      - ${AUTH_USERS_FILE:?explicit provider credential source required}:/users.json:ro
+
+  auth:
+    extends:
+      file: compose.dev.yaml
+      service: auth
+    environment:
+      PEOPLE_GATOR_AUTH__ISSUER: https://live-preview.peoplegator.dev
+      PEOPLE_GATOR_AUTH__AUDIENCE: live-preview.peoplegator.dev
+    networks:
+      web:
+      default:
+        aliases: [live-preview-auth]
+    labels: !override
+      traefik.enable: 'true'
+      traefik.docker.network: web
+      traefik.http.routers.people-gator-live-preview-auth.entrypoints: websecure
+      traefik.http.routers.people-gator-live-preview-auth.rule: 'Host(`live-preview.peoplegator.dev`) && (PathPrefix(`/token/`) || PathPrefix(`/.well-known/`) || Path(`/auth/health`))'
+      traefik.http.routers.people-gator-live-preview-auth.priority: '110'
+      traefik.http.routers.people-gator-live-preview-auth.tls: 'true'
+      traefik.http.routers.people-gator-live-preview-auth.tls.certresolver: tlschallenge
+      traefik.http.services.people-gator-live-preview-auth.loadbalancer.server.port: '8002'
+
   frontend:
     extends:
       file: compose.dev.yaml
@@ -65,6 +99,7 @@ services:
     environment:
       ALLOWED_VITE_HOSTS: live-preview.peoplegator.dev
       VITE_API_BASE_URL: https://live-preview.peoplegator.dev
+      VITE_AUTH_BASE_URL: https://live-preview.peoplegator.dev
     labels: !override
       traefik.enable: "true"
       traefik.docker.network: web
@@ -81,6 +116,7 @@ services:
 volumes:
   postgres-data:
   api-data:
+  auth-data:
 
 networks:
   web:

@@ -65,16 +65,14 @@ services:
       PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /data
       PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ""
       PEOPLE_GATOR_API__CORS__ALLOW_ORIGINS: '["${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}"]'
-      PEOPLE_GATOR_API__JWK__ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
-      PEOPLE_GATOR_API__JWK__AUDIENCE: ${HTTP_HOST:-localhost}
-      # The existing example users file supplies the frontend's test/test login.
-      PEOPLE_GATOR_API__JWK__USERS_PATH: peoplegator_api/users.json
+      PEOPLE_GATOR_API__AUTH__ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
+      PEOPLE_GATOR_API__AUTH__AUDIENCE: ${HTTP_HOST:-localhost}
+      PEOPLE_GATOR_API__API_KEYS__IDENTITY_ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
+      PEOPLE_GATOR_API__AUTH__JWKS_URL: http://auth:8002/.well-known/jwks.json
       PEOPLE_GATOR_API__OPENROUTER__API_KEY: ${OPENROUTER_API_KEY:-}
       WATCHFILES_FORCE_POLLING: "true"
     volumes:
       - api-data:/data
-      # Auth reads this file on login/refresh; keep it read-only and outside Watch.
-      - ./people-gator-api/example.users.json:/data/peoplegator_api/users.json:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
       interval: 10s
@@ -112,10 +110,54 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.people-gator-dev-api.entrypoints: web
-      traefik.http.routers.people-gator-dev-api.rule: 'Host(`${HTTP_HOST:-localhost}`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`) )'
+      traefik.http.routers.people-gator-dev-api.rule: 'Host(`${HTTP_HOST:-localhost}`) && ( PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) )'
       traefik.http.routers.people-gator-dev-api.priority: "100"
       traefik.http.routers.people-gator-dev-api.service: people-gator-dev-api
       traefik.http.services.people-gator-dev-api.loadbalancer.server.port: "8000"
+
+  auth-provision:
+    build:
+      context: ./people-gator-api
+      dockerfile: Dockerfile.dev
+    profiles: [tools]
+    command: [uv, run, people-gator-auth-provision, /users.json]
+    env_file: .env
+    environment:
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: db
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: '5432'
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${POSTGRES_USER:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${POSTGRES_PASSWORD:-people_gator}
+      PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${POSTGRES_DB:-people_gator}
+      PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /tmp/provision
+      PEOPLE_GATOR_AUTH__STATE_DIR: /auth
+      PEOPLE_GATOR_AUTH__ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
+      PEOPLE_GATOR_AUTH__AUDIENCE: ${HTTP_HOST:-localhost}
+    volumes:
+      - auth-data:/auth
+      - ./people-gator-api/example.users.json:/users.json:ro
+
+  auth:
+    build:
+      context: ./people-gator-api
+      dockerfile: Dockerfile.dev
+    command: [uv, run, people-gator-auth]
+    restart: unless-stopped
+    environment:
+      PEOPLE_GATOR_AUTH__STATE_DIR: /auth
+      PEOPLE_GATOR_AUTH__ISSUER: ${PUBLIC_ORIGIN:-http://${HTTP_HOST:-localhost}:${HTTP_PORT:-8080}}
+      PEOPLE_GATOR_AUTH__AUDIENCE: ${HTTP_HOST:-localhost}
+    volumes: [auth-data:/auth]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/auth/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    labels:
+      traefik.enable: 'true'
+      traefik.http.routers.people-gator-dev-auth.entrypoints: web
+      traefik.http.routers.people-gator-dev-auth.rule: 'Host(`${HTTP_HOST:-localhost}`) && (PathPrefix(`/token/`) || PathPrefix(`/.well-known/`) || Path(`/auth/health`))'
+      traefik.http.routers.people-gator-dev-auth.priority: '110'
+      traefik.http.services.people-gator-dev-auth.loadbalancer.server.port: '8002'
 
   frontend:
     build:
@@ -130,8 +172,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       ALLOWED_VITE_HOSTS: ${HTTP_HOST:-localhost}
       VITE_API_BASE_URL: ${HTTP_API_BASE_URL:-http://localhost:8080}
-      VITE_API_USERNAME: test
-      VITE_API_PASSWORD: test
+      VITE_AUTH_BASE_URL: ${PUBLIC_ORIGIN:-http://localhost:8080}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
       interval: 10s
@@ -171,3 +212,4 @@ services:
 volumes:
   postgres-data:
   api-data:
+  auth-data:
