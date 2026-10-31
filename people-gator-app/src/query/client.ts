@@ -1,3 +1,4 @@
+import { apiBaseUrl } from '@/telemetry'
 import { getTokenTokenLoginPost, refreshTokenTokenRefreshPost, type TokenResponse } from '@/client'
 import { client } from '@/client/client.gen'
 
@@ -74,7 +75,6 @@ export async function getAccessToken() {
   return pendingToken
 }
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://dev.people-gator.capturemyhand.com'
 
 client.setConfig({
   // SDK endpoint paths start with '/'; a root base must be empty to avoid '//host' URLs.
