@@ -79,12 +79,18 @@ it only when the API can reach your OTLP HTTP receiver:
 
 ```dotenv
 PEOPLE_GATOR_API__OTEL__ENABLED=true
-PEOPLE_GATOR_API__OTEL__HTTP_ENDPOINT=http://lgtm:4318
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://lgtm:4318/v1/traces
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://lgtm:4318/v1/logs
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://lgtm:4318/v1/metrics
 ```
 
-The endpoint is an operator-provided base URL; export paths default to
-`/v1/traces`, `/v1/metrics` and `/v1/logs`. Runtime uses HTTP exporters, despite the
-presence of a gRPC endpoint setting. FastAPI, aiohttp, asyncpg, SQLAlchemy,
+Each setting is a complete HTTP endpoint URL and is passed unchanged to its
+exporter. Defaults are the three URLs shown above. The project names
+`PEOPLE_GATOR_API__OTEL__TRACES_ENDPOINT`, `PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT`
+and `PEOPLE_GATOR_API__OTEL__METRICS_ENDPOINT` are also accepted; they take priority
+when both environment names are supplied. There are no base/path or gRPC settings.
+
+FastAPI, aiohttp, asyncpg, SQLAlchemy,
 Weaviate and system metrics instrumentation are initialized in
 [`utils/opentelemetry.py`](../people-gator-api/src/people_gator_api/utils/opentelemetry.py).
 SQLAlchemy instrumentation attaches to the selected async engine. The `trace`
@@ -127,8 +133,7 @@ exception attributes, a metric, resource identity and exporter authorization.
 This requires no database or external service and does not establish live sink
 retention or availability.
 
-There is no implemented profiling exporter despite a profiles-path setting,
-and no `/metrics` Prometheus endpoint supplied here. Browser RUM and W3C trace
+Profiling and a Prometheus `/metrics` endpoint are not provided. Browser RUM and W3C trace
 propagation are configured through the [OpenObserve RUM guide](OPENOBSERVE-RUM.md).
 
 ## Add signals safely and validate them

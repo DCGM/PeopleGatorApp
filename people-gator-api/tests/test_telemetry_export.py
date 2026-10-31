@@ -86,7 +86,9 @@ def test_backend_directly_exports_correlated_traces_logs_and_metrics(environment
         env = {key: value for key, value in os.environ.items() if not key.startswith('OTEL_')}
         env.update({
             'PEOPLE_GATOR_API__OTEL__ENABLED': 'true',
-            'PEOPLE_GATOR_API__OTEL__HTTP_ENDPOINT': f'http://127.0.0.1:{sink.server_port}',
+            'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT': f'http://127.0.0.1:{sink.server_port}/custom/trace-ingest',
+            'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT': f'http://127.0.0.1:{sink.server_port}/custom/log-ingest',
+            'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT': f'http://127.0.0.1:{sink.server_port}/custom/metric-ingest',
             'PEOPLE_GATOR_API__DEPLOYMENT__ENVIRONMENT': environment,
             'PEOPLE_GATOR_API__DEPLOYMENT__VERSION': version,
             'PEOPLE_GATOR_API__DEPLOYMENT__COMMIT': 'synthetic-commit',
@@ -108,13 +110,13 @@ def test_backend_directly_exports_correlated_traces_logs_and_metrics(environment
         return {item.key: item.value.string_value for item in values}
 
     spans, logs, metric_names = [], [], []
-    assert {path for path, _, _ in requests} == {'/v1/traces', '/v1/logs', '/v1/metrics'}
+    assert {path for path, _, _ in requests} == {'/custom/trace-ingest', '/custom/log-ingest', '/custom/metric-ingest'}
     for path, authorization, body in requests:
         assert authorization == 'Bearer synthetic-collector-token'
         message_type, resource_field, signal_field = {
-            '/v1/traces': (ExportTraceServiceRequest, 'resource_spans', 'scope_spans'),
-            '/v1/logs': (ExportLogsServiceRequest, 'resource_logs', 'scope_logs'),
-            '/v1/metrics': (ExportMetricsServiceRequest, 'resource_metrics', 'scope_metrics'),
+            '/custom/trace-ingest': (ExportTraceServiceRequest, 'resource_spans', 'scope_spans'),
+            '/custom/log-ingest': (ExportLogsServiceRequest, 'resource_logs', 'scope_logs'),
+            '/custom/metric-ingest': (ExportMetricsServiceRequest, 'resource_metrics', 'scope_metrics'),
         }[path]
         message = message_type.FromString(body)
         for resource in getattr(message, resource_field):
@@ -125,9 +127,9 @@ def test_backend_directly_exports_correlated_traces_logs_and_metrics(environment
             assert values['vcs.ref.head.revision'] == 'synthetic-commit'
             assert values['people-gator.preview.pr'] == pr_number
             for scope in getattr(resource, signal_field):
-                if path == '/v1/traces':
+                if path == '/custom/trace-ingest':
                     spans.extend(scope.spans)
-                elif path == '/v1/logs':
+                elif path == '/custom/log-ingest':
                     logs.extend(scope.log_records)
                 else:
                     metric_names.extend(metric.name for metric in scope.metrics)

@@ -95,7 +95,7 @@ explicitly set the unused object to null, as in [Development](DEVELOPMENT.md).
 | `PAGE_IMAGE_CACHE`, `ALIGNED_FACE_CROP`, `PAGE_LAYOUT`, `IMAGE_CONTENT` | Media/cache prefixes, sizes and rendering controls |
 | `EMBEDDING_SERVICE__*` | Optional external embedding endpoints and request timeout |
 | `OPENROUTER__API_KEY/MODEL/BASE_URL` | Optional translation service configuration; keep key in secret storage |
-| `OTEL__ENABLED`, `OTEL__HTTP_ENDPOINT` | SDK telemetry opt-in and HTTP exporter endpoint; see [Observability](OBSERVABILITY.md) |
+| `OTEL__ENABLED`, `OTEL__TRACES_ENDPOINT`, `OTEL__LOGS_ENDPOINT`, `OTEL__METRICS_ENDPOINT` | SDK opt-in and complete HTTP endpoint URLs; standard per-signal `OTEL_EXPORTER_OTLP_*_ENDPOINT` aliases are also accepted; see [Observability](OBSERVABILITY.md) |
 
 For local storage in `runtime.env`, for example:
 
