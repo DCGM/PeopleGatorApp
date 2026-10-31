@@ -1,5 +1,5 @@
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
-import { shallowMount, flushPromises } from '@vue/test-utils'
+import { mount, shallowMount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { reactive, ref, nextTick, type Ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DocumentPageView from '@/views/DocumentPageView.vue'
@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   deleteFace: vi.fn(),
   patchFace: vi.fn(),
+  assignFace: vi.fn(),
+  unassignFace: vi.fn(),
+  createAndAssign: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
   useRoute: mocks.route,
@@ -76,6 +79,7 @@ let faces: Ref<Face[]>
 let lines: Ref<TranscriptionLine[]>
 let route: { params: Record<string, string>; query: Record<string, string> }
 let assignmentError: Ref<Error | null>
+let assignmentStatus: Ref<string>
 let referenceFace: Ref<Face | null>
 beforeEach(() => {
   vi.clearAllMocks()
@@ -93,6 +97,7 @@ beforeEach(() => {
   })
   ready = ref(true)
   assignmentError = ref(null)
+  assignmentStatus = ref('idle')
   referenceFace = ref(null)
   faces = ref([face('a'), face('b')])
   lines = ref(
@@ -105,12 +110,15 @@ beforeEach(() => {
   )
   mocks.workspace.mockReturnValue({
     faces,
-    assignmentStatus: ref('idle'),
+    assignmentStatus,
+    assignFace: mocks.assignFace,
+    unassignFace: mocks.unassignFace,
+    createAndAssign: mocks.createAndAssign,
     assignmentError,
     resetAssignment: vi.fn(() => (assignmentError.value = null)),
     referenceFace,
     transcription: lines,
-    page: ref({ page_id: 'one' }),
+    page: ref({ page_id: 'one', source_id: 'source' }),
     pageImageReady: ready,
     annotationsLoading: ref(false),
     pageDimensions: ref({ width: 800, height: 1100 }),
@@ -139,8 +147,8 @@ async function settleFocus() {
   await new Promise((resolve) => requestAnimationFrame(resolve))
   await flushPromises()
 }
-async function mountView() {
-  const wrapper = shallowMount(DocumentPageView, {
+async function mountView(renderActions = false) {
+  const wrapper = (renderActions ? mount : shallowMount)(DocumentPageView, {
     global: {
       plugins: [
         [
@@ -149,6 +157,32 @@ async function mountView() {
         ],
       ],
       stubs: {
+        ...(renderActions
+          ? {
+              AlertDialogHeader: { template: '<div><slot /></div>' },
+              AlertDialogTitle: { template: '<h2><slot /></h2>' },
+              AlertDialogDescription: { template: '<p><slot /></p>' },
+              AlertDialogCancel: true,
+              DocumentControls: true,
+              DocumentPageGallery: true,
+              DocumentPageOverlay: {
+                name: 'DocumentPageOverlay',
+                props: ['faces'],
+                template: '<div><slot name="actions" :face="faces[0]" /></div>',
+              },
+              DocumentTeleprompter: true,
+              FaceGallery: true,
+              LoadableImage: true,
+              IdentityFacePreview: true,
+              RouterLink: RouterLinkStub,
+              SimilarPeopleResults: true,
+              SimilarPeopleSearch: true,
+              PageActivityPanel: true,
+              PageStatisticsPanel: true,
+              TabsList: true,
+              TabsTrigger: true,
+            }
+          : {}),
         AlertDialog: { name: 'AlertDialog', props: ['open'], template: '<div><slot /></div>' },
         AlertDialogContent: { template: '<div><slot /></div>' },
         AlertDialogFooter: { template: '<div><slot /></div>' },
@@ -409,4 +443,125 @@ it('clears the selected face and route when the overlay requests Escape dismissa
     }),
   )
   wrapper.unmount()
+})
+
+// Render the real action buttons and hold requests open to exercise concurrency.
+describe('detection mutation coordination', () => {
+  it.each(['CurrentFacePanel', 'DocumentPageOverlay'])(
+    'shares pending/error state when Verify starts in %s',
+    async (source) => {
+      faces.value = faces.value.map((item) => ({ ...item, linkState: 'manual' }))
+      let rejectVerification!: (error: Error) => void
+      mocks.patchFace.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectVerification = reject
+          }),
+      )
+      const wrapper = await mountView(true)
+      const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+      const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+      const candidates = wrapper.findComponent({ name: 'SimilarPeopleResults' })
+      wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+      await flushPromises()
+      await wrapper
+        .findComponent({ name: source })
+        .get('[aria-label="Verify this link"]')
+        .trigger('click')
+      await flushPromises()
+      expect(mocks.patchFace).toHaveBeenCalledTimes(1)
+      for (const control of [card, overlay]) {
+        for (const button of control.findAll('button[aria-label]')) {
+          expect(button.attributes('disabled')).toBeDefined()
+        }
+      }
+      expect(candidates.props('assignmentPending')).toBe(true)
+      // Stale events cannot bypass the guard at the mutation boundary.
+      candidates.vm.$emit('assign', { id: 'someone-else' })
+      card.vm.$emit('unassign')
+      card.vm.$emit('create', { name: 'New person' })
+      card.vm.$emit('delete')
+      overlay.findComponent({ name: 'FaceActionButtons' }).vm.$emit('verify')
+      await flushPromises()
+      expect(mocks.assignFace).not.toHaveBeenCalled()
+      expect(mocks.unassignFace).not.toHaveBeenCalled()
+      expect(mocks.createAndAssign).not.toHaveBeenCalled()
+      expect(mocks.deleteFace).not.toHaveBeenCalled()
+      expect(mocks.patchFace).toHaveBeenCalledTimes(1)
+      expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+      rejectVerification(new Error('Forbidden'))
+      await flushPromises()
+      expect(card.text()).toContain('Could not verify link.')
+      expect(overlay.text()).toContain('Could not verify link.')
+      expect(candidates.props('assignmentPending')).toBe(false)
+      expect(card.get('[aria-label="Verify this link"]').attributes('disabled')).toBeUndefined()
+      wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'b')
+      await flushPromises()
+      expect(card.text()).not.toContain('Could not verify link.')
+      mocks.patchFace.mockResolvedValueOnce({ data: {} })
+      await card.get('[aria-label="Verify this link"]').trigger('click')
+      await flushPromises()
+      expect(mocks.patchFace).toHaveBeenLastCalledWith({
+        path: { detection_id: 'b' },
+        body: { entity_link_state: 'verified' },
+        throwOnError: true,
+      })
+      expect(candidates.props('assignmentPending')).toBe(false)
+      wrapper.unmount()
+    },
+  )
+
+  it('disables both Verify controls during assignment, creation and deletion', async () => {
+    faces.value = faces.value.map((item) => ({ ...item, linkState: 'manual' }))
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    await flushPromises()
+    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+    const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+    const candidates = wrapper.findComponent({ name: 'SimilarPeopleResults' })
+    const expectBusy = () => {
+      for (const control of [card, overlay]) {
+        expect(control.get('[aria-label="Verify this link"]').attributes('disabled')).toBeDefined()
+      }
+      expect(candidates.props('assignmentPending')).toBe(true)
+    }
+    assignmentStatus.value = 'pending'
+    await flushPromises()
+    expectBusy()
+    assignmentStatus.value = 'idle'
+    await flushPromises()
+    let finishCreation!: (entity: { entity_id: string }) => void
+    mocks.createAndAssign.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishCreation = resolve
+        }),
+    )
+    card.vm.$emit('create', { name: 'New person' })
+    await flushPromises()
+    expectBusy()
+    finishCreation({ entity_id: 'new-person' })
+    await flushPromises()
+    expect(candidates.props('assignmentPending')).toBe(false)
+    let rejectDeletion!: (error: Error) => void
+    mocks.deleteFace.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectDeletion = reject
+        }),
+    )
+    card.vm.$emit('delete')
+    await flushPromises()
+    await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
+    await flushPromises()
+    expectBusy()
+    await card.get('[aria-label="Verify this link"]').trigger('click')
+    overlay.findComponent({ name: 'FaceActionButtons' }).vm.$emit('verify')
+    await flushPromises()
+    expect(mocks.patchFace).not.toHaveBeenCalled()
+    rejectDeletion(new Error('Forbidden'))
+    await flushPromises()
+    expect(candidates.props('assignmentPending')).toBe(false)
+    wrapper.unmount()
+  })
 })

@@ -9,7 +9,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
 import { Button } from '@/components/ui/button'
-import VerifyEntityLink from '@/components/custom/VerifyEntityLink.vue'
+import { BadgeCheck } from '@lucide/vue'
+import UiTooltip from '@/components/custom/UiTooltip.vue'
 import FaceActionButtons from '@/components/custom/FaceActionButtons.vue'
 import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
@@ -276,8 +277,10 @@ const canDelete = useCanDeleteDetection()
 const verifyMutation = useVerifyLinkMutation()
 const deleteMutation = useDeleteFaceMutation()
 const deletionTarget = ref<Face | null>(null)
+const creatingPerson = ref(false)
 const actionBusy = computed(
   () =>
+    creatingPerson.value ||
     assignmentStatus.value === 'pending' ||
     verifyMutation.isPending.value ||
     deleteMutation.isPending.value,
@@ -303,12 +306,17 @@ function closeDeletion(open: boolean) {
   deletionTarget.value = null
   deleteMutation.reset()
 }
+function requestDeletion(face: Face | null) {
+  if (!face || actionBusy.value) return
+  deletionTarget.value = face
+}
 function verifyFace(face: Face) {
+  if (actionBusy.value) return
   verifyMutation.mutate({ id: face.id, kind: 'face' })
 }
 async function deleteDetection() {
   const face = deletionTarget.value
-  if (!face) return
+  if (!face || actionBusy.value) return
   try {
     await deleteMutation.mutateAsync(face.id)
     clearFace()
@@ -394,7 +402,7 @@ function clearFace() {
 }
 
 function unassignSelectedFace() {
-  if (!selectedFace.value?.personId) return
+  if (!selectedFace.value?.personId || actionBusy.value) return
   unassignFace(selectedFace.value.id)
   selectedPersonId.value = null
   syncRoute()
@@ -455,17 +463,26 @@ function previewSimilarPerson(person: SimilarPersonCandidate) {
 }
 
 function assignSimilarPerson(person: SimilarPersonCandidate) {
-  if (!selectedFace.value) return
+  if (!selectedFace.value || actionBusy.value) return
   assignFace(selectedFace.value.id, person.id)
   selectedPersonId.value = person.id
   syncRoute()
 }
 
 async function createSimilarPerson(person: { name: string; shortDescription?: string }) {
-  if (!selectedFace.value) return
-  const entity = await createAndAssign(selectedFace.value.id, person.name, person.shortDescription)
-  selectedPersonId.value = entity.entity_id
-  syncRoute()
+  if (!selectedFace.value || actionBusy.value) return
+  creatingPerson.value = true
+  try {
+    const entity = await createAndAssign(
+      selectedFace.value.id,
+      person.name,
+      person.shortDescription,
+    )
+    selectedPersonId.value = entity.entity_id
+    syncRoute()
+  } finally {
+    creatingPerson.value = false
+  }
 }
 
 async function focusSimilarPeopleSearch() {
@@ -723,7 +740,7 @@ onBeforeUnmount(() => {
             @find-profile="focusSimilarPeopleSearch"
             @unassign="unassignSelectedFace"
             @verify="verifyFace(face)"
-            @delete="deletionTarget = face"
+            @delete="requestDeletion(face)"
           />
           <p v-if="actionError" role="alert" class="text-xs text-destructive">{{ actionError }}</p>
         </template>
@@ -788,18 +805,25 @@ onBeforeUnmount(() => {
           :assignment-pending="actionBusy"
           :can-delete="canDelete && selectedFaceOnPage"
           :action-error="actionError"
-          @delete="deletionTarget = selectedFace"
+          @delete="requestDeletion(selectedFace ?? null)"
           @find-profile="focusSimilarPeopleSearch"
           @create="createSimilarPerson"
           @unassign="unassignSelectedFace"
         >
-          <VerifyEntityLink
-            v-if="selectedFace"
-            v-bind="selectedFace"
-            :id="selectedFace.id"
-            kind="face"
-            inline
-          />
+          <UiTooltip
+            v-if="selectedFace?.personId && selectedFace.linkState !== 'verified' && canAnnotate"
+            text="Verify this link"
+          >
+            <Button
+              variant="outline"
+              size="icon-xs"
+              class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
+              :disabled="actionBusy"
+              aria-label="Verify this link"
+              @click="verifyFace(selectedFace)"
+              ><BadgeCheck aria-hidden="true"
+            /></Button>
+          </UiTooltip>
         </CurrentFacePanel>
         <SimilarPeopleSearch
           :key="candidateSearchResetKey"
@@ -823,7 +847,7 @@ onBeforeUnmount(() => {
           :is-fetching-next-page="isFetchingNextPage"
           :selected-face="selectedFace ?? null"
           :viewed-person-id="selectedPersonId"
-          :assignment-pending="assignmentStatus === 'pending'"
+          :assignment-pending="actionBusy"
           :search-term="`${candidateBrowseMode}:${candidateTerm}`"
           @load-more="loadMore()"
           @preview="previewSimilarPerson"
