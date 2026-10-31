@@ -120,3 +120,34 @@ verification, unassignment and deletion immediately affect membership/order.
 No persisted counter, migration or additional index is required; existing source,
 state and library/document relationship indexes serve the scope. Responses retain
 their bounded batch summary queries, independent of result batch size.
+
+### Page sequence metadata
+
+`pg_demo_pages.page_number` is a nullable positive 32-bit integer: a 1-based
+position local to `(library, document_id)`, separate from archive/source UUIDs.
+Legacy records remain NULL. Duplicate positions and gaps are allowed and never
+renumber other records. Repeated create/import calls preserve the first record,
+even when a later payload supplies a different number or null. Correct with
+`PATCH /api/v1/pages/{page_source_id}` under the annotate scope; omission preserves
+and explicit null clears. Changes attribute the real actor and touch the page
+and parent document using the existing annotation conventions.
+
+Typed page list/detail/search responses include `page_number` and
+`registered_page_count`. Counts are batched for the response, independent of
+filters and loaded batches, and include all registered pages with the same
+library/document identity, even without a registered parent Document. They are
+not the original document's authoritative length or the largest number; partial
+imports and gaps can legitimately produce `10/3`. Unknown displays use `–`.
+Batch imports project totals after all inserts, for existing and newly created
+records alike, including repeated page identities within a batch.
+
+Shared `sort=page_number&sort_direction=asc|desc` compares numbers, unknowns last
+in both directions, then canonical source UUID ascending. Cross-document sorting
+compares local positions across documents; it is not one continuous sequence.
+API defaults remain compatible: identity for lists and relevance for searches.
+Document browsing/gallery explicitly default to numeric order, with user sort
+choices taking precedence. Search retains its existing bounded candidate set;
+explicit numeric sort orders that complete set before pagination. Cursor query
+fingerprints include the shared sort. Concurrent edits are not a snapshot;
+after numbering edits the frontend resets affected result chains while retaining
+the current page route, filters and sort settings.

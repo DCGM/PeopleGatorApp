@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageNumberEditor from './PageNumberEditor.vue'
 import type { DocumentResponse, PageResponse } from '@/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +32,7 @@ const states = ['automatic', 'manual', 'verified', 'unassigned'] as const
         </p>
       </CardHeader>
       <CardContent>
+        <PageNumberEditor v-if="scope === 'page' && page" :page="page" />
         <p v-if="scope === 'document' && loading" role="status">Loading statistics…</p>
         <p v-else-if="scope === 'document' && error" role="alert">
           Could not load document statistics.

@@ -2,6 +2,7 @@
 import { ChevronRight, FileText } from '@lucide/vue'
 
 import LoadableImage from '@/components/custom/LoadableImage.vue'
+import PagePosition from '@/components/custom/PagePosition.vue'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 
@@ -10,6 +11,8 @@ const props = withDefaults(
     library: string
     documentUuid: string
     pageUuid: string
+    pageNumber?: number | null
+    registeredPageCount?: number | null
     names: readonly string[]
     thumbnailUrl?: string
     thumbnailLoading?: boolean
@@ -41,6 +44,7 @@ const props = withDefaults(
       </AspectRatio>
     </CardHeader>
     <CardContent class="px-0">
+      <PagePosition class="block" :number="props.pageNumber" :total="props.registeredPageCount" />
       <small class="block truncate" :title="props.pageUuid">
         <span v-if="props.showLibrary" class="font-bold text-secondary"
           >{{ props.library }} ·

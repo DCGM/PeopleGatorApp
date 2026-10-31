@@ -261,7 +261,7 @@ describe('document page gallery navigation', () => {
     // Only the route document and the gallery's own order; no evidence filters.
     const [, , , , order] = mocks.gallery.mock.calls[0]!
     expect(mocks.gallery.mock.calls[0]).toHaveLength(5)
-    expect(order.value).toEqual({ field: 'page_id', direction: 'asc' })
+    expect(order.value).toEqual({ field: 'page_number', direction: 'asc' })
     const location = wrapper.findComponent({ name: 'DocumentPageGallery' }).props('location')
     route.query = { person: 'a', line: 'l2', link_state: 'manual', page_link_state: 'verified' }
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({

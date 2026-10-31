@@ -49,6 +49,7 @@ from people_gator_api.schemas.sources import (
     GenericSourceLookupRequest,
     GenericSourceResponse,
     PageResponse,
+    PagePatchRequest,
     DocumentLibraryOptionsRequest, DocumentLibraryOptionsResponse, DocumentLibraryOption,
 )
 from people_gator_api.persistence.postgres.models import (
@@ -197,6 +198,7 @@ class PostgresSourceRepository(SourceRepository):
                     SortKey(page.document_id, "uuid", desc),
                     SortKey(page.page_id, "uuid", desc),
                 ],
+                "page_number": lambda desc: [SortKey(page.page_number, "number", desc)],
                 "page_id": lambda desc: [SortKey(page.page_id, "uuid", desc)],
                 "last_touched_at": lambda desc: [SortKey(Source.last_touched_at, "datetime", desc)],
             }
@@ -295,6 +297,7 @@ class PostgresSourceRepository(SourceRepository):
                 library=spec.library,
                 document_id=spec.document_id,
                 page_id=spec.page_id,
+                page_number=spec.page_number,
             )
         if spec.source_type == SourceKind.document:
             assert isinstance(spec.library, str)
@@ -315,6 +318,13 @@ class PostgresSourceRepository(SourceRepository):
     async def get_or_create(
         self, spec: GenericSourceCreateRequest
     ) -> tuple[GenericSourceResponse, CreateResult]:
+        [result] = await self.get_or_create_batch([spec])
+        return result
+
+    async def _existing_or_created(
+        self, spec: GenericSourceCreateRequest
+    ) -> tuple[Source, CreateResult]:
+        """Retain rows until the complete batch is ready for projection."""
         key = str(spec.url)
         await self._session.execute(
             select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
@@ -336,21 +346,54 @@ class PostgresSourceRepository(SourceRepository):
                 )
             if by_url is not None and by_url.id != by_identity.source_id:
                 raise ValueError("source URL conflicts with another source identity")
-            return by_identity, CreateResult.EXISTING
+            assert by_url is not None
+            return by_url, CreateResult.EXISTING
         if by_url is not None:
             raise ValueError("source URL is already registered with another identity")
         source = self._new(spec)
         self._session.add(source)
         await commit(self._session, "source create violates a persistence constraint")
-        return source_response(source), CreateResult.CREATED
+        return source, CreateResult.CREATED
 
     async def get_or_create_batch(
         self, specs: Sequence[GenericSourceCreateRequest]
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
-        results: list[tuple[GenericSourceResponse, CreateResult]] = []
-        for spec in specs:
-            results.append(await self.get_or_create(spec))
-        return results
+        outcomes = [await self._existing_or_created(spec) for spec in specs]
+        # Project every result after all inserts, including existing sources:
+        # their document totals may have changed during this batch too.
+        await load_link_stats(self._session, [item for item, _ in outcomes])
+        return [
+            (source_response(item), result)
+            for item, result in outcomes
+        ]
+
+    async def patch_page(
+        self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor, touch: bool = True,
+    ) -> PageResponse | None:
+        row = (await self._session.execute(select(Page.page_number).where(Page.id == source_id))).first()
+        if row is None:
+            return None
+        current = row[0]
+        if "page_number" in payload.model_fields_set and current != payload.page_number:
+            # Touching the parent document locks further sources, so touching
+            # edits keep the graph lock order shared with merges and deletes.
+            if touch:
+                await lock_annotation_graph(self._session)
+            page = await self._session.scalar(
+                select(Page).where(Page.id == source_id).with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if page is None:
+                await self._session.rollback()
+                return None
+            if page.page_number != payload.page_number:
+                page.page_number = payload.page_number
+                if touch:
+                    await touch_sources(self._session, [source_id], context)
+                await commit(self._session, "page number update failed")
+            else:
+                await self._session.rollback()
+        return await self.get_page(source_id)
 
     async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
         return bool(await self.delete_batch([source_id], context=context))

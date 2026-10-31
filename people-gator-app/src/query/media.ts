@@ -3,6 +3,8 @@ import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import {
+  patchPageRouteApiV1PagesPageSourceIdPatch,
+  type PagePatchRequest,
   createDocumentRouteApiV1DocumentsPost,
   createDocumentBatchRouteApiV1DocumentsBatchPost,
   createImageRouteApiV1ImagesPost,
@@ -422,5 +424,44 @@ export function useDeleteSourceMutation() {
         }),
       ),
     onSuccess: invalidate,
+  })
+}
+
+/** Query keys whose cursor chains depend on page order. */
+const PAGE_ORDERED_LISTS = [
+  queryKeys.pages.lists(),
+  ['pages', 'results'],
+  ['search', 'pages'],
+  queryKeys.documents.lists(),
+  ['search', 'documents'],
+] as const
+
+/**
+ * Discard ordered cursor chains after a numbering edit; keep the edited page,
+ * images, layouts and spans cached so the workspace does not reload.
+ */
+export function usePageNumberMutation() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sourceId, payload }: { sourceId: string; payload: PagePatchRequest }) =>
+      responseData(
+        patchPageRouteApiV1PagesPageSourceIdPatch({
+          path: { page_source_id: sourceId },
+          body: payload,
+          throwOnError: true,
+        }),
+      ),
+    onSuccess: async (page) => {
+      client.setQueryData(queryKeys.pages.detail(page.source_id), page)
+      client.setQueryData(
+        queryKeys.pages.lookup(page.library, page.document_id, page.page_id),
+        page,
+      )
+      await Promise.all([
+        ...PAGE_ORDERED_LISTS.map((queryKey) => client.resetQueries({ queryKey })),
+        client.invalidateQueries({ queryKey: ['documents', 'detail'] }),
+        client.invalidateQueries({ queryKey: ['documents', 'lookup'] }),
+      ])
+    },
   })
 }

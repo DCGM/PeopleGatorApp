@@ -72,6 +72,8 @@ class PageSortField(StrEnum):
     MENTIONS_MANUAL_COUNT = "mentions_manual_count"
     MENTIONS_VERIFIED_COUNT = "mentions_verified_count"
     MENTIONS_UNASSIGNED_COUNT = "mentions_unassigned_count"
+
+    PAGE_NUMBER = "page_number"
     RELEVANCE = "relevance"
     LIBRARY = "library"
     DOCUMENT_ID = "document_id"

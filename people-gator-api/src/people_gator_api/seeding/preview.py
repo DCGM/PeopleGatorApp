@@ -38,7 +38,7 @@ from people_gator_api.schemas.mentions import (
     TextMentionListFilter,
     TextMentionListRequest,
 )
-from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest, ImageCreateRequest
+from people_gator_api.schemas.sources import DocumentCreateRequest, PageCreateRequest, PagePatchRequest, ImageCreateRequest
 from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
@@ -70,6 +70,7 @@ class SeedUpgrades(BaseModel):
     model_config = ConfigDict(extra="ignore")
     thumbnail: dict[str, ThumbnailUpgrade] = Field(default_factory=dict)
     record_edits: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
+    page_numbers: dict[str, RecordEditUpgrade] = Field(default_factory=dict)
 
 
 class SeedManifest(BaseModel):
@@ -257,8 +258,30 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 library=document.library,
                 document_id=document.document_id,
                 page_id=page.page_id,
+                page_number=None if page.key == "page-gallery-9" else page.number,
             )
         )
+        # Upgrade legacy synthetic pages once, only while still unannotated.
+        # Persist precondition before the write; recovery preserves later edits.
+        # The write leaves last-touched attribution as a fresh seed would.
+        upgrade_key = "page-number-v1/" + page.key
+        if page.key != "page-gallery-9":
+            edit = upgrades.page_numbers.get(upgrade_key)
+            if edit is None:
+                edit = RecordEditUpgrade(expected_touched_at=source.last_touched_at)
+                upgrades.page_numbers[upgrade_key] = edit
+                await checkpoint_upgrades()
+            if not edit.complete:
+                if source.page_number is None and source.last_touched_at == edit.expected_touched_at:
+                    patched = await database.sources.patch_page(
+                        source.source_id, PagePatchRequest(page_number=page.number),
+                        context=actors["reviewer"], touch=False,
+                    )
+                    if patched is None:
+                        raise RuntimeError(f"preview page {page.key} disappeared during its numbering upgrade")
+                    source = patched
+                edit.complete = True
+                await checkpoint_upgrades()
         pages[page.key] = source.source_id
         image_key = page_image_key(document.library, document.document_id, page.page_id)
         if page.has_image and await _read_optional(filesystem, image_key) is None:

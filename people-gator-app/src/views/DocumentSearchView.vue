@@ -16,6 +16,7 @@ import { useSourceLabels } from '@/query/people-filter-options'
 import { DEFAULT_SORT_KEYS, useRouteSort } from '@/lib/sorting'
 import {
   PAGE_BROWSE_DEFAULT,
+  GALLERY_DEFAULT,
   PAGE_SORTS,
   RELEVANCE,
   scoredOptions,
@@ -32,10 +33,14 @@ const scopeError = scope.error
 const unregisteredLabels = computed(() =>
   Object.fromEntries(scope.unregistered.value.map((id) => [id, `${id} (not registered)`])),
 )
+const archiveDocuments = computed(() => queryValues(route.query.archive_document))
+/** Numeric page order only makes sense within one document. */
+const singleDocument = computed(
+  () => shared.filters.value.documentIds.length + archiveDocuments.value.length === 1,
+)
 const heading = computed(() => {
   const { documentIds, libraries } = shared.filters.value
-  if (documentIds.length === 1 || queryValues(route.query.archive_document).length)
-    return 'Document pages'
+  if (documentIds.length === 1 || archiveDocuments.value.length) return 'Document pages'
   return libraries.length ? 'Library scans' : 'Browse scans'
 })
 const subtitle = computed(() => {
@@ -55,7 +60,7 @@ const assignment = ref(normalizePageContentFilter(route.query.assignment))
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(PAGE_SORTS, searching.value))
 const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
-  searching.value ? RELEVANCE : PAGE_BROWSE_DEFAULT,
+  searching.value ? RELEVANCE : singleDocument.value ? GALLERY_DEFAULT : PAGE_BROWSE_DEFAULT,
 )
 const {
   cards,
@@ -158,6 +163,8 @@ useAutomaticPagination({
             :library="result.library"
             :document-uuid="result.documentId"
             :page-uuid="result.pageId"
+            :page-number="result.pageNumber"
+            :registered-page-count="result.registeredPageCount"
             :names="result.names"
             :thumbnail-url="result.thumbnailUrl"
             :thumbnail-loading="result.thumbnailLoading"

@@ -44,9 +44,11 @@ from people_gator_api.schemas.sources import (
     PageListResponse,
     PageLookupRequest,
     PageResponse,
+    PagePatchRequest,
 )
 from people_gator_api.services.auth_service import (
     AdminActorDependency,
+    AnnotatorActorDependency,
     BrowseActorDependency,
     DataIngestActorDependency,
 )
@@ -309,6 +311,14 @@ async def lookup_page_route(
     if resolved is None:
         raise_api_error(404, "not_found", "Page not found")
     return resolved
+
+
+@router.patch("/pages/{page_source_id:uuid}", response_model=PageResponse, tags=["pages"])
+async def patch_page_route(page_source_id: uuid.UUID, payload: PagePatchRequest, database: DatabaseDependency, user: AnnotatorActorDependency) -> PageResponse:
+    page = await database.sources.patch_page(page_source_id, payload, context=user)
+    if page is None:
+        raise_api_error(404, "not_found", "Page not found")
+    return page
 
 
 @router.get("/pages/{page_source_id:uuid}", response_model=PageResponse, tags=["pages"])

@@ -160,10 +160,11 @@ export type DocumentResponse = {
      * Document Id
      */
     document_id: string;
+    first_page_number?: PageNumber | null;
     /**
      * First Page Source Id
      *
-     * First registered page by archive page ID, independent of evidence filters; null when no registered page is available.
+     * First registered page by page number, unknowns last and source UUID ascending; independent of evidence filters.
      */
     first_page_source_id?: string | null;
     /**
@@ -1107,10 +1108,11 @@ export type FoundDocument = {
      * Document Id
      */
     document_id: string;
+    first_page_number?: PageNumber | null;
     /**
      * First Page Source Id
      *
-     * First registered page by archive page ID, independent of evidence filters; null when no registered page is available.
+     * First registered page by page number, unknowns last and source UUID ascending; independent of evidence filters.
      */
     first_page_source_id?: string | null;
     /**
@@ -1433,6 +1435,13 @@ export type FoundPage = {
      * Page Id
      */
     page_id: string;
+    page_number?: PageNumber | null;
+    /**
+     * Registered Page Count
+     *
+     * Registered pages in this library/document, not the original document length.
+     */
+    registered_page_count?: number | null;
 };
 
 /**
@@ -2063,6 +2072,10 @@ export type PageCreateRequest = {
      * Page Id
      */
     page_id: string;
+    /**
+     * 1-based document position; null means unknown. Reimports preserve existing annotations.
+     */
+    page_number?: PageNumber | null;
 };
 
 /**
@@ -2095,7 +2108,18 @@ export type PageLayoutModel = {
 /**
  * PageListSortField
  */
-export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageListSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+
+export type PageNumber = number;
+
+/**
+ * PagePatchRequest
+ *
+ * Omission preserves numbering; null explicitly clears it.
+ */
+export type PagePatchRequest = {
+    page_number?: PageNumber | null;
+};
 
 /**
  * PageResponse
@@ -2137,12 +2161,19 @@ export type PageResponse = {
      * Page Id
      */
     page_id: string;
+    page_number?: PageNumber | null;
+    /**
+     * Registered Page Count
+     *
+     * Registered pages in this library/document, not the original document length.
+     */
+    registered_page_count?: number | null;
 };
 
 /**
  * PageSortField
  */
-export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
+export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
 
 /**
  * RefreshTokenRequest
@@ -5980,6 +6011,36 @@ export type GetPageRouteApiV1PagesPageSourceIdGetResponses = {
 };
 
 export type GetPageRouteApiV1PagesPageSourceIdGetResponse = GetPageRouteApiV1PagesPageSourceIdGetResponses[keyof GetPageRouteApiV1PagesPageSourceIdGetResponses];
+
+export type PatchPageRouteApiV1PagesPageSourceIdPatchData = {
+    body: PagePatchRequest;
+    path: {
+        /**
+         * Page Source Id
+         */
+        page_source_id: string;
+    };
+    query?: never;
+    url: '/api/v1/pages/{page_source_id}';
+};
+
+export type PatchPageRouteApiV1PagesPageSourceIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchPageRouteApiV1PagesPageSourceIdPatchError = PatchPageRouteApiV1PagesPageSourceIdPatchErrors[keyof PatchPageRouteApiV1PagesPageSourceIdPatchErrors];
+
+export type PatchPageRouteApiV1PagesPageSourceIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageResponse;
+};
+
+export type PatchPageRouteApiV1PagesPageSourceIdPatchResponse = PatchPageRouteApiV1PagesPageSourceIdPatchResponses[keyof PatchPageRouteApiV1PagesPageSourceIdPatchResponses];
 
 export type GetPageImageByIdRouteApiV1PagesPageSourceIdImageGetData = {
     body?: never;

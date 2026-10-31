@@ -83,7 +83,7 @@ describe('document page gallery', () => {
       'filter.library': [LIBRARY],
       'filter.document_id': [DOCUMENT],
       // Archive page IDs are an explicit order, never presented as page numbers.
-      sort: 'page_id',
+      sort: 'page_number',
       sort_direction: 'asc',
       limit: 2,
       return_total_count: true,

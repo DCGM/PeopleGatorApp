@@ -45,6 +45,7 @@ import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import type { CandidateBrowseMode } from '@/viewmodels/similar-people'
 import type { Language } from '@/client'
 import { useDocumentWorkspace } from '@/viewmodels/document-workspace'
+import PagePosition from '@/components/custom/PagePosition.vue'
 import { useRouteSort } from '@/lib/sorting'
 import {
   CANDIDATE_SORT_KEYS,
@@ -664,6 +665,11 @@ onBeforeUnmount(() => {
       aria-label="Pan and zoom document page"
       tabindex="-1"
     >
+      <PagePosition
+        class="absolute bottom-3 right-3 z-20 bg-background px-2 py-1"
+        :number="page?.page_number"
+        :total="page?.registered_page_count"
+      />
       <DocumentControls
         class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
         @pointerdown.stop

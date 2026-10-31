@@ -85,9 +85,6 @@ useIntersectionObserver(sentinel, ([entry]) => {
           <ArchiveLink :url="documentUrl" kind="document" />
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <p id="document-pages-order" class="text-xs text-muted-foreground">
-            Page IDs are not page numbers
-          </p>
           <SortControl
             v-if="sort && sortOptions"
             v-model="sort"
@@ -107,11 +104,7 @@ useIntersectionObserver(sentinel, ([entry]) => {
         This document has one registered page.
       </p>
       <ScrollArea type="always" orientation="horizontal" class="w-full">
-        <ol
-          ref="list"
-          class="flex w-max items-start gap-2 px-1 pb-4 pt-2"
-          aria-describedby="document-pages-order"
-        >
+        <ol ref="list" class="flex w-max items-start gap-2 px-1 pb-4 pt-2">
           <li v-for="item in props.items" :key="item.sourceId" class="w-14 shrink-0 sm:w-16">
             <RouterLink
               :to="props.location(item)"

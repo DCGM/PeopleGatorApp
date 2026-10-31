@@ -108,6 +108,7 @@ from people_gator_api.schemas.sources import (
     PageListResponse,
     PageLookupRequest,
     PageResponse,
+    PagePatchRequest,
     SourceCreateRequestBase,
     SourceListRequest,
     SourceListResponse,
@@ -717,6 +718,18 @@ class SourceRepository(ABC):
             specs=specs,
             cls=DocumentResponse,
         )
+
+    async def patch_page(
+        self, source_id: uuid.UUID, payload: "PagePatchRequest", *, context: GenericActor, touch: bool = True,
+    ) -> PageResponse | None:
+        """Edit numbering with actor attribution; omission preserves, null clears.
+
+        Duplicate numbers and gaps are allowed; other pages never renumber.
+        Imports preserve all existing annotations, including conflicting values.
+        ``touch=False`` is for additive data upgrades that must keep the page's
+        and document's last-touched time and modifier unchanged.
+        """
+        raise NotImplementedError
 
     async def get_or_create_page_batch(
         self, specs: Sequence[PageCreateRequest]

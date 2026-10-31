@@ -23,6 +23,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -317,11 +318,9 @@ class Page(Source):
             "page_id",
             name="uq_pg_demo_page_identity",
         ),
-        Index(
-            INDEX_NAME_FORMAT.format("page_document"), 
-            "library", 
-            "document_id"
-        ),
+        CheckConstraint("page_number > 0", name="ck_pg_demo_pages_page_number"),
+        # Also serves (library, document_id) lookups, which need no separate index.
+        Index(INDEX_NAME_FORMAT.format("pages_number"), "library", "document_id", "page_number", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -330,6 +329,7 @@ class Page(Source):
     library: Mapped[str] = mapped_column(String(255), nullable=False)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     page_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __mapper_args__ = {"polymorphic_identity": "page"}  # noqa: RUF012
 

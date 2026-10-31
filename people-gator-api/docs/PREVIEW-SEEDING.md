@@ -343,10 +343,11 @@ view inside the strip. Selecting an item pushes the canonical page URL, so
 reload and Back/Forward restore it. Evidence, link-state and workspace settings
 are kept. Face, person and line selections are dropped, and pan/zoom resets.
 
-Pages appear in archive page-ID order by default, or by last change through the
-strip's **Sort pages** control (#33), 12 per request. Neither order is the
-physical page sequence: the archive does not record page numbers, so the gallery
-shows no ordinal and its UUID labels are not page numbers. The gallery loads further batches until the current page
+Pages appear in stored page-number order by default (#53), unknown numbers last,
+or by page ID or last change through the strip's **Sort pages** control (#33),
+12 per request. Pages without a stored number show the first eight characters of
+their UUID, which are not page numbers. Links saved before #53 that relied on the
+old page-ID default now open in page-number order. The gallery loads further batches until the current page
 appears. After that it loads when the strip's end is reached or **More pages**
 is activated. Evidence filters never apply to the gallery.
 
@@ -1049,3 +1050,19 @@ all fifteen sorts and minima on browse/search for both resources, traverses
 cursors with ties and zeros, and checks response scope and constant query counts.
 The recovery test edits/deletes these fixtures, reruns the seed, and recovers a
 lost face checkpoint without replacing reviewed state, timestamps or identities.
+
+### Page numbers (#53)
+
+Open the page-gallery document: its 14 synthetic pages use stored positions
+1–14 except page 9, which stays unknown. UUID order differs from numeric order;
+the gallery loads multiple batches, placing the unknown page last. Cards,
+document previews and scan detail show `n/total` with a dash for unknown values.
+`total` counts registered pages in exactly the same library/document, regardless
+of evidence filters. It does not assert the original archive document length;
+gaps or partial imports can therefore show, for example, `10/3`.
+
+Existing unnumbered synthetic pages receive a one-time additive numbering
+upgrade, checkpointed before writing and guarded by their annotation timestamp.
+The upgrade leaves last-touched time and modifier unchanged, as a fresh seed
+would. Reruns preserve changed numbers and explicit clears, including after
+interrupted writes. Page 9 remains a usable legacy/unknown example.

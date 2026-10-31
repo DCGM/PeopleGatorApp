@@ -1,6 +1,6 @@
 """Shared document scope, same-witness filters and batched link aggregates."""
 
-from sqlalchemy import select, union_all, or_, exists, func
+from sqlalchemy import tuple_, select, union_all, or_, exists, func
 from people_gator_api.schemas.entity_links import EntityLinkStats
 from .models import Source, Document, Page, Entity, ImageOccurrence, TextMention, User, APIKey
 
@@ -180,6 +180,13 @@ async def load_link_stats(session, objects, *, entities=False):
     for obj in objects:
         obj._entity_link_stats = stats[obj.id]
     if not entities:
+        pages = [obj for obj in objects if isinstance(obj, Page)]
+        if pages:
+            identities = {(obj.library, obj.document_id) for obj in pages}
+            rows = await session.execute(select(Page.library, Page.document_id, func.count()).where(tuple_(Page.library, Page.document_id).in_(identities)).group_by(Page.library, Page.document_id))
+            counts = {(library, document): count for library, document, count in rows}
+            for obj in pages:
+                obj._registered_page_count = counts.get((obj.library, obj.document_id), 0)
         await load_document_summaries(session, objects)
 
 
@@ -189,17 +196,17 @@ async def load_document_summaries(session, objects):
     if not documents:
         return
     for obj in documents.values():
-        obj._document_summary = {"registered_page_count": 0, "linked_entity_count": 0, "first_page_source_id": None}
+        obj._document_summary = {"registered_page_count": 0, "linked_entity_count": 0, "first_page_source_id": None, "first_page_number": None}
     document, page = Document.__table__.c, Page.__table__.c
     pages = (
-        # Count before DISTINCT ON selects the first archive page for each document.
-        select(document.id, func.count(page.id).over(partition_by=document.id), page.id)
+        # Count before DISTINCT ON selects the first numbered page for each document.
+        select(document.id, func.count(page.id).over(partition_by=document.id), page.id, page.page_number)
         .select_from(Document.__table__.join(Page.__table__,
             (page.library == document.library) & (page.document_id == document.document_id)))
-        .where(document.id.in_(documents)).distinct(document.id).order_by(document.id, page.page_id)
+        .where(document.id.in_(documents)).distinct(document.id).order_by(document.id, page.page_number.asc().nulls_last(), page.id)
     )
-    for owner, count, first_page in await session.execute(pages):
-        documents[owner]._document_summary.update(registered_page_count=count, first_page_source_id=first_page)
+    for owner, count, first_page, number in await session.execute(pages):
+        documents[owner]._document_summary.update(registered_page_count=count, first_page_source_id=first_page, first_page_number=number)
     scope = source_scope()
     evidence = union_all(
         select(ImageOccurrence.source_id, ImageOccurrence.entity_id).where(ImageOccurrence.occurrence_type == "face"),
