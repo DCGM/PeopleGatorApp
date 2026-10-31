@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
-import { defaultDocumentColumns } from '@/viewmodels/document-table'
+import { defaultDocumentColumns, documentColumnSizing } from '@/viewmodels/document-table'
 import type { DocumentResponse } from '@/client'
 
 const media = vi.hoisted(() => ({ image: vi.fn() }))
@@ -71,6 +71,72 @@ async function render() {
   return { wrapper, router, visibility }
 }
 describe('document table', () => {
+  it('keeps one applied width model through data, sorting, media and visibility changes', async () => {
+    const { wrapper } = await render()
+    const widths = () =>
+      Object.fromEntries(
+        wrapper
+          .findAll('col')
+          .map((col) => [col.attributes('data-column')!, (col.element as HTMLElement).style.width]),
+      )
+    const original = widths()
+    const checkModel = () => {
+      const current = widths()
+      const total = Object.keys(current).reduce((sum, id) => sum + documentColumnSizing(id).size, 0)
+      expect((wrapper.get('table').element as HTMLElement).style.width).toBe(`${total}px`)
+      expect(wrapper.get('table').classes()).toContain('table-fixed')
+      for (const cell of wrapper.findAll('tbody td')) {
+        expect((cell.element as HTMLElement).style.width).toBe(
+          current[cell.attributes('data-column')!],
+        )
+        expect(cell.classes()).toContain('[overflow-wrap:anywhere]')
+      }
+    }
+    checkModel()
+    await wrapper.get('button[aria-label="Sort by Document name"]').trigger('click')
+    await wrapper.setProps({ documents: [] })
+    expect(widths()).toEqual(original)
+    checkModel()
+    await wrapper.setProps({
+      documents: [
+        {
+          ...documents[0]!,
+          name: 'ArchiveReference'.repeat(50),
+          library: 'Long archive'.repeat(20),
+        },
+      ],
+    })
+    expect(widths()).toEqual(original)
+    expect(wrapper.get('tbody td').text()).toBe('ArchiveReference'.repeat(50))
+    checkModel()
+    await wrapper.setProps({
+      visibility: {
+        ...defaultDocumentColumns(),
+        first_page: true,
+        faces_total: true,
+        faces_manual: true,
+      },
+    })
+    await flushPromises()
+    checkModel()
+    expect(widths().first_page).toBe('144px')
+    expect(
+      (wrapper.get('th[scope="colgroup"][colspan="2"]').element as HTMLElement).style.width,
+    ).toBe('288px')
+    for (const [id, width] of Object.entries(original)) expect(widths()[id]).toBe(width)
+    await wrapper.setProps({ visibility: { ...defaultDocumentColumns(), library: false } })
+    checkModel()
+    expect(widths().library).toBeUndefined()
+    await wrapper.setProps({
+      visibility: defaultDocumentColumns(),
+      documents: [...documents, { ...documents[0]!, source_id: 'appended' }],
+    })
+    expect(widths()).toEqual(original)
+    checkModel()
+    for (const button of wrapper.findAll('thead button')) {
+      expect(button.get('span[aria-hidden="true"]').classes()).toContain('size-4')
+    }
+  })
   it('renders one row per document, full summaries, unknowns and navigation', async () => {
     const { wrapper } = await render()
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)

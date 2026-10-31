@@ -68,3 +68,24 @@ export const DOCUMENT_COLUMN_SORTS: Readonly<Partial<Record<string, DocumentSort
     ),
   ),
 }
+
+/** Fixed CSS-pixel widths at every viewport; overflow belongs to the table region.
+ * Bounds document the intended readable range for each column purpose.
+ */
+export function documentColumnSizing(id: string) {
+  const widths: Record<string, number> = {
+    identity: 280,
+    name: 320,
+    ndk: 96,
+    first_page: 144,
+    library: 224,
+    document_id: 320,
+    registered_page_count: 112,
+    last_modified: 208,
+    modified_by: 224,
+    api_key: 224,
+    linked_entity_count: 144,
+  }
+  const size = widths[id] ?? 144 // Annotation counts include the longest label + arrow.
+  return { size, minSize: size, maxSize: size }
+}
