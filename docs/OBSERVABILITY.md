@@ -72,7 +72,7 @@ and retries while space is available. Full buffers, daemon shutdown, long outage
 or short-lived containers exiting during an outage can lose logs. This transport
 is not a durable audit archive. Preserve maintenance outcomes separately.
 
-## Optional API traces and metrics
+## Direct backend OTLP traces, metrics and logs
 
 The SDK is disabled by default, including in the current per-PR template. Enable
 it only when the API can reach your OTLP HTTP receiver:
@@ -92,13 +92,44 @@ decorator provides custom async spans.
 
 SDK resources use `service.name=people-gator-api`, deployment-supplied version,
 environment, commit and PR context, with hostname as instance ID. Container-log
-service names remain separate from SDK service names. A log provider/exporter is initialized, but
-`configure_logging()` installs only a stream handler; do not assume standard
-Python logs are directly exported by the SDK. Preview container logging remains
-the documented log path. There is no implemented profiling exporter despite a
-profiles-path setting, and no `/metrics` Prometheus endpoint supplied here. Browser RUM and W3C
-trace propagation are configured through the
-[OpenObserve RUM guide](OPENOBSERVE-RUM.md).
+service names remain separate from SDK service names.
+
+When enabled, the backend connects **directly** to the configured OTLP HTTP
+collector for traces, metrics and application logs in PR, staging and release:
+
+```text
+FastAPI / service / database instrumentation + Python application logging
+  → backend SDK exporters → http://lgtm:4318 → OpenObserve
+```
+
+The locked `opentelemetry-instrumentation-logging` package installs an OTLP
+`LoggingHandler` automatically during `LoggingInstrumentor.instrument()` and
+preserves it when `configure_logging()` applies the stderr configuration. Python
+application/library logs that propagate to the root logger therefore retain
+structured severity, extra attributes, exceptions and the active trace/span IDs.
+Disabling logging auto-instrumentation through standard OTEL environment flags
+also disables this automatic handler. Loggers with their own non-propagating
+handlers and raw stdout/stderr are still container output.
+
+Container logging is an independent diagnostic path. PR/staging continue to ship
+stderr copies through Fluent Forward; these can duplicate the structured SDK
+records. Use `service.name=people-gator-api` for SDK application logs and the
+`people-gator-preview.*` / `people-gator-staging.*` services for container output.
+The release template stores container output locally using rotating `json-file`
+logs; enabling SDK telemetry supplies its direct application-log export without
+requiring Fluent Forward. Frontend nginx and one-off tool logs do not use the
+backend SDK.
+A subprocess integration test, `tests/test_telemetry_export.py`, runs the actual
+API SDK bootstrap against a local HTTP OTLP receiver for all three deployment
+identities. It decodes protobuf trace/log/metric payloads and checks incoming
+browser-parent continuation, a child operation, correlated info/error logs,
+exception attributes, a metric, resource identity and exporter authorization.
+This requires no database or external service and does not establish live sink
+retention or availability.
+
+There is no implemented profiling exporter despite a profiles-path setting,
+and no `/metrics` Prometheus endpoint supplied here. Browser RUM and W3C trace
+propagation are configured through the [OpenObserve RUM guide](OPENOBSERVE-RUM.md).
 
 ## Add signals safely and validate them
 
