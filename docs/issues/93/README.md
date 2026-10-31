@@ -10,12 +10,15 @@ Z–A changed its measured width from **160px to 1,171px**, and Library from
 **149px to 269px**. With the fix, Document name stays **320px** and Library
 **224px** across those sorts. The complete title wraps visibly within its cell,
 including the uninterrupted archive reference; row height adapts to its content.
+Vertical separators align across the headers and body cells.
 
 - `before-*-ascending.png` / `before-*-descending.png`: original width jump.
 - `after-*-ascending.png` / `after-*-descending.png`: stable defaults, header grips
   and the wrapped long title after sorting.
 - `after-*-resized-media.png`: title adjusted to 330px using its header, optional
   First page and attribution/count fields enabled, local preview media loaded.
+- `after-*-dark-titles.png`: dark title columns and header controls after theme
+  transitions settle; text/header contrast is checked to be at least 4.5:1.
 - `after-*-dark.png`: dark appearance and the rightmost count headers/fields,
   reached inside the bounded table scroll region.
 

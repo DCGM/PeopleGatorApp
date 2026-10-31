@@ -146,9 +146,10 @@ try {
           }),
         )
       }
-      dispatch(element, 'touchstart', box.x)
-      dispatch(document, 'touchmove', box.x + 50)
-      dispatch(document, 'touchend', box.x + 50)
+      const start = Math.round(box.x)
+      dispatch(element, 'touchstart', start)
+      dispatch(document, 'touchmove', start + 50)
+      dispatch(document, 'touchend', start + 50)
     })
     assert.equal((await widths()).name, 370)
     const resized = await widths()
@@ -284,7 +285,35 @@ try {
       element.scrollLeft = element.scrollWidth - element.clientWidth
     })
     await page.evaluate(() => document.documentElement.classList.add('dark'))
+    // Wait for standard color transitions before measuring/capturing the theme.
+    await page.waitForTimeout(500)
+    const contrast = await table.evaluate((element) => {
+      const luminance = (color) => {
+        const channels = color
+          .match(/[\d.]+/g)
+          .slice(0, 3)
+          .map(Number)
+          .map((v) => {
+            const s = v / 255
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+          })
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+      }
+      const background = luminance(getComputedStyle(document.body).backgroundColor)
+      return Array.from(element.querySelectorAll('td, th, th button')).map((cell) => {
+        const foreground = luminance(getComputedStyle(cell).color)
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+      })
+    })
+    assert.ok(
+      contrast.every((ratio) => ratio >= 4.5),
+      'dark table text and header controls must remain legible',
+    )
     await capture('dark')
+    await region.evaluate((element) => {
+      element.scrollLeft = 0
+    })
+    await capture('dark-titles')
     assert.deepEqual(errors, [])
     console.log(
       `${label} ${width}x${height}: stable geometry, wrapping, pointer/touch/keyboard resizing, bounds/reset, grouped headers, media, visibility, shared sorting/history, loading/empty/error recovery, keyboard scrolling and cursor loading passed`,

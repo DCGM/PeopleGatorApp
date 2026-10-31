@@ -1087,7 +1087,7 @@ reviewed assignments and last-processing timestamps are preserved on reruns.
 
 Sort Document name in both directions, then enable First page, Modified by,
 API key and the face/text-mention count groups. At desktop and mobile sizes,
-column widths stay constant while full titles and other long values wrap
+column boundaries have vertical separators and widths stay constant while full titles and other long values wrap
 inside their cells; row heights grow with the text. The title width is 320 CSS
 pixels. All widths use the same fixed pixel policy at every viewport; unused
 parent space is left blank and excess columns scroll inside the keyboard-focusable
