@@ -25,6 +25,7 @@ async def rum_config(response: Response):
         "env": deployment.environment,
         "version": deployment.version,
         "sessionSampleRate": rum.session_sample_rate,
+        "sessionReplaySampleRate": rum.session_replay_sample_rate,
         "context": {"commit": deployment.commit, "pr_number": deployment.pr_number},
     }
 
