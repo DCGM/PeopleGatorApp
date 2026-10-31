@@ -616,6 +616,19 @@ describe('teleprompter focus modes (#36)', () => {
     wrapper.unmount()
   })
 
+  it('restores a URL line hidden by the mode at the nearest visible line', async () => {
+    route.query = { lines: 'annotated', line: 'l2' }
+    lines.value = []
+    const wrapper = await mountView()
+    threeLines()
+    await flushPromises()
+    // L2 is unannotated; L1 and L3 are equally near, so the earlier line wins.
+    expect(
+      wrapper.findComponent({ name: 'DocumentTeleprompter' }).props('selectedLineIndex'),
+    ).toBe(0)
+    wrapper.unmount()
+  })
+
   it('clears expansions when the mode changes and keeps the empty Person mode', async () => {
     threeLines()
     const wrapper = await mountView()
