@@ -15,6 +15,7 @@ from pydantic import (
 )
 from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
+from people_gator_api.schemas.annotation_counts import MinimumCount
 from people_gator_api.schemas.sorting import EntitySortField, SortableRequest
 from people_gator_api.schemas.common import (
     GenericListRequest,
@@ -169,6 +170,28 @@ class EntityListFilter(ListFilterBase, SharedFilter):
     Filter fields are combined using logical AND.
     Lists of criteria in each field are combined using logical OR.\
     """
+
+    min_faces_total_count: MinimumCount | MissingType = Field(
+        default=MISSING, description="Inclusive minimum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.",
+    )
+    max_faces_total_count: MinimumCount | MissingType = Field(
+        default=MISSING, description="Inclusive maximum assigned faces across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.",
+    )
+    min_mentions_total_count: MinimumCount | MissingType = Field(
+        default=MISSING, description="Inclusive minimum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.",
+    )
+    max_mentions_total_count: MinimumCount | MissingType = Field(
+        default=MISSING, description="Inclusive maximum assigned mentions across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.",
+    )
+
+    @model_validator(mode="after")
+    def validate_count_ranges(self) -> Self:
+        for kind in ("faces", "mentions"):
+            lower = getattr(self, f"min_{kind}_total_count")
+            upper = getattr(self, f"max_{kind}_total_count")
+            if isinstance(lower, int) and isinstance(upper, int) and lower > upper:
+                raise ValueError(f"min_{kind}_total_count must not exceed max_{kind}_total_count")
+        return self
 
     entity_id: list[uuid.UUID] | MissingType = Field(
         default=MISSING, description="The unique identifiers of the entities."

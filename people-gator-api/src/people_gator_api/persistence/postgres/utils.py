@@ -756,6 +756,10 @@ def entity_filters(
     if filter_values is None:
         return []
     filters: list[ColumnElement[bool]] = touch_conditions(Entity, filter_values)
+    from .entity_counts import entity_count_predicate
+    count_predicate = entity_count_predicate(filter_values)
+    if count_predicate is not None:
+        filters.append(count_predicate)
     entity_ids = missing_to_none(filter_values.entity_id)
     if entity_ids is not None:
         filters.append(Entity.id.in_(entity_ids))

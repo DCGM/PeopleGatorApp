@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePeopleCounts } from '@/viewmodels/people-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { computed, ref } from 'vue'
 import { relatedQuery, useSharedFilters } from '@/viewmodels/shared-filters'
@@ -24,6 +25,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const shared = useSharedFilters()
+const counts = usePeopleCounts()
 
 const resultsPerPage = 12
 function updateQuery(changes: import('vue-router').LocationQueryRaw) {
@@ -57,8 +59,8 @@ const {
   searchTerm,
   assignment,
   resultsPerPage,
-  shared.params,
-  computed(() => !shared.error.value),
+  computed(() => ({ ...shared.params.value, ...counts.params.value })),
+  computed(() => !shared.error.value && !counts.error.value),
   sort,
 )
 const listEnd = ref<HTMLElement | null>(null)
@@ -67,7 +69,7 @@ useAutomaticPagination({
   hasNextPage,
   isFetching,
   error,
-  enabled: computed(() => !shared.error.value),
+  enabled: computed(() => !shared.error.value && !counts.error.value),
   loadMore,
 })
 </script>

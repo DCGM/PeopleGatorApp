@@ -296,6 +296,10 @@ def entity_list_filter_dependency(
         list[uuid.UUID] | None,
         _model_parameter(EntityListFilter, "mention_id", "filter"),
     ] = None,
+    min_faces_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_faces_total_count", "filter")] = None,
+    max_faces_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_faces_total_count", "filter")] = None,
+    min_mentions_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "min_mentions_total_count", "filter")] = None,
+    max_mentions_total_count: Annotated[MinimumCount | None, _model_parameter(EntityListFilter, "max_mentions_total_count", "filter")] = None,
     has_mentions: Annotated[
         bool | None,
         _model_parameter(EntityListFilter, "has_mentions", "filter"),
@@ -316,6 +320,10 @@ def entity_list_filter_dependency(
         source_id=source_id,
         detection_id=detection_id,
         mention_id=mention_id,
+        min_faces_total_count=min_faces_total_count,
+        max_faces_total_count=max_faces_total_count,
+        min_mentions_total_count=min_mentions_total_count,
+        max_mentions_total_count=max_mentions_total_count,
         has_mentions=has_mentions,
         has_detections=has_detections,
     )
