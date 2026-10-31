@@ -109,6 +109,7 @@ useAutomaticPagination({
             :name="person.name"
             :faces="person.faces"
             :names="person.names"
+            :count-details="person.countDetails"
           />
         </RouterLink>
         <PeopleCardSkeleton

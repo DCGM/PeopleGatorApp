@@ -9,6 +9,7 @@ const props = defineProps<{
   name: string
   faces: number | null
   names: number | null
+  countDetails?: { field: string; label: string; value: number | null }[]
 }>()
 </script>
 
@@ -41,6 +42,11 @@ const props = defineProps<{
           }}</b>
           all annotations</small
         >
+      </p>
+      <p v-if="props.countDetails?.length" class="flex flex-wrap gap-x-2">
+        <small v-for="count in props.countDetails" :key="count.field">
+          <b>{{ count.value ?? '—' }}</b> {{ count.label }}
+        </small>
       </p>
     </CardContent>
     <CardFooter class="shrink-0 px-0">

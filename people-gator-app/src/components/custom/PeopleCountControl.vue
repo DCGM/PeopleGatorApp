@@ -4,9 +4,16 @@ import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { parseMinimum } from '@/viewmodels/annotation-counts'
-import { usePeopleCounts, type PeopleCountCategory } from '@/viewmodels/people-counts'
+import {
+  usePeopleCounts,
+  PEOPLE_COUNT_STATES,
+  type PeopleCountCategory,
+  type PeopleCountState,
+} from '@/viewmodels/people-counts'
+import FilterSingleSelect from './FilterSingleSelect.vue'
 const props = defineProps<{ category: PeopleCountCategory; label: string }>()
 const counts = usePeopleCounts()
+const state = ref<PeopleCountState>('total')
 const open = ref(false),
   lower = ref(''),
   upper = ref(''),
@@ -19,16 +26,20 @@ const error = computed(() => {
   if (min !== undefined && max !== undefined && min > max) return 'Minimum must not exceed maximum.'
   return undefined
 })
-watch([open, counts.params], () => {
+watch([open, state, counts.params], () => {
   if (!open.value) return
-  lower.value = String(counts.params.value[`filter.min_${props.category}_total_count`] ?? '')
-  upper.value = String(counts.params.value[`filter.max_${props.category}_total_count`] ?? '')
+  lower.value = String(
+    counts.params.value[`filter.min_${props.category}_${state.value}_count`] ?? '',
+  )
+  upper.value = String(
+    counts.params.value[`filter.max_${props.category}_${state.value}_count`] ?? '',
+  )
   attempted.value = false
 })
 function apply() {
   attempted.value = true
   if (error.value) return
-  counts.set(props.category, lower.value, upper.value)
+  counts.set(props.category, lower.value, upper.value, state.value)
   open.value = false
 }
 </script>
@@ -43,6 +54,7 @@ function apply() {
         :aria-label="`${label} count range`"
         @submit.prevent="apply"
       >
+        <FilterSingleSelect v-model="state" label="State" :options="[...PEOPLE_COUNT_STATES]" />
         <InputGroup>
           <InputGroupAddon>Min</InputGroupAddon>
           <InputGroupInput

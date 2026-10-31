@@ -3,7 +3,13 @@ import { QueryClient } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { computed, defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { readPeopleCounts, usePeopleCounts, PEOPLE_COUNT_KEYS } from '@/viewmodels/people-counts'
+import {
+  readPeopleCounts,
+  usePeopleCounts,
+  PEOPLE_COUNT_KEYS,
+  PEOPLE_COUNT_OPTIONS,
+  PEOPLE_COUNT_STATES,
+} from '@/viewmodels/people-counts'
 import { restartPeoplePages } from '@/query/people-count-invalidation'
 import { PEOPLE_SORTS } from '@/viewmodels/sort-options'
 import { sortStrategies } from '@/lib/sorting'
@@ -39,7 +45,7 @@ describe('people count filters', () => {
   })
 
   it('has both numeric strategies and starts highest first', () => {
-    for (const field of ['faces_total_count', 'mentions_total_count', 'annotations_total_count'])
+    for (const { value: field } of PEOPLE_COUNT_OPTIONS)
       expect(
         sortStrategies(PEOPLE_SORTS)
           .filter((s) => s.field === field)
@@ -128,6 +134,83 @@ describe('people count filters', () => {
     for (const key of keys)
       expect(client.getQueryData(key)).toEqual({ pages: [{ items: [1] }], pageParams: [null] })
     expect(client.getQueryData(['entities', 'detail', 'id'])).toEqual({ name: 'Ada' })
-    expect(PEOPLE_COUNT_KEYS).toHaveLength(4)
+    expect(PEOPLE_COUNT_KEYS).toHaveLength(24)
   })
+})
+
+it('parses independently removable state/category ranges without offering unassigned counts', () => {
+  expect(PEOPLE_COUNT_STATES.map((s) => s.value)).toEqual([
+    'total',
+    'verified',
+    'manual',
+    'automatic',
+  ])
+  for (const { value: field, label } of PEOPLE_COUNT_OPTIONS) {
+    const parsed = readPeopleCounts({ [`min_${field}`]: '0', [`max_${field}`]: '2' })
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.params).toEqual({ [`filter.min_${field}`]: 0, [`filter.max_${field}`]: 2 })
+    expect(parsed.tags.map((t) => t.label)).toEqual([`${label} ≥ 0`, `${label} ≤ 2`])
+    expect(readPeopleCounts({ [`min_${field}`]: '3', [`max_${field}`]: '2' }).error).toBeTruthy()
+  }
+})
+
+it('keeps total bounds while applying another state and restoring history', async () => {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/people', component: { template: '<div />' } }],
+  })
+  await router.push('/people?min_faces_total_count=2&sort=faces_verified_count&dir=asc')
+  let counts!: ReturnType<typeof usePeopleCounts>
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        counts = usePeopleCounts()
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [router] } },
+  )
+  counts.set('faces', '0', '1', 'verified')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toMatchObject({
+    min_faces_total_count: '2',
+    min_faces_verified_count: '0',
+    max_faces_verified_count: '1',
+    sort: 'faces_verified_count',
+    dir: 'asc',
+  })
+  counts.remove(counts.tags.value.find((t) => t.key === 'max_faces_verified_count')!)
+  await flushPromises()
+  expect(counts.params.value['filter.max_faces_verified_count']).toBeUndefined()
+  expect(counts.params.value['filter.min_faces_total_count']).toBe(2)
+  router.back()
+  await flushPromises()
+  expect(counts.params.value['filter.max_faces_verified_count']).toBe(1)
+  wrapper.unmount()
+})
+
+it('submits the selected state while preserving ranges for other states', async () => {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/people', component: { template: '<div />' } }],
+  })
+  await router.push('/people?min_faces_total_count=2&sort=faces_manual_count')
+  const wrapper = mount(PeopleCountControl, {
+    props: { category: 'faces', label: 'Faces' },
+    global: { plugins: [router] },
+  })
+  const state = wrapper.findComponent({ name: 'FilterSingleSelect' })
+  state.vm.$emit('update:modelValue', 'verified')
+  await flushPromises()
+  await wrapper.get('[aria-label="Faces minimum"]').setValue('0')
+  await wrapper.get('[aria-label="Faces maximum"]').setValue('1')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toMatchObject({
+    min_faces_total_count: '2',
+    min_faces_verified_count: '0',
+    max_faces_verified_count: '1',
+    sort: 'faces_manual_count',
+  })
+  wrapper.unmount()
 })

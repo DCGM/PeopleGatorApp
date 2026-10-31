@@ -204,3 +204,49 @@ it('keeps unavailable statistics unknown without per-person count queries', asyn
   wrapper.unmount()
   queryClient.clear()
 })
+
+it('shows active state counts from batched statistics in browse and search', async () => {
+  const term = ref('')
+  const shared = ref({ 'filter.min_faces_manual_count': 1 })
+  const sort = ref({ field: 'annotations_verified_count' as const, direction: 'desc' as const })
+  const response = {
+    ...page(),
+    items: [
+      {
+        entity_id: 'mixed',
+        name: 'Mixed',
+        entity_link_stats: {
+          faces: { total: 7, automatic: 2, manual: 3, verified: 2 },
+          mentions: { total: 3, automatic: 1, manual: 1, verified: 1 },
+        },
+      },
+    ],
+  }
+  mocks.list.mockResolvedValue(response)
+  mocks.search.mockResolvedValue({ data: response })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  let result!: ReturnType<typeof usePeopleSearch>
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        result = usePeopleSearch(term, 'all', 12, shared, true, sort)
+        return () => h('div')
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+  )
+  await flushPromises()
+  expect(result.people.value[0]?.countDetails).toEqual([
+    { field: 'annotations_verified_count', label: 'All annotations: Verified', value: 3 },
+    { field: 'faces_manual_count', label: 'Faces: Manual', value: 3 },
+  ])
+  term.value = 'Mixed'
+  await flushPromises()
+  expect(mocks.search.mock.lastCall?.[0].query).toMatchObject({
+    'filter.min_faces_manual_count': 1,
+    sort: 'annotations_verified_count',
+  })
+  expect(result.people.value[0]?.countDetails.map((c) => c.value)).toEqual([3, 3])
+  wrapper.unmount()
+  client.clear()
+})
