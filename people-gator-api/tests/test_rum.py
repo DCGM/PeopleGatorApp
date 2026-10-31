@@ -7,7 +7,7 @@ import pytest
 
 from people_gator_api.app import get_app
 from people_gator_api.settings import DeploymentSettings, RumSettings, settings
-from people_gator_api.utils.opentelemetry import signal_endpoint, telemetry_resource
+from people_gator_api.utils.opentelemetry import telemetry_resource
 
 
 def test_runtime_config_only_publishes_browser_fields(monkeypatch):
@@ -58,14 +58,3 @@ def test_fastapi_continues_browser_trace():
     finally:
         FastAPIInstrumentor.uninstrument_app(app)
         provider.shutdown()
-
-
-def test_export_endpoint_preserves_org_prefix_and_signal_override(monkeypatch):
-    monkeypatch.setattr(settings.otel, 'http_endpoint', 'https://openobserve.example/api/default')
-    monkeypatch.delenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', raising=False)
-    monkeypatch.delenv('OTEL_EXPORTER_OTLP_ENDPOINT', raising=False)
-    assert signal_endpoint('traces') == 'https://openobserve.example/api/default/v1/traces'
-    monkeypatch.setenv('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://collector:4318')
-    assert signal_endpoint('traces') == 'http://collector:4318/v1/traces'
-    monkeypatch.setenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'http://other-collector:4318/v1/traces')
-    assert signal_endpoint('traces') == 'http://other-collector:4318/v1/traces'

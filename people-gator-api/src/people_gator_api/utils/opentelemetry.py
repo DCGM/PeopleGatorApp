@@ -32,8 +32,6 @@ from opentelemetry.instrumentation.weaviate import WeaviateInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from urllib.parse import urljoin
-
 from people_gator_api.settings import settings
 
 P = ParamSpec("P")
@@ -71,18 +69,11 @@ def telemetry_resource() -> Resource:
         }
     )
 
-def signal_endpoint(signal: str) -> str:
-    # Preserve an OpenObserve organization prefix and standard signal overrides.
-    return os.getenv(f"OTEL_EXPORTER_OTLP_{signal.upper()}_ENDPOINT") or urljoin(
-        (os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or settings.otel.http_endpoint).rstrip("/") + "/",
-        getattr(settings.otel, f"{signal}_path").lstrip("/"),
-    )
-
 
 def initialize_opentelemetry():
     resource = telemetry_resource()
     trace_exporter = OTLPSpanExporter(
-        endpoint=signal_endpoint("traces")
+        endpoint=settings.otel.traces_endpoint
     )
     trace_processor = BatchSpanProcessor(trace_exporter)
     trace_provider = TracerProvider(resource=resource)
@@ -90,14 +81,14 @@ def initialize_opentelemetry():
     otel_trace.set_tracer_provider(trace_provider)
 
     meter_exporter = OTLPMetricExporter(
-        endpoint=signal_endpoint("metrics")
+        endpoint=settings.otel.metrics_endpoint
     )
     meter_reader = PeriodicExportingMetricReader(meter_exporter)
     meter_provider = MeterProvider([meter_reader], resource=resource)
     metrics.set_meter_provider(meter_provider)
 
     log_exporter = OTLPLogExporter(
-        endpoint=signal_endpoint("logs")
+        endpoint=settings.otel.logs_endpoint
     )
     log_processor = BatchLogRecordProcessor(log_exporter)
     log_provider = LoggerProvider(resource=resource)

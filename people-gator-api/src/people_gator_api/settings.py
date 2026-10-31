@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     Field,
     model_validator,
@@ -213,16 +214,35 @@ class DeploymentSettings(BaseModel):
     pr_number: str = ""
 
 
-class OpenTelemetrySettings(BaseModel):
-    """OpenTelemetry configuration settings."""
+class OpenTelemetrySettings(BaseSettings):
+    """Complete OTLP HTTP endpoint URLs, with standard per-signal aliases."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="PEOPLE_GATOR_API__OTEL__",
+        env_file=".env",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     enabled: bool = False
-    http_endpoint: str = "http://lgtm:4318"
-    grpc_endpoint: str = "http://lgtm:4317"
-    traces_path: str = "/v1/traces"
-    logs_path: str = "/v1/logs"
-    metrics_path: str = "/v1/metrics"
-    profiles_path: str = "/v1/profiles"
+    traces_endpoint: str = Field(
+        default="http://lgtm:4318/v1/traces",
+        validation_alias=AliasChoices(
+            "PEOPLE_GATOR_API__OTEL__TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+        ),
+    )
+    logs_endpoint: str = Field(
+        default="http://lgtm:4318/v1/logs",
+        validation_alias=AliasChoices(
+            "PEOPLE_GATOR_API__OTEL__LOGS_ENDPOINT", "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+        ),
+    )
+    metrics_endpoint: str = Field(
+        default="http://lgtm:4318/v1/metrics",
+        validation_alias=AliasChoices(
+            "PEOPLE_GATOR_API__OTEL__METRICS_ENDPOINT", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+        ),
+    )
 
 
 # --------------------------------------------------------------------------------------
