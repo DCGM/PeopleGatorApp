@@ -68,7 +68,12 @@ services:
       PEOPLE_GATOR_AUTH__AUDIENCE: live-preview.peoplegator.dev
     volumes: !override
       - auth-data:/auth
-      - ${AUTH_USERS_FILE:?explicit provider credential source required}:/users.json:ro
+      - type: bind
+        source: ${AUTH_USERS_FILE:-/run/people-gator-auth/users.json}
+        target: /users.json
+        read_only: true
+        bind:
+          create_host_path: false
 
   auth:
     extends:

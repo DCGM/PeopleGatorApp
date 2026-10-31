@@ -248,7 +248,9 @@ Do not hand-edit generated client files or fetch a different deployed server's
 schema to represent your local change.
 
 The legacy `compose.live-preview.yaml` entry also runs the standalone issuer.
-It requires `AUTH_USERS_FILE` to point to an explicit, externally supplied
-credential file; provision through its `auth-provision` tools profile before
+Set `AUTH_USERS_FILE` to an externally supplied credential file, or supply the
+default `/run/people-gator-auth/users.json`. The read-only bind refuses to create a
+missing source; ordinary stack/backup configuration needs no credential file.
+Provision through its `auth-provision` tools profile before
 starting `auth`. It does not silently install demo accounts. Preserve its
 `auth-data` volume and keep the retained issuer for actor continuity.
