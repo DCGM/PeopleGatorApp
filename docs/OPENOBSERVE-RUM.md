@@ -112,8 +112,13 @@ bundled Fluent Forward collector only handles container logs; this change does
 not modify that shared infrastructure or substitute it for the LGTM receiver.
 Enable or adjust trace forwarding through an explicit operator change.
 
-The backend exports traces, metrics and logs when OTEL is enabled. Its collector
-must accept the configured signals. If server-side authorization is required,
+The backend SDK exports traces, metrics and structured application logs directly
+to `http://lgtm:4318` when OTEL is enabled in every deployment mode. The locked
+logging instrumentor installs and preserves the root OTLP handler, including
+trace/span correlation and exception attributes. Container stdout/stderr collection
+is separate; see [backend versus container logs](OBSERVABILITY.md#direct-backend-otlp-traces-metrics-and-logs)
+for duplicate copies and the release diagnostic-log path. The collector must
+accept all configured signals. If server-side authorization is required,
 put standard `OTEL_EXPORTER_OTLP_HEADERS` or per-signal headers in the private
 telemetry file. Per-signal `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (and logs/metrics
 variants) override `OTEL_EXPORTER_OTLP_ENDPOINT`, then the API HTTP base; otherwise signal paths are appended while
@@ -147,5 +152,7 @@ and OpenObserve credentials. Never use the browser RUM token as OTLP credentials
 
 Local tests cover public-config isolation, real FastAPI parent continuation,
 SDK configuration/URL boundaries, and rendered Compose settings for all three
-environments. Live delivery, browser ingestion CORS and the external LGTM trace
+environments. A local OTLP HTTP sink also verifies actual backend protobuf
+trace/log/metric export, correlated info/error logs and collector authorization
+for preview, staging and release identities. Live delivery, browser ingestion CORS and the external LGTM trace
 pipeline require the operator checks above.
