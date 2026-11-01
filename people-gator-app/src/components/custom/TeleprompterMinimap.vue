@@ -9,7 +9,7 @@ const props = defineProps<{
   viewport: { first: number; last: number } | null
 }>()
 
-const emit = defineEmits<{ navigate: [index: number] }>()
+const emit = defineEmits<{ navigate: [index: number]; scroll: [deltaY: number] }>()
 
 // Each line is a 2-unit bar with a 1-unit gap; the SVG scales to fit the column.
 const ROW = 3
@@ -48,7 +48,7 @@ function stop(event: PointerEvent) {
 </script>
 
 <template>
-  <!-- Pointer orientation aid; the text column remains the accessible way to read and scroll. -->
+  <!-- Replaces the text column's scrollbar; the text column remains the accessible way to read and scroll. -->
   <svg
     ref="element"
     data-teleprompter-minimap
@@ -61,6 +61,7 @@ function stop(event: PointerEvent) {
     @pointermove="move"
     @pointerup="stop"
     @pointercancel="stop"
+    @wheel.prevent="emit('scroll', $event.deltaY)"
   >
     <g
       v-for="line in lines"
