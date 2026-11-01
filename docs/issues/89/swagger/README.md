@@ -6,6 +6,8 @@ targeting the independently running issuer. Desktop is 1440 × 900 and mobile is
 390 × 844 CSS pixels. Captures show Authorize with Sign in, the existing gateway,
 and docs after automatic bearer authorization. No token-bearing Curl panel is
 visible; operations are collapsed before the authorized capture.
+The gateway captures were refreshed from the production frontend at a locally
+resolved PR hostname to show the prefilled synthetic account (password masked).
 
 Reproduce with `node people-gator-app/scripts/check-swagger-session.mjs` using the
 [local configuration](../../../DEVELOPMENT.md). The script checks return query and

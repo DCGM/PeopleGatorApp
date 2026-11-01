@@ -16,6 +16,9 @@ The maintained topology serves the app and `/login.html` at one browser origin.
 resource API. Tokens remain in that origin's tab-local sessionStorage. Return
 navigation carries only a local application path, never tokens or credentials.
 The gateway is a separate HTML/Vue entry, without resource queries or telemetry.
+On `pr-<number>.preview.peoplegator.dev`, its username and password are prefilled
+with the synthetic `test` account. Sign in still requires submitting the form.
+Other hostnames, including staging and local development, start with empty fields.
 An alternate issuer origin works with `VITE_AUTH_BASE_URL` and an explicit
 `PEOPLE_GATOR_AUTH__ALLOW_ORIGINS` JSON list. The gateway must still be hosted at
 the **application** origin; sessionStorage does not cross origins. Use HTTPS

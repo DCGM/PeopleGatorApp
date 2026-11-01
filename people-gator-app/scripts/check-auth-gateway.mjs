@@ -19,6 +19,9 @@ try {
     await page.waitForURL('**/login.html?**')
     assert.equal(new URL(page.url()).searchParams.get('return'), '/people?q=Ada')
     await page.getByLabel('Username').waitFor()
+    const preview = /^pr-\d+\.preview\.peoplegator\.dev$/.test(new URL(origin).hostname)
+    assert.equal(await page.getByLabel('Username').inputValue(), preview ? 'test' : '')
+    assert.equal(await page.getByLabel('Password').inputValue(), preview ? 'test' : '')
     await page.screenshot({ path: `${output}/${label}-login.png` })
     // Keyboard reaches the fields and submit control in natural order.
     await page.getByLabel('Username').focus()

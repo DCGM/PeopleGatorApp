@@ -1128,6 +1128,9 @@ fallback. Search/filter/sort URLs and counts retain their existing semantics.
 
 ### Standalone login and actor attribution (#89)
 
+The `auth-preview-login` link opens the gateway and returns to the existing Ada
+search. On PR preview hostnames the synthetic test account is prefilled; other
+environments keep empty fields. Credentials are provisioned outside the seed.
 The `auth-attribution-login` link opens the separate browser gateway and returns
 to Ada Novak, whose linked faces and mentions are local synthetic fixtures.
 `auth-attribution-review` opens the reviewer attribution filter.

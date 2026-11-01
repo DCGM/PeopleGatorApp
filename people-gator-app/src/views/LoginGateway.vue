@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login, safeReturnPath } from '@/query/auth'
 
-const username = ref('')
-const password = ref('')
+const previewAccount = /^pr-\d+\.preview\.peoplegator\.dev$/.test(location.hostname)
+const username = ref(previewAccount ? 'test' : '')
+const password = ref(previewAccount ? 'test' : '')
 const busy = ref(false)
 const params = new URLSearchParams(location.search)
 const message = ref(params.has('expired') ? 'Your session ended. Sign in again.' : '')

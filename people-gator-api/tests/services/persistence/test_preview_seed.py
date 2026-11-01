@@ -3100,6 +3100,9 @@ async def test_auth_provisioning_preserves_actors_accounts_and_seed_links(seed_t
     assert docs_gateway.path == "/login.html"
     assert parse_qs(docs_gateway.query)["return"] == ["/docs"]
     assert (await database.entities.get(seed.entities["ada"])).name == "Ada Novak"
+    preview_gateway = urlsplit(seed.filter_examples["auth-preview-login"])
+    assert preview_gateway.path == "/login.html"
+    assert parse_qs(preview_gateway.query)["return"] == ["/people?q=Ada"]
     document_gateway = urlsplit(seed.filter_examples["auth-document-navigation"])
     assert document_gateway.path == "/login.html"
     assert parse_qs(document_gateway.query)["return"] == ["/documents?library=preview-table"]

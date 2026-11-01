@@ -11,3 +11,8 @@ synthetic local setup in [Authentication](../../AUTHENTICATION.md). The script
 checks keyboard field/button order, full return path, successful login, refresh
 rotation, session expiry/recovery, bounded page width and browser errors.
 No physical-device or non-Chromium checks were performed.
+
+Initial login and expired-session captures also exercise the PR-only prefilled
+synthetic account. These were refreshed from the production build served locally
+over TLS with a `pr-89.preview.peoplegator.dev` browser hostname. Separate local
+hostname checks confirm both fields start empty outside PR previews.
