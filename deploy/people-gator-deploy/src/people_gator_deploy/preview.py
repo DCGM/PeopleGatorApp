@@ -27,6 +27,7 @@ class PreviewState(PreviewCredentials, total=False):
     seeded_version: list[int]
     sha: str
     images: dict[str, str]
+    standalone_auth: bool
 
 
 class Preview(Host):
@@ -40,10 +41,32 @@ class Preview(Host):
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.domain):
             raise DeployError("Invalid preview domain")
 
+    @staticmethod
+    def uses_standalone_auth(env_file: Path) -> bool:
+        if not env_file.exists():
+            return False
+        for line in env_file.read_text().splitlines():
+            if line.startswith("STANDALONE_AUTH="):
+                if line in ("STANDALONE_AUTH=1", "STANDALONE_AUTH='1'"):
+                    return True
+                if line in ("STANDALONE_AUTH=0", "STANDALONE_AUTH='0'"):
+                    return False
+                raise DeployError("Unsupported saved preview auth topology")
+        return False
+
+    def image_uses_standalone_auth(self, image: str) -> bool:
+        inspected = json.loads(self.command(["docker", "image", "inspect", image]))[0]
+        capability = (inspected.get("Config", {}).get("Labels") or {}).get("org.peoplegator.auth-service")
+        if capability not in (None, "1"):
+            raise DeployError("Unsupported image auth-service capability")
+        return capability == "1"
+
     def compose(self, number: int, env_file: Path, *args: str) -> list[str]:
+        # Select only recipes shipped in the reviewed installation, never PR files.
+        recipe = "compose.pr-auth.yaml" if self.uses_standalone_auth(env_file) else "compose.pr.yaml"
         return [
             "docker", "compose", "--project-name", f"people-gator-pr-{positive_int(number)}",
-            "--env-file", str(env_file), "-f", str(INSTALL_DIR / "compose.pr.yaml"), *args,
+            "--env-file", str(env_file), "-f", str(INSTALL_DIR / recipe), *args,
         ]
 
     def provision_database(self, number: int, password: str) -> None:
@@ -89,8 +112,9 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         numbers = sorted({positive_int(pr["number"]) for pr in candidates})
         return run, numbers
 
-    def env(self, number: int, state: PreviewState, images: dict[str, str], *, sha: str = "unknown") -> str:
+    def env(self, number: int, state: PreviewState, images: dict[str, str], *, sha: str = "unknown", standalone_auth: bool = False) -> str:
         values = {
+            "STANDALONE_AUTH": "1" if standalone_auth else "0",
             "COMMIT_SHA": sha,
             "TELEMETRY_FILE": self.config.get("telemetry_file", "/dev/null"),
             "APPLICATION_OTEL_NETWORK": self.config.get("otel_network", self.config.get("web_network", "web")),
@@ -120,9 +144,10 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         if not users.is_absolute() or not users.is_file():
             raise DeployError("users_file must name an existing absolute file")
         images = {component: self.image(component, run) for component in ("frontend", "backend")}
-        return [number for number in current if self.deploy_pr(number, run, images)]
+        standalone_auth = self.image_uses_standalone_auth(images["backend"])
+        return [number for number in current if self.deploy_pr(number, run, images, standalone_auth=standalone_auth)]
 
-    def deploy_pr(self, number: int, run: dict, images: dict[str, str]) -> bool:
+    def deploy_pr(self, number: int, run: dict, images: dict[str, str], *, standalone_auth: bool = False) -> bool:
         directory = self.previews / f"pr-{positive_int(number)}"
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         state_file = directory / "state.json"
@@ -133,6 +158,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         deployed_version = tuple(state.get("version", [0, 0]))
         if deployed_version > version or (
             deployed_version == version and tuple(state.get("seeded_version", [])) == version
+            and state.get("standalone_auth", False) == standalone_auth
         ):
             print(f"PR #{number} already has this run or a newer deployment")
             return False
@@ -141,7 +167,7 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         # Persist credentials before provisioning so failures can be retried/cleaned.
         write_private(state_file, json.dumps(state))
         candidate = directory / "candidate.env"
-        write_private(candidate, self.env(number, state, images, sha=run["head_sha"]))
+        write_private(candidate, self.env(number, state, images, sha=run["head_sha"], standalone_auth=standalone_auth))
         # Replace this PR's containers explicitly, including an earlier stack
         # whose local controller state is unavailable. Keep its media volume,
         # database and retained credentials so review edits survive redeployment.
@@ -153,6 +179,8 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         print(f"PR #{number}: seeding candidate data before application startup", flush=True)
         self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "seed"))
         print(f"PR #{number}: candidate seeding completed", flush=True)
+        if standalone_auth:
+            self.command(self.compose(number, candidate, "run", "--rm", "--no-deps", "auth-provision"))
         # A PR can close or receive a new commit while migrations/seeding are running.
         if not self.current_pr(number, run["head_sha"]):
             if self.api(f"pulls/{number}")["state"] == "closed":
@@ -161,11 +189,11 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
             return False
         self.command(self.compose(number, candidate,
                                   "up", "-d", "--wait", "--wait-timeout", "180", "--remove-orphans",
-                                  "backend", "frontend"))
+                                  *(["auth"] if standalone_auth else []), "backend", "frontend"))
         candidate.replace(directory / "compose.env")
         # Success is recorded only once the routed preview responds.
         self.readiness(number)
-        state.update(version=list(version), seeded_version=list(version), sha=run["head_sha"], images=images)
+        state.update(version=list(version), seeded_version=list(version), sha=run["head_sha"], images=images, standalone_auth=standalone_auth)
         write_private(state_file, json.dumps(state))
         url = f"https://pr-{number}.{self.domain}"
         print(f"Deployed PR #{number}: {url}")
@@ -177,7 +205,14 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         return f"pr-{positive_int(number)}.{self.domain}"
 
     def readiness(self, number: int) -> None:
-        routed_readiness(self.host(number))
+        environment = self.previews / f"pr-{positive_int(number)}" / "compose.env"
+        if self.uses_standalone_auth(environment):
+            routed_readiness(self.host(number), extra={
+                "/login.html": b"<html", "/auth/health": b'{"status":"ok"}',
+                "/.well-known/jwks.json": b'"keys":[',
+            })
+        else:
+            routed_readiness(self.host(number))
 
     def remove(self, number: int) -> None:
         number = positive_int(number)

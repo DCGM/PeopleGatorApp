@@ -1,0 +1,215 @@
+# Standalone-auth capability 1: fixed recipe selected by the reviewed controller.
+x-preview-labels: &preview-labels
+  people-gator.preview.pr: ${PR_NUMBER:?required}
+  people-gator.preview.sha: ${COMMIT_SHA:-unknown}
+
+# Docker sends stdout/stderr, including one-off migration and seed logs, to the host collector.
+# The driver connects from the Docker daemon, not from the container's network.
+x-preview-logging: &preview-logging
+  driver: fluentd
+  options:
+    fluentd-address: ${PREVIEW_LOG_ADDRESS:-127.0.0.1:24224}
+    fluentd-async: 'true'
+    fluentd-buffer-limit: '8192'
+    fluentd-sub-second-precision: 'true'
+    fluentd-write-timeout: '3s'
+    labels: people-gator.preview.pr,people-gator.preview.sha,com.docker.compose.service
+    tag: people-gator.preview
+    cache-max-size: 10m
+    cache-max-file: '3'
+
+x-backend: &backend
+  image: ${BACKEND_IMAGE:?required}
+  logging: *preview-logging
+  labels: *preview-labels
+  user: '10001:10001'
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ['/tmp:size=128m,mode=1777']
+  mem_limit: 2g
+  pids_limit: 256
+  environment: &preview-environment
+    PEOPLE_GATOR_API__HOST: 0.0.0.0
+    PEOPLE_GATOR_API__PORT: '8000'
+    PEOPLE_GATOR_API__DEBUG: 'false'
+    PEOPLE_GATOR_API__RELOAD: 'false'
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__HOST: preview-postgres
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PORT: '5432'
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__USER: ${DB_USER:?required}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__PASSWORD: ${DB_PASSWORD:?required}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__DATABASE: ${DB_NAME:?required}
+    PEOPLE_GATOR_API__PERSISTENCE__POSTGRES__SCHEMA_MODE: validate
+    PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT: /data
+    PEOPLE_GATOR_API__AUTH__JWKS_URL: http://auth-pr-${PR_NUMBER}:8002/.well-known/jwks.json
+    PEOPLE_GATOR_API__API_KEYS__IDENTITY_ISSUER: https://${PREVIEW_HOST:?required}
+    PEOPLE_GATOR_AUTH__ISSUER: https://${PREVIEW_HOST:?required}
+    PEOPLE_GATOR_AUTH__AUDIENCE: ${PREVIEW_HOST:?required}
+    PEOPLE_GATOR_API__AUTH__ISSUER: https://${PREVIEW_HOST:?required}
+    PEOPLE_GATOR_API__AUTH__AUDIENCE: ${PREVIEW_HOST:?required}
+    PEOPLE_GATOR_API__CORS__ALLOW_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:?required}
+  volumes:
+    - api-data:/data
+  networks: [database]
+
+services:
+  storage-init:
+    image: ${BACKEND_IMAGE:?required}
+    profiles: [tools]
+    logging: *preview-logging
+    labels: *preview-labels
+    user: '0:0'
+    entrypoint: [python, -c]
+    command:
+      - "import os; os.makedirs('/data/peoplegator_api', exist_ok=True); os.chown('/data', 10001, 10001); os.chown('/data/peoplegator_api', 10001, 10001); os.chown('/auth', 10001, 10001)"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    volumes: [api-data:/data, auth-data:/auth]
+
+  migrate:
+    <<: *backend
+    profiles: [tools]
+    command: [migrate]
+
+  check:
+    <<: *backend
+    profiles: [tools]
+    command: [check]
+
+  seed:
+    <<: *backend
+    profiles: [tools]
+    command: [seed]
+
+  auth-provision:
+    <<: *backend
+    profiles: [tools]
+    command: [auth-provision, /users.json]
+    environment:
+      <<: *preview-environment
+      PEOPLE_GATOR_AUTH__STATE_DIR: /auth
+    volumes:
+      - auth-data:/auth
+      - api-data:/data
+      - ${USERS_FILE:?required}:/users.json:ro
+
+  auth:
+    image: ${BACKEND_IMAGE:?required}
+    logging: *preview-logging
+    user: '10001:10001'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:size=32m,mode=1777']
+    restart: unless-stopped
+    command: [auth]
+    environment:
+      PEOPLE_GATOR_AUTH__STATE_DIR: /auth
+      PEOPLE_GATOR_AUTH__ISSUER: https://${PREVIEW_HOST:?required}
+      PEOPLE_GATOR_AUTH__AUDIENCE: ${PREVIEW_HOST:?required}
+    volumes: [auth-data:/auth]
+    networks:
+      web:
+      authorization:
+        aliases: ["auth-pr-${PR_NUMBER}"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/auth/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    labels:
+      - people-gator.preview.pr=${PR_NUMBER:?required}
+      - people-gator.preview.sha=${COMMIT_SHA:-unknown}
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.entrypoints=websecure
+      - 'traefik.http.routers.pg-pr-${PR_NUMBER}-auth.rule=Host(`${PREVIEW_HOST}`) && (PathPrefix(`/token/`) || PathPrefix(`/.well-known/`) || Path(`/auth/health`))'
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.priority=110
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.service=pg-pr-${PR_NUMBER}-auth
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.tls=true
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-auth.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-pr-${PR_NUMBER}-auth.loadbalancer.server.port=8002
+
+  backend:
+    <<: *backend
+    env_file:
+      - path: ${TELEMETRY_FILE:-/dev/null}
+        format: raw
+    restart: unless-stopped
+    command: [api]
+    networks: [database, web, telemetry, authorization]
+    environment:
+      <<: *preview-environment
+      PEOPLE_GATOR_API__DEPLOYMENT__ENVIRONMENT: preview
+      PEOPLE_GATOR_API__DEPLOYMENT__VERSION: ${COMMIT_SHA:-unknown}
+      PEOPLE_GATOR_API__DEPLOYMENT__COMMIT: ${COMMIT_SHA:-unknown}
+      PEOPLE_GATOR_API__DEPLOYMENT__PR_NUMBER: "${PR_NUMBER:?required}"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    labels:
+      - people-gator.preview.pr=${PR_NUMBER:?required}
+      - people-gator.preview.sha=${COMMIT_SHA:-unknown}
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.entrypoints=websecure
+      - 'traefik.http.routers.pg-pr-${PR_NUMBER}-api.rule=Host(`${PREVIEW_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`))'
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.priority=100
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.service=pg-pr-${PR_NUMBER}-api
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls=true
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-api.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-pr-${PR_NUMBER}-api.loadbalancer.server.port=8000
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?required}
+    logging: *preview-logging
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:size=32m,mode=1777']
+    mem_limit: 128m
+    pids_limit: 128
+    depends_on:
+      auth:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks: [web]
+    labels:
+      - people-gator.preview.pr=${PR_NUMBER:?required}
+      - people-gator.preview.sha=${COMMIT_SHA:-unknown}
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.entrypoints=websecure
+      - 'traefik.http.routers.pg-pr-${PR_NUMBER}-app.rule=Host(`${PREVIEW_HOST}`)'
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.priority=10
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.service=pg-pr-${PR_NUMBER}-app
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls=true
+      - traefik.http.routers.pg-pr-${PR_NUMBER}-app.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-pr-${PR_NUMBER}-app.loadbalancer.server.port=8080
+
+volumes:
+  auth-data:
+  api-data:
+
+networks:
+  authorization:
+    internal: true
+  database:
+    external: true
+    name: ${DATABASE_NETWORK:-people-gator-preview-db}
+  web:
+    external: true
+    name: ${WEB_NETWORK:-web}
+  telemetry:
+    external: true
+    name: ${APPLICATION_OTEL_NETWORK:-${WEB_NETWORK:-web}}
