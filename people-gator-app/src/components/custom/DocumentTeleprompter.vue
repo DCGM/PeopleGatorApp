@@ -285,10 +285,31 @@ function activateEntity(index: number, entity: TranscriptionEntitySpan) {
   if (!textSelection()) emit('select-entity', index, entity)
 }
 
-/** Text of the selection, one row per line, without numbers, badges or controls. */
+/** Whether a range covers a whole element, such as a collapsed gap band. */
+function coversElement(range: Range, element: Element) {
+  const bounds = document.createRange()
+  bounds.selectNode(element)
+  return (
+    range.compareBoundaryPoints(Range.START_TO_START, bounds) <= 0 &&
+    range.compareBoundaryPoints(Range.END_TO_END, bounds) >= 0
+  )
+}
+
+/**
+ * Text of the selection, one row per line, without numbers, badges or
+ * controls. Selections cross collapsed gaps natively; a gap they span counts
+ * as selected, so its hidden lines are copied in reading order.
+ */
 function copiedText(range: Range) {
   const parts: string[] = []
-  for (const element of scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-text]') ?? []) {
+  const elements = scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-text], [data-gap-start]')
+  for (const element of elements ?? []) {
+    if (element.dataset.gapStart !== undefined) {
+      if (!coversElement(range, element)) continue
+      for (let index = Number(element.dataset.gapStart); index <= Number(element.dataset.gapEnd); index += 1)
+        parts.push(props.transcription[index]?.text ?? '')
+      continue
+    }
     if (!range.intersectsNode(element)) continue
     const part = document.createRange()
     part.selectNodeContents(element)
@@ -310,23 +331,23 @@ function handleCopy(event: ClipboardEvent) {
   event.preventDefault()
 }
 
-function closestPassage(node: Node | null) {
-  return (node instanceof Element ? node : node?.parentElement)?.closest('[data-passage]') ?? null
-}
-
-/** Text selection stops at a collapsed gap instead of skipping hidden lines. */
-function clampSelection() {
+/** Collapsed gaps inside the current text selection, tinted to show they are included. */
+const selectedGaps = ref<ReadonlySet<number>>(new Set())
+let selectionFrame: number | undefined
+function measureSelectedGaps() {
+  selectionFrame = undefined
   const current = textSelection()
-  if (!current) return
-  const { selection } = current
-  const anchor = selection.anchorNode
-  const focus = selection.focusNode
-  const anchorPassage = closestPassage(anchor)
-  if (!anchor || !focus || !anchorPassage || anchorPassage === closestPassage(focus)) return
-  const forward = Boolean(anchor.compareDocumentPosition(focus) & Node.DOCUMENT_POSITION_FOLLOWING)
-  const texts = anchorPassage.querySelectorAll<HTMLElement>('[data-line-text]')
-  const edge = forward ? texts[texts.length - 1] : texts[0]
-  if (edge) selection.extend(edge, forward ? edge.childNodes.length : 0)
+  const next = new Set<number>()
+  if (current)
+    for (const gap of scrollElement.value?.querySelectorAll<HTMLElement>('[data-gap-start]') ?? [])
+      if (coversElement(current.range, gap)) next.add(Number(gap.dataset.gapStart))
+  const previous = selectedGaps.value
+  if (next.size !== previous.size || [...next].some((start) => !previous.has(start)))
+    selectedGaps.value = next
+}
+function scheduleSelectedGaps() {
+  if (selectionFrame === undefined && typeof requestAnimationFrame !== 'undefined')
+    selectionFrame = requestAnimationFrame(measureSelectedGaps)
 }
 
 /** After explicit selection, scroll just enough to bring the selected line into view. */
@@ -412,7 +433,7 @@ function scheduleViewport() {
 
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
-  document.addEventListener('selectionchange', clampSelection)
+  document.addEventListener('selectionchange', scheduleSelectedGaps)
   if (scrollElement.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(scheduleViewport)
     resizeObserver.observe(scrollElement.value)
@@ -420,7 +441,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('selectionchange', clampSelection)
+  document.removeEventListener('selectionchange', scheduleSelectedGaps)
+  if (selectionFrame !== undefined) cancelAnimationFrame(selectionFrame)
   resizeObserver?.disconnect()
   if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame)
 })
@@ -509,7 +531,8 @@ defineExpose({ scrollPage, navigateTo })
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
         <template v-for="block in blocks" :key="block.key">
           <div v-if="block.kind === 'gap'" :data-gap-start="block.gap.start" :data-gap-end="block.gap.end"
-            class="grid select-none grid-cols-[2.5rem_1fr] items-center border-y bg-muted/50 font-sans">
+            :data-selected="selectedGaps.has(block.gap.start) ? '' : undefined"
+            class="teleprompter-gap grid select-none grid-cols-[2.5rem_1fr] items-center border-y bg-muted/50 font-sans">
             <div class="flex flex-col items-center">
               <Button v-for="action in gapActions(block.gap)" :key="action.label" variant="ghost" size="icon-xs"
                 :aria-label="action.label" :title="action.label"
@@ -593,6 +616,11 @@ defineExpose({ scrollPage, navigateTo })
 }
 .teleprompter-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* A collapsed gap inside a text selection: its hidden lines are copied too. */
+.teleprompter-gap[data-selected] {
+  background-color: color-mix(in srgb, Highlight 30%, transparent);
 }
 
 .teleprompter-line {
