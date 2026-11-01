@@ -272,6 +272,7 @@ describe('entity link review', () => {
   it('keeps multiline mentions accessible and selectable without hover tooltips', async () => {
     const wrapper = mount(DocumentTeleprompter, {
       props: {
+        entityNames: new Map([['ada', 'Ada Novak']]),
         selectedLineIndex: 0,
         selectedEntityKey: null,
         relatedEntityId: null,
@@ -327,7 +328,16 @@ describe('entity link review', () => {
       },
     })
     cleanup.push(() => wrapper.unmount())
-    expect(wrapper.findAll('[data-face-status-badge]')).toHaveLength(2)
+    // No inline state icons: mention text and underline take the link-state color.
+    expect(wrapper.findAll('[data-face-status-badge]')).toHaveLength(0)
+    expect(wrapper.findAll('mark').map((mark) => mark.attributes('data-link-state'))).toEqual([
+      'verified',
+      'verified',
+      'manual',
+    ])
+    expect(wrapper.findAll('mark')[2]!.classes()).toEqual(
+      expect.arrayContaining(['border-b-2', 'text-amber-700', 'border-amber-500']),
+    )
     expect(wrapper.findAll('mark').map((mark) => mark.text())).toEqual([
       'Ada',
       'Novak',
@@ -338,11 +348,20 @@ describe('entity link review', () => {
     expect(text.find('[title]').exists()).toBe(false)
     expect(text.findComponent({ name: 'UiTooltip' }).exists()).toBe(false)
     const mention = wrapper.findAll('mark')[2]!
-    expect(mention.attributes('aria-label')).toContain('Ada Novak:')
+    expect(mention.attributes('aria-label')).toContain('Ada Novak: Ada Novak, Manually linked')
     expect(mention.attributes('tabindex')).toBe('0')
+    // Hover and focus show the scan view's state badge with the assigned name, outside the text.
     await mention.trigger('mouseenter')
     expect(mention.attributes('style')).toContain('outline:')
+    const badge = wrapper.get('[data-mention-badge]')
+    expect(badge.text()).toBe('Ada Novak')
+    expect(text.find('[data-mention-badge]').exists()).toBe(false)
     await mention.trigger('mouseleave')
+    expect(wrapper.find('[data-mention-badge]').exists()).toBe(false)
+    await wrapper.findAll('mark')[0]!.trigger('focus')
+    expect(wrapper.get('[data-mention-badge]').attributes('aria-label')).toBe('Verified link')
+    await wrapper.findAll('mark')[0]!.trigger('blur')
+    expect(wrapper.find('[data-mention-badge]').exists()).toBe(false)
     for (const event of ['click', 'keydown.enter', 'keydown.space']) {
       await mention.trigger(event)
     }

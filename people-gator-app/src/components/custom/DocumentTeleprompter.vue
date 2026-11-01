@@ -2,7 +2,7 @@
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import TeleprompterHighlightFilter from './TeleprompterHighlightFilter.vue'
 import TeleprompterMinimap from './TeleprompterMinimap.vue'
-import { linkTooltip } from '@/lib/entity-links'
+import { linkTooltip, mentionStateClasses } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -13,7 +13,7 @@ import {
   X,
 } from '@lucide/vue'
 
-import type { EntityType, Language } from '@/client/types.gen'
+import type { Language } from '@/client/types.gen'
 import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
@@ -26,6 +26,7 @@ import {
   lineVisibilityLabels,
   minimapLines,
   passages as toPassages,
+  spanHighlightState,
   type HighlightState,
   type LineVisibility,
   type Passage,
@@ -53,6 +54,8 @@ const props = withDefaults(
     selectedLineIndex: number
     selectedEntityKey: string | null
     relatedEntityId: string | null
+    /** Linked identity names, shown when hovering or focusing a mention. */
+    entityNames?: ReadonlyMap<string, string>
     /** Original lines currently available in the text; defaults to all. */
     included?: boolean[]
     hasExpansions?: boolean
@@ -76,11 +79,52 @@ const emit = defineEmits<{
   reset: []
 }>()
 
-const entityClasses = {
-  person: 'border-b-2 border-secondary/60 text-secondary',
-} satisfies Record<EntityType, string>
-
 const hoveredEntityKey = ref<string | null>(null)
+const bodyElement = ref<HTMLElement | null>(null)
+/** The scan view's state badge with the assigned name, floating beside the active mention. */
+const mentionBadge = ref<{
+  entity: TranscriptionEntitySpan
+  name: string
+  left: number
+  top: number
+} | null>(null)
+const MENTION_BADGE_HEIGHT = 24
+
+function mentionName(entity: TranscriptionEntitySpan) {
+  if (!entity.entity_id) return undefined
+  return props.entityNames?.get(entity.entity_id) ?? 'Unknown person'
+}
+
+function mentionClasses(entity: TranscriptionEntitySpan) {
+  return ['border-b-2', mentionStateClasses[spanHighlightState(entity)]]
+}
+
+function mentionLabel(entity: TranscriptionEntitySpan) {
+  const name = mentionName(entity)
+  return `${entityText(entity)}: ${name ? `${name}, ` : ''}${linkTooltip(entity)}`
+}
+
+function showMentionBadge(event: Event, entity: TranscriptionEntitySpan) {
+  hoveredEntityKey.value = entityKey(entity)
+  const body = bodyElement.value
+  const mark = event.currentTarget as HTMLElement | null
+  if (!body || !mark) return
+  const bounds = body.getBoundingClientRect()
+  const target = mark.getBoundingClientRect()
+  const above = target.top - bounds.top - MENTION_BADGE_HEIGHT - 4
+  mentionBadge.value = {
+    entity,
+    name: mentionName(entity) ?? 'Unassigned',
+    left: Math.max(0, target.left - bounds.left),
+    // Near the top edge, show the badge below the mention instead of clipping it.
+    top: above >= 0 ? above : target.bottom - bounds.top + 4,
+  }
+}
+
+function hideMentionBadge() {
+  hoveredEntityKey.value = null
+  mentionBadge.value = null
+}
 const scrollElement = ref<HTMLElement | null>(null)
 const translationElement = ref<HTMLElement | null>(null)
 const isTranslationExpanded = ref(false)
@@ -509,10 +553,11 @@ defineExpose({ scrollPage, navigateTo })
         @click="emit('reset')">Reset</Button>
     </div>
 
-    <div class="grid min-h-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_3.5rem]">
+    <div ref="bodyElement"
+      class="relative grid min-h-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_3.5rem]">
       <section ref="scrollElement" tabindex="0"
         class="teleprompter-scroll relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport" @keydown="handleKeydown"
+        aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport(); mentionBadge = null" @keydown="handleKeydown"
         @copy="handleCopy">
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
         <!-- Every line stays in the DOM; hidden lines only stop being displayed, so
@@ -547,16 +592,15 @@ defineExpose({ scrollPage, navigateTo })
               <p data-line-text class="cursor-text select-text font-serif leading-[1.75em]">
                 <template v-for="(segment, segmentIndex) in segments[index]" :key="segmentIndex">
                   <mark v-if="segment.entity && isHighlighted(segment.entity)" tabindex="0" role="button"
-                    :aria-label="`${entityText(segment.entity)}: ${linkTooltip(segment.entity)}`"
-                    class="transcription-entity cursor-pointer" :class="entityClasses[segment.entity.label]"
+                    :aria-label="mentionLabel(segment.entity)" :data-link-state="spanHighlightState(segment.entity)"
+                    class="transcription-entity cursor-pointer" :class="mentionClasses(segment.entity)"
                     :style="entityStyle(segment.entity)"
-                    @mouseenter="hoveredEntityKey = entityKey(segment.entity)" @mouseleave="hoveredEntityKey = null"
+                    @mouseenter="showMentionBadge($event, segment.entity)" @mouseleave="hideMentionBadge"
+                    @focus="showMentionBadge($event, segment.entity)" @blur="hideMentionBadge"
                     @keydown.enter.stop.prevent="emit('select-entity', index, segment.entity)"
                     @keydown.space.stop.prevent="emit('select-entity', index, segment.entity)"
                     @click.stop="activateEntity(index, segment.entity)">
-                    {{ segment.text }}<EntityLinkStateBadge v-if="segment.entity.firstFragment !== false"
-                      v-bind="segment.entity" :focusable="false" :tooltip="false" compact data-copy-exclude
-                      class="ml-1 inline-flex select-none align-middle" />
+                    {{ segment.text }}
                   </mark>
                   <template v-else>{{ segment.text }}</template>
                 </template>
@@ -564,6 +608,13 @@ defineExpose({ scrollPage, navigateTo })
             </div>
         </template>
       </section>
+      <!-- Outside the text, so it never shifts lines or joins a selection or copy. -->
+      <!-- Positioned by its own wrapper: the badge component renders inside a span of its own. -->
+      <div v-if="mentionBadge" class="pointer-events-none absolute z-10"
+        :style="{ left: `${mentionBadge.left}px`, top: `${mentionBadge.top}px` }">
+        <EntityLinkStateBadge v-bind="mentionBadge.entity" :label="mentionBadge.name" :focusable="false"
+          :tooltip="false" data-mention-badge class="h-6 max-w-40 rounded-full shadow-xs" />
+      </div>
       <div class="min-h-0 overflow-hidden py-2">
         <TeleprompterMinimap :lines="minimap" :viewport="viewport" @navigate="navigateTo"
           @scroll="scrollBy" />

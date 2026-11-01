@@ -313,6 +313,13 @@ export function useDocumentWorkspace(
   const onPageEntities = computed(
     () => new Map(onPageEntityRecords.value.map((entity) => [entity.entity_id, entity])),
   )
+  // Names for linked mentions on this page, shown when hovering them in the text.
+  const entityNames = computed(
+    () =>
+      new Map(
+        onPageEntityRecords.value.map((entity) => [entity.entity_id, entity.name || 'Unnamed person']),
+      ),
+  )
   const candidateRecords = computed<EntitySearchRecord[]>(() =>
     resultMode.value === 'page' ? onPageEntityRecords.value : candidateMatches.value,
   )
@@ -474,5 +481,6 @@ export function useDocumentWorkspace(
     ),
     similarPeople,
     transcription,
+    entityNames,
   }
 }
