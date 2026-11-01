@@ -370,16 +370,82 @@ class LifecycleTests(unittest.TestCase):
         commands = [call.args[0] for call in self.controller.command.call_args_list]
         self.assertIn("down", commands[0])
         self.assertEqual([command[-1] for command in commands[1:4]], ["storage-init", "migrate", "seed"])
-        self.assertEqual(commands[4][-1], "auth-provision")
-        self.assertIn("up", commands[5])
+        self.assertIn("up", commands[4])
 
-    def test_failed_account_provisioning_blocks_candidate_startup(self):
+    def test_image_capability_selects_only_supported_topologies(self):
+        for capability, expected in ((None, False), ("1", True)):
+            labels = {} if capability is None else {"org.peoplegator.auth-service": capability}
+            self.controller.command.return_value = json.dumps([{"Config": {"Labels": labels}}])
+            self.assertEqual(self.controller.image_uses_standalone_auth(IMAGES["backend"]), expected)
+        self.controller.command.return_value = json.dumps([{"Config": {"Labels": {"org.peoplegator.auth-service": "2"}}}])
+        with self.assertRaisesRegex(DeployError, "Unsupported image auth-service"):
+            self.controller.image_uses_standalone_auth(IMAGES["backend"])
+
+    def test_standalone_auth_orders_provisioning_and_persists_recipe_for_cleanup(self):
         directory = self.seed_preview()
-        self.controller.command.side_effect = ["", "", "", "", RuntimeError("account provisioning failed")]
-        with self.assertRaisesRegex(RuntimeError, "account provisioning failed"):
-            self.controller.deploy_pr(123, RUN, IMAGES)
+        state_file = directory / "state.json"
+        state = json.loads(state_file.read_text())
+        state.update(version=[100, 1], seeded_version=[100, 1])
+        state_file.write_text(json.dumps(state))
+        # Repair an already-deployed image when an older controller omitted auth.
+        self.assertTrue(self.controller.deploy_pr(123, RUN, IMAGES, standalone_auth=True))
+        commands = [call.args[0] for call in self.controller.command.call_args_list]
+        self.assertEqual([command[-1] for command in commands[1:5]],
+                         ["storage-init", "migrate", "seed", "auth-provision"])
+        self.assertEqual(commands[5][-3:], ["auth", "backend", "frontend"])
+        self.assertTrue(all(str(preview.INSTALL_DIR / "compose.pr-auth.yaml") in command for command in commands))
+        self.assertTrue(json.loads(state_file.read_text())["standalone_auth"])
+        self.controller.command.reset_mock()
+        self.controller.remove(123)
+        cleanup = self.controller.command.call_args.args[0]
+        self.assertIn(str(preview.INSTALL_DIR / "compose.pr-auth.yaml"), cleanup)
+        self.assertIn("--volumes", cleanup)
+
+    def test_failed_auth_provisioning_blocks_startup_and_success(self):
+        directory = self.seed_preview()
+        self.controller.command.side_effect = ["", "", "", "", RuntimeError("auth provision failed")]
+        with self.assertRaisesRegex(RuntimeError, "auth provision failed"):
+            self.controller.deploy_pr(123, RUN, IMAGES, standalone_auth=True)
         self.assertEqual((directory / "compose.env").read_text(), "placeholder")
+        self.assertNotIn("version", json.loads((directory / "state.json").read_text()))
         self.assertFalse(any("up" in call.args[0] for call in self.controller.command.call_args_list))
+
+    def test_auth_readiness_rejects_frontend_html_at_health_route(self):
+        directory = self.seed_preview()
+        (directory / "compose.env").write_text("STANDALONE_AUTH=1\n")
+        self.controller.readiness = preview.Preview.readiness.__get__(self.controller)
+        def response_for(url, **kwargs):
+            if url.endswith("/api/v1/health"):
+                return io.BytesIO(b'{"status":"ok"}')
+            if url.endswith("/healthz"):
+                return io.BytesIO(b"ok")
+            # The frontend fallback returns 200 for missing /auth/health too.
+            return io.BytesIO(b"<html>ok</html>")
+        with patch.object(host.urllib.request, "urlopen", side_effect=response_for), patch.object(host.time, "sleep"):
+            with self.assertRaisesRegex(DeployError, "/auth/health"):
+                self.controller.readiness(123)
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose not installed")
+    def test_standalone_auth_recipe_has_private_alias_and_separate_credentials(self):
+        env_file = self.root / "auth.env"
+        preview.write_private(env_file, self.controller.env(123, {"password": "c" * 64}, IMAGES, standalone_auth=True))
+        result = subprocess.run(self.controller.compose(123, env_file, "--profile", "tools", "config", "--format", "json"),
+                                text=True, capture_output=True, check=True)
+        config = json.loads(result.stdout)
+        auth = config["services"]["auth"]
+        backend = config["services"]["backend"]
+        provision = config["services"]["auth-provision"]
+        self.assertEqual(auth["command"], ["auth"])
+        self.assertEqual(set(auth["networks"]), {"web", "authorization"})
+        self.assertEqual(auth["networks"]["authorization"]["aliases"], ["auth-pr-123"])
+        self.assertTrue(config["networks"]["authorization"]["internal"])
+        self.assertFalse(any(key.startswith("PEOPLE_GATOR_API__") for key in auth["environment"]))
+        self.assertEqual(backend["environment"]["PEOPLE_GATOR_API__AUTH__JWKS_URL"], "http://auth-pr-123:8002/.well-known/jwks.json")
+        self.assertEqual({mount["target"] for mount in backend["volumes"]}, {"/data"})
+        self.assertEqual(provision["command"], ["auth-provision", "/users.json"])
+        self.assertEqual(set(provision["networks"]), {"database"})
+        self.assertNotIn("/token/", backend["labels"]["traefik.http.routers.pg-pr-123-api.rule"])
+        self.assertIn("/token/", auth["labels"]["traefik.http.routers.pg-pr-123-auth.rule"])
 
     def test_seed_failure_preserves_running_configuration_for_retry(self):
         directory = self.seed_preview()
@@ -489,19 +555,12 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("pr-123.preview.peoplegator.dev", labels["traefik.http.routers.pg-pr-123-api.rule"])
         self.assertTrue(config["networks"]["database"]["external"])
         self.assertFalse(config["services"]["backend"].get("ports"))
-        issuer = config["services"]["auth"]
-        self.assertEqual(set(issuer["networks"]), {"authorization", "web"})
-        self.assertEqual(issuer["networks"]["authorization"]["aliases"], ["auth-pr-123"])
-        self.assertTrue(config["networks"]["authorization"]["internal"])
-        self.assertEqual(config["services"]["backend"]["environment"]["PEOPLE_GATOR_API__AUTH__JWKS_URL"],
-                         "http://auth-pr-123:8002/.well-known/jwks.json")
-        self.assertFalse(any(key.startswith("PEOPLE_GATOR_API__") for key in issuer["environment"]))
         self.assertEqual(config["services"]["migrate"]["command"], ["migrate"])
         self.assertEqual(config["services"]["seed"]["command"], ["seed"])
         self.assertEqual(config["services"]["seed"]["user"], "10001:10001")
         self.assertEqual(set(config["services"]["seed"]["networks"]), {"database"})
         self.assertTrue(all(mount.startswith("/") for mount in config["services"]["backend"]["tmpfs"]))
-        for name in ("frontend", "auth", "auth-provision", "backend", "migrate", "seed", "storage-init"):
+        for name in ("frontend", "backend", "migrate", "seed", "storage-init"):
             service = config["services"][name]
             self.assertEqual(service["logging"]["driver"], "fluentd")
             self.assertEqual(service["logging"]["options"]["fluentd-async"], "true")
