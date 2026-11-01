@@ -373,6 +373,15 @@ describe('entity link review', () => {
       ]
       for (const key of countKeys)
         queryClient.setQueryData(key, { pages: [{ items: [], totalCount: 0 }], pageParams: [null] })
+      const peopleKeys = [
+        queryKeys.entities.infinite(countParams),
+        queryKeys.search.infiniteEntities(countParams),
+      ]
+      for (const key of peopleKeys)
+        queryClient.setQueryData(key, {
+          pages: [{ items: ['first'] }, { items: ['second'] }],
+          pageParams: [null, 'old'],
+        })
       const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
       await flushPromises()
       if (inline) {
@@ -407,6 +416,13 @@ describe('entity link review', () => {
       expect(api.patchFace.mock.calls[api.patchFace.mock.calls.length - 1]![0].body).toEqual({
         entity_link_state: 'verified',
       })
+      for (const key of peopleKeys) {
+        expect(queryClient.getQueryData(key)).toEqual({
+          pages: [{ items: ['first'] }],
+          pageParams: [null],
+        })
+        expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true)
+      }
       expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     },
   )

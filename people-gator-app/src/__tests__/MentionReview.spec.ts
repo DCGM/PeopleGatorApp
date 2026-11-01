@@ -1,10 +1,40 @@
-import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { QueryClient, VueQueryPlugin, type InfiniteData } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { resolveMentionTargets, useReviewMentionsMutation } from '@/query/mention-review'
 import PersonMentionGroups from '@/components/custom/PersonMentionGroups.vue'
+import { queryKeys } from '@/query/keys'
+
+function cachePeoplePages(client: QueryClient) {
+  const keys = [
+    queryKeys.entities.infinite({
+      sort: 'mentions_total_count',
+      'filter.max_mentions_total_count': 3,
+    }),
+    queryKeys.search.infiniteEntities({ 'query.text': ['Ada'], sort: 'annotations_total_count' }),
+  ]
+  for (const key of keys)
+    client.setQueryData(key, {
+      pages: [
+        { items: ['first'], nextPage: 'next' },
+        { items: ['second'], nextPage: 'later' },
+      ],
+      pageParams: [null, 'next'],
+    })
+  return keys
+}
+
+function expectPeopleRestarted(client: QueryClient, keys: ReturnType<typeof cachePeoplePages>) {
+  for (const key of keys) {
+    expect(client.getQueryData<InfiniteData<unknown>>(key)).toEqual({
+      pages: [{ items: ['first'], nextPage: 'next' }],
+      pageParams: [null],
+    })
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true)
+  }
+}
 const api = vi.hoisted(() => ({ list: vi.fn(), patch: vi.fn(), groups: vi.fn() }))
 vi.mock('@/client', async (original) => ({
   ...(await original<typeof import('@/client')>()),
@@ -120,6 +150,7 @@ it('selects exact text independently of expansion and reviews unloaded occurrenc
 })
 it('reports confirmed chunks on failure and invalidates counts and lists', async () => {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+  const peopleKeys = cachePeoplePages(client)
   const invalidate = vi.spyOn(client, 'invalidateQueries')
   let mutation: ReturnType<typeof useReviewMentionsMutation>
   const wrapper = mount(
@@ -140,9 +171,35 @@ it('reports confirmed chunks on failure and invalidates counts and lists', async
       action: 'unlink',
     }),
   ).rejects.toThrow('50 of 60 updates confirmed')
+  expectPeopleRestarted(client, peopleKeys)
   expect(
     invalidate.mock.calls.map(([arg]) => typeof arg === 'object' && arg?.queryKey?.[0]),
   ).toEqual(expect.arrayContaining(['text-mentions', 'entities', 'documents', 'pages', 'search']))
   wrapper.unmount()
   client.clear()
 })
+
+it.each(['unlink', 'verify'] as const)(
+  'restarts People continuation pages after mention %s',
+  async (action) => {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const peopleKeys = cachePeoplePages(client)
+    const detailKey = queryKeys.entities.detail('person')
+    client.setQueryData(detailKey, { name: 'Ada' })
+    let mutation!: ReturnType<typeof useReviewMentionsMutation>
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          mutation = useReviewMentionsMutation()
+          return () => null
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    )
+    await mutation.mutateAsync({ targets: { ids: ['one'] }, action })
+    expectPeopleRestarted(client, peopleKeys)
+    expect(client.getQueryData(detailKey)).toEqual({ name: 'Ada' })
+    wrapper.unmount()
+    client.clear()
+  },
+)

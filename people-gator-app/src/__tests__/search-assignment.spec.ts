@@ -185,6 +185,7 @@ describe('assignment search filters', () => {
     expect(mocks.searchEntities).toHaveBeenCalledWith({
       query: {
         'query.text': ['Ada'],
+        'filter.entity_type': ['person'],
         'filter.has_detections': true,
         'filter.has_mentions': undefined,
         limit: 12,
@@ -240,6 +241,7 @@ describe('assignment search filters', () => {
     expect(mocks.searchEntities).toHaveBeenNthCalledWith(2, {
       query: {
         'query.text': ['Ada'],
+        'filter.entity_type': ['person'],
         'filter.has_detections': undefined,
         'filter.has_mentions': undefined,
         limit: 12,
@@ -277,6 +279,7 @@ describe('assignment search filters', () => {
     expect(mocks.fetchEntities).toHaveBeenNthCalledWith(
       1,
       {
+        'filter.entity_type': ['person'],
         'filter.has_detections': true,
         'filter.has_mentions': undefined,
         limit: 12,
@@ -288,6 +291,7 @@ describe('assignment search filters', () => {
     expect(mocks.fetchEntities).toHaveBeenNthCalledWith(
       2,
       {
+        'filter.entity_type': ['person'],
         'filter.has_detections': true,
         'filter.has_mentions': undefined,
         limit: 12,

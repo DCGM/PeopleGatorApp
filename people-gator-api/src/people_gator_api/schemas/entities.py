@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Self, Literal
+from typing import Annotated, Literal
 from datetime import timezone
 
 from pydantic import (
@@ -15,6 +15,7 @@ from pydantic import (
 )
 from people_gator_api.schemas.entity_links import SharedFilter, EntityLinkStats
 from people_gator_api.settings import settings
+from people_gator_api.schemas.entity_counts import EntityCountFilter
 from people_gator_api.schemas.sorting import EntitySortField, SortableRequest
 from people_gator_api.schemas.common import (
     GenericListRequest,
@@ -162,7 +163,7 @@ class EntityResponse(CreationMetadata):
 EntityListResponse = GenericListResponse[EntityResponse]
 
 
-class EntityListFilter(ListFilterBase, SharedFilter):
+class EntityListFilter(ListFilterBase, SharedFilter, EntityCountFilter):
     """\
     Filter criteria for listing entities.
     Every field is optional and can be used to narrow down the results.

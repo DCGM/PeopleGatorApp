@@ -1,3 +1,4 @@
+import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { isAxiosError } from 'axios'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -307,6 +308,8 @@ export function useSourceLookupQuery(url: MaybeRefOrGetter<string>) {
 function useMediaInvalidation() {
   const queryClient = useQueryClient()
   return () => {
+    restartPeoplePages(queryClient)
+    void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
     void queryClient.invalidateQueries({ queryKey: ['people-filter-options', 'library'] })
     void queryClient.invalidateQueries({ queryKey: ['people-filter-options', 'document'] })
     void queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })

@@ -151,3 +151,17 @@ explicit numeric sort orders that complete set before pagination. Cursor query
 fingerprints include the shared sort. Concurrent edits are not a snapshot;
 after numbering edits the frontend resets affected result chains while retaining
 the current page route, filters and sort settings.
+
+Entity count ranges and sorts derive assigned totals from one grouped
+`UNION ALL` of face occurrences (`occurrence_type = 'face'`) and text mentions,
+keyed by entity UUID. They exclude null owners and generic image occurrences,
+coalesce missing owners to zero, and reuse existing owner indexes. No stored
+counter or schema migration is required. Evidence membership filters remain
+independent of the aggregate; the batched response link statistics use the same
+annotation definition. See [People counts](SEARCH_FILTERS.md#people-assigned-annotation-counts)
+for range, ordering and bounded-search semantics.
+
+Entity count ranges/orderings additionally derive automatic, manual and verified
+buckets from the same assigned evidence union, grouped by entity. Combined state
+counts sum faces and mentions of that state. Ownerless records have no entity
+bucket; no unassigned-person count, stored counter, index or migration is added.
