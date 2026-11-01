@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
-import { useDebounce } from '@vueuse/core'
+import { useDebounce, useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -81,6 +82,10 @@ const maximumZoomPercent = MAXIMUM_ZOOM * 100
 const controlledZoomStep = 0.24
 const touchZoomStep = 0.45
 const route = useRoute()
+// The transcription panel is always left of the scan on wide screens and above
+// it on narrow ones; each layout remembers its own user-resized split.
+const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
+const splitDirection = computed(() => (isWideWorkspace.value ? 'horizontal' : 'vertical'))
 const router = useRouter()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
@@ -690,142 +695,165 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="workspace-grid">
-    <section
-      class="workspace-teleprompter relative min-h-0 min-w-0 overflow-hidden border-b bg-background"
-      aria-labelledby="page-transcription-title"
-    >
-      <DocumentTeleprompter
-        ref="teleprompter"
-        v-model:line-visibility="lineVisibility"
-        v-model:annotation-highlight="annotationHighlight"
-        class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
-        :transcription="transcription"
-        :selected-line-index="selectedLineIndex"
-        :selected-entity-key="selectedEntityKey"
-        :related-entity-id="selectedPersonId"
-        :entity-names="entityNames"
-        :included="includedLines"
-        :has-expansions="teleprompterLines.hasExpansions.value"
-        :is-translation-open="isTranslationOpen"
-        :selected-language="selectedLanguage"
-        :current-translation="currentTranslation"
-        :translation-loading="translationLoading"
-        @select-line="selectLine"
-        @select-entity="selectEntity"
-        @expand="expandContext"
-        @reset="teleprompterLines.reset()"
-      />
-    </section>
-
-    <section
-      ref="viewerElement"
-      class="workspace-viewer bg-viewer relative min-h-0 overflow-hidden"
-      aria-label="Pan and zoom document page"
-      tabindex="-1"
-    >
-      <PagePosition
-        class="absolute bottom-3 right-3 z-20 bg-background px-2 py-1"
-        :number="page?.page_number"
-        :total="page?.registered_page_count"
-      />
-      <DocumentControls
-        class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
-        @pointerdown.stop
-        @wheel.stop
-        @keydown.stop
-        v-model:link-states="linkStates"
-        :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
-        :line-count="visibleLineIndices.length"
-        :selected-face-index="selectedFaceIndex"
-        :face-count="faces.length"
-        :zoom-percent="zoomPercent"
-        :minimum-zoom-percent="minimumZoomPercent"
-        :maximum-zoom-percent="maximumZoomPercent"
-        :translation-options="translationOptions"
-        :is-translation-open="isTranslationOpen"
-        :selected-language="selectedLanguage"
-        :show-badge-names="showBadgeNames"
-        @previous-line="previousLine"
-        @next-line="nextLine"
-        @previous-face="previousFace"
-        @next-face="nextFace"
-        @set-zoom="setZoom"
-        @reset-view="resetView"
-        @select-translation="selectTranslation"
-        @toggle-badge-names="showBadgeNames = !showBadgeNames"
-      />
-      <div
-        ref="zoomElement"
-        class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
+    <!-- The splitter sets an inline 100% height, so this wrapper owns the height. -->
+    <div class="workspace-split">
+      <ResizablePanelGroup
+        :key="splitDirection"
+        :direction="splitDirection"
+        :auto-save-id="`document-workspace-${splitDirection}`"
       >
-        <div
-          ref="pageElement"
-          class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
-          :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }"
-        >
-          <LoadableImage
-            :src="pageImageUrl"
-            :loading="pageImageLoading"
-            :alt="`Scan ${pageId}`"
-            class="absolute inset-0 size-full"
-            image-class="object-contain"
-            @load="pageImageLoaded"
+        <ResizablePanel :default-size="isWideWorkspace ? 32 : 30" :min-size="15" :max-size="70">
+          <section
+            class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
+            aria-labelledby="page-transcription-title"
           >
-            <template #fallback>
-              <div class="flex size-full items-center justify-center text-muted-foreground">
-                <span v-if="error || pageImageError">Could not load scan</span
-                ><span v-else>Loading scan…</span>
+            <DocumentTeleprompter
+              ref="teleprompter"
+              v-model:line-visibility="lineVisibility"
+              v-model:annotation-highlight="annotationHighlight"
+              class="absolute inset-y-0 left-3 right-3 sm:left-6 sm:right-6"
+              :transcription="transcription"
+              :selected-line-index="selectedLineIndex"
+              :selected-entity-key="selectedEntityKey"
+              :related-entity-id="selectedPersonId"
+              :entity-names="entityNames"
+              :included="includedLines"
+              :has-expansions="teleprompterLines.hasExpansions.value"
+              :is-translation-open="isTranslationOpen"
+              :selected-language="selectedLanguage"
+              :current-translation="currentTranslation"
+              :translation-loading="translationLoading"
+              @select-line="selectLine"
+              @select-entity="selectEntity"
+              @expand="expandContext"
+              @reset="teleprompterLines.reset()"
+            />
+          </section>
+        </ResizablePanel>
+        <!-- Above scan overlays and toolbars, which would otherwise capture drags at the edge. -->
+        <ResizableHandle
+          with-handle
+          aria-label="Resize transcription panel"
+          class="z-30 data-[orientation=vertical]:after:h-3 data-[orientation=horizontal]:after:w-3"
+        />
+        <ResizablePanel
+          :default-size="isWideWorkspace ? 68 : 70"
+          class="flex min-h-0 min-w-0 flex-col"
+        >
+          <section
+            ref="viewerElement"
+            class="workspace-viewer bg-viewer relative min-h-0 flex-1 overflow-hidden"
+            aria-label="Pan and zoom document page"
+            tabindex="-1"
+          >
+            <PagePosition
+              class="absolute bottom-3 right-3 z-20 bg-background px-2 py-1"
+              :number="page?.page_number"
+              :total="page?.registered_page_count"
+            />
+            <DocumentControls
+              class="viewer-tools absolute inset-x-3 top-3 z-20 mx-auto w-fit max-w-[calc(100%-1.5rem)]"
+              @pointerdown.stop
+              @wheel.stop
+              @keydown.stop
+              v-model:link-states="linkStates"
+              :selected-line-index="visibleLineIndices.indexOf(selectedLineIndex)"
+              :line-count="visibleLineIndices.length"
+              :selected-face-index="selectedFaceIndex"
+              :face-count="faces.length"
+              :zoom-percent="zoomPercent"
+              :minimum-zoom-percent="minimumZoomPercent"
+              :maximum-zoom-percent="maximumZoomPercent"
+              :translation-options="translationOptions"
+              :is-translation-open="isTranslationOpen"
+              :selected-language="selectedLanguage"
+              :show-badge-names="showBadgeNames"
+              @previous-line="previousLine"
+              @next-line="nextLine"
+              @previous-face="previousFace"
+              @next-face="nextFace"
+              @set-zoom="setZoom"
+              @reset-view="resetView"
+              @select-translation="selectTranslation"
+              @toggle-badge-names="showBadgeNames = !showBadgeNames"
+            />
+            <div
+              ref="zoomElement"
+              class="panzoom-layer flex size-full min-h-full min-w-full items-center justify-center"
+            >
+              <div
+                ref="pageElement"
+                class="scan-page relative w-135 shrink-0 overflow-hidden bg-card shadow-2xl"
+                :style="{ aspectRatio: `${pageDimensions.width} / ${pageDimensions.height}` }"
+              >
+                <LoadableImage
+                  :src="pageImageUrl"
+                  :loading="pageImageLoading"
+                  :alt="`Scan ${pageId}`"
+                  class="absolute inset-0 size-full"
+                  image-class="object-contain"
+                  @load="pageImageLoaded"
+                >
+                  <template #fallback>
+                    <div class="flex size-full items-center justify-center text-muted-foreground">
+                      <span v-if="error || pageImageError">Could not load scan</span
+                      ><span v-else>Loading scan…</span>
+                    </div>
+                  </template>
+                </LoadableImage>
               </div>
-            </template>
-          </LoadableImage>
-        </div>
-      </div>
-      <DocumentPageOverlay
-        :page-bounds="pageBounds"
-        :viewer="viewerElement"
-        :actions-enabled="(canAnnotate || canDelete) && !deletionTarget"
-        :transcription="transcription"
-        :faces="faces"
-        :selected-line-index="selectedLineIndex"
-        :selected-face-id="selectedFace?.id ?? null"
-        :selected-person-id="selectedPersonId"
-        :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
-        :show-badge-names="showBadgeNames"
-        @select-line="selectLine"
-        @select-face="selectFace"
-        @clear-face="clearFace"
-      >
-        <template #actions="{ face }">
-          <FaceActionButtons
-            :face="face"
-            :can-annotate="canAnnotate"
-            :can-delete="canDelete"
-            :busy="actionBusy"
-            @find-profile="focusSimilarPeopleSearch"
-            @unassign="unassignSelectedFace"
-            @verify="verifyFace(face)"
-            @delete="requestDeletion(face)"
-          />
-          <p v-if="actionError" role="alert" class="text-xs text-destructive">{{ actionError }}</p>
-        </template>
-      </DocumentPageOverlay>
-    </section>
+            </div>
+            <DocumentPageOverlay
+              :page-bounds="pageBounds"
+              :viewer="viewerElement"
+              :actions-enabled="(canAnnotate || canDelete) && !deletionTarget"
+              :transcription="transcription"
+              :faces="faces"
+              :selected-line-index="selectedLineIndex"
+              :selected-face-id="selectedFace?.id ?? null"
+              :selected-person-id="selectedPersonId"
+              :selected-candidate-face-id="selectedPersonCandidate?.faceId ?? null"
+              :show-badge-names="showBadgeNames"
+              @select-line="selectLine"
+              @select-face="selectFace"
+              @clear-face="clearFace"
+            >
+              <template #actions="{ face }">
+                <FaceActionButtons
+                  :face="face"
+                  :can-annotate="canAnnotate"
+                  :can-delete="canDelete"
+                  :busy="actionBusy"
+                  @find-profile="focusSimilarPeopleSearch"
+                  @unassign="unassignSelectedFace"
+                  @verify="verifyFace(face)"
+                  @delete="requestDeletion(face)"
+                />
+                <p v-if="actionError" role="alert" class="text-xs text-destructive">
+                  {{ actionError }}
+                </p>
+              </template>
+            </DocumentPageOverlay>
+          </section>
 
-    <DocumentPageGallery
-      class="workspace-gallery border-t"
-      :document-url="documentQuery.data.value?.url"
-      :items="gallery.items.value"
-      :total-count="gallery.totalCount.value"
-      :loading="gallery.isLoading.value"
-      :error="Boolean(gallery.error.value)"
-      :has-next-page="gallery.hasNextPage.value"
-      :is-fetching-next-page="gallery.isFetchingNextPage.value"
-      :location="galleryLocation"
-      v-model:sort="gallerySort"
-      :sort-options="GALLERY_SORTS"
-      @load-more="gallery.loadMore()"
-      @retry="gallery.retry()"
-    />
+          <DocumentPageGallery
+            class="workspace-gallery shrink-0 border-t"
+            :document-url="documentQuery.data.value?.url"
+            :items="gallery.items.value"
+            :total-count="gallery.totalCount.value"
+            :loading="gallery.isLoading.value"
+            :error="Boolean(gallery.error.value)"
+            :has-next-page="gallery.hasNextPage.value"
+            :is-fetching-next-page="gallery.isFetchingNextPage.value"
+            :location="galleryLocation"
+            v-model:sort="gallerySort"
+            :sort-options="GALLERY_SORTS"
+            @load-more="gallery.loadMore()"
+            @retry="gallery.retry()"
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
 
     <Tabs
       class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
@@ -958,29 +986,16 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: calc(100vh - 3.25rem);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(28rem, calc(78dvh - 14rem)) auto minmax(36rem, 85dvh);
 }
 
-.workspace-viewer {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.workspace-gallery {
-  grid-column: 1;
-  grid-row: 3;
+/* Narrow screens: transcription above the scan, filling one screen height. */
+.workspace-split {
+  height: max(34rem, calc(100dvh - 3.25rem));
 }
 
 .workspace-sidebar {
-  grid-column: 1;
-  grid-row: 4;
-}
-
-.workspace-teleprompter {
-  grid-column: 1;
-  grid-row: 1;
-  /* Room for the settings row plus several lines of text. */
-  height: clamp(11rem, 28dvh, 15rem);
+  height: 85dvh;
+  min-height: 36rem;
 }
 
 .bg-viewer {
@@ -1006,59 +1021,18 @@ onBeforeUnmount(() => {
   .workspace-grid {
     height: calc(100vh - 3.25rem);
     grid-template-columns: minmax(0, 1fr) 25rem;
-    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
-  .workspace-viewer {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  .workspace-gallery {
-    grid-column: 1;
-    grid-row: 3;
-  }
-
-  .workspace-teleprompter {
-    grid-column: 1;
-    grid-row: 1;
-    /* Its content is absolutely positioned, so an auto row would collapse. */
-    height: clamp(12rem, 28dvh, 17rem);
+  .workspace-split {
+    height: auto;
+    min-height: 0;
   }
 
   .workspace-sidebar {
-    grid-column: 2;
-    grid-row: 1 / 4;
+    height: auto;
+    min-height: 0;
     border-left-width: 1px;
     border-top-width: 0;
-  }
-}
-
-@media (min-width: 1536px) {
-  .workspace-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) 25rem;
-  }
-
-  .workspace-viewer {
-    grid-column: 2;
-    grid-row: 1 / 3;
-  }
-
-  .workspace-gallery {
-    grid-column: 2;
-    grid-row: 3;
-  }
-
-  .workspace-sidebar {
-    grid-column: 3;
-  }
-
-  .workspace-teleprompter {
-    grid-column: 1;
-    grid-row: 1 / 4;
-    height: auto;
-    border-right-width: 1px;
-    border-bottom-width: 0;
   }
 }
 </style>

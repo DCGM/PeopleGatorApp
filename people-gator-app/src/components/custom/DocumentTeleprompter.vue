@@ -315,7 +315,17 @@ function textSelection() {
   const scroller = scrollElement.value
   if (!selection || selection.isCollapsed || !selection.rangeCount || !scroller) return null
   const range = selection.getRangeAt(0)
-  return scroller.contains(range.commonAncestorContainer) ? { selection, range } : null
+  if (!range.intersectsNode(scroller)) return null
+  // A drag past the text (for example over the minimap) can spill into the rest
+  // of the page; only the part inside the transcription counts here.
+  const bounds = document.createRange()
+  bounds.selectNodeContents(scroller)
+  const clipped = range.cloneRange()
+  if (clipped.compareBoundaryPoints(Range.START_TO_START, bounds) < 0)
+    clipped.setStart(bounds.startContainer, bounds.startOffset)
+  if (clipped.compareBoundaryPoints(Range.END_TO_END, bounds) > 0)
+    clipped.setEnd(bounds.endContainer, bounds.endOffset)
+  return clipped.collapsed ? null : { selection, range: clipped }
 }
 
 function selectLine(index: number) {
@@ -615,7 +625,7 @@ defineExpose({ scrollPage, navigateTo })
         <EntityLinkStateBadge v-bind="mentionBadge.entity" :label="mentionBadge.name" :focusable="false"
           :tooltip="false" data-mention-badge class="h-6 max-w-40 rounded-full shadow-xs" />
       </div>
-      <div class="min-h-0 overflow-hidden py-2">
+      <div class="min-h-0 select-none overflow-hidden py-2">
         <TeleprompterMinimap :lines="minimap" :viewport="viewport" @navigate="navigateTo"
           @scroll="scrollBy" />
       </div>
