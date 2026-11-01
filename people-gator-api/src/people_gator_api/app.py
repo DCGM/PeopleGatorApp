@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from people_gator_api.services.embedding_service.http_service import (
@@ -20,6 +20,7 @@ from people_gator_api.services.database_service import (
     init_db,
 )
 from people_gator_api.utils.version_info import get_version_info
+from people_gator_api.utils.swagger import swagger_html
 import dotenv
 
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
@@ -44,6 +45,7 @@ def get_app() -> FastAPI:
         description="An API for managing people and their relationships through backend-neutral persistence contracts.",
         version=get_version_info().full_version,
         lifespan=lifespan,
+        docs_url=None,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -64,6 +66,11 @@ def get_app() -> FastAPI:
         configure_logging()
     else:
         configure_logging()
+    @app.get("/docs", include_in_schema=False)
+    async def docs(request: Request):
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        return swagger_html(openapi_url=f"{root_path}{app.openapi_url}", title=f"{app.title} - Swagger UI")
+
     app.include_router(v1_router)
     def openapi():
         if app.openapi_schema is None:

@@ -17,7 +17,11 @@ from people_gator_api.services.auth_scopes import (
     INGEST_SCOPE as INGEST_SCOPE, ADMIN_SCOPE as ADMIN_SCOPE, KNOWN_SCOPES as KNOWN_SCOPES,
 )
 from fastapi.security import HTTPAuthorizationCredentials
-security = HTTPBearer(auto_error=False, scheme_name="PeopleGatorBearer")
+security = HTTPBearer(
+    auto_error=False,
+    scheme_name="PeopleGatorBearer",
+    description="Use [Sign in](/login.html?return=%2Fdocs) to reuse your app session, or enter an access token.",
+)
 
 class IdentityRepositories(Protocol):
     @property

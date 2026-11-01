@@ -21,12 +21,10 @@ describe('issuer session transport', () => {
   })
   it('logs in directly without bundled credentials and coalesces refresh', async () => {
     const token = `h.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'actor' }))}.s`
-    const fetch = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({ access_token: token, refresh_token: 'refresh' }),
-      })
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: token, refresh_token: 'refresh' }),
+    })
     vi.stubGlobal('fetch', fetch)
     await login('alice', 'entered-password')
     expect(fetch.mock.calls[0]![0]).toContain('/token/login')
@@ -41,6 +39,14 @@ describe('issuer session transport', () => {
     await expect(login('alice', 'wrong')).rejects.toThrow('Check your username and password.')
     expect(sessionStorage.length).toBe(0)
   })
+  it('allows docs to check an expired session without navigation', async () => {
+    sessionStorage.setItem('people-gator.refresh-token', 'expired')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }))
+    await expect(getAccessToken({ redirect: false })).rejects.toThrow('Session expired')
+    expect(sessionStorage.getItem('people-gator.refresh-token')).toBeNull()
+    expect(sessionStorage.getItem('people-gator.access-token')).toBeNull()
+  })
+
   it('revokes and clears the refresh session on logout', async () => {
     sessionStorage.setItem('people-gator.refresh-token', 'refresh')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))

@@ -1131,6 +1131,10 @@ fallback. Search/filter/sort URLs and counts retain their existing semantics.
 The `auth-attribution-login` link opens the separate browser gateway and returns
 to Ada Novak, whose linked faces and mentions are local synthetic fixtures.
 `auth-attribution-review` opens the reviewer attribution filter.
+`auth-api-docs` returns login to Swagger, where the existing browser session
+supports **Try it out** on seeded records, for example `GET /api/v1/entities`.
+The standard **Authorize → Sign in** link opens the same gateway; manual tokens
+and API keys remain available.
 `auth-document-navigation` returns from login to the seeded document table and
 lets reviewers check the standard header navigation; no sign-out control is shown. Provision demo
 accounts separately with `people-gator-auth-provision`; the seed contains no

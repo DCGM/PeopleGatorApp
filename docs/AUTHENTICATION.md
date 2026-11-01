@@ -35,6 +35,27 @@ writable by the issuer, backed up, and separate from resource storage. Startup
 readiness (`/auth/health`) validates accounts and loads/creates signing keys.
 The API never creates keys or substitutes local keys for provider failure.
 
+## Swagger browser session
+
+Open `/docs` at the same public origin as the app and gateway. In **Authorize**,
+choose **Sign in** to open the existing login page; the return path, query and
+operation fragment are preserved. Tokens stay in sessionStorage and never appear
+in navigation URLs. Existing app sessions are applied automatically. The shared
+frontend auth client refreshes managed tokens before **Try it out** requests.
+
+The resource API serves the docs HTML and public OpenAPI; `/swagger-auth.js` is a
+small frontend entry with no-store caching and hashed shared imports. The API
+still owns no passwords, signing keys or refresh sessions. Bearer/API-key OpenAPI
+contracts stay intact. Manual authorization is respected; selecting an API key
+clears only Swagger's automatically applied bearer and leaves the app session.
+Anonymous docs remain accessible when a saved session cannot be refreshed.
+Managed app tokens are sent only to same-origin `/api/` resources.
+
+For separate native dev servers, use the frontend's `/docs` and set server-only
+`API_PROXY_TARGET` to the API URL, as in [Development](DEVELOPMENT.md). The raw API
+origin is a different sessionStorage origin and supports manual authorization;
+no cross-origin token handoff is assumed. ReDoc remains a reference view.
+
 ## Claims, scopes and keys
 
 Access tokens require a trusted signature and `iss`, `aud`, nonempty string
@@ -123,3 +144,8 @@ people-gator-app/scripts/check-auth-gateway.mjs` runs real-browser login,
 keyboard, return navigation, refresh and expiry recovery at 1440×900 and
 390×844. It expects the synthetic local instance at ports 5189/8089/8189 (or set
 `AUTH_GATEWAY_ORIGIN`); credentials are entered only by that local test script.
+
+The real-browser Swagger check is `node people-gator-app/scripts/check-swagger-session.mjs`.
+It covers the gateway return/hash, existing app session reuse, authenticated
+**Try it out**, refresh, recovery, API-key isolation and keyboard use at desktop
+and mobile viewports. Set `SWAGGER_ORIGIN` for a same-origin preview.

@@ -846,6 +846,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "auth-attribution-login": "/login.html?" + urlencode({
                 "return": f"/people/{manifest.entities['ada']}",
             }),
+            "auth-api-docs": "/login.html?" + urlencode({"return": "/docs"}),
             "auth-document-navigation": "/login.html?" + urlencode({
                 "return": "/documents?library=preview-table",
             }),

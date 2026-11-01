@@ -59,7 +59,7 @@ export async function login(username: string, password: string) {
   return persistTokens(await exchange('/token/login', new URLSearchParams({ username, password })))
 }
 
-export function requireLogin(expired = false): never {
+export function redirectToLogin(expired = false): void {
   sessionStorage.removeItem(accessTokenKey)
   sessionStorage.removeItem(refreshTokenKey)
   if (!redirecting) {
@@ -70,26 +70,38 @@ export function requireLogin(expired = false): never {
         new URLSearchParams({ return: returnTo, ...(expired ? { expired: '1' } : {}) }),
     )
   }
+}
+
+export function requireLogin(expired = false): never {
+  redirectToLogin(expired)
   throw new Error('Sign in required')
 }
 
-export async function getAccessToken(): Promise<string> {
+export async function getAccessToken(options: { redirect?: boolean } = {}): Promise<string> {
   const saved = sessionStorage.getItem(accessTokenKey)
+  const hadSession = Boolean(saved || sessionStorage.getItem(refreshTokenKey))
   if (saved && tokenExpiry(saved) > Date.now() + 30_000) return saved
   pendingToken ??= (async () => {
     const refresh = sessionStorage.getItem(refreshTokenKey)
-    if (!refresh) return requireLogin()
+    if (!refresh) throw new Error('Sign in required')
     try {
       return persistTokens(
         await exchange('/token/refresh', JSON.stringify({ refresh_token: refresh })),
       )
     } catch {
-      return requireLogin(true)
+      sessionStorage.removeItem(accessTokenKey)
+      sessionStorage.removeItem(refreshTokenKey)
+      throw new Error('Session expired')
     }
   })().finally(() => {
     pendingToken = undefined
   })
-  return pendingToken
+  try {
+    return await pendingToken
+  } catch (error) {
+    if (options.redirect !== false) return requireLogin(hadSession)
+    throw error
+  }
 }
 
 export async function logout() {

@@ -3,7 +3,9 @@
 Protected routes accept either `Authorization: Bearer <JWT>` or `X-API-Key: <key>`.
 Both headers return 400; missing or invalid credentials return 401; insufficient
 endpoint scopes return 403. The standalone issuer provides login and refresh; see [Authentication](../../docs/AUTHENTICATION.md). Swagger's
-Authorize dialog offers both methods; supply one at a time.
+Authorize dialog offers both methods; supply one at a time. Its **Sign in** link
+opens the existing gateway and returns with the app session. Selecting an API key
+clears the automatically applied Swagger bearer without ending the app session.
 
 Set `PEOPLE_GATOR_API__API_KEYS__KEYS_PATH` to a JSON object in the configured
 filesystem (default `peoplegator_api/api-keys.json`):
