@@ -187,8 +187,23 @@ describe('DocumentTeleprompter', () => {
       lineVisibility: 'person',
       included: modeLines(sample(), 'person', 'ada'),
     })
-    const numbers = wrapper.findAll('[data-line-index] small').map((label) => label.text())
+    const numbers = wrapper
+      .findAll('[data-line-index]:not([data-hidden]) small')
+      .map((label) => label.text())
     expect(numbers).toEqual(['L2', 'L7', 'L9', 'L10'])
+    // Hidden lines stay in the DOM, undisplayed, so selections can span them.
+    const hidden = wrapper.findAll('[data-line-index][data-hidden]')
+    expect(hidden.map((line) => line.attributes('data-line-index'))).toEqual([
+      '0',
+      '2',
+      '3',
+      '4',
+      '5',
+      '7',
+    ])
+    expect(hidden.every((line) => (line.element as HTMLElement).style.display === 'none')).toBe(
+      true,
+    )
     const gaps = wrapper.findAll('[data-gap-start]')
     expect(gaps.map((gap) => gap.get('small').text())).toEqual([
       '1 hidden line',
@@ -257,7 +272,7 @@ describe('DocumentTeleprompter', () => {
       isTranslationOpen: true,
     })
     expect(wrapper.text()).toContain(message)
-    expect(wrapper.find('[data-line-index]').exists()).toBe(false)
+    expect(wrapper.find('[data-line-index]:not([data-hidden])').exists()).toBe(false)
     // Settings stay available, and no stale translation is shown.
     expect(wrapper.find('[aria-label="Teleprompter settings"]').exists()).toBe(true)
     expect(wrapper.find('[aria-label="Translate teleprompter text"]').exists()).toBe(false)
@@ -266,10 +281,10 @@ describe('DocumentTeleprompter', () => {
   it('changes highlighted annotations without changing the visible lines', async () => {
     const included = modeLines(sample(), 'annotated', null)
     const wrapper = render({ lineVisibility: 'annotated', included })
-    const lineCount = wrapper.findAll('[data-line-index]').length
+    const lineCount = wrapper.findAll('[data-line-index]:not([data-hidden])').length
     expect(wrapper.findAll('mark')).toHaveLength(5)
     await wrapper.setProps({ annotationHighlight: 'verified' })
-    expect(wrapper.findAll('[data-line-index]')).toHaveLength(lineCount)
+    expect(wrapper.findAll('[data-line-index]:not([data-hidden])')).toHaveLength(lineCount)
     expect(wrapper.findAll('mark').map((mark) => mark.text())).toEqual(['Ada Novak'])
     expect(wrapper.text()).toContain('Ada Novak returned.')
   })
