@@ -305,6 +305,50 @@ describe('DocumentTeleprompter', () => {
     selection.removeAllRanges()
   })
 
+  it('selects across a collapsed gap, tints it and copies its hidden lines in order', async () => {
+    const wrapper = render({
+      lineVisibility: 'person',
+      included: modeLines(sample(), 'person', 'ada'),
+    })
+    // Visible: L2, L7, L9–L10. Select from the start of L2 to "Ada" in L7.
+    const from = wrapper.get('[data-line-index="1"] [data-line-text]').element
+    const to = wrapper.get('[data-line-index="6"] [data-line-text]').element
+    const range = document.createRange()
+    range.setStart(from, 0)
+    range.setEnd(to.querySelector('mark')!.firstChild!, 3)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await nextTick()
+    // The native selection is kept, not pulled back to the gap.
+    expect(selection.rangeCount).toBe(1)
+    expect(selection.getRangeAt(0).endContainer).toBe(to.querySelector('mark')!.firstChild)
+    expect(
+      wrapper
+        .findAll('[data-gap-start][data-selected]')
+        .map((gap) => gap.attributes('data-gap-start')),
+    ).toEqual(['2'])
+    const data = new Map<string, string>()
+    const event = new Event('copy', { bubbles: true, cancelable: true }) as ClipboardEvent
+    Object.defineProperty(event, 'clipboardData', {
+      value: { setData: (type: string, value: string) => data.set(type, value) },
+    })
+    wrapper.get('[aria-label="Transcription teleprompter"]').element.dispatchEvent(event)
+    expect(data.get('text/plain')).toBe(
+      [
+        'Ada Novak signed it.',
+        'Plain context line.',
+        'Ada Novak of another family.',
+        'More context.',
+        'Even more context.',
+        'Ada',
+      ].join('\n'),
+    )
+    selection.removeAllRanges()
+  })
+
   it('clears a text selection when its lines become hidden', async () => {
     const wrapper = render()
     const line = wrapper.findAll('[data-line-text]')[2]!.element
