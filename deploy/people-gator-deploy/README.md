@@ -367,3 +367,33 @@ operator-owned telemetry file shared across PR, staging and release descriptors,
 collector networking, credential boundaries and reviewed-main rollout. The
 browser receives a dedicated RUM client token through the API; backend OTLP
 authorization stays server-side. No frontend build secrets are required.
+
+### Preview application capabilities
+
+The reviewed controller inspects the tested backend image's
+`org.peoplegator.auth-service` label. Missing labels select the existing
+frontend/API recipe. Value `1` selects the fixed `compose.pr-auth.yaml` recipe
+shipped with the utility; unknown versions are rejected before replacement.
+Neither label values nor PR files become controller paths or host commands.
+This lets a controller upgrade reach `main` before standalone-auth application
+images, without changing the topology of existing previews or staging.
+
+Capability 1 runs storage initialization, migration, seed and explicit account
+provisioning before starting auth/API/frontend. Only the provisioning container
+receives the external users file; the issuer retains its own `auth-data` volume
+and has no database connection. The API uses a per-preview private issuer alias.
+Existing account edits and actor UUIDs survive provisioning reruns. New issuer
+keys force re-login unless retained keys are copied explicitly as an operator
+step. Closure removes both preview volumes using the saved recipe selector.
+
+The selected topology is saved in the private Compose environment and successful
+preview state. An already-seeded run can be repaired when an older controller
+omitted its advertised topology. Readiness requires real issuer health/JWKS
+responses and the gateway; an HTTP 200 frontend fallback is insufficient.
+
+For the #89 rollout: merge/review this controller support on `main` first, then
+build/redeploy PR #100 with the capability label. Rerunning that PR's CI triggers
+the normal lifecycle using the exact reviewed-main utility. Do not install
+utility code from the application PR or start an unmanaged replacement stack on
+the preview host. This controller preparation does not change staging or release
+auth ownership or require operator credential changes for legacy previews.
