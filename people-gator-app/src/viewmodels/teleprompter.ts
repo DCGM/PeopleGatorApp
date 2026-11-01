@@ -134,7 +134,13 @@ export function adjacentIncluded(
   return null
 }
 
-export type MinimapSegment = { start: number; width: number; key: string; related: boolean }
+export type MinimapSegment = {
+  start: number
+  width: number
+  key: string
+  related: boolean
+  state: HighlightState
+}
 export type MinimapLine = {
   index: number
   width: number
@@ -167,6 +173,7 @@ export function minimapLines(
           start: (span.start_index / length) * width,
           width: (Math.max(1, span.end_index - span.start_index) / length) * width,
           related: Boolean(span.entity_id && span.entity_id === relatedEntityId),
+          state: spanHighlightState(span),
         })),
     }
   })

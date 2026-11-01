@@ -28,6 +28,22 @@ export const linkStateVisuals = {
     classes: 'bg-muted text-muted-foreground',
   },
 }
+/**
+ * Text mentions use their link state's badge hue for text and underline, and
+ * the same hue in overview marks, instead of an inline state icon.
+ */
+export const mentionStateClasses = {
+  automatic: 'text-sky-700 border-sky-500 dark:text-sky-300 dark:border-sky-400',
+  manual: 'text-amber-700 border-amber-500 dark:text-amber-300 dark:border-amber-400',
+  verified: 'text-emerald-700 border-emerald-500 dark:text-emerald-300 dark:border-emerald-400',
+  unassigned: 'text-muted-foreground border-dashed border-muted-foreground',
+}
+export const mentionStateFillClasses = {
+  automatic: 'fill-sky-500',
+  manual: 'fill-amber-500',
+  verified: 'fill-emerald-500',
+  unassigned: 'fill-muted-foreground',
+}
 export type LinkMetadata = {
   linkState?: EntityLinkState | null
   verifiedBy?: string | null

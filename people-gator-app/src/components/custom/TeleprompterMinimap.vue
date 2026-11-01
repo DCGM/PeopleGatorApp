@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import { mentionStateFillClasses } from '@/lib/entity-links'
 import type { MinimapLine } from '@/viewmodels/teleprompter'
 
 const props = defineProps<{
@@ -85,7 +86,7 @@ function stop(event: PointerEvent) {
           :y="line.index * ROW"
           :width="Math.max(1.5, segment.width * 100)"
           :height="BAR"
-          :class="segment.related ? 'minimap-related' : 'minimap-annotation'"
+          :class="segment.related ? 'minimap-related' : mentionStateFillClasses[segment.state]"
         />
       </template>
     </g>
@@ -108,9 +109,6 @@ function stop(event: PointerEvent) {
 }
 .minimap-hidden {
   fill: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
-}
-.minimap-annotation {
-  fill: var(--secondary);
 }
 .minimap-related {
   fill: var(--accent);

@@ -135,6 +135,7 @@ const {
   similarPeople,
   similarPeopleLoading,
   transcription,
+  entityNames,
   unassignFace,
 } = useDocumentWorkspace(
   libraryId,
@@ -702,6 +703,7 @@ onBeforeUnmount(() => {
         :selected-line-index="selectedLineIndex"
         :selected-entity-key="selectedEntityKey"
         :related-entity-id="selectedPersonId"
+        :entity-names="entityNames"
         :included="includedLines"
         :has-expansions="teleprompterLines.hasExpansions.value"
         :is-translation-open="isTranslationOpen"
