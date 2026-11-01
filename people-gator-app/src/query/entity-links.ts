@@ -5,6 +5,7 @@ import {
 } from '@/client'
 import { responseData } from './api'
 import { queryKeys } from './keys'
+import { restartPeoplePages } from './people-count-invalidation'
 export function useVerifyLinkMutation() {
   const client = useQueryClient()
   return useMutation({
@@ -25,6 +26,7 @@ export function useVerifyLinkMutation() {
             }),
           ),
     onSuccess: async () => {
+      restartPeoplePages(client)
       await Promise.all(
         [
           queryKeys.faces.all,

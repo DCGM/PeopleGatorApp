@@ -1,3 +1,4 @@
+import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -66,6 +67,7 @@ export function useCreateEntityMutation() {
     mutationFn: (body: EntityCreateRequest) =>
       responseData(createEntityRouteApiV1EntitiesPost({ body, throwOnError: true })),
     onSuccess: (entity) => {
+      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
@@ -85,6 +87,7 @@ export function useCreateEntitiesMutation() {
     mutationFn: (body: EntityCreateRequest[]) =>
       responseData(createEntityBatchRouteApiV1EntitiesBatchPost({ body, throwOnError: true })),
     onSuccess: (entities) => {
+      restartPeoplePages(queryClient)
       for (const entity of entities) {
         queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       }
@@ -112,6 +115,7 @@ export function usePatchEntityMutation() {
         }),
       ),
     onSuccess: (entity) => {
+      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.entities.detail(entity.entity_id), entity)
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
@@ -153,6 +157,7 @@ export function useMergeEntitiesMutation() {
       )
     },
     onSuccess: (result, { sourceEntityIds }) => {
+      restartPeoplePages(queryClient)
       for (const sourceEntityId of sourceEntityIds) {
         queryClient.removeQueries({ queryKey: queryKeys.entities.detail(sourceEntityId) })
       }
@@ -185,6 +190,7 @@ export function useDeleteEntityMutation() {
         }),
       ),
     onSuccess: (_data, entityId) => {
+      restartPeoplePages(queryClient)
       queryClient.removeQueries({ queryKey: queryKeys.entities.detail(entityId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.search.all })
@@ -204,6 +210,7 @@ export function useDeleteEntitiesMutation() {
     mutationFn: (body: EntityDeleteManyRequest) =>
       responseData(deleteEntitiesRouteApiV1EntitiesDelete({ body, throwOnError: true })),
     onSuccess: () => {
+      restartPeoplePages(queryClient)
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.faces.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all })

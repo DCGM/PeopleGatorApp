@@ -6,6 +6,7 @@ import {
 import { responseData } from './api'
 import { fetchTextMentions, type TextMentionListParams } from './text-mentions'
 import { queryKeys } from './keys'
+import { restartPeoplePages } from './people-count-invalidation'
 
 export type MentionReviewTargets =
   | { ids: string[] }
@@ -79,6 +80,7 @@ export function useReviewMentionsMutation() {
       return completed
     },
     onSettled: async () => {
+      restartPeoplePages(client)
       await Promise.all(
         [
           queryKeys.textMentions.all,

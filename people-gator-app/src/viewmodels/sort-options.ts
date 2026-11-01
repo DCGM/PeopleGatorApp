@@ -1,4 +1,5 @@
 import { COUNT_OPTIONS } from './annotation-counts'
+import { PEOPLE_COUNT_OPTIONS } from './people-counts'
 import type {
   DocumentSortField,
   EntitySortField,
@@ -16,6 +17,7 @@ import type { SortOption, SortState, SortUrlKeys } from '@/lib/sorting'
 export const RELEVANCE: SortState<'relevance'> = { field: 'relevance', direction: 'desc' }
 
 export const PEOPLE_SORTS: SortOption<EntitySortField>[] = [
+  ...PEOPLE_COUNT_OPTIONS,
   { value: 'relevance', label: 'Relevance', kind: 'relevance' },
   { value: 'name', label: 'Name', kind: 'text' },
   { value: 'last_touched_at', label: 'Last change', kind: 'time' },

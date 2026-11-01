@@ -52,8 +52,10 @@ from people_gator_api.schemas.common import (
     GenericListRequest,
     GenericListResponse,
 )
+from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
 from people_gator_api.schemas.entities import (
     EntityCreateRequest,
+    EntityListFilter,
     EntityDeleteManyRequest,
     EntityDeleteManyResponse,
     EntityListRequest,
@@ -323,6 +325,12 @@ def _require_default_sort(query: object) -> None:
     Lists follow canonical identity ascending and searches relevance descending,
     so explicitly requesting either is the same order and is accepted.
     """
+    values = missing_to_none(getattr(query, "filter_", None))
+    if isinstance(values, EntityListFilter) and any(
+        not is_missing(getattr(values, f"{bound}_{field}"))
+        for field in ENTITY_COUNT_FIELDS for bound in ("min", "max")
+    ):
+        raise NotImplementedError("entity count filters require the PostgreSQL backend")
     if getattr(query, "sort", None) is None:
         return
     field, direction = getattr(query, "effective_sort")()

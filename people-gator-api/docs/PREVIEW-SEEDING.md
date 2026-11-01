@@ -1076,6 +1076,27 @@ The upgrade leaves last-touched time and modifier unchanged, as a fresh seed
 would. Reruns preserve changed numbers and explicit clears, including after
 interrupted writes. Page 9 remains a usable legacy/unknown example.
 
+### People count ranges and sorting (#92)
+
+The seed exposes `people-zero-faces`, `people-count-range` and
+`people-count-scope` links. These reuse stable synthetic identities and local
+media without modifying retained assignments: Lenka Vesela has zero evidence,
+Emil Dvorak has faces only, Nora Svoboda has mentions only, and Mira Counts has
+seven faces and three mentions across documents, with mixed assignment states.
+The pagination people provide tied counts spanning several cursor batches.
+
+Open **People**, set **Faces** minimum and maximum to `0`, and sort by
+**Text mentions · Highest first**. Nora appears ahead of the tied one-mention
+people; Lenka has explicit zeros. Try Faces `2` through `7` with Text mentions
+maximum `3`, then **All annotations** in both directions. Choose Mira's
+**Count study: faces** document and Faces minimum `7` plus Text mentions minimum
+`3`: she still matches because totals cover the person, including other documents.
+The mobile sliders button reveals both range controls; active tags remain visible
+while collapsed. Repository tests traverse tied count orders, check exact/open
+ranges and document-wide membership versus person-wide totals, repeat seeding,
+and exercise evidence transitions. Existing edit-preservation and interrupted
+checkpoint tests continue to protect retained previews.
+
 ### Stable document column widths (#93)
 
 Open the `document-table-widths` manifest link. It combines 14 unchanged
@@ -1104,3 +1125,19 @@ No browser-local persistence is included.
 Scroll horizontally to the middle/far right and vertically to the final row to
 load the second cursor batch automatically; Load more documents is the keyboard
 fallback. Search/filter/sort URLs and counts retain their existing semantics.
+
+### People count states
+
+Open `people-count-states` for Mira Counts with at least three manual faces and
+one verified mention, sorted by verified annotations. Her seven faces comprise
+two automatic, three manual and two verified links; her three mentions include
+one of each state. The combined verified count is three. Switch each range's
+state selector between All, Verified, Manual and Automatic, combine bounds and
+remove tags. `people-zero-verified` demonstrates exact zero verified evidence
+and automatic-face sorting, including people without evidence.
+
+These links reuse preserved mixed-state fixtures and local media. State-count
+repository tests traverse all twelve orders in both directions and cursor batches,
+compare exact ranges to batched statistics, retain person-wide counts under
+source/state membership filters, and verify that reviewed assignments survive a
+second seed run. No preview edits or checkpoint identities are reset.

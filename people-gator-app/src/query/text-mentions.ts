@@ -1,3 +1,4 @@
+import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
@@ -102,6 +103,7 @@ export function useCreateTextMentionMutation() {
         }),
       ),
     onSuccess: (mention) => {
+      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })
@@ -131,6 +133,7 @@ export function useCreateTextMentionsMutation() {
         }),
       ),
     onSuccess: (mentions) => {
+      restartPeoplePages(queryClient)
       for (const mention of mentions) {
         queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       }
@@ -160,6 +163,7 @@ export function useReassignTextMentionMutation() {
         }),
       ),
     onSuccess: (mention) => {
+      restartPeoplePages(queryClient)
       queryClient.setQueryData(queryKeys.textMentions.detail(mention.mention_id), mention)
       void queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.lists() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.all })

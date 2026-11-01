@@ -25,6 +25,18 @@ class SortDirection(StrEnum):
 
 
 class EntitySortField(StrEnum):
+    FACES_TOTAL_COUNT = "faces_total_count"
+    FACES_VERIFIED_COUNT = "faces_verified_count"
+    FACES_MANUAL_COUNT = "faces_manual_count"
+    FACES_AUTOMATIC_COUNT = "faces_automatic_count"
+    MENTIONS_TOTAL_COUNT = "mentions_total_count"
+    MENTIONS_VERIFIED_COUNT = "mentions_verified_count"
+    MENTIONS_MANUAL_COUNT = "mentions_manual_count"
+    MENTIONS_AUTOMATIC_COUNT = "mentions_automatic_count"
+    ANNOTATIONS_TOTAL_COUNT = "annotations_total_count"
+    ANNOTATIONS_VERIFIED_COUNT = "annotations_verified_count"
+    ANNOTATIONS_MANUAL_COUNT = "annotations_manual_count"
+    ANNOTATIONS_AUTOMATIC_COUNT = "annotations_automatic_count"
     RELEVANCE = "relevance"
     NAME = "name"
     ENTITY_ID = "entity_id"

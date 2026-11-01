@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from people_gator_api.schemas.annotation_counts import ANNOTATION_COUNT_FIELDS
+from people_gator_api.schemas.entity_counts import ENTITY_COUNT_FIELDS
 from people_gator_api.routes.v1 import router
 from people_gator_api.routes.v1.query_dependencies import (
     FaceListFilterDependency,
@@ -37,6 +38,7 @@ LIST_FILTERS = {
         "mention_id",
         "has_mentions",
         "has_detections",
+        *(f"{bound}_{field}" for field in ENTITY_COUNT_FIELDS for bound in ("min", "max")),
         "last_touched_from", "last_touched_to", "document_source_id",
         "last_touched_by_user_id", "last_touched_by_api_key_id",
     },
@@ -178,6 +180,8 @@ def test_sort_fields_are_resource_allowlists(openapi: dict[str, Any], path: str,
     """Relevance is offered only where a search score exists."""
     if path in {"/documents", "/search-documents", "/pages", "/search-pages"}:
         values = [*ANNOTATION_COUNT_FIELDS, *values]
+    if path in {"/entities", "/search-entities"}:
+        values = [*ENTITY_COUNT_FIELDS, *values]
     assert _sort_values(openapi, path) == values
 
 

@@ -332,6 +332,150 @@ export type EntityLinkStats = {
  */
 export type EntityListFilter = {
     /**
+     * Min Faces Total Count
+     *
+     * Inclusive minimum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_faces_total_count?: MinimumCount;
+    /**
+     * Max Faces Total Count
+     *
+     * Inclusive maximum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_faces_total_count?: MinimumCount;
+    /**
+     * Min Faces Verified Count
+     *
+     * Inclusive minimum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_faces_verified_count?: MinimumCount;
+    /**
+     * Max Faces Verified Count
+     *
+     * Inclusive maximum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_faces_verified_count?: MinimumCount;
+    /**
+     * Min Faces Manual Count
+     *
+     * Inclusive minimum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_faces_manual_count?: MinimumCount;
+    /**
+     * Max Faces Manual Count
+     *
+     * Inclusive maximum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_faces_manual_count?: MinimumCount;
+    /**
+     * Min Faces Automatic Count
+     *
+     * Inclusive minimum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_faces_automatic_count?: MinimumCount;
+    /**
+     * Max Faces Automatic Count
+     *
+     * Inclusive maximum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_faces_automatic_count?: MinimumCount;
+    /**
+     * Min Mentions Total Count
+     *
+     * Inclusive minimum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_mentions_total_count?: MinimumCount;
+    /**
+     * Max Mentions Total Count
+     *
+     * Inclusive maximum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_mentions_total_count?: MinimumCount;
+    /**
+     * Min Mentions Verified Count
+     *
+     * Inclusive minimum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_mentions_verified_count?: MinimumCount;
+    /**
+     * Max Mentions Verified Count
+     *
+     * Inclusive maximum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_mentions_verified_count?: MinimumCount;
+    /**
+     * Min Mentions Manual Count
+     *
+     * Inclusive minimum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_mentions_manual_count?: MinimumCount;
+    /**
+     * Max Mentions Manual Count
+     *
+     * Inclusive maximum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_mentions_manual_count?: MinimumCount;
+    /**
+     * Min Mentions Automatic Count
+     *
+     * Inclusive minimum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_mentions_automatic_count?: MinimumCount;
+    /**
+     * Max Mentions Automatic Count
+     *
+     * Inclusive maximum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_mentions_automatic_count?: MinimumCount;
+    /**
+     * Min Annotations Total Count
+     *
+     * Inclusive minimum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_annotations_total_count?: MinimumCount;
+    /**
+     * Max Annotations Total Count
+     *
+     * Inclusive maximum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_annotations_total_count?: MinimumCount;
+    /**
+     * Min Annotations Verified Count
+     *
+     * Inclusive minimum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_annotations_verified_count?: MinimumCount;
+    /**
+     * Max Annotations Verified Count
+     *
+     * Inclusive maximum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_annotations_verified_count?: MinimumCount;
+    /**
+     * Min Annotations Manual Count
+     *
+     * Inclusive minimum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_annotations_manual_count?: MinimumCount;
+    /**
+     * Max Annotations Manual Count
+     *
+     * Inclusive maximum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_annotations_manual_count?: MinimumCount;
+    /**
+     * Min Annotations Automatic Count
+     *
+     * Inclusive minimum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    min_annotations_automatic_count?: MinimumCount;
+    /**
+     * Max Annotations Automatic Count
+     *
+     * Inclusive maximum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+     */
+    max_annotations_automatic_count?: MinimumCount;
+    /**
      * Entity Link State
      *
      * Assignment states of the linked faces/mentions; the same annotation must satisfy the selected source scope. Omit to include unassigned annotations.
@@ -438,7 +582,7 @@ export type EntityListFilter = {
 /**
  * EntityListSortField
  */
-export type EntityListSortField = 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityMergeBatchRequest
@@ -744,7 +888,7 @@ export type EntityResponse = {
 /**
  * EntitySortField
  */
-export type EntitySortField = 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
+export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'faces_manual_count' | 'faces_automatic_count' | 'mentions_total_count' | 'mentions_verified_count' | 'mentions_manual_count' | 'mentions_automatic_count' | 'annotations_total_count' | 'annotations_verified_count' | 'annotations_manual_count' | 'annotations_automatic_count' | 'relevance' | 'name' | 'entity_id' | 'last_touched_at' | 'created_at';
 
 /**
  * EntityType
@@ -2887,6 +3031,150 @@ export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
          */
         'filter.mention_id'?: Array<string> | null;
         /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Verified Count
+         *
+         * Inclusive maximum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Manual Count
+         *
+         * Inclusive maximum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Automatic Count
+         *
+         * Inclusive maximum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Verified Count
+         *
+         * Inclusive maximum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Manual Count
+         *
+         * Inclusive maximum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Automatic Count
+         *
+         * Inclusive maximum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Total Count
+         *
+         * Inclusive maximum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Verified Count
+         *
+         * Inclusive maximum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Manual Count
+         *
+         * Inclusive maximum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Automatic Count
+         *
+         * Inclusive maximum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_automatic_count'?: MinimumCount | null;
+        /**
          * Filter.Has Mentions
          *
          * Whether the entity has mentions.
@@ -3795,6 +4083,150 @@ export type ListEntitiesRouteApiV1EntitiesGetData = {
          * The mention identifiers associated with the entity.
          */
         'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Min Faces Total Count
+         *
+         * Inclusive minimum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Total Count
+         *
+         * Inclusive maximum faces total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Verified Count
+         *
+         * Inclusive minimum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Verified Count
+         *
+         * Inclusive maximum faces verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Manual Count
+         *
+         * Inclusive minimum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Manual Count
+         *
+         * Inclusive maximum faces manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Faces Automatic Count
+         *
+         * Inclusive minimum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Faces Automatic Count
+         *
+         * Inclusive maximum faces automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_faces_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Total Count
+         *
+         * Inclusive minimum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Total Count
+         *
+         * Inclusive maximum mentions total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Verified Count
+         *
+         * Inclusive minimum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Verified Count
+         *
+         * Inclusive maximum mentions verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Manual Count
+         *
+         * Inclusive minimum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Manual Count
+         *
+         * Inclusive maximum mentions manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Mentions Automatic Count
+         *
+         * Inclusive minimum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Mentions Automatic Count
+         *
+         * Inclusive maximum mentions automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_mentions_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Total Count
+         *
+         * Inclusive minimum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Total Count
+         *
+         * Inclusive maximum annotations total count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_total_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Verified Count
+         *
+         * Inclusive minimum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Verified Count
+         *
+         * Inclusive maximum annotations verified count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_verified_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Manual Count
+         *
+         * Inclusive minimum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Manual Count
+         *
+         * Inclusive maximum annotations manual count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_manual_count'?: MinimumCount | null;
+        /**
+         * Filter.Min Annotations Automatic Count
+         *
+         * Inclusive minimum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.min_annotations_automatic_count'?: MinimumCount | null;
+        /**
+         * Filter.Max Annotations Automatic Count
+         *
+         * Inclusive maximum annotations automatic count across the complete entity, independent of evidence filters; integer 0 through 9007199254740991.
+         */
+        'filter.max_annotations_automatic_count'?: MinimumCount | null;
         /**
          * Filter.Has Mentions
          *
