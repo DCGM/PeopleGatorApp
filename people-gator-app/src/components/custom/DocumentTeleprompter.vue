@@ -97,7 +97,7 @@ const includedLines = computed(() => props.included ?? props.transcription.map((
 const visiblePassages = computed(() => toPassages(includedLines.value))
 const lineCount = computed(() => props.transcription.length)
 
-/** Passages in reading order, each surrounded by its collapsed gaps and their controls. */
+/** Passages in reading order with the collapsed gaps around them. */
 const blocks = computed(() => {
   const items: Array<
     { kind: 'passage'; passage: Passage; key: string } | { kind: 'gap'; gap: Gap; key: string }
@@ -123,6 +123,14 @@ const blocks = computed(() => {
     })
   return items
 })
+
+/** Each collapsed gap by its first hidden line; the band renders just before it. */
+const gapsByStart = computed(
+  () =>
+    new Map(
+      blocks.value.flatMap((block) => (block.kind === 'gap' ? [[block.gap.start, block.gap]] : [])),
+    ),
+)
 
 function lineCountText(count: number) {
   return `${count} hidden ${count === 1 ? 'line' : 'lines'}`
@@ -187,10 +195,6 @@ const minimap = computed(() =>
     props.relatedEntityId,
   ),
 )
-
-function range(passage: Passage) {
-  return Array.from({ length: passage.end - passage.start + 1 }, (_, i) => passage.start + i)
-}
 
 function entityKey(entity: TranscriptionEntitySpan) {
   return transcriptionEntityKey(entity)
@@ -264,7 +268,11 @@ function setAnnotationHighlight(value: unknown) {
 }
 
 function lineElement(index: number) {
-  return scrollElement.value?.querySelector<HTMLElement>(`[data-line-index="${index}"]`) ?? null
+  return (
+    scrollElement.value?.querySelector<HTMLElement>(
+      `[data-line-index="${index}"]:not([data-hidden])`,
+    ) ?? null
+  )
 }
 
 function textSelection() {
@@ -297,19 +305,12 @@ function coversElement(range: Range, element: Element) {
 
 /**
  * Text of the selection, one row per line, without numbers, badges or
- * controls. Selections cross collapsed gaps natively; a gap they span counts
- * as selected, so its hidden lines are copied in reading order.
+ * controls. Hidden lines stay in the DOM, so a selection across a collapsed
+ * gap spans them natively and copies them in reading order.
  */
 function copiedText(range: Range) {
   const parts: string[] = []
-  const elements = scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-text], [data-gap-start]')
-  for (const element of elements ?? []) {
-    if (element.dataset.gapStart !== undefined) {
-      if (!coversElement(range, element)) continue
-      for (let index = Number(element.dataset.gapStart); index <= Number(element.dataset.gapEnd); index += 1)
-        parts.push(props.transcription[index]?.text ?? '')
-      continue
-    }
+  for (const element of scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-text]') ?? []) {
     if (!range.intersectsNode(element)) continue
     const part = document.createRange()
     part.selectNodeContents(element)
@@ -404,7 +405,9 @@ let viewportFrame: number | undefined
 function measureViewport() {
   viewportFrame = undefined
   const scroller = scrollElement.value
-  const lines = [...(scroller?.querySelectorAll<HTMLElement>('[data-line-index]') ?? [])]
+  const lines = [
+    ...(scroller?.querySelectorAll<HTMLElement>('[data-line-index]:not([data-hidden])') ?? []),
+  ]
   if (!scroller || !lines.length) {
     viewport.value = null
     return
@@ -447,17 +450,19 @@ onBeforeUnmount(() => {
   if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame)
 })
 
-// Hiding any selected text, through a mode change or Reset, clears that selection.
+// Hiding visible selected text, through a mode change or Reset, clears that selection.
 watch(
   includedLines,
-  (next) => {
+  (next, previous) => {
     const current = textSelection()
     if (!current) return
-    for (const element of scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-index]') ?? [])
-      if (current.range.intersectsNode(element) && !next[Number(element.dataset.lineIndex)]) {
+    for (const element of scrollElement.value?.querySelectorAll<HTMLElement>('[data-line-index]') ?? []) {
+      const index = Number(element.dataset.lineIndex)
+      if (previous?.[index] && !next[index] && current.range.intersectsNode(element)) {
         current.selection.removeAllRanges()
         return
       }
+    }
   },
   { flush: 'pre' },
 )
@@ -529,24 +534,26 @@ defineExpose({ scrollPage, navigateTo })
         aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport" @keydown="handleKeydown"
         @copy="handleCopy">
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
-        <template v-for="block in blocks" :key="block.key">
-          <div v-if="block.kind === 'gap'" :data-gap-start="block.gap.start" :data-gap-end="block.gap.end"
-            :data-selected="selectedGaps.has(block.gap.start) ? '' : undefined"
+        <!-- Every line stays in the DOM; hidden lines only stop being displayed, so
+          text selection spans collapsed gaps natively. -->
+        <template v-for="(line, index) in transcription" :key="line.id">
+          <div v-if="gapsByStart.get(index)" :data-gap-start="index" :data-gap-end="gapsByStart.get(index)!.end"
+            :data-selected="selectedGaps.has(index) ? '' : undefined"
             class="teleprompter-gap grid select-none grid-cols-[2.5rem_1fr] items-center border-y bg-muted/50 font-sans">
             <div class="flex flex-col items-center">
-              <Button v-for="action in gapActions(block.gap)" :key="action.label" variant="ghost" size="icon-xs"
-                :aria-label="action.label" :title="action.label"
+              <Button v-for="action in gapActions(gapsByStart.get(index)!)" :key="action.label" variant="ghost"
+                size="icon-xs" :aria-label="action.label" :title="action.label"
                 @click="emit('expand', action.passage, action.direction, action.count)">
                 <component :is="action.icon" aria-hidden="true" />
               </Button>
             </div>
             <small class="px-1 text-xs text-muted-foreground">
-              {{ lineCountText(block.gap.end - block.gap.start + 1) }}
+              {{ lineCountText(gapsByStart.get(index)!.end - index + 1) }}
             </small>
           </div>
-          <div v-else data-passage>
-            <div v-for="index in range(block.passage)" :key="transcription[index]!.id" role="group"
+            <div v-show="includedLines[index]" role="group"
               :aria-label="`Line ${index + 1}`" :data-line-index="index"
+              :data-hidden="includedLines[index] ? undefined : ''"
               class="teleprompter-line grid min-w-0 grid-cols-[2.5rem_1fr] items-start rounded-sm text-left transition-colors"
               :class="index === selectedLineIndex
                 ? 'bg-muted text-foreground'
@@ -574,7 +581,6 @@ defineExpose({ scrollPage, navigateTo })
                 </template>
               </p>
             </div>
-          </div>
         </template>
       </section>
       <div class="min-h-0 overflow-hidden py-2">
