@@ -1,21 +1,14 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
+import TeleprompterHighlightFilter from './TeleprompterHighlightFilter.vue'
 import TeleprompterMinimap from './TeleprompterMinimap.vue'
 import { linkTooltip } from '@/lib/entity-links'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   ArrowDownFromLine,
   ArrowUpFromLine,
-  Highlighter,
   UnfoldVertical,
   X,
 } from '@lucide/vue'
@@ -27,15 +20,13 @@ import type {
 } from '@/viewmodels/document-workspace.types'
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import {
-  ANNOTATION_HIGHLIGHTS,
   EXPAND_STEP,
   LINE_VISIBILITIES,
-  annotationHighlightLabels,
   highlightsSpan,
   lineVisibilityLabels,
   minimapLines,
   passages as toPassages,
-  type AnnotationHighlight,
+  type HighlightState,
   type LineVisibility,
   type Passage,
 } from '@/viewmodels/teleprompter'
@@ -74,8 +65,8 @@ const props = withDefaults(
 )
 
 const lineVisibility = defineModel<LineVisibility>('lineVisibility', { default: 'all' })
-const annotationHighlight = defineModel<AnnotationHighlight>('annotationHighlight', {
-  default: 'all',
+const annotationHighlight = defineModel<HighlightState[]>('annotationHighlight', {
+  default: () => [],
 })
 
 const emit = defineEmits<{
@@ -265,11 +256,6 @@ function isHighlighted(entity: TranscriptionEntitySpan) {
 function setLineVisibility(value: unknown) {
   if (typeof value === 'string' && LINE_VISIBILITIES.includes(value as LineVisibility))
     lineVisibility.value = value as LineVisibility
-}
-
-function setAnnotationHighlight(value: unknown) {
-  if (typeof value === 'string' && ANNOTATION_HIGHLIGHTS.includes(value as AnnotationHighlight))
-    annotationHighlight.value = value as AnnotationHighlight
 }
 
 function lineElement(index: number) {
@@ -511,24 +497,14 @@ defineExpose({ scrollPage, navigateTo })
 <template>
   <div class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background">
     <div role="toolbar" aria-label="Teleprompter settings"
-      class="flex min-w-0 flex-row flex-nowrap items-center gap-2 border-b py-1.5">
+      class="@container flex min-w-0 flex-row flex-wrap items-center gap-2 border-b py-1.5">
       <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
         :model-value="lineVisibility" @update:model-value="setLineVisibility">
-        <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="px-2.5">
+        <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="px-2">
           {{ lineVisibilityLabels[mode] }}
         </ToggleGroupItem>
       </ToggleGroup>
-      <Select :model-value="annotationHighlight" @update:model-value="setAnnotationHighlight">
-        <SelectTrigger size="sm" aria-label="Highlight" class="min-w-0 shrink">
-          <Highlighter aria-hidden="true" />
-          <SelectValue class="truncate" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem v-for="option in ANNOTATION_HIGHLIGHTS" :key="option" :value="option">
-            {{ annotationHighlightLabels[option] }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
+      <TeleprompterHighlightFilter v-model="annotationHighlight" />
       <Button v-if="hasExpansions" variant="ghost" size="sm" class="ml-auto shrink-0"
         @click="emit('reset')">Reset</Button>
     </div>

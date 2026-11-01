@@ -14,7 +14,8 @@ import {
   minimapLines,
   modeLines,
   nearestIncluded,
-  parseAnnotationHighlight,
+  highlightsSpan,
+  parseHighlightStates,
   parseLineVisibility,
   passages,
   useTeleprompterLines,
@@ -121,8 +122,28 @@ describe('teleprompter line visibility', () => {
   it('parses unknown URL values to the defaults', () => {
     expect(parseLineVisibility('person')).toBe('person')
     expect(parseLineVisibility('bogus')).toBe('all')
-    expect(parseAnnotationHighlight('verified')).toBe('verified')
-    expect(parseAnnotationHighlight(undefined)).toBe('all')
+    expect(parseHighlightStates('verified')).toEqual(['verified'])
+    expect(parseHighlightStates(['unassigned', 'bogus', 'manual'])).toEqual([
+      'manual',
+      'unassigned',
+    ])
+    expect(parseHighlightStates(undefined)).toEqual([])
+  })
+
+  it('highlights every span without states, otherwise only the chosen states', () => {
+    const automatic = mention('L1', 'ada', 'Ada', 0)
+    const verified = mention('L1', 'ada', 'Ada', 0, { linkState: 'verified' })
+    const unlinked = mention('L1', '', 'Ada', 0, { entity_id: undefined, linkState: null })
+    expect([automatic, verified, unlinked].map((span) => highlightsSpan(span, []))).toEqual([
+      true,
+      true,
+      true,
+    ])
+    expect(
+      [automatic, verified, unlinked].map((span) =>
+        highlightsSpan(span, ['verified', 'unassigned']),
+      ),
+    ).toEqual([false, true, true])
   })
 
   it('starts fresh when the page, person or mode changes', async () => {
@@ -152,7 +173,7 @@ describe('teleprompter line visibility', () => {
   it('builds page-scoped minimap bars with highlighted segments only on included lines', () => {
     const lines = sample()
     const included = modeLines(lines, 'person', 'ada')
-    const bars = minimapLines(lines, included, 'verified', 'ada')
+    const bars = minimapLines(lines, included, ['verified'], 'ada')
     expect(bars).toHaveLength(10)
     expect(bars.filter((bar) => bar.included).map((bar) => bar.index)).toEqual([1, 6, 8, 9])
     expect(bars[1]!.segments).toHaveLength(1)
@@ -289,10 +310,36 @@ describe('DocumentTeleprompter', () => {
     const wrapper = render({ lineVisibility: 'annotated', included })
     const lineCount = wrapper.findAll('[data-line-index]:not([data-hidden])').length
     expect(wrapper.findAll('mark')).toHaveLength(5)
-    await wrapper.setProps({ annotationHighlight: 'verified' })
+    await wrapper.setProps({ annotationHighlight: ['verified'] })
     expect(wrapper.findAll('[data-line-index]:not([data-hidden])')).toHaveLength(lineCount)
     expect(wrapper.findAll('mark').map((mark) => mark.text())).toEqual(['Ada Novak'])
     expect(wrapper.text()).toContain('Ada Novak returned.')
+    // Several states combine; All (none selected) highlights everything again.
+    await wrapper.setProps({ annotationHighlight: ['verified', 'manual'] })
+    expect(wrapper.findAll('mark').map((mark) => mark.text())).toEqual(['Ada Novak', 'Ada Novak'])
+    await wrapper.setProps({ annotationHighlight: [] })
+    expect(wrapper.findAll('mark')).toHaveLength(5)
+  })
+
+  it('uses the scan toolbar link-state toggle group, plus Unassigned and All', async () => {
+    const wrapper = render()
+    const group = wrapper.get('[aria-label="Highlight controls"]')
+    expect(
+      group.findAll('[aria-label="Highlight"] button').map((item) => item.attributes('aria-label')),
+    ).toEqual(['Automatic', 'Manual', 'Verified', 'Unassigned'])
+    const all = group.findAll('button').find((button) => button.text() === 'All')!
+    expect(all.attributes('aria-pressed')).toBe('true')
+    await group.get('[aria-label="Verified"]').trigger('click')
+    await group.get('[aria-label="Unassigned"]').trigger('click')
+    expect(wrapper.emitted('update:annotationHighlight')).toEqual([
+      [['verified']],
+      [['verified', 'unassigned']],
+    ])
+    await wrapper.setProps({ annotationHighlight: ['verified'] })
+    expect(all.attributes('aria-pressed')).toBe('false')
+    await all.trigger('click')
+    const emitted = wrapper.emitted('update:annotationHighlight')!
+    expect(emitted[emitted.length - 1]).toEqual([[]])
   })
 
   it('switches line visibility and offers Reset only for manual expansions', async () => {
