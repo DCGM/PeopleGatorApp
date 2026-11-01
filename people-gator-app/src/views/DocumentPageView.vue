@@ -702,7 +702,8 @@ onBeforeUnmount(() => {
         :direction="splitDirection"
         :auto-save-id="`document-workspace-${splitDirection}`"
       >
-        <ResizablePanel :default-size="isWideWorkspace ? 32 : 30" :min-size="15" :max-size="70">
+        <!-- On wide screens 40% keeps the settings row on one line from about 1440px. -->
+        <ResizablePanel :default-size="isWideWorkspace ? 40 : 30" :min-size="15" :max-size="70">
           <section
             class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
             aria-labelledby="page-transcription-title"
@@ -737,7 +738,7 @@ onBeforeUnmount(() => {
           class="z-30 data-[orientation=vertical]:after:h-3 data-[orientation=horizontal]:after:w-3"
         />
         <ResizablePanel
-          :default-size="isWideWorkspace ? 68 : 70"
+          :default-size="isWideWorkspace ? 60 : 70"
           class="flex min-h-0 min-w-0 flex-col"
         >
           <section
