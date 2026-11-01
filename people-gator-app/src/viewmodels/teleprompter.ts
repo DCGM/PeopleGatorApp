@@ -28,7 +28,8 @@ export const annotationHighlightLabels: Record<AnnotationHighlight, string> = {
   unassigned: 'Unassigned',
 }
 
-export const CONTEXT_STEPS = [1, 5] as const
+/** Lines revealed per expand action; shorter gaps expand completely in one action. */
+export const EXPAND_STEP = 5
 
 export function parseLineVisibility(value: unknown): LineVisibility {
   return LINE_VISIBILITIES.includes(value as LineVisibility) ? (value as LineVisibility) : 'all'

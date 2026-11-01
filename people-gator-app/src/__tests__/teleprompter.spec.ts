@@ -182,7 +182,7 @@ describe('DocumentTeleprompter', () => {
     return wrapper
   }
 
-  it('shows original line numbers with collapsed-gap controls only where lines remain', () => {
+  it('shows original line numbers and expands short gaps completely', async () => {
     const wrapper = render({
       lineVisibility: 'person',
       included: modeLines(sample(), 'person', 'ada'),
@@ -190,38 +190,56 @@ describe('DocumentTeleprompter', () => {
     const numbers = wrapper.findAll('[data-line-index] small').map((label) => label.text())
     expect(numbers).toEqual(['L2', 'L7', 'L9', 'L10'])
     const gaps = wrapper.findAll('[data-gap-start]')
-    expect(gaps.map((gap) => gap.get('small').text())).toEqual(['1 hidden', '4 hidden', '1 hidden'])
+    expect(gaps.map((gap) => gap.get('small').text())).toEqual([
+      '1 hidden line',
+      '4 hidden lines',
+      '1 hidden line',
+    ])
+    // Gaps no longer than one step have a single expand-all control.
     expect(
       gaps.map((gap) => gap.findAll('button').map((button) => button.attributes('aria-label'))),
     ).toEqual([
-      ['Show 1 more line before L2', 'Show 5 more lines before L2'],
-      [
-        'Show 1 more line after L2',
-        'Show 5 more lines after L2',
-        'Show 1 more line before L7',
-        'Show 5 more lines before L7',
-      ],
-      [
-        'Show 1 more line after L7',
-        'Show 5 more lines after L7',
-        'Show 1 more line before L9',
-        'Show 5 more lines before L9',
-      ],
+      ['Show 1 hidden line, L1'],
+      ['Show 4 hidden lines, L3–L6'],
+      ['Show 1 hidden line, L8'],
     ])
     // Nothing is hidden after the final passage, so it has no trailing controls.
     expect(wrapper.find('[data-gap-start="10"]').exists()).toBe(false)
+    for (const label of ['Show 1 hidden line, L1', 'Show 4 hidden lines, L3–L6']) {
+      await wrapper.get(`[aria-label="${label}"]`).trigger('click')
+    }
+    expect(wrapper.emitted('expand')).toEqual([
+      [{ start: 1, end: 1 }, 'before', 1],
+      [{ start: 1, end: 1 }, 'after', 4],
+    ])
   })
 
-  it('emits expansion for the passage and direction of each control', async () => {
-    const wrapper = render({
-      lineVisibility: 'person',
-      included: modeLines(sample(), 'person', 'ada'),
-    })
-    await wrapper.get('[aria-label="Show 5 more lines before L7"]').trigger('click')
-    await wrapper.get('[aria-label="Show 1 more line after L2"]').trigger('click')
+  it('expands long gaps a step below the passage above or above the passage below', async () => {
+    const transcription = Array.from({ length: 20 }, (_, index) => ({
+      id: `L${index + 1}`,
+      text: `Line ${index + 1}`,
+      position,
+      entities: [],
+    }))
+    // Visible: L2 and L15. Hidden: L1, L3–L14 (12 lines) and L16–L20 (5 lines).
+    const included = transcription.map((_, index) => index === 1 || index === 14)
+    const wrapper = render({ transcription, included, selectedLineIndex: 1 })
+    const gaps = wrapper.findAll('[data-gap-start]')
+    expect(
+      gaps.map((gap) => gap.findAll('button').map((button) => button.attributes('aria-label'))),
+    ).toEqual([
+      ['Show 1 hidden line, L1'],
+      ['Show 5 lines below L2', 'Show 5 lines above L15'],
+      ['Show 5 hidden lines, L16–L20'],
+    ])
+    expect(gaps[1]!.get('small').text()).toBe('12 hidden lines')
+    await wrapper.get('[aria-label="Show 5 lines below L2"]').trigger('click')
+    await wrapper.get('[aria-label="Show 5 lines above L15"]').trigger('click')
+    await wrapper.get('[aria-label="Show 5 hidden lines, L16–L20"]').trigger('click')
     expect(wrapper.emitted('expand')).toEqual([
-      [{ start: 6, end: 6 }, 'before', 5],
-      [{ start: 1, end: 1 }, 'after', 1],
+      [{ start: 1, end: 1 }, 'after', 5],
+      [{ start: 14, end: 14 }, 'before', 5],
+      [{ start: 14, end: 14 }, 'after', 5],
     ])
   })
 

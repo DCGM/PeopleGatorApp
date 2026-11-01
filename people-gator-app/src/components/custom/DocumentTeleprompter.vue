@@ -12,7 +12,13 @@ import {
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronDown, ChevronUp, Highlighter, X } from '@lucide/vue'
+import {
+  ArrowDownFromLine,
+  ArrowUpFromLine,
+  Highlighter,
+  UnfoldVertical,
+  X,
+} from '@lucide/vue'
 
 import type { EntityType, Language } from '@/client/types.gen'
 import type {
@@ -22,7 +28,7 @@ import type {
 import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import {
   ANNOTATION_HIGHLIGHTS,
-  CONTEXT_STEPS,
+  EXPAND_STEP,
   LINE_VISIBILITIES,
   annotationHighlightLabels,
   highlightsSpan,
@@ -40,6 +46,13 @@ type TranscriptionSegment = {
 }
 
 type Gap = { start: number; end: number; before?: Passage; after?: Passage }
+type GapAction = {
+  icon: typeof UnfoldVertical
+  label: string
+  passage: Passage
+  direction: 'before' | 'after'
+  count: number
+}
 
 const props = withDefaults(
   defineProps<{
@@ -110,6 +123,50 @@ const blocks = computed(() => {
     })
   return items
 })
+
+function lineCountText(count: number) {
+  return `${count} hidden ${count === 1 ? 'line' : 'lines'}`
+}
+
+/**
+ * GitHub-style gap expansion: reveal lines below the passage above and above
+ * the passage below, or the whole gap at once when it is no longer than a step.
+ */
+function gapActions(gap: Gap): GapAction[] {
+  const size = gap.end - gap.start + 1
+  if (size <= EXPAND_STEP) {
+    const range = size === 1 ? `L${gap.start + 1}` : `L${gap.start + 1}–L${gap.end + 1}`
+    return [
+      {
+        icon: UnfoldVertical,
+        label: `Show ${lineCountText(size)}, ${range}`,
+        passage: (gap.before ?? gap.after)!,
+        direction: gap.before ? 'after' : 'before',
+        count: size,
+      },
+    ]
+  }
+  return [
+    ...(gap.before
+      ? [{
+          icon: ArrowDownFromLine,
+          label: `Show ${EXPAND_STEP} lines below L${gap.before.end + 1}`,
+          passage: gap.before,
+          direction: 'after' as const,
+          count: EXPAND_STEP,
+        }]
+      : []),
+    ...(gap.after
+      ? [{
+          icon: ArrowUpFromLine,
+          label: `Show ${EXPAND_STEP} lines above L${gap.after.start + 1}`,
+          passage: gap.after,
+          direction: 'before' as const,
+          count: EXPAND_STEP,
+        }]
+      : []),
+  ]
+}
 
 const emptyMessage = computed(() => {
   if (visiblePassages.value.length) return ''
@@ -452,24 +509,17 @@ defineExpose({ scrollPage, navigateTo })
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
         <template v-for="block in blocks" :key="block.key">
           <div v-if="block.kind === 'gap'" :data-gap-start="block.gap.start" :data-gap-end="block.gap.end"
-            class="flex select-none flex-row flex-wrap items-center gap-1 py-0.5 pl-10 font-sans">
-            <template v-if="block.gap.before">
-              <Button v-for="step in CONTEXT_STEPS" :key="`after-${step}`" variant="ghost" size="xs"
-                :aria-label="`Show ${step} more ${step === 1 ? 'line' : 'lines'} after L${block.gap.before.end + 1}`"
-                @click="emit('expand', block.gap.before, 'after', step)">
-                <ChevronDown aria-hidden="true" />+{{ step }}
+            class="grid select-none grid-cols-[2.5rem_1fr] items-center border-y bg-muted/50 font-sans">
+            <div class="flex flex-col items-center">
+              <Button v-for="action in gapActions(block.gap)" :key="action.label" variant="ghost" size="icon-xs"
+                :aria-label="action.label" :title="action.label"
+                @click="emit('expand', action.passage, action.direction, action.count)">
+                <component :is="action.icon" aria-hidden="true" />
               </Button>
-            </template>
+            </div>
             <small class="px-1 text-xs text-muted-foreground">
-              {{ block.gap.end - block.gap.start + 1 }} hidden
+              {{ lineCountText(block.gap.end - block.gap.start + 1) }}
             </small>
-            <template v-if="block.gap.after">
-              <Button v-for="step in CONTEXT_STEPS" :key="`before-${step}`" variant="ghost" size="xs"
-                :aria-label="`Show ${step} more ${step === 1 ? 'line' : 'lines'} before L${block.gap.after.start + 1}`"
-                @click="emit('expand', block.gap.after, 'before', step)">
-                <ChevronUp aria-hidden="true" />+{{ step }}
-              </Button>
-            </template>
           </div>
           <div v-else data-passage>
             <div v-for="index in range(block.passage)" :key="transcription[index]!.id" role="group"
