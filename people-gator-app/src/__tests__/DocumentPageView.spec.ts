@@ -188,6 +188,9 @@ async function mountView(renderActions = false) {
         AlertDialogFooter: { template: '<div><slot /></div>' },
         Tabs: { template: '<div><slot /></div>' },
         TabsContent: { template: '<div><slot /></div>' },
+        ResizablePanelGroup: { template: '<div><slot /></div>' },
+        ResizablePanel: { template: '<div><slot /></div>' },
+        ResizableHandle: true,
       },
     },
   })
@@ -623,9 +626,9 @@ describe('teleprompter focus modes (#36)', () => {
     threeLines()
     await flushPromises()
     // L2 is unannotated; L1 and L3 are equally near, so the earlier line wins.
-    expect(
-      wrapper.findComponent({ name: 'DocumentTeleprompter' }).props('selectedLineIndex'),
-    ).toBe(0)
+    expect(wrapper.findComponent({ name: 'DocumentTeleprompter' }).props('selectedLineIndex')).toBe(
+      0,
+    )
     wrapper.unmount()
   })
 
@@ -645,4 +648,40 @@ describe('teleprompter focus modes (#36)', () => {
     expect(teleprompter.props('included')).toEqual([false, false, false])
     wrapper.unmount()
   })
+})
+
+describe('resizable transcription panel (#36)', () => {
+  it.each([
+    [true, 'horizontal'],
+    [false, 'vertical'],
+  ])(
+    'splits beside the scan when wide=%s (%s), keeping the transcription first',
+    async (wide, direction) => {
+      const matchMedia = window.matchMedia
+      window.matchMedia = vi.fn().mockReturnValue({
+        matches: wide,
+        media: '(min-width: 1024px)',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      }) as unknown as typeof window.matchMedia
+      try {
+        const wrapper = await mountView()
+        const group = wrapper.get('.workspace-split > div')
+        expect(group.attributes('direction')).toBe(direction)
+        // Each layout remembers its own user-resized split.
+        expect(group.attributes('auto-save-id')).toBe(`document-workspace-${direction}`)
+        const panels = group.element.children
+        // Transcription first (left or top), then the handle, then the scan.
+        expect(
+          panels[0]!.querySelector('[aria-labelledby="page-transcription-title"]'),
+        ).not.toBeNull()
+        expect(panels[2]!.querySelector('[aria-label="Pan and zoom document page"]')).not.toBeNull()
+        wrapper.unmount()
+      } finally {
+        window.matchMedia = matchMedia
+      }
+    },
+  )
 })
