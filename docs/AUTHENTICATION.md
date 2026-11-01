@@ -105,7 +105,7 @@ are removed; reverse-proxy compatibility paths target the standalone issuer.
 
 Refresh tokens rotate on every successful exchange. An atomic process lock
 permits one winner for concurrent reuse. Four sessions per username are retained;
-logout removes the current session. These sessions are **single-process only**:
+the logout API removes the current session. A browser sign-out control is deferred. These sessions are **single-process only**:
 run one issuer worker/replica. Restart loses sessions, and multi-worker refresh
 is unsupported. No general account platform, durable refresh database or SSO
 protocol is introduced. The browser clears a failed session and opens login once;
@@ -120,6 +120,6 @@ JWKS, rotation/cooldown/outages, alternate claim mapping and import boundaries.
 The seed lifecycle test exercises separate issuer/resource apps and attributed
 mutations through migrated PostgreSQL. `node
 people-gator-app/scripts/check-auth-gateway.mjs` runs real-browser login,
-keyboard, return navigation, refresh, expiry recovery and logout at 1440×900 and
+keyboard, return navigation, refresh and expiry recovery at 1440×900 and
 390×844. It expects the synthetic local instance at ports 5189/8089/8189 (or set
 `AUTH_GATEWAY_ORIGIN`); credentials are entered only by that local test script.

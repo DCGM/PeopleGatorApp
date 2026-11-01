@@ -37,8 +37,8 @@ try {
     await page.getByLabel('Password').fill('test')
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.waitForURL(origin + '/people?q=Ada')
-    await page.getByRole('button', { name: 'Sign out' }).waitFor()
     await page.getByText('Ada Novak', { exact: true }).first().waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Sign out', exact: true }).count(), 0)
     assert.equal(
       await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
       false,
@@ -67,17 +67,10 @@ try {
     await page.getByLabel('Password').fill('test')
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.waitForURL(origin + '/people?q=Ada')
-    await page.getByRole('button', { name: 'Sign out' }).click()
-    await page.waitForURL(origin + '/login.html')
-    assert.equal(
-      await page.evaluate(() => sessionStorage.getItem('people-gator.refresh-token')),
-      null,
-    )
+    await page.getByText('Ada Novak', { exact: true }).first().waitFor()
     assert.deepEqual(errors, [])
     await context.close()
-    console.log(
-      `${label}: login, failure, return, refresh, expiry recovery, logout and keyboard passed`,
-    )
+    console.log(`${label}: login, failure, return, refresh, expiry recovery and keyboard passed`)
   }
 } finally {
   await browser.close()

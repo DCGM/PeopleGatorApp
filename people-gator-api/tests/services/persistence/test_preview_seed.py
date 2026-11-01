@@ -3096,6 +3096,14 @@ async def test_auth_provisioning_preserves_actors_accounts_and_seed_links(seed_t
     gateway = urlsplit(seed.filter_examples["auth-attribution-login"])
     assert gateway.path == "/login.html"
     assert parse_qs(gateway.query)["return"] == [f"/people/{seed.entities['ada']}"]
+    document_gateway = urlsplit(seed.filter_examples["auth-document-navigation"])
+    assert document_gateway.path == "/login.html"
+    assert parse_qs(document_gateway.query)["return"] == ["/documents?library=preview-table"]
+    from people_gator_api.schemas.sources import DocumentListFilter
+    documents = await database.sources.list_documents(DocumentListRequest(
+        limit=100, filter_=DocumentListFilter(library=["preview-table"]),
+    ))
+    assert documents.items and all(document.library == "preview-table" for document in documents.items)
     monkeypatch.setattr(issuer_settings, "issuer", "urn:people-gator:preview-seed")
     reviewer = await database.users.get_or_create(UserCreateRequest(display_name="Reviewer",
         external_subject="reviewer", external_issuer=issuer_settings.issuer, is_active=True))

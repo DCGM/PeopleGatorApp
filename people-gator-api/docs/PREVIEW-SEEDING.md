@@ -1130,7 +1130,9 @@ fallback. Search/filter/sort URLs and counts retain their existing semantics.
 
 The `auth-attribution-login` link opens the separate browser gateway and returns
 to Ada Novak, whose linked faces and mentions are local synthetic fixtures.
-`auth-attribution-review` opens the reviewer attribution filter. Provision demo
+`auth-attribution-review` opens the reviewer attribution filter.
+`auth-document-navigation` returns from login to the seeded document table and
+lets reviewers check the standard header navigation; no sign-out control is shown. Provision demo
 accounts separately with `people-gator-auth-provision`; the seed contains no
 credentials. After signing in, edit a synthetic profile and inspect its last
 changed user and the user filter. The signed `uid` is the explicitly provisioned
