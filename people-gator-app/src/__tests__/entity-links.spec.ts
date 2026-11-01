@@ -333,8 +333,10 @@ describe('entity link review', () => {
       'Novak',
       'Ada Novak',
     ])
-    expect(wrapper.find('[title]').exists()).toBe(false)
-    expect(wrapper.findComponent({ name: 'UiTooltip' }).exists()).toBe(false)
+    // Mentions have no hover tooltips; settings toggles keep the scan toolbar's titles.
+    const text = wrapper.get('[aria-label="Transcription teleprompter"]')
+    expect(text.find('[title]').exists()).toBe(false)
+    expect(text.findComponent({ name: 'UiTooltip' }).exists()).toBe(false)
     const mention = wrapper.findAll('mark')[2]!
     expect(mention.attributes('aria-label')).toContain('Ada Novak:')
     expect(mention.attributes('tabindex')).toBe('0')

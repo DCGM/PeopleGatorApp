@@ -70,7 +70,7 @@ import { useTranslationQuery } from '@/query/translation'
 import {
   adjacentIncluded,
   nearestIncluded,
-  parseAnnotationHighlight,
+  parseHighlightStates,
   parseLineVisibility,
   useTeleprompterLines,
   type Passage,
@@ -179,7 +179,7 @@ let panzoom: PanzoomObject | undefined
 let pageResizeObserver: ResizeObserver | undefined
 const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
 const lineVisibility = ref(parseLineVisibility(route.query.lines))
-const annotationHighlight = ref(parseAnnotationHighlight(route.query.highlight))
+const annotationHighlight = ref(parseHighlightStates(route.query.highlight))
 const teleprompterLines = useTeleprompterLines(
   transcription,
   lineVisibility,
@@ -388,7 +388,7 @@ function syncRoute() {
       selectedPerson: selectedPersonId.value ?? undefined,
       line: line?.id,
       lines: lineVisibility.value === 'all' ? undefined : lineVisibility.value,
-      highlight: annotationHighlight.value === 'all' ? undefined : annotationHighlight.value,
+      highlight: annotationHighlight.value.length ? annotationHighlight.value : undefined,
       translate: isTranslationOpen.value ? 'on' : 'off',
     },
   })
@@ -481,7 +481,7 @@ function expandContext(passage: Passage, direction: 'before' | 'after', count: n
   teleprompterLines.expand(passage, direction, count)
 }
 
-watch([lineVisibility, annotationHighlight], syncRoute)
+watch([lineVisibility, () => annotationHighlight.value.join()], syncRoute)
 // Mode changes, Reset and route restoration move a hidden selection to the
 // nearest available line.
 watch([includedLines, selectedLineIndex], ([included, index]) => {
@@ -599,7 +599,9 @@ watch(
   () => [route.query.lines, route.query.highlight],
   () => {
     lineVisibility.value = parseLineVisibility(route.query.lines)
-    annotationHighlight.value = parseAnnotationHighlight(route.query.highlight)
+    const highlight = parseHighlightStates(route.query.highlight)
+    // Query arrays are recreated on each navigation; keep equal selections stable.
+    if (highlight.join() !== annotationHighlight.value.join()) annotationHighlight.value = highlight
   },
 )
 watch(

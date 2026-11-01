@@ -1,5 +1,6 @@
 import { computed, shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
+import type { EntityLinkState } from '@/client'
 import type { TranscriptionEntitySpan, TranscriptionLine } from './document-workspace.types'
 
 /** Which original lines the teleprompter shows (issue #36). */
@@ -11,22 +12,17 @@ export const lineVisibilityLabels: Record<LineVisibility, string> = {
   person: 'Person',
 }
 
-/** Which annotations are highlighted; never changes which lines are shown. */
-export type AnnotationHighlight = 'all' | 'automatic' | 'manual' | 'verified' | 'unassigned'
-export const ANNOTATION_HIGHLIGHTS: readonly AnnotationHighlight[] = [
-  'all',
+/**
+ * Annotation states to highlight; an empty list highlights every annotation.
+ * Highlighting never changes which lines are shown.
+ */
+export type HighlightState = EntityLinkState | 'unassigned'
+export const HIGHLIGHT_STATES: readonly HighlightState[] = [
   'automatic',
   'manual',
   'verified',
   'unassigned',
 ]
-export const annotationHighlightLabels: Record<AnnotationHighlight, string> = {
-  all: 'All',
-  automatic: 'Automatic',
-  manual: 'Manual',
-  verified: 'Verified',
-  unassigned: 'Unassigned',
-}
 
 /** Lines revealed per expand action; shorter gaps expand completely in one action. */
 export const EXPAND_STEP = 5
@@ -35,16 +31,18 @@ export function parseLineVisibility(value: unknown): LineVisibility {
   return LINE_VISIBILITIES.includes(value as LineVisibility) ? (value as LineVisibility) : 'all'
 }
 
-export function parseAnnotationHighlight(value: unknown): AnnotationHighlight {
-  return ANNOTATION_HIGHLIGHTS.includes(value as AnnotationHighlight)
-    ? (value as AnnotationHighlight)
-    : 'all'
+export function parseHighlightStates(value: unknown): HighlightState[] {
+  const values = Array.isArray(value) ? value : [value]
+  return HIGHLIGHT_STATES.filter((state) => values.includes(state))
 }
 
-export function highlightsSpan(span: TranscriptionEntitySpan, highlight: AnnotationHighlight) {
-  if (highlight === 'all') return true
-  if (highlight === 'unassigned') return !span.entity_id
-  return Boolean(span.entity_id) && span.linkState === highlight
+/** An unlinked span, or a link without a recorded state, counts as unassigned. */
+export function spanHighlightState(span: TranscriptionEntitySpan): HighlightState {
+  return span.entity_id ? (span.linkState ?? 'unassigned') : 'unassigned'
+}
+
+export function highlightsSpan(span: TranscriptionEntitySpan, states: readonly HighlightState[]) {
+  return !states.length || states.includes(spanHighlightState(span))
 }
 
 /**
@@ -151,7 +149,7 @@ export type MinimapLine = {
 export function minimapLines(
   lines: readonly TranscriptionLine[],
   included: readonly boolean[],
-  highlight: AnnotationHighlight,
+  highlight: readonly HighlightState[],
   relatedEntityId: string | null,
 ): MinimapLine[] {
   const longest = Math.max(1, ...lines.map((line) => line.text.length))

@@ -582,14 +582,14 @@ describe('teleprompter focus modes (#36)', () => {
     const wrapper = await mountView()
     const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
     expect(teleprompter.props('lineVisibility')).toBe('person')
-    expect(teleprompter.props('annotationHighlight')).toBe('verified')
+    expect(teleprompter.props('annotationHighlight')).toEqual(['verified'])
     expect(teleprompter.props('included')).toEqual([true, false, true])
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
     await flushPromises()
     expect(teleprompter.props('selectedLineIndex')).toBe(2)
     expect(mocks.replace).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        query: expect.objectContaining({ line: 'l3', lines: 'person', highlight: 'verified' }),
+        query: expect.objectContaining({ line: 'l3', lines: 'person', highlight: ['verified'] }),
       }),
     )
     // Toolbar navigation counts and boundaries follow the visible sequence.
