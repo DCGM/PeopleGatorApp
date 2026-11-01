@@ -1,6 +1,9 @@
 FROM ghcr.io/astral-sh/uv:python3.14-trixie
 WORKDIR /app
 
+# Reviewed controllers select the fixed standalone-auth topology from this capability.
+LABEL org.peoplegator.auth-service="1"
+
 ENV UV_LINK_MODE=copy \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
