@@ -311,6 +311,11 @@ function scrollPage(direction: 'next' | 'previous') {
   if (scroller) scroller.scrollTop += (direction === 'next' ? 1 : -1) * scroller.clientHeight
 }
 
+/** Wheel input over the minimap scrolls the text, like the scrollbar it replaces. */
+function scrollBy(deltaY: number) {
+  if (scrollElement.value) scrollElement.value.scrollTop += deltaY
+}
+
 function handleKeydown(event: KeyboardEvent) {
   if (event.key !== 'PageDown' && event.key !== 'PageUp') return
   event.preventDefault()
@@ -441,7 +446,7 @@ defineExpose({ scrollPage, navigateTo })
 
     <div class="grid min-h-0 grid-cols-[minmax(0,1fr)_2.5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_3.5rem]">
       <section ref="scrollElement" tabindex="0"
-        class="relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        class="teleprompter-scroll relative min-h-0 overflow-y-auto py-2 text-base font-serif leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label="Transcription teleprompter" @scroll.passive="scheduleViewport" @keydown="handleKeydown"
         @copy="handleCopy">
         <p v-if="emptyMessage" class="px-2 py-4 font-sans text-sm text-muted-foreground">{{ emptyMessage }}</p>
@@ -500,7 +505,8 @@ defineExpose({ scrollPage, navigateTo })
         </template>
       </section>
       <div class="min-h-0 overflow-hidden py-2">
-        <TeleprompterMinimap :lines="minimap" :viewport="viewport" @navigate="navigateTo" />
+        <TeleprompterMinimap :lines="minimap" :viewport="viewport" @navigate="navigateTo"
+          @scroll="scrollBy" />
       </div>
     </div>
 
@@ -531,6 +537,14 @@ defineExpose({ scrollPage, navigateTo })
 
 <style scoped>
 /* Off-screen lines skip rendering work but stay in the DOM for selection and copying. */
+/* The minimap replaces the scrollbar; wheel, touch and keyboard scrolling remain. */
+.teleprompter-scroll {
+  scrollbar-width: none;
+}
+.teleprompter-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .teleprompter-line {
   content-visibility: auto;
   contain-intrinsic-size: auto 1.75em;

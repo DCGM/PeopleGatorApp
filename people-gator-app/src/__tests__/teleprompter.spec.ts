@@ -333,4 +333,15 @@ describe('DocumentTeleprompter', () => {
     expect(wheel.defaultPrevented).toBe(false)
     expect(wrapper.emitted('select-line')).toBeUndefined()
   })
+
+  it('scrolls the text from wheel input over the minimap, which replaces its scrollbar', () => {
+    const wrapper = render()
+    const text = wrapper.get('[aria-label="Transcription teleprompter"]')
+    expect(text.classes()).toContain('teleprompter-scroll')
+    const wheel = new WheelEvent('wheel', { deltaY: 90, cancelable: true, bubbles: true })
+    wrapper.get('[data-teleprompter-minimap]').element.dispatchEvent(wheel)
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(text.element.scrollTop).toBe(90)
+    expect(wrapper.emitted('select-line')).toBeUndefined()
+  })
 })
