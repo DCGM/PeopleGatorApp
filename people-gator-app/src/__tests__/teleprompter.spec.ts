@@ -214,13 +214,13 @@ describe('DocumentTeleprompter', () => {
     expect(
       gaps.map((gap) => gap.findAll('button').map((button) => button.attributes('aria-label'))),
     ).toEqual([
-      ['Show 1 hidden line, L1'],
-      ['Show 4 hidden lines, L3–L6'],
-      ['Show 1 hidden line, L8'],
+      ['Show all 1 hidden line, L1'],
+      ['Show all 4 hidden lines, L3–L6'],
+      ['Show all 1 hidden line, L8'],
     ])
     // Nothing is hidden after the final passage, so it has no trailing controls.
     expect(wrapper.find('[data-gap-start="10"]').exists()).toBe(false)
-    for (const label of ['Show 1 hidden line, L1', 'Show 4 hidden lines, L3–L6']) {
+    for (const label of ['Show all 1 hidden line, L1', 'Show all 4 hidden lines, L3–L6']) {
       await wrapper.get(`[aria-label="${label}"]`).trigger('click')
     }
     expect(wrapper.emitted('expand')).toEqual([
@@ -243,14 +243,20 @@ describe('DocumentTeleprompter', () => {
     expect(
       gaps.map((gap) => gap.findAll('button').map((button) => button.attributes('aria-label'))),
     ).toEqual([
-      ['Show 1 hidden line, L1'],
+      ['Show all 1 hidden line, L1'],
       ['Show 5 lines below L2', 'Show 5 lines above L15'],
-      ['Show 5 hidden lines, L16–L20'],
+      ['Show all 5 hidden lines, L16–L20'],
     ])
     expect(gaps[1]!.get('small').text()).toBe('12 hidden lines')
+    // Each action is a full-width row with short visible text.
+    expect(gaps[1]!.findAll('button').map((button) => button.find('span.truncate').text())).toEqual(
+      ['5 lines below L2', '5 lines above L15'],
+    )
+    expect(gaps[0]!.get('button span.truncate').text()).toBe('Show all')
+    expect(gaps[1]!.findAll('button').every((button) => button.classes('w-full'))).toBe(true)
     await wrapper.get('[aria-label="Show 5 lines below L2"]').trigger('click')
     await wrapper.get('[aria-label="Show 5 lines above L15"]').trigger('click')
-    await wrapper.get('[aria-label="Show 5 hidden lines, L16–L20"]').trigger('click')
+    await wrapper.get('[aria-label="Show all 5 hidden lines, L16–L20"]').trigger('click')
     expect(wrapper.emitted('expand')).toEqual([
       [{ start: 1, end: 1 }, 'after', 5],
       [{ start: 14, end: 14 }, 'before', 5],

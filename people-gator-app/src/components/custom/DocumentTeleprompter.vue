@@ -48,6 +48,8 @@ type TranscriptionSegment = {
 type Gap = { start: number; end: number; before?: Passage; after?: Passage }
 type GapAction = {
   icon: typeof UnfoldVertical
+  /** Short visible text; the accessible label repeats it with context. */
+  text: string
   label: string
   passage: Passage
   direction: 'before' | 'after'
@@ -147,7 +149,8 @@ function gapActions(gap: Gap): GapAction[] {
     return [
       {
         icon: UnfoldVertical,
-        label: `Show ${lineCountText(size)}, ${range}`,
+        text: 'Show all',
+        label: `Show all ${lineCountText(size)}, ${range}`,
         passage: (gap.before ?? gap.after)!,
         direction: gap.before ? 'after' : 'before',
         count: size,
@@ -158,6 +161,7 @@ function gapActions(gap: Gap): GapAction[] {
     ...(gap.before
       ? [{
           icon: ArrowDownFromLine,
+          text: `${EXPAND_STEP} lines below L${gap.before.end + 1}`,
           label: `Show ${EXPAND_STEP} lines below L${gap.before.end + 1}`,
           passage: gap.before,
           direction: 'after' as const,
@@ -167,6 +171,7 @@ function gapActions(gap: Gap): GapAction[] {
     ...(gap.after
       ? [{
           icon: ArrowUpFromLine,
+          text: `${EXPAND_STEP} lines above L${gap.after.start + 1}`,
           label: `Show ${EXPAND_STEP} lines above L${gap.after.start + 1}`,
           passage: gap.after,
           direction: 'before' as const,
@@ -539,17 +544,17 @@ defineExpose({ scrollPage, navigateTo })
         <template v-for="(line, index) in transcription" :key="line.id">
           <div v-if="gapsByStart.get(index)" :data-gap-start="index" :data-gap-end="gapsByStart.get(index)!.end"
             :data-selected="selectedGaps.has(index) ? '' : undefined"
-            class="teleprompter-gap grid select-none grid-cols-[2.5rem_1fr] items-center border-y bg-muted/50 font-sans">
-            <div class="flex flex-col items-center">
-              <Button v-for="action in gapActions(gapsByStart.get(index)!)" :key="action.label" variant="ghost"
-                size="icon-xs" :aria-label="action.label" :title="action.label"
-                @click="emit('expand', action.passage, action.direction, action.count)">
-                <component :is="action.icon" aria-hidden="true" />
-              </Button>
-            </div>
-            <small class="px-1 text-xs text-muted-foreground">
-              {{ lineCountText(gapsByStart.get(index)!.end - index + 1) }}
-            </small>
+            class="teleprompter-gap flex select-none flex-col border-y bg-muted/50 font-sans">
+            <!-- Each action spans the full row; its icon sits in the line-number gutter. -->
+            <Button v-for="(action, actionIndex) in gapActions(gapsByStart.get(index)!)" :key="action.label"
+              variant="ghost" size="xs" class="w-full justify-start gap-0 rounded-none px-0"
+              :aria-label="action.label" @click="emit('expand', action.passage, action.direction, action.count)">
+              <span class="flex w-10 shrink-0 justify-center"><component :is="action.icon" aria-hidden="true" /></span>
+              <span class="truncate">{{ action.text }}</span>
+              <small v-if="actionIndex === 0" class="ml-auto shrink-0 pr-2 text-muted-foreground" aria-hidden="true">
+                {{ lineCountText(gapsByStart.get(index)!.end - index + 1) }}
+              </small>
+            </Button>
           </div>
             <div v-show="includedLines[index]" role="group"
               :aria-label="`Line ${index + 1}`" :data-line-index="index"
