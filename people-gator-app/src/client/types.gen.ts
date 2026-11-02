@@ -965,7 +965,7 @@ export type FaceKeypointType = 'left_eye' | 'right_eye' | 'nose' | 'left_mouth_c
 /**
  * FaceListSortField
  */
-export type FaceListSortField = 'detection_id' | 'last_touched_at' | 'link_state' | 'confidence' | 'source';
+export type FaceListSortField = 'detection_id' | 'last_touched_at' | 'link_state' | 'confidence' | 'source' | 'person';
 
 /**
  * FaceModelListResponse
@@ -1164,7 +1164,7 @@ export type FaceResponse = {
 /**
  * FaceSortField
  */
-export type FaceSortField = 'relevance' | 'detection_id' | 'last_touched_at' | 'link_state' | 'confidence' | 'source';
+export type FaceSortField = 'relevance' | 'detection_id' | 'last_touched_at' | 'link_state' | 'confidence' | 'source' | 'person';
 
 /**
  * FileUploadResponse
