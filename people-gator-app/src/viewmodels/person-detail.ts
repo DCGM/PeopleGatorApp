@@ -232,10 +232,11 @@ export function usePersonDetail(
 
   const mentions = useMentionViews(mentionRecords)
 
-  function updateProfile(nextProfile: PersonProfile) {
+  function updateProfile(nextProfile: PersonProfile, expectedVersion?: number) {
     patchEntity.mutate({
       entityId: toValue(personId),
       body: {
+        expected_version: expectedVersion ?? entityQuery.data.value!.version!,
         name: nextProfile.name,
         short_description: nextProfile.shortDescription || null,
         description: nextProfile.article || null,
@@ -244,10 +245,11 @@ export function usePersonDetail(
     })
   }
 
-  function updateIdentifiers(nextIdentifiers: PersonIdentifiers) {
+  function updateIdentifiers(nextIdentifiers: PersonIdentifiers, expectedVersion?: number) {
     patchEntity.mutate({
       entityId: toValue(personId),
       body: {
+        expected_version: expectedVersion ?? entityQuery.data.value!.version!,
         wikidata_id: nextIdentifiers.wikidataId || null,
         nlcr_authority_id: nextIdentifiers.nationalLibraryAuthorityId || null,
       },

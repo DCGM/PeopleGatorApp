@@ -1,3 +1,4 @@
+import { readVersion } from './versions'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -158,7 +159,11 @@ export function useReassignTextMentionMutation() {
       responseData(
         patchTextMentionRouteApiV1TextMentionsMentionIdPatch({
           path: { mention_id: mentionId },
-          body: { entity_id: entityId, entity_link_state: entityId ? 'manual' : null },
+          body: {
+            expected_version: readVersion(queryClient, 'mention', mentionId),
+            entity_id: entityId,
+            entity_link_state: entityId ? 'manual' : null,
+          },
           throwOnError: true,
         }),
       ),

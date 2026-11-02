@@ -1,3 +1,4 @@
+vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'

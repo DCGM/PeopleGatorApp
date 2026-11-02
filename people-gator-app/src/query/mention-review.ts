@@ -1,3 +1,4 @@
+import { readVersion } from './versions'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
   patchTextMentionBatchRouteApiV1TextMentionsBatchPatch,
@@ -22,6 +23,7 @@ export type MentionReviewTargets =
 export async function resolveMentionTargets(
   targets: MentionReviewTargets,
   action: 'verify' | 'unlink' = 'unlink',
+  versions?: Map<string, number>,
 ) {
   if (!('scopes' in targets)) return [...new Set(targets.ids)]
   const records = new Map<string, TextMentionResponse>()
@@ -29,7 +31,10 @@ export async function resolveMentionTargets(
     let cursor: string | null = null
     do {
       const page = await fetchTextMentions({ ...scope, limit: 100, cursor })
-      for (const record of page.items) records.set(record.mention_id, record)
+      for (const record of page.items) {
+        records.set(record.mention_id, record)
+        if (record.version) versions?.set(record.mention_id, record.version)
+      }
       cursor = page.cursor ?? null
     } while (cursor)
   }
@@ -53,7 +58,8 @@ export function useReviewMentionsMutation() {
       targets: MentionReviewTargets
       action: 'verify' | 'unlink'
     }) => {
-      const ids = await resolveMentionTargets(targets, action)
+      const versions = new Map<string, number>()
+      const ids = await resolveMentionTargets(targets, action, versions)
       let completed = 0
       try {
         // Stay below the API's default batch limit and report confirmed chunks on failure.
@@ -62,6 +68,8 @@ export function useReviewMentionsMutation() {
             patchTextMentionBatchRouteApiV1TextMentionsBatchPatch({
               body: ids.slice(index, index + 50).map((mention_id) => ({
                 mention_id,
+                expected_version:
+                  versions.get(mention_id) ?? readVersion(client, 'mention', mention_id),
                 ...(action === 'verify'
                   ? { entity_link_state: 'verified' as const }
                   : { entity_id: null, entity_link_state: null }),

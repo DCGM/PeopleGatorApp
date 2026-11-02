@@ -1,3 +1,4 @@
+import { readVersion } from './versions'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -152,7 +153,11 @@ export function useAssignFaceMutation() {
       responseData(
         patchFaceRouteApiV1FacesDetectionIdPatch({
           path: { detection_id: detectionId },
-          body: { entity_id: entityId, entity_link_state: entityId ? 'manual' : null },
+          body: {
+            expected_version: readVersion(queryClient, 'face', detectionId),
+            entity_id: entityId,
+            entity_link_state: entityId ? 'manual' : null,
+          },
           throwOnError: true,
         }),
       ),
@@ -181,6 +186,7 @@ export function useAssignFacesMutation() {
         patchFaceBatchRouteApiV1FacesBatchPatch({
           body: detectionIds.map((detectionId) => ({
             detection_id: detectionId,
+            expected_version: readVersion(queryClient, 'face', detectionId),
             entity_id: entityId,
             entity_link_state: 'manual',
           })),
@@ -224,6 +230,7 @@ export function useReviewFacesMutation() {
         patchFaceBatchRouteApiV1FacesBatchPatch({
           body: [...new Set(detectionIds)].map((detection_id) => ({
             detection_id,
+            expected_version: readVersion(queryClient, 'face', detection_id),
             ...(action === 'verify'
               ? { entity_link_state: 'verified' as const }
               : { entity_id: null, entity_link_state: null }),
@@ -262,6 +269,7 @@ export function useDeleteFaceMutation() {
       responseData(
         deleteFaceRouteApiV1FacesDetectionIdDelete({
           path: { detection_id: detectionId },
+          query: { expected_version: readVersion(client, 'face', detectionId) },
           throwOnError: true,
         }),
       ),

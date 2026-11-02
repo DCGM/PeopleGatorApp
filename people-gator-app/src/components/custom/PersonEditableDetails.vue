@@ -14,6 +14,7 @@ type ProfileTextField = Exclude<keyof PersonProfile, 'aliases'>
 const props = defineProps<{
   hideStatistics?: boolean
   modelValue: PersonProfile
+  version?: number
   personId: string
   thumbnailFaceId?: string | null
   faceCount: number
@@ -24,8 +25,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [profile: PersonProfile]
-  'update:identifiers': [identifiers: PersonIdentifiers]
+  'update:modelValue': [profile: PersonProfile, version?: number]
+  'update:identifiers': [identifiers: PersonIdentifiers, version?: number]
 }>()
 
 const draft = reactive<PersonProfile>({
@@ -37,6 +38,7 @@ const identifierDraft = reactive<PersonIdentifiers>({
   nationalLibraryAuthorityId: props.nationalLibraryAuthorityId,
 })
 const editingField = ref<EditableField | null>(null)
+let savedVersion: number | undefined
 let savedFieldValue: string | string[] | null = null
 
 function isIdentifierField(field: EditableField): field is keyof PersonIdentifiers {
@@ -59,6 +61,7 @@ function nameFromId(id: string) {
 }
 
 function beginEditing(field: EditableField) {
+  savedVersion = props.version
   savedFieldValue =
     field === 'aliases'
       ? [...draft.aliases]
@@ -73,13 +76,13 @@ function saveEditing(field: EditableField) {
     draft.aliases = draft.aliases.map((alias) => alias.trim()).filter(Boolean)
   } else if (isIdentifierField(field)) {
     identifierDraft[field] = identifierDraft[field].trim()
-    emit('update:identifiers', { ...identifierDraft })
+    emit('update:identifiers', { ...identifierDraft }, savedVersion)
   } else {
     draft[field] = draft[field].trim()
     if (field === 'name' && !draft.name) draft.name = nameFromId(props.personId)
   }
   if (!isIdentifierField(field)) {
-    emit('update:modelValue', { ...draft, aliases: [...draft.aliases] })
+    emit('update:modelValue', { ...draft, aliases: [...draft.aliases] }, savedVersion)
   }
   savedFieldValue = null
   editingField.value = null

@@ -1,3 +1,4 @@
+vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { computed } from 'vue'
@@ -90,8 +91,8 @@ describe('assigned face selection and review', () => {
       .trigger('click')
     await flushPromises()
     expect(api.patch.mock.calls[0]![0].body).toEqual([
-      { detection_id: 'f0', entity_link_state: 'verified' },
-      { detection_id: 'f1', entity_link_state: 'verified' },
+      { expected_version: 1, detection_id: 'f0', entity_link_state: 'verified' },
+      { expected_version: 1, detection_id: 'f1', entity_link_state: 'verified' },
     ])
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
     expect(wrapper.get('[role="status"]').text()).toBe('2 faces verified.')
@@ -151,7 +152,7 @@ describe('assigned face selection and review', () => {
       .trigger('click')
     await flushPromises()
     expect(api.patch.mock.calls[1]![0].body).toEqual([
-      { detection_id: 'f2', entity_id: null, entity_link_state: null },
+      { expected_version: 1, detection_id: 'f2', entity_id: null, entity_link_state: null },
     ])
     expect(wrapper.text()).toContain('1 face unassigned.')
   })
@@ -221,7 +222,7 @@ describe('assigned face selection and review', () => {
       .find((button) => button.text() === 'Use automatic')!
       .trigger('click')
     await flushPromises()
-    expect(api.portrait.mock.lastCall?.[0].body).toEqual({ thumbnail_face_id: null })
+    expect(api.portrait.mock.lastCall?.[0].body).toEqual({ expected_version: 1, thumbnail_face_id: null })
     expect(wrapper.get('[role="status"]').text()).toBe('Automatic portrait.')
     expect(queryClient.getQueryData(['entities', 'detail', 'person'])).toMatchObject({
       thumbnail_mode: 'automatic',

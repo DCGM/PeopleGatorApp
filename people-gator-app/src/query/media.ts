@@ -1,3 +1,4 @@
+import { readVersion } from './versions'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { isAxiosError } from 'axios'
@@ -375,12 +376,14 @@ export function useCreateImagesMutation() {
 }
 
 export function useDeleteDocumentMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
     mutationFn: (sourceId: string) =>
       responseData(
         deleteDocumentRouteApiV1DocumentsDocumentSourceIdDelete({
           path: { document_source_id: sourceId },
+          query: { expected_version: readVersion(client, 'source', sourceId) },
           throwOnError: true,
         }),
       ),
@@ -389,12 +392,14 @@ export function useDeleteDocumentMutation() {
 }
 
 export function useDeletePageMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
     mutationFn: (sourceId: string) =>
       responseData(
         deletePageRouteApiV1PagesPageSourceIdDelete({
           path: { page_source_id: sourceId },
+          query: { expected_version: readVersion(client, 'source', sourceId) },
           throwOnError: true,
         }),
       ),
@@ -403,12 +408,14 @@ export function useDeletePageMutation() {
 }
 
 export function useDeleteImageMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
     mutationFn: (imageId: string) =>
       responseData(
         deleteImageRouteApiV1ImagesImageIdDelete({
           path: { image_id: imageId },
+          query: { expected_version: readVersion(client, 'source', imageId) },
           throwOnError: true,
         }),
       ),
@@ -417,12 +424,14 @@ export function useDeleteImageMutation() {
 }
 
 export function useDeleteSourceMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
     mutationFn: (sourceId: string) =>
       responseData(
         deleteSourceRouteApiV1SourcesSourceIdDelete({
           path: { source_id: sourceId },
+          query: { expected_version: readVersion(client, 'source', sourceId) },
           throwOnError: true,
         }),
       ),

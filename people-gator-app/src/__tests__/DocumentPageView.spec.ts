@@ -1,3 +1,4 @@
+vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query'
 import { mount, shallowMount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { reactive, ref, nextTick, type Ref } from 'vue'
@@ -361,6 +362,7 @@ describe('shared detection actions', () => {
     await flushPromises()
     expect(mocks.deleteFace).toHaveBeenLastCalledWith({
       path: { detection_id: 'a' },
+      query: { expected_version: 1 },
       throwOnError: true,
     })
     expect(overlay.props('selectedFaceId')).toBeNull()
@@ -508,7 +510,7 @@ describe('detection mutation coordination', () => {
     await flushPromises()
     expect(mocks.patchFace).toHaveBeenLastCalledWith({
       path: { detection_id: 'b' },
-      body: { entity_link_state: 'verified' },
+      body: { expected_version: 1, entity_link_state: 'verified' },
       throwOnError: true,
     })
     expect(candidates.props('assignmentPending')).toBe(false)

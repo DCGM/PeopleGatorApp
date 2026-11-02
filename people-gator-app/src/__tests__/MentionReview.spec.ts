@@ -1,3 +1,4 @@
+vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin, type InfiniteData } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -81,8 +82,8 @@ it('skips already-verified occurrences only when verifying', async () => {
   api.list.mockResolvedValueOnce({
     data: {
       items: [
-        { mention_id: 'auto', entity_link_state: 'automatic' },
-        { mention_id: 'done', entity_link_state: 'verified' },
+        { expected_version: 1, mention_id: 'auto', entity_link_state: 'automatic' },
+        { expected_version: 1, mention_id: 'done', entity_link_state: 'verified' },
       ],
       cursor: null,
       limit: 100,
@@ -96,7 +97,7 @@ it('skips already-verified occurrences only when verifying', async () => {
   expect(await resolveMentionTargets(targets, 'verify')).toEqual(['auto', 'picked'])
   api.list.mockResolvedValueOnce({
     data: {
-      items: [{ mention_id: 'done', entity_link_state: 'verified' }],
+      items: [{ expected_version: 1, mention_id: 'done', entity_link_state: 'verified' }],
       cursor: null,
       limit: 100,
     },
@@ -139,7 +140,7 @@ it('selects exact text independently of expansion and reviews unloaded occurrenc
   })
   expect(api.patch.mock.calls.flatMap((call) => call[0].body)).toHaveLength(101)
   expect(api.patch.mock.calls[api.patch.mock.calls.length - 1]![0].body).toEqual([
-    { mention_id: 'last', entity_link_state: 'verified' },
+    { expected_version: 1, mention_id: 'last', entity_link_state: 'verified' },
   ])
   await wrapper.get('[aria-label="Select group Ada"]').trigger('click')
   await router.push('/?mention_view=page')

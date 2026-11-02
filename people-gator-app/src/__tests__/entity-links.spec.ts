@@ -1,3 +1,4 @@
+vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { computed, defineComponent, h, ref } from 'vue'
@@ -390,7 +391,7 @@ describe('entity link review', () => {
     async (inline) => {
       api.patchFace
         .mockRejectedValueOnce(new Error('Try again'))
-        .mockResolvedValueOnce({ data: { detection_id: 'f1', entity_link_state: 'verified' } })
+        .mockResolvedValueOnce({ data: { expected_version: 1, detection_id: 'f1', entity_link_state: 'verified' } })
       const { wrapper, queryClient } = renderQuery(
         () => () => h(VerifyEntityLink, { id: 'f1', kind: 'face', linkState: 'manual', inline }),
       )
@@ -448,6 +449,7 @@ describe('entity link review', () => {
         ]),
       )
       expect(api.patchFace.mock.calls[api.patchFace.mock.calls.length - 1]![0].body).toEqual({
+        expected_version: 1,
         entity_link_state: 'verified',
       })
       for (const key of peopleKeys) {
@@ -549,6 +551,7 @@ it('preserves a rejected deletion, then removes cached detail/crops and refreshe
   await flushPromises()
   expect(api.deleteFace).toHaveBeenLastCalledWith({
     path: { detection_id: 'f1' },
+    query: { expected_version: 1 },
     throwOnError: true,
   })
   expect(queryClient.getQueryData(['faces', 'detail', 'f1'])).toBeUndefined()

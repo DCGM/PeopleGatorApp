@@ -1,4 +1,5 @@
 import { isAxiosError } from 'axios'
+import { readVersion } from './versions'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -107,11 +108,20 @@ export function useCreateEntitiesMutation() {
 export function usePatchEntityMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ entityId, body }: { entityId: string; body: EntityPatchRequest }) =>
+    mutationFn: ({
+      entityId,
+      body,
+    }: {
+      entityId: string
+      body: Omit<EntityPatchRequest, 'expected_version'> & { expected_version?: number }
+    }) =>
       responseData(
         patchEntityRouteApiV1EntitiesEntityIdPatch({
           path: { entity_id: entityId },
-          body,
+          body: {
+            ...body,
+            expected_version: body.expected_version ?? readVersion(queryClient, 'entity', entityId),
+          },
           throwOnError: true,
         }),
       ),
@@ -136,9 +146,11 @@ export function useMergeEntitiesMutation() {
     mutationFn: async ({
       targetEntityId,
       sourceEntityIds,
+      expectedVersions,
     }: {
       targetEntityId: string
       sourceEntityIds: string[]
+      expectedVersions?: Record<string, number>
     }) => {
       if (
         !targetEntityId ||
@@ -148,11 +160,19 @@ export function useMergeEntitiesMutation() {
       ) {
         throw new Error('Select distinct people and a target before merging.')
       }
+      const expected_versions =
+        expectedVersions ??
+        Object.fromEntries(
+          [targetEntityId, ...sourceEntityIds].map((id) => [
+            id,
+            readVersion(queryClient, 'entity', id),
+          ]),
+        )
       if (sourceEntityIds.length === 1) {
         return await responseData(
           mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost({
             path: { target_entity_id: targetEntityId },
-            body: { source_entity_id: sourceEntityIds[0]! },
+            body: { expected_versions, source_entity_id: sourceEntityIds[0]! },
             throwOnError: true,
           }),
         )
@@ -160,7 +180,7 @@ export function useMergeEntitiesMutation() {
       return await responseData(
         mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost({
           path: { target_entity_id: targetEntityId },
-          body: { source_entity_ids: sourceEntityIds },
+          body: { expected_versions, source_entity_ids: sourceEntityIds },
           throwOnError: true,
         }),
       )
@@ -204,6 +224,7 @@ export function useDeleteEntityMutation() {
       responseData(
         deleteEntityRouteApiV1EntitiesEntityIdDelete({
           path: { entity_id: entityId },
+          query: { expected_version: readVersion(queryClient, 'entity', entityId) },
           throwOnError: true,
         }),
       ),

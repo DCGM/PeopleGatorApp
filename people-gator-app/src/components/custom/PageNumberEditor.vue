@@ -23,7 +23,7 @@ function save() {
   if (!valid.value) return
   mutation.mutate({
     sourceId: props.page.source_id,
-    payload: { page_number: value.value === '' ? null : Number(value.value) },
+    payload: { expected_version: props.page.version!, page_number: value.value === '' ? null : Number(value.value) },
   })
 }
 </script>

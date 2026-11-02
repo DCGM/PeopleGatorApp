@@ -518,6 +518,7 @@ function retrySearch() {
 
         <TabsContent value="details">
           <PersonEditableDetails
+            :version="entity?.version"
             hide-statistics
             :model-value="profile"
             :person-id="personId"
