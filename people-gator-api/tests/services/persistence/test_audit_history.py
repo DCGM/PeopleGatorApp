@@ -321,9 +321,9 @@ async def test_http_requires_versions_exposes_conflicts_and_filters(audit_graph)
         )
         assert (await client.delete(url)).status_code == 422
         result = await client.get(
-            "/api/v1/audit",
+            "/api/v1/entities/audit",
             params={
-                "entity_id": str(r.first.entity_id),
+                "filter.entity_id": str(r.first.entity_id),
                 "sort": "version",
                 "direction": "asc",
             },
@@ -331,19 +331,35 @@ async def test_http_requires_versions_exposes_conflicts_and_filters(audit_graph)
         assert result.status_code == 200 and result.json()["total_count"] == 1
         assert result.json()["items"][0]["state"]["name"] == "Ada"
         archived = await client.get(
-            f"/api/v1/audit/entity/{r.first.entity_id}/versions/1"
+            "/api/v1/entities/audit",
+            params={
+                "filter.entity_id": str(r.first.entity_id),
+                "filter.version_min": 1,
+                "filter.version_max": 1,
+            },
         )
-        assert archived.status_code == 200 and archived.json()["state"]["name"] == "Ada"
-        assert (
-            await client.get(f"/api/v1/audit/entity/{r.first.entity_id}/versions/2")
-        ).status_code == 404
+        assert archived.status_code == 200 and archived.json()["items"][0]["state"][
+            "entity_id"
+        ] == str(r.first.entity_id)
+        current = await client.get(
+            "/api/v1/entities/audit",
+            params={
+                "filter.entity_id": str(r.first.entity_id),
+                "filter.version_min": 2,
+            },
+        )
+        assert current.status_code == 200 and current.json()["items"] == []
+        assert (await client.get("/api/v1/audit")).status_code == 404
         for params in (
             {"sort": "name"},
-            {"version_min": 0},
+            {"filter.version_min": 0},
             {"limit": 501},
-            {"version_min": 3, "version_max": 1},
+            {"filter.version_min": 3, "filter.version_max": 1},
+            {"object_type": "face"},
         ):
-            assert (await client.get("/api/v1/audit", params=params)).status_code == 422
+            assert (
+                await client.get("/api/v1/entities/audit", params=params)
+            ).status_code == 422
     app.dependency_overrides.clear()
 
 
@@ -447,4 +463,244 @@ async def test_face_vectors_and_api_key_actor_are_preserved(audit_graph):
     )
     assert old.actor_api_key_id == key.api_key_id
     assert old.state["created_by_api_key_id"] is None
+    from people_gator_api.schemas.audit_history import FaceAuditListRequest
+
+    typed = await r.db.audit.list_faces(
+        FaceAuditListRequest(
+            detection_id=[r.face.detection_id], version_min=2, version_max=2
+        )
+    )
+    assert typed.items[0].state.embeddings[0].embedding == pytest.approx([0.1, 0.2])
     assert (await r.db.entities.get(r.first.entity_id)).version == 1
+
+
+@pytest.mark.asyncio
+async def test_typed_face_history_filters_past_assignments_after_live_deletion(
+    audit_graph,
+):
+    from people_gator_api.schemas.audit_history import (
+        FaceAuditListRequest,
+        FaceAuditState,
+    )
+
+    r = audit_graph
+    await r.db.faces.patch(
+        r.face.detection_id,
+        FacePatchRequest(expected_version=1, entity_id=r.second.entity_id),
+        r.actor,
+    )
+    await r.db.faces.patch(
+        r.face.detection_id,
+        FacePatchRequest(expected_version=2, entity_id=None),
+        r.actor,
+    )
+    await r.db.text_mentions.patch(
+        r.mention.mention_id,
+        TextMentionPatchRequest(expected_version=1, entity_id=None),
+        r.actor,
+    )
+    await r.db.entities.delete(r.first.entity_id, expected_version=1, context=r.actor)
+    await r.db.sources.delete(r.page.source_id, expected_version=1, context=r.actor)
+    result = await r.db.audit.list_faces(
+        FaceAuditListRequest(
+            entity_id=[r.first.entity_id], source_id=[r.page.source_id]
+        )
+    )
+    assert result.total_count == 1
+    item = result.items[0]
+    assert isinstance(item.state, FaceAuditState)
+    assert item.detection_id == r.face.detection_id and item.version == 1
+    assert (
+        item.state.entity_id == r.first.entity_id
+        and item.state.source_id == r.page.source_id
+    )
+    assert item.state.bounding_box.width == 100
+    both = await r.db.audit.list_faces(
+        FaceAuditListRequest(
+            entity_id=[r.first.entity_id, r.second.entity_id],
+            sort="version",
+            direction="asc",
+            limit=1,
+        )
+    )
+    assert both.total_count == 2 and both.items[0].version == 1
+    second = await r.db.audit.list_faces(
+        FaceAuditListRequest(
+            entity_id=[r.first.entity_id, r.second.entity_id],
+            sort="version",
+            direction="asc",
+            limit=1,
+            offset=1,
+        )
+    )
+    assert second.items[0].version == 2
+    assert (
+        await r.db.audit.list_faces(FaceAuditListRequest(entity_id=[uuid.uuid4()]))
+    ).items == []
+    deleted = await r.db.audit.list_faces(
+        FaceAuditListRequest(detection_id=[r.face.detection_id], deleted=True)
+    )
+    assert deleted.items[0].version == 3 and deleted.items[0].state.entity_id is None
+
+    import httpx
+    from people_gator_api.app import get_app
+    from people_gator_api.services.auth_service import get_auth_context
+    from people_gator_api.services.database_service import get_database
+
+    app = get_app()
+    app.dependency_overrides[get_database] = lambda: r.db
+    app.dependency_overrides[get_auth_context] = lambda: r.actor
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/faces/audit",
+            params=[
+                ("filter.entity_id", str(r.first.entity_id)),
+                ("filter.entity_id", str(r.second.entity_id)),
+                ("filter.source_id", str(r.page.source_id)),
+                ("sort", "version"),
+                ("direction", "asc"),
+            ],
+        )
+        assert response.status_code == 200, response.text
+        assert [item["version"] for item in response.json()["items"]] == [1, 2]
+        assert response.json()["items"][0]["state"]["detection_id"] == str(
+            r.face.detection_id
+        )
+        assert "object_type" not in response.json()["items"][0]
+        assert (
+            await client.get(
+                "/api/v1/faces/audit", params={"filter.entity_id": "not-a-uuid"}
+            )
+        ).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_typed_entity_mention_and_source_states(audit_graph):
+    from people_gator_api.schemas.audit_history import (
+        EntityAuditListRequest,
+        TextMentionAuditListRequest,
+        SourceAuditListRequest,
+        EntityAuditState,
+        TextMentionAuditState,
+        PageAuditState,
+        DocumentAuditState,
+        ImageAuditState,
+    )
+    from people_gator_api.schemas.sources import (
+        DocumentCreateRequest,
+        ImageCreateRequest,
+    )
+
+    r = audit_graph
+    await r.db.entities.patch(
+        r.first.entity_id,
+        EntityPatchRequest(expected_version=1, aliases=["Changed"]),
+        r.actor,
+    )
+    entity = (
+        await r.db.audit.list_entities(
+            EntityAuditListRequest(entity_id=[r.first.entity_id])
+        )
+    ).items[0]
+    assert isinstance(entity.state, EntityAuditState)
+    assert (
+        entity.state.entity_id == r.first.entity_id
+        and entity.state.aliases[0].name == "Original alias"
+    )
+    await r.db.text_mentions.patch(
+        r.mention.mention_id,
+        TextMentionPatchRequest(expected_version=1, entity_link_state="verified"),
+        r.actor,
+    )
+    await r.db.text_mentions.patch(
+        r.mention.mention_id,
+        TextMentionPatchRequest(expected_version=2, entity_id=None),
+        r.actor,
+    )
+    mention = (
+        await r.db.audit.list_text_mentions(
+            TextMentionAuditListRequest(
+                mention_id=[r.mention.mention_id], version_min=2
+            )
+        )
+    ).items[0]
+    assert isinstance(mention.state, TextMentionAuditState)
+    assert (
+        mention.state.name == "Ada"
+        and mention.state.entity_link_verified_by_user_id == r.actor.user_id
+    )
+    await r.db.sources.patch_page(
+        r.page.source_id,
+        PagePatchRequest(expected_version=1, page_number=2),
+        context=r.actor,
+    )
+    doc, _ = await r.db.sources.get_or_create_document(
+        DocumentCreateRequest(library="audit", document_id=uuid.uuid4(), name="History")
+    )
+    image, _ = await r.db.sources.get_or_create_image(
+        ImageCreateRequest(url="https://example.test/audit.png")
+    )
+    await r.db.sources.delete(doc.source_id, expected_version=1, context=r.actor)
+    await r.db.sources.delete(image.source_id, expected_version=1, context=r.actor)
+    sources = await r.db.audit.list_sources(
+        SourceAuditListRequest(
+            source_id=[r.page.source_id, doc.source_id, image.source_id]
+        )
+    )
+    assert sources.total_count == 3
+    assert {type(row.state) for row in sources.items} == {
+        PageAuditState,
+        DocumentAuditState,
+        ImageAuditState,
+    }
+    assert (
+        next(
+            row.state for row in sources.items if row.source_id == r.page.source_id
+        ).page_number
+        == 1
+    )
+
+    pages = await r.db.audit.list_sources(
+        SourceAuditListRequest(
+            library=["audit"], document_id=[r.page.document_id], source_type=["page"]
+        )
+    )
+    assert pages.total_count == 1 and pages.items[0].source_id == r.page.source_id
+    assert (
+        await r.db.audit.list_sources(SourceAuditListRequest(library=["other"]))
+    ).items == []
+
+
+def test_audit_openapi_has_resource_specific_snapshot_schemas():
+    from people_gator_api.app import get_app
+
+    spec = get_app().openapi()
+    assert "/api/v1/audit" not in spec["paths"]
+    for resource, prefix, state in [
+        ("entities", "Entity", "EntityAuditState"),
+        ("faces", "Face", "FaceAuditState"),
+        ("text-mentions", "TextMention", "TextMentionAuditState"),
+        ("sources", "Source", None),
+    ]:
+        route = spec["paths"][f"/api/v1/{resource}/audit"]["get"]
+        assert route["responses"]["200"]["content"]["application/json"]["schema"][
+            "$ref"
+        ].endswith(f"/{prefix}AuditListResponse")
+        item = spec["components"]["schemas"][f"{prefix}AuditItem"]
+        assert "object_type" not in item["properties"]
+        if state:
+            assert item["properties"]["state"]["$ref"].endswith("/" + state)
+        else:
+            union = item["properties"]["state"]
+            if "$ref" in union:
+                union = spec["components"]["schemas"][union["$ref"].split("/")[-1]]
+            assert len(union["oneOf"]) == 3
+            assert union["discriminator"]["propertyName"] == "source_type"
+        params = {p["name"] for p in route["parameters"]}
+        assert "object_type" not in params and "object_id" not in params
+        assert "filter.version_min" in params
+    assert "filter.entity_id" in {
+        p["name"] for p in spec["paths"]["/api/v1/faces/audit"]["get"]["parameters"]
+    }

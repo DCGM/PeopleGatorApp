@@ -265,29 +265,26 @@ def test_audit_endpoints_require_their_own_scope(
 ):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
-    from datetime import datetime, timezone
     from people_gator_api.routes.v1.audit import router
-    from people_gator_api.schemas.audit import AuditListResponse, AuditRevision
-
-    revision = AuditRevision(
-        object_type="entity",
-        object_id=uuid.uuid4(),
-        version=1,
-        changed_at=datetime.now(timezone.utc),
-        actor_user_id=authenticated.user.user_id,
-        actor_api_key_id=None,
-        deleted=False,
-        entity_id=None,
-        source_id=None,
-        state={"name": "Synthetic"},
+    from people_gator_api.schemas.audit_history import (
+        EntityAuditListResponse,
+        FaceAuditListResponse,
+        TextMentionAuditListResponse,
+        SourceAuditListResponse,
     )
+
     audit = SimpleNamespace(
-        list=AsyncMock(
-            return_value=AuditListResponse(
-                items=[revision], total_count=1, limit=50, offset=0
+        **{
+            name: AsyncMock(
+                return_value=response(items=[], total_count=0, limit=50, offset=0)
             )
-        ),
-        get=AsyncMock(return_value=revision),
+            for name, response in [
+                ("list_entities", EntityAuditListResponse),
+                ("list_faces", FaceAuditListResponse),
+                ("list_text_mentions", TextMentionAuditListResponse),
+                ("list_sources", SourceAuditListResponse),
+            ]
+        }
     )
     authenticated.app.include_router(router, prefix="/api/v1")
     authenticated.app.dependency_overrides[get_database] = lambda: SimpleNamespace(
@@ -303,8 +300,10 @@ def test_audit_endpoints_require_their_own_scope(
         else {"X-API-Key": "test-key"}
     )
     for path in (
-        "/api/v1/audit",
-        f"/api/v1/audit/entity/{revision.object_id}/versions/1",
+        "/api/v1/entities/audit",
+        "/api/v1/faces/audit",
+        "/api/v1/text-mentions/audit",
+        "/api/v1/sources/audit",
     ):
         response = authenticated.client.get(path, headers=headers)
         assert response.status_code == expected, response.text
@@ -312,8 +311,8 @@ def test_audit_endpoints_require_their_own_scope(
         assert authenticated.client.get("/admin", headers=headers).status_code == 403
         assert authenticated.client.get("/browse", headers=headers).status_code == 403
     else:
-        audit.list.assert_not_awaited()
-        audit.get.assert_not_awaited()
+        for method in vars(audit).values():
+            method.assert_not_awaited()
 
 
 def test_audit_scope_is_published_in_openapi():
@@ -324,9 +323,16 @@ def test_audit_scope_is_published_in_openapi():
         oauth["flows"]["password"]["scopes"]["people-gator:audit"]
         == "Read audit history"
     )
+    assert "/api/v1/audit" not in schema["paths"]
+    assert (
+        "/api/v1/audit/{object_type}/{object_id}/versions/{version}"
+        not in schema["paths"]
+    )
     for path in (
-        "/api/v1/audit",
-        "/api/v1/audit/{object_type}/{object_id}/versions/{version}",
+        "/api/v1/entities/audit",
+        "/api/v1/faces/audit",
+        "/api/v1/text-mentions/audit",
+        "/api/v1/sources/audit",
     ):
         security = schema["paths"][path]["get"]["security"]
         assert {

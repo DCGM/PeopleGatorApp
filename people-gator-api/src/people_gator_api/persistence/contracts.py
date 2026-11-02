@@ -151,11 +151,51 @@ from people_gator_api.schemas.users import (
 )
 
 
+from people_gator_api.schemas.audit_history import (
+    EntityAuditListRequest,
+    EntityAuditListResponse,
+    FaceAuditListRequest,
+    FaceAuditListResponse,
+    TextMentionAuditListRequest,
+    TextMentionAuditListResponse,
+    SourceAuditListRequest,
+    SourceAuditListResponse,
+)
+
+
 class AuditRepository(ABC):
     """Immutable predecessor/final-state history; unavailable adapters fail explicitly."""
 
-    async def get(self, object_type: "ObjectKind", object_id: uuid.UUID, version: int) -> "AuditRevision | None":
-        result = await self.list(AuditQuery(object_type=object_type, object_id=object_id, version_min=version, version_max=version, limit=1))
+    async def list_entities(
+        self, query: EntityAuditListRequest
+    ) -> EntityAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def list_faces(self, query: FaceAuditListRequest) -> FaceAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def list_text_mentions(
+        self, query: TextMentionAuditListRequest
+    ) -> TextMentionAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def list_sources(
+        self, query: SourceAuditListRequest
+    ) -> SourceAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def get(
+        self, object_type: "ObjectKind", object_id: uuid.UUID, version: int
+    ) -> "AuditRevision | None":
+        result = await self.list(
+            AuditQuery(
+                object_type=object_type,
+                object_id=object_id,
+                version_min=version,
+                version_max=version,
+                limit=1,
+            )
+        )
         return result.items[0] if result.items else None
 
     async def list(self, query: "AuditQuery") -> "AuditListResponse":

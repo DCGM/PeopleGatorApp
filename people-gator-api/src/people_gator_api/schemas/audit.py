@@ -5,6 +5,7 @@ from enum import StrEnum
 from uuid import UUID
 from typing import Any, Literal
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from people_gator_api.schemas.enums import SourceKind
 
 
 class ObjectKind(StrEnum):
@@ -25,11 +26,15 @@ class VersionedEdit(BaseModel):
 
 
 class AuditQuery(BaseModel):
+    source_type: list[SourceKind] | None = None
+    library: list[str] | None = None
+    document_id: list[UUID] | None = None
+    page_id: list[UUID] | None = None
     object_type: ObjectKind | None = None
-    object_id: UUID | None = None
-    entity_id: UUID | None = None
-    source_id: UUID | None = None
-    actor_user_id: UUID | None = None
+    object_id: UUID | list[UUID] | None = None
+    entity_id: UUID | list[UUID] | None = None
+    source_id: UUID | list[UUID] | None = None
+    actor_user_id: UUID | list[UUID] | None = None
     since: AwareDatetime | None = None
     until: AwareDatetime | None = None
     version_min: int | None = Field(default=None, ge=1)
