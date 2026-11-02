@@ -336,7 +336,7 @@ describe('entity link review', () => {
       'manual',
     ])
     expect(wrapper.findAll('mark')[2]!.classes()).toEqual(
-      expect.arrayContaining(['border-b-2', 'text-amber-700', 'border-amber-500']),
+      expect.arrayContaining(['underline', 'text-amber-700', 'decoration-amber-500']),
     )
     expect(wrapper.findAll('mark').map((mark) => mark.text())).toEqual([
       'Ada',

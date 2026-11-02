@@ -108,7 +108,12 @@ function mentionName(entity: TranscriptionEntitySpan) {
 
 function mentionClasses(entity: TranscriptionEntitySpan) {
   return [
-    'border-b-2',
+    // A text underline spans the letters only, unaffected by the padding below.
+    'underline decoration-2 underline-offset-1',
+    // Room for the text inside the selection lines. The negative margin cancels
+    // the side padding, so a tag is exactly as wide as the plain text: nothing
+    // shifts on select/unselect or when a filter turns text into a tag.
+    '-mx-1 px-1 py-0.5',
     mentionStateClasses[spanHighlightState(entity)],
     mentionSelectionClasses[mentionSelectionState(entity)],
   ]
@@ -280,12 +285,13 @@ function entityText(entity: TranscriptionEntitySpan) {
 
 /**
  * The scan overlay's selection scheme: the selected mention is blue, mentions
- * of the selected person are orange, and a mention that is both keeps the blue
- * fill with an orange outline. Outlines leave the text layout unchanged.
+ * of the selected person are orange, and a mention that is both has the
+ * selected blue fill and blue inner line inside an orange outer line. Outlines
+ * and inset rings leave the text layout and the link-state underline unchanged.
  */
 const mentionSelectionClasses = {
   selected: 'bg-accent/20 outline-2 outline-accent',
-  selectedMentioned: 'bg-accent/20 outline-2 outline-orange-500',
+  selectedMentioned: 'bg-accent/20 inset-ring-2 inset-ring-accent outline-2 outline-orange-500',
   mentioned: 'bg-orange-500/15 outline-2 outline-orange-500 hover:bg-orange-500/30',
   hovered: 'bg-accent/10 outline-1 outline-accent/70',
   // Transparent overrides the browser's yellow default for mark elements.
