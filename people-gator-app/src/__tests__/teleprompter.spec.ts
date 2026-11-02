@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick, ref } from 'vue'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -577,6 +577,57 @@ describe('DocumentTeleprompter', () => {
     window.getSelection()!.removeAllRanges()
     await wrapper.findAll('[data-line-index]')[3]!.trigger('click')
     expect(wrapper.emitted('select-line')).toEqual([[3]])
+  })
+
+  it('moves the cursor a non-overlapping page with Page Up/Down, or to the view edge', async () => {
+    // Every displayed line is 20px tall; the viewport shows three lines (60px).
+    const included = sample().map((_, index) => index !== 5)
+    const wrapper = render({ included, selectedLineIndex: 0 })
+    const scroller = wrapper.get('[aria-label="Transcription teleprompter"]').element as HTMLElement
+    const lines = [
+      ...scroller.querySelectorAll<HTMLElement>('[data-line-index]:not([data-hidden])'),
+    ]
+    lines.forEach((line, row) => {
+      Object.defineProperty(line, 'offsetTop', { get: () => row * 20 })
+      Object.defineProperty(line, 'offsetHeight', { get: () => 20 })
+    })
+    let scrollTop = 0
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => scrollTop,
+      set: (value: number) => (scrollTop = value),
+    })
+    Object.defineProperty(scroller, 'clientHeight', { get: () => 60 })
+    Object.defineProperty(scroller, 'scrollHeight', { get: () => lines.length * 20 })
+    // Let the initial reveal of the selected line settle first.
+    await flushPromises()
+    // Like the page, feed each new cursor back as the selected line.
+    const press = async (key: string) => {
+      await wrapper.get('[aria-label="Transcription teleprompter"]').trigger('keydown', { key })
+      const emitted = wrapper.emitted('select-line')!
+      const index = emitted[emitted.length - 1]![0] as number
+      await wrapper.setProps({ selectedLineIndex: index })
+      await flushPromises()
+      return index
+    }
+    // L1–L3 in view: the next view starts at L4, which becomes the cursor.
+    expect(await press('PageDown')).toBe(3)
+    expect(scroller.scrollTop).toBe(60)
+    // L4, L5, L7 in view (hidden L6 is skipped); the next view starts at L8.
+    expect(await press('PageDown')).toBe(7)
+    expect(scroller.scrollTop).toBe(120)
+    // At the end the view cannot move: the cursor goes to its last line.
+    expect(await press('PageDown')).toBe(9)
+    expect(scroller.scrollTop).toBe(120)
+    // The previous view ends just above L8: L4, L5, L7, with the cursor on L4.
+    expect(await press('PageUp')).toBe(3)
+    expect(scroller.scrollTop).toBe(60)
+    // The previous view is L1–L3, with the cursor on L1.
+    expect(await press('PageUp')).toBe(0)
+    expect(scroller.scrollTop).toBe(0)
+    // At the beginning the view cannot move: the cursor goes to its first line.
+    await wrapper.setProps({ selectedLineIndex: 2 })
+    expect(await press('PageUp')).toBe(0)
+    expect(scroller.scrollTop).toBe(0)
   })
 
   it('grays hidden lines in the minimap and keeps wheel scrolling native', () => {
