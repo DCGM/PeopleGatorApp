@@ -394,3 +394,57 @@ async def test_migration_initializes_existing_rows_without_inventing_history(
             == 0
         )
         await connection.run_sync(validate_schema)
+
+
+@pytest.mark.asyncio
+async def test_face_vectors_and_api_key_actor_are_preserved(audit_graph):
+    import json
+    from people_gator_api.schemas.api_keys import APIKeyCreateRequest
+    from people_gator_api.schemas.face_models import FaceModelRegisterRequest
+    from people_gator_api.schemas.faces import FaceEmbedding
+    from people_gator_api.services.auth_service import AuthContext
+
+    r = audit_graph
+    key = await r.db.api_keys.get_or_create(
+        APIKeyCreateRequest(
+            identifier="audit-review",
+            display_name="Audit review",
+            user_id=r.actor.user_id,
+        )
+    )
+    actor = AuthContext(
+        user_id=r.actor.user_id,
+        api_key_id=key.api_key_id,
+        authentication_method="api_key",
+        scopes=set(),
+    )
+    await r.db.face_models.register(
+        FaceModelRegisterRequest(model_stub="audit-2d", embedding_dim=2)
+    )
+    await r.db.faces.patch(
+        r.face.detection_id,
+        FacePatchRequest(
+            expected_version=1,
+            embeddings=[FaceEmbedding(model_identifier="audit-2d", vector=[0.1, 0.2])],
+        ),
+        actor,
+    )
+    changed = await r.db.faces.patch(
+        r.face.detection_id,
+        FacePatchRequest(
+            expected_version=2,
+            embeddings=[FaceEmbedding(model_identifier="audit-2d", vector=[0.3, 0.4])],
+        ),
+        actor,
+    )
+    assert changed.version == 3
+    old = await r.db.audit.get("face", r.face.detection_id, 2)
+    embedding = old.state["embeddings"][0]
+    assert embedding["model_id"] == "audit-2d"
+    vector = embedding["embedding"]
+    assert (json.loads(vector) if isinstance(vector, str) else vector) == pytest.approx(
+        [0.1, 0.2]
+    )
+    assert old.actor_api_key_id == key.api_key_id
+    assert old.state["created_by_api_key_id"] is None
+    assert (await r.db.entities.get(r.first.entity_id)).version == 1

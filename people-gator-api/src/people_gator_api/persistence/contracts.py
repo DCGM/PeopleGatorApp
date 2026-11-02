@@ -25,8 +25,20 @@ other supplied fields using logical AND.
 Successful batch results preserve input order. Patch batches require unique
 object IDs; duplicate IDs are invalid. Delete batches de-duplicate IDs and count
 each stored object once. Empty batches succeed with an empty result or zero.
-Batches are not guaranteed to be atomic: an error is raised, but a backend that
-cannot roll back may retain earlier successful writes.
+PostgreSQL versioned patch/delete batches and merges are atomic: all explicit
+target versions are checked before writing, and any failure rolls back current
+state and audit rows together. Creation batches may retain earlier successful
+writes (notably source get-or-create). The optional Weaviate adapter rejects
+versioned edits and audit reads rather than claiming transactional guarantees.
+
+Entities, faces, mentions and sources expose independent server-managed versions.
+Edits require the version read by the caller; deletes and merges require versions
+for every explicitly targeted object. A stale request raises VersionConflict,
+including stale no-ops. Matching no-ops create no history and keep their version.
+Actual changes archive complete predecessors and advance versions once per
+operation; final deleted states and historical IDs survive live cascades. Read
+archived states through Database.audit. Activity propagation is independent of
+content revisions.
 
 References named by create or patch payloads must already exist. Missing
 references are errors. Deleting an entity unassigns its faces and text mentions;
@@ -221,7 +233,7 @@ class EntityRepository(ABC):
 
         Always the actor performing the patch must be specified through the context.
 
-        Ideally, should persist information about actor performing the patch.
+        Archive the persisted predecessor and actor atomically with actual changes.
 
         :param self: The instance of the repository.
         :param entity_id: The unique identifier of the entity to patch.
