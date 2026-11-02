@@ -5,7 +5,6 @@ import UiTooltip from './UiTooltip.vue'
 import {
   Check,
   ChevronRight,
-  ExternalLink,
   Link2,
   RefreshCw,
   Search,
@@ -45,10 +44,6 @@ const isCreating = ref(false)
 const draftName = ref('')
 const draftShortDescription = ref('')
 
-function wikidataHref(value: string) {
-  return /^https?:\/\//i.test(value) ? value : `https://www.wikidata.org/wiki/${value}`
-}
-
 function startCreating() {
   draftName.value = ''
   draftShortDescription.value = ''
@@ -79,12 +74,12 @@ watch(() => props.face.id, cancelCreating)
 <template>
   <Item
     :as="isCreating ? 'form' : 'div'"
-    class="w-full relative items-start gap-x-4 gap-y-2 px-3 py-3"
+    class="w-full items-center gap-x-3 gap-y-2 px-3 py-2.5"
     @submit.prevent="createProfile"
     @keydown.esc="isCreating && ($event.stopPropagation(), cancelCreating())"
   >
-    <ItemMedia class="self-start">
-      <div class="relative size-15 overflow-hidden rounded-full bg-muted">
+    <ItemMedia class="relative self-start">
+      <div class="size-12 overflow-hidden rounded-full bg-muted">
         <LoadableImage
           :src="face.portrait"
           :loading="face.portraitLoading"
@@ -93,9 +88,18 @@ watch(() => props.face.id, cancelCreating)
           image-class="size-full object-cover grayscale"
         />
       </div>
+      <!-- The person's other faces open from a small + over this face. -->
+      <span v-if="face.personId && !isCreating" class="absolute -right-1 -bottom-1">
+        <IdentityFacePreview
+          :key="face.personId"
+          :person-id="face.personId"
+          :name="face.name"
+          compact
+        />
+      </span>
     </ItemMedia>
 
-    <ItemContent v-if="isCreating" class="min-w-0 gap-1 overflow-hidden pt-1">
+    <ItemContent v-if="isCreating" class="min-w-0 gap-1 overflow-hidden">
       <ItemTitle class="min-w-0 w-full max-w-full">
         <ContentEditable
           v-model="draftName"
@@ -119,7 +123,7 @@ watch(() => props.face.id, cancelCreating)
       />
     </ItemContent>
 
-    <ItemContent v-else class="min-w-0 gap-1 overflow-hidden pt-1">
+    <ItemContent v-else class="min-w-0 items-start gap-1 overflow-hidden">
       <ItemTitle class="min-w-0 w-full max-w-full">
         <RouterLink
           v-if="face.personId"
@@ -133,7 +137,7 @@ watch(() => props.face.id, cancelCreating)
           class="flex min-w-0 w-full items-center gap-1 underline-offset-4 transition-transform group hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <h4
-            class="flex min-h-8 min-w-0 w-full items-center gap-1.5 rounded-sm border border-transparent px-1 py-0.5"
+            class="flex min-h-6 min-w-0 w-full items-center gap-1.5 rounded-sm border border-transparent px-1"
           >
             <span class="min-w-0 truncate">{{ face.name }}</span>
             <ChevronRight
@@ -144,33 +148,16 @@ watch(() => props.face.id, cancelCreating)
         </RouterLink>
         <h4
           v-else
-          class="min-h-8 w-full truncate rounded-sm border border-transparent px-1 py-0.5 text-muted-foreground"
+          class="min-h-6 w-full truncate rounded-sm border border-transparent px-1 text-muted-foreground"
         >
           Unassigned face
         </h4>
       </ItemTitle>
 
       <EntityLinkStateBadge v-bind="face" />
-      <p
-        class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
-        :title="face.shortDescription"
-      >
-        {{ face.personId ? face.shortDescription || 'No description' : 'Not linked to a person' }}
-      </p>
     </ItemContent>
 
     <ItemFooter class="w-full shrink-0 flex-wrap items-center justify-start gap-2 border-t pt-2">
-      <a
-        v-if="!isCreating && face.wikidataId"
-        :href="wikidataHref(face.wikidataId)"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex min-w-0 basis-full items-center gap-1 text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-current"
-      >
-        <span class="truncate">Wikidata</span>
-        <ExternalLink class="size-3 shrink-0" aria-hidden="true" />
-      </a>
-
       <div v-if="isCreating" class="flex min-w-0 flex-wrap items-center gap-1">
         <Button
           type="submit"
@@ -200,13 +187,7 @@ watch(() => props.face.id, cancelCreating)
       </div>
 
       <div v-else class="flex min-w-0 w-full flex-wrap items-center gap-1">
-        <IdentityFacePreview
-          v-if="face.personId"
-          :key="face.personId"
-          :person-id="face.personId"
-          :name="face.name"
-        />
-        <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+        <div class="flex min-w-0 flex-wrap items-center justify-start gap-1">
           <UiTooltip
             :text="face.embeddingModel ? 'Search people by this face' : 'Face search unavailable'"
           >

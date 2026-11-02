@@ -49,14 +49,38 @@ describe('selected face card (#103)', () => {
     expect(wrapper.emitted('findProfile')).toHaveLength(1)
   })
 
+  it('is compact: face with a + for more faces, state, and left-aligned actions', () => {
+    const wrapper = mount(SelectedFaceItem, {
+      props: {
+        face: { ...face, shortDescription: 'Synthetic archivist', wikidataId: 'Q1' },
+        canDelete: true,
+      },
+      global: { stubs },
+    })
+    const preview = wrapper.getComponent({ name: 'IdentityFacePreview' })
+    expect(preview.props()).toMatchObject({ personId: 'person', name: 'Lina', compact: true })
+    // The + sits over the thumbnail, beside the name and state.
+    expect(wrapper.get('[data-slot="item-media"]').element.contains(preview.element)).toBe(true)
+    expect(wrapper.text()).toContain('Lina')
+    expect(wrapper.text()).not.toContain('Synthetic archivist')
+    expect(wrapper.text()).not.toContain('Wikidata')
+    const actions = wrapper.get('[aria-label="Search people by this face"]').element.closest('div')!
+    expect(actions.className).toContain('justify-start')
+    expect(actions.className).not.toContain('ml-auto')
+  })
+
   it('states an unassigned face truthfully and respects permissions', async () => {
     const wrapper = mount(SelectedFaceItem, {
-      props: { face: { ...face, personId: null, embeddingModel: undefined }, canAnnotate: false },
+      props: {
+        face: { ...face, personId: null, linkState: null, embeddingModel: undefined },
+        canAnnotate: false,
+      },
       slots: { actions: () => h('button', { 'aria-label': 'Verify this link' }) },
       global: { stubs },
     })
     expect(wrapper.text()).toContain('Unassigned face')
-    expect(wrapper.text()).toContain('Not linked to a person')
+    // The assignment-state badge states it; no person info is repeated.
+    expect(wrapper.get('[data-face-status-badge]').text()).toBe('Unassigned')
     // Browsing keeps Search; it needs a face embedding.
     expect(labels(wrapper)).toEqual(['Search people by this face'])
     expect(
