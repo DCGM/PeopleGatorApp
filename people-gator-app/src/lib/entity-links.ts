@@ -33,10 +33,11 @@ export const linkStateVisuals = {
  * the same hue in overview marks, instead of an inline state icon.
  */
 export const mentionStateClasses = {
-  automatic: 'text-sky-700 border-sky-500 dark:text-sky-300 dark:border-sky-400',
-  manual: 'text-amber-700 border-amber-500 dark:text-amber-300 dark:border-amber-400',
-  verified: 'text-emerald-700 border-emerald-500 dark:text-emerald-300 dark:border-emerald-400',
-  unassigned: 'text-muted-foreground border-dashed border-muted-foreground',
+  automatic: 'text-sky-700 decoration-sky-500 dark:text-sky-300 dark:decoration-sky-400',
+  manual: 'text-amber-700 decoration-amber-500 dark:text-amber-300 dark:decoration-amber-400',
+  verified:
+    'text-emerald-700 decoration-emerald-500 dark:text-emerald-300 dark:decoration-emerald-400',
+  unassigned: 'text-muted-foreground decoration-dashed decoration-muted-foreground',
 }
 export const mentionStateFillClasses = {
   automatic: 'fill-sky-500',
