@@ -1,8 +1,10 @@
+import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { EntitySortField, FoundEntity, EntityResponse } from '@/client'
 import { defaultDirection, listSortParams, sortParams, type SortState } from '@/lib/sorting'
-import { useEntityListQuery, type EntityListParams } from '@/query/entities'
+import { fetchEntities, useEntityListQuery, type EntityListParams } from '@/query/entities'
+import { queryKeys } from '@/query/keys'
 import { useEntitySearchQuery, type EntitySearchParams } from '@/query/search'
 import { RELEVANCE } from '@/viewmodels/sort-options'
 import type { PeopleOrder, PeopleScope } from '@/viewmodels/scan-sidebar'
@@ -13,6 +15,7 @@ import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 export type PeopleTier = 'page' | 'document' | 'all'
 const NESTED_TIERS: PeopleTier[] = ['page', 'document', 'all']
 export const SCAN_PEOPLE_BATCH_SIZE = 20
+const MEMBERSHIP_BATCH_SIZE = 50
 
 /**
  * Context order lists this page's people, then the rest of this document, then
@@ -165,6 +168,49 @@ export function useScanPeople(options: {
   const combined = computed(() => combineTiers(used.value.map((slot) => slot.state.value)))
   const activeSlot = computed(() => used.value[combined.value.active])
 
+  // Page and document tiers are document members by definition; other loaded
+  // people are checked in batches against the document scope.
+  const knownMembers = computed(() => {
+    const ids = new Set<string>()
+    for (const { record, tier } of combined.value.items)
+      if (tiers.value[tier] !== 'all') ids.add(record.entity_id)
+    return ids
+  })
+  const membershipBatches = computed(() => {
+    const ids = combined.value.items
+      .map(({ record }) => record.entity_id)
+      .filter((id) => !knownMembers.value.has(id))
+      .sort()
+    const batches: string[][] = []
+    for (let index = 0; index < ids.length; index += MEMBERSHIP_BATCH_SIZE)
+      batches.push(ids.slice(index, index + MEMBERSHIP_BATCH_SIZE))
+    return batches
+  })
+  const membership = useQueries({
+    queries: computed(() => {
+      const document = toValue(options.sources)?.document
+      return membershipBatches.value.map((ids) => {
+        const params: EntityListParams = {
+          'filter.document_source_id': [document ?? ''],
+          'filter.entity_id': ids,
+          limit: ids.length,
+        }
+        return {
+          queryKey: queryKeys.entities.list(params),
+          queryFn: ({ signal }: { signal: AbortSignal }) => fetchEntities(params, signal),
+          enabled: ready.value && Boolean(document),
+          staleTime: 60_000,
+        }
+      })
+    }),
+  })
+  const documentMembers = computed(() => {
+    const ids = new Set(knownMembers.value)
+    for (const query of membership.value)
+      for (const entity of query.data?.items ?? []) ids.add(entity.entity_id)
+    return ids
+  })
+
   const pageFaceCounts = computed(() => {
     const counts = new Map<string, number>()
     for (const face of toValue(options.pageFaces))
@@ -222,6 +268,9 @@ export function useScanPeople(options: {
             : []),
           ...(mentionCount > 0 ? ([{ type: 'scan-text' }] as const) : []),
           ...(detections > 0 ? ([{ type: 'scan-face' }] as const) : []),
+          ...(documentMembers.value.has(record.entity_id)
+            ? ([{ type: 'in-document' }] as const)
+            : []),
         ],
         wikidataId: record.wikidata_id || undefined,
         nlcrAuthorityId: record.nlcr_authority_id || undefined,
