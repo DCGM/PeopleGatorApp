@@ -103,6 +103,16 @@ describe('useScanPeople (#103)', () => {
 
   it('lists page, then document, then other people across cursor batches without duplicates', async () => {
     api.entities.mockImplementation(({ query }) => {
+      // Membership lookups list which requested people are in the document.
+      if (query['filter.entity_id'])
+        return Promise.resolve({
+          data: {
+            items: (query['filter.entity_id'] as string[])
+              .filter((id) => ['ada', 'bea', 'cyril', 'eve'].includes(id))
+              .map((id) => person(id)),
+            cursor: null,
+          },
+        })
       const scope = query['filter.page_source_id']
         ? 'page'
         : query['filter.document_source_id']
@@ -132,6 +142,19 @@ describe('useScanPeople (#103)', () => {
     await model().loadMore()
     await flushPromises()
     expect(model().people.value.map((item) => item.id)).toEqual(['ada', 'bea', 'cyril', 'dora'])
+    await flushPromises()
+    const inDocument = (id: string) =>
+      model()
+        .people.value.find((item) => item.id === id)
+        ?.matchSources?.some((source) => source.type === 'in-document')
+    // Page and document tiers are members; others are checked by a lookup.
+    expect(['ada', 'bea', 'cyril', 'dora'].map(inDocument)).toEqual([true, true, true, false])
+    const lookups = api.entities.mock.calls.filter(([call]) => call.query['filter.entity_id'])
+    expect(lookups).toHaveLength(1)
+    expect(lookups[0]![0].query).toMatchObject({
+      'filter.document_source_id': ['document-source'],
+      'filter.entity_id': ['dora'],
+    })
     expect(model().people.value[0]?.sourceId).toBe('page-source')
     expect(model().hasNextPage.value).toBe(false)
     expect(api.search).not.toHaveBeenCalled()
@@ -173,7 +196,11 @@ describe('useScanPeople (#103)', () => {
     expect(model().totalCount.value).toBe(1)
     const [ada] = model().people.value
     expect(ada).toMatchObject({ id: 'ada', faceId: 'f', referenceFaceId: 'face-a' })
-    expect(ada?.matchSources?.map((source) => source.type)).toEqual(['text-search', 'face-match'])
+    expect(ada?.matchSources?.map((source) => source.type)).toEqual([
+      'text-search',
+      'face-match',
+      'in-document',
+    ])
     expect(api.entities).not.toHaveBeenCalled()
     wrapper.unmount()
     client.clear()

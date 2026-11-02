@@ -155,6 +155,25 @@ describe('People panel (#103)', () => {
     expect((field.element as HTMLTextAreaElement).value).toBe('')
   })
 
+  it('marks page text, page faces and document membership with one icon each', () => {
+    const wrapper = panel({
+      people: [
+        {
+          ...candidate,
+          matchSources: [{ type: 'scan-text' }, { type: 'scan-face' }, { type: 'in-document' }],
+        },
+      ],
+    })
+    const badges = wrapper.get('[aria-label="Match sources"]')
+    expect(badges.findAll('[aria-label]').map((badge) => badge.attributes('aria-label'))).toEqual([
+      'Mentioned on this page',
+      'Face on this page',
+      'In this document',
+    ])
+    expect(badges.findAll('svg')).toHaveLength(3)
+    expect(badges.find('.lucide-scan').exists()).toBe(false)
+  })
+
   it('assigns only a selected face, separately from preview', async () => {
     const wrapper = panel()
     expect(wrapper.find('button[aria-label^="Assign to"]').exists()).toBe(false)

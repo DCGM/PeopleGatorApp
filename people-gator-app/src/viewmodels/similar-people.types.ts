@@ -5,6 +5,7 @@ export type SimilarPersonMatchSource =
   | { type: 'face-match'; distance: number }
   | { type: 'scan-text' }
   | { type: 'scan-face' }
+  | { type: 'in-document' }
 
 export type SimilarPersonCandidate = {
   id: string

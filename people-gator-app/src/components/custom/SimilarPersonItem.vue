@@ -3,8 +3,8 @@ import {
   Check,
   ChevronRight,
   ExternalLink,
+  FileText,
   LetterText,
-  Scan,
   ScanFace,
   Search,
   UserRound,
@@ -57,9 +57,11 @@ function sourceLabel(source: SimilarPersonMatchSource) {
     case 'face-match':
       return `Face match cosine distance ${source.distance.toFixed(2)}`
     case 'scan-text':
-      return 'Found in scanned text'
+      return 'Mentioned on this page'
     case 'scan-face':
-      return 'Found in scanned faces'
+      return 'Face on this page'
+    case 'in-document':
+      return 'In this document'
   }
 }
 
@@ -111,14 +113,16 @@ function formatTextScore(score: number) {
           </span>
         </template>
         <template v-else-if="source.type === 'scan-text'">
-          <Scan aria-hidden="true" />
           <LetterText aria-hidden="true" />
-          <span class="sr-only">Found in scanned text</span>
+          <span class="sr-only">Mentioned on this page</span>
+        </template>
+        <template v-else-if="source.type === 'scan-face'">
+          <UserRound aria-hidden="true" />
+          <span class="sr-only">Face on this page</span>
         </template>
         <template v-else>
-          <Scan aria-hidden="true" />
-          <UserRound aria-hidden="true" />
-          <span class="sr-only">Found in scanned faces</span>
+          <FileText aria-hidden="true" />
+          <span class="sr-only">In this document</span>
         </template>
       </Badge>
     </ItemActions>
