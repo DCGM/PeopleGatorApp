@@ -1,10 +1,11 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { computed, defineComponent, h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import PersonMentionEntry from '@/components/custom/PersonMentionEntry.vue'
 import SelectedFaceItem from '@/components/custom/SelectedFaceItem.vue'
 import { useRouteQueryPatch } from '@/composables/route-query'
+import { SCAN_SELECTED_MENTION } from '@/viewmodels/scan-sidebar'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 import type { Face } from '@/viewmodels/document-workspace.types'
 
@@ -76,8 +77,19 @@ describe('scan sidebar navigation (#103)', () => {
           metadata: { entity_id: 'ada' },
         } as unknown as PersonMention,
       },
-      global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+      global: {
+        plugins: [router],
+        stubs: { RouterLink: RouterLinkStub },
+        provide: { [SCAN_SELECTED_MENTION as symbol]: computed(() => 'm1') },
+      },
     })
+    // The page label and the mention text both select the mention there.
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    expect(links).toHaveLength(2)
+    expect(links[1]!.attributes('aria-label')).toBe('Select mention: Ada wrote.')
+    expect(links[1]!.attributes('aria-current')).toBe('true')
+    expect(wrapper.find('[data-mention-selected]').exists()).toBe(true)
+    expect(links[1]!.props('to')).toEqual(links[0]!.props('to'))
     expect(wrapper.getComponent(RouterLinkStub).props('to')).toMatchObject({
       params: { pageId: 'two' },
       query: {
@@ -86,6 +98,7 @@ describe('scan sidebar navigation (#103)', () => {
         page_link_state: 'manual',
         person: undefined,
         line: undefined,
+        mention: 'm1',
         selectedPerson: 'ada',
       },
     })

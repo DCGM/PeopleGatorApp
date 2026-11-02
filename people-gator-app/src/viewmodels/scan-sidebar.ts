@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, type InjectionKey, type Ref } from 'vue'
 import { useRoute, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 
 import type { TextMentionGroupSortField, TextMentionSortField, FaceSortField } from '@/client'
@@ -21,6 +21,10 @@ import {
  * Back/Forward restore them, and every tab keeps its own keys while another is
  * open. Absent or invalid values resolve to the agreed defaults.
  */
+/** The mention selected on the scan, so listed mentions can show it. */
+export const SCAN_SELECTED_MENTION: InjectionKey<Readonly<Ref<string | null>>> =
+  Symbol('scan-selected-mention')
+
 export const SIDEBAR_TABS = ['people', 'faces', 'mentions', 'info'] as const
 export type SidebarTab = (typeof SIDEBAR_TABS)[number]
 

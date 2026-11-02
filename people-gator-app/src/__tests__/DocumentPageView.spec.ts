@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
   focusPeople: vi.fn(),
+  mention: vi.fn(),
   deleteFace: vi.fn(),
   patchFace: vi.fn(),
   assignFace: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/client', async (original) => ({
   ...(await original<typeof import('@/client')>()),
   deleteFaceRouteApiV1FacesDetectionIdDelete: mocks.deleteFace,
   patchFaceRouteApiV1FacesDetectionIdPatch: mocks.patchFace,
+  getTextMentionRouteApiV1TextMentionsMentionIdGet: mocks.mention,
 }))
 vi.mock('@/composables/can-annotate', () => ({
   useCanAnnotate: () => ref(true),
@@ -127,6 +129,7 @@ beforeEach(() => {
     page: ref({ page_id: 'one', source_id: 'source' }),
     pageImageReady: ready,
     annotationsLoading: ref(false),
+    isLoading: ref(false),
     pageDimensions: ref({ width: 800, height: 1100 }),
     pageImageUrl: ref(''),
     pageImageLoading: ref(false),
@@ -880,4 +883,47 @@ describe('scan sidebar (#103)', () => {
     })
     wrapper.unmount()
   })
+})
+
+it('selects a mention requested from the Mentions tab on its own, revealed line (#103)', async () => {
+  // Spans match recorded text, so mention m9 also matches the first line.
+  lines.value = ['l1', 'l2', 'l3'].map((id, index) => ({
+    id,
+    text: index === 1 ? 'Plain context' : index === 0 ? 'Ada opened' : 'Ada wrote',
+    position: { ...box, top: 20 + index * 50 },
+    entities: index === 1 ? [] : [{ ...span(id), mention_id: 'm9', occurrence: `m9:${id}:0` }],
+  }))
+  mocks.mention.mockResolvedValue({
+    data: { mention_id: 'm9', name: 'Ada', context: 'Ada wrote', entity_id: 'ada' },
+  })
+  // Person mode for someone else hides the requested line until it is selected.
+  route.query = { mention: 'm9', lines: 'person', selectedPerson: 'nobody' }
+  const wrapper = await mountView()
+  await settleFocus()
+  const transcription = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+  expect(transcription.props('selectedLineIndex')).toBe(2)
+  expect(transcription.props('selectedEntityKey')).toBe('m9:l3:0')
+  expect(transcription.props('included')[2]).toBe(true)
+  expect(mocks.replace).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      query: expect.objectContaining({ mention: undefined, line: 'l3', selectedPerson: 'ada' }),
+    }),
+  )
+  wrapper.unmount()
+})
+
+it('selects the line of an unlinked mention requested from the Mentions tab (#103)', async () => {
+  mocks.mention.mockResolvedValue({
+    data: { mention_id: 'loose', name: 'Ada', context: 'Ada', entity_id: null },
+  })
+  route.query = { mention: 'loose' }
+  const wrapper = await mountView()
+  await settleFocus()
+  const transcription = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+  expect(transcription.props('selectedLineIndex')).toBe(0)
+  expect(transcription.props('selectedEntityKey')).toBeNull()
+  expect(mocks.replace).toHaveBeenLastCalledWith(
+    expect.objectContaining({ query: expect.objectContaining({ mention: undefined }) }),
+  )
+  wrapper.unmount()
 })

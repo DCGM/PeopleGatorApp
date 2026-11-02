@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onBeforeUnmount } from 'vue'
+import { computed, inject, ref, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { Info } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
@@ -7,6 +7,7 @@ import AnnotationLastChange from './AnnotationLastChange.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { SCAN_SELECTED_MENTION } from '@/viewmodels/scan-sidebar'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   mention: PersonMention
@@ -16,8 +17,11 @@ const props = defineProps<{
   compact?: boolean
 }>()
 const route = useRoute()
-// From a scan, another page opens with the same scan settings; elsewhere a
-// mention opens its page with only the person as explicit context (#109).
+const onScan = computed(() => route.name === 'document-page')
+const selectedOnScan = inject(SCAN_SELECTED_MENTION, null)
+const selected = computed(() => selectedOnScan?.value === props.mention.id)
+// From a scan, the mention is selected there, on this page or another one,
+// keeping the scan settings; elsewhere only the person is explicit context (#109).
 const target = computed(() => ({
   name: 'document-page',
   params: {
@@ -26,8 +30,8 @@ const target = computed(() => ({
     pageId: props.mention.pageId,
   },
   query: {
-    ...(route.name === 'document-page'
-      ? { ...route.query, person: undefined, line: undefined }
+    ...(onScan.value
+      ? { ...route.query, person: undefined, line: undefined, mention: props.mention.id }
       : {}),
     selectedPerson: props.personId ?? props.mention.metadata?.entity_id ?? undefined,
   },
@@ -56,7 +60,11 @@ const parts = computed(() => {
 })
 </script>
 <template>
-  <div class="flex min-w-0 items-start gap-2 font-sans">
+  <div
+    class="flex min-w-0 items-start gap-2 rounded-md font-sans"
+    :class="selected && 'bg-accent/15 ring-1 ring-accent'"
+    :data-mention-selected="selected || undefined"
+  >
     <div class="min-w-0 flex-1" :class="compact && 'flex flex-wrap items-center gap-x-2 gap-y-1'">
       <div class="flex min-w-0 items-center gap-2" :class="compact && 'max-w-full shrink-0'">
         <RouterLink
@@ -76,10 +84,18 @@ const parts = computed(() => {
         }}</span>
         <EntityLinkStateBadge v-bind="mention" class="shrink-0" />
       </div>
-      <p
-        class="min-w-0 break-words font-serif"
-        :class="compact && 'basis-full truncate sm:basis-0 sm:flex-1'"
+      <component
+        :is="onScan && mention.pageId ? 'RouterLink' : 'p'"
+        :to="onScan && mention.pageId ? target : undefined"
+        class="block min-w-0 break-words font-serif"
+        :class="[
+          compact && 'basis-full truncate sm:basis-0 sm:flex-1',
+          onScan &&
+            'rounded-sm hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-ring',
+        ]"
         :title="mention.excerpt"
+        :aria-label="onScan ? `Select mention: ${mention.excerpt}` : undefined"
+        :aria-current="selected ? 'true' : undefined"
       >
         <template v-if="parts"
           >{{ parts[0]
@@ -94,7 +110,7 @@ const parts = computed(() => {
           }}</mark>
           · {{ mention.excerpt }}</template
         >
-      </p>
+      </component>
     </div>
     <Popover v-model:open="infoOpen">
       <PopoverTrigger as-child
