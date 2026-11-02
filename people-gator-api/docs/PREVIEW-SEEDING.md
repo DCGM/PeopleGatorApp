@@ -1163,8 +1163,10 @@ lines stay unannotated. One unembedded Ada face sits beside the text.
   Arrow keys step through visible lines only. Reveal 5 lines below L8 (the view
   becomes **Custom**), then select Viktor's mention on L10: the lines and scroll
   position stay put. Choose **Person** to see Viktor's lines (L10, L25).
-- Open `teleprompter-annotated` to see that **Verified** highlighting marks only
-  Viktor's mentions, while every annotated line stays visible.
+- Open `teleprompter-annotated` (Annotated with **Verified**): only Viktor's
+  verified lines L10 and L25 are shown. Add **Manual** to include Nora's L20; with
+  no state chosen (**All**), every annotated line returns. In Person mode the
+  states narrow the person's own mentions, so Ada with **Verified** is empty.
 - The page-scoped minimap on the right grays hidden lines and colors highlighted
   mentions. Click a gray gap to center the nearest passages without revealing it.
 

@@ -19,6 +19,7 @@ import {
   parseLineVisibility,
   passages,
   useTeleprompterLines,
+  type HighlightState,
   type LineMode,
   type LineVisibility,
 } from '@/viewmodels/teleprompter'
@@ -86,6 +87,35 @@ describe('teleprompter line visibility', () => {
     ])
     expect(modeLines(lines, 'annotated', null).filter(Boolean)).toHaveLength(5)
     expect(modeLines(lines, 'all', null).every(Boolean)).toBe(true)
+  })
+
+  it('narrows Annotated and Person lines to annotations in the chosen states', () => {
+    const lines = sample()
+    const shown = (values: boolean[]) =>
+      values.flatMap((value, index) => (value ? [index + 1] : []))
+    // Ada: verified on L2, manual on L7, automatic on L9–L10; another identity on L4.
+    expect(shown(modeLines(lines, 'annotated', null, ['verified']))).toEqual([2])
+    expect(shown(modeLines(lines, 'annotated', null, ['manual', 'automatic']))).toEqual([
+      4, 7, 9, 10,
+    ])
+    expect(shown(modeLines(lines, 'person', 'ada', ['automatic']))).toEqual([9, 10])
+    // A matching annotation of another person does not qualify a Person line.
+    expect(shown(modeLines(lines, 'person', 'other-ada', ['verified']))).toEqual([])
+    expect(shown(modeLines(lines, 'all', null, ['verified']))).toHaveLength(10)
+  })
+
+  it('keeps Custom lines when the annotation states change', async () => {
+    const mode = ref<LineVisibility>('annotated')
+    const states = ref<HighlightState[]>(['verified'])
+    const state = useTeleprompterLines(ref(sample()), mode, ref(null), ref('one'), states)
+    const shown = () => state.included.value.flatMap((value, index) => (value ? [index + 1] : []))
+    expect(shown()).toEqual([2])
+    state.reveal([2])
+    expect(shown()).toEqual([2, 3])
+    states.value = []
+    await nextTick()
+    expect(mode.value).toBe('custom')
+    expect(shown()).toEqual([2, 3])
   })
 
   it('keeps Person mode empty without a selected person or matches', () => {
@@ -310,16 +340,29 @@ describe('DocumentTeleprompter', () => {
   })
 
   it.each([
-    ['person', null, 'Select a person to see their lines.'],
-    ['person', 'nobody', 'No lines for this person. Select another person or switch to All.'],
-    ['annotated', null, 'No annotated lines. Switch to All.'],
-  ])('keeps %s mode empty with a short message', (mode, person, message) => {
+    ['person', null, [], 'Select a person to see their lines.'],
+    ['person', 'nobody', [], 'No lines for this person. Select another person or switch to All.'],
+    [
+      'person',
+      'nobody',
+      ['verified'],
+      'No matching lines for this person. Change the annotation states or switch to All.',
+    ],
+    ['annotated', null, [], 'No annotated lines. Switch to All.'],
+    [
+      'annotated',
+      null,
+      ['unassigned'],
+      'No lines with these annotations. Change the annotation states or switch to All.',
+    ],
+  ])('keeps %s mode empty with a short message', (mode, person, states, message) => {
     const transcription = sample().map((line) => ({ ...line, entities: [] }))
     const wrapper = render({
       transcription,
       relatedEntityId: person,
       lineVisibility: mode,
-      included: modeLines(transcription, mode as LineMode, person),
+      annotationHighlight: states,
+      included: modeLines(transcription, mode as LineMode, person, states as HighlightState[]),
       isTranslationOpen: true,
     })
     expect(wrapper.text()).toContain(message)
@@ -329,7 +372,7 @@ describe('DocumentTeleprompter', () => {
     expect(wrapper.find('[aria-label="Translate teleprompter text"]').exists()).toBe(false)
   })
 
-  it('changes highlighted annotations without changing the visible lines', async () => {
+  it('highlights only the chosen states within the lines it is given', async () => {
     const included = modeLines(sample(), 'annotated', null)
     const wrapper = render({ lineVisibility: 'annotated', included })
     const lineCount = wrapper.findAll('[data-line-index]:not([data-hidden])').length
@@ -347,9 +390,9 @@ describe('DocumentTeleprompter', () => {
 
   it('uses the scan toolbar link-state toggle group, plus Unassigned and All', async () => {
     const wrapper = render()
-    const group = wrapper.get('[aria-label="Highlight controls"]')
+    const group = wrapper.get('[aria-label="Annotation state controls"]')
     expect(
-      group.findAll('[aria-label="Highlight"] button').map((item) => item.attributes('aria-label')),
+      group.findAll('[aria-label="Annotation states"] button').map((item) => item.attributes('aria-label')),
     ).toEqual(['Automatic', 'Manual', 'Verified', 'Unassigned'])
     const all = group.findAll('button').find((button) => button.text() === 'All')!
     expect(all.attributes('aria-pressed')).toBe('true')

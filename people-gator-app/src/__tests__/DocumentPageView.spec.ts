@@ -575,9 +575,29 @@ describe('teleprompter focus modes (#36)', () => {
       id,
       text: index === 1 ? 'Plain context' : 'Ada',
       position: { ...box, top: 20 + index * 30 },
-      entities: index === 1 ? [] : [span(id)],
+      // Verified on L1 and L3, so a Verified filter keeps both.
+      entities: index === 1 ? [] : [{ ...span(id), linkState: 'verified' as const }],
     }))
   }
+
+  it('narrows Annotated lines to the chosen annotation states, keeping the mode', async () => {
+    route.query = { lines: 'annotated' }
+    threeLines()
+    lines.value[2]!.entities = [{ ...span('l3'), linkState: 'manual' }]
+    const wrapper = await mountView()
+    const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    expect(teleprompter.props('included')).toEqual([true, false, true])
+    teleprompter.vm.$emit('update:annotationHighlight', ['manual'])
+    await flushPromises()
+    expect(teleprompter.props('lineVisibility')).toBe('annotated')
+    expect(teleprompter.props('included')).toEqual([false, false, true])
+    // The selection moves from the now hidden L1 to the nearest matching line.
+    expect(teleprompter.props('selectedLineIndex')).toBe(2)
+    teleprompter.vm.$emit('update:annotationHighlight', [])
+    await flushPromises()
+    expect(teleprompter.props('included')).toEqual([true, false, true])
+    wrapper.unmount()
+  })
 
   it('restores Person mode from the URL and navigates only its visible lines', async () => {
     route.query = { lines: 'person', highlight: 'verified', selectedPerson: 'ada' }

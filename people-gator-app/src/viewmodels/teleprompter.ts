@@ -53,19 +53,27 @@ export function highlightsSpan(span: TranscriptionEntitySpan, states: readonly H
 }
 
 /**
- * Lines allowed by the visibility mode alone. Person mode matches linked
- * identity IDs, so every fragment of a multiline mention qualifies, and stays
+ * Lines allowed by the visibility mode. Annotated keeps lines with an
+ * annotation in the chosen states (any state when none are chosen); Person
+ * keeps lines where the selected identity's own annotations match, by linked
+ * identity ID, so every fragment of a multiline mention qualifies. Person stays
  * empty without a selected person rather than falling back to full text.
  */
 export function modeLines(
   lines: readonly TranscriptionLine[],
   mode: LineMode,
   personId: string | null,
+  states: readonly HighlightState[] = [],
 ): boolean[] {
   if (mode === 'all') return lines.map(() => true)
-  if (mode === 'annotated') return lines.map((line) => Boolean(line.entities?.length))
+  if (mode === 'annotated')
+    return lines.map((line) => line.entities?.some((span) => highlightsSpan(span, states)) ?? false)
   if (!personId) return lines.map(() => false)
-  return lines.map((line) => line.entities?.some((span) => span.entity_id === personId) ?? false)
+  return lines.map(
+    (line) =>
+      line.entities?.some((span) => span.entity_id === personId && highlightsSpan(span, states)) ??
+      false,
+  )
 }
 
 /** Mode lines plus manually revealed context, in original order. */
@@ -198,13 +206,15 @@ export function useTeleprompterLines(
   mode: Ref<LineVisibility>,
   personId: MaybeRefOrGetter<string | null>,
   pageKey: MaybeRefOrGetter<string>,
+  states: MaybeRefOrGetter<readonly HighlightState[]> = [],
 ) {
   const custom = shallowRef<ReadonlySet<number> | null>(null)
   /** The mode a Custom view was created from, restored by reset and in the URL. */
   const customBase = ref<LineMode>('annotated')
   const included = computed(() => {
     const lines = toValue(transcription)
-    if (mode.value !== 'custom') return modeLines(lines, mode.value, toValue(personId))
+    if (mode.value !== 'custom')
+      return modeLines(lines, mode.value, toValue(personId), toValue(states))
     const selected = custom.value ?? new Set<number>()
     return lines.map((_, index) => selected.has(index))
   })

@@ -230,11 +230,17 @@ function gapActions(gap: Gap): GapAction[] {
 const emptyMessage = computed(() => {
   if (visiblePassages.value.length) return ''
   if (!lineCount.value) return 'No transcription.'
-  if (lineVisibility.value === 'person')
-    return props.relatedEntityId
-      ? 'No lines for this person. Select another person or switch to All.'
-      : 'Select a person to see their lines.'
-  if (lineVisibility.value === 'annotated') return 'No annotated lines. Switch to All.'
+  const filtered = annotationHighlight.value.length > 0
+  if (lineVisibility.value === 'person') {
+    if (!props.relatedEntityId) return 'Select a person to see their lines.'
+    return filtered
+      ? 'No matching lines for this person. Change the annotation states or switch to All.'
+      : 'No lines for this person. Select another person or switch to All.'
+  }
+  if (lineVisibility.value === 'annotated')
+    return filtered
+      ? 'No lines with these annotations. Change the annotation states or switch to All.'
+      : 'No annotated lines. Switch to All.'
   return 'No transcription.'
 })
 
