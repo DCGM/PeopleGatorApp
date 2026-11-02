@@ -120,6 +120,15 @@ PEOPLE = (
     # Issue #66: evidence written by a reviewer who was deactivated afterwards.
     Person("deactivated-olga", "Olga Expiry", (),
            "Synthetic person linked by a reviewer whose account is now inactive.", "former"),
+    # Issue #103: page, document and other people for the scan sidebar.
+    Person("sidebar-hana", "Hana Sidebar", (),
+           "Synthetic scan-sidebar person with faces and repeated mentions on one page.", "importer"),
+    Person("sidebar-tomas", "Tomas Lettered", (),
+           "Synthetic scan-sidebar person mentioned in text only.", "importer"),
+    Person("sidebar-rosa", "Rosa Elsewhere", (),
+           "Synthetic scan-sidebar person with one face on another page of the document.", "importer"),
+    Person("sidebar-karel", "Karel Crowd", (),
+           "Synthetic scan-sidebar person whose many faces span several pages.", "importer"),
 )
 
 
@@ -191,6 +200,7 @@ DOCUMENTS = (
     Document("reference-faces", "preview-nlk", "Reference appearances"),
     Document("alignment", "preview-mzk", "Face alignment recovery"),
     Document("teleprompter", "preview-mzk", "Teleprompter reading practice"),
+    Document("scan-sidebar", "preview-mzk", "Scan sidebar practice"),
 )
 
 
@@ -289,6 +299,42 @@ TELEPROMPTER_WRAPPED_LINES = (
     "The register was returned to its shelf.",
 )
 
+SIDEBAR_CROWD_PAGES = 3
+SIDEBAR_CROWD_FACES = 12
+SIDEBAR_REPEATED_MENTIONS = 7
+
+
+def _sidebar_crowd_face(page: int, index: int) -> Face:
+    """Two rows of six small faces above the text; every fourth stays unassigned."""
+    person = (None if index % 4 == 3 else
+              "sidebar-rosa" if (page, index) == (2, 0) else "sidebar-karel")
+    return Face(f"sidebar-crowd-{page}-{index}", person, index, 1,
+                ("automatic", "manual", "verified")[index % 3], embedded=False,
+                box=(50 + index % 6 * 120, 190 + index // 6 * 160, 110, 140))
+
+
+# Issue #103: one page with face and text-only people, two of Hana's faces, an
+# unassigned face and a repeated phrase that includes an unlinked occurrence,
+# beside further pages whose faces and occurrences exceed one sidebar batch.
+SIDEBAR_PAGES = (
+    Page("scan-sidebar-1", "scan-sidebar", 1, (
+        Face("sidebar-hana-left", "sidebar-hana", 0, 2),
+        Face("sidebar-unassigned", None, 1, 2),
+        Face("sidebar-hana-right", "sidebar-hana", 2, 2, "manual"),
+    ), (
+        Mention("sidebar-hana-opened", "sidebar-hana", "Hana Sidebar opened the ledger."),
+        Mention("sidebar-hana-signed", "sidebar-hana", "Hana Sidebar signed the margin.", "verified"),
+        Mention("sidebar-hana-unlinked", "sidebar-hana", "Hana Sidebar appears in a caption.", None),
+        Mention("sidebar-tomas", "sidebar-tomas", "Tomas Lettered wrote the heading."),
+    )),
+    *(Page(f"scan-sidebar-{page}", "scan-sidebar", page,
+           tuple(_sidebar_crowd_face(page, index) for index in range(SIDEBAR_CROWD_FACES)),
+           tuple(Mention(f"sidebar-hana-{page}-{index}", "sidebar-hana",
+                         f"Hana Sidebar filed entry {page}.{index + 1}.",
+                         ("automatic", "manual", "verified")[index % 3])
+                 for index in range(SIDEBAR_REPEATED_MENTIONS)))
+      for page in range(2, SIDEBAR_CROWD_PAGES + 2)),
+)
 PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
@@ -573,6 +619,7 @@ PAGES = (
     Page("teleprompter-wrap-2", "teleprompter", 2, (),
          (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
          lines=TELEPROMPTER_WRAPPED_LINES),
+    *SIDEBAR_PAGES,
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"
