@@ -45,7 +45,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field as dataclass_field
 from pydantic import AnyUrl
-from people_gator_api.schemas.audit import AuditQuery, AuditListResponse
+from people_gator_api.schemas.audit import AuditQuery, AuditListResponse, AuditRevision, ObjectKind
 from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest, APIKeyResponse, APIKeyListResponse, APIKeyListRequest
 from people_gator_api.schemas.missing import MISSING, MissingType
@@ -141,6 +141,10 @@ from people_gator_api.schemas.users import (
 
 class AuditRepository(ABC):
     """Immutable predecessor/final-state history; unavailable adapters fail explicitly."""
+
+    async def get(self, object_type: "ObjectKind", object_id: uuid.UUID, version: int) -> "AuditRevision | None":
+        result = await self.list(AuditQuery(object_type=object_type, object_id=object_id, version_min=version, version_max=version, limit=1))
+        return result.items[0] if result.items else None
 
     async def list(self, query: "AuditQuery") -> "AuditListResponse":
         raise NotImplementedError("Audit history requires PostgreSQL")
