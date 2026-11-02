@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { ArrowUp, ChevronDown } from '@lucide/vue'
+import { ChevronDown, Search } from '@lucide/vue'
 import ListPagination from './ListPagination.vue'
 import SearchFaceAttachment from './SearchFaceAttachment.vue'
 import SimilarPersonItem from './SimilarPersonItem.vue'
@@ -153,7 +153,7 @@ defineExpose({ focus: () => group.value?.querySelector('textarea')?.focus() })
             size="icon-xs"
             :disabled="!changed"
           >
-            <ArrowUp class="size-4" aria-hidden="true" />
+            <Search class="size-4" aria-hidden="true" />
             <span class="sr-only">Search</span>
           </InputGroupButton>
         </InputGroupAddon>
