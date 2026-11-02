@@ -32,6 +32,8 @@ const documentWorkspaceMock = vi.hoisted(() => ({
 
 vi.mock('@panzoom/panzoom', () => ({
   default: vi.fn<() => object>(() => ({
+    getScale: () => 0.82,
+    getPan: () => ({ x: 0, y: 0 }),
     destroy: vi.fn<() => void>(),
     reset: vi.fn<() => void>(),
     zoomIn: vi.fn<() => void>(),

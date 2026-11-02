@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   route: vi.fn(),
   zoom: vi.fn(),
   pan: vi.fn(),
+  zoomIn: vi.fn(),
+  zoomWithWheel: vi.fn(),
   reset: vi.fn(),
   gallery: vi.fn(),
   replace: vi.fn(),
@@ -47,6 +49,8 @@ vi.mock('@/viewmodels/document-page-gallery', async (importOriginal) => ({
 vi.mock('@panzoom/panzoom', () => ({
   default: () => ({
     zoom: mocks.zoom,
+    zoomIn: mocks.zoomIn,
+    zoomWithWheel: mocks.zoomWithWheel,
     pan: mocks.pan,
     reset: mocks.reset,
     getScale: () => 1,
@@ -284,7 +288,7 @@ describe('document page gallery navigation', () => {
     expect(transcription.props('selectedLineIndex')).toBe(1)
     route.params.pageId = 'two'
     await settleFocus()
-    expect(mocks.reset).toHaveBeenCalledWith({ animate: false })
+    expect(mocks.reset).toHaveBeenCalledWith(expect.objectContaining({ animate: false, startScale: 0.82 }))
     expect(transcription.props('selectedEntityKey')).toBeNull()
     expect(transcription.props('selectedLineIndex')).toBe(0)
     wrapper.unmount()
@@ -729,8 +733,6 @@ describe('resizable transcription panel (#36)', () => {
         const wrapper = await mountView()
         const group = wrapper.get('.workspace-split > div')
         expect(group.attributes('direction')).toBe(direction)
-        // Each layout remembers its own user-resized split.
-        expect(group.attributes('auto-save-id')).toBe(`document-workspace-${direction}`)
         const panels = group.element.children
         // Transcription first (left or top), then the handle, then the scan.
         expect(
@@ -743,4 +745,43 @@ describe('resizable transcription panel (#36)', () => {
       }
     },
   )
+})
+
+
+it('keeps the live scan and its actions through repeated responsive round trips', async () => {
+  const original = window.matchMedia
+  const module = await import('@panzoom/panzoom')
+  const initialize = vi.spyOn(module, 'default')
+  let wide = true
+  let listener: ((event: { matches: boolean; media: string }) => void) | undefined
+  window.matchMedia = vi.fn((query: string) => ({
+    get matches() { return query.includes('1024') && wide },
+    media: query,
+    addEventListener: (_: string, callback: typeof listener) => { if (query.includes('1024')) listener = callback },
+    removeEventListener: vi.fn(),
+  })) as unknown as typeof window.matchMedia
+  const wrapper = await mountView()
+  try {
+    const element = wrapper.get('.panzoom-layer').element
+    const viewer = wrapper.get('.workspace-viewer').element
+    for (let pass = 0; pass < 3; pass++) {
+      for (const value of [false, true]) {
+        wide = value
+        listener?.({ matches: value, media: '(min-width: 1024px)' })
+        await settleFocus()
+        expect(wrapper.get('.panzoom-layer').element).toBe(element)
+        expect(wrapper.get('.workspace-viewer').element).toBe(viewer)
+        wrapper.findComponent({ name: 'DocumentControls' }).vm.$emit('set-zoom', 'in')
+        viewer.dispatchEvent(new WheelEvent('wheel'))
+      }
+    }
+    expect(initialize).toHaveBeenCalledTimes(1)
+    expect(initialize.mock.calls[0]![0]).toBe(element)
+    expect(mocks.zoomIn).toHaveBeenCalledTimes(6)
+    expect(mocks.zoomWithWheel).toHaveBeenCalledTimes(6)
+  } finally {
+    wrapper.unmount()
+    window.matchMedia = original
+    initialize.mockRestore()
+  }
 })

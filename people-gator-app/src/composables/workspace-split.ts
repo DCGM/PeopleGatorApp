@@ -1,0 +1,61 @@
+import { nextTick, watch, type Ref } from 'vue'
+
+type Direction = 'horizontal' | 'vertical'
+export type WorkspacePanel = { getSize: () => number; resize: (size: number) => void }
+const STORAGE_KEY = 'document-workspace-layouts-v1'
+
+function validSize(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 15 && value <= 70
+}
+
+/** Restore each orientation explicitly, without remounting either panel. */
+export function useWorkspaceSplit(direction: Ref<Direction>, panel: Ref<WorkspacePanel | null>) {
+  const sizes: Record<Direction, number> = { horizontal: 40, vertical: 30 }
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    for (const mode of ['horizontal', 'vertical'] as const) {
+      if (validSize(stored?.[mode])) sizes[mode] = stored[mode]
+      else {
+        // Retain sizes saved by the earlier, orientation-keyed splitter.
+        const legacy = JSON.parse(localStorage.getItem(`reka:document-workspace-${mode}`) ?? '{}')
+        const state = Object.values(legacy).find((value) =>
+          validSize((value as { layout?: number[] })?.layout?.[0]),
+        ) as { layout: number[] } | undefined
+        if (state) sizes[mode] = state.layout[0]!
+      }
+    }
+  } catch {
+    // Blocked storage and invalid settings must not prevent opening a scan.
+  }
+  const defaultSize = sizes[direction.value]
+  let restoring = false
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sizes))
+    } catch {
+      // The layout still works when storage is unavailable.
+    }
+  }
+  function layoutChanged(layout: number[]) {
+    if (restoring || !validSize(layout[0])) return
+    sizes[direction.value] = layout[0]
+    save()
+  }
+  watch(direction, async (value, previous, onCleanup) => {
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+    })
+    // Save before the direction change reaches the DOM. The splitter does not
+    // reload auto-save settings or defaultSize when direction changes in place.
+    const departing = panel.value?.getSize?.()
+    if (!restoring && validSize(departing)) sizes[previous] = departing
+    restoring = true
+    await nextTick()
+    if (cancelled) return
+    panel.value?.resize?.(sizes[value])
+    restoring = false
+    save()
+  })
+  return { defaultSize, layoutChanged }
+}
