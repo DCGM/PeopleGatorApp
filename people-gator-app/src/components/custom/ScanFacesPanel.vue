@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
@@ -89,51 +90,54 @@ function location(item: ScanFaceItem) {
         @clear="scope = 'page'"
       />
     </div>
-    <div class="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3" :aria-busy="loading || isFetching">
-      <p v-if="!loading" class="mb-2 text-xs text-muted-foreground" role="status">
-        {{ totalCount ?? items.length }} {{ (totalCount ?? items.length) === 1 ? 'face' : 'faces' }}
-      </p>
-      <section
-        v-for="group in sections"
-        :key="group.key"
-        class="mb-4 min-w-0"
-        :aria-label="view === 'person' ? groupName(group) : 'Faces'"
-      >
-        <h3 v-if="view === 'person'" class="mb-2 truncate text-sm font-semibold">
-          {{ groupName(group) }}
-        </h3>
-        <ul class="flex flex-row flex-wrap gap-3 p-1">
-          <li v-for="item in group.items" :key="item.face.detection_id">
-            <ScanFaceThumbnail
-              :item="item"
-              :selected="item.face.detection_id === selectedFaceId"
-              :to="location(item)"
-              @select="emit('select', item.face.detection_id)"
-            />
-          </li>
-        </ul>
-      </section>
-      <div v-if="loading" class="size-16 animate-pulse rounded-md border bg-muted" role="status">
-        <span class="sr-only">Loading faces</span>
-      </div>
-      <p
-        v-else-if="!items.length && !hasNextPage && !error"
-        class="py-6 text-center text-sm text-muted-foreground"
-      >
-        No faces.
-        <Button v-if="filtered" type="button" variant="link" @click="emit('resetFilters')"
-          >Reset filters</Button
+    <ScrollArea class="min-h-0 flex-1" :aria-busy="loading || isFetching">
+      <div class="px-3 pb-3 pt-3">
+        <p v-if="!loading" class="mb-2 text-xs text-muted-foreground" role="status">
+          {{ totalCount ?? items.length }}
+          {{ (totalCount ?? items.length) === 1 ? 'face' : 'faces' }}
+        </p>
+        <section
+          v-for="group in sections"
+          :key="group.key"
+          class="mb-4 min-w-0"
+          :aria-label="view === 'person' ? groupName(group) : 'Faces'"
         >
-      </p>
-      <ListPagination
-        :has-next-page="hasNextPage"
-        :is-fetching="isFetching"
-        :error="error"
-        error-text="Could not load faces."
-        :reset-key="`${scope}:${view}:${sort.field}:${sort.direction}`"
-        :load-more="loadMore"
-        :retry="retry"
-      />
-    </div>
+          <h3 v-if="view === 'person'" class="mb-2 truncate text-sm font-semibold">
+            {{ groupName(group) }}
+          </h3>
+          <ul class="flex flex-row flex-wrap gap-3 p-1">
+            <li v-for="item in group.items" :key="item.face.detection_id">
+              <ScanFaceThumbnail
+                :item="item"
+                :selected="item.face.detection_id === selectedFaceId"
+                :to="location(item)"
+                @select="emit('select', item.face.detection_id)"
+              />
+            </li>
+          </ul>
+        </section>
+        <div v-if="loading" class="size-16 animate-pulse rounded-md border bg-muted" role="status">
+          <span class="sr-only">Loading faces</span>
+        </div>
+        <p
+          v-else-if="!items.length && !hasNextPage && !error"
+          class="py-6 text-center text-sm text-muted-foreground"
+        >
+          No faces.
+          <Button v-if="filtered" type="button" variant="link" @click="emit('resetFilters')"
+            >Reset filters</Button
+          >
+        </p>
+        <ListPagination
+          :has-next-page="hasNextPage"
+          :is-fetching="isFetching"
+          :error="error"
+          error-text="Could not load faces."
+          :reset-key="`${scope}:${view}:${sort.field}:${sort.direction}`"
+          :load-more="loadMore"
+          :retry="retry"
+        />
+      </div>
+    </ScrollArea>
   </section>
 </template>

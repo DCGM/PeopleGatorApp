@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed, nextTick, ref, watch } from 'vue'
 import { ChevronDown, Plus, ScanFace, Search } from '@lucide/vue'
 import ListPagination from './ListPagination.vue'
@@ -191,44 +192,45 @@ defineExpose({ focus: () => group.value?.querySelector('textarea')?.focus() })
       <h3 id="people-results-title" class="text-sm font-semibold">Results</h3>
       <SortSelect v-model="orderValue" :strategies="orderOptions" label="Sort people" size="sm" />
     </div>
-    <div
-      ref="results"
+    <ScrollArea
       role="region"
-      class="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-2"
+      class="min-h-0 flex-1"
       aria-labelledby="people-results-title"
       :aria-busy="loading || isFetching"
     >
-      <ul class="flex flex-col gap-2">
-        <li v-for="person in people" :key="person.id">
-          <SimilarPersonItem
-            :person="person"
-            :assigned="selectedFace?.personId === person.id"
-            :reassignment="Boolean(selectedFace?.personId && selectedFace.personId !== person.id)"
-            :assignment-disabled="!selectedFace"
-            :assignment-pending="assignmentPending"
-            :viewed="viewedPersonId === person.id"
-            :data-person-viewed="viewedPersonId === person.id"
-            @preview="emit('preview', $event)"
-            @assign="emit('assign', $event)"
-          />
-        </li>
-      </ul>
-      <SimilarPersonItemSkeleton v-if="loading" />
-      <p
-        v-else-if="!people.length && !hasNextPage && !error"
-        class="py-6 text-center text-sm text-muted-foreground"
-      >
-        No matching people.
-      </p>
-      <ListPagination
-        :has-next-page="hasNextPage"
-        :is-fetching="isFetching"
-        :error="error"
-        error-text="Could not load people."
-        :reset-key="resetKey"
-        :load-more="loadMore"
-        :retry="retry"
-      />
-    </div>
+      <div ref="results" class="px-3 pb-3 pt-2">
+        <ul class="flex flex-col gap-2">
+          <li v-for="person in people" :key="person.id">
+            <SimilarPersonItem
+              :person="person"
+              :assigned="selectedFace?.personId === person.id"
+              :reassignment="Boolean(selectedFace?.personId && selectedFace.personId !== person.id)"
+              :assignment-disabled="!selectedFace"
+              :assignment-pending="assignmentPending"
+              :viewed="viewedPersonId === person.id"
+              :data-person-viewed="viewedPersonId === person.id"
+              @preview="emit('preview', $event)"
+              @assign="emit('assign', $event)"
+            />
+          </li>
+        </ul>
+        <SimilarPersonItemSkeleton v-if="loading" />
+        <p
+          v-else-if="!people.length && !hasNextPage && !error"
+          class="py-6 text-center text-sm text-muted-foreground"
+        >
+          No matching people.
+        </p>
+        <ListPagination
+          :has-next-page="hasNextPage"
+          :is-fetching="isFetching"
+          :error="error"
+          error-text="Could not load people."
+          :reset-key="resetKey"
+          :load-more="loadMore"
+          :retry="retry"
+        />
+      </div>
+    </ScrollArea>
   </section>
 </template>
