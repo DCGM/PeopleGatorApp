@@ -5,7 +5,7 @@ import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/documen
 import { SCAN_ZOOM_STEP, useScanViewport } from '@/composables/scan-viewport'
 import { useWorkspaceSplit, type WorkspacePanel } from '@/composables/workspace-split'
 import { useMediaQuery } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { useLinkStateFilter } from '@/composables/link-state-filter'
@@ -15,6 +15,7 @@ import UiTooltip from '@/components/custom/UiTooltip.vue'
 import { useCanAnnotate, useCanDeleteDetection } from '@/composables/can-annotate'
 import { useVerifyLinkMutation } from '@/query/entity-links'
 import { useDeleteFaceMutation, useFaceQuery } from '@/query/faces'
+import { useTextMentionQuery } from '@/query/text-mentions'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -49,6 +50,7 @@ import { useRouteSort } from '@/lib/sorting'
 import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/sort-options'
 import {
   effectivePeopleOrder,
+  SCAN_SELECTED_MENTION,
   useScanSidebarState,
   type ScanSidebarState,
 } from '@/viewmodels/scan-sidebar'
@@ -123,6 +125,7 @@ const {
   createAndAssign,
   error,
   faces,
+  isLoading,
   pageDimensions,
   pageImageLoading,
   pageImageError,
@@ -677,6 +680,62 @@ watch([faces, referenceFace, transcription, annotationsLoading], () => {
   }
   if (changed) syncRoute()
 })
+
+// A Mentions-tab link selects its mention here like a click in the transcription.
+// Spans match recorded text, so the mention's own context picks its line; an
+// unlinked mention has no span and selects that line instead.
+const requestedMention = computed(() =>
+  typeof route.query.mention === 'string' ? route.query.mention : '',
+)
+const requestedMentionQuery = useTextMentionQuery(requestedMention)
+const selectedUnlinkedMention = ref<string | null>(null)
+watch([selectedLineIndex, selectedEntityKey], () => (selectedUnlinkedMention.value = null), {
+  flush: 'sync',
+})
+watch(
+  [requestedMention, transcription, isLoading, () => requestedMentionQuery.data.value],
+  ([id]) => {
+    if (!id || isLoading.value) return
+    const record = requestedMentionQuery.data.value
+    if (record?.mention_id !== id && !requestedMentionQuery.isError.value) return
+    const lines = transcription.value
+    const context = (record?.context ?? '').trim()
+    const own = (index: number) => {
+      const text = lines[index]!.text.trim()
+      return Boolean(text) && context.includes(text)
+    }
+    const spanLines = lines.flatMap((line, index) =>
+      line.entities?.some((span) => span.mention_id === id) ? [index] : [],
+    )
+    const index = spanLines.find(own) ?? spanLines[0]
+    if (index !== undefined) {
+      const spans = lines[index]!.entities!.filter((span) => span.mention_id === id)
+      const span = spans.find((item) => item.firstFragment !== false) ?? spans[0]!
+      if (!includedLines.value[index]) teleprompterLines.reveal([index])
+      selectEntity(index, span)
+    } else {
+      const fallback = context ? lines.findIndex((_line, line) => own(line)) : -1
+      if (fallback >= 0) {
+        selectLine(fallback)
+        selectedUnlinkedMention.value = id
+      }
+    }
+    sidebar.patch({ mention: undefined })
+  },
+  { immediate: true },
+)
+// The mention selected on the scan, shown in the Mentions list too.
+provide(
+  SCAN_SELECTED_MENTION,
+  computed(() => {
+    const key = selectedEntityKey.value
+    if (!key) return selectedUnlinkedMention.value
+    for (const line of transcription.value)
+      for (const span of line.entities ?? [])
+        if (transcriptionEntityKey(span) === key) return span.mention_id ?? null
+    return null
+  }),
+)
 
 onMounted(() => {
   window.addEventListener('keydown', handleNavigationKeydown)
