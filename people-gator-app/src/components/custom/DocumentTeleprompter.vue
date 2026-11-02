@@ -107,7 +107,11 @@ function mentionName(entity: TranscriptionEntitySpan) {
 }
 
 function mentionClasses(entity: TranscriptionEntitySpan) {
-  return ['border-b-2', mentionStateClasses[spanHighlightState(entity)]]
+  return [
+    'border-b-2',
+    mentionStateClasses[spanHighlightState(entity)],
+    mentionSelectionClasses[mentionSelectionState(entity)],
+  ]
 }
 
 function mentionLabel(entity: TranscriptionEntitySpan) {
@@ -274,18 +278,27 @@ function entityText(entity: TranscriptionEntitySpan) {
   return entityTexts.value.get(entityKey(entity))?.join(' ') ?? entity.text
 }
 
-function entityStyle(entity: TranscriptionEntitySpan) {
+/**
+ * The scan overlay's selection scheme: the selected mention is blue, mentions
+ * of the selected person are orange, and a mention that is both keeps the blue
+ * fill with an orange outline. Outlines leave the text layout unchanged.
+ */
+const mentionSelectionClasses = {
+  selected: 'bg-accent/20 outline-2 outline-accent',
+  selectedMentioned: 'bg-accent/20 outline-2 outline-orange-500',
+  mentioned: 'bg-orange-500/15 outline-2 outline-orange-500 hover:bg-orange-500/30',
+  hovered: 'bg-accent/10 outline-1 outline-accent/70',
+  // Transparent overrides the browser's yellow default for mark elements.
+  default: 'bg-transparent hover:bg-accent/10',
+} as const
+
+function mentionSelectionState(entity: TranscriptionEntitySpan) {
   const key = entityKey(entity)
-  if (props.selectedEntityKey === key) {
-    return { backgroundColor: 'color-mix(in srgb, var(--secondary) 25%, transparent)', outline: '1px solid var(--secondary)' }
-  }
-  if (entity.entity_id && props.relatedEntityId === entity.entity_id) {
-    return { backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)', outline: '2px solid var(--accent)' }
-  }
-  if (hoveredEntityKey.value === key) {
-    return { backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', outline: '1px solid color-mix(in srgb, var(--accent) 50%, transparent)' }
-  }
-  return { backgroundColor: 'transparent' }
+  const mentioned = Boolean(entity.entity_id) && props.relatedEntityId === entity.entity_id
+  if (props.selectedEntityKey === key) return mentioned ? 'selectedMentioned' : 'selected'
+  if (mentioned) return 'mentioned'
+  // All fragments of a multiline mention respond to hovering any one of them.
+  return hoveredEntityKey.value === key ? 'hovered' : 'default'
 }
 
 function lineSegments(line: TranscriptionLine): TranscriptionSegment[] {
@@ -628,7 +641,7 @@ defineExpose({ scrollPage, navigateTo })
                   <mark v-if="segment.entity && isHighlighted(segment.entity)" tabindex="0" role="button"
                     :aria-label="mentionLabel(segment.entity)" :data-link-state="spanHighlightState(segment.entity)"
                     class="transcription-entity cursor-pointer" :class="mentionClasses(segment.entity)"
-                    :style="entityStyle(segment.entity)"
+                    :data-selection="mentionSelectionState(segment.entity)"
                     @mouseenter="showMentionBadge($event, segment.entity)" @mouseleave="hideMentionBadge"
                     @focus="showMentionBadge($event, segment.entity)" @blur="hideMentionBadge"
                     @keydown.enter.stop.prevent="emit('select-entity', index, segment.entity)"

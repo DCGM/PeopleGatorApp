@@ -416,10 +416,16 @@ describe('App', () => {
       },
     })
 
+    // The selected person's mentions use the scan overlay's orange highlight.
     const spans = wrapper.findAll('mark.transcription-entity')
-    expect(spans[0]?.attributes('style')).toContain('2px solid var(--accent)')
-    expect(spans[1]?.attributes('style')).not.toContain('2px solid var(--accent)')
-    expect(spans[2]?.attributes('style')).toContain('2px solid var(--accent)')
+    expect(spans.map((span) => span.attributes('data-selection'))).toEqual([
+      'mentioned',
+      'default',
+      'mentioned',
+    ])
+    expect(spans[0]!.classes()).toEqual(
+      expect.arrayContaining(['bg-orange-500/15', 'outline-orange-500']),
+    )
   })
 
   it('selects a person when its transcription span is clicked', async () => {

@@ -84,6 +84,8 @@ function spanFragments(
       {
         ...linkMetadata(span),
         mention_id: span.mention_id,
+        // Fragments of one occurrence, such as a two-line name, share this key.
+        occurrence: `${span.mention_id}:${span.start_line_id}:${span.start_character}`,
         firstFragment: offset === 0,
         entity_id: span.entity_id,
         label: span.entity_type as EntityType,
