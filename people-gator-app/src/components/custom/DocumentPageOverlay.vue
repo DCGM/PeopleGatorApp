@@ -224,7 +224,7 @@ function regionStyle(position: Face['position']): CSSProperties {
         side="top"
         align="start"
         :side-offset="4"
-        class="max-h-(--reka-popover-content-available-height) w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
+        class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
         :collision-boundary="viewer ?? undefined"
         :collision-padding="8"
         sticky="always"
