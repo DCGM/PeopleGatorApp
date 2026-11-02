@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Minus, Check, BadgeCheck, Unlink } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useCanAnnotate } from '@/composables/can-annotate'
+import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { useReviewMentionsMutation } from '@/query/mention-review'
 import { useRoute } from 'vue-router'
 import type {
@@ -25,10 +26,14 @@ const props = withDefaults(
     filters: TextMentionListParams
     groupSort: SortState<TextMentionGroupSortField>
     occurrenceSort: SortState<TextMentionSortField>
-    personId: string
+    personId?: string
     linkStates: EntityLinkState[]
     enabled?: boolean
     compact?: boolean
+    /** Show occurrences under each group in their compact form. */
+    compactOccurrences?: boolean
+    /** Load further groups when the list end scrolls into view. */
+    automatic?: boolean
   }>(),
   { enabled: true, mode: 'mention' },
 )
@@ -44,6 +49,15 @@ const query = useTextMentionGroupsQuery(
   computed(() => props.enabled),
 )
 const groups = computed(() => (query.data.value?.pages ?? []).flatMap((page) => page.items))
+const listEnd = ref<HTMLElement | null>(null)
+useAutomaticPagination({
+  target: listEnd,
+  hasNextPage: query.hasNextPage,
+  isFetching: query.isFetching,
+  error: query.error,
+  enabled: () => Boolean(props.automatic) && props.enabled,
+  loadMore: () => query.fetchNextPage(),
+})
 const total = computed(() => query.data.value?.pages[0]?.total_count ?? 0)
 const allowed = useCanAnnotate()
 const mutation = useReviewMentionsMutation()
@@ -281,7 +295,7 @@ watch(groups, (items) => {
         <div v-if="!compact" class="pl-7">
           <PersonMentionOccurrences
             :name="mode === 'mention' ? group.name : undefined"
-            :compact="compact"
+            :compact="compactOccurrences"
             :selection="selection(group)"
             :disabled="mutation.isPending.value"
             @loaded="
@@ -299,6 +313,12 @@ watch(groups, (items) => {
         </div>
       </li>
     </ul>
+    <div
+      v-if="automatic && query.hasNextPage.value"
+      ref="listEnd"
+      class="h-px"
+      aria-hidden="true"
+    />
     <PersonMentionListSkeleton
       v-if="enabled && (query.isPending.value || query.isFetchingNextPage.value)"
       :mode="mode"

@@ -9,6 +9,7 @@ import {
   Link,
   Link2,
   RefreshCw,
+  Search,
   Trash2,
   Unlink,
   UserPlus,
@@ -31,15 +32,20 @@ import {
   ItemTitle,
 } from '@/components/ui/item'
 
-const props = defineProps<{
-  face: Face
-  assignmentPending?: boolean
-  canDelete?: boolean
-  actionError?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    face: Face
+    assignmentPending?: boolean
+    canAnnotate?: boolean
+    canDelete?: boolean
+    actionError?: string
+  }>(),
+  { canAnnotate: true },
+)
 
 const emit = defineEmits<{
   findProfile: []
+  searchFace: []
   createProfile: [profile: { name: string; shortDescription?: string }]
   unassign: []
   delete: []
@@ -83,9 +89,9 @@ watch(() => props.face.id, cancelCreating)
 <template>
   <Item
     :as="isCreating ? 'form' : 'div'"
-    variant="outline"
-    class="w-full relative items-start gap-x-4 gap-y-2 bg-card px-3 py-3"
+    class="w-full relative items-start gap-x-4 gap-y-2 px-3 py-3"
     @submit.prevent="createProfile"
+    @keydown.esc="isCreating && ($event.stopPropagation(), cancelCreating())"
   >
     <ItemMedia class="self-start">
       <div class="relative size-15 overflow-hidden rounded-full bg-muted">
@@ -162,7 +168,7 @@ watch(() => props.face.id, cancelCreating)
           v-else
           class="min-h-8 w-full truncate rounded-sm border border-transparent px-1 py-0.5 text-muted-foreground"
         >
-          Unknown
+          Unassigned face
         </h4>
       </ItemTitle>
 
@@ -171,9 +177,7 @@ watch(() => props.face.id, cancelCreating)
         class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
         :title="face.shortDescription"
       >
-        {{
-          face.shortDescription ? face.shortDescription : 'Unknown person, no description available'
-        }}
+        {{ face.personId ? face.shortDescription || 'No description' : 'Not linked to a person' }}
       </p>
     </ItemContent>
 
@@ -225,60 +229,76 @@ watch(() => props.face.id, cancelCreating)
           :name="face.name"
         />
         <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-          <UiTooltip v-if="face.personId" text="Reassign to another profile">
+          <UiTooltip
+            :text="face.embeddingModel ? 'Search people by this face' : 'Face search unavailable'"
+          >
             <Button
               type="button"
               size="icon-xs"
               variant="outline"
-              class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
-              :disabled="props.assignmentPending"
-              aria-label="Reassign to another profile"
-              @click="emit('findProfile')"
+              :disabled="!face.embeddingModel"
+              aria-label="Search people by this face"
+              @click="emit('searchFace')"
             >
-              <RefreshCw aria-hidden="true" />
+              <Search aria-hidden="true" />
             </Button>
           </UiTooltip>
-          <UiTooltip v-else text="Link to an existing profile">
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              :disabled="props.assignmentPending"
-              class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
-              aria-label="Link to an existing profile"
-              @click="emit('findProfile')"
-            >
-              <Link2 aria-hidden="true" />
-            </Button>
-          </UiTooltip>
-          <UiTooltip text="Create and assign a new profile">
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              class="border-violet-600 text-violet-700 hover:text-violet-700 dark:border-violet-500 dark:text-violet-400 dark:hover:text-violet-400"
-              :disabled="props.assignmentPending"
-              aria-label="Create and assign a new profile"
-              @click="startCreating"
-            >
-              <UserPlus aria-hidden="true" />
-            </Button>
-          </UiTooltip>
-          <UiTooltip v-if="face.personId" text="Unassign current profile">
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
-              :disabled="props.assignmentPending"
-              aria-label="Unassign current profile"
-              @click="emit('unassign')"
-            >
-              <Unlink aria-hidden="true" />
-            </Button>
-          </UiTooltip>
-          <!-- Same order as the scan action bar: link, unlink, verify, delete. -->
-          <slot name="actions" />
+          <template v-if="canAnnotate">
+            <UiTooltip v-if="face.personId" text="Reassign to another profile">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
+                :disabled="props.assignmentPending"
+                aria-label="Reassign to another profile"
+                @click="emit('findProfile')"
+              >
+                <RefreshCw aria-hidden="true" />
+              </Button>
+            </UiTooltip>
+            <UiTooltip v-else text="Link to an existing profile">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                :disabled="props.assignmentPending"
+                class="border-amber-600 text-amber-700 hover:text-amber-700 dark:border-amber-500 dark:text-amber-400 dark:hover:text-amber-400"
+                aria-label="Link to an existing profile"
+                @click="emit('findProfile')"
+              >
+                <Link2 aria-hidden="true" />
+              </Button>
+            </UiTooltip>
+            <UiTooltip text="Create and assign a new profile">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                class="border-violet-600 text-violet-700 hover:text-violet-700 dark:border-violet-500 dark:text-violet-400 dark:hover:text-violet-400"
+                :disabled="props.assignmentPending"
+                aria-label="Create and assign a new profile"
+                @click="startCreating"
+              >
+                <UserPlus aria-hidden="true" />
+              </Button>
+            </UiTooltip>
+            <UiTooltip v-if="face.personId" text="Unassign current profile">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                class="border-destructive text-destructive hover:text-destructive dark:border-destructive"
+                :disabled="props.assignmentPending"
+                aria-label="Unassign current profile"
+                @click="emit('unassign')"
+              >
+                <Unlink aria-hidden="true" />
+              </Button>
+            </UiTooltip>
+            <!-- Order: search, link, new, unlink, verify, delete. -->
+            <slot name="actions" />
+          </template>
           <UiTooltip v-if="canDelete" text="Delete detection">
             <Button
               type="button"

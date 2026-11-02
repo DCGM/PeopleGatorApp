@@ -57,7 +57,7 @@ const open = computed({
           :aria-label="label"
           :placeholder="placeholder"
         />
-        <InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon>
+        <InputGroupAddon><Search aria-hidden="true" /><slot name="attachment" /></InputGroupAddon>
         <InputGroupAddon align="inline-end">
           <InputGroupButton
             v-if="searchTerm"

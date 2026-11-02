@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   reset: vi.fn(),
   gallery: vi.fn(),
   replace: vi.fn(),
+  push: vi.fn(),
+  focusPeople: vi.fn(),
   deleteFace: vi.fn(),
   patchFace: vi.fn(),
   assignFace: vi.fn(),
@@ -23,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('vue-router', () => ({
   useRoute: mocks.route,
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
 }))
 vi.mock('@/client', async (original) => ({
   ...(await original<typeof import('@/client')>()),
@@ -126,7 +128,6 @@ beforeEach(() => {
     pageImageReady: ready,
     annotationsLoading: ref(false),
     pageDimensions: ref({ width: 800, height: 1100 }),
-    similarPeople: ref([]),
     pageImageUrl: ref(''),
     pageImageLoading: ref(false),
   })
@@ -169,28 +170,39 @@ async function mountView(renderActions = false) {
               AlertDialogCancel: true,
               DocumentControls: true,
               DocumentPageGallery: true,
+              // Like the real overlay: one card, for the selected face only.
               DocumentPageOverlay: {
                 name: 'DocumentPageOverlay',
-                props: ['faces'],
-                template: '<div><slot name="actions" :face="faces[0]" /></div>',
+                props: ['faces', 'selectedFaceId', 'actionsEnabled'],
+                template: `<div><template v-for="face in faces" :key="face.id"><slot
+                  v-if="actionsEnabled && face.id === selectedFaceId" name="card" :face="face"
+                /></template></div>`,
               },
               DocumentTeleprompter: true,
-              FaceGallery: true,
               LoadableImage: true,
               IdentityFacePreview: true,
               RouterLink: RouterLinkStub,
-              SimilarPeopleResults: true,
-              SimilarPeopleSearch: true,
-              PageActivityPanel: true,
-              PageStatisticsPanel: true,
-              TabsList: true,
-              TabsTrigger: true,
+              ScanPeoplePanel: {
+                name: 'ScanPeoplePanel',
+                props: ['assignmentPending'],
+                template: '<div />',
+                methods: { focus: mocks.focusPeople },
+              },
+              ScanFacesPanel: true,
+              ScanMentionsPanel: true,
+              ScanInfoPanel: true,
             }
           : {}),
         AlertDialog: { name: 'AlertDialog', props: ['open'], template: '<div><slot /></div>' },
         AlertDialogContent: { template: '<div><slot /></div>' },
         AlertDialogFooter: { template: '<div><slot /></div>' },
-        Tabs: { template: '<div><slot /></div>' },
+        Tabs: { name: 'Tabs', props: ['modelValue'], template: '<div><slot /></div>' },
+        TabsList: { template: '<div><slot /></div>' },
+        TabsTrigger: {
+          name: 'TabsTrigger',
+          props: ['value'],
+          template: '<button><slot /></button>',
+        },
         TabsContent: { template: '<div><slot /></div>' },
         ResizablePanelGroup: { template: '<div><slot /></div>' },
         ResizablePanel: { template: '<div><slot /></div>' },
@@ -204,10 +216,10 @@ async function mountView(renderActions = false) {
 describe('evidence selection viewport focus', () => {
   it('focuses gallery, overlay, toolbar and keyboard face selections, including reselection', async () => {
     const wrapper = await mountView()
-    for (const component of ['FaceGallery', 'DocumentPageOverlay']) {
+    for (const component of ['ScanFacesPanel', 'DocumentPageOverlay']) {
       wrapper
         .findComponent({ name: component })
-        .vm.$emit(component === 'FaceGallery' ? 'select' : 'select-face', 'a')
+        .vm.$emit(component === 'ScanFacesPanel' ? 'select' : 'select-face', 'a')
       await settleFocus()
     }
     expect(mocks.pan).toHaveBeenCalledTimes(2)
@@ -238,7 +250,7 @@ describe('evidence selection viewport focus', () => {
   it('waits for readiness, uses the latest request, and discards stale page or removed targets', async () => {
     ready.value = false
     const wrapper = await mountView()
-    const gallery = wrapper.findComponent({ name: 'FaceGallery' })
+    const gallery = wrapper.findComponent({ name: 'ScanFacesPanel' })
     gallery.vm.$emit('select', 'a')
     gallery.vm.$emit('select', 'b')
     await settleFocus()
@@ -287,30 +299,34 @@ describe('document page gallery navigation', () => {
     expect(transcription.props('selectedLineIndex')).toBe(1)
     route.params.pageId = 'two'
     await settleFocus()
-    expect(mocks.reset).toHaveBeenCalledWith(expect.objectContaining({ animate: false, startScale: 0.82 }))
+    expect(mocks.reset).toHaveBeenCalledWith(
+      expect.objectContaining({ animate: false, startScale: 0.82 }),
+    )
     expect(transcription.props('selectedEntityKey')).toBeNull()
     expect(transcription.props('selectedLineIndex')).toBe(0)
     wrapper.unmount()
   })
 })
 
-it('keeps the selected reference and assignment panel when workspace filters hide its gallery entry', async () => {
+it('anchors the selected reference on the scan when workspace filters hide it', async () => {
+  // A former "Similar faces" link attaches that face to People search once.
   route.query = { person: 'a', candidate_mode: 'face' }
   const reference = ref<Face | null>(face('a'))
   mocks.workspace.mockReturnValue({
     ...mocks.workspace.getMockImplementation()!(),
     referenceFace: reference,
   })
-  const wrapper = await mountView()
   faces.value = []
+  const wrapper = await mountView()
   await flushPromises()
-  expect(wrapper.findComponent({ name: 'CurrentFacePanel' }).props('face')).toMatchObject({
-    id: 'a',
-  })
-  expect(
-    wrapper.findComponent({ name: 'SimilarPeopleSearch' }).props('selectedFace'),
-  ).toMatchObject({ id: 'a' })
-  expect(route.query.person).toBe('a')
+  const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
+  expect(overlay.props('faces').map((item: Face) => item.id)).toEqual(['a'])
+  expect(overlay.props('selectedFaceId')).toBe('a')
+  expect(mocks.replace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      query: expect.objectContaining({ candidate_mode: undefined, candidate_face: 'a' }),
+    }),
+  )
   wrapper.unmount()
 })
 
@@ -319,32 +335,32 @@ describe('shared detection actions', () => {
     mocks.deleteFace
       .mockRejectedValueOnce(new Error('Forbidden'))
       .mockResolvedValueOnce({ data: null })
-    const wrapper = await mountView()
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
     await flushPromises()
-    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
+    const card = () => wrapper.findComponent({ name: 'SelectedFaceItem' })
     const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
     expect(overlay.props('actionsEnabled')).toBe(true)
-    card.vm.$emit('delete')
+    card().vm.$emit('delete')
     await flushPromises()
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
-    // The scan actions stay hidden behind the confirmation.
+    // The scan card stays hidden behind the confirmation.
     expect(overlay.props('actionsEnabled')).toBe(false)
     expect(mocks.deleteFace).not.toHaveBeenCalled()
-    await wrapper.findComponent({ name: 'Button' }).trigger('click')
+    const confirm = () => wrapper.get('button[data-slot="button"][class*="bg-destructive"]')
+    await confirm().trigger('click')
     await flushPromises()
-    expect(card.props('face')).toMatchObject({ id: 'a' })
-    // The dialog alone reports the failure and stays open for a retry.
-    expect(card.props('actionError')).toBe('')
+    expect(overlay.props('selectedFaceId')).toBe('a')
+    expect(card().exists()).toBe(false)
     expect(wrapper.text()).toContain('Could not delete detection. Try again.')
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(true)
-    await wrapper.findComponent({ name: 'Button' }).trigger('click')
+    await confirm().trigger('click')
     await flushPromises()
     expect(mocks.deleteFace).toHaveBeenLastCalledWith({
       path: { detection_id: 'a' },
       throwOnError: true,
     })
-    expect(card.props('face')).toBeNull()
+    expect(overlay.props('selectedFaceId')).toBeNull()
     expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
     expect(mocks.replace).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -355,12 +371,12 @@ describe('shared detection actions', () => {
   })
   it('clears a failed delete when the confirmation closes', async () => {
     mocks.deleteFace.mockRejectedValueOnce(new Error('Forbidden'))
-    const wrapper = await mountView()
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
     await flushPromises()
-    wrapper.findComponent({ name: 'CurrentFacePanel' }).vm.$emit('delete')
+    wrapper.findComponent({ name: 'SelectedFaceItem' }).vm.$emit('delete')
     await flushPromises()
-    await wrapper.findComponent({ name: 'Button' }).trigger('click')
+    await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
     await flushPromises()
     wrapper.findComponent({ name: 'AlertDialog' }).vm.$emit('update:open', false)
     await flushPromises()
@@ -371,38 +387,27 @@ describe('shared detection actions', () => {
     expect(wrapper.text()).not.toContain('Could not delete detection')
     wrapper.unmount()
   })
-  it('offers Delete only for a face on this scan, not an off-page reference', async () => {
-    referenceFace.value = face('elsewhere')
-    route.query = { person: 'elsewhere' }
-    const wrapper = await mountView()
-    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
-    expect(card.props('face')).toMatchObject({ id: 'elsewhere' })
-    expect(card.props('canDelete')).toBe(false)
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
-    await flushPromises()
-    expect(card.props('canDelete')).toBe(true)
-    wrapper.unmount()
-  })
   it('clears a failed link update when another face is selected', async () => {
-    const wrapper = await mountView()
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
     await flushPromises()
     assignmentError.value = new Error('Forbidden')
     await flushPromises()
-    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
-    expect(card.props('actionError')).toBe('Could not update link.')
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'b')
+    const card = () => wrapper.findComponent({ name: 'SelectedFaceItem' })
+    expect(card().props('actionError')).toBe('Could not update link.')
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'b')
     await flushPromises()
-    expect(card.props('actionError')).toBe('')
+    expect(card().props('face')).toMatchObject({ id: 'b' })
+    expect(card().props('actionError')).toBe('')
     wrapper.unmount()
   })
-  it('keeps face and line navigation from detection boxes and their actions', async () => {
+  it('keeps face and line navigation from detection boxes and their card', async () => {
     const wrapper = await mountView()
     const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
     const container = document.createElement('div')
     container.innerHTML = `
       <button data-region-type="face"></button>
-      <div data-detection-actions role="dialog"><button id="action"></button></div>
+      <div data-detection-card role="dialog"><button id="action"></button></div>
       <button id="other"></button>`
     document.body.append(container)
     const key = (selector: string, key: string) =>
@@ -451,84 +456,71 @@ it('clears the selected face and route when the overlay requests Escape dismissa
   wrapper.unmount()
 })
 
-// Render the real action buttons and hold requests open to exercise concurrency.
+// Render the real card and hold requests open to exercise concurrency.
 describe('detection mutation coordination', () => {
-  it.each(['CurrentFacePanel', 'DocumentPageOverlay'])(
-    'shares pending/error state when Verify starts in %s',
-    async (source) => {
-      faces.value = faces.value.map((item) => ({ ...item, linkState: 'manual' }))
-      let rejectVerification!: (error: Error) => void
-      mocks.patchFace.mockImplementationOnce(
-        () =>
-          new Promise((_resolve, reject) => {
-            rejectVerification = reject
-          }),
-      )
-      const wrapper = await mountView(true)
-      const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
-      const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
-      const candidates = wrapper.findComponent({ name: 'SimilarPeopleResults' })
-      wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
-      await flushPromises()
-      await wrapper
-        .findComponent({ name: source })
-        .get('[aria-label="Verify this link"]')
-        .trigger('click')
-      await flushPromises()
-      expect(mocks.patchFace).toHaveBeenCalledTimes(1)
-      for (const control of [card, overlay]) {
-        for (const button of control.findAll('button[aria-label]')) {
-          expect(button.attributes('disabled')).toBeDefined()
-        }
-      }
-      expect(candidates.props('assignmentPending')).toBe(true)
-      // Stale events cannot bypass the guard at the mutation boundary.
-      candidates.vm.$emit('assign', { id: 'someone-else' })
-      card.vm.$emit('unassign')
-      card.vm.$emit('create', { name: 'New person' })
-      card.vm.$emit('delete')
-      overlay.findComponent({ name: 'FaceActionButtons' }).vm.$emit('verify')
-      await flushPromises()
-      expect(mocks.assignFace).not.toHaveBeenCalled()
-      expect(mocks.unassignFace).not.toHaveBeenCalled()
-      expect(mocks.createAndAssign).not.toHaveBeenCalled()
-      expect(mocks.deleteFace).not.toHaveBeenCalled()
-      expect(mocks.patchFace).toHaveBeenCalledTimes(1)
-      expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
-      rejectVerification(new Error('Forbidden'))
-      await flushPromises()
-      expect(card.text()).toContain('Could not verify link.')
-      expect(overlay.text()).toContain('Could not verify link.')
-      expect(candidates.props('assignmentPending')).toBe(false)
-      expect(card.get('[aria-label="Verify this link"]').attributes('disabled')).toBeUndefined()
-      wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'b')
-      await flushPromises()
-      expect(card.text()).not.toContain('Could not verify link.')
-      mocks.patchFace.mockResolvedValueOnce({ data: {} })
-      await card.get('[aria-label="Verify this link"]').trigger('click')
-      await flushPromises()
-      expect(mocks.patchFace).toHaveBeenLastCalledWith({
-        path: { detection_id: 'b' },
-        body: { entity_link_state: 'verified' },
-        throwOnError: true,
-      })
-      expect(candidates.props('assignmentPending')).toBe(false)
-      wrapper.unmount()
-    },
-  )
+  it('shares pending/error state between the card and People assignment', async () => {
+    faces.value = faces.value.map((item) => ({ ...item, linkState: 'manual' }))
+    let rejectVerification!: (error: Error) => void
+    mocks.patchFace.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectVerification = reject
+        }),
+    )
+    const wrapper = await mountView(true)
+    const card = () => wrapper.findComponent({ name: 'SelectedFaceItem' })
+    const candidates = wrapper.findComponent({ name: 'ScanPeoplePanel' })
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    await card().get('[aria-label="Verify this link"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patchFace).toHaveBeenCalledTimes(1)
+    // Search remains available; every assignment action waits.
+    for (const button of card().findAll('button[aria-label]'))
+      if (button.attributes('aria-label') !== 'Search people by this face')
+        expect(button.attributes('disabled')).toBeDefined()
+    expect(candidates.props('assignmentPending')).toBe(true)
+    // Stale events cannot bypass the guard at the mutation boundary.
+    candidates.vm.$emit('assign', { id: 'someone-else' })
+    card().vm.$emit('unassign')
+    card().vm.$emit('createProfile', { name: 'New person' })
+    card().vm.$emit('delete')
+    await flushPromises()
+    expect(mocks.assignFace).not.toHaveBeenCalled()
+    expect(mocks.unassignFace).not.toHaveBeenCalled()
+    expect(mocks.createAndAssign).not.toHaveBeenCalled()
+    expect(mocks.deleteFace).not.toHaveBeenCalled()
+    expect(mocks.patchFace).toHaveBeenCalledTimes(1)
+    expect(wrapper.findComponent({ name: 'AlertDialog' }).props('open')).toBe(false)
+    rejectVerification(new Error('Forbidden'))
+    await flushPromises()
+    expect(card().text()).toContain('Could not verify link.')
+    expect(candidates.props('assignmentPending')).toBe(false)
+    expect(card().get('[aria-label="Verify this link"]').attributes('disabled')).toBeUndefined()
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'b')
+    await flushPromises()
+    expect(card().text()).not.toContain('Could not verify link.')
+    mocks.patchFace.mockResolvedValueOnce({ data: {} })
+    await card().get('[aria-label="Verify this link"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patchFace).toHaveBeenLastCalledWith({
+      path: { detection_id: 'b' },
+      body: { entity_link_state: 'verified' },
+      throwOnError: true,
+    })
+    expect(candidates.props('assignmentPending')).toBe(false)
+    wrapper.unmount()
+  })
 
-  it('disables both Verify controls during assignment, creation and deletion', async () => {
+  it('disables Verify during assignment, creation and deletion', async () => {
     faces.value = faces.value.map((item) => ({ ...item, linkState: 'manual' }))
     const wrapper = await mountView(true)
-    wrapper.findComponent({ name: 'FaceGallery' }).vm.$emit('select', 'a')
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
     await flushPromises()
-    const card = wrapper.findComponent({ name: 'CurrentFacePanel' })
-    const overlay = wrapper.findComponent({ name: 'DocumentPageOverlay' })
-    const candidates = wrapper.findComponent({ name: 'SimilarPeopleResults' })
+    const card = () => wrapper.findComponent({ name: 'SelectedFaceItem' })
+    const candidates = wrapper.findComponent({ name: 'ScanPeoplePanel' })
     const expectBusy = () => {
-      for (const control of [card, overlay]) {
-        expect(control.get('[aria-label="Verify this link"]').attributes('disabled')).toBeDefined()
-      }
+      expect(card().get('[aria-label="Verify this link"]').attributes('disabled')).toBeDefined()
       expect(candidates.props('assignmentPending')).toBe(true)
     }
     assignmentStatus.value = 'pending'
@@ -543,7 +535,7 @@ describe('detection mutation coordination', () => {
           finishCreation = resolve
         }),
     )
-    card.vm.$emit('create', { name: 'New person' })
+    card().vm.$emit('createProfile', { name: 'New person' })
     await flushPromises()
     expectBusy()
     finishCreation({ entity_id: 'new-person' })
@@ -556,18 +548,15 @@ describe('detection mutation coordination', () => {
           rejectDeletion = reject
         }),
     )
-    card.vm.$emit('delete')
+    card().vm.$emit('delete')
     await flushPromises()
     await wrapper.get('button[data-slot="button"][class*="bg-destructive"]').trigger('click')
     await flushPromises()
-    expectBusy()
-    await card.get('[aria-label="Verify this link"]').trigger('click')
-    overlay.findComponent({ name: 'FaceActionButtons' }).vm.$emit('verify')
-    await flushPromises()
-    expect(mocks.patchFace).not.toHaveBeenCalled()
+    expect(candidates.props('assignmentPending')).toBe(true)
     rejectDeletion(new Error('Forbidden'))
     await flushPromises()
     expect(candidates.props('assignmentPending')).toBe(false)
+    expect(mocks.patchFace).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })
@@ -746,7 +735,6 @@ describe('resizable transcription panel (#36)', () => {
   )
 })
 
-
 it('keeps the live scan and its actions through repeated responsive round trips', async () => {
   const original = window.matchMedia
   const module = await import('@panzoom/panzoom')
@@ -754,9 +742,13 @@ it('keeps the live scan and its actions through repeated responsive round trips'
   let wide = true
   let listener: ((event: { matches: boolean; media: string }) => void) | undefined
   window.matchMedia = vi.fn((query: string) => ({
-    get matches() { return query.includes('1024') && wide },
+    get matches() {
+      return query.includes('1024') && wide
+    },
     media: query,
-    addEventListener: (_: string, callback: typeof listener) => { if (query.includes('1024')) listener = callback },
+    addEventListener: (_: string, callback: typeof listener) => {
+      if (query.includes('1024')) listener = callback
+    },
     removeEventListener: vi.fn(),
   })) as unknown as typeof window.matchMedia
   const wrapper = await mountView()
@@ -783,4 +775,93 @@ it('keeps the live scan and its actions through repeated responsive round trips'
     window.matchMedia = original
     initialize.mockRestore()
   }
+})
+
+describe('scan sidebar (#103)', () => {
+  const lastQuery = (navigate: typeof mocks.push) =>
+    (navigate.mock.lastCall?.[0] as { query: Record<string, unknown> }).query
+
+  it('orders People, Faces, Mentions and Info and opens People by default', async () => {
+    const wrapper = await mountView()
+    const tabs = wrapper.findComponent({ name: 'Tabs' })
+    expect(
+      wrapper.findAllComponents({ name: 'TabsTrigger' }).map((tab) => tab.props('value')),
+    ).toEqual(['people', 'faces', 'mentions', 'info'])
+    expect(tabs.props('modelValue')).toBe('people')
+    // Former Activity and Statistics links open Info.
+    route.query = { panel: 'statistics' }
+    await flushPromises()
+    expect(tabs.props('modelValue')).toBe('info')
+    tabs.vm.$emit('update:modelValue', 'faces')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({ panel: 'faces' })
+    wrapper.unmount()
+  })
+
+  it('searches by the selected face: one attachment, no name text, Similarity, same scope', async () => {
+    route.query = {
+      people_scope: 'document',
+      candidate_text: 'Novak',
+      candidate_face: 'previous',
+      panel: 'faces',
+    }
+    faces.value = faces.value.map((item) => ({ ...item, embeddingModel: 'model' }))
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    // Ordinary selection leaves the attached search face alone.
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(lastQuery(mocks.replace)).toMatchObject({ person: 'a', candidate_face: 'previous' })
+    await wrapper
+      .findComponent({ name: 'SelectedFaceItem' })
+      .get('[aria-label="Search people by this face"]')
+      .trigger('click')
+    await flushPromises()
+    expect(mocks.push).toHaveBeenCalledTimes(1)
+    expect(lastQuery(mocks.push)).toMatchObject({
+      panel: undefined,
+      candidate_face: 'a',
+      candidate_text: undefined,
+      candidate_sort: 'relevance',
+      people_scope: 'document',
+    })
+    // Focus follows once the People tab opens.
+    expect(mocks.focusPeople).not.toHaveBeenCalled()
+    route.query = { ...route.query, panel: undefined } as unknown as Record<string, string>
+    await flushPromises()
+    expect(mocks.focusPeople).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('opens People search for Link and keeps typed text when the face is removed', async () => {
+    route.query = { panel: 'info', candidate_face: 'a', candidate_sort: 'relevance' }
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'a')
+    await flushPromises()
+    wrapper.findComponent({ name: 'SelectedFaceItem' }).vm.$emit('findProfile')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({ panel: undefined, candidate_face: 'a' })
+    // The mocked router leaves the route as it was; apply the tab change.
+    route.query = { ...route.query, panel: undefined } as unknown as Record<string, string>
+    await flushPromises()
+    expect(mocks.focusPeople).toHaveBeenCalledTimes(1)
+    const people = wrapper.findComponent({ name: 'ScanPeoplePanel' })
+    // Without a name or face to score, Similarity falls back to context order.
+    people.vm.$emit('remove-face')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({
+      candidate_face: undefined,
+      candidate_sort: undefined,
+    })
+    route.query = { candidate_face: 'a', candidate_sort: 'relevance', candidate_text: 'Ada' }
+    await flushPromises()
+    people.vm.$emit('remove-face')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({
+      candidate_face: undefined,
+      candidate_sort: 'relevance',
+      candidate_text: 'Ada',
+    })
+    wrapper.unmount()
+  })
 })
