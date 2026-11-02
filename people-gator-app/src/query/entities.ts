@@ -139,6 +139,14 @@ export function useMergeEntitiesMutation() {
       targetEntityId: string
       sourceEntityIds: string[]
     }) => {
+      if (
+        !targetEntityId ||
+        !sourceEntityIds.length ||
+        sourceEntityIds.some((id) => !id || id === targetEntityId) ||
+        new Set(sourceEntityIds).size !== sourceEntityIds.length
+      ) {
+        throw new Error('Select distinct people and a target before merging.')
+      }
       if (sourceEntityIds.length === 1) {
         return await responseData(
           mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost({

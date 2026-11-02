@@ -112,3 +112,10 @@ Documents columns keep fixed widths when sorting, filtering or loading more rows
 Full titles wrap over multiple lines within a row. Use the table's horizontal
 scroll region to reach additional fields on narrow screens. The preview manifest's
 `document-table-widths` link provides contrasting short/long titles and local media.
+
+People search supports admin merges: search **Rina Merge**, select records (Shift
+adds an inclusive range in display order), then choose **Last selected (name)** or
+**First selected (name)**. Both merge immediately into the named person. Clear
+resets selection. Only loaded, explicitly selected people participate; changing
+search/filters clears selection, while sorting preserves selection order for
+people still loaded. See the seed guide for disposable practice data.

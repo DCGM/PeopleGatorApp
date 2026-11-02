@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
+import { addSelectionRange } from '@/lib/range-selection'
 import { relatedQuery } from '@/viewmodels/shared-filters'
 import ArchiveLink from './ArchiveLink.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
@@ -204,17 +205,12 @@ function clearFaceSelection() {
 }
 
 function addPersonRangeToSelection(personId: string) {
-  const personIndex = props.people.findIndex((person) => person.id === personId)
-  const anchorIndex = props.people.findIndex(
-    (person) => person.id === personSelectionAnchorId.value,
+  const next = addSelectionRange(
+    selectedPersonIds.value, props.people.map((person) => person.id),
+    personSelectionAnchorId.value, personId,
   )
-  if (personIndex < 0 || anchorIndex < 0) return false
-  const start = Math.min(personIndex, anchorIndex)
-  const end = Math.max(personIndex, anchorIndex)
-  selectedPersonIds.value = new Set([
-    ...selectedPersonIds.value,
-    ...props.people.slice(start, end + 1).map((person) => person.id),
-  ])
+  if (!next) return false
+  selectedPersonIds.value = next
   return true
 }
 

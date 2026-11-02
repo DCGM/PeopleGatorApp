@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { usePeopleMerge } from '@/viewmodels/people-merge'
 import { usePeopleCounts } from '@/viewmodels/people-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { computed, ref } from 'vue'
 import { relatedQuery, useSharedFilters } from '@/viewmodels/shared-filters'
 
 import { useRoute, useRouter } from 'vue-router'
-import { UserRound } from '@lucide/vue'
+import { Merge, UserRound } from '@lucide/vue'
 
 import PeopleCard from '@/components/custom/PeopleCard.vue'
 import PeopleCardSkeleton from '@/components/custom/PeopleCardSkeleton.vue'
@@ -63,6 +64,18 @@ const {
   computed(() => !shared.error.value && !counts.error.value),
   sort,
 )
+const selectionScope = computed(() =>
+  JSON.stringify(
+    Object.entries(route.query)
+      .filter(([key]) => !['sort', 'dir'].includes(key))
+      .sort(),
+  ),
+)
+const { allowed, selectedIds, selected, busy, message, clear, toggle, merge } = usePeopleMerge(
+  people,
+  selectionScope,
+  isFetching,
+)
 const listEnd = ref<HTMLElement | null>(null)
 useAutomaticPagination({
   target: listEnd,
@@ -89,29 +102,78 @@ useAutomaticPagination({
       :result-count="resultCount"
     />
 
+    <div
+      v-if="allowed && selected.length"
+      role="toolbar"
+      aria-label="Selected person actions"
+      class="mt-4 flex w-full flex-wrap items-center gap-2"
+    >
+      <span>{{ selected.length }} {{ selected.length === 1 ? 'person' : 'people' }} selected</span>
+      <Button
+        type="button"
+        size="sm"
+        class="max-w-full"
+        :disabled="busy || isFetching || selected.length < 2"
+        @click="merge('last')"
+      >
+        <Merge aria-hidden="true" /><span class="truncate"
+          >Last selected ({{ selected[selected.length - 1]?.name }})</span
+        >
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        class="max-w-full"
+        :disabled="busy || isFetching || selected.length < 2"
+        @click="merge('first')"
+      >
+        <Merge aria-hidden="true" /><span class="truncate"
+          >First selected ({{ selected[0]?.name }})</span
+        >
+      </Button>
+      <Button type="button" size="sm" variant="outline" :disabled="busy" @click="clear"
+        >Clear</Button
+      >
+    </div>
+    <p v-if="busy" role="status">Merging…</p>
+    <p v-if="message" :role="message === 'People merged.' ? 'status' : 'alert'">{{ message }}</p>
+
     <section class="stable-search-results pt-6" aria-live="polite">
       <h2 class="mb-4">Search Results</h2>
       <Separator orientation="horizontal" />
 
       <div v-if="people.length || isLoading" class="grid gap-0 pt-6 sm:grid-cols-2 lg:grid-cols-3">
-        <RouterLink
-          v-for="person in people"
-          :key="person.id"
-          class="group min-w-0"
-          :to="{
-            name: 'person-detail',
-            params: { personId: person.id },
-            query: relatedQuery(route),
-          }"
-        >
-          <PeopleCard
-            :thumbnail-face-id="person.thumbnailFaceId"
-            :name="person.name"
-            :faces="person.faces"
-            :names="person.names"
-            :count-details="person.countDetails"
-          />
-        </RouterLink>
+        <div v-for="person in people" :key="person.id" class="relative min-w-0">
+          <Button
+            v-if="allowed"
+            type="button"
+            variant="outline"
+            size="sm"
+            class="absolute right-2 top-2 z-10"
+            :disabled="busy || isFetching"
+            :aria-label="`Select ${person.name} for merge`"
+            :aria-pressed="selectedIds.has(person.id)"
+            @click="toggle(person.id, $event)"
+            >{{ selectedIds.has(person.id) ? 'Selected' : 'Select' }}</Button
+          >
+          <RouterLink
+            class="group block h-full min-w-0"
+            :class="allowed && 'pt-8'"
+            :to="{
+              name: 'person-detail',
+              params: { personId: person.id },
+              query: relatedQuery(route),
+            }"
+          >
+            <PeopleCard
+              :thumbnail-face-id="person.thumbnailFaceId"
+              :name="person.name"
+              :faces="person.faces"
+              :names="person.names"
+              :count-details="person.countDetails"
+            />
+          </RouterLink>
+        </div>
         <PeopleCardSkeleton
           v-for="index in isLoading || isFetchingNextPage ? 3 : 0"
           :key="`loading-${index}`"
