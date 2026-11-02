@@ -62,8 +62,10 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v6
         with:
-          enable-cache: true
-          cache-dependency-glob: people-gator-api/uv.lock
+          # Each self-hosted runner keeps its own downloads, like npm above.
+          # Shared home-cache pruning blocks on other runners and local uv run services.
+          enable-cache: false
+          cache-local-path: ${{ runner.tool_cache }}/people-gator/uv
       - name: Configure isolated PostgreSQL test port
         env:
           CI_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
