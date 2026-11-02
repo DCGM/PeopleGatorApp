@@ -187,11 +187,13 @@ let pageResizeObserver: ResizeObserver | undefined
 const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
 const lineVisibility = ref<LineVisibility>(parseLineVisibility(route.query.lines))
 const annotationHighlight = ref(parseHighlightStates(route.query.highlight))
+// Annotation states narrow the Annotated and Person lines as well as highlights.
 const teleprompterLines = useTeleprompterLines(
   transcription,
   lineVisibility,
   selectedPersonId,
   focusPageKey,
+  annotationHighlight,
 )
 const includedLines = teleprompterLines.included
 const routeLineMode = computed(() =>

@@ -10,7 +10,8 @@ import {
   type HighlightState,
 } from '@/viewmodels/teleprompter'
 
-// Mirrors the scan toolbar's link-state toggle group, plus Unassigned.
+// Mirrors the scan toolbar's link-state toggle group, plus Unassigned. The chosen
+// states highlight annotations and narrow Annotated and Person lines.
 const selected = defineModel<HighlightState[]>({ default: () => [] })
 function update(value: unknown) {
   selected.value = parseHighlightStates(value)
@@ -18,13 +19,13 @@ function update(value: unknown) {
 </script>
 
 <template>
-  <ButtonGroup class="shrink-0" aria-label="Highlight controls">
+  <ButtonGroup class="shrink-0" aria-label="Annotation state controls">
     <ToggleGroup
       type="multiple"
       :model-value="selected"
       variant="outline"
       size="sm"
-      aria-label="Highlight"
+      aria-label="Annotation states"
       @update:model-value="update"
     >
       <ToggleGroupItem
