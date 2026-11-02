@@ -1247,3 +1247,38 @@ Start with a checkbox, then click cards to add people. Clicking a selected card
 keeps it selected; only its checkbox removes it. Shift-click either control to add
 a range, and Clear restores card navigation. Existing linked fixtures demonstrate
 these interactions without a fixture or persistence upgrade.
+
+
+## Scan sidebar practice (#103)
+
+The additive **Scan sidebar practice** document (`scan-sidebar`, `preview-mzk`)
+has four pages. Page 1 (`scan-sidebar-1`) holds two of Hana Sidebar's faces, one
+unassigned face, Hana's repeated phrase (automatic, verified and one unlinked
+occurrence) and a text-only mention of Tomas Lettered. Pages 2–4 hold 36 small
+faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
+21 further Hana occurrences, so document scope exceeds the 30-face and
+20-occurrence sidebar batches.
+
+- Open `scan-sidebar-people`. People lists Hana and Tomas (this page), then
+  Karel and Rosa (this document), then everyone else. Change the scope in the
+  search group to **This page** or **This document**; type a name and press
+  Enter or the Search button to refine.
+- Open `scan-sidebar-card` to see Hana's tag expanded into the details card.
+  Choose **Search** (magnifier): the face is attached to People search, Similarity
+  sorting is selected and the scope is kept. Remove the face with its ×.
+  `scan-sidebar-face-search` opens that state directly.
+- Open `scan-sidebar-faces` for document faces grouped by person, with
+  **Unassigned** last. Scroll to load the next batch; faces on other pages open
+  their page with the face selected.
+- Open `scan-sidebar-mentions` for document mentions grouped by phrase. Hana's
+  group lists 24 occurrences, including the unlinked one, and loads further
+  occurrences while scrolling. Switch **View** to **Flat** for one list.
+- Open `scan-sidebar-info` for this page's statistics, last change and the
+  latest recorded change of each face and mention.
+
+New stable keys add the four people, document, pages, faces and mentions to
+retained previews. Reruns keep reviewer reassignments and timestamps.
+Integration tests check page/document membership through faces or mentions,
+person-grouped face batches, phrase groups with unlinked occurrences, face and
+combined name/face search within the document, local media and aligned crops,
+additive upgrade with an interrupted checkpoint, and review preservation.
