@@ -1,3 +1,6 @@
+Current OIDC evidence is in [the OIDC directory](../oidc/README.md). These
+captures describe the earlier direct-session Swagger integration.
+
 # Swagger gateway session evidence
 
 Actual Chromium captures from the migrated synthetic instance at its frontend

@@ -1,3 +1,10 @@
+# Current evidence
+
+See [OIDC and provider replacement evidence](oidc/README.md) for the current
+implementation, screenshots and reproducible built-in/Keycloak browser journeys.
+
+The earlier captures below document the previous direct-login revision.
+
 # Standalone login evidence
 
 Actual Chromium captures from the twice-seeded isolated instance, using separate
