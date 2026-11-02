@@ -27,73 +27,6 @@ export type ApiKeyResponse = {
 };
 
 /**
- * AuditListResponse
- */
-export type AuditListResponse = {
-    /**
-     * Items
-     */
-    items: Array<AuditRevision>;
-    /**
-     * Total Count
-     */
-    total_count: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * Offset
-     */
-    offset: number;
-};
-
-/**
- * AuditRevision
- */
-export type AuditRevision = {
-    object_type: ObjectKind;
-    /**
-     * Object Id
-     */
-    object_id: string;
-    /**
-     * Version
-     */
-    version: number;
-    /**
-     * Changed At
-     */
-    changed_at: string;
-    /**
-     * Actor User Id
-     */
-    actor_user_id: string;
-    /**
-     * Actor Api Key Id
-     */
-    actor_api_key_id: string | null;
-    /**
-     * Deleted
-     */
-    deleted: boolean;
-    /**
-     * Entity Id
-     */
-    entity_id: string | null;
-    /**
-     * Source Id
-     */
-    source_id: string | null;
-    /**
-     * State
-     */
-    state: {
-        [key: string]: unknown;
-    };
-};
-
-/**
  * Body_get_token_token_login_post
  */
 export type BodyGetTokenTokenLoginPost = {
@@ -155,6 +88,56 @@ export type BoundingBox = {
      * Height
      */
     height: number;
+};
+
+/**
+ * DocumentAuditState
+ */
+export type DocumentAuditState = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Source Type
+     */
+    source_type: 'document';
+    /**
+     * Library
+     */
+    library: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Name Normalized
+     */
+    name_normalized?: string | null;
 };
 
 /**
@@ -272,9 +255,174 @@ export type DocumentResponse = {
 export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
 
 /**
+ * EntityAliasAuditState
+ */
+export type EntityAliasAuditState = {
+    /**
+     * Alias Id
+     */
+    alias_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Name Normalized
+     */
+    name_normalized?: string | null;
+    /**
+     * Search Document
+     */
+    search_document?: string | null;
+};
+
+/**
  * EntityAnnotation
  */
 export type EntityAnnotation = 'faces' | 'aliases' | 'name';
+
+/**
+ * EntityAuditItem
+ */
+export type EntityAuditItem = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Changed At
+     */
+    changed_at: string;
+    /**
+     * Actor User Id
+     */
+    actor_user_id: string;
+    /**
+     * Actor Api Key Id
+     */
+    actor_api_key_id: string | null;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    state: EntityAuditState;
+};
+
+/**
+ * EntityAuditListResponse
+ */
+export type EntityAuditListResponse = {
+    /**
+     * Items
+     */
+    items: Array<EntityAuditItem>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+};
+
+/**
+ * EntityAuditState
+ */
+export type EntityAuditState = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Entity Type
+     */
+    entity_type: string | null;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Name Normalized
+     */
+    name_normalized?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     */
+    short_description?: string | null;
+    /**
+     * Wikidata Id
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * Thumbnail Face Id
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Thumbnail Mode
+     */
+    thumbnail_mode: 'automatic' | 'manual';
+    /**
+     * Aliases
+     */
+    aliases: Array<EntityAliasAuditState>;
+    /**
+     * Search Document
+     */
+    search_document?: string | null;
+};
 
 /**
  * EntityCreateRequest
@@ -1011,6 +1159,146 @@ export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'fa
 export type EntityType = 'person';
 
 /**
+ * FaceAuditItem
+ */
+export type FaceAuditItem = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Changed At
+     */
+    changed_at: string;
+    /**
+     * Actor User Id
+     */
+    actor_user_id: string;
+    /**
+     * Actor Api Key Id
+     */
+    actor_api_key_id: string | null;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Detection Id
+     */
+    detection_id: string;
+    state: FaceAuditState;
+};
+
+/**
+ * FaceAuditListResponse
+ */
+export type FaceAuditListResponse = {
+    /**
+     * Items
+     */
+    items: Array<FaceAuditItem>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+};
+
+/**
+ * FaceAuditState
+ */
+export type FaceAuditState = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string | null;
+    entity_link_state: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
+    /**
+     * Detection Id
+     */
+    detection_id: string;
+    /**
+     * Occurrence Type
+     */
+    occurrence_type: 'face';
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Identifier
+     */
+    identifier: string | null;
+    /**
+     * Confidence
+     */
+    confidence: number;
+    bounding_box: BoundingBox;
+    /**
+     * Keypoints
+     */
+    keypoints: Array<[
+        number,
+        number
+    ]>;
+    /**
+     * Keypoint Types
+     */
+    keypoint_types: Array<string>;
+    /**
+     * Embeddings
+     */
+    embeddings: Array<FaceEmbeddingAuditState>;
+};
+
+/**
  * FaceCreateRequest
  *
  * Request body for ingesting a face detection.
@@ -1066,6 +1354,24 @@ export type FaceCreateRequest = {
      * The unique identifier of the entity associated with the face detection.
      */
     entity_id?: string;
+};
+
+/**
+ * FaceEmbeddingAuditState
+ */
+export type FaceEmbeddingAuditState = {
+    /**
+     * Face Id
+     */
+    face_id: string;
+    /**
+     * Model Id
+     */
+    model_id: string;
+    /**
+     * Embedding
+     */
+    embedding: Array<number>;
 };
 
 /**
@@ -2184,6 +2490,40 @@ export type HealthResponse = {
 };
 
 /**
+ * ImageAuditState
+ */
+export type ImageAuditState = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Source Type
+     */
+    source_type: 'image';
+};
+
+/**
  * ImageCreateRequest
  *
  * Typed image descriptor backed by an arbitrary URL Source record.
@@ -2324,11 +2664,6 @@ export type ModelEmbeddingFaceModelStub = {
 };
 
 /**
- * ObjectKind
- */
-export type ObjectKind = 'entity' | 'face' | 'mention' | 'source';
-
-/**
  * OpenIDConfigurationResponse
  *
  * OpenID Connect discovery metadata for the People Gator token service.
@@ -2362,6 +2697,56 @@ export type OpenIdConfigurationResponse = {
      * Token Endpoint Auth Methods Supported
      */
     token_endpoint_auth_methods_supported: Array<string>;
+};
+
+/**
+ * PageAuditState
+ */
+export type PageAuditState = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Source Type
+     */
+    source_type: 'page';
+    /**
+     * Library
+     */
+    library: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Page Id
+     */
+    page_id: string;
+    /**
+     * Page Number
+     */
+    page_number: number | null;
 };
 
 /**
@@ -2573,6 +2958,67 @@ export type ScoreFusion = 'rrf';
 export type SortDirection = 'asc' | 'desc';
 
 /**
+ * SourceAuditItem
+ */
+export type SourceAuditItem = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Changed At
+     */
+    changed_at: string;
+    /**
+     * Actor User Id
+     */
+    actor_user_id: string;
+    /**
+     * Actor Api Key Id
+     */
+    actor_api_key_id: string | null;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    state: SourceAuditState;
+};
+
+/**
+ * SourceAuditListResponse
+ */
+export type SourceAuditListResponse = {
+    /**
+     * Items
+     */
+    items: Array<SourceAuditItem>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+};
+
+export type SourceAuditState = ({
+    source_type: 'page';
+} & PageAuditState) | ({
+    source_type: 'document';
+} & DocumentAuditState) | ({
+    source_type: 'image';
+} & ImageAuditState);
+
+/**
  * SourceKind
  *
  * Physical type of a SOURCE record.
@@ -2646,6 +3092,126 @@ export type TextLineModel = {
      * Index
      */
     index?: number | null;
+};
+
+/**
+ * TextMentionAuditItem
+ */
+export type TextMentionAuditItem = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Changed At
+     */
+    changed_at: string;
+    /**
+     * Actor User Id
+     */
+    actor_user_id: string;
+    /**
+     * Actor Api Key Id
+     */
+    actor_api_key_id: string | null;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Mention Id
+     */
+    mention_id: string;
+    state: TextMentionAuditState;
+};
+
+/**
+ * TextMentionAuditListResponse
+ */
+export type TextMentionAuditListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TextMentionAuditItem>;
+    /**
+     * Total Count
+     */
+    total_count: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+};
+
+/**
+ * TextMentionAuditState
+ */
+export type TextMentionAuditState = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string | null;
+    entity_link_state: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
+    /**
+     * Mention Id
+     */
+    mention_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Mention Normalized
+     */
+    mention_normalized?: string | null;
+    /**
+     * Context
+     */
+    context: string | null;
 };
 
 /**
@@ -3141,6 +3707,318 @@ export type ValidationError = {
         [key: string]: unknown;
     };
 };
+
+export type ListEntityAuditRouteApiV1EntitiesAuditGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Entity Id
+         */
+        'filter.entity_id'?: Array<string> | null;
+    };
+    url: '/api/v1/entities/audit';
+};
+
+export type ListEntityAuditRouteApiV1EntitiesAuditGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListEntityAuditRouteApiV1EntitiesAuditGetError = ListEntityAuditRouteApiV1EntitiesAuditGetErrors[keyof ListEntityAuditRouteApiV1EntitiesAuditGetErrors];
+
+export type ListEntityAuditRouteApiV1EntitiesAuditGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: EntityAuditListResponse;
+};
+
+export type ListEntityAuditRouteApiV1EntitiesAuditGetResponse = ListEntityAuditRouteApiV1EntitiesAuditGetResponses[keyof ListEntityAuditRouteApiV1EntitiesAuditGetResponses];
+
+export type ListFaceAuditRouteApiV1FacesAuditGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Detection Id
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
+    url: '/api/v1/faces/audit';
+};
+
+export type ListFaceAuditRouteApiV1FacesAuditGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListFaceAuditRouteApiV1FacesAuditGetError = ListFaceAuditRouteApiV1FacesAuditGetErrors[keyof ListFaceAuditRouteApiV1FacesAuditGetErrors];
+
+export type ListFaceAuditRouteApiV1FacesAuditGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: FaceAuditListResponse;
+};
+
+export type ListFaceAuditRouteApiV1FacesAuditGetResponse = ListFaceAuditRouteApiV1FacesAuditGetResponses[keyof ListFaceAuditRouteApiV1FacesAuditGetResponses];
+
+export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Mention Id
+         */
+        'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
+    url: '/api/v1/text-mentions/audit';
+};
+
+export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetError = ListTextMentionAuditRouteApiV1TextMentionsAuditGetErrors[keyof ListTextMentionAuditRouteApiV1TextMentionsAuditGetErrors];
+
+export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TextMentionAuditListResponse;
+};
+
+export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponse = ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponses[keyof ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponses];
+
+export type ListSourceAuditRouteApiV1SourcesAuditGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Source Type
+         */
+        'filter.source_type'?: Array<SourceKind> | null;
+        /**
+         * Filter.Library
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Id
+         */
+        'filter.document_id'?: Array<string> | null;
+        /**
+         * Filter.Page Id
+         */
+        'filter.page_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
+    url: '/api/v1/sources/audit';
+};
+
+export type ListSourceAuditRouteApiV1SourcesAuditGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSourceAuditRouteApiV1SourcesAuditGetError = ListSourceAuditRouteApiV1SourcesAuditGetErrors[keyof ListSourceAuditRouteApiV1SourcesAuditGetErrors];
+
+export type ListSourceAuditRouteApiV1SourcesAuditGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SourceAuditListResponse;
+};
+
+export type ListSourceAuditRouteApiV1SourcesAuditGetResponse = ListSourceAuditRouteApiV1SourcesAuditGetResponses[keyof ListSourceAuditRouteApiV1SourcesAuditGetResponses];
 
 export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     body?: never;
@@ -7642,123 +8520,6 @@ export type HealthApiV1HealthGetResponses = {
 };
 
 export type HealthApiV1HealthGetResponse = HealthApiV1HealthGetResponses[keyof HealthApiV1HealthGetResponses];
-
-export type ListAuditRouteApiV1AuditGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Object Type
-         */
-        object_type?: ObjectKind | null;
-        /**
-         * Object Id
-         */
-        object_id?: string | null;
-        /**
-         * Entity Id
-         */
-        entity_id?: string | null;
-        /**
-         * Source Id
-         */
-        source_id?: string | null;
-        /**
-         * Actor User Id
-         */
-        actor_user_id?: string | null;
-        /**
-         * Since
-         */
-        since?: string | null;
-        /**
-         * Until
-         */
-        until?: string | null;
-        /**
-         * Version Min
-         */
-        version_min?: number | null;
-        /**
-         * Version Max
-         */
-        version_max?: number | null;
-        /**
-         * Deleted
-         */
-        deleted?: boolean | null;
-        /**
-         * Sort
-         */
-        sort?: 'time' | 'version';
-        /**
-         * Direction
-         */
-        direction?: 'asc' | 'desc';
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-    };
-    url: '/api/v1/audit';
-};
-
-export type ListAuditRouteApiV1AuditGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ListAuditRouteApiV1AuditGetError = ListAuditRouteApiV1AuditGetErrors[keyof ListAuditRouteApiV1AuditGetErrors];
-
-export type ListAuditRouteApiV1AuditGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AuditListResponse;
-};
-
-export type ListAuditRouteApiV1AuditGetResponse = ListAuditRouteApiV1AuditGetResponses[keyof ListAuditRouteApiV1AuditGetResponses];
-
-export type GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetData = {
-    body?: never;
-    path: {
-        object_type: ObjectKind;
-        /**
-         * Object Id
-         */
-        object_id: string;
-        /**
-         * Version
-         */
-        version: number;
-    };
-    query?: never;
-    url: '/api/v1/audit/{object_type}/{object_id}/versions/{version}';
-};
-
-export type GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetError = GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetErrors[keyof GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetErrors];
-
-export type GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AuditRevision;
-};
-
-export type GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetResponse = GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetResponses[keyof GetAuditRevisionRouteApiV1AuditObjectTypeObjectIdVersionsVersionGetResponses];
 
 export type GetJwksWellKnownJwksJsonGetData = {
     body?: never;

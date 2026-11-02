@@ -56,7 +56,7 @@ rejects inactive users and registers the key.
 | `people-gator:browse` | Lists, searches, media reads and filter-option lookups |
 | `people-gator:annotate` | Create/edit identities, patch faces and mentions, change/verify links |
 | `people-gator:ingest` | Register sources, create faces/mentions and upload page assets |
-| `people-gator:audit` | Audit history lists and archived-version reads; can be granted without browse or admin |
+| `people-gator:audit` | Typed entity/source/face/text-mention audit lists; can be granted without browse or admin |
 | `people-gator:admin` | Administrative deletion, identity merges, users and face-model registration |
 
 Scopes are explicit; do not assume admin automatically grants every other scope.

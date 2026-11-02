@@ -60,45 +60,63 @@ provide reconstruction, restore, undo or an audit timeline UI.
 
 ## Read endpoints
 
-Both endpoints require `people-gator:audit`. An auditor can hold this scope alone,
-without `people-gator:admin` or `people-gator:browse`. Browse/admin scopes do not
-implicitly grant audit access; grant `people-gator:audit` explicitly to any
-credential that should read history. This works with bearer tokens and API keys.
-For bearer login request `scope=people-gator:audit`; configure that scope on the
-user credential first. Existing tokens must be reissued with the new scope.
+All four list endpoints require `people-gator:audit`. An auditor can hold this
+scope alone, without `people-gator:admin` or `people-gator:browse`. Browse/admin
+scopes do not implicitly grant audit access. Configure the scope on a user or API
+key explicitly; for bearer login request `scope=people-gator:audit`. Existing
+tokens must be reissued with that scope. The frontend keeps its existing scopes
+because it has no audit UI; the example demo user also permits audit requests.
 
-The frontend continues requesting its existing browse/annotate/ingest/admin
-scopes because it has no audit UI. The example demo user also permits audit
-requests; existing configured users and keys are not upgraded automatically.
+| GET endpoint | Identity/relationship filters | Typed `state` |
+| --- | --- | --- |
+| `/api/v1/entities/audit` | `filter.entity_id` | Entity profile, aliases and portrait selection |
+| `/api/v1/faces/audit` | `filter.detection_id`, `filter.entity_id`, `filter.source_id` | Face, keypoints, vectors and assignment/verification |
+| `/api/v1/text-mentions/audit` | `filter.mention_id`, `filter.entity_id`, `filter.source_id` | Recorded text/context and assignment/verification |
+| `/api/v1/sources/audit` | `filter.source_id`, `filter.source_type`, `filter.library`, `filter.document_id`, `filter.page_id` | Discriminated page, document or image state |
 
-Endpoints:
+Lists return archived revisions and final deleted states; current records remain
+available through the ordinary resource endpoints. A never-edited current object
+has no archived revision yet.
 
-- `GET /api/v1/audit` returns archived states with transition metadata,
-  `total_count`, `limit` (1–500, default 50), and `offset` (default 0).
-- `GET /api/v1/audit/{object_type}/{object_id}/versions/{version}` returns one
-  archived version, including deleted objects. An unarchived current version or
-  unknown version returns 404; read current objects through their usual endpoint.
+Each item has its resource-specific UUID, version, transition time, actor IDs,
+deletion marker and a concrete snapshot schema. There is no generic object-kind
+selector or untyped snapshot dictionary in the public API. Vectors are numeric
+arrays. Source states discriminate on `source_type`. Audit queries never require
+the referenced entity/source/annotation to remain alive.
 
-List filters combine with AND:
+For faces previously linked to an entity, use:
+
+```text
+GET /api/v1/faces/audit?filter.entity_id=<entity-UUID>&sort=version&direction=asc
+```
+
+Repeat an ID parameter to match any of several IDs, and combine different
+criteria with AND. For example, add `filter.source_id=<source-UUID>` to restrict
+those historical assignments to a source. These filters match the persisted
+snapshot, so reassignment and live-object deletion do not erase earlier links.
+One item represents one revision; the same face ID can appear several times.
+
+All lists also accept:
 
 | Parameter | Meaning |
 | --- | --- |
-| `object_type` | `entity`, `face`, `mention`, or `source` |
-| `object_id` | Exact historical object UUID |
-| `entity_id` | Entity profile UUID or assignment in the archived state |
-| `source_id` | Source UUID or evidence source in the archived state |
-| `actor_user_id` | Actor responsible for the transition |
-| `since`, `until` | Inclusive transition timestamps with timezone |
-| `version_min`, `version_max` | Inclusive object-version range |
-| `deleted` | Whether the archived state is a final deletion |
+| `filter.actor_user_id` | One or more transition actors |
+| `filter.since`, `filter.until` | Inclusive transition timestamps with timezone |
+| `filter.version_min`, `filter.version_max` | Inclusive object-version range |
+| `filter.deleted` | Whether the revision is a final deletion |
+| `sort` | `time` (default) or `version` |
+| `direction` | `asc` or `desc` (default) |
+| `limit`, `offset` | Page size 1–500 (default 50) and offset (default 0) |
 
-Use `sort=time` (default) or `sort=version`, and `direction=asc|desc` (default
-descending). Object type, UUID and version provide deterministic tie breakers.
-Versions are independent per object; version ordering across different objects
-is not a global chronology. Offset pagination is intentionally simple and can
-shift if other users create revisions between requests. Filters on related IDs
-refer to the archived predecessor, not the current assignment. Compare adjacent
-annotation versions and the current record to understand assignment transitions.
+Responses include `items`, `total_count`, `limit` and `offset`. Use the same
+minimum and maximum version to select an exact archived version. A list with no
+matching revision returns an empty `items` array. The old generic `/api/v1/audit`
+and generic single-version route have been removed.
+
+UUID and version provide deterministic tie breakers. Versions are independent per
+object; ordering different objects by version is not a global chronology. Offset
+pagination can shift if other users create revisions between requests. Compare
+adjacent annotation versions and the current record to understand transitions.
 
 The optional Weaviate adapter explicitly rejects versioned edits and audit reads
 with HTTP 501. It cannot provide PostgreSQL's transactional archival guarantee.

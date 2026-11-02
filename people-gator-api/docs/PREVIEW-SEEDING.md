@@ -1297,14 +1297,19 @@ is verified by the synthetic reviewer. Eva's profile advances once with a new
 alias and short description. These transitions provide archived predecessors for
 all four object kinds without an embedding or OCR service.
 
-The seed result's `filter_examples["audit-history"]` is an API query for Eva's
-profile and assigned evidence, ordered by version. The
-`filter_examples["audit-first-profile-version"]` entry opens its initial archived
-profile directly. Authenticate with `people-gator:audit`; neither browse nor admin
-is required for these history endpoints. Use `GET /api/v1/audit?source_id=<audit-page-source-UUID>` for the
-page and its annotations; add `object_type=face` or `object_type=mention` to
-isolate them. [Audit history](AUDIT-HISTORY.md) documents version preconditions,
-time/version sorting, deletion retention and exact-version reads.
+The seed report includes typed API examples: `audit-history` for Eva's entity
+profile revisions, `audit-faces` and `audit-text-mentions` filtered by her historical
+entity assignment, and `audit-sources` for the page. `audit-first-profile-version`
+filters the entity list to version 1. Authenticate with `people-gator:audit`;
+neither browse nor admin is required. For example:
+
+```text
+GET /api/v1/faces/audit?filter.entity_id=<Eva-entity-UUID>&sort=version&direction=asc
+GET /api/v1/sources/audit?filter.library=preview-audit
+```
+
+[Audit history](AUDIT-HISTORY.md) documents each concrete snapshot schema,
+resource-specific filters, version preconditions, sorting and deletion retention.
 
 The profile upgrade is narrowly scoped to the untouched initial fixture. Its
 checkpoint survives interruption between mutation and checkpoint completion.

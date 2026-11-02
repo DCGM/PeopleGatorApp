@@ -57,5 +57,7 @@ a string for every scheme would send both headers and correctly receive 400.
 The browser app keeps its existing JWT login flow.
 
 Audit-only keys may specify `"scopes": ["people-gator:audit"]`. This permits
-`GET /api/v1/audit` and archived-version reads without browse or admin access.
+the typed `/api/v1/entities/audit`, `/api/v1/faces/audit`,
+`/api/v1/text-mentions/audit` and `/api/v1/sources/audit` lists without browse or
+admin access.
 Browse and admin keys need the audit scope explicitly to read history.

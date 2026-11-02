@@ -643,8 +643,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "reset-navigation-documents": "/documents?" + urlencode({"library": "preview-mzk"}),
             "reset-navigation-scans": "/scans?" + urlencode({"library": "preview-mzk"}),
             "reset-navigation-people": "/people?" + urlencode({"library": "preview-mzk"}),
-            "audit-first-profile-version": f"/api/v1/audit/entity/{manifest.entities['audit-profile']}/versions/1",
-            "audit-history": "/api/v1/audit?" + urlencode({"entity_id": str(manifest.entities["audit-profile"]), "sort": "version", "direction": "asc"}),
+            "audit-first-profile-version": "/api/v1/entities/audit?" + urlencode({"filter.entity_id": str(manifest.entities["audit-profile"]), "filter.version_min": 1, "filter.version_max": 1}),
+            "audit-faces": "/api/v1/faces/audit?" + urlencode({"filter.entity_id": str(manifest.entities["audit-profile"]), "sort": "version", "direction": "asc"}),
+            "audit-text-mentions": "/api/v1/text-mentions/audit?" + urlencode({"filter.entity_id": str(manifest.entities["audit-profile"])}),
+            "audit-sources": "/api/v1/sources/audit?" + urlencode({"filter.source_id": str(pages["audit-page"])}),
+            "audit-history": "/api/v1/entities/audit?" + urlencode({"filter.entity_id": str(manifest.entities["audit-profile"]), "sort": "version", "direction": "asc"}),
             # Replay a synthetic person-to-page journey without telemetry credentials.
             "openobserve-replay-person": f"/people/{manifest.entities['ada']}",
             "openobserve-replay-page": reference_path,

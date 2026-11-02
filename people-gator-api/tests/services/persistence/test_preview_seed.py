@@ -5464,11 +5464,22 @@ async def test_seed_history_is_available_to_auditor_without_admin(
         headers={"Authorization": "Bearer synthetic-auditor"},
     ) as client:
         history = await client.get(result.filter_examples["audit-history"])
-        assert history.status_code == 200 and history.json()["total_count"] >= 3
+        assert history.status_code == 200 and history.json()["total_count"] >= 1
         archived = await client.get(
             result.filter_examples["audit-first-profile-version"]
         )
-        assert archived.status_code == 200 and archived.json()["version"] == 1
+        assert (
+            archived.status_code == 200 and archived.json()["items"][0]["version"] == 1
+        )
+        for key, identity in [
+            ("audit-faces", "detection_id"),
+            ("audit-text-mentions", "mention_id"),
+            ("audit-sources", "source_id"),
+        ]:
+            response = await client.get(result.filter_examples[key])
+            assert response.status_code == 200, response.text
+            item = response.json()["items"][0]
+            assert identity in item and identity in item["state"]
         assert (await client.get("/api/v1/entities")).status_code == 403
         assert (
             await client.delete(
