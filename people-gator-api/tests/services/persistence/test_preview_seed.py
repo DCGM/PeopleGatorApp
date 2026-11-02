@@ -1303,7 +1303,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
     expected_libraries = [
-        'preview-counts', 'preview-mzk', 'preview-nlk', 'preview-pagination',
+        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
         'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
