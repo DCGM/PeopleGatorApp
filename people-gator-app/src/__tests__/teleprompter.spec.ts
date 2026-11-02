@@ -19,6 +19,7 @@ import {
   parseLineVisibility,
   passages,
   useTeleprompterLines,
+  type LineMode,
   type LineVisibility,
 } from '@/viewmodels/teleprompter'
 
@@ -146,28 +147,51 @@ describe('teleprompter line visibility', () => {
     ).toEqual([false, true, true])
   })
 
-  it('starts fresh when the page, person or mode changes', async () => {
+  it('switches to Custom when lines are revealed and keeps it across person changes', async () => {
     const lines = ref(sample())
     const mode = ref<LineVisibility>('person')
     const person = ref<string | null>('ada')
     const page = ref('one')
     const state = useTeleprompterLines(lines, mode, person, page)
+    const shown = () => state.included.value.flatMap((value, index) => (value ? [index] : []))
+    expect(shown()).toEqual([1, 6, 8, 9])
     state.expand(state.passages.value[0]!, 'after', 1)
-    expect(state.hasExpansions.value).toBe(true)
-    expect(state.included.value[2]).toBe(true)
-    for (const change of [
-      () => (person.value = 'other-ada'),
-      () => (mode.value = 'annotated'),
-      () => (page.value = 'two'),
-    ]) {
-      state.reveal([2])
-      change()
-      await nextTick()
-      expect(state.hasExpansions.value).toBe(false)
-    }
-    state.reveal([2])
+    expect(mode.value).toBe('custom')
+    expect(state.isCustom.value).toBe(true)
+    expect(state.customBase.value).toBe('person')
+    expect(shown()).toEqual([1, 2, 6, 8, 9])
+    // Another person changes highlights only: the Custom lines stay put.
+    person.value = 'other-ada'
+    await nextTick()
+    expect(shown()).toEqual([1, 2, 6, 8, 9])
+    state.reveal([4])
+    expect(shown()).toEqual([1, 2, 4, 6, 8, 9])
+    // Reset returns to the mode it came from, now for the current person.
     state.reset()
-    expect(state.included.value[2]).toBe(false)
+    expect(mode.value).toBe('person')
+    expect(shown()).toEqual([3])
+  })
+
+  it('leaves Custom when a mode is chosen or the page changes', async () => {
+    const mode = ref<LineVisibility>('annotated')
+    const page = ref('one')
+    const state = useTeleprompterLines(ref(sample()), mode, ref(null), page)
+    state.reveal([0])
+    expect(mode.value).toBe('custom')
+    mode.value = 'person'
+    await nextTick()
+    expect(state.isCustom.value).toBe(false)
+    expect(state.included.value.some(Boolean)).toBe(false)
+    mode.value = 'annotated'
+    state.reveal([0])
+    page.value = 'two'
+    await nextTick()
+    expect(mode.value).toBe('annotated')
+    expect(state.included.value[0]).toBe(false)
+    // All shows everything already, so revealing never creates Custom there.
+    mode.value = 'all'
+    state.reveal([0])
+    expect(mode.value).toBe('all')
   })
 
   it('builds page-scoped minimap bars with highlighted segments only on included lines', () => {
@@ -295,7 +319,7 @@ describe('DocumentTeleprompter', () => {
       transcription,
       relatedEntityId: person,
       lineVisibility: mode,
-      included: modeLines(transcription, mode as LineVisibility, person),
+      included: modeLines(transcription, mode as LineMode, person),
       isTranslationOpen: true,
     })
     expect(wrapper.text()).toContain(message)
@@ -342,15 +366,23 @@ describe('DocumentTeleprompter', () => {
     expect(emitted[emitted.length - 1]).toEqual([[]])
   })
 
-  it('switches line visibility and offers Reset only for manual expansions', async () => {
+  it('switches line visibility and shows Custom only while it is active', async () => {
     const wrapper = render()
+    const lines = () =>
+      wrapper.findAll('[aria-label="Lines"] button').map((button) => button.text())
+    expect(lines()).toEqual(['All', 'Annotated', 'Person'])
     expect(wrapper.findAll('button').some((button) => button.text() === 'Reset')).toBe(false)
     await wrapper.get('[role="toolbar"] button[value="annotated"]').trigger('click')
     expect(wrapper.emitted('update:lineVisibility')).toEqual([['annotated']])
-    await wrapper.setProps({ hasExpansions: true })
-    const reset = wrapper.findAll('button').find((button) => button.text() === 'Reset')!
-    await reset.trigger('click')
-    expect(wrapper.emitted('reset')).toHaveLength(1)
+    await wrapper.setProps({ lineVisibility: 'custom' })
+    expect(lines()).toEqual(['All', 'Annotated', 'Person', 'Custom'])
+    expect(
+      wrapper.get('[aria-label="Lines"] button[value="custom"]').attributes('data-state'),
+    ).toBe('on')
+    // Choosing a mode leaves Custom.
+    await wrapper.get('[role="toolbar"] button[value="person"]').trigger('click')
+    const emitted = wrapper.emitted('update:lineVisibility')!
+    expect(emitted[emitted.length - 1]).toEqual(['person'])
   })
 
   it('copies selected text with line breaks, excluding numbers and badges', () => {

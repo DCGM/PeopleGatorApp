@@ -602,20 +602,59 @@ describe('teleprompter focus modes (#36)', () => {
     wrapper.unmount()
   })
 
-  it('reveals a hidden overlay line, then Reset moves selection to the nearest mode line', async () => {
+  it('reveals a hidden overlay line as Custom; choosing the mode again moves to the nearest line', async () => {
     route.query = { lines: 'annotated' }
     threeLines()
     const wrapper = await mountView()
     const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
     wrapper.findComponent({ name: 'DocumentPageOverlay' }).vm.$emit('select-line', 1)
     await flushPromises()
+    expect(teleprompter.props('lineVisibility')).toBe('custom')
     expect(teleprompter.props('included')).toEqual([true, true, true])
-    expect(teleprompter.props('hasExpansions')).toBe(true)
     expect(teleprompter.props('selectedLineIndex')).toBe(1)
-    teleprompter.vm.$emit('reset')
+    // A Custom view is not shareable; the URL keeps the mode it came from.
+    expect(mocks.replace).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ lines: 'annotated', line: 'l2' }),
+      }),
+    )
+    teleprompter.vm.$emit('update:lineVisibility', 'annotated')
     await flushPromises()
     expect(teleprompter.props('included')).toEqual([true, false, true])
     expect(teleprompter.props('selectedLineIndex')).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('keeps Custom when the URL updates to its base mode, but applies a different mode', async () => {
+    route.query = { lines: 'annotated' }
+    threeLines()
+    const wrapper = await mountView()
+    const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    teleprompter.vm.$emit('expand', { start: 0, end: 0 }, 'after', 1)
+    await flushPromises()
+    // The router echoes the synced query back, as a real navigation would.
+    route.query = { ...route.query, lines: 'annotated', line: 'l1' }
+    await flushPromises()
+    expect(teleprompter.props('lineVisibility')).toBe('custom')
+    route.query = { ...route.query, lines: 'person' }
+    await flushPromises()
+    expect(teleprompter.props('lineVisibility')).toBe('person')
+    wrapper.unmount()
+  })
+
+  it('keeps Custom lines when another person is selected', async () => {
+    route.query = { lines: 'person', selectedPerson: 'ada' }
+    threeLines()
+    const wrapper = await mountView()
+    const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
+    teleprompter.vm.$emit('expand', { start: 0, end: 0 }, 'after', 1)
+    await flushPromises()
+    expect(teleprompter.props('lineVisibility')).toBe('custom')
+    expect(teleprompter.props('included')).toEqual([true, true, true])
+    wrapper.findComponent({ name: 'DocumentPageOverlay' }).vm.$emit('select-face', 'b')
+    await flushPromises()
+    expect(teleprompter.props('included')).toEqual([true, true, true])
+    expect(teleprompter.props('lineVisibility')).toBe('custom')
     wrapper.unmount()
   })
 
@@ -632,7 +671,7 @@ describe('teleprompter focus modes (#36)', () => {
     wrapper.unmount()
   })
 
-  it('clears expansions when the mode changes and keeps the empty Person mode', async () => {
+  it('leaves Custom when a mode is chosen and keeps the empty Person mode', async () => {
     threeLines()
     const wrapper = await mountView()
     const teleprompter = wrapper.findComponent({ name: 'DocumentTeleprompter' })
@@ -640,10 +679,10 @@ describe('teleprompter focus modes (#36)', () => {
     await flushPromises()
     teleprompter.vm.$emit('expand', { start: 0, end: 0 }, 'after', 1)
     await flushPromises()
-    expect(teleprompter.props('hasExpansions')).toBe(true)
+    expect(teleprompter.props('lineVisibility')).toBe('custom')
     teleprompter.vm.$emit('update:lineVisibility', 'person')
     await flushPromises()
-    expect(teleprompter.props('hasExpansions')).toBe(false)
+    expect(teleprompter.props('lineVisibility')).toBe('person')
     // No selected person: no fallback to full text.
     expect(teleprompter.props('included')).toEqual([false, false, false])
     wrapper.unmount()

@@ -28,6 +28,7 @@ import {
   passages as toPassages,
   spanHighlightState,
   type HighlightState,
+  type LineMode,
   type LineVisibility,
   type Passage,
 } from '@/viewmodels/teleprompter'
@@ -58,13 +59,12 @@ const props = withDefaults(
     entityNames?: ReadonlyMap<string, string>
     /** Original lines currently available in the text; defaults to all. */
     included?: boolean[]
-    hasExpansions?: boolean
     isTranslationOpen?: boolean
     selectedLanguage?: Language
     currentTranslation?: string
     translationLoading?: boolean
   }>(),
-  { included: undefined, hasExpansions: false },
+  { included: undefined },
 )
 
 const lineVisibility = defineModel<LineVisibility>('lineVisibility', { default: 'all' })
@@ -76,7 +76,6 @@ const emit = defineEmits<{
   'select-line': [index: number]
   'select-entity': [index: number, entity: TranscriptionEntitySpan]
   expand: [passage: Passage, direction: 'before' | 'after', count: number]
-  reset: []
 }>()
 
 const hoveredEntityKey = ref<string | null>(null)
@@ -298,8 +297,8 @@ function isHighlighted(entity: TranscriptionEntitySpan) {
 }
 
 function setLineVisibility(value: unknown) {
-  if (typeof value === 'string' && LINE_VISIBILITIES.includes(value as LineVisibility))
-    lineVisibility.value = value as LineVisibility
+  if (typeof value === 'string' && LINE_VISIBILITIES.includes(value as LineMode))
+    lineVisibility.value = value as LineMode
 }
 
 function lineElement(index: number) {
@@ -557,10 +556,13 @@ defineExpose({ scrollPage, navigateTo })
         <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="px-2">
           {{ lineVisibilityLabels[mode] }}
         </ToggleGroupItem>
+        <!-- Shown only while active: revealing lines creates it, choosing a mode leaves it. -->
+        <ToggleGroupItem v-if="lineVisibility === 'custom'" value="custom" class="px-2"
+          title="Lines you revealed. Choose a mode to reset.">
+          {{ lineVisibilityLabels.custom }}
+        </ToggleGroupItem>
       </ToggleGroup>
       <TeleprompterHighlightFilter v-model="annotationHighlight" />
-      <Button v-if="hasExpansions" variant="ghost" size="sm" class="ml-auto shrink-0"
-        @click="emit('reset')">Reset</Button>
     </div>
 
     <div ref="bodyElement"

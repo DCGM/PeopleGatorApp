@@ -74,6 +74,7 @@ import {
   parseHighlightStates,
   parseLineVisibility,
   useTeleprompterLines,
+  type LineVisibility,
   type Passage,
 } from '@/viewmodels/teleprompter'
 
@@ -184,7 +185,7 @@ const teleprompter = ref<InstanceType<typeof DocumentTeleprompter> | null>(null)
 let panzoom: PanzoomObject | undefined
 let pageResizeObserver: ResizeObserver | undefined
 const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
-const lineVisibility = ref(parseLineVisibility(route.query.lines))
+const lineVisibility = ref<LineVisibility>(parseLineVisibility(route.query.lines))
 const annotationHighlight = ref(parseHighlightStates(route.query.highlight))
 const teleprompterLines = useTeleprompterLines(
   transcription,
@@ -193,6 +194,9 @@ const teleprompterLines = useTeleprompterLines(
   focusPageKey,
 )
 const includedLines = teleprompterLines.included
+const routeLineMode = computed(() =>
+  lineVisibility.value === 'custom' ? teleprompterLines.customBase.value : lineVisibility.value,
+)
 const visibleLineIndices = computed(() =>
   includedLines.value.flatMap((included, index) => (included ? [index] : [])),
 )
@@ -393,7 +397,8 @@ function syncRoute() {
       person: selectedFaceId.value ?? undefined,
       selectedPerson: selectedPersonId.value ?? undefined,
       line: line?.id,
-      lines: lineVisibility.value === 'all' ? undefined : lineVisibility.value,
+      // A Custom line set is not shareable; links keep the mode it came from.
+      lines: routeLineMode.value === 'all' ? undefined : routeLineMode.value,
       highlight: annotationHighlight.value.length ? annotationHighlight.value : undefined,
       translate: isTranslationOpen.value ? 'on' : 'off',
     },
@@ -604,7 +609,9 @@ watch(
 watch(
   () => [route.query.lines, route.query.highlight],
   () => {
-    lineVisibility.value = parseLineVisibility(route.query.lines)
+    // The URL keeps a Custom view's base mode, so only a different mode applies.
+    const lines = parseLineVisibility(route.query.lines)
+    if (lines !== routeLineMode.value) lineVisibility.value = lines
     const highlight = parseHighlightStates(route.query.highlight)
     // Query arrays are recreated on each navigation; keep equal selections stable.
     if (highlight.join() !== annotationHighlight.value.join()) annotationHighlight.value = highlight
@@ -719,7 +726,6 @@ onBeforeUnmount(() => {
               :related-entity-id="selectedPersonId"
               :entity-names="entityNames"
               :included="includedLines"
-              :has-expansions="teleprompterLines.hasExpansions.value"
               :is-translation-open="isTranslationOpen"
               :selected-language="selectedLanguage"
               :current-translation="currentTranslation"
@@ -727,7 +733,6 @@ onBeforeUnmount(() => {
               @select-line="selectLine"
               @select-entity="selectEntity"
               @expand="expandContext"
-              @reset="teleprompterLines.reset()"
             />
           </section>
         </ResizablePanel>

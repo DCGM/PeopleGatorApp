@@ -88,7 +88,7 @@ This does not automatically seed the actual staging environment.
 | OCR highlights | Six mentions with matching text, baselines and polygons in stored OCR layouts |
 | Multiple embedding models | Deterministic, normalized 8D and 4D synthetic vectors with registered models |
 | Processing filters and details | Reviewer activity without an API key, face-importer and OCR-linker attribution with different registered keys |
-| Teleprompter focus modes (#36) | Open `teleprompter-person`: Ada's lines of the 40-line **Teleprompter reading practice** page, with GitHub-style gap expansion, Reset and the page minimap. See [Teleprompter reading practice](#teleprompter-reading-practice-36). |
+| Teleprompter focus modes (#36) | Open `teleprompter-person`: Ada's lines of the 40-line **Teleprompter reading practice** page, with GitHub-style gap expansion, Custom line sets and the page minimap. See [Teleprompter reading practice](#teleprompter-reading-practice-36). |
 | Scan document-page gallery | Open `document-page-gallery`: 14 evidence-free pages of **Page gallery navigation**, more than one 12-page gallery batch, one without media; `document-page-gallery-filtered` keeps all six Příběhy archivářů pages under an annotation filter |
 
 Open the people search page and try the assignment, document, user and API-key
@@ -1155,11 +1155,14 @@ lines stay unannotated. One unembedded Ada face sits beside the text.
 - Open `teleprompter` for full text. Select **Annotated** to collapse the
   unannotated lines. Each hidden gap is a band showing its line count. Its
   gutter buttons reveal 5 lines below the passage above or above the passage
-  below. A gap of 5 lines or fewer has one button that reveals it all. **Reset**
-  clears the revealed context.
+  below. A gap of 5 lines or fewer has one button that reveals it all.
+  Revealing lines switches to **Custom**, which keeps exactly the shown lines;
+  choose **Annotated** again to collapse them.
 - Open `teleprompter-person` for Ada's lines (L3, L16, L29, L33–L34) with
   original numbers. Select Viktor's mention or the Ada face to change the person.
-  Arrow keys step through visible lines only.
+  Arrow keys step through visible lines only. Reveal 5 lines below L8 (the view
+  becomes **Custom**), then select Viktor's mention on L10: the lines and scroll
+  position stay put. Choose **Person** to see Viktor's lines (L10, L25).
 - Open `teleprompter-annotated` to see that **Verified** highlighting marks only
   Viktor's mentions, while every annotated line stays visible.
 - The page-scoped minimap on the right grays hidden lines and colors highlighted

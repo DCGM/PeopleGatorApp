@@ -1,15 +1,22 @@
-import { computed, shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue'
+import { computed, ref, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 
 import type { EntityLinkState } from '@/client'
 import type { TranscriptionEntitySpan, TranscriptionLine } from './document-workspace.types'
 
-/** Which original lines the teleprompter shows (issue #36). */
-export type LineVisibility = 'all' | 'annotated' | 'person'
-export const LINE_VISIBILITIES: readonly LineVisibility[] = ['all', 'annotated', 'person']
+/**
+ * Which original lines the teleprompter shows (issue #36). Revealing lines
+ * outside the Annotated or Person window switches to Custom, an explicit line
+ * set that no longer follows the selected person.
+ */
+export type LineVisibility = 'all' | 'annotated' | 'person' | 'custom'
+export type LineMode = Exclude<LineVisibility, 'custom'>
+/** The modes a reader chooses directly; Custom only results from revealing lines. */
+export const LINE_VISIBILITIES: readonly LineMode[] = ['all', 'annotated', 'person']
 export const lineVisibilityLabels: Record<LineVisibility, string> = {
   all: 'All',
   annotated: 'Annotated',
   person: 'Person',
+  custom: 'Custom',
 }
 
 /**
@@ -27,8 +34,8 @@ export const HIGHLIGHT_STATES: readonly HighlightState[] = [
 /** Lines revealed per expand action; shorter gaps expand completely in one action. */
 export const EXPAND_STEP = 5
 
-export function parseLineVisibility(value: unknown): LineVisibility {
-  return LINE_VISIBILITIES.includes(value as LineVisibility) ? (value as LineVisibility) : 'all'
+export function parseLineVisibility(value: unknown): LineMode {
+  return LINE_VISIBILITIES.includes(value as LineMode) ? (value as LineMode) : 'all'
 }
 
 export function parseHighlightStates(value: unknown): HighlightState[] {
@@ -52,7 +59,7 @@ export function highlightsSpan(span: TranscriptionEntitySpan, states: readonly H
  */
 export function modeLines(
   lines: readonly TranscriptionLine[],
-  mode: LineVisibility,
+  mode: LineMode,
   personId: string | null,
 ): boolean[] {
   if (mode === 'all') return lines.map(() => true)
@@ -180,32 +187,53 @@ export function minimapLines(
 }
 
 /**
- * Teleprompter line state: the mode's lines plus manually revealed context.
- * A new page, person or mode starts fresh, without previous expansions.
+ * Teleprompter line state. Revealing lines outside the Annotated or Person
+ * window switches to Custom, keeping exactly the lines shown; a Custom view no
+ * longer follows the selected person, so changing person never collapses or
+ * jumps the text. Choosing a mode discards it; a new page returns to the mode
+ * it came from.
  */
 export function useTeleprompterLines(
   transcription: MaybeRefOrGetter<readonly TranscriptionLine[]>,
-  mode: MaybeRefOrGetter<LineVisibility>,
+  mode: Ref<LineVisibility>,
   personId: MaybeRefOrGetter<string | null>,
   pageKey: MaybeRefOrGetter<string>,
 ) {
-  const revealed = shallowRef<ReadonlySet<number>>(new Set())
-  const base = computed(() => modeLines(toValue(transcription), toValue(mode), toValue(personId)))
-  const included = computed(() => includedLines(base.value, revealed.value))
+  const custom = shallowRef<ReadonlySet<number> | null>(null)
+  /** The mode a Custom view was created from, restored by reset and in the URL. */
+  const customBase = ref<LineMode>('annotated')
+  const included = computed(() => {
+    const lines = toValue(transcription)
+    if (mode.value !== 'custom') return modeLines(lines, mode.value, toValue(personId))
+    const selected = custom.value ?? new Set<number>()
+    return lines.map((_, index) => selected.has(index))
+  })
   const visiblePassages = computed(() => passages(included.value))
-  const hasExpansions = computed(() => [...revealed.value].some((index) => !base.value[index]))
+  const isCustom = computed(() => mode.value === 'custom')
 
   function reveal(indices: readonly number[]) {
-    if (!indices.length) return
-    revealed.value = new Set([...revealed.value, ...indices])
+    if (!indices.length || mode.value === 'all') return
+    const next = new Set(indices)
+    included.value.forEach((value, index) => value && next.add(index))
+    if (mode.value !== 'custom') customBase.value = mode.value
+    custom.value = next
+    mode.value = 'custom'
   }
   function expand(passage: Passage, direction: 'before' | 'after', count: number) {
     reveal(contextIndices(passage, direction, count, toValue(transcription).length))
   }
   function reset() {
-    revealed.value = new Set()
+    if (mode.value === 'custom') mode.value = customBase.value
   }
-  watch(() => [toValue(pageKey), toValue(personId), toValue(mode)], reset, { flush: 'sync' })
+  watch(
+    mode,
+    (value) => {
+      if (value !== 'custom') custom.value = null
+    },
+    { flush: 'sync' },
+  )
+  // Custom line sets are page-specific.
+  watch(() => toValue(pageKey), reset, { flush: 'sync' })
 
-  return { base, included, passages: visiblePassages, hasExpansions, expand, reveal, reset }
+  return { included, passages: visiblePassages, isCustom, customBase, expand, reveal, reset }
 }
