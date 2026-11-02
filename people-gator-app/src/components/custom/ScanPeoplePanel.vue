@@ -128,13 +128,17 @@ defineExpose({ focus: () => group.value?.querySelector('textarea')?.focus() })
           placeholder="Name or alias"
           @keydown="keydown"
         />
+        <!-- Always present at a fixed height, so attaching context never resizes search. -->
         <InputGroupAddon
-          v-if="searchFaceId"
           align="block-end"
           aria-label="Search context"
-          class="flex-wrap pb-0"
+          class="h-9 flex-nowrap overflow-x-auto pb-0"
         >
-          <SearchFaceAttachment :face-id="searchFaceId" @remove="emit('removeFace')" />
+          <SearchFaceAttachment
+            v-if="searchFaceId"
+            :face-id="searchFaceId"
+            @remove="emit('removeFace')"
+          />
         </InputGroupAddon>
         <InputGroupAddon align="block-end">
           <DropdownMenu>
