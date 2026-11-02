@@ -7,9 +7,13 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
+  AlignJustify,
   ArrowDownFromLine,
   ArrowUpFromLine,
+  Highlighter,
+  ListPlus,
   UnfoldVertical,
+  UserRound,
   X,
 } from '@lucide/vue'
 
@@ -77,6 +81,14 @@ const emit = defineEmits<{
   'select-entity': [index: number, entity: TranscriptionEntitySpan]
   expand: [passage: Passage, direction: 'before' | 'after', count: number]
 }>()
+
+// Like the highlight toggles: icon and label when the settings row is wide, icon only otherwise.
+const lineVisibilityIcons = {
+  all: AlignJustify,
+  annotated: Highlighter,
+  person: UserRound,
+  custom: ListPlus,
+} satisfies Record<LineVisibility, typeof AlignJustify>
 
 const hoveredEntityKey = ref<string | null>(null)
 const bodyElement = ref<HTMLElement | null>(null)
@@ -553,12 +565,16 @@ defineExpose({ scrollPage, navigateTo })
       class="@container flex min-w-0 flex-row flex-wrap items-center gap-2 border-b py-1.5">
       <ToggleGroup type="single" variant="outline" size="sm" class="shrink-0" aria-label="Lines"
         :model-value="lineVisibility" @update:model-value="setLineVisibility">
-        <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="px-2">
-          {{ lineVisibilityLabels[mode] }}
+        <ToggleGroupItem v-for="mode in LINE_VISIBILITIES" :key="mode" :value="mode" class="gap-1 px-2"
+          :aria-label="lineVisibilityLabels[mode]" :title="lineVisibilityLabels[mode]">
+          <component :is="lineVisibilityIcons[mode]" class="size-3.5" aria-hidden="true" />
+          <span class="hidden @3xl:inline">{{ lineVisibilityLabels[mode] }}</span>
         </ToggleGroupItem>
-        <!-- Shown only while active: revealing lines creates it, choosing a mode leaves it. -->
-        <ToggleGroupItem v-if="lineVisibility === 'custom'" value="custom" class="px-2"
-          title="Lines you revealed. Choose a mode to reset.">
+        <!-- Shown only while active, and always labeled: revealing lines creates it,
+          choosing a mode leaves it. -->
+        <ToggleGroupItem v-if="lineVisibility === 'custom'" value="custom" class="gap-1 px-2"
+          :aria-label="lineVisibilityLabels.custom" title="Lines you revealed. Choose a mode to reset.">
+          <component :is="lineVisibilityIcons.custom" class="size-3.5" aria-hidden="true" />
           {{ lineVisibilityLabels.custom }}
         </ToggleGroupItem>
       </ToggleGroup>

@@ -376,6 +376,18 @@ describe('DocumentTeleprompter', () => {
     expect(wrapper.emitted('update:lineVisibility')).toEqual([['annotated']])
     await wrapper.setProps({ lineVisibility: 'custom' })
     expect(lines()).toEqual(['All', 'Annotated', 'Person', 'Custom'])
+    // Every option has an icon and an accessible name; labels collapse to icons
+    // when the settings row is narrow, except Custom, which stays labeled.
+    const items = wrapper.findAll('[aria-label="Lines"] button')
+    expect(items.map((item) => item.attributes('aria-label'))).toEqual([
+      'All',
+      'Annotated',
+      'Person',
+      'Custom',
+    ])
+    expect(items.every((item) => item.find('svg').exists())).toBe(true)
+    expect(items.slice(0, 3).every((item) => item.get('span').classes('hidden'))).toBe(true)
+    expect(items[3]!.find('span.hidden').exists()).toBe(false)
     expect(
       wrapper.get('[aria-label="Lines"] button[value="custom"]').attributes('data-state'),
     ).toBe('on')
