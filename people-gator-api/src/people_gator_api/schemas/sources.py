@@ -378,8 +378,9 @@ class ImageLookupRequest(BaseModel):
 
 
 class SourceResponseBase(BaseModel):
-    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
     """A linkable reference to a typed source."""
+
+    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
 
     model_config = ConfigDict(extra="forbid")
     source_id: uuid.UUID

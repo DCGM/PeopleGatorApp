@@ -65,8 +65,9 @@ type TextMentionsBatchPatchRequest = Annotated[
 
 
 class TextMentionResponse(EntityLinkResponse):
-    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
     """A single mention of an entity name in a text source."""
+
+    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
 
     mention_id: uuid.UUID
     name: str

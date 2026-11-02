@@ -123,8 +123,9 @@ type EntityBatchPatchRequest = Annotated[
 
 
 class EntityResponse(CreationMetadata):
-    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
     """A single entity record."""
+
+    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
 
     entity_id: uuid.UUID = Field(description="The unique identifier of the entity.")
     entity_type: EntityType = Field(description="The type of the entity.")

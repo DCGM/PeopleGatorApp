@@ -8,6 +8,10 @@ Only selected objects and their deletion/merge dependents are read.
 from datetime import datetime, timezone
 from functools import wraps
 from uuid import UUID, uuid4
+from typing import Any
+from collections.abc import Iterable, Mapping
+from sqlalchemy.ext.asyncio import AsyncSession
+from people_gator_api.schemas.common import GenericActor
 from sqlalchemy import select, text, update
 from sqlalchemy.orm.attributes import set_committed_value
 from people_gator_api.schemas.audit import VersionConflict
@@ -42,7 +46,9 @@ SNAPSHOTS = {
 }
 
 
-async def snapshots(session, kind, ids):
+async def snapshots(
+    session: AsyncSession, kind: str, ids: Iterable[UUID]
+) -> dict[UUID, dict[str, Any]]:
     if not ids:
         return {}
     return dict(
@@ -50,7 +56,13 @@ async def snapshots(session, kind, ids):
     )
 
 
-async def prepare_audit(session, kind, ids, context, expected_versions):
+async def prepare_audit(
+    session: AsyncSession,
+    kind: str,
+    ids: Iterable[UUID],
+    context: GenericActor,
+    expected_versions: Mapping[UUID, int] | None,
+) -> None:
     """Lock/check all explicit targets before any mutation; capture cascade effects."""
     await lock_annotation_graph(session)
     ids = sorted(set(ids))
@@ -91,7 +103,7 @@ async def prepare_audit(session, kind, ids, context, expected_versions):
     session.info["audit_pending"] = (targets, context)
 
 
-def semantic_state(kind, state):
+def semantic_state(kind: str, state: dict[str, Any]) -> dict[str, Any]:
     # Activity propagation is deliberately independent of object content versions.
     result = {
         k: v
@@ -109,7 +121,7 @@ def semantic_state(kind, state):
     return result
 
 
-async def finish_audit(session):
+async def finish_audit(session: AsyncSession) -> None:
     pending = session.info.pop("audit_pending", None)
     if pending is None:
         return
