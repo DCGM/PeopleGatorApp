@@ -833,6 +833,22 @@ describe('scan sidebar (#103)', () => {
     wrapper.unmount()
   })
 
+  it('attaches the selected face from the People context menu', async () => {
+    route.query = { candidate_text: 'Ada' }
+    faces.value = faces.value.map((item) => ({ ...item, embeddingModel: 'model' }))
+    const wrapper = await mountView(true)
+    wrapper.findComponent({ name: 'ScanFacesPanel' }).vm.$emit('select', 'b')
+    await flushPromises()
+    wrapper.findComponent({ name: 'ScanPeoplePanel' }).vm.$emit('attach-selected-face')
+    await flushPromises()
+    expect(lastQuery(mocks.push)).toMatchObject({
+      candidate_face: 'b',
+      candidate_text: undefined,
+      candidate_sort: 'relevance',
+    })
+    wrapper.unmount()
+  })
+
   it('opens People search for Link and keeps typed text when the face is removed', async () => {
     route.query = { panel: 'info', candidate_face: 'a', candidate_sort: 'relevance' }
     const wrapper = await mountView(true)

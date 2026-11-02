@@ -12,11 +12,16 @@ const url = useObjectUrl(() => crop.data.value)
 </script>
 
 <template>
-  <span class="flex shrink-0 items-center gap-0.5" data-search-face :data-face-id="faceId">
+  <span
+    class="flex shrink-0 items-center gap-1.5 rounded-full border py-0.5 pl-0.5 text-xs text-foreground"
+    data-search-face
+    :data-face-id="faceId"
+  >
     <Avatar class="size-6">
-      <AvatarImage :src="url" alt="Search face" class="object-cover grayscale" />
-      <AvatarFallback class="text-[0.625rem]">Face</AvatarFallback>
+      <AvatarImage :src="url" alt="" class="object-cover grayscale" />
+      <AvatarFallback class="text-[0.625rem]">F</AvatarFallback>
     </Avatar>
+    Face
     <InputGroupButton
       size="icon-xs"
       class="rounded-full"

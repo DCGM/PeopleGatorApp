@@ -101,11 +101,17 @@ describe('People panel (#103)', () => {
   it('keeps face, scope, result count and Search in one input group', async () => {
     const wrapper = panel({ searchFaceId: 'face-a', scored: true, order: 'relevance' })
     const group = wrapper.get('[data-slot="input-group"]')
-    const addon = group.get('[data-align="block-end"]')
-    expect(addon.find('[data-search-face][data-face-id="face-a"]').exists()).toBe(true)
+    // Attachments sit on their own row below the text, above the controls.
+    const rows = group.findAll('[data-align="block-end"]')
+    expect(rows).toHaveLength(2)
+    const [context, addon] = rows as [(typeof rows)[0], (typeof rows)[0]]
+    expect(context.attributes('aria-label')).toBe('Search context')
+    expect(context.find('[data-search-face][data-face-id="face-a"]').exists()).toBe(true)
+    expect(addon.find('[data-search-face]').exists()).toBe(false)
+    expect(addon.get('button').attributes('aria-label')).toBe('Add search context')
     expect(addon.get('[aria-label="Scope: All people"]').text()).toBe('All people')
     expect(addon.get('[role="status"]').text()).toBe('1 result')
-    await addon.get('[aria-label="Remove search face"]').trigger('click')
+    await context.get('[aria-label="Remove search face"]').trigger('click')
     expect(wrapper.emitted('removeFace')).toHaveLength(1)
     // Sorting sits beside the Results heading, not in the search group.
     expect(group.findComponent({ name: 'SortSelect' }).exists()).toBe(false)
@@ -120,6 +126,12 @@ describe('People panel (#103)', () => {
       'name',
       'last_touched_at',
     ])
+  })
+
+  it('shows no attachment row without context', () => {
+    const wrapper = panel()
+    expect(wrapper.findAll('[data-align="block-end"]')).toHaveLength(1)
+    expect(wrapper.find('[aria-label="Add search context"]').exists()).toBe(true)
   })
 
   it('applies name text on Enter or Search, not while typing', async () => {
