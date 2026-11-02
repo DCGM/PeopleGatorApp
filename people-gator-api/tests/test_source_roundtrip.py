@@ -45,7 +45,9 @@ class FakeSources:
     async def get_source(self, source_id: uuid.UUID) -> SourceResponseBase | None:
         return self.objects.get(source_id)
 
-    async def delete(self, source_id: uuid.UUID, *, context: UserResponse) -> bool:
+    async def delete(
+        self, source_id: uuid.UUID, *, context: UserResponse, expected_version: int
+    ) -> bool:
         return self.objects.pop(source_id, None) is not None
 
 
@@ -67,7 +69,15 @@ def test_sources_contract_is_read_only_and_has_no_polymorphic_metadata() -> None
     source_properties = openapi["components"]["schemas"]["SourceResponseBase"][
         "properties"
     ]
-    assert set(source_properties) == {"source_id", "source_type", "url", "last_touched_at", "last_touched_by_user_id", "last_touched_by_api_key_id"}
+    assert set(source_properties) == {
+        "version",
+        "source_id",
+        "source_type",
+        "url",
+        "last_touched_at",
+        "last_touched_by_user_id",
+        "last_touched_by_api_key_id",
+    }
 
 
 @pytest.mark.asyncio
@@ -92,6 +102,7 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
     assert fetched.source_type == SourceKind.image
 
     await delete_source_route(
+        expected_version=1,
         source_id=source_id,
         user=_user(),
         database=database,  # type: ignore[arg-type]

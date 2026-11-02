@@ -4,6 +4,7 @@ import os
 import uuid
 
 import pytest
+from version_preconditions import read_version, read_versions
 from sqlalchemy.engine import make_url
 from pydantic import AnyUrl
 
@@ -131,6 +132,7 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                         target_patch=EntityMergeTargetPatch(
                             description="Replacement description",
                             short_description=None,
+                            expected_versions=await read_versions(database.entities, [target_id, source_id]),
                         ),
                         context=user,
                     )
@@ -155,6 +157,7 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 target_patch=EntityMergeTargetPatch(
                     description="Replacement description",
                     short_description=None,
+                    expected_versions=await read_versions(database.entities, [target_id, source_id]),
                 ),
                 context=user,
             )
@@ -177,11 +180,25 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert stored_mention is not None and stored_mention.entity_id == target_id
 
             assert (
-                await database.entities.merge(target_id, source_id, context=user)
+                await database.entities.merge(
+                    target_id,
+                    source_id,
+                    context=user,
+                    target_patch=EntityMergeTargetPatch(
+                        expected_versions=await read_versions(database.entities, [target_id, source_id])
+                    ),
+                )
                 is None
             )
             with pytest.raises(ValueError, match="must differ"):
-                await database.entities.merge(target_id, target_id, context=user)
+                await database.entities.merge(
+                    target_id,
+                    target_id,
+                    context=user,
+                    target_patch=EntityMergeTargetPatch(
+                        expected_versions=await read_versions(database.entities, [target_id, target_id])
+                    ),
+                )
 
             more_sources = await database.entities.create_batch(
                 [
@@ -201,12 +218,22 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             more_source_ids = [entity.entity_id for entity in more_sources]
             await database.faces.patch(
                 face.detection_id,
-                FacePatchRequest(entity_id=more_source_ids[0]),
+                FacePatchRequest(
+                    entity_id=more_source_ids[0],
+                    expected_version=(
+                        await database.faces.get(face.detection_id)
+                    ).version,
+                ),
                 user,
             )
             await database.text_mentions.patch(
                 mention.mention_id,
-                TextMentionPatchRequest(entity_id=more_source_ids[1]),
+                TextMentionPatchRequest(
+                    entity_id=more_source_ids[1],
+                    expected_version=(
+                        await database.text_mentions.get(mention.mention_id)
+                    ).version,
+                ),
                 user,
             )
 
@@ -214,7 +241,10 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 await database.entities.merge_batch(
                     target_id,
                     [more_source_ids[0], uuid.uuid4()],
-                    target_patch=EntityMergeTargetPatch(description="Must not persist"),
+                    target_patch=EntityMergeTargetPatch(
+                        description="Must not persist",
+                        expected_versions=await read_versions(database.entities, [target_id, more_source_ids[0], uuid.uuid4()]),
+                    ),
                     context=user,
                 )
                 is None
@@ -241,7 +271,8 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 target_id,
                 more_source_ids,
                 target_patch=EntityMergeTargetPatch(
-                    short_description="Batch short description"
+                    short_description="Batch short description",
+                    expected_versions=await read_versions(database.entities, [target_id, *more_source_ids]),
                 ),
                 context=user,
             )
@@ -273,7 +304,12 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
 
             with pytest.raises(ValueError, match="unique"):
                 await database.entities.merge_batch(
-                    target_id, [target_id, target_id], context=user
+                    target_id,
+                    [target_id, target_id],
+                    context=user,
+                    target_patch=EntityMergeTargetPatch(
+                        expected_versions=await read_versions(database.entities, [target_id, target_id, target_id])
+                    ),
                 )
 
             final_source = await database.entities.create(
@@ -285,15 +321,30 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             cleared = await database.entities.merge(
                 target_id,
                 final_source.entity_id,
-                target_patch=EntityMergeTargetPatch(description=None),
+                target_patch=EntityMergeTargetPatch(
+                    description=None,
+                    expected_versions=await read_versions(database.entities, [target_id, final_source.entity_id]),
+                ),
                 context=user,
             )
             assert cleared is not None
             assert cleared.merged_entity.description is None
             assert cleared.merged_entity.short_description == "Batch short description"
 
-            await database.sources.delete(source.source_id, context=user)
-            await database.entities.delete(target_id, context=user)
+            await database.sources.delete(
+                source.source_id,
+                context=user,
+                expected_version=(
+                    await read_version(database.sources, source.source_id)
+                ),
+            )
+            await database.entities.delete(
+                target_id,
+                context=user,
+                expected_version=(
+                    await read_version(database.entities, target_id)
+                ),
+            )
             await database.users.delete(user.user_id)
     finally:
         await engine.dispose()

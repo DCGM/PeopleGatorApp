@@ -146,24 +146,17 @@ async def test_weaviate_link_contract_and_additive_upgrade():
             )
         )
         assert doc.source_id in {item.source_id for item in docs.items}
-        moved = await db.text_mentions.patch(
-            mention.mention_id, TextMentionPatchRequest(entity_id=emil.entity_id), actor
-        )
-        assert (
-            moved.entity_link_state == EntityLinkState.manual
-            and moved.entity_link_verified_at is None
-        )
-        assert (
-            await db.text_mentions.get(mention.mention_id)
-        ).entity_id == emil.entity_id
-        merged = await db.entities.merge(ada.entity_id, emil.entity_id, context=actor)
-        assert merged.text_mentions_reassigned == 1
-        assert (
-            await db.faces.get(face.detection_id)
-        ).entity_link_state == EntityLinkState.verified
+        with pytest.raises(NotImplementedError, match="require PostgreSQL"):
+            await db.text_mentions.patch(
+                mention.mention_id,
+                TextMentionPatchRequest(entity_id=emil.entity_id, expected_version=1),
+                actor,
+            )
+        with pytest.raises(NotImplementedError, match="require PostgreSQL"):
+            await db.entities.merge(ada.entity_id, emil.entity_id, context=actor)
         assert (
             await db.text_mentions.get(mention.mention_id)
-        ).entity_link_state == EntityLinkState.manual
+        ).entity_id == ada.entity_id
         before_upgrade = await db.faces.get(face.detection_id)
         legacy_id = uuid.uuid4()
         stored = await client.collections.get("Face").query.fetch_object_by_id(
@@ -190,19 +183,13 @@ async def test_weaviate_link_contract_and_additive_upgrade():
         assert (
             await db.faces.get(legacy_id)
         ).entity_link_state == EntityLinkState.automatic
-        await db.entities.delete_batch([ada.entity_id], context=actor)
-        for repo, record_id in (
-            (db.faces, face.detection_id),
-            (db.text_mentions, mention.mention_id),
-        ):
-            stored = await repo.get(record_id)
-            assert (
-                stored.entity_id
-                is stored.entity_link_state
-                is stored.entity_link_verified_at
-                is None
+        with pytest.raises(NotImplementedError, match="require PostgreSQL"):
+            await db.entities.delete_batch(
+                [ada.entity_id], context=actor, expected_versions={ada.entity_id: 1}
             )
-        stats = (await db.sources.get_document(doc.source_id)).entity_link_stats
-        assert stats.faces.unassigned == 2 and stats.mentions.unassigned == 1
+        assert (await db.faces.get(face.detection_id)).entity_id == ada.entity_id
+        assert (
+            await db.text_mentions.get(mention.mention_id)
+        ).entity_id == ada.entity_id
     finally:
         await client.close()

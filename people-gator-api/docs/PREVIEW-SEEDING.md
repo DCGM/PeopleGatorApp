@@ -1285,3 +1285,28 @@ Integration tests check page/document membership through faces or mentions,
 person-grouped face batches, phrase groups with unlinked occurrences, face and
 combined name/face search within the document, local media and aligned crops,
 additive upgrade with an interrupted checkpoint, and review preservation.
+
+
+## Audit history (#104)
+
+Search for **Eva History**, then open **Audit history ledger** in the
+`preview-audit` library. The `audit-profile`, `audit-page`, `audit-face`, and
+`audit-mention` fixture keys are stable. The page includes local synthetic media,
+a face and a text mention. Its number is upgraded from unknown to 1; its evidence
+is verified by the synthetic reviewer. Eva's profile advances once with a new
+alias and short description. These transitions provide archived predecessors for
+all four object kinds without an embedding or OCR service.
+
+The seed result's `filter_examples["audit-history"]` is an API query for Eva's
+profile and assigned evidence, ordered by version. Authenticate with the normal
+browse scope. Use `GET /api/v1/audit?source_id=<audit-page-source-UUID>` for the
+page and its annotations; add `object_type=face` or `object_type=mention` to
+isolate them. [Audit history](AUDIT-HISTORY.md) documents version preconditions,
+time/version sorting, deletion retention and exact-version reads.
+
+The profile upgrade is narrowly scoped to the untouched initial fixture. Its
+checkpoint survives interruption between mutation and checkpoint completion.
+Reruns add missing examples and preserve review changes, versions, history,
+assignments, source identities and activity timestamps. Integration coverage
+queries snapshots and actors through `Database.audit`, reruns the seed and
+checks that reviewed data and history counts remain unchanged.

@@ -237,6 +237,30 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         active_entities[person.key] = entity.entity_id
         await checkpoint()
 
+    # Additive #104 scenario: archive an initial profile and full alias collection.
+    # Only the untouched new fixture can advance; review edits and interrupted
+    # checkpoints must never replay the demonstration mutation.
+    audit_id = active_entities.get("audit-profile")
+    audit_person = await database.entities.get(audit_id) if audit_id else None
+    upgrade_key = "audit-profile-v1"
+    if audit_person is not None:
+        upgrade = upgrades.record_edits.get(upgrade_key)
+        if upgrade is None:
+            upgrade = RecordEditUpgrade(expected_touched_at=audit_person.last_touched_at)
+            upgrades.record_edits[upgrade_key] = upgrade
+            await checkpoint_upgrades()
+        if not upgrade.complete:
+            if (audit_person.version == 1 and audit_person.name == "Eva History"
+                    and audit_person.aliases == ["E. History"]
+                    and audit_person.last_touched_at == upgrade.expected_touched_at):
+                await database.entities.patch(audit_id, EntityPatchRequest(
+                    expected_version=audit_person.version,
+                    aliases=["E. History", "Eva Archive"],
+                    short_description="Reviewed synthetic audit history example.",
+                ), actors["reviewer"])
+            upgrade.complete = True
+            await checkpoint_upgrades()
+
     documents: dict[str, UUID] = {}
     pages: dict[str, UUID] = {}
     for document in DOCUMENTS:
@@ -258,7 +282,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 library=document.library,
                 document_id=document.document_id,
                 page_id=page.page_id,
-                page_number=None if page.key == "page-gallery-9" else page.number,
+                page_number=None if page.key in ("page-gallery-9", "audit-page") else page.number,
             )
         )
         # Upgrade legacy synthetic pages once, only while still unannotated.
@@ -274,7 +298,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             if not edit.complete:
                 if source.page_number is None and source.last_touched_at == edit.expected_touched_at:
                     patched = await database.sources.patch_page(
-                        source.source_id, PagePatchRequest(page_number=page.number),
+                        source.source_id, PagePatchRequest(page_number=page.number, expected_version=source.version),
                         context=actors["reviewer"], touch=False,
                     )
                     if patched is None:
@@ -339,7 +363,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     else actors["importer"],
                 )
             if face.state == "verified" and detection.entity_id == active_entities.get(face.person) and detection.entity_link_state == EntityLinkState.automatic:
-                detection = await database.faces.patch(detection.detection_id, FacePatchRequest(entity_link_state=EntityLinkState.verified), actors["reviewer"])
+                detection = await database.faces.patch(detection.detection_id, FacePatchRequest(expected_version=detection.version, entity_link_state=EntityLinkState.verified), actors["reviewer"])
             manifest.faces[face.key] = detection.detection_id
             active_faces[face.key] = detection.detection_id
             await checkpoint()
@@ -383,9 +407,9 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 )
             if record.entity_id == active_entities.get(person.key) and record.entity_link_state == EntityLinkState.automatic:
                 if mention.state == "verified":
-                    record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actors["reviewer"])
+                    record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(expected_version=record.version, entity_link_state=EntityLinkState.verified), actors["reviewer"])
                 elif mention.state is None:
-                    record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(entity_id=None), actors["reviewer"])
+                    record = await database.text_mentions.patch(record.mention_id, TextMentionPatchRequest(expected_version=record.version, entity_id=None), actors["reviewer"])
             manifest.mentions[mention.key] = record.mention_id
             active_mentions[mention.key] = record.mention_id
             await checkpoint()
@@ -486,6 +510,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     and person.last_touched_at == upgrade.expected_touched_at
                     and candidate is not None and candidate.entity_id == person_id):
                 await database.entities.patch(person_id, EntityPatchRequest(
+                    expected_version=person.version,
                     thumbnail_face_id=upgrade.selected_face_id,
                 ), actors["reviewer"])
             upgrade.complete = True
@@ -508,6 +533,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                     and person.last_touched_by_user_id == actors["reviewer"].user_id):
                 curator = actors["curator"]
                 await database.entities.patch(person_id, EntityPatchRequest(
+                    expected_version=person.version,
                     short_description="Curated after the reviewer linked her face.",
                 ), AuthContext(
                     user_id=curator.user_id, api_key_id=None,
@@ -617,6 +643,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             "reset-navigation-documents": "/documents?" + urlencode({"library": "preview-mzk"}),
             "reset-navigation-scans": "/scans?" + urlencode({"library": "preview-mzk"}),
             "reset-navigation-people": "/people?" + urlencode({"library": "preview-mzk"}),
+            "audit-history": "/api/v1/audit?" + urlencode({"entity_id": str(active_entities.get("audit-profile", "")), "sort": "version", "direction": "asc"}),
             # Replay a synthetic person-to-page journey without telemetry credentials.
             "openobserve-replay-person": f"/people/{manifest.entities['ada']}",
             "openobserve-replay-page": reference_path,

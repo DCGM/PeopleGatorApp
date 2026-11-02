@@ -215,8 +215,16 @@ async def collection(sorted_records):
         face_payload(pages[3].source_id, 0.7, person, "manual"),
         face_payload(pages[4].source_id, 0.9, person, "automatic"),
     ], r.actor)
-    await r.db.faces.patch_batch([FacePatchBatchItem(detection_id=faces[3].detection_id,
-                                                     entity_link_state="verified")], r.actor)
+    await r.db.faces.patch_batch(
+        [
+            FacePatchBatchItem(
+                detection_id=faces[3].detection_id,
+                entity_link_state="verified",
+                expected_version=(await r.db.faces.get(faces[3].detection_id)).version,
+            )
+        ],
+        r.actor,
+    )
     mentions = await r.db.text_mentions.create_batch([
         TextMentionCreateRequest(name=name, entity_id=person, source_id=pages[index % len(pages)].source_id)
         for index, name in enumerate(

@@ -137,7 +137,10 @@ async def test_empty_entity_delete_batch_is_a_noop() -> None:
             raise AssertionError("delete_many must not be called")
 
     response = await EntityRepository.delete_batch(
-        type_cast(EntityRepository, Repository()), [], context=GenericActor(user_id=uuid.uuid4())
+        type_cast(EntityRepository, Repository()),
+        [],
+        context=GenericActor(user_id=uuid.uuid4()),
+        expected_versions={},
     )
     assert response.deleted_count == 0
 

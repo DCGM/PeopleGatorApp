@@ -26,6 +26,7 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    Person("audit-profile", "Eva History", ("E. History",), "Synthetic audit history example.", "reviewer"),
     *(Person(f"merge-{i}", f"Rina Merge {i}", (f"R. Merge {i}",),
              "Synthetic duplicate for first/last-selected merge practice.", "importer")
       for i in range(1, 4)),
@@ -147,6 +148,7 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("audit-history", "preview-audit", "Audit history ledger"),
     Document("search-merge", "preview-merge", "Search merge practice"),
     Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("count-faces", "preview-counts", "Count study: faces"),
@@ -339,6 +341,8 @@ PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
+    Page("audit-page", "audit-history", 1, (Face("audit-face", "audit-profile", 0, 7, "verified", embedded=False),),
+         (Mention("audit-mention", "audit-profile", "Eva History reviewed this synthetic ledger.", "verified"),)),
     *(Page(f"search-merge-{i}", "search-merge", i,
            (Face(f"search-merge-{i}", f"merge-{i}", 0, 0, embedded=False),),
            (Mention(f"search-merge-{i}", f"merge-{i}", f"Rina Merge {i} signed this register."),))

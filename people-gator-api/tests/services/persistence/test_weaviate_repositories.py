@@ -299,38 +299,18 @@ async def test_face_model_reregistration_checks_stored_dimension() -> None:
 
 
 @pytest.mark.asyncio
-async def test_state_only_mention_patch_is_atomic_preserves_identity_and_verification():
+async def test_versioned_mention_patch_is_explicitly_unsupported():
     from people_gator_api.schemas.mentions import TextMentionPatchRequest
-    from people_gator_api.schemas.enums import EntityLinkState
     collection = _collection()
-    actor = GenericActor(user_id=uuid.uuid4())
-    entity_id, source_id = uuid.uuid4(), uuid.uuid4()
-    stored = _stored({"name": "Ada", "context": "A caption", "entity_link_state": "automatic"}, entity=entity_id, source=source_id)
-    collection.query.fetch_object_by_id.return_value = stored
     repo = WeaviateTextMentionRepository(_client(collection))
-    verified = await repo.patch(stored.uuid, TextMentionPatchRequest(entity_link_state="verified"), actor)
-    assert verified.entity_id == entity_id and verified.mention_id == stored.uuid
-    assert verified.entity_link_verified_by_user_id == actor.user_id
-    replaced = collection.data.replace.await_args.kwargs
-    assert replaced["references"] == {"entity": entity_id, "source": source_id}
-    assert replaced["properties"]["name"] == "Ada"
-    assert replaced["properties"]["entity_link_verified_at"] is not None
-    # Simulate persisted data; repeated verification must do no writes/touches.
-    stored.properties = replaced["properties"]
-    collection.data.replace.reset_mock()
-    collection.data.update.reset_mock()
-    repeated = await repo.patch(stored.uuid, TextMentionPatchRequest(entity_link_state="verified"), GenericActor(user_id=uuid.uuid4()))
-    assert repeated.entity_link_verified_at == verified.entity_link_verified_at
-    assert repeated.entity_link_verified_by_user_id == actor.user_id
+    with pytest.raises(NotImplementedError, match="require PostgreSQL"):
+        await repo.patch(
+            uuid.uuid4(),
+            TextMentionPatchRequest(expected_version=1, entity_link_state="verified"),
+            GenericActor(user_id=uuid.uuid4()),
+        )
     collection.data.replace.assert_not_awaited()
     collection.data.update.assert_not_awaited()
-    with pytest.raises(ValueError):
-        await repo.patch(stored.uuid, TextMentionPatchRequest(entity_link_state=None), actor)
-    collection.data.replace.assert_not_awaited()
-    reassigned = await repo.patch(stored.uuid, TextMentionPatchRequest(entity_id=uuid.uuid4()), actor)
-    assert reassigned.entity_link_state == EntityLinkState.manual
-    assert reassigned.entity_link_verified_at is None
-    assert reassigned.name == verified.name and reassigned.source_id == source_id
 
 
 @pytest.mark.asyncio

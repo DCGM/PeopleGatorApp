@@ -9,6 +9,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from version_preconditions import read_version, read_versions
+from people_gator_api.schemas.entities import EntityMergeTargetPatch
 import pytest_asyncio
 from alembic import command
 from PIL import Image
@@ -106,8 +108,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (44, 162, 108)
-    assert len(result.documents) == 55 and len(result.pages) == 116
+    assert await counts(database) == (45, 163, 109)
+    assert len(result.documents) == 56 and len(result.pages) == 117
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     # #107: all three duplicates are discoverable together, with usable evidence.
@@ -381,7 +383,12 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
     assert await database.sources.get_page(invalid.source_id) == page_before
 
     reviewed: FaceResponse | None = await database.faces.patch(
-        invalid.detection_id, FacePatchRequest(entity_id=seed.entities["lenka"]), actor,
+        invalid.detection_id,
+        FacePatchRequest(
+            entity_id=seed.entities["lenka"],
+            expected_version=(await database.faces.get(invalid.detection_id)).version,
+        ),
+        actor,
     )
     assert reviewed is not None
     reviewed_person: EntityResponse | None = await database.entities.get(seed.entities["lenka"])
@@ -390,7 +397,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (44, 162, 108)
+    assert await counts(database) == (45, 163, 109)
 
 
 @pytest.mark.asyncio
@@ -401,16 +408,28 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     first = await preview.seed_preview(database, filesystem)
     actor = GenericActor(user_id=first.users["reviewer"])
     edited = await database.entities.patch(
-        first.entities["ada"], EntityPatchRequest(name="Reviewed Ada"), actor
+        first.entities["ada"],
+        EntityPatchRequest(
+            name="Reviewed Ada",
+            expected_version=(
+                await database.entities.get(first.entities["ada"])
+            ).version,
+        ),
+        actor,
     )
     await database.faces.patch(
         first.faces["unassigned-ada"],
-        FacePatchRequest(entity_id=first.entities["lenka"]),
+        FacePatchRequest(
+            entity_id=first.entities["lenka"],
+            expected_version=(
+                await database.faces.get(first.faces["unassigned-ada"])
+            ).version,
+        ),
         actor,
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (44, 162, 108)
+    assert await counts(database) == (45, 163, 109)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -433,7 +452,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (45, 162, 108)
+    assert await counts(database) == (46, 163, 109)
 
 
 
@@ -458,8 +477,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 44 and len(result.faces) == 162
-    assert await counts(database) == (44, 162, 108)
+    assert len(result.entities) == 45 and len(result.faces) == 163
+    assert await counts(database) == (45, 163, 109)
 
 
 
@@ -469,10 +488,27 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     first = await preview.seed_preview(database, filesystem)
     actor = GenericActor(user_id=first.users["reviewer"])
     await database.entities.merge(
-        first.entities["ada"], first.entities["ada-candidate"], context=actor
+        first.entities["ada"],
+        first.entities["ada-candidate"],
+        context=actor,
+        target_patch=EntityMergeTargetPatch(
+            expected_versions=await read_versions(database.entities, [first.entities["ada"], first.entities["ada-candidate"]])
+        ),
     )
-    await database.faces.delete(first.faces["unassigned-other"], context=actor)
-    await database.text_mentions.delete(first.mentions["nora-letter"], context=actor)
+    await database.faces.delete(
+        first.faces["unassigned-other"],
+        context=actor,
+        expected_version=(
+            await read_version(database.faces, first.faces["unassigned-other"])
+        ),
+    )
+    await database.text_mentions.delete(
+        first.mentions["nora-letter"],
+        context=actor,
+        expected_version=(
+            await read_version(database.text_mentions, first.mentions["nora-letter"])
+        ),
+    )
     second = await preview.seed_preview(database, filesystem)
     assert "ada-candidate" not in second.entities
     assert "unassigned-other" not in second.faces
@@ -480,7 +516,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (43, 161, 107)
+    assert await counts(database) == (44, 162, 108)
 
 
 
@@ -491,7 +527,13 @@ async def test_no_ocr_scan_preserves_face_review_and_media_on_rerun(seed_target)
     actor = GenericActor(user_id=first.users["reviewer"])
     face = await database.faces.patch(
         first.faces["no-ocr-left"],
-        FacePatchRequest(entity_id=first.entities["lenka"], entity_link_state="manual"),
+        FacePatchRequest(
+            entity_id=first.entities["lenka"],
+            entity_link_state="manual",
+            expected_version=(
+                await database.faces.get(first.faces["no-ocr-left"])
+            ).version,
+        ),
         actor,
     )
     source = await database.sources.get_page(first.pages["faces-no-ocr-1"])
@@ -816,49 +858,82 @@ async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
     ):
         before = await repo.get(record_id)
         verified = await repo.patch(
-            record_id, patch(entity_link_state=State.verified), importer
+            record_id,
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_link_state=State.verified,
+            ),
+            importer,
         )
         assert verified.entity_link_verified_by_user_id == importer.user_id
         assert verified.entity_link_verified_at is not None
         touched = (await db.entities.get(before.entity_id)).last_touched_at
         repeat = await repo.patch(
             record_id,
-            patch(entity_id=before.entity_id, entity_link_state=State.verified),
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_id=before.entity_id,
+                entity_link_state=State.verified,
+            ),
             reviewer,
         )
         assert repeat.entity_link_verified_at == verified.entity_link_verified_at
         assert repeat.entity_link_verified_by_user_id == importer.user_id
         assert (await db.entities.get(before.entity_id)).last_touched_at == touched
         assert (
-            await repo.patch(record_id, patch(), reviewer)
+            await repo.patch(
+                record_id,
+                patch(
+                    expected_version=(await repo.get(record_id)).version,
+                ),
+                reviewer,
+            )
         ).entity_link_verified_at == verified.entity_link_verified_at
         if repo is db.faces:
             embedded = await repo.patch(
                 record_id,
                 patch(
+                    expected_version=(await repo.get(record_id)).version,
                     embeddings=[
                         preview.FaceEmbedding(
                             model_identifier=MODEL, vector=[1.0] + [0.0] * 7
                         )
-                    ]
+                    ],
                 ),
                 reviewer,
             )
             assert embedded.entity_link_verified_at == verified.entity_link_verified_at
             assert embedded.entity_link_verified_by_user_id == importer.user_id
         for invalid in (
-            patch(entity_link_state=None),
             patch(
-                entity_id=seed.entities["link-emil"], entity_link_state=State.verified
+                expected_version=(await repo.get(record_id)).version,
+                entity_link_state=None,
             ),
-            patch(entity_id=None, entity_link_state=State.manual),
-            patch(entity_id=uuid.uuid4()),
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_id=seed.entities["link-emil"],
+                entity_link_state=State.verified,
+            ),
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_id=None,
+                entity_link_state=State.manual,
+            ),
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_id=uuid.uuid4(),
+            ),
         ):
             with pytest.raises(ValueError):
                 await repo.patch(record_id, invalid, reviewer)
             assert (await repo.get(record_id)).entity_id == before.entity_id
         moved = await repo.patch(
-            record_id, patch(entity_id=seed.entities["link-emil"]), reviewer
+            record_id,
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_id=seed.entities["link-emil"],
+            ),
+            reviewer,
         )
         assert (
             moved.entity_link_state == State.manual
@@ -871,7 +946,11 @@ async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
                 before.context,
                 before.source_id,
             )
-        cleared = await repo.patch(record_id, patch(entity_id=None), reviewer)
+        cleared = await repo.patch(
+            record_id,
+            patch(expected_version=(await repo.get(record_id)).version, entity_id=None),
+            reviewer,
+        )
         assert (
             cleared.entity_id
             is cleared.entity_link_state
@@ -880,18 +959,32 @@ async def test_link_states_transitions_filters_stats_and_rerun(seed_target):
         )
         with pytest.raises(ValueError):
             await repo.patch(
-                record_id, patch(entity_link_state=State.verified), reviewer
+                record_id,
+                patch(
+                    expected_version=(await repo.get(record_id)).version,
+                    entity_link_state=State.verified,
+                ),
+                reviewer,
             )
         restored = await repo.patch(
             record_id,
-            patch(entity_id=before.entity_id, entity_link_state=State.automatic),
+            patch(
+                expected_version=(await repo.get(record_id)).version,
+                entity_id=before.entity_id,
+                entity_link_state=State.automatic,
+            ),
             reviewer,
         )
         assert restored.entity_link_state == State.automatic
     # Reruns preserve review changes and the verification actor/time.
     face_id = seed.faces["links-verified"]
     edited = await db.faces.patch(
-        face_id, FacePatchRequest(entity_link_state=State.manual), reviewer
+        face_id,
+        FacePatchRequest(
+            entity_link_state=State.manual,
+            expected_version=(await db.faces.get(face_id)).version,
+        ),
+        reviewer,
     )
     await preview.seed_preview(db, fs)
     assert (await db.faces.get(face_id)) == edited
@@ -953,16 +1046,29 @@ async def test_link_database_constraints_delete_merge_and_migration(seed_target)
     # A manual merge resets only the transferred links; target links keep verification.
     verified_target = await db.faces.patch(
         seed.faces["links-auto"],
-        FacePatchRequest(entity_link_state=State.verified),
+        FacePatchRequest(
+            entity_link_state=State.verified,
+            expected_version=(await db.faces.get(seed.faces["links-auto"])).version,
+        ),
         actor,
     )
     await db.text_mentions.patch(
         seed.mentions["links-manual-mention"],
-        TextMentionPatchRequest(entity_link_state=State.verified),
+        TextMentionPatchRequest(
+            entity_link_state=State.verified,
+            expected_version=(
+                await db.text_mentions.get(seed.mentions["links-manual-mention"])
+            ).version,
+        ),
         actor,
     )
     merged = await db.entities.merge(
-        seed.entities["link-ada"], seed.entities["link-emil"], context=actor
+        seed.entities["link-ada"],
+        seed.entities["link-emil"],
+        context=actor,
+        target_patch=EntityMergeTargetPatch(
+            expected_versions=await read_versions(db.entities, [seed.entities["link-ada"], seed.entities["link-emil"]])
+        ),
     )
     assert (
         merged.merged_entity.entity_link_stats.faces.manual
@@ -1049,7 +1155,13 @@ async def test_entity_link_http_contract_and_batch_validation(seed_target):
             ids = seed.faces if path == "faces" else seed.mentions
             record_id = str(ids[key])
             url = f"/api/v1/{path}/{record_id}"
-            response = await client.patch(url, json={"entity_link_state": "verified"})
+            response = await client.patch(
+                url,
+                json={
+                    "expected_version": (await client.get(url)).json()["version"],
+                    "entity_link_state": "verified",
+                },
+            )
             assert response.status_code == 200, response.text
             body = response.json()
             assert body["entity_link_verified_by_user_id"] == str(actor.user_id)
@@ -1064,12 +1176,24 @@ async def test_entity_link_http_contract_and_batch_validation(seed_target):
                     "entity_link_state": "verified",
                 },
             ):
-                assert (await client.patch(url, json=invalid)).status_code == 422
+                assert (
+                    await client.patch(
+                        url,
+                        json={
+                            **invalid,
+                            "expected_version": (await client.get(url)).json()[
+                                "version"
+                            ],
+                        },
+                    )
+                ).status_code == 422
                 assert (await client.get(url)).json()["entity_id"] == str(
                     seed.entities["link-ada"]
                 )
             assert (
-                await client.patch(f"/api/v1/{path}/{uuid.uuid4()}", json={})
+                await client.patch(
+                    f"/api/v1/{path}/{uuid.uuid4()}", json={"expected_version": 1}
+                )
             ).status_code == 404
             # Complete semantic preflight prevents a valid first item from changing.
             invalid_batch = [
@@ -1092,8 +1216,8 @@ async def test_entity_link_http_contract_and_batch_validation(seed_target):
             batch = await client.patch(
                 f"/api/v1/{path}:batch",
                 json=[
-                    {id_field: record_id, "entity_id": None},
-                    {id_field: str(uuid.uuid4()), "entity_link_state": "manual"},
+                    {id_field: record_id, "expected_version": (await client.get(url)).json()["version"], "entity_id": None},
+                    {id_field: str(uuid.uuid4()), "expected_version": 1, "entity_link_state": "manual"},
                 ],
             )
             assert batch.status_code == 200 and batch.json()[1] is None
@@ -1128,7 +1252,12 @@ async def test_document_scope_and_indexed_aggregates_with_larger_fixture(seed_ta
         actor,
     )
     await db.text_mentions.patch(
-        direct.mention_id, TextMentionPatchRequest(entity_link_state="verified"), actor
+        direct.mention_id,
+        TextMentionPatchRequest(
+            entity_link_state="verified",
+            expected_version=(await db.text_mentions.get(direct.mention_id)).version,
+        ),
+        actor,
     )
     original = await db.sources.get_document(doc.source_id)
     assert original.entity_link_stats.mentions.total == 4
@@ -1305,7 +1434,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
     expected_libraries = [
-        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
+        'preview-audit', 'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
         'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
@@ -1331,9 +1460,20 @@ async def test_issue8_annotation_noops_delete_merge_rollback_and_concurrency(see
     actor = GenericActor(user_id=seeded.users['reviewer'])
     image = await database.sources.lookup_image(ImageLookupRequest(url=ISSUE8_IMAGE_URL))
     face_id = seeded.faces['issue8-image-face']
-    await database.faces.patch(face_id, FacePatchRequest(), actor)
+    await database.faces.patch(
+        face_id,
+        FacePatchRequest(expected_version=(await database.faces.get(face_id)).version),
+        actor,
+    )
     assert (await database.sources.get_image(image.source_id)).last_touched_at == image.last_touched_at
-    await database.faces.patch(face_id, FacePatchRequest(entity_id=seeded.entities['lenka']), actor)
+    await database.faces.patch(
+        face_id,
+        FacePatchRequest(
+            entity_id=seeded.entities["lenka"],
+            expected_version=(await database.faces.get(face_id)).version,
+        ),
+        actor,
+    )
     changed = await database.sources.get_image(image.source_id)
     assert changed.last_touched_at > image.last_touched_at and changed.last_touched_by_api_key_id is None
     # Failed commit rolls back the annotation and both kinds of metadata.
@@ -1343,40 +1483,107 @@ async def test_issue8_annotation_noops_delete_merge_rollback_and_concurrency(see
         raise RuntimeError('forced rollback')
     monkeypatch.setattr(face_repository, 'commit', fail)
     with pytest.raises(RuntimeError, match='rollback'):
-        await database.faces.patch(face_id, FacePatchRequest(entity_id=seeded.entities['ada']), actor)
+        await database.faces.patch(
+            face_id,
+            FacePatchRequest(
+                entity_id=seeded.entities["ada"],
+                expected_version=(await database.faces.get(face_id)).version,
+            ),
+            actor,
+        )
     monkeypatch.setattr(face_repository, 'commit', original_commit)
     assert (await database.faces.get(face_id)).entity_id == seeded.entities['lenka']
     assert (await database.sources.get_image(image.source_id)).last_touched_at == changed.last_touched_at
     # A batch assigns the exact same timestamp to all source targets and parents.
-    await database.faces.patch_batch([
-        FacePatchBatchItem(detection_id=face_id, entity_id=None),
-        FacePatchBatchItem(detection_id=seeded.faces['issue8-orphan-face'], entity_id=seeded.entities['lenka']),
-        FacePatchBatchItem(detection_id=seeded.faces['issue8-face-2'], entity_id=seeded.entities['lenka']),
-    ], actor)
+    await database.faces.patch_batch(
+        [
+            FacePatchBatchItem(
+                detection_id=face_id,
+                entity_id=None,
+                expected_version=(await database.faces.get(face_id)).version,
+            ),
+            FacePatchBatchItem(
+                detection_id=seeded.faces["issue8-orphan-face"],
+                entity_id=seeded.entities["lenka"],
+                expected_version=(
+                    await database.faces.get(seeded.faces["issue8-orphan-face"])
+                ).version,
+            ),
+            FacePatchBatchItem(
+                detection_id=seeded.faces["issue8-face-2"],
+                entity_id=seeded.entities["lenka"],
+                expected_version=(
+                    await database.faces.get(seeded.faces["issue8-face-2"])
+                ).version,
+            ),
+        ],
+        actor,
+    )
     image = await database.sources.get_image(image.source_id)
     orphan = await database.sources.get_page(seeded.pages['issue8-orphan-1'])
     page = await database.sources.get_page(seeded.pages['issue8-search-2'])
     document = await database.sources.get_document(seeded.documents['issue8-search'])
     assert image.last_touched_at == orphan.last_touched_at == page.last_touched_at == document.last_touched_at
     assert (await database.sources.get_page(seeded.pages['issue8-untouched'])).last_touched_at is None
-    await database.text_mentions.patch(seeded.mentions['issue8-mention-5'], TextMentionPatchRequest(entity_id=None), actor)
+    await database.text_mentions.patch(
+        seeded.mentions["issue8-mention-5"],
+        TextMentionPatchRequest(
+            entity_id=None,
+            expected_version=(
+                await database.text_mentions.get(seeded.mentions["issue8-mention-5"])
+            ).version,
+        ),
+        actor,
+    )
     mention_page = await database.sources.get_page(seeded.pages['issue8-search-5'])
     assert mention_page.last_touched_at == (await database.sources.get_document(document.source_id)).last_touched_at
-    assert await database.text_mentions.delete(seeded.mentions['issue8-mention-5'], context=actor)
+    assert await database.text_mentions.delete(
+        seeded.mentions["issue8-mention-5"],
+        context=actor,
+        expected_version=(
+            await read_version(database.text_mentions, seeded.mentions["issue8-mention-5"])
+        ),
+    )
     assert (await database.sources.get_page(mention_page.source_id)).last_touched_at > mention_page.last_touched_at
-    await database.entities.merge(seeded.entities['ada'], seeded.entities['lenka'], context=actor)
+    await database.entities.merge(
+        seeded.entities["ada"],
+        seeded.entities["lenka"],
+        context=actor,
+        target_patch=EntityMergeTargetPatch(
+            expected_versions=await read_versions(database.entities, [seeded.entities["ada"], seeded.entities["lenka"]])
+        ),
+    )
     assert (await database.sources.get_page(orphan.source_id)).last_touched_at > orphan.last_touched_at
-    await database.entities.delete(seeded.entities['ada'], context=actor)
+    await database.entities.delete(
+        seeded.entities["ada"],
+        context=actor,
+        expected_version=(
+            await read_version(database.entities, seeded.entities["ada"])
+        ),
+    )
     assert (await database.faces.get(seeded.faces['issue8-face-2'])).entity_id is None
     before = await database.sources.get_document(document.source_id)
-    assert await database.sources.delete(page.source_id, context=actor)
+    assert await database.sources.delete(
+        page.source_id,
+        context=actor,
+        expected_version=(
+            await read_version(database.sources, page.source_id)
+        ),
+    )
     assert (await database.sources.get_document(document.source_id)).last_touched_at > before.last_touched_at
     assert await database.sources.get_page(page.source_id) is None
     # Concurrent independent edits of siblings serialize parent processing.
     async def edit(face_id, entity_id):
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
             db = postgres_database(session)
-            await db.faces.patch(face_id, FacePatchRequest(entity_id=entity_id), actor)
+            await db.faces.patch(
+                face_id,
+                FacePatchRequest(
+                    entity_id=entity_id,
+                    expected_version=(await db.faces.get(face_id)).version,
+                ),
+                actor,
+            )
             return await db.sources.get_document(document.source_id)
     a, b = await asyncio.wait_for(asyncio.gather(
         edit(seeded.faces['issue8-face-3'], seeded.entities['nora']),
@@ -1384,7 +1591,19 @@ async def test_issue8_annotation_noops_delete_merge_rollback_and_concurrency(see
     ), timeout=10)
     assert a.last_touched_at != b.last_touched_at
     assert (await database.sources.get_document(document.source_id)).last_touched_at == max(a.last_touched_at, b.last_touched_at)
-    assert await database.sources.delete_batch([document.source_id, seeded.pages['issue8-untouched']], context=actor) == 2
+    assert (
+        await database.sources.delete_batch(
+            [document.source_id, seeded.pages["issue8-untouched"]],
+            context=actor,
+            expected_versions={
+                item_id: (
+                    await read_version(database.sources, item_id)
+                )
+                for item_id in [document.source_id, seeded.pages["issue8-untouched"]]
+            },
+        )
+        == 2
+    )
     assert await database.sources.get_document(document.source_id) is None
     assert await database.sources.get_page(seeded.pages['issue8-untouched']) is None
     assert (await database.sources.get_document(seeded.documents['issue8-mirror'])).last_touched_at is None
@@ -1418,9 +1637,31 @@ async def test_issue8_direct_annotations_touch_only_document_and_preserve_recove
     assert pages.total_count == 0
     # Verification changes source history; repeating verification preserves it.
     actor = GenericActor(user_id=result.users['reviewer'])
-    await database.text_mentions.patch(result.mentions['issue8-direct-mention'], TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actor)
+    await database.text_mentions.patch(
+        result.mentions["issue8-direct-mention"],
+        TextMentionPatchRequest(
+            entity_link_state=EntityLinkState.verified,
+            expected_version=(
+                await database.text_mentions.get(
+                    result.mentions["issue8-direct-mention"]
+                )
+            ).version,
+        ),
+        actor,
+    )
     verified = await database.sources.get_document(processed.source_id)
-    await database.text_mentions.patch(result.mentions['issue8-direct-mention'], TextMentionPatchRequest(entity_link_state=EntityLinkState.verified), actor)
+    await database.text_mentions.patch(
+        result.mentions["issue8-direct-mention"],
+        TextMentionPatchRequest(
+            entity_link_state=EntityLinkState.verified,
+            expected_version=(
+                await database.text_mentions.get(
+                    result.mentions["issue8-direct-mention"]
+                )
+            ).version,
+        ),
+        actor,
+    )
     assert (await database.sources.get_document(processed.source_id)).last_touched_at == verified.last_touched_at
     await preview.seed_preview(database, filesystem)
     assert (await database.sources.get_document(processed.source_id)).last_touched_at == verified.last_touched_at
@@ -1441,14 +1682,26 @@ async def test_issue8_source_only_actor_and_key_references(seed_target):
     image, _ = await database.sources.get_or_create_image(ImageCreateRequest(url='https://preview.invalid/source-only.png'))
     actor = GenericActor(user_id=user.user_id)
     face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), actor)
-    await database.faces.delete(face.detection_id, context=actor)
+    await database.faces.delete(
+        face.detection_id,
+        context=actor,
+        expected_version=(
+            await read_version(database.faces, face.detection_id)
+        ),
+    )
     # No owned face, entity or key remains; source processing alone protects U.
     with pytest.raises(ValueError, match='referenced'):
         await database.users.delete(user.user_id)
     key = await database.api_keys.get_or_create(APIKeyCreateRequest(identifier='source-only-key', display_name='Historical source key', user_id=user.user_id))
     key_actor = AuthContext(user_id=user.user_id, api_key_id=key.api_key_id, authentication_method='api_key', scopes=set())
     face = await database.faces.create(FaceCreateRequest(source_id=image.source_id, confidence=0.9, bounding_box=face_box(Face("source-ref", None, 0, 0)), keypoints=face_keypoints(Face("source-ref", None, 0, 0))), key_actor)
-    await database.faces.delete(face.detection_id, context=key_actor)
+    await database.faces.delete(
+        face.detection_id,
+        context=key_actor,
+        expected_version=(
+            await read_version(database.faces, face.detection_id)
+        ),
+    )
     with pytest.raises(ValueError, match='referenced API key'):
         await database.api_keys.get_or_create(APIKeyCreateRequest(identifier='source-only-key', display_name='Renamed key', user_id=other.user_id))
     assert (await database.sources.get_image(image.source_id)).last_touched_by_api_key_id == key.api_key_id
@@ -1629,11 +1882,26 @@ async def test_scan_toolbar_examples_filter_real_evidence_and_preserve_reviews(s
 
     actor = GenericActor(user_id=first.users['reviewer'])
     reviewed_face = await database.faces.patch(
-        first.faces['links-verified'], FacePatchRequest(entity_link_state=State.manual), actor,
+        first.faces["links-verified"],
+        FacePatchRequest(
+            entity_link_state=State.manual,
+            expected_version=(
+                await database.faces.get(first.faces["links-verified"])
+            ).version,
+        ),
+        actor,
     )
     reviewed_mention = await database.text_mentions.patch(
-        first.mentions['links-verified-mention'],
-        TextMentionPatchRequest(entity_link_state=State.manual), actor,
+        first.mentions["links-verified-mention"],
+        TextMentionPatchRequest(
+            entity_link_state=State.manual,
+            expected_version=(
+                await database.text_mentions.get(
+                    first.mentions["links-verified-mention"]
+                )
+            ).version,
+        ),
+        actor,
     )
     page_before = await database.sources.get_page(first.pages['links-2'])
     document_before = await database.sources.get_document(first.documents['link-states'])
@@ -1695,11 +1963,25 @@ async def test_annotation_filter_parity_and_creation_preservation(seed_target):
     assert (await database.faces.get(authority.detection_id)).model_dump() == before
     # Identical verification preserves time and attribution; a material JWT edit clears the key.
     reviewer = GenericActor(user_id=result.users['reviewer'])
-    unchanged = await database.faces.patch(authority.detection_id, FacePatchRequest(entity_link_state='verified'), reviewer)
+    unchanged = await database.faces.patch(
+        authority.detection_id,
+        FacePatchRequest(
+            entity_link_state="verified",
+            expected_version=(await database.faces.get(authority.detection_id)).version,
+        ),
+        reviewer,
+    )
     assert unchanged.last_touched_at == authority.last_touched_at
     automatic = await database.faces.get(result.faces['provenance-auto'])
     assert automatic.last_touched_by_api_key_id == result.api_keys['importer']
-    changed = await database.faces.patch(automatic.detection_id, FacePatchRequest(entity_link_state='manual'), reviewer)
+    changed = await database.faces.patch(
+        automatic.detection_id,
+        FacePatchRequest(
+            entity_link_state="manual",
+            expected_version=(await database.faces.get(automatic.detection_id)).version,
+        ),
+        reviewer,
+    )
     assert changed.last_touched_by_api_key_id is None
     assert changed.last_touched_at > automatic.last_touched_at
     assert changed.created_at == automatic.created_at
@@ -1922,9 +2204,17 @@ async def test_scan_assignment_search_finds_people_elsewhere_and_preserves_revie
         query=QueryBase(text=['Ada Novak']), limit=100,
     ))
     assert seed.entities['ada'] in {person.entity_id for person in candidates.items}
-    edited = await db.faces.patch(seed.faces['provenance-auto'], FacePatchRequest(
-        entity_id=seed.entities['ada'], entity_link_state='manual',
-    ), GenericActor(user_id=seed.users['reviewer']))
+    edited = await db.faces.patch(
+        seed.faces["provenance-auto"],
+        FacePatchRequest(
+            entity_id=seed.entities["ada"],
+            entity_link_state="manual",
+            expected_version=(
+                await db.faces.get(seed.faces["provenance-auto"])
+            ).version,
+        ),
+        GenericActor(user_id=seed.users["reviewer"]),
+    )
     assert edited.source_id == source_id and edited.entity_id == seed.entities['ada']
     for _ in range(2):
         rerun = await preview.seed_preview(db, filesystem)
@@ -1951,10 +2241,22 @@ async def test_person_face_review_preserves_verified_and_unassigned_edits_on_rer
     assert automatic.entity_link_state.value == 'automatic'
     assert manual.entity_link_state.value == 'manual'
     assert (await db.faces.get(seed.faces['provenance-authority'])).entity_link_state.value == 'verified'
-    updated = await db.faces.patch_batch([
-        FacePatchBatchItem(detection_id=automatic.detection_id, entity_link_state='verified'),
-        FacePatchBatchItem(detection_id=manual.detection_id, entity_id=None, entity_link_state=None),
-    ], actor)
+    updated = await db.faces.patch_batch(
+        [
+            FacePatchBatchItem(
+                detection_id=automatic.detection_id,
+                entity_link_state="verified",
+                expected_version=(await db.faces.get(automatic.detection_id)).version,
+            ),
+            FacePatchBatchItem(
+                detection_id=manual.detection_id,
+                entity_id=None,
+                entity_link_state=None,
+                expected_version=(await db.faces.get(manual.detection_id)).version,
+            ),
+        ],
+        actor,
+    )
     verified, unassigned = updated
     reviewed_person = await db.entities.get(person_id)
     assert reviewed_person.created_at == person.created_at
@@ -2005,12 +2307,16 @@ async def test_creation_and_reviews_survive_metadata_cleanup_upgrade(seed_target
                 assert not columns & {'provenance'}
         await connection.run_sync(upgrade_retained_preview)
     await validate_postgres_schema(engine)
-    assert await db.faces.get(before_face.detection_id) == before_face
-    assert (await db.entities.get(before_person.entity_id)).model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'}) == before_person.model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'})
+    assert (await db.faces.get(before_face.detection_id)).model_dump(
+        exclude={"version"}
+    ) == before_face.model_dump(exclude={"version"})
+    assert (await db.entities.get(before_person.entity_id)).model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode', 'version'}) == before_person.model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode', 'version'})
     for _ in range(2):
         assert await preview.seed_preview(db, filesystem) == seed
-        assert await db.faces.get(before_face.detection_id) == before_face
-        assert (await db.entities.get(before_person.entity_id)).model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'}) == before_person.model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode'})
+        assert (await db.faces.get(before_face.detection_id)).model_dump(
+            exclude={"version"}
+        ) == before_face.model_dump(exclude={"version"})
+        assert (await db.entities.get(before_person.entity_id)).model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode', 'version'}) == before_person.model_dump(exclude={'thumbnail_face_id', 'thumbnail_mode', 'version'})
 
 
 @pytest.mark.asyncio
@@ -2114,7 +2420,10 @@ async def test_person_mention_highlights_follow_linked_identity_and_preserve_rev
 
     reviewed = await database.text_mentions.patch(
         lower,
-        TextMentionPatchRequest(entity_id=lenka),
+        TextMentionPatchRequest(
+            entity_id=lenka,
+            expected_version=(await database.text_mentions.get(lower)).version,
+        ),
         GenericActor(user_id=result.users["reviewer"]),
     )
     reviewed_person = await database.entities.get(lenka)
@@ -2156,7 +2465,10 @@ async def test_person_mention_highlights_cover_multi_line_mentions_by_identity(s
     unlinked = result.mentions["links-unassigned-mention"]
     reviewed = await database.text_mentions.patch(
         unlinked,
-        TextMentionPatchRequest(entity_id=link_ada),
+        TextMentionPatchRequest(
+            entity_id=link_ada,
+            expected_version=(await database.text_mentions.get(unlinked)).version,
+        ),
         GenericActor(user_id=result.users["reviewer"]),
     )
     assert await preview.seed_preview(database, filesystem) == result
@@ -2194,7 +2506,11 @@ async def test_viewport_focus_targets_and_repeated_occurrences(seed_target):
                    box.y <= point.y <= box.y + box.height for point in face.keypoints)
     assert urlsplit(result.filter_examples["viewport-focus"]).path.endswith(f"/pages/{page.page_id}")
     reviewed = await database.faces.patch(
-        lower.detection_id, FacePatchRequest(entity_id=result.entities["lenka"]),
+        lower.detection_id,
+        FacePatchRequest(
+            entity_id=result.entities["lenka"],
+            expected_version=(await database.faces.get(lower.detection_id)).version,
+        ),
         GenericActor(user_id=result.users["reviewer"]),
     )
     reviewed_person = await database.entities.get(result.entities["lenka"])
@@ -2322,8 +2638,14 @@ async def test_canonical_portraits_media_and_review_preservation(seed_target):
         entity_id=automatic.entity_id, confidence=selected_face.confidence,
         bounding_box=selected_face.bounding_box, keypoints=selected_face.keypoints)
     await database.faces.create(new_face, actor)
-    edited = await database.entities.patch(automatic.entity_id,
-        EntityPatchRequest(description="Reviewed automatic portrait"), actor)
+    edited = await database.entities.patch(
+        automatic.entity_id,
+        EntityPatchRequest(
+            description="Reviewed automatic portrait",
+            expected_version=(await database.entities.get(automatic.entity_id)).version,
+        ),
+        actor,
+    )
     assert edited.thumbnail_face_id == automatic.thumbnail_face_id
     assert edited.thumbnail_mode == 'automatic'
     await preview.seed_preview(database, filesystem)
@@ -2332,10 +2654,24 @@ async def test_canonical_portraits_media_and_review_preservation(seed_target):
     assert empty.thumbnail_mode == 'automatic' and empty.thumbnail_face_id is None
     # An explicit reset is a review choice and must survive reseeding unchanged.
     actor = GenericActor(user_id=first.users['reviewer'])
-    reset = await database.entities.patch(manual.entity_id, EntityPatchRequest(thumbnail_face_id=None), actor)
+    reset = await database.entities.patch(
+        manual.entity_id,
+        EntityPatchRequest(
+            thumbnail_face_id=None,
+            expected_version=(await database.entities.get(manual.entity_id)).version,
+        ),
+        actor,
+    )
     assert await preview.seed_preview(database, filesystem) == first
     assert await database.entities.get(manual.entity_id) == reset
-    selected = await database.entities.patch(manual.entity_id, EntityPatchRequest(thumbnail_face_id=linked[0].detection_id), actor)
+    selected = await database.entities.patch(
+        manual.entity_id,
+        EntityPatchRequest(
+            thumbnail_face_id=linked[0].detection_id,
+            expected_version=(await database.entities.get(manual.entity_id)).version,
+        ),
+        actor,
+    )
     await preview.seed_preview(database, filesystem)
     assert await database.entities.get(manual.entity_id) == selected
 
@@ -2362,8 +2698,14 @@ async def test_portrait_upgrade_checkpoint_recovery_preserves_review(seed_target
     person = await database.entities.get(person_id)
     assert person.thumbnail_mode == 'manual'
     if intervening_review:
-        person = await database.entities.patch(person_id, EntityPatchRequest(thumbnail_face_id=None),
-            GenericActor(user_id=person.user_id))
+        person = await database.entities.patch(
+            person_id,
+            EntityPatchRequest(
+                thumbnail_face_id=None,
+                expected_version=(await database.entities.get(person_id)).version,
+            ),
+            GenericActor(user_id=person.user_id),
+        )
     await preview.seed_preview(database, filesystem)
     assert await database.entities.get(person_id) == person
     # Rolled-back seed code rejects unknown identity-manifest keys.
@@ -2382,8 +2724,14 @@ async def test_legacy_portrait_upgrade_state_moves_out_of_identity_manifest(seed
     await filesystem.write_bytes(preview.MANIFEST_KEY, json.dumps(identity).encode())
     (tmp_path / preview.UPGRADES_KEY).unlink()
     person_id = uuid.UUID(identity['entities']['provenance-review'])
-    reset = await database.entities.patch(person_id, EntityPatchRequest(thumbnail_face_id=None),
-        GenericActor(user_id=(await database.entities.get(person_id)).user_id))
+    reset = await database.entities.patch(
+        person_id,
+        EntityPatchRequest(
+            thumbnail_face_id=None,
+            expected_version=(await database.entities.get(person_id)).version,
+        ),
+        GenericActor(user_id=(await database.entities.get(person_id)).user_id),
+    )
     await preview.seed_preview(database, filesystem)
     # The completed upgrade is not repeated over the later reviewer reset.
     assert await database.entities.get(person_id) == reset
@@ -2448,8 +2796,16 @@ async def test_sorting_scenario_orders_groups_and_survives_reruns(seed_target):
     assert seed.faces["sorting-similar"] in {face.detection_id for face in similar.items}
 
     # Reviewer edits and checkpointed identities survive a rerun.
-    reviewed = await db.faces.patch(seed.faces["sorting-automatic"],
-                                    FacePatchRequest(entity_id=None), GenericActor(user_id=seed.users["reviewer"]))
+    reviewed = await db.faces.patch(
+        seed.faces["sorting-automatic"],
+        FacePatchRequest(
+            entity_id=None,
+            expected_version=(
+                await db.faces.get(seed.faces["sorting-automatic"])
+            ).version,
+        ),
+        GenericActor(user_id=seed.users["reviewer"]),
+    )
     again = await preview.seed_preview(db, filesystem)
     assert again.faces == seed.faces and again.mentions == seed.mentions
     stored = await db.faces.get(seed.faces["sorting-automatic"])
@@ -2505,7 +2861,12 @@ async def test_default_documents_landing_has_linked_media_and_preserves_reviews(
 
     reviewed = await database.faces.patch(
         seed.faces["unassigned-ada"],
-        FacePatchRequest(entity_id=seed.entities["lenka"]),
+        FacePatchRequest(
+            entity_id=seed.entities["lenka"],
+            expected_version=(
+                await database.faces.get(seed.faces["unassigned-ada"])
+            ).version,
+        ),
         GenericActor(user_id=seed.users["reviewer"]),
     )
     before_documents = await landing_documents()
@@ -2559,8 +2920,24 @@ async def test_entity_discovery_choices_many_faces_and_degenerate_vectors(seed_t
     assert identifier_results.items[0].text_score == 1
     # Retain operator-reviewed inputs and assignments on an additive rerun.
     actor = GenericActor(user_id=first.users["reviewer"])
-    edited = await db.entities.patch(reference, EntityPatchRequest(aliases=["Reviewed navigator"]), actor)
-    assigned = await db.faces.patch(first.faces['discovery-unassigned'], FacePatchRequest(entity_id=reference), actor)
+    edited = await db.entities.patch(
+        reference,
+        EntityPatchRequest(
+            aliases=["Reviewed navigator"],
+            expected_version=(await db.entities.get(reference)).version,
+        ),
+        actor,
+    )
+    assigned = await db.faces.patch(
+        first.faces["discovery-unassigned"],
+        FacePatchRequest(
+            entity_id=reference,
+            expected_version=(
+                await db.faces.get(first.faces["discovery-unassigned"])
+            ).version,
+        ),
+        actor,
+    )
     before = await db.entities.get(reference)
     second = await preview.seed_preview(db, filesystem)
     assert second == first
@@ -2625,8 +3002,14 @@ async def test_shared_filter_scenario_matches_own_latest_changes(seed_target):
     assert [item.source_id for item in pages.items] == [seed.pages["shared-mirror-1"]]
 
     # Reruns keep the edit once; a later review edit is never overwritten.
-    edited = await db.entities.patch(hana, EntityPatchRequest(short_description="Reviewed"),
-                                     GenericActor(user_id=seed.users["reviewer"]))
+    edited = await db.entities.patch(
+        hana,
+        EntityPatchRequest(
+            short_description="Reviewed",
+            expected_version=(await db.entities.get(hana)).version,
+        ),
+        GenericActor(user_id=seed.users["reviewer"]),
+    )
     for _ in range(2):
         assert await preview.seed_preview(db, filesystem) == seed
         assert await db.entities.get(hana) == edited
@@ -2735,7 +3118,12 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
         old = await preview.seed_preview(database, filesystem)
     actor = GenericActor(user_id=old.users["reviewer"])
     reviewed = await database.entities.patch(
-        old.entities["ada"], EntityPatchRequest(name="Reviewed Ada"), actor,
+        old.entities["ada"],
+        EntityPatchRequest(
+            name="Reviewed Ada",
+            expected_version=(await database.entities.get(old.entities["ada"])).version,
+        ),
+        actor,
     )
     first = await preview.seed_preview(database, filesystem)
     for name in ("entities", "documents", "pages", "faces", "mentions"):
@@ -2804,8 +3192,26 @@ async def test_list_pagination_scenario_crosses_browse_and_search_batches(seed_t
     with Image.open(io.BytesIO(image.content)) as stored:
         assert stored.width == 256
     actor = GenericActor(user_id=first.users["reviewer"])
-    edited = await database.entities.patch(first.entities[keys[0]], EntityPatchRequest(name="Reviewed pagination"), actor)
-    mention = await database.text_mentions.patch(first.mentions[keys[0]], TextMentionPatchRequest(entity_id=None), actor)
+    edited = await database.entities.patch(
+        first.entities[keys[0]],
+        EntityPatchRequest(
+            name="Reviewed pagination",
+            expected_version=(
+                await database.entities.get(first.entities[keys[0]])
+            ).version,
+        ),
+        actor,
+    )
+    mention = await database.text_mentions.patch(
+        first.mentions[keys[0]],
+        TextMentionPatchRequest(
+            entity_id=None,
+            expected_version=(
+                await database.text_mentions.get(first.mentions[keys[0]])
+            ).version,
+        ),
+        actor,
+    )
     edited = await database.entities.get(edited.entity_id)
     second = await preview.seed_preview(database, filesystem)
     assert second == first
@@ -2899,8 +3305,22 @@ async def test_global_discovery_outside_retained_workspace(seed_target):
         limit=40, query=query, filter_=EntityListFilter(page_source_id=[first.pages['discovery-1']])))
     assert candidate_id not in {item.entity_id for item in local_people.items}
     actor = GenericActor(user_id=first.users['reviewer'])
-    reviewed = await db.faces.patch(unassigned_id, FacePatchRequest(entity_id=reference), actor)
-    edited = await db.entities.patch(candidate_id, EntityPatchRequest(short_description='Reviewed global match'), actor)
+    reviewed = await db.faces.patch(
+        unassigned_id,
+        FacePatchRequest(
+            entity_id=reference,
+            expected_version=(await db.faces.get(unassigned_id)).version,
+        ),
+        actor,
+    )
+    edited = await db.entities.patch(
+        candidate_id,
+        EntityPatchRequest(
+            short_description="Reviewed global match",
+            expected_version=(await db.entities.get(candidate_id)).version,
+        ),
+        actor,
+    )
     before_page = await db.sources.get_page(page.source_id)
     manifest = await filesystem.read_bytes(preview.MANIFEST_KEY)
     second = await preview.seed_preview(db, filesystem)
@@ -2946,7 +3366,11 @@ async def test_deactivated_reviewer_keeps_attribution_across_reruns(seed_target:
 
     # A reviewer verifies the link; an administrator later reactivates the user.
     reviewed = await db.text_mentions.patch(
-        mention.mention_id, TextMentionPatchRequest(entity_link_state=EntityLinkState.verified),
+        mention.mention_id,
+        TextMentionPatchRequest(
+            entity_link_state=EntityLinkState.verified,
+            expected_version=(await db.text_mentions.get(mention.mention_id)).version,
+        ),
         GenericActor(user_id=seed.users["reviewer"]),
     )
     assert reviewed is not None
@@ -3057,7 +3481,16 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
             response = await client.get("/whoami", headers=bearer)
             assert response.json() == {"user_id": str(user.user_id)}
         olga = f"/api/v1/entities/{seed.entities['deactivated-olga']}"
-        patched = await client.patch(olga, json={"short_description": "Checked by lifecycle."}, headers=bearer)
+        patched = await client.patch(
+            olga,
+            json={
+                "expected_version": (
+                    await db.entities.get(seed.entities["deactivated-olga"])
+                ).version,
+                "short_description": "Checked by lifecycle.",
+            },
+            headers=bearer,
+        )
         assert patched.status_code == 200, patched.text
         assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
         assert patched.json()["last_touched_by_api_key_id"] is None
@@ -3068,7 +3501,7 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
         assert (await client.get("/whoami", headers=bearer)).status_code == 200
         me = await client.get("/api/v1/me", headers=bearer)
         assert me.status_code == 200 and me.json()["is_active"] is False
-        patched = await client.patch(olga, json={"short_description": "Written after deactivation."}, headers=bearer)
+        patched = await client.patch(olga, json={"expected_version": (await db.entities.get(seed.entities["deactivated-olga"])).version, "short_description": "Written after deactivation."}, headers=bearer)
         assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
         assert contexts.entries == 1
 
@@ -3162,8 +3595,20 @@ async def test_document_table_summaries_are_scoped_batched_and_preserved(seed_ta
         user_id=seeded.users["reviewer"], authentication_method="bearer",
         scopes={"people-gator:annotate"},
     )
-    await database.faces.delete(seeded.faces["table-manual"], context=reviewer_actor)
-    await database.text_mentions.delete(seeded.mentions["table-manual-mention"], context=reviewer_actor)
+    await database.faces.delete(
+        seeded.faces["table-manual"],
+        context=reviewer_actor,
+        expected_version=(
+            await read_version(database.faces, seeded.faces["table-manual"])
+        ),
+    )
+    await database.text_mentions.delete(
+        seeded.mentions["table-manual-mention"],
+        context=reviewer_actor,
+        expected_version=(
+            await read_version(database.text_mentions, seeded.mentions["table-manual-mention"])
+        ),
+    )
     edited = await database.sources.get_document(document.source_id)
     assert edited.linked_entity_count == 1  # Repeated Tereza links still count once.
     assert edited.entity_link_stats.faces.total == 3
@@ -3396,11 +3841,22 @@ async def test_detection_actions_review_and_delete_survive_rerun(seed_target, re
         f"/libraries/{source.library}/documents/{source.document_id}/pages/{source.page_id}"
     )
     patch = (
-        FacePatchRequest(entity_link_state="verified") if review_action == "verify"
-        else FacePatchRequest(entity_id=seeded.entities["ada"], entity_link_state="manual")
+        FacePatchRequest(entity_link_state="verified", expected_version=1)
+        if review_action == "verify"
+        else FacePatchRequest(
+            entity_id=seeded.entities["ada"],
+            entity_link_state="manual",
+            expected_version=1,
+        )
     )
     reviewed = await database.faces.patch(linked_id, patch, actor)
-    await database.faces.delete(false_id, context=actor)
+    await database.faces.delete(
+        false_id,
+        context=actor,
+        expected_version=(
+            await read_version(database.faces, false_id)
+        ),
+    )
     rerun = await preview.seed_preview(database, filesystem)
     assert "actions-false-positive" not in rerun.faces
     assert await database.faces.get(false_id) is None
@@ -3477,7 +3933,15 @@ async def test_identity_reference_gallery_pages_cross_library_crops_and_preserve
 
     actor = GenericActor(user_id=seed.users['reviewer'])
     reviewed = await database.faces.patch(
-        seed.faces['reference-ada-manual'], FacePatchRequest(entity_id=None, entity_link_state=None), actor,
+        seed.faces["reference-ada-manual"],
+        FacePatchRequest(
+            entity_id=None,
+            entity_link_state=None,
+            expected_version=(
+                await database.faces.get(seed.faces["reference-ada-manual"])
+            ).version,
+        ),
+        actor,
     )
     before = await database.entities.get(ada)
     rerun = await preview.seed_preview(database, filesystem)
@@ -3536,7 +4000,16 @@ async def test_person_review_groups_candidates_and_preservation(seed_target):
     assert len(remainder.items) == 7
     assert not ({m.mention_id for m in mentions.items} & {m.mention_id for m in remainder.items})
     actor = GenericActor(user_id=seed.users['reviewer'])
-    edited = await db.text_mentions.patch(mentions.items[0].mention_id, TextMentionPatchRequest(entity_id=None), actor)
+    edited = await db.text_mentions.patch(
+        mentions.items[0].mention_id,
+        TextMentionPatchRequest(
+            entity_id=None,
+            expected_version=(
+                await db.text_mentions.get(mentions.items[0].mention_id)
+            ).version,
+        ),
+        actor,
+    )
     again = await preview.seed_preview(db, filesystem)
     assert again.mentions == seed.mentions
     assert await db.text_mentions.get(edited.mention_id) == edited
@@ -3551,7 +4024,16 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     monkeypatch.setattr(preview, 'PAGES', tuple(p for p in all_pages if not p.key.startswith('review-overflow-')))
     first = await preview.seed_preview(db, filesystem)
     actor = GenericActor(user_id=first.users['reviewer'])
-    edited = await db.faces.patch(first.faces['review-face-0-0'], FacePatchRequest(entity_id=None), actor)
+    edited = await db.faces.patch(
+        first.faces["review-face-0-0"],
+        FacePatchRequest(
+            entity_id=None,
+            expected_version=(
+                await db.faces.get(first.faces["review-face-0-0"])
+            ).version,
+        ),
+        actor,
+    )
     monkeypatch.setattr(preview, 'PAGES', all_pages)
     original_write = filesystem.write_bytes
     interrupted = False
@@ -3571,7 +4053,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (44, 162, 108)
+    assert await counts(db) == (45, 163, 109)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -3875,32 +4357,59 @@ async def test_count_preview_mutations_preservation_and_interrupted_recovery(
     assert await membership("verified", 2) == (False, False)
     await db.faces.patch(
         original.faces["count-face-0"],
-        FacePatchRequest(entity_link_state="verified"),
+        FacePatchRequest(
+            entity_link_state="verified",
+            expected_version=(
+                await db.faces.get(original.faces["count-face-0"])
+            ).version,
+        ),
         actor,
     )
     assert await membership("verified", 2) == (True, True)
     await db.faces.patch(
-        original.faces["count-face-0"], FacePatchRequest(entity_id=None), actor
+        original.faces["count-face-0"],
+        FacePatchRequest(
+            entity_id=None,
+            expected_version=(
+                await db.faces.get(original.faces["count-face-0"])
+            ).version,
+        ),
+        actor,
     )
     assert await membership("verified", 2) == (False, False)
     assert await membership("unassigned", 2) == (True, True)
     await db.faces.patch(
         original.faces["count-face-0"],
         FacePatchRequest(
-            entity_id=original.entities["table-tereza"], entity_link_state="manual"
+            entity_id=original.entities["table-tereza"],
+            entity_link_state="manual",
+            expected_version=(
+                await db.faces.get(original.faces["count-face-0"])
+            ).version,
         ),
         actor,
     )
     assert await membership("unassigned", 2) == (False, False)
     assert await membership("manual", 2) == (True, True)
     assert await membership("total", 4) == (True, True)
-    await db.faces.delete(original.faces["count-face-0"], context=actor)
+    await db.faces.delete(
+        original.faces["count-face-0"],
+        context=actor,
+        expected_version=(
+            await read_version(db.faces, original.faces["count-face-0"])
+        ),
+    )
     assert await membership("total", 4) == (True, False)
     assert await membership("total", 5) == (False, False)
     assert await membership("manual", 2) == (True, False)
     await db.text_mentions.patch(
         original.mentions["count-mention-0"],
-        TextMentionPatchRequest(entity_link_state="verified"),
+        TextMentionPatchRequest(
+            entity_link_state="verified",
+            expected_version=(
+                await db.text_mentions.get(original.mentions["count-mention-0"])
+            ).version,
+        ),
         actor,
     )
     mentions = await db.sources.list_pages(
@@ -3913,7 +4422,13 @@ async def test_count_preview_mutations_preservation_and_interrupted_recovery(
         )
     )
     assert len(mentions.items) == 1
-    await db.text_mentions.delete(original.mentions["count-mention-0"], context=actor)
+    await db.text_mentions.delete(
+        original.mentions["count-mention-0"],
+        context=actor,
+        expected_version=(
+            await read_version(db.text_mentions, original.mentions["count-mention-0"])
+        ),
+    )
     mentions = await db.sources.list_pages(
         PageListRequest(
             limit=12,
@@ -4038,7 +4553,16 @@ async def test_page_number_seed_order_totals_and_clear_preservation(seed_target)
     assert [p.page_number for p in collected] == [*range(1, 9), *range(10, 15), None]
     assert all(p.registered_page_count == 14 for p in collected)
     actor = AuthContext(user_id=seed.users['reviewer'], api_key_id=None, authentication_method='bearer', scopes=set())
-    edited = await db.sources.patch_page(collected[0].source_id, PagePatchRequest(page_number=None), context=actor)
+    edited = await db.sources.patch_page(
+        collected[0].source_id,
+        PagePatchRequest(
+            page_number=None,
+            expected_version=(
+                await db.sources.get_page(collected[0].source_id)
+            ).version,
+        ),
+        context=actor,
+    )
     await preview.seed_preview(db, fs)
     after = await db.sources.get_page(edited.source_id)
     assert after.page_number is None
@@ -4190,30 +4714,94 @@ async def test_people_count_transitions_and_unchanged_verification_totals(seed_t
         return {p.entity_id for p in (await db.entities.list(EntityListRequest(limit=20,
             filter_=EntityListFilter(entity_id=[source, target], max_faces_total_count=0)))).items}
     assert target in await zeros()
-    await db.faces.patch(face.detection_id, FacePatchRequest(entity_id=target, entity_link_state='manual'), actor)
+    await db.faces.patch(
+        face.detection_id,
+        FacePatchRequest(
+            entity_id=target,
+            entity_link_state="manual",
+            expected_version=(await db.faces.get(face.detection_id)).version,
+        ),
+        actor,
+    )
     assert (await db.entities.get(source)).entity_link_stats.faces.total == original - 1
     assert target not in await zeros()
-    await db.faces.patch(face.detection_id, FacePatchRequest(entity_link_state='verified'), actor)
+    await db.faces.patch(
+        face.detection_id,
+        FacePatchRequest(
+            entity_link_state="verified",
+            expected_version=(await db.faces.get(face.detection_id)).version,
+        ),
+        actor,
+    )
     assert (await db.entities.get(target)).entity_link_stats.faces.total == 1
-    await db.faces.patch(face.detection_id, FacePatchRequest(entity_id=None), actor)
+    await db.faces.patch(
+        face.detection_id,
+        FacePatchRequest(
+            entity_id=None,
+            expected_version=(await db.faces.get(face.detection_id)).version,
+        ),
+        actor,
+    )
     assert target in await zeros()
-    await db.faces.patch(face.detection_id, FacePatchRequest(entity_id=target, entity_link_state='manual'), actor)
-    await db.faces.delete(face.detection_id, context=actor)
+    await db.faces.patch(
+        face.detection_id,
+        FacePatchRequest(
+            entity_id=target,
+            entity_link_state="manual",
+            expected_version=(await db.faces.get(face.detection_id)).version,
+        ),
+        actor,
+    )
+    await db.faces.delete(
+        face.detection_id,
+        context=actor,
+        expected_version=(
+            await read_version(db.faces, face.detection_id)
+        ),
+    )
     assert target in await zeros()
     # Move a mention, verify it and merge the new owner back into the old one.
     from people_gator_api.schemas.mentions import TextMentionListFilter
     nora = seed.entities['nora']
     mention = (await db.text_mentions.list(TextMentionListRequest(limit=1, filter_=TextMentionListFilter(entity_id=[nora])))).items[0]
     old = (await db.entities.get(nora)).entity_link_stats.mentions.total
-    await db.text_mentions.patch(mention.mention_id, TextMentionPatchRequest(entity_id=target, entity_link_state='manual'), actor)
+    await db.text_mentions.patch(
+        mention.mention_id,
+        TextMentionPatchRequest(
+            entity_id=target,
+            entity_link_state="manual",
+            expected_version=(await db.text_mentions.get(mention.mention_id)).version,
+        ),
+        actor,
+    )
     assert (await db.entities.get(nora)).entity_link_stats.mentions.total == old - 1
     assert (await db.entities.get(target)).entity_link_stats.mentions.total == 1
-    await db.text_mentions.patch(mention.mention_id, TextMentionPatchRequest(entity_link_state='verified'), actor)
+    await db.text_mentions.patch(
+        mention.mention_id,
+        TextMentionPatchRequest(
+            entity_link_state="verified",
+            expected_version=(await db.text_mentions.get(mention.mention_id)).version,
+        ),
+        actor,
+    )
     assert (await db.entities.get(target)).entity_link_stats.mentions.total == 1
-    await db.entities.merge(nora, target, context=actor)
+    await db.entities.merge(
+        nora,
+        target,
+        context=actor,
+        target_patch=EntityMergeTargetPatch(
+            expected_versions=await read_versions(db.entities, [nora, target])
+        ),
+    )
     assert await db.entities.get(target) is None
     assert (await db.entities.get(nora)).entity_link_stats.mentions.total == old
-    await db.text_mentions.delete(mention.mention_id, context=actor)
+    await db.text_mentions.delete(
+        mention.mention_id,
+        context=actor,
+        expected_version=(
+            await read_version(db.text_mentions, mention.mention_id)
+        ),
+    )
     assert (await db.entities.get(nora)).entity_link_stats.mentions.total == old - 1
 
 
@@ -4234,8 +4822,12 @@ async def test_replay_journey_has_linked_person_page_and_local_media(seed_target
     image = await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
     assert image.content
     edited = await database.entities.patch(
-        person.entity_id, EntityPatchRequest(name='Reviewed replay person'),
-        GenericActor(user_id=seeded.users['reviewer']),
+        person.entity_id,
+        EntityPatchRequest(
+            name="Reviewed replay person",
+            expected_version=(await database.entities.get(person.entity_id)).version,
+        ),
+        GenericActor(user_id=seeded.users["reviewer"]),
     )
     rerun = await preview.seed_preview(database, filesystem)
     assert rerun.filter_examples['openobserve-replay-person'] == person_url
@@ -4276,7 +4868,18 @@ async def test_document_width_scenario_is_additive_readable_and_preserves_edits(
     assert Image.open(io.BytesIO(image.content)).width == 256
     # A reviewed annotation and the document's last-processing metadata survive reruns.
     actor = GenericActor(user_id=seeded.users["reviewer"])
-    await database.text_mentions.patch(seeded.mentions["table-width-long-mention"], TextMentionPatchRequest(entity_id=None), actor)
+    await database.text_mentions.patch(
+        seeded.mentions["table-width-long-mention"],
+        TextMentionPatchRequest(
+            entity_id=None,
+            expected_version=(
+                await database.text_mentions.get(
+                    seeded.mentions["table-width-long-mention"]
+                )
+            ).version,
+        ),
+        actor,
+    )
     edited = await database.sources.get_document(long.source_id)
     await preview.seed_preview(database, filesystem)
     assert await database.sources.get_document(long.source_id) == edited
@@ -4349,7 +4952,14 @@ async def test_people_state_count_ranges_sorting_and_preserved_review(seed_targe
     actor = GenericActor(user_id=seed.users['reviewer'])
     mention = (await db.text_mentions.list(TextMentionListRequest(limit=1, filter_=TextMentionListFilter(
         entity_id=[mira], entity_link_state=['manual'])))).items[0]
-    await db.text_mentions.patch(mention.mention_id, TextMentionPatchRequest(entity_link_state='verified'), actor)
+    await db.text_mentions.patch(
+        mention.mention_id,
+        TextMentionPatchRequest(
+            entity_link_state="verified",
+            expected_version=(await db.text_mentions.get(mention.mention_id)).version,
+        ),
+        actor,
+    )
     reviewed = counts(await db.entities.get(mira))
     assert reviewed['mentions_verified_count'] == 2
     assert reviewed['mentions_manual_count'] == 0
@@ -4418,7 +5028,12 @@ async def test_teleprompter_page_covers_sparse_repeated_and_multiline_mentions(s
     # A reviewer moves Nora's line to Lenka; reruns keep that edit and the page.
     reviewed = await database.text_mentions.patch(
         result.mentions["teleprompter-nora"],
-        TextMentionPatchRequest(entity_id=result.entities["lenka"]),
+        TextMentionPatchRequest(
+            entity_id=result.entities["lenka"],
+            expected_version=(
+                await database.text_mentions.get(result.mentions["teleprompter-nora"])
+            ).version,
+        ),
         GenericActor(user_id=result.users["reviewer"]),
     )
     page_before = await database.sources.get_page(page.source_id)
@@ -4742,3 +5357,78 @@ async def test_scan_sidebar_upgrade_is_additive_and_preserves_reviews(seed_targe
     assert await counts(database) == before
     assert await database.faces.get(unlinked.detection_id) == unlinked
     assert await database.text_mentions.get(relinked.mention_id) == relinked
+
+
+@pytest.mark.asyncio
+async def test_audit_preview_has_predecessors_and_preserves_review_edits(seed_target):
+    from people_gator_api.schemas.audit import AuditQuery
+
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    person_id = first.entities["audit-profile"]
+    history = await database.audit.list(
+        AuditQuery(object_id=person_id, sort="version", direction="asc")
+    )
+    assert [row.version for row in history.items] == [1]
+    assert [alias["name"] for alias in history.items[0].state["aliases"]] == [
+        "E. History"
+    ]
+    assert history.items[0].actor_user_id == first.users["reviewer"]
+    person = await database.entities.get(person_id)
+    assert person.version == 2 and person.aliases == ["E. History", "Eva Archive"]
+    edited = await database.entities.patch(
+        person_id,
+        EntityPatchRequest(expected_version=2, name="Reviewed Eva"),
+        GenericActor(user_id=first.users["reviewer"]),
+    )
+    count = (await database.audit.list(AuditQuery())).total_count
+    second = await preview.seed_preview(database, filesystem)
+    assert second.entities == first.entities and second.faces == first.faces
+    assert await database.entities.get(person_id) == edited
+    assert (await database.audit.list(AuditQuery())).total_count == count
+    # Existing synthetic verification and page-number upgrades demonstrate the
+    # same contract for annotations and sources through real repository reads.
+    assert (
+        await database.audit.list(AuditQuery(object_id=first.faces["audit-face"]))
+    ).items
+    assert (
+        await database.audit.list(AuditQuery(object_id=first.mentions["audit-mention"]))
+    ).items
+    page = await database.audit.list(AuditQuery(object_id=first.pages["audit-page"]))
+    assert page.items[0].state["page_number"] is None
+
+
+@pytest.mark.asyncio
+async def test_audit_upgrade_recovers_after_committed_edit_before_checkpoint(seed_target, monkeypatch):
+    from people_gator_api.schemas.audit import AuditQuery
+    database, filesystem, _ = seed_target
+    original_write = filesystem.write_bytes
+    interrupted = False
+
+    async def write(key, data):
+        nonlocal interrupted
+        if key == preview.UPGRADES_KEY:
+            state = json.loads(data)
+            if state.get('record_edits', {}).get('audit-profile-v1', {}).get('complete') and not interrupted:
+                interrupted = True
+                raise RuntimeError('audit checkpoint interrupted')
+        return await original_write(key, data)
+
+    monkeypatch.setattr(filesystem, 'write_bytes', write)
+    with pytest.raises(RuntimeError, match='audit checkpoint interrupted'):
+        await preview.seed_preview(database, filesystem)
+    manifest = preview.SeedManifest.model_validate_json(await filesystem.read_bytes(preview.MANIFEST_KEY))
+    person_id = manifest.entities['audit-profile']
+    person = await database.entities.get(person_id)
+    assert person.version == 2
+    assert (await database.audit.list(AuditQuery(object_id=person_id))).total_count == 1
+    actor = GenericActor(user_id=person.user_id)
+    reviewed = await database.entities.patch(person_id, EntityPatchRequest(expected_version=2, name='Eva reviewed during recovery'), actor)
+    recovered = await preview.seed_preview(database, filesystem)
+    assert recovered.entities['audit-profile'] == person_id
+    current = await database.entities.get(person_id)
+    assert current.name == reviewed.name and current.version == reviewed.version
+    assert current.aliases == reviewed.aliases
+    await preview.seed_preview(database, filesystem)
+    assert await database.entities.get(person_id) == current
+    assert (await database.audit.list(AuditQuery(object_id=person_id))).total_count == 2
