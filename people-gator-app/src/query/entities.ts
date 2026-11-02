@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -164,6 +165,14 @@ export function useMergeEntitiesMutation() {
         }),
       )
     },
+    onError: async (error) => {
+      if (!isAxiosError(error) || error.response?.status !== 404) return
+      restartPeoplePages(queryClient)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
+      ])
+    },
     onSuccess: (result, { sourceEntityIds }) => {
       restartPeoplePages(queryClient)
       for (const sourceEntityId of sourceEntityIds) {
@@ -173,7 +182,7 @@ export function useMergeEntitiesMutation() {
         queryKeys.entities.detail(result.target_entity_id),
         result.merged_entity,
       )
-      void Promise.all([
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.faces.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all }),

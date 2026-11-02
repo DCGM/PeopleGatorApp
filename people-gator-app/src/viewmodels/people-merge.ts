@@ -48,7 +48,7 @@ export function usePeopleMerge(people: Ref<Person[]>, scope: Ref<string>, loadin
   watch(allowed, (value) => {
     if (!value) clear()
   })
-  watch([people, loading], () => {
+  watch([people, loading, busy], () => {
     if (loading.value || busy.value) return
     const available = new Set(people.value.map((p) => p.id))
     selectedIds.value = new Set([...selectedIds.value].filter((id) => available.has(id)))

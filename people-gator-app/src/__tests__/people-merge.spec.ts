@@ -213,3 +213,18 @@ it.each([
   expect(api.batch).not.toHaveBeenCalled()
   wrapper.unmount()
 })
+
+it('clears selection after a query change during a failed pending request', async () => {
+  let fail!: (error: unknown) => void
+  api.single.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
+  const wrapper = setup()
+  click('a'); click('b')
+  const pending = state.merge('first')
+  await flushPromises()
+  scope.value = 'different-query'
+  fail(new AxiosError('network'))
+  await pending
+  expect(state.selectedIds.value.size).toBe(0)
+  expect(state.message.value).toBe('')
+  wrapper.unmount()
+})
