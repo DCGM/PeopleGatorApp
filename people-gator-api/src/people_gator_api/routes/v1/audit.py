@@ -9,7 +9,7 @@ from people_gator_api.schemas.audit import (
     AuditRevision,
     ObjectKind,
 )
-from people_gator_api.services.auth_service import BrowseActorDependency
+from people_gator_api.services.auth_service import AuditorActorDependency
 from people_gator_api.services.database_service import DatabaseDependency
 from people_gator_api.utils.http_errors import raise_api_error
 
@@ -19,7 +19,7 @@ router = APIRouter(tags=["audit"])
 @router.get("/audit", response_model=AuditListResponse)
 async def list_audit_route(
     database: DatabaseDependency,
-    user: BrowseActorDependency,
+    user: AuditorActorDependency,
     query: Annotated[AuditQuery, Query()],
 ) -> AuditListResponse:
     try:
@@ -36,7 +36,7 @@ async def get_audit_revision_route(
     object_id: UUID,
     version: Annotated[int, Path(ge=1)],
     database: DatabaseDependency,
-    user: BrowseActorDependency,
+    user: AuditorActorDependency,
 ) -> AuditRevision:
     try:
         revision = await database.audit.get(object_type, object_id, version)

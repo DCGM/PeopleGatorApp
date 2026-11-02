@@ -5432,3 +5432,49 @@ async def test_audit_upgrade_recovers_after_committed_edit_before_checkpoint(see
     await preview.seed_preview(database, filesystem)
     assert await database.entities.get(person_id) == current
     assert (await database.audit.list(AuditQuery(object_id=person_id))).total_count == 2
+
+
+@pytest.mark.asyncio
+async def test_seed_history_is_available_to_auditor_without_admin(
+    seed_target, monkeypatch
+):
+    import httpx
+    from people_gator_api.app import get_app
+    from people_gator_api.services import auth_service
+    from people_gator_api.services.database_service import get_database
+    from people_gator_api.services.auth_scopes import AUDIT_SCOPE
+
+    database, filesystem, _ = seed_target
+    result = await preview.seed_preview(database, filesystem)
+    actor = auth_service.AuthContext(
+        user_id=result.users["reviewer"],
+        authentication_method="bearer",
+        scopes={AUDIT_SCOPE},
+    )
+
+    async def auditor(token):
+        return actor
+
+    monkeypatch.setattr(auth_service, "authenticate_bearer", auditor)
+    app = get_app()
+    app.dependency_overrides[get_database] = lambda: database
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Authorization": "Bearer synthetic-auditor"},
+    ) as client:
+        history = await client.get(result.filter_examples["audit-history"])
+        assert history.status_code == 200 and history.json()["total_count"] >= 3
+        archived = await client.get(
+            result.filter_examples["audit-first-profile-version"]
+        )
+        assert archived.status_code == 200 and archived.json()["version"] == 1
+        assert (await client.get("/api/v1/entities")).status_code == 403
+        assert (
+            await client.delete(
+                f"/api/v1/entities/{result.entities['audit-profile']}",
+                params={"expected_version": 2},
+            )
+        ).status_code == 403
+    again = await preview.seed_preview(database, filesystem)
+    assert again.filter_examples == result.filter_examples

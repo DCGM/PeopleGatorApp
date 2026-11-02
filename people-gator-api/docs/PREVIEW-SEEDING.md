@@ -1298,8 +1298,10 @@ alias and short description. These transitions provide archived predecessors for
 all four object kinds without an embedding or OCR service.
 
 The seed result's `filter_examples["audit-history"]` is an API query for Eva's
-profile and assigned evidence, ordered by version. Authenticate with the normal
-browse scope. Use `GET /api/v1/audit?source_id=<audit-page-source-UUID>` for the
+profile and assigned evidence, ordered by version. The
+`filter_examples["audit-first-profile-version"]` entry opens its initial archived
+profile directly. Authenticate with `people-gator:audit`; neither browse nor admin
+is required for these history endpoints. Use `GET /api/v1/audit?source_id=<audit-page-source-UUID>` for the
 page and its annotations; add `object_type=face` or `object_type=mention` to
 isolate them. [Audit history](AUDIT-HISTORY.md) documents version preconditions,
 time/version sorting, deletion retention and exact-version reads.

@@ -897,6 +897,8 @@ export type EntityPatchRequest = {
 
 /**
  * EntityResponse
+ *
+ * A single entity record.
  */
 export type EntityResponse = {
     /**
@@ -1187,6 +1189,8 @@ export type FacePatchRequest = {
 
 /**
  * FaceResponse
+ *
+ * A single face detection record.
  */
 export type FaceResponse = {
     /**
@@ -2577,6 +2581,8 @@ export type SourceKind = 'page' | 'document' | 'image';
 
 /**
  * SourceResponseBase
+ *
+ * A linkable reference to a typed source.
  */
 export type SourceResponseBase = {
     /**
@@ -2809,6 +2815,8 @@ export type TextMentionPatchRequest = {
 
 /**
  * TextMentionResponse
+ *
+ * A single mention of an entity name in a text source.
  */
 export type TextMentionResponse = {
     /**

@@ -60,7 +60,18 @@ provide reconstruction, restore, undo or an audit timeline UI.
 
 ## Read endpoints
 
-Both endpoints require the existing browse permission:
+Both endpoints require `people-gator:audit`. An auditor can hold this scope alone,
+without `people-gator:admin` or `people-gator:browse`. Browse/admin scopes do not
+implicitly grant audit access; grant `people-gator:audit` explicitly to any
+credential that should read history. This works with bearer tokens and API keys.
+For bearer login request `scope=people-gator:audit`; configure that scope on the
+user credential first. Existing tokens must be reissued with the new scope.
+
+The frontend continues requesting its existing browse/annotate/ingest/admin
+scopes because it has no audit UI. The example demo user also permits audit
+requests; existing configured users and keys are not upgraded automatically.
+
+Endpoints:
 
 - `GET /api/v1/audit` returns archived states with transition metadata,
   `total_count`, `limit` (1–500, default 50), and `offset` (default 0).

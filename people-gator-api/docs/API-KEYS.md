@@ -55,3 +55,7 @@ const client = createClient({
 For JWT clients, return a token only when `scheme.scheme === 'bearer'`. Returning
 a string for every scheme would send both headers and correctly receive 400.
 The browser app keeps its existing JWT login flow.
+
+Audit-only keys may specify `"scopes": ["people-gator:audit"]`. This permits
+`GET /api/v1/audit` and archived-version reads without browse or admin access.
+Browse and admin keys need the audit scope explicitly to read history.

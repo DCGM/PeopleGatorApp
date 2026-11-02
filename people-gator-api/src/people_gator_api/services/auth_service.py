@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 from people_gator_api.services.auth_scopes import (
     BROWSE_SCOPE as BROWSE_SCOPE, ANNOTATE_SCOPE as ANNOTATE_SCOPE,
     INGEST_SCOPE as INGEST_SCOPE, ADMIN_SCOPE as ADMIN_SCOPE, KNOWN_SCOPES as KNOWN_SCOPES,
+    AUDIT_SCOPE as AUDIT_SCOPE,
 )
 
 
@@ -47,6 +48,7 @@ security = OAuth2PasswordBearer(
         ANNOTATE_SCOPE: "Annotate data",
         INGEST_SCOPE: "Ingest data",
         ADMIN_SCOPE: "Administer the system",
+        AUDIT_SCOPE: "Read audit history",
     },
     description="OAuth2 password flow for PeopleGator API. Use this to obtain an access token for authenticated requests.",
 )
@@ -326,6 +328,7 @@ type TokenDependency = Annotated[TokenResponse, Depends(get_token)]
 type DataIngestActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[INGEST_SCOPE])]
 type AnnotatorActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[ANNOTATE_SCOPE])]
 type AdminActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[ADMIN_SCOPE])]
+type AuditorActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[AUDIT_SCOPE])]
 type BrowseActorDependency = Annotated[AuthContext, Security(get_auth_context, scopes=[BROWSE_SCOPE])]
 
 # Retain import compatibility for consumers during the transition.
