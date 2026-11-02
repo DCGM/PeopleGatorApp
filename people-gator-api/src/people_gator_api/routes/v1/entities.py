@@ -140,10 +140,11 @@ async def patch_entity_route(
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entity_route(
     entity_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.entities.delete(entity_id, context=user):
+    if not await database.entities.delete(entity_id, context=user, expected_version=expected_version):
         raise_api_error(404, "not_found", "Entity not found")
 
 

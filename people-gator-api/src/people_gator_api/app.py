@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from people_gator_api.schemas.audit import VersionConflict
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -66,6 +68,14 @@ def get_app() -> FastAPI:
         version=get_version_info().full_version,
         lifespan=lifespan,
     )
+    @app.exception_handler(NotImplementedError)
+    async def unsupported_operation(request: Request, exc: NotImplementedError):
+        return JSONResponse(status_code=501, content={"detail": {"code": "unsupported_operation", "message": str(exc)}})
+
+    @app.exception_handler(VersionConflict)
+    async def version_conflict(request: Request, exc: VersionConflict):
+        return JSONResponse(status_code=409, content={"detail": {"code": "version_conflict", "message": str(exc)}})
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors.allow_origins,

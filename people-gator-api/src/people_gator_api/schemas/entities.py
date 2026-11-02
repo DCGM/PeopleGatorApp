@@ -1,6 +1,7 @@
+from __future__ import annotations
+from people_gator_api.schemas.audit import VersionedEdit
 """Pydantic schemas for entity and annotation endpoints."""
 
-from __future__ import annotations
 
 import uuid
 from typing import Annotated, Literal
@@ -73,7 +74,7 @@ type EntityBatchCreateRequest = Annotated[
 ]
 
 
-class EntityPatchRequest(BaseModel):
+class EntityPatchRequest(VersionedEdit):
     """Request body for patching an existing entity."""
 
     thumbnail_face_id: uuid.UUID | None | MissingType = Field(
@@ -122,6 +123,7 @@ type EntityBatchPatchRequest = Annotated[
 
 
 class EntityResponse(CreationMetadata):
+    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
     """A single entity record."""
 
     entity_id: uuid.UUID = Field(description="The unique identifier of the entity.")
@@ -212,6 +214,7 @@ class EntityListRequest(GenericListRequest, SortableRequest[EntitySortField]):
 
 
 class EntityDeleteManyRequest(BaseModel):
+    expected_versions: dict[uuid.UUID, int] = Field(description="Version read for every selected entity.")
     """Request body for deleting multiple entities by filter criteria."""
 
     filter: EntityListFilter | MissingType = Field(
@@ -228,6 +231,7 @@ class EntityDeleteManyResponse(BaseModel):
 
 
 class EntityMergeTargetPatch(BaseModel):
+    expected_versions: dict[uuid.UUID, int] = Field(description="Versions read for the target and every source entity.")
     """Optional target fields to update as part of an entity merge."""
 
     description: str | None | MissingType = Field(

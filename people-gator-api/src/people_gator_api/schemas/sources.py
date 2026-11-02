@@ -1,3 +1,4 @@
+from people_gator_api.schemas.audit import VersionedEdit
 """Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
 
 from abc import abstractmethod
@@ -36,7 +37,7 @@ from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 type PageNumber = Annotated[int, Field(strict=True, ge=1, le=2147483647)]
 
 
-class PagePatchRequest(BaseModel):
+class PagePatchRequest(VersionedEdit):
     """Omission preserves numbering; null explicitly clears it."""
 
     model_config = ConfigDict(extra="forbid")
@@ -377,6 +378,7 @@ class ImageLookupRequest(BaseModel):
 
 
 class SourceResponseBase(BaseModel):
+    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
     """A linkable reference to a typed source."""
 
     model_config = ConfigDict(extra="forbid")
@@ -390,6 +392,7 @@ class SourceResponseBase(BaseModel):
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> Self:
         return cls(
+            version=generic.version,
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
@@ -484,6 +487,7 @@ class PageResponse(SourceResponseBase):
             raise ValueError("Missing required fields in generic source response.")
         return cls(
             entity_link_stats=generic.entity_link_stats,
+            version=generic.version,
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
@@ -522,6 +526,7 @@ class DocumentResponse(SourceResponseBase):
             raise ValueError("Missing required fields in generic source response.")
         return cls(
             entity_link_stats=generic.entity_link_stats,
+            version=generic.version,
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,
@@ -548,6 +553,7 @@ class ImageResponse(SourceResponseBase):
         if generic.source_type != SourceKind.image:
             raise ValueError("Missing required fields in generic source response.")
         return cls(
+            version=generic.version,
             source_id=generic.source_id,
             source_type=generic.source_type,
             url=generic.url,

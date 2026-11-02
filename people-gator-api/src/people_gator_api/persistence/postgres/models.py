@@ -140,7 +140,11 @@ class AnnotationMetadata(RecordedCreation):
         ForeignKey(TABLE_NAME_FORMAT.format("api_keys.id"), ondelete="RESTRICT"), index=True)
 
 
-class Entity(RecordedCreation, Base):
+class VersionedObject:
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1", default=1)
+
+
+class Entity(VersionedObject, RecordedCreation, Base):
     """A canonical real-world entity."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("entities")
@@ -252,7 +256,7 @@ class Alias(Base):
     entity: Mapped[Entity] = relationship(back_populates="aliases")
 
 
-class Source(Base):
+class Source(VersionedObject, Base):
     """URL-addressable evidence source and polymorphic source root."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("sources")
@@ -346,7 +350,7 @@ class Image(Source):
     __mapper_args__ = {"polymorphic_identity": "image"}  # noqa: RUF012
 
 
-class TextMention(AnnotationMetadata, Base):
+class TextMention(VersionedObject, AnnotationMetadata, Base):
     """A textual occurrence with mandatory provenance and optional resolution."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("text_mentions")
@@ -385,7 +389,7 @@ class TextMention(AnnotationMetadata, Base):
     entity: Mapped[Entity | None] = relationship(back_populates="text_mentions")
 
 
-class ImageOccurrence(AnnotationMetadata, Base):
+class ImageOccurrence(VersionedObject, AnnotationMetadata, Base):
     """An image-region occurrence and polymorphic root for face detections."""
 
     __tablename__ = TABLE_NAME_FORMAT.format("image_occurrences")
@@ -552,3 +556,25 @@ def _thumbnail_schema_present(ddl, target, connection, **kwargs):
 
 for statement in THUMBNAIL_DDL:
     event.listen(Base.metadata, "after_create", DDL(statement).execute_if(callable_=_thumbnail_schema_present))
+
+
+class AuditChange(Base):
+    """One committed mutation, with historical actor IDs independent of live FKs."""
+    __tablename__ = "pg_demo_audit_changes"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    actor_api_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class ObjectHistory(Base):
+    """Complete predecessors and final deleted states. Related IDs have no live FKs."""
+    __tablename__ = "pg_demo_object_history"
+    object_type: Mapped[str] = mapped_column(String(16), primary_key=True)
+    object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    change_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pg_demo_audit_changes.id", ondelete="RESTRICT"), nullable=False, index=True)
+    deleted: Mapped[bool] = mapped_column(nullable=False)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    state: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

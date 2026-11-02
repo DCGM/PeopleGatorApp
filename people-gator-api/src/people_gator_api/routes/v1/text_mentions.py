@@ -140,11 +140,14 @@ async def patch_text_mention_batch_route(
 
 @router.delete("/text-mentions:batch", response_model=int)
 async def delete_text_mention_batch_route(
-    mention_id: list[uuid.UUID],
+    expected_versions: dict[uuid.UUID, int],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> int:
-    return await database.text_mentions.delete_batch(mention_id, context=user)
+    try:
+        return await database.text_mentions.delete_batch(list(expected_versions), context=user, expected_versions=expected_versions)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_precondition", str(exc))
 
 
 @router.get(
@@ -188,8 +191,9 @@ async def patch_text_mention_route(
 )
 async def delete_text_mention_route(
     mention_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.text_mentions.delete(mention_id, context=user):
+    if not await database.text_mentions.delete(mention_id, context=user, expected_version=expected_version):
         raise_api_error(404, "not_found", "Text mention not found")

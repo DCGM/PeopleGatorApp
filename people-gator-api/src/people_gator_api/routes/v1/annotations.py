@@ -105,11 +105,14 @@ async def patch_face_batch_route(
 
 @router.delete("/faces:batch", response_model=int)
 async def delete_face_batch_route(
-    detection_id: list[uuid.UUID],
+    expected_versions: dict[uuid.UUID, int],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> int:
-    return await database.faces.delete_batch(detection_id, context=user)
+    try:
+        return await database.faces.delete_batch(list(expected_versions), context=user, expected_versions=expected_versions)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_precondition", str(exc))
 
 
 @router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
@@ -176,8 +179,9 @@ async def patch_face_route(
 @router.delete("/faces/{detection_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_face_route(
     detection_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.faces.delete(detection_id, context=user):
+    if not await database.faces.delete(detection_id, context=user, expected_version=expected_version):
         raise_api_error(404, "not_found", "Face not found")

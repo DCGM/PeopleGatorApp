@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .audit import prepare_audit, audit_transaction
 
 import uuid
 from collections.abc import Sequence
@@ -216,6 +217,7 @@ class PostgresEntityRepository(EntityRepository):
         command = EntityPatchBatchItem(entity_id=entity_id, **payload.model_dump())
         return (await self.patch_batch([command], context))[0]
 
+    @audit_transaction
     async def patch_batch(
         self,
         commands: Sequence[EntityPatchBatchItem],
@@ -226,6 +228,7 @@ class PostgresEntityRepository(EntityRepository):
             raise ValueError("entity patch batch requires unique object IDs")
         if not commands:
             return []
+        await prepare_audit(self._session, "entity", ids, context, {c.entity_id: c.expected_version for c in commands})
         # Selection and evidence transitions share the same outer lock. Validate
         # the entire batch before changing anything, including unrelated fields.
         if any(not is_missing(c.thumbnail_face_id) for c in commands):
@@ -286,10 +289,11 @@ class PostgresEntityRepository(EntityRepository):
             for item_id in ids
         ]
 
-    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
-        result = await self.delete_batch([entity_id], context=context)
+    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
+        result = await self.delete_batch([entity_id], context=context, expected_versions={entity_id: expected_version})
         return result.deleted_count == 1
 
+    @audit_transaction
     async def merge_batch(
         self,
         target_entity_id: uuid.UUID,
@@ -304,7 +308,8 @@ class PostgresEntityRepository(EntityRepository):
         if target_entity_id in source_entity_ids:
             raise ValueError("source and target entity must differ")
 
-        await lock_annotation_graph(self._session)
+        await prepare_audit(self._session, "entity", [target_entity_id, *source_entity_ids], context,
+                            target_patch.expected_versions if target_patch is not None else None)
         try:
             # A stable lock order avoids deadlocks between simultaneous merges.
             entities = {
@@ -374,6 +379,8 @@ class PostgresEntityRepository(EntityRepository):
             await self._session.refresh(target, ["thumbnail_face_id", "thumbnail_mode"])
             await touch_sources(self._session, affected_sources, context)
             await load_link_stats(self._session, [target], entities=True)
+            from .audit import finish_audit
+            await finish_audit(self._session)
             response = EntityMergeBatchResponse(
                 source_entity_ids=list(source_entity_ids),
                 target_entity_id=target_entity_id,
@@ -394,13 +401,14 @@ class PostgresEntityRepository(EntityRepository):
             sources.update(await self._session.scalars(select(evidence.source_id).where(evidence.entity_id.in_(entity_ids))))
         return sources
 
+    @audit_transaction
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]
     ) -> EntityDeleteManyResponse:
         unique = list(dict.fromkeys(entity_ids))
         if not unique:
             return EntityDeleteManyResponse(deleted_count=0)
-        await lock_annotation_graph(self._session)
+        await prepare_audit(self._session, "entity", unique, context, expected_versions)
         affected_sources = await self._annotation_sources(unique)
         await self._session.execute(
             update(ImageOccurrence)
@@ -432,7 +440,7 @@ class PostgresEntityRepository(EntityRepository):
                 .limit(selector.limit)
             )
         )
-        return await self.delete_batch(ids, context=context)
+        return await self.delete_batch(ids, context=context, expected_versions=selector.expected_versions)
 
     async def _text_scores(
         self, query: SearchEntitiesRequest, filters: Sequence[ColumnElement[bool]]

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from people_gator_api.schemas.audit import VersionedEdit
 from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, SharedFilter
 from typing import Annotated
 import uuid
@@ -71,7 +72,7 @@ type FacesBatchCreateRequest = Annotated[
 ]
 
 
-class FacePatchRequest(EntityLinkPatch):
+class FacePatchRequest(EntityLinkPatch, VersionedEdit):
     """Patch body for assigning a face, or unassigning it with a null entity ID."""
 
     entity_id: uuid.UUID | None | MissingType = Field(
@@ -107,6 +108,7 @@ type FacesBatchPatchRequest = Annotated[
 
 
 class FaceResponse(EntityLinkResponse):
+    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
     """A single face detection record."""
 
     detection_id: uuid.UUID = Field(

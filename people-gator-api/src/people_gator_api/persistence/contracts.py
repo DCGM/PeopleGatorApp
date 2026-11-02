@@ -43,8 +43,9 @@ import enum
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from pydantic import AnyUrl
+from people_gator_api.schemas.audit import AuditQuery, AuditListResponse
 from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest, APIKeyResponse, APIKeyListResponse, APIKeyListRequest
 from people_gator_api.schemas.missing import MISSING, MissingType
@@ -136,6 +137,13 @@ from people_gator_api.schemas.users import (
     UserPatchRequest,
     UserResponse,
 )
+
+
+class AuditRepository(ABC):
+    """Immutable predecessor/final-state history; unavailable adapters fail explicitly."""
+
+    async def list(self, query: "AuditQuery") -> "AuditListResponse":
+        raise NotImplementedError("Audit history requires PostgreSQL")
 
 
 class CreateResult(enum.StrEnum):
@@ -239,7 +247,7 @@ class EntityRepository(ABC):
         """
 
     @abstractmethod
-    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
         """Delete an entity and unassign its faces and text mentions.
 
         Return False when the entity does not exist.
@@ -284,7 +292,7 @@ class EntityRepository(ABC):
         """
 
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]
     ) -> EntityDeleteManyResponse:
         unique_ids = list(dict.fromkeys(entity_ids))
         if not unique_ids:
@@ -292,6 +300,7 @@ class EntityRepository(ABC):
         request = EntityDeleteManyRequest(
             filter=EntityListFilter(entity_id=unique_ids),
             limit=len(unique_ids),
+            expected_versions=expected_versions,
         )
         return await self.delete_many(request, context=context)
 
@@ -741,11 +750,11 @@ class SourceRepository(ABC):
         )
 
     @abstractmethod
-    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(self, source_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
         """Delete a source and cascade its dependent faces and mentions."""
 
     @abstractmethod
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
         """Delete unique source IDs with the same cascade as delete().
 
         Duplicate IDs count once. Empty input returns zero.
@@ -888,7 +897,7 @@ class FaceRepository(ABC):
         """Patch faces and preserve command order, using None for missing IDs."""
 
     @abstractmethod
-    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
         """
         Delete an existing face entry based on the given detection ID.
 
@@ -900,7 +909,7 @@ class FaceRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
         """
         Delete multiple existing face entries based on the given detection IDs.
 
@@ -1038,7 +1047,7 @@ class TextMentionRepository(ABC):
         """
 
     @abstractmethod
-    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
         """
         Delete an existing text mention entry by its ID.
 
@@ -1050,7 +1059,7 @@ class TextMentionRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
         """
         Delete a batch of existing text mention entries by their IDs.
 
@@ -1155,3 +1164,4 @@ class Database:
     text_mentions: TextMentionRepository
     users: UserRepository
     api_keys: APIKeyRepository | None = None
+    audit: AuditRepository = dataclass_field(default_factory=AuditRepository)

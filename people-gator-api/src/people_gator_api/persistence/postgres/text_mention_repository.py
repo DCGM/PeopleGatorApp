@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .audit import prepare_audit, audit_transaction
 
 import uuid
 from people_gator_api.persistence.entity_links import create_link_state, link_transition, apply_link
@@ -277,6 +278,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             )
         )[0]
 
+    @audit_transaction
     async def patch_batch(
         self,
         commands: Sequence[TextMentionPatchBatchItem],
@@ -287,6 +289,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
             raise ValueError("text mention patch batch requires unique object IDs")
         if not commands:
             return []
+        await prepare_audit(self._session, "mention", ids, context, {c.mention_id: c.expected_version for c in commands})
         await lock_annotation_graph(self._session)
         await ensure_ids(
             self._session,
@@ -319,14 +322,15 @@ class PostgresTextMentionRepository(TextMentionRepository):
             for item_id in ids
         ]
 
-    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
-        return bool(await self.delete_batch([mention_id], context=context))
+    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
+        return bool(await self.delete_batch([mention_id], context=context, expected_versions={mention_id: expected_version}))
 
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    @audit_transaction
+    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
         unique = list(dict.fromkeys(mention_ids))
         if not unique:
             return 0
-        await lock_annotation_graph(self._session)
+        await prepare_audit(self._session, "mention", unique, context, expected_versions)
         removed = list(await self._session.execute(
             delete(TextMention).where(TextMention.id.in_(unique)).returning(TextMention.entity_id, TextMention.source_id)
         ))

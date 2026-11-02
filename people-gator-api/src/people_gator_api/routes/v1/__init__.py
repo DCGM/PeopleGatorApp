@@ -30,3 +30,6 @@ router.include_router(root_router)
 router.include_router(rum_config_router)
 
 __all__ = ["router"]
+
+from people_gator_api.routes.v1.audit import router as audit_router
+router.include_router(audit_router)

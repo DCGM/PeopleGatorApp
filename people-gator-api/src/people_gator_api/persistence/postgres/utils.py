@@ -451,6 +451,8 @@ def strings(values: Iterable[object]) -> list[str]:
 @trace("postgres.commit")
 async def commit(session: AsyncSession, message: str) -> None:
     try:
+        from .audit import finish_audit
+        await finish_audit(session)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -654,7 +656,7 @@ def entity_response(entity: Entity) -> EntityResponse:
             f"entity {entity.id} does not satisfy the persistence contract"
         )
     return EntityResponse(
-        **creation_metadata(entity),
+        version=entity.version or 1,        **creation_metadata(entity),
         entity_id=entity.id,
         thumbnail_face_id=entity.thumbnail_face_id,
         thumbnail_mode=entity.thumbnail_mode or "automatic",
@@ -675,6 +677,7 @@ def entity_response(entity: Entity) -> EntityResponse:
 
 def source_response(source: Source) -> GenericSourceResponse:
     common: dict[str, Any] = {
+        "version": source.version or 1,
         "entity_link_stats": getattr(source, "_entity_link_stats", None) or {},
         "source_id": source.id,
         "last_touched_at": source.last_touched_at,
@@ -700,7 +703,7 @@ def source_response(source: Source) -> GenericSourceResponse:
 def face_response(face: Face) -> FaceResponse:
     box = face.roi
     return FaceResponse(
-        **annotation_values(face),
+        version=face.version or 1,        **annotation_values(face),
         detection_id=face.id,
         identifier=face.identifier,
         source_id=face.source_id,
@@ -726,7 +729,7 @@ def face_response(face: Face) -> FaceResponse:
 
 def mention_response(mention: TextMention) -> TextMentionResponse:
     return TextMentionResponse(
-        **annotation_values(mention),
+        version=mention.version or 1,        **annotation_values(mention),
         mention_id=mention.id,
         name=mention.mention,
         context=mention.context,

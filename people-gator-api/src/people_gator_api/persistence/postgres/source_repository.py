@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .audit import prepare_audit, audit_transaction
 
 import uuid
 from collections.abc import Sequence
@@ -367,9 +368,11 @@ class PostgresSourceRepository(SourceRepository):
             for item, result in outcomes
         ]
 
+    @audit_transaction
     async def patch_page(
         self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor, touch: bool = True,
     ) -> PageResponse | None:
+        await prepare_audit(self._session, "source", [source_id], context, {source_id: payload.expected_version})
         row = (await self._session.execute(select(Page.page_number).where(Page.id == source_id))).first()
         if row is None:
             return None
@@ -395,14 +398,15 @@ class PostgresSourceRepository(SourceRepository):
                 await self._session.rollback()
         return await self.get_page(source_id)
 
-    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
-        return bool(await self.delete_batch([source_id], context=context))
+    async def delete(self, source_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
+        return bool(await self.delete_batch([source_id], context=context, expected_versions={source_id: expected_version}))
 
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    @audit_transaction
+    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
         unique = list(dict.fromkeys(source_ids))
         if not unique:
             return 0
-        await lock_annotation_graph(self._session)
+        await prepare_audit(self._session, "source", unique, context, expected_versions)
         survivors = set(await source_touch_ids(self._session, unique)) - set(unique)
         touched: set[uuid.UUID | None] = set()
         for evidence in (ImageOccurrence, TextMention):

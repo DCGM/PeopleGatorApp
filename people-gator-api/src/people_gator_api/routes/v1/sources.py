@@ -87,8 +87,9 @@ async def get_source_route(
 @router.delete("/sources/{source_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source_route(
     source_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.sources.delete(source_id, context=user):
+    if not await database.sources.delete(source_id, context=user, expected_version=expected_version):
         raise_api_error(404, "not_found", "Source not found")

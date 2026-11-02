@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .audit import prepare_audit, audit_transaction
 
 import uuid
 from people_gator_api.persistence.entity_links import create_link_state, link_transition, apply_link
@@ -236,6 +237,7 @@ class PostgresFaceRepository(FaceRepository):
         command = FacePatchBatchItem(detection_id=detection_id, **payload.model_dump())
         return (await self.patch_batch([command], context))[0]
 
+    @audit_transaction
     async def patch_batch(
         self,
         commands: Sequence[FacePatchBatchItem],
@@ -246,6 +248,7 @@ class PostgresFaceRepository(FaceRepository):
             raise ValueError("face patch batch requires unique object IDs")
         if not commands:
             return []
+        await prepare_audit(self._session, "face", ids, context, {c.detection_id: c.expected_version for c in commands})
         await lock_annotation_graph(self._session)
         await ensure_ids(self._session, User, [context.user_id], "actor user")
         entity_ids = [
@@ -303,14 +306,15 @@ class PostgresFaceRepository(FaceRepository):
             for item_id in ids
         ]
 
-    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
-        return bool(await self.delete_batch([detection_id], context=context))
+    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
+        return bool(await self.delete_batch([detection_id], context=context, expected_versions={detection_id: expected_version}))
 
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    @audit_transaction
+    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
         unique = list(dict.fromkeys(detection_ids))
         if not unique:
             return 0
-        await lock_annotation_graph(self._session)
+        await prepare_audit(self._session, "face", unique, context, expected_versions)
         removed = list(await self._session.execute(
             delete(ImageOccurrence).where(ImageOccurrence.id.in_(unique), ImageOccurrence.occurrence_type == "face")
             .returning(ImageOccurrence.entity_id, ImageOccurrence.source_id)

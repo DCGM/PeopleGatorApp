@@ -217,12 +217,13 @@ async def get_document_route(
 )
 async def delete_document_route(
     document_source_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
     if await database.sources.get_document(document_source_id) is None:
         raise_api_error(404, "not_found", "Document not found")
-    await database.sources.delete(document_source_id, context=user)
+    await database.sources.delete(document_source_id, context=user, expected_version=expected_version)
 
 
 # -----------------------------------------------------------------------------
@@ -475,12 +476,13 @@ async def get_text_mention_spans_by_id_route(
 )
 async def delete_page_route(
     page_source_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
     if await database.sources.get_page(page_source_id) is None:
         raise_api_error(404, "not_found", "Page not found")
-    await database.sources.delete(page_source_id, context=user)
+    await database.sources.delete(page_source_id, context=user, expected_version=expected_version)
 
 
 # -----------------------------------------------------------------------------
@@ -597,12 +599,13 @@ async def get_image_content_by_id_route(
 )
 async def delete_image_route(
     image_id: uuid.UUID,
+    expected_version: int,
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
     if await database.sources.get_image(image_id) is None:
         raise_api_error(404, "not_found", "Image not found")
-    await database.sources.delete(image_id, context=user)
+    await database.sources.delete(image_id, context=user, expected_version=expected_version)
 
 
 @router.get("/document-library-filter-options", response_model=DocumentLibraryOptionsResponse, tags=["documents"])
