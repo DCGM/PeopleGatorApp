@@ -662,4 +662,43 @@ describe('DocumentTeleprompter', () => {
     expect(text.element.scrollTop).toBe(90)
     expect(wrapper.emitted('select-line')).toBeUndefined()
   })
+  it('pages through tall wrapped lines in both directions without selection snapping', async () => {
+    const wrapper = render({ selectedLineIndex: 0 })
+    const scroller = wrapper.get('[aria-label="Transcription teleprompter"]').element as HTMLElement
+    const lines = [...scroller.querySelectorAll<HTMLElement>('[data-line-index]')]
+    // L2 is 200px high; all others are 20px. A 60px viewport starts with
+    // L1 and the first 40px of L2. Selecting L2 must not reveal its far edge.
+    lines.forEach((line, index) => {
+      Object.defineProperty(line, 'offsetTop', { get: () => index < 2 ? index * 20 : 220 + (index - 2) * 20 })
+      Object.defineProperty(line, 'offsetHeight', { get: () => index === 1 ? 200 : 20 })
+    })
+    Object.defineProperty(scroller, 'clientHeight', { get: () => 60 })
+    Object.defineProperty(scroller, 'scrollHeight', { get: () => 380, configurable: true })
+    await flushPromises()
+    const press = async (key: string) => {
+      await wrapper.get('[aria-label="Transcription teleprompter"]').trigger('keydown', { key })
+      const emitted = wrapper.emitted('select-line')
+      const index = emitted?.[emitted.length - 1]?.[0] as number | undefined
+      if (index !== undefined) await wrapper.setProps({ selectedLineIndex: index })
+      await flushPromises()
+    }
+    scroller.scrollTop = 0
+    for (const expected of [60, 120, 180]) {
+      await press('PageDown')
+      expect(scroller.scrollTop).toBe(expected)
+    }
+    expect(wrapper.props('selectedLineIndex')).toBe(1)
+    for (const expected of [120, 60, 0]) {
+      await press('PageUp')
+      expect(scroller.scrollTop).toBe(expected)
+    }
+    // The same behavior applies when the oversized line is the final line.
+    await wrapper.setProps({ included: sample().map((_, index) => index < 2) })
+    Object.defineProperty(scroller, 'scrollHeight', { get: () => 220, configurable: true })
+    for (const expected of [60, 120, 160, 160]) {
+      await press('PageDown')
+      expect(scroller.scrollTop).toBe(expected)
+    }
+  })
+
 })

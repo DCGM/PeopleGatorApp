@@ -276,6 +276,15 @@ TELEPROMPTER_LINES = (
     "End of the autumn register.",
 )
 
+# A wrapped line taller than a short phone text panel, with one original line ID.
+TELEPROMPTER_WRAPPED_LINES = (
+    "The reading room register records the boxes, letters, glass plates and harbour maps. "
+    "This deliberately long OCR line keeps its original identity while the narrow text panel "
+    "wraps it across several rows. Read every row with Page Down, then return with Page Up.",
+    "Ada Novak checked the final entry.",
+    "The register was returned to its shelf.",
+)
+
 PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
@@ -553,6 +562,9 @@ PAGES = (
           Mention("teleprompter-viktor", "viktor", "Viktor Marek brought the glass plates.", "verified"),
           Mention("teleprompter-nora", "nora", "Nora Svoboda copied the index.", "manual")),
          lines=TELEPROMPTER_LINES),
+    Page("teleprompter-wrap-2", "teleprompter", 2, (),
+         (Mention("teleprompter-wrap-ada", "ada", "Ada Novak checked the final entry."),),
+         lines=TELEPROMPTER_WRAPPED_LINES),
 )
 
 ISSUE8_IMAGE_URL = "https://preview.invalid/issue8/portrait.png"

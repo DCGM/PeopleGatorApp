@@ -434,6 +434,7 @@ function scheduleSelectedGaps() {
 
 /** After explicit selection, scroll just enough to bring the selected line into view. */
 let revealPending = true
+let pagedSelection: number | null = null
 function revealSelectedLine() {
   const scroller = scrollElement.value
   const line = lineElement(props.selectedLineIndex)
@@ -493,7 +494,18 @@ function scrollPage(direction: 'next' | 'previous') {
   const last = view[view.length - 1] ?? first
   const maximum = scroller.scrollHeight - scroller.clientHeight
   let target: HTMLElement
-  if (direction === 'next') {
+  // An OCR line may wrap over several screenfuls, especially on a phone. Page
+  // through its visual text before advancing to the next original line.
+  const edge = direction === 'next' ? top + scroller.clientHeight : top
+  const crossing = lines.find((line) =>
+    line.offsetHeight > scroller.clientHeight &&
+    line.offsetTop < edge - 1 && line.offsetTop + line.offsetHeight > edge + 1,
+  )
+  if (crossing) {
+    const step = direction === 'next' ? scroller.clientHeight : -scroller.clientHeight
+    scroller.scrollTop = Math.max(0, Math.min(maximum, top + step))
+    target = crossing
+  } else if (direction === 'next') {
     const below = lines[lines.indexOf(last) + 1]
     if (below && top < maximum - 1) {
       scroller.scrollTop = Math.min(maximum, below.offsetTop)
@@ -508,7 +520,12 @@ function scrollPage(direction: 'next' | 'previous') {
     } else target = first
   }
   const index = Number(target.dataset.lineIndex)
-  if (index !== props.selectedLineIndex) emit('select-line', index)
+  if (index !== props.selectedLineIndex) {
+    // The parent updates scan selection, but must not then scroll to the far
+    // end of a tall line to try to fit the whole line inside this viewport.
+    pagedSelection = index
+    emit('select-line', index)
+  }
 }
 
 /** Wheel input over the minimap scrolls the text, like the scrollbar it replaces. */
@@ -591,7 +608,8 @@ watch(
 watch(
   () => props.selectedLineIndex,
   () => {
-    revealPending = true
+    revealPending = props.selectedLineIndex !== pagedSelection
+    pagedSelection = null
   },
   { flush: 'sync' },
 )

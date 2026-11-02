@@ -555,6 +555,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
                 "lines": "annotated", "highlight": "verified",
             }),
         }
+        wrapped = next((item for item in PAGES if item.key == "teleprompter-wrap-2"), None)
+        if wrapped:
+            teleprompter_examples["teleprompter-wrapped"] = (
+                f"/libraries/{teleprompter_document.library}/documents/"
+                f"{teleprompter_document.document_id}/pages/{wrapped.page_id}"
+            )
     search_document = next(item for item in DOCUMENTS if item.key == "issue8-search")
     sorting_document = next(item for item in DOCUMENTS if item.key == "sorting-ledger")
     sorting_person = manifest.entities.get("sorting")

@@ -1147,7 +1147,7 @@ second seed run. No preview edits or checkpoint identities are reset.
 ## Teleprompter reading practice (#36)
 
 The additive **Teleprompter reading practice** document (`teleprompter`,
-`preview-mzk`) has one 40-line page (`teleprompter-1`). Ada Novak's automatic
+`preview-mzk`) has a 40-line page (`teleprompter-1`) and an additive wrapped-line page (`teleprompter-wrap-2`). Ada Novak's automatic
 mention repeats on L3, L16 and L29 and spans L33–L34. Viktor Marek's verified
 mention is on L10 and L25 and Nora Svoboda's manual mention is on L20. The other
 lines stay unannotated. One unembedded Ada face sits beside the text.
@@ -1177,3 +1177,23 @@ processing times. Integration tests resolve each identity's lines through the
 media services, including the two-line Ada span. They also check face and line
 geometry, preserve a reviewed reassignment across reruns and recover an
 interrupted upgrade checkpoint.
+
+
+### Teleprompter review regressions (#36 / #101)
+
+Open `teleprompter-wrapped` for a second page of the reading-practice document.
+Its first OCR line is deliberately long enough to wrap across several rows on
+phones. Reduce the vertical split to about 20% with the resize handle to make
+that line exceed the text viewport. Page Down and Page Up traverse every visual
+portion before moving to another original line. L2 links Ada Novak, and all original line IDs are retained.
+The local scan fits the synthetic text inside its OCR polygon without external
+media or inference. The scenario is additive: reruns preserve the existing
+practice page, identity links, processing metadata and reviewer edits.
+
+On either practice page, resize the workspace through 1024px and back several
+times. The same scan stays mounted, pan/zoom continues working without reloading,
+and each orientation restores its own chosen split. A genuinely replaced scan
+gets fresh element-owned resources while retaining the view for the same page;
+new pages and Reset return to the default view. Mentions have tighter padding and
+thin outlines while keeping the blue selected/orange person states and state
+underlines. Test both a phone-sized panel and a wide panel, including wrapped names.
