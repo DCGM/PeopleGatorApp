@@ -352,7 +352,7 @@ describe('entity link review', () => {
     expect(mention.attributes('tabindex')).toBe('0')
     // Hover and focus show the scan view's state badge with the assigned name, outside the text.
     await mention.trigger('mouseenter')
-    expect(mention.attributes('style')).toContain('outline:')
+    expect(mention.attributes('data-selection')).toBe('hovered')
     const badge = wrapper.get('[data-mention-badge]')
     expect(badge.text()).toBe('Ada Novak')
     expect(text.find('[data-mention-badge]').exists()).toBe(false)
@@ -368,8 +368,21 @@ describe('entity link review', () => {
     expect(wrapper.emitted('select-entity')).toHaveLength(3)
     expect(wrapper.emitted('select-entity')![0]![0]).toBe(1)
     expect(wrapper.emitted('select-entity')![0]![1]).toMatchObject({ mention_id: 'm2' })
+    // One selected mention, blue as in the scan overlay; orange outline when it
+    // also belongs to the selected person.
     await wrapper.setProps({ selectedEntityKey: 'm2' })
-    expect(mention.attributes('style')).toContain('outline:')
+    expect(mention.attributes('data-selection')).toBe('selected')
+    expect(mention.classes()).toEqual(expect.arrayContaining(['bg-accent/20', 'outline-accent']))
+    expect(
+      wrapper.findAll('mark').filter((mark) => mark.attributes('data-selection') === 'selected'),
+    ).toHaveLength(1)
+    await wrapper.setProps({ relatedEntityId: 'ada' })
+    expect(mention.attributes('data-selection')).toBe('selectedMentioned')
+    expect(mention.classes()).toEqual(
+      expect.arrayContaining(['bg-accent/20', 'outline-orange-500']),
+    )
+    // The other Ada mention, not selected, is orange.
+    expect(wrapper.findAll('mark')[0]!.attributes('data-selection')).toBe('mentioned')
   })
 
   it.each([false, true])(

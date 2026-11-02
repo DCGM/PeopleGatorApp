@@ -7,6 +7,7 @@ import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
+import { transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
 import {
   adjacentIncluded,
   contextIndices,
@@ -388,11 +389,60 @@ describe('DocumentTeleprompter', () => {
     expect(wrapper.findAll('mark')).toHaveLength(5)
   })
 
+  it('selects one occurrence in the scan colors, even when a mention record repeats', async () => {
+    // One mention record resolved twice (L1, and across L2–L3), as span resolution does.
+    const occurrence = (line: string, start: number) => ({
+      mention_id: 'm',
+      occurrence: `m:${line}:${start}`,
+    })
+    const transcription: TranscriptionLine[] = [
+      {
+        id: 'L1',
+        text: 'Ada Novak',
+        position,
+        entities: [mention('L1', 'ada', 'Ada Novak', 0, occurrence('L1', 0))],
+      },
+      {
+        id: 'L2',
+        text: 'Then Ada',
+        position,
+        entities: [mention('L2', 'ada', 'Ada', 5, occurrence('L2', 5))],
+      },
+      {
+        id: 'L3',
+        text: 'Novak left',
+        position,
+        entities: [
+          mention('L3', 'ada', 'Novak', 0, { ...occurrence('L2', 5), firstFragment: false }),
+        ],
+      },
+    ]
+    expect(transcriptionEntityKey(transcription[0]!.entities![0]!)).toBe('m:L1:0')
+    const wrapper = render({ transcription, selectedLineIndex: 0, relatedEntityId: 'ada' })
+    const states = () => wrapper.findAll('mark').map((mark) => mark.attributes('data-selection'))
+    expect(states()).toEqual(['mentioned', 'mentioned', 'mentioned'])
+    expect(wrapper.findAll('mark')[0]!.classes()).toEqual(
+      expect.arrayContaining(['bg-orange-500/15', 'outline-orange-500']),
+    )
+    await wrapper.setProps({ selectedEntityKey: 'm:L2:5' })
+    // Only that occurrence, with both of its line fragments, is selected.
+    expect(states()).toEqual(['mentioned', 'selectedMentioned', 'selectedMentioned'])
+    await wrapper.setProps({ relatedEntityId: null })
+    expect(states()).toEqual(['default', 'selected', 'selected'])
+    expect(wrapper.findAll('mark')[1]!.classes()).toEqual(
+      expect.arrayContaining(['bg-accent/20', 'outline-accent']),
+    )
+    // Unselected, unhighlighted mentions override the browser's yellow mark background.
+    expect(wrapper.findAll('mark')[0]!.classes()).toContain('bg-transparent')
+  })
+
   it('uses the scan toolbar link-state toggle group, plus Unassigned and All', async () => {
     const wrapper = render()
     const group = wrapper.get('[aria-label="Annotation state controls"]')
     expect(
-      group.findAll('[aria-label="Annotation states"] button').map((item) => item.attributes('aria-label')),
+      group
+        .findAll('[aria-label="Annotation states"] button')
+        .map((item) => item.attributes('aria-label')),
     ).toEqual(['Automatic', 'Manual', 'Verified', 'Unassigned'])
     const all = group.findAll('button').find((button) => button.text() === 'All')!
     expect(all.attributes('aria-pressed')).toBe('true')

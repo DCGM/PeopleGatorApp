@@ -110,8 +110,9 @@ function stop(event: PointerEvent) {
 .minimap-hidden {
   fill: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
 }
+/* The selected person's mentions, orange as in the scan overlay. */
 .minimap-related {
-  fill: var(--accent);
+  fill: var(--color-orange-500);
 }
 .minimap-viewport {
   fill: color-mix(in srgb, var(--foreground) 8%, transparent);

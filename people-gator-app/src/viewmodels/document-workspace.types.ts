@@ -28,6 +28,8 @@ export type PageViewportBounds = {
 
 export type TranscriptionEntitySpan = LinkMetadata & {
   mention_id?: string
+  /** One resolved occurrence; a mention record can match its name several times. */
+  occurrence?: string
   firstFragment?: boolean
   entity_id?: string
   label: EntityType
@@ -39,6 +41,7 @@ export type TranscriptionEntitySpan = LinkMetadata & {
 
 export function transcriptionEntityKey(entity: TranscriptionEntitySpan) {
   return (
+    entity.occurrence ??
     entity.mention_id ??
     entity.entity_id ??
     `${entity.line_id}:${entity.start_index}:${entity.end_index}`
