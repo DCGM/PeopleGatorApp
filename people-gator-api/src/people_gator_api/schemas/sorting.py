@@ -9,6 +9,8 @@ Text fields compare case- and accent-insensitively (lowercased, unaccented) in
 Unicode code-point order, then by the exact recorded text in code-point order.
 Counts compare numerically and times chronologically. Assignment state orders
 ``verified``, ``manual``, ``automatic``, then unassigned (unknown) last.
+Face ``person`` orders by the assigned person's name and then identity, so each
+person's faces are contiguous; unassigned faces are unknown and last.
 ``relevance`` is the final search score and is valid only for searches.
 """
 
@@ -100,6 +102,7 @@ class FaceSortField(StrEnum):
     LINK_STATE = "link_state"
     CONFIDENCE = "confidence"
     SOURCE = "source"
+    PERSON = "person"
 
 
 class TextMentionSortField(StrEnum):
