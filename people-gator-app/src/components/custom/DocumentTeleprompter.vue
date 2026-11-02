@@ -459,10 +459,50 @@ function navigateTo(index: number) {
   if (target) centerOn(target)
 }
 
-/** Page Up/Down: one viewport of available lines, keeping the selected line. */
+/** Displayed lines fully inside the viewport, or partly when none fit completely. */
+function linesInView(lines: HTMLElement[], top: number, bottom: number) {
+  const full = lines.filter(
+    (line) => line.offsetTop >= top - 1 && line.offsetTop + line.offsetHeight <= bottom + 1,
+  )
+  return full.length
+    ? full
+    : lines.filter((line) => line.offsetTop + line.offsetHeight > top && line.offsetTop < bottom)
+}
+
+/**
+ * Page Up/Down move the cursor (the selected line) like an editor. When the
+ * text can scroll, show the next or previous non-overlapping view and select
+ * its first line; at the end or beginning, select the last or first line of
+ * the current view instead. Only displayed lines take part.
+ */
 function scrollPage(direction: 'next' | 'previous') {
   const scroller = scrollElement.value
-  if (scroller) scroller.scrollTop += (direction === 'next' ? 1 : -1) * scroller.clientHeight
+  const lines = [
+    ...(scroller?.querySelectorAll<HTMLElement>('[data-line-index]:not([data-hidden])') ?? []),
+  ]
+  if (!scroller || !lines.length) return
+  const top = scroller.scrollTop
+  const view = linesInView(lines, top, top + scroller.clientHeight)
+  const first = view[0] ?? lines[0]!
+  const last = view[view.length - 1] ?? first
+  const maximum = scroller.scrollHeight - scroller.clientHeight
+  let target: HTMLElement
+  if (direction === 'next') {
+    const below = lines[lines.indexOf(last) + 1]
+    if (below && top < maximum - 1) {
+      scroller.scrollTop = Math.min(maximum, below.offsetTop)
+      target = below
+    } else target = last
+  } else {
+    const above = lines[lines.indexOf(first) - 1]
+    if (above && top > 1) {
+      scroller.scrollTop = Math.max(0, above.offsetTop + above.offsetHeight - scroller.clientHeight)
+      const next = scroller.scrollTop
+      target = linesInView(lines, next, next + scroller.clientHeight)[0] ?? above
+    } else target = first
+  }
+  const index = Number(target.dataset.lineIndex)
+  if (index !== props.selectedLineIndex) emit('select-line', index)
 }
 
 /** Wheel input over the minimap scrolls the text, like the scrollbar it replaces. */
