@@ -39,4 +39,26 @@ describe('PersonEditableDetails', () => {
       nationalLibraryAuthorityId: 'xx0000000',
     })
   })
+
+  it('keeps the version read when editing began after a background refresh', async () => {
+    const profile = { name: 'Ada', shortDescription: '', article: '', aliases: [] }
+    const wrapper = mount(PersonEditableDetails, {
+      global: { stubs: { PersonPortrait: true } },
+      props: {
+        modelValue: profile,
+        version: 3,
+        personId: 'ada',
+        faceCount: 0,
+        mentionCount: 0,
+        libraryCount: 0,
+        wikidataId: '',
+        nationalLibraryAuthorityId: '',
+      },
+    })
+    await wrapper.get('[aria-label="Edit name"]').trigger('click')
+    await wrapper.setProps({ version: 4, modelValue: { ...profile, name: 'Newer Ada' } })
+    await wrapper.get('[aria-label="Save name"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[1]).toBe(3)
+    wrapper.unmount()
+  })
 })

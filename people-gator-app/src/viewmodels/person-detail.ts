@@ -304,5 +304,6 @@ export function usePersonDetail(
     updateProfile,
     updateIdentifiers,
     updateStatus: patchEntity.status,
+    updateError: patchEntity.error,
   }
 }

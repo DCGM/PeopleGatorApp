@@ -104,6 +104,7 @@ const {
   portraitFaceId,
   profile,
   processing,
+  updateError,
   updateIdentifiers,
   updateProfile,
 } = usePersonDetail(
@@ -532,6 +533,7 @@ function retrySearch() {
             @update:identifiers="updateIdentifiers"
           >
           </PersonEditableDetails>
+          <small v-if="updateError" role="alert">Could not save. Reload and try again.</small>
         </TabsContent>
         <TabsContent value="statistics" class="space-y-4 pt-4">
           <PersonLibraryCount :person-id="personId" />
