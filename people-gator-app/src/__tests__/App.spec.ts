@@ -14,7 +14,6 @@ import { readSharedFilters } from '@/viewmodels/shared-filters'
 
 const documentWorkspaceMock = vi.hoisted(() => ({
   faces: [] as Array<Record<string, unknown>>,
-  similarPeople: [] as Array<Record<string, unknown>>,
   transcription: [] as Array<{
     id: string
     text: string
@@ -110,16 +109,12 @@ vi.mock('@/viewmodels/document-workspace', () => ({
     annotationsLoading: ref(false),
     referenceFace: ref(null),
     faces: ref([]),
-    hasNextPage: ref(false),
-    isFetchingNextPage: ref(false),
     isLoading: ref(false),
-    loadMore: vi.fn<() => void>(),
+    page: ref(null),
     pageDimensions: ref({ width: 210, height: 297 }),
     pageImageLoading: ref(false),
     pageImageReady: ref(false),
     pageImageUrl: ref(''),
-    similarPeople: ref(documentWorkspaceMock.similarPeople),
-    similarPeopleLoading: ref(false),
     transcription: ref(documentWorkspaceMock.transcription),
   }),
 }))
@@ -197,35 +192,45 @@ describe('App', () => {
     expect(wrapper.getComponent(DocumentPageOverlay).props('showBadgeNames')).toBe(false)
   })
 
-  it('restores top-level sidebar tabs without keeping face assignment controls in Activity or Statistics', async () => {
+  it('restores sidebar tabs from the URL, including former Activity and Statistics links', async () => {
     await router.push(
       '/libraries/library/documents/document/pages/page?panel=activity&candidate_text=Ada&origin_text=Irena',
     )
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
     const sidebar = wrapper.get('.workspace-sidebar')
-    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Activity')
-    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(false)
-    expect(sidebar.find('input').exists()).toBe(false)
-    expect(sidebar.find('details').exists()).toBe(false)
+    expect(sidebar.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
+      'People',
+      'Faces',
+      'Mentions',
+      'Info',
+    ])
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Info')
+    expect(sidebar.find('textarea[aria-label="Search people"]').exists()).toBe(false)
 
     await router.push({ query: { ...router.currentRoute.value.query, panel: 'statistics' } })
     await flushPromises()
-    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
-    expect(sidebar.text()).toContain('Whole document')
-    expect(sidebar.find('details').exists()).toBe(false)
-    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(false)
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Info')
 
     await router.push({ query: { ...router.currentRoute.value.query, panel: undefined } })
     await flushPromises()
-    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Faces')
-    expect(sidebar.find('[aria-labelledby="face-gallery-title"]').exists()).toBe(true)
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('People')
+    expect(sidebar.get('textarea[aria-label="Search people"]').element).toHaveProperty(
+      'value',
+      'Ada',
+    )
     expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
     // Never-applied origin text is dropped from copied links (#52).
     expect(router.currentRoute.value.query).not.toHaveProperty('origin_text')
+
+    // Switching tabs keeps every other tab's settings.
+    await router.push({ query: { ...router.currentRoute.value.query, panel: 'faces' } })
+    await flushPromises()
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Faces')
+    expect(router.currentRoute.value.query.candidate_text).toBe('Ada')
     await router.push({ path: router.currentRoute.value.path, hash: '#link-statistics' })
     await flushPromises()
-    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Statistics')
+    expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Info')
     wrapper.unmount()
   })
 
@@ -242,10 +247,9 @@ describe('App', () => {
       const sidebar = wrapper.get('.workspace-sidebar')
       expect(sidebar.find('[aria-label="Active filters"]').exists()).toBe(false)
       expect(sidebar.find('[role="alert"]').exists()).toBe(false)
-      expect(sidebar.text()).not.toContain('Candidate source:')
-      expect(sidebar.text()).not.toContain('Clear all filters')
+      expect(sidebar.text()).not.toContain('Clear filters')
       expect(
-        sidebar.get('input[placeholder="Search by name or alias"]').attributes('disabled'),
+        sidebar.get('textarea[aria-label="Search people"]').attributes('disabled'),
       ).toBeUndefined()
       expect(router.currentRoute.value.query).toEqual(original)
       const tools = wrapper.get('[aria-label="Scan tools"]')
@@ -442,15 +446,6 @@ describe('App', () => {
         portraitLoading: false,
       },
     ]
-    documentWorkspaceMock.similarPeople = [
-      {
-        id: 'person-ada',
-        name: 'Ada Lovelace',
-        nerMentions: 1,
-        detections: 1,
-        source: 'page',
-      },
-    ]
     documentWorkspaceMock.transcription = [
       {
         id: 'line-ada',
@@ -472,9 +467,6 @@ describe('App', () => {
     const wrapper = mount(App, { global: { plugins: [router, VueQueryPlugin] } })
     await flushPromises()
 
-    if (wrapper.find('button[aria-label="Show filters"]').exists())
-      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
-    await wrapper.get('[aria-label="Show people with similar faces"]').trigger('click')
     await wrapper.get('[aria-label="Search people"]').setValue('Grace')
     await wrapper.vm.$nextTick()
     await wrapper.get('mark.transcription-entity').trigger('click')
@@ -482,14 +474,9 @@ describe('App', () => {
 
     expect(router.currentRoute.value.query.selectedPerson).toBe('person-ada')
     expect(router.currentRoute.value.query.line).toBe('line-ada')
-    expect(wrapper.get('[aria-label="Search people"]').element).toHaveProperty('value', '')
-    if (wrapper.find('button[aria-label="Show filters"]').exists())
-      await wrapper.findAll('button[aria-label="Show filters"]').slice(-1)[0]!.trigger('click')
-    expect(wrapper.get('[aria-label="Show people on this page"]').attributes('data-state')).toBe(
-      'on',
-    )
+    // Selecting evidence no longer resets People search.
+    expect(wrapper.get('[aria-label="Search people"]').element).toHaveProperty('value', 'Grace')
     documentWorkspaceMock.faces = []
-    documentWorkspaceMock.similarPeople = []
     documentWorkspaceMock.transcription = []
   })
 

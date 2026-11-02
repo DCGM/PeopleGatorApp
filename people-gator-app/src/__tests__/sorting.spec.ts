@@ -25,7 +25,6 @@ import {
   type SortState,
 } from '@/lib/sorting'
 import { useDocumentResultsQuery } from '@/query/search/documents'
-import { activityGroups } from '@/viewmodels/page-activity'
 import {
   DOCUMENT_BROWSE_DEFAULT,
   DOCUMENT_SORTS,
@@ -208,32 +207,3 @@ describe('document results sorting', () => {
   })
 })
 
-describe('activity order', () => {
-  const items = [
-    { id: 'b', kind: 'face' as const, label: 'B', touchedAt: '2026-01-02T10:00:00Z', userId: 'u2' },
-    { id: 'a', kind: 'mention' as const, label: 'A', touchedAt: null, userId: 'u1' },
-    { id: 'c', kind: 'face' as const, label: 'C', touchedAt: '2026-01-02T11:00:00Z', userId: 'u1' },
-    { id: 'd', kind: 'face' as const, label: 'D', touchedAt: null, userId: null },
-  ]
-  const labels: Record<string, string> = { u1: 'Zora', u2: 'Ada' }
-
-  it('orders user groups by label with unknown editors last in both directions', () => {
-    for (const groups of ['asc', 'desc'] as const) {
-      const result = activityGroups(items, 'user', { groups, items: 'desc' }, (key) => labels[key]!)
-      expect(result.map((group) => group.key)).toEqual(
-        groups === 'asc' ? ['u2', 'u1', ''] : ['u1', 'u2', ''],
-      )
-    }
-  })
-
-  it('orders edits chronologically with unknown times last in both directions', () => {
-    for (const direction of ['asc', 'desc'] as const) {
-      const [user] = activityGroups(items, 'user', { groups: 'asc', items: direction }, (key) =>
-        key === 'u1' ? 'A' : 'B',
-      )
-      expect(user!.records.map((item) => item.id)).toEqual(['c', 'a'])
-    }
-    const [, unknownDay] = activityGroups(items, 'time', { groups: 'desc', items: 'asc' })
-    expect(unknownDay).toMatchObject({ key: '' })
-  })
-})

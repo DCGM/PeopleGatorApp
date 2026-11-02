@@ -212,7 +212,7 @@ describe('DocumentPageOverlay', () => {
   })
 })
 
-it('keeps selected-face actions through viewport movement and closes them on an outside click, not a drag', async () => {
+it('expands the selected tag into one card through viewport movement and collapses it on an outside scan click, not a drag', async () => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -242,7 +242,7 @@ it('keeps selected-face actions through viewport movement and closes them on an 
       selectedPersonId: null,
       selectedCandidateFaceId: null,
     },
-    slots: { actions: () => h('button', { type: 'button' }, 'Link') },
+    slots: { card: () => h('button', { type: 'button' }, 'Link') },
   })
   const panel = () => document.querySelector<HTMLElement>('[data-slot="popover-content"]')
   const settle = async () => {
@@ -261,7 +261,11 @@ it('keeps selected-face actions through viewport movement and closes them on an 
     expect(wrapper.emitted('selectFace')).toEqual([['one']])
     // The panel itself takes focus, so no action tooltip pops up on open.
     expect(document.activeElement).toBe(panel())
-    expect(panel()!.getAttribute('aria-label')).toBe('Actions for Unknown')
+    expect(panel()!.getAttribute('aria-label')).toBe('Details for unassigned face')
+    // The card replaces the selected face's name tag; other tags stay.
+    const tag = (id: string) => wrapper.get(`[data-detection-id="${id}"] > *`)
+    expect((tag('one').element as HTMLElement).style.display).toBe('none')
+    expect((tag('two').element as HTMLElement).style.display).toBe('')
     panel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await flushPromises()
     expect(wrapper.emitted('clearFace')).toEqual([[]])
@@ -307,6 +311,13 @@ it('keeps selected-face actions through viewport movement and closes them on an 
     // Escape on the selected box clears the selection in one press.
     await detection.trigger('keydown', { key: 'Escape' })
     expect(wrapper.emitted('clearFace')).toHaveLength(2)
+
+    // Selecting another face collapses the previous card to its tag.
+    await wrapper.setProps({ selectedFaceId: 'two' })
+    await settle()
+    expect(document.querySelectorAll('[data-slot="popover-content"]')).toHaveLength(1)
+    expect(panel()!.getAttribute('data-detection-card')).toBe('two')
+    expect((tag('one').element as HTMLElement).style.display).toBe('')
 
     // A face without a drawable box never gets an unanchored panel.
     await wrapper.setProps({ selectedFaceId: 'hidden' })

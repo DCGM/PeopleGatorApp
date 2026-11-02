@@ -12,7 +12,7 @@ import type { EntityLinkState } from '@/client'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   mentions: PersonMention[]
-  personId: string
+  personId?: string
   linkStates: EntityLinkState[]
   compact?: boolean
   selection?: { all: boolean; ids: string[] }

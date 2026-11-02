@@ -16,7 +16,7 @@ const props = defineProps<{
   disabled?: boolean
   filters: TextMentionListParams
   sort: SortState<TextMentionSortField>
-  personId: string
+  personId?: string
   linkStates: EntityLinkState[]
 }>()
 const emit = defineEmits<{

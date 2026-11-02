@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
 import { Info } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
 import AnnotationLastChange from './AnnotationLastChange.vue'
@@ -9,10 +10,28 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   mention: PersonMention
-  personId: string
+  /** Omitted where mentions of several people are listed; each links its own. */
+  personId?: string
   linkStates: EntityLinkState[]
   compact?: boolean
 }>()
+const route = useRoute()
+// From a scan, another page opens with the same scan settings; elsewhere a
+// mention opens its page with only the person as explicit context (#109).
+const target = computed(() => ({
+  name: 'document-page',
+  params: {
+    libraryId: props.mention.library,
+    documentId: props.mention.documentId,
+    pageId: props.mention.pageId,
+  },
+  query: {
+    ...(route.name === 'document-page'
+      ? { ...route.query, person: undefined, line: undefined }
+      : {}),
+    selectedPerson: props.personId ?? props.mention.metadata?.entity_id ?? undefined,
+  },
+}))
 const infoOpen = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | undefined
 function openInfo() {
@@ -42,17 +61,7 @@ const parts = computed(() => {
       <div class="flex min-w-0 items-center gap-2" :class="compact && 'max-w-full shrink-0'">
         <RouterLink
           v-if="mention.pageId"
-          :to="{
-            name: 'document-page',
-            params: {
-              libraryId: mention.library,
-              documentId: mention.documentId,
-              pageId: mention.pageId,
-            },
-            query: {
-              selectedPerson: personId,
-            },
-          }"
+          :to="target"
           class="min-w-0 text-sm underline wrap-anywhere"
           :title="`${mention.library} · ${mention.documentId} · ${mention.pageId}`"
         >
