@@ -6,14 +6,12 @@ import {
   Check,
   ChevronRight,
   ExternalLink,
-  Link,
   Link2,
   RefreshCw,
   Search,
   Trash2,
   Unlink,
   UserPlus,
-  UserRoundX,
   X,
 } from '@lucide/vue'
 import { ref, watch } from 'vue'
@@ -21,16 +19,8 @@ import { ref, watch } from 'vue'
 import ContentEditable from '@/components/custom/ContentEditable.vue'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import LoadableImage from '@/components/custom/LoadableImage.vue'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemFooter,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item'
+import { Item, ItemContent, ItemFooter, ItemMedia, ItemTitle } from '@/components/ui/item'
 
 const props = withDefaults(
   defineProps<{
@@ -104,18 +94,6 @@ watch(() => props.face.id, cancelCreating)
         />
       </div>
     </ItemMedia>
-
-    <ItemActions class="absolute right-0 top-0 pt-1 pr-1">
-      <Badge
-        variant="outline"
-        class="font-mono text-xs py-0 uppercase border-none"
-        :class="face.personId ? 'text-emerald-700' : 'text-muted-foreground'"
-      >
-        <Link v-if="face.personId" aria-hidden="true" />
-        <UserRoundX v-else aria-hidden="true" />
-        Current
-      </Badge>
-    </ItemActions>
 
     <ItemContent v-if="isCreating" class="min-w-0 gap-1 overflow-hidden pt-1">
       <ItemTitle class="min-w-0 w-full max-w-full">

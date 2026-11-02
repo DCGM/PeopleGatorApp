@@ -34,8 +34,10 @@ const props = withDefaults(
     compactOccurrences?: boolean
     /** Load further groups when the list end scrolls into view. */
     automatic?: boolean
+    /** Offer selection and the selected-mention review actions. */
+    selectable?: boolean
   }>(),
-  { enabled: true, mode: 'mention' },
+  { enabled: true, mode: 'mention', selectable: true },
 )
 const emit = defineEmits<{ broaden: [] }>()
 const query = useTextMentionGroupsQuery(
@@ -59,7 +61,8 @@ useAutomaticPagination({
   loadMore: () => query.fetchNextPage(),
 })
 const total = computed(() => query.data.value?.pages[0]?.total_count ?? 0)
-const allowed = useCanAnnotate()
+const canAnnotate = useCanAnnotate()
+const allowed = computed(() => props.selectable && canAnnotate.value)
 const mutation = useReviewMentionsMutation()
 const route = useRoute()
 type Selection = { all: boolean; ids: string[] }
@@ -296,6 +299,7 @@ watch(groups, (items) => {
           <PersonMentionOccurrences
             :name="mode === 'mention' ? group.name : undefined"
             :compact="compactOccurrences"
+            :selectable="selectable"
             :selection="selection(group)"
             :disabled="mutation.isPending.value"
             @loaded="

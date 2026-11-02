@@ -77,6 +77,7 @@ const tags = computed<ActiveFilter[]>(() =>
           :link-states="linkStates"
           compact-occurrences
           automatic
+          :selectable="false"
           @broaden="emit('resetFilters')"
         />
         <PersonMentionOccurrences
@@ -86,6 +87,7 @@ const tags = computed<ActiveFilter[]>(() =>
           :sort="sort"
           :link-states="linkStates"
           compact
+          :selectable="false"
         />
       </template>
     </div>
