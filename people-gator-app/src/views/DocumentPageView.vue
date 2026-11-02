@@ -3,7 +3,8 @@ import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { focusTransform, MINIMUM_ZOOM, MAXIMUM_ZOOM } from '@/viewmodels/document-focus'
-import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
+import { SCAN_ZOOM_STEP, useScanViewport } from '@/composables/scan-viewport'
+import { useWorkspaceSplit, type WorkspacePanel } from '@/composables/workspace-split'
 import { useDebounce, useMediaQuery } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -80,13 +81,13 @@ import {
 
 const minimumZoomPercent = MINIMUM_ZOOM * 100
 const maximumZoomPercent = MAXIMUM_ZOOM * 100
-const controlledZoomStep = 0.24
-const touchZoomStep = 0.45
 const route = useRoute()
 // The transcription panel is always left of the scan on wide screens and above
 // it on narrow ones; each layout remembers its own user-resized split.
 const isWideWorkspace = useMediaQuery('(min-width: 1024px)')
 const splitDirection = computed(() => (isWideWorkspace.value ? 'horizontal' : 'vertical'))
+const transcriptionPanel = ref<WorkspacePanel | null>(null)
+const workspaceSplit = useWorkspaceSplit(splitDirection, transcriptionPanel)
 const router = useRouter()
 const libraryId = computed(() => String(route.params.libraryId))
 const documentId = computed(() => String(route.params.documentId))
@@ -182,9 +183,10 @@ const pageElement = ref<HTMLElement | null>(null)
 const pageBounds = ref<PageViewportBounds | null>(null)
 const similarPeopleSearch = ref<InstanceType<typeof SimilarPeopleSearch> | null>(null)
 const teleprompter = ref<InstanceType<typeof DocumentTeleprompter> | null>(null)
-let panzoom: PanzoomObject | undefined
-let pageResizeObserver: ResizeObserver | undefined
 const focusPageKey = computed(() => `${libraryId.value}/${documentId.value}/${pageId.value}`)
+const scanViewport = useScanViewport(
+  viewerElement, zoomElement, pageElement, focusPageKey, pageBounds, zoomPercent, scheduleFocus,
+)
 const lineVisibility = ref<LineVisibility>(parseLineVisibility(route.query.lines))
 const annotationHighlight = ref(parseHighlightStates(route.query.highlight))
 // Annotation states narrow the Annotated and Person lines as well as highlights.
@@ -226,6 +228,7 @@ function requestFocus(target: FocusTarget) {
 
 function applyPendingFocus() {
   const request = pendingFocus.value
+  const panzoom = scanViewport.current()
   const viewer = viewerElement.value
   const pageNode = pageElement.value
   if (
@@ -294,10 +297,10 @@ watch(
   { flush: 'sync' },
 )
 // Another page reuses this view: discard the previous page's selections and viewport.
-watch(pageId, () => {
+watch(focusPageKey, () => {
   selectedEntityKey.value = null
   selectedLineIndex.value = 0
-  panzoom?.reset({ animate: false })
+  scanViewport.reset()
 })
 watch([pageImageReady, faces, transcription, annotationsLoading], () => {
   scheduleFocus()
@@ -543,34 +546,16 @@ async function focusSimilarPeopleSearch() {
 }
 
 function setZoom(direction: 'in' | 'out') {
+  const panzoom = scanViewport.current()
   if (!panzoom) return
   if (direction === 'in' && zoomPercent.value < maximumZoomPercent)
-    panzoom.zoomIn({ animate: false, step: controlledZoomStep })
+    panzoom.zoomIn({ animate: false, step: SCAN_ZOOM_STEP })
   if (direction === 'out' && zoomPercent.value > minimumZoomPercent)
-    panzoom.zoomOut({ animate: false, step: controlledZoomStep })
+    panzoom.zoomOut({ animate: false, step: SCAN_ZOOM_STEP })
 }
 function resetView() {
   pendingFocus.value = null
-  panzoom?.reset({ animate: false })
-}
-
-function handleWheel(event: WheelEvent) {
-  panzoom?.zoomWithWheel(event, { step: controlledZoomStep })
-}
-
-function updatePageBounds() {
-  const viewer = viewerElement.value
-  const page = pageElement.value
-  if (!viewer || !page) return
-
-  const viewerRect = viewer.getBoundingClientRect()
-  const pageRect = page.getBoundingClientRect()
-  pageBounds.value = {
-    left: pageRect.left - viewerRect.left,
-    top: pageRect.top - viewerRect.top,
-    width: pageRect.width,
-    height: pageRect.height,
-  }
+  scanViewport.reset()
 }
 
 function handleNavigationKeydown(event: KeyboardEvent) {
@@ -660,45 +645,15 @@ watch([faces, referenceFace, transcription, annotationsLoading], () => {
   if (changed) syncRoute()
 })
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener('keydown', handleNavigationKeydown)
-  await nextTick()
-  if (!zoomElement.value) return
-  panzoom = Panzoom(zoomElement.value, {
-    canvas: true,
-    handleStartEvent: (event) => event.preventDefault(),
-    maxScale: maximumZoomPercent / 100,
-    minScale: minimumZoomPercent / 100,
-    startScale: 0.82,
-    step: touchZoomStep,
-  })
-  viewerElement.value?.addEventListener('wheel', handleWheel, { passive: false })
-  zoomElement.value.addEventListener('panzoomchange', ((event: CustomEvent<{ scale: number }>) => {
-    zoomPercent.value = Math.round(event.detail.scale * 100)
-    updatePageBounds()
-  }) as EventListener)
-  window.addEventListener('resize', updatePageBounds)
-  if (typeof ResizeObserver !== 'undefined' && viewerElement.value && pageElement.value) {
-    pageResizeObserver = new ResizeObserver(() => {
-      updatePageBounds()
-      scheduleFocus()
-    })
-    pageResizeObserver.observe(viewerElement.value)
-    pageResizeObserver.observe(pageElement.value)
-  }
-  updatePageBounds()
   if (selectedFaceId.value) requestFocus({ kind: 'face', id: selectedFaceId.value })
-  scheduleFocus()
 })
 
 onBeforeUnmount(() => {
   if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
   pendingFocus.value = null
   window.removeEventListener('keydown', handleNavigationKeydown)
-  window.removeEventListener('resize', updatePageBounds)
-  viewerElement.value?.removeEventListener('wheel', handleWheel)
-  pageResizeObserver?.disconnect()
-  panzoom?.destroy()
 })
 </script>
 
@@ -707,12 +662,11 @@ onBeforeUnmount(() => {
     <!-- The splitter sets an inline 100% height, so this wrapper owns the height. -->
     <div class="workspace-split">
       <ResizablePanelGroup
-        :key="splitDirection"
         :direction="splitDirection"
-        :auto-save-id="`document-workspace-${splitDirection}`"
+        @layout="workspaceSplit.layoutChanged"
       >
         <!-- On wide screens 40% keeps the settings row on one line from about 1440px. -->
-        <ResizablePanel :default-size="isWideWorkspace ? 40 : 30" :min-size="15" :max-size="70">
+        <ResizablePanel ref="transcriptionPanel" :default-size="workspaceSplit.defaultSize" :min-size="15" :max-size="70">
           <section
             class="workspace-teleprompter relative size-full min-h-0 min-w-0 overflow-hidden bg-background"
             aria-labelledby="page-transcription-title"
@@ -745,7 +699,7 @@ onBeforeUnmount(() => {
           class="z-30 data-[orientation=vertical]:after:h-3 data-[orientation=horizontal]:after:w-3"
         />
         <ResizablePanel
-          :default-size="isWideWorkspace ? 60 : 70"
+          :default-size="100 - workspaceSplit.defaultSize"
           class="flex min-h-0 min-w-0 flex-col"
         >
           <section
