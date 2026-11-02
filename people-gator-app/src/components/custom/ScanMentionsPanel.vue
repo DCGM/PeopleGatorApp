@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed } from 'vue'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
@@ -66,30 +67,32 @@ const tags = computed<ActiveFilter[]>(() =>
         @clear="scope = 'page'"
       />
     </div>
-    <div class="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-      <template v-if="sources">
-        <PersonMentionGroups
-          v-if="view === 'group'"
-          mode="mention"
-          :filters="filters"
-          :group-sort="groupSort"
-          :occurrence-sort="sort"
-          :link-states="linkStates"
-          compact-occurrences
-          automatic
-          :selectable="false"
-          @broaden="emit('resetFilters')"
-        />
-        <PersonMentionOccurrences
-          v-else
-          class="pt-2"
-          :filters="filters"
-          :sort="sort"
-          :link-states="linkStates"
-          compact
-          :selectable="false"
-        />
-      </template>
-    </div>
+    <ScrollArea class="min-h-0 flex-1">
+      <div class="px-3 pb-3">
+        <template v-if="sources">
+          <PersonMentionGroups
+            v-if="view === 'group'"
+            mode="mention"
+            :filters="filters"
+            :group-sort="groupSort"
+            :occurrence-sort="sort"
+            :link-states="linkStates"
+            compact-occurrences
+            automatic
+            :selectable="false"
+            @broaden="emit('resetFilters')"
+          />
+          <PersonMentionOccurrences
+            v-else
+            class="pt-2"
+            :filters="filters"
+            :sort="sort"
+            :link-states="linkStates"
+            compact
+            :selectable="false"
+          />
+        </template>
+      </div>
+    </ScrollArea>
   </section>
 </template>
