@@ -55,9 +55,13 @@ carry the database user ID and optional registered API-key ID. API-key hashes an
 secrets stay in the credential file, never in the SQL registry; see
 [API-key authentication](../people-gator-api/docs/API-KEYS.md).
 
-The browser opens the separate `/login.html` gateway. The issuer grants the
-account's configured scopes; tokens live in sessionStorage. The frontend bundles
-no usernames or passwords.
+The browser uses one provider-neutral OIDC client for the app and Swagger.
+`/login.html` starts Authorization Code + S256 PKCE at the configured issuer,
+which owns credential collection. Access/refresh tokens stay in memory;
+full page navigation can recover them through the issuer's SSO session.
+The built-in provider runs the separate `people_gator_auth` package, with no
+resource application imports. Keycloak replacement uses issuer/client settings
+and explicit permission/audience/actor mappings. See [Authentication](AUTHENTICATION.md).
 
 ## Search and annotation behavior
 

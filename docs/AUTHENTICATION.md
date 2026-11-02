@@ -1,154 +1,163 @@
 # Authentication and provider boundary
 
-`people-gator-auth` is an independent FastAPI process in the API distribution.
-It imports neither the resource application nor its settings, database, media,
-embedding or inference lifecycle. It owns local accounts, Argon2 verification,
-private signing keys, account disablement and process-local refresh sessions.
-The resource API exposes none of its routes. Export the separate issuer OpenAPI
-with `uv run --locked python scripts/export_auth_openapi.py /tmp/auth-openapi.json`
-from `people-gator-api`; resource export/client generation stays separate. `/docs` describes resource bearer
-and API-key authentication; obtain tokens from the issuer separately.
+The browser uses OpenID Connect Authorization Code flow with mandatory S256 PKCE.
+A shared provider interface supplies valid access tokens to the app and Swagger;
+neither consumer knows provider endpoints, credentials or token storage keys.
+The standard client uses `oidc-client-ts` for transactions/state/nonce/PKCE and
+refresh, with `jose` validating ID-token signature, issuer, audience and expiry.
+
+`people-gator-auth` runs the independent `people_gator_auth` application package.
+It owns the built-in login form, accounts, private keys and durable issuer-only
+sessions. It imports no resource application/settings/database/media/inference.
+The resource API imports no issuer application. Both entry points share a wheel
+and image to preserve reviewed deployment-controller compatibility. The explicit
+provisioning CLI belongs to resource-side setup, not running issuer startup.
+See [Issuer implementation](../people-gator-api/docs/ISSUER.md).
+
+## Browser flow and storage
+
+1. `/login.html` starts authorization at the configured provider; passwords are
+   entered only on the provider's page.
+2. The provider authenticates the user and redirects to an exact registered
+   application callback with a temporary authorization code and state.
+3. The OIDC client validates transaction state, exchanges the code using PKCE,
+   validates nonce and verifies the ID token. It restores the validated original
+   path, query and fragment before resource requests or application routing.
+4. Access tokens are sent as bearer credentials. Refresh is coalesced and performed
+   through the provider's standard token endpoint when expiry approaches.
+
+Access, refresh and ID tokens stay in memory. Session storage contains only
+short-lived state/nonce/PKCE transactions and a non-secret issuer/client SSO hint.
+Legacy custom-provider stored tokens are removed. A full navigation or reload
+can recover fresh tokens through a top-level `prompt=none` authorization round
+trip using the provider's HttpOnly login-session cookie. This does not rely on
+third-party iframe cookies. Without a valid provider session, docs remain public;
+protected app use starts an interactive sign-in. Callback failures show an
+explicit retry, never automatically replay a code or loop redirects.
+
+Application callbacks are `/auth-callback.html` for app pages and `/docs` for
+Swagger. The app callback initializes OIDC before mounting the router in that
+same document. Swagger completes its callback in its own document; no token
+handoff between page storage or navigation URLs is necessary. Credentials and
+access/refresh tokens are never placed in navigation URLs. Standard logout may
+use an ID-token hint, which is not an API bearer credential.
+
+The built-in issuer form prefills the synthetic `test` account only when its
+configured public hostname exactly matches `pr-<number>.preview.peoplegator.dev`.
+Submission is still required. Local/staging/production forms start empty. The
+application header has no Sign out control; provider/client logout remains tested.
 
 ## Configuration and topology
 
-The maintained topology serves the app and `/login.html` at one browser origin.
-`/token/`, `/.well-known/` and `/auth/health` route to the issuer, `/api/` to the
-resource API. Tokens remain in that origin's tab-local sessionStorage. Return
-navigation carries only a local application path, never tokens or credentials.
-The gateway is a separate HTML/Vue entry, without resource queries or telemetry.
-On `pr-<number>.preview.peoplegator.dev`, its username and password are prefilled
-with the synthetic `test` account. Sign in still requires submitting the form.
-Other hostnames, including staging and local development, start with empty fields.
-An alternate issuer origin works with `VITE_AUTH_BASE_URL` and an explicit
-`PEOPLE_GATOR_AUTH__ALLOW_ORIGINS` JSON list. The gateway must still be hosted at
-the **application** origin; sessionStorage does not cross origins. Use HTTPS
-outside isolated local development. This is direct credential exchange, not an
-OIDC authorization-code flow; no PKCE, ID tokens or client registration exists.
-
 | Process | Settings |
 | --- | --- |
-| Resource API | `PEOPLE_GATOR_API__AUTH__ISSUER`, `AUDIENCE`, `JWKS_URL`, `ALGORITHMS` (JSON list, ES256/RS256), `ACTOR_CLAIM` (default `uid`), `SCOPES_CLAIM` (default `scopes`) |
-| Issuer | `PEOPLE_GATOR_AUTH__ISSUER`, `AUDIENCE`, `STATE_DIR`, `HOST`, `PORT` (8002), `ACCESS_TOKEN_LIFETIME_SECONDS` (7200), `ALLOW_ORIGINS` |
-| Browser | `VITE_API_BASE_URL` and `VITE_AUTH_BASE_URL`; empty auth base uses the browser origin. No username/password build settings. |
-| API keys | `PEOPLE_GATOR_API__API_KEYS__KEYS_PATH` and `IDENTITY_ISSUER`; set the latter to the retained identity issuer, independently of a future bearer provider. |
+| Resource API | `PEOPLE_GATOR_API__AUTH__ISSUER`, `AUDIENCE`, `JWKS_URL`, `ALGORITHMS` (ES256/RS256), `ACTOR_CLAIM` (default `uid`), `SCOPES_CLAIM` (default `scopes`) |
+| Built-in issuer | `PEOPLE_GATOR_AUTH__ISSUER`, `AUDIENCE`, `STATE_DIR`, optional exact `CLIENTS` registrations, `ALLOW_ORIGINS`, lifetimes and port |
+| Browser | `VITE_OIDC_AUTHORITY` (default browser origin), `VITE_OIDC_CLIENT_ID` (default `people-gator-browser`), `VITE_OIDC_SCOPE` (default `openid profile offline_access`), `VITE_API_BASE_URL` |
+| API keys | `PEOPLE_GATOR_API__API_KEYS__KEYS_PATH`, `IDENTITY_ISSUER`; keep the retained identity issuer independently of a bearer-provider replacement |
 
-Consumer public-key settings do not contain paths to issuer keys/accounts. The
-issuer directory contains `accounts.json` and `jwks.json`; keep it private,
-writable by the issuer, backed up, and separate from resource storage. Startup
-readiness (`/auth/health`) validates accounts and loads/creates signing keys.
-The API never creates keys or substitutes local keys for provider failure.
+`VITE_AUTH_BASE_URL` remains a compatibility alias for the OIDC authority, not a
+custom password API base. These public build settings contain no client secret.
+The maintained proxy sends `/token/`, `/.well-known/` and `/auth/health` to the
+issuer, `/api/`, `/docs` and `/openapi.json` to the resource API, and frontend
+entries/assets to the frontend. Issuer and application may be on different
+origins with exact callback registrations and provider CORS settings. Use HTTPS
+except loopback development. Native Vite uses `API_PROXY_TARGET` and
+`AUTH_PROXY_TARGET`; see [Development](DEVELOPMENT.md).
 
-## Swagger browser session
+## Swagger
 
-Open `/docs` at the same public origin as the app and gateway. In **Authorize**,
-choose **Sign in** to open the existing login page; the return path, query and
-operation fragment are preserved. Tokens stay in sessionStorage and never appear
-in navigation URLs. Existing app sessions are applied automatically. The shared
-frontend auth client refreshes managed tokens before **Try it out** requests.
+Open `/docs` at the application origin. **Authorize → Sign in** starts the same
+provider flow and preserves the selected operation, query and fragment. An
+existing issuer SSO session can authorize docs without another password prompt.
+The request hook obtains fresh access tokens from the shared interface before
+**Try it out** and limits managed credentials to same-origin `/api/` requests.
 
-The resource API serves the docs HTML and public OpenAPI; `/swagger-auth.js` is a
-small frontend entry with no-store caching and hashed shared imports. The API
-still owns no passwords, signing keys or refresh sessions. Bearer/API-key OpenAPI
-contracts stay intact. Manual authorization is respected; selecting an API key
-clears only Swagger's automatically applied bearer and leaves the app session.
-Anonymous docs remain accessible when a saved session cannot be refreshed.
-Managed app tokens are sent only to same-origin `/api/` resources.
+FastAPI serves standard Swagger HTML through a small wrapper loading the
+frontend's no-store `/swagger-auth.js`. Manual bearer tokens and API keys remain
+supported. Choosing a manual key clears only Swagger's managed bearer. Anonymous
+docs remain usable when provider recovery fails. The resource API still owns no
+passwords, signing keys or refresh state, and its HTTP bearer/API-key security
+schemas remain unchanged. Raw API-origin docs support manual authorization;
+use the frontend origin for integrated login. ReDoc remains reference-only.
 
-For separate native dev servers, use the frontend's `/docs` and set server-only
-`API_PROXY_TARGET` to the API URL, as in [Development](DEVELOPMENT.md). The raw API
-origin is a different sessionStorage origin and supports manual authorization;
-no cross-origin token handoff is assumed. ReDoc remains a reference view.
+## Replacing the issuer with Keycloak
 
-## Claims, scopes and keys
+Use a public OIDC client, enable Standard Flow and enforce S256 PKCE. Register
+both exact application callbacks and the exact `/login.html` post-logout URL;
+register the browser web origin. Disable direct password grants. Set browser
+OIDC authority/client/scope and resource issuer/JWKS/audience/algorithm/claim
+settings; no browser adapter or resource-router edits are needed.
 
-Access tokens require a trusted signature and `iss`, `aud`, nonempty string
-`sub`, integer `iat` and `exp`, a UUID string `uid`, and space-separated string
-`scopes`. Expiry and not-before are validated. Only configured algorithms are
-accepted. Built-in tokens mark `token_use=access` or `refresh`; refresh tokens
-also lack access-token actor/expiry claims. They cannot authorize resource calls.
-External providers may omit `token_use` or use `access`; their access-token `jti`
-is allowed. A valid signature still needs each endpoint's application scopes.
+Keycloak commonly issues RS256 access tokens and a `scope` claim. Configure a
+space-separated custom permissions claim when application permissions differ
+from OIDC scopes. Configure the API audience and a UUID claim containing the
+**existing persisted application user UUID**. A Keycloak subject is not a
+replacement UUID; provision/map identities explicitly and preserve attribution.
+Keep API-key identity configuration independent during this transition.
 
-A future provider supplies the **existing persisted actor UUID**, using `uid`
-or the configured actor claim, and space-separated scopes via the configured
-scopes claim. Provision/map users explicitly before issuing tokens; never derive
-a random UUID from a subject or resolve users on every resource call. Changing
-provider issuer/keys and claim mapping requires no resource-router changes.
-API-key identity mapping can retain the old issuer during a bearer transition.
+For ordinary Keycloak browser sessions, `VITE_OIDC_SCOPE="openid profile"`
+receives refresh tokens within the provider's session policy. Request
+`offline_access` only when the user/client is explicitly permitted offline
+sessions; otherwise Keycloak rejects the exchange. This scope is configurable.
+The same browser journey was exercised against the built-in issuer and a separate
+Keycloak instance; see the PR for exact executed evidence/version and limitations.
 
-JWKS comes only from configured `JWKS_URL`, never token `jku`, `x5u` or `iss`.
-Redirects are refused. A per-process lock coalesces fetches; a five-second
-`REFRESH_INTERVAL_SECONDS` bounds unknown-kid and failure retries. Successful
-keys are cached for `KEY_CACHE_TTL_SECONDS` (3600). Known cached keys work during
-outages until that TTL expires. A key miss refreshes once when the cooldown
-permits; publish rotated keys before using them and allow the cooldown to pass.
-Unknown keys remain 401. With no usable cached keys, network, provider or invalid
-JWKS failures return 503, including during the retry cooldown. Fetches have a
-five-second `TIMEOUT_SECONDS`, a 64 KiB bound and a 64-key bound. JWKS must contain
-public EC/RSA material only. For emergency revocation, restart API workers or
-reduce TTL in advance; removing a key cannot invalidate existing worker caches
-instantly. Rotate by publishing overlapping public keys, then changing the
-signing key and retiring the old public key after access tokens/cache expire.
+## API validation and permissions
 
-## Accounts, provisioning and retained-data rollout
+Access tokens require a trusted signature, issuer/audience, nonempty subject,
+integer issued-at/expiry, a UUID actor claim and space-separated permissions.
+Only configured ES256/RS256 algorithms are accepted. The API rejects built-in ID
+and refresh tokens as access credentials. External access tokens may omit
+`token_use` or mark it `access`. Endpoint permissions remain explicit; admin
+permission does not implicitly grant every other permission. Bearer
+validation/actor construction performs no database lookups.
 
-Before rollout, back up retained credentials, keys and user identities. Keep the
-original issuer value when running the explicit provisioning bridge:
+Public keys come only from configured `JWKS_URL`, never token-supplied URLs.
+Redirects are refused. Fetches have a five-second timeout, 64 KiB/64-key bounds,
+coalescing and a five-second retry cooldown. Public keys are cached for one hour
+by default; usable cached keys permit validation during outages until TTL expiry.
+Unknown keys remain 401; an unavailable provider with no usable cache returns
+503. Publish overlapping keys before signing with a rotated key. Existing
+worker caches cannot be revoked instantly; restart workers or adjust TTL when
+required. No local/private-key fallback exists in the API.
 
-```sh
-# With resource persistence/storage settings and issuer settings configured:
-people-gator-auth-provision /private/retained-users.json
-```
+## Provisioning, account policy and rollout
 
-The source has the existing username → `{hash, scopes}` shape. This operator
-command uses `Database.users.get_or_create` by issuer/subject and stores the
-persisted UUID with each provider account. Existing identities and historical
-foreign keys stay unchanged; newly provisioned accounts get real persisted users.
-The running issuer does not connect to the database. Provisioning reruns add
-missing accounts and preserve provider hashes, scopes, UUIDs and disablement.
-Run one provisioning command at a time. For S3-backed legacy credentials, export
-the users JSON privately first; this command accepts a local file.
+`people-gator-auth-provision /private/retained-users.json` explicitly maps the
+retained issuer/subject to `Database.users.get_or_create`, then publishes issuer
+accounts after the resource transaction commits. Reruns add missing accounts
+without replacing passwords, permissions, UUIDs or account disablement. Keep
+provisioning single-writer. The issuer itself never connects to that database.
 
-Edit `accounts.json` at the provider boundary to change allowed scopes or
-`is_active`; replace the file atomically and preserve UUIDs. Removing/disabling
-an account blocks new login/refresh. A rejected refresh consumes that session.
-Issued access tokens stay valid until expiry. Resource `/users`, `/me` and user
-filter routes own domain profiles/attribution, not passwords or browser account
-administration. Their `is_active` remains the domain/API-key access flag;
-changing it does not disable a provider login account. Set provider account
-policy separately. Referenced users cannot be deleted by resource routes.
+Retain issuer `accounts.json`, `jwks.json` and `oidc.sqlite3` outside utility
+installations, separate from resource media/API-key storage. The initial upgrade
+preserves account/key formats and existing access-token validity when issuer,
+audience and keys remain unchanged. Legacy custom refresh tokens require fresh
+OIDC login. Codes, sessions and rotated refresh tokens survive later restarts;
+SQLite transactions serialize redemption across local workers.
+Refresh-token replay revokes the active refresh family and SSO session. Multi-host
+issuer replicas/shared network filesystem storage are unsupported.
 
-Retained `jwks.json` can be copied privately into the issuer state directory
-before its first start, preserving key IDs, issuer and audience. Without that
-explicit copy, the issuer generates a new ES256 key and **forces re-login**.
-Never copy private keys into API settings/storage for validation. Old access
-tokens carrying `uid` remain valid to expiry when the original public key is
-retained. Refresh sessions were already process-local: issuer restarts force
-re-login for renewal regardless of retained signing keys. Old API issuer routes
-are removed; reverse-proxy compatibility paths target the standalone issuer.
+Provider disablement blocks new login, SSO and refresh; issued access tokens stay
+valid to expiry. A rejected disabled-account refresh is revoked. Resource
+`/users` and `/me` remain domain profile/attribution operations. Their `is_active`
+flag governs existing API-key access and does not administer the provider account.
+Account provisioning must preserve historical user UUIDs and foreign keys.
 
-Refresh tokens rotate on every successful exchange. An atomic process lock
-permits one winner for concurrent reuse. Four sessions per username are retained;
-the logout API removes the current session. A browser sign-out control is deferred. These sessions are **single-process only**:
-run one issuer worker/replica. Restart loses sessions, and multi-worker refresh
-is unsupported. No general account platform, durable refresh database or SSO
-protocol is introduced. The browser clears a failed session and opens login once;
-failed login stays on the form, with no automatic credential fallback.
+Preview startup remains storage initialization → migration → seed → explicit
+account provisioning → issuer/API/frontend health. Seed/provisioning failure
+blocks activation. The reviewed-main deployment controller is unchanged; PR code
+never becomes the host controller.
 
 ## Validation
 
-Follow [Development](DEVELOPMENT.md) for isolated stores and separate processes.
-`test_auth_service.py`, `test_bearer_auth_http.py` and `test_public_jwks.py` cover
-provider policy/replay, forbidden database access, claim rejection, real HTTP
-JWKS, rotation/cooldown/outages, alternate claim mapping and import boundaries.
-The seed lifecycle test exercises separate issuer/resource apps and attributed
-mutations through migrated PostgreSQL. `node
-people-gator-app/scripts/check-auth-gateway.mjs` runs real-browser login,
-keyboard, return navigation, refresh and expiry recovery at 1440×900 and
-390×844. It expects the synthetic local instance at ports 5189/8089/8189 (or set
-`AUTH_GATEWAY_ORIGIN`); credentials are entered only by that local test script.
-
-The real-browser Swagger check is `node people-gator-app/scripts/check-swagger-session.mjs`.
-It covers the gateway return/hash, existing app session reuse, authenticated
-**Try it out**, refresh, recovery, API-key isolation and keyboard use at desktop
-and mobile viewports. Set `SWAGGER_ORIGIN` for a same-origin preview.
+Backend tests cover PKCE, code/client/redirect binding, expiry/replay/concurrent
+redemption, nonce, refresh rotation, account policy, restart persistence, public
+keys, alternate claim mappings, database-free bearer requests and import isolation.
+The seeded lifecycle verifies real attributed mutations and identity preservation.
+Run `node people-gator-app/scripts/check-oidc-login.mjs` against a synthetic
+same-origin app/API proxy. Configure `OIDC_APP_ORIGIN`, `OIDC_AUTHORITY` and
+`OIDC_EVIDENCE` for another instance/provider. It exercises desktop/mobile code
+login and return, real protected Swagger requests, refresh, app/docs SSO, manual
+API-key isolation, logout, expiry recovery and absence of persisted tokens.

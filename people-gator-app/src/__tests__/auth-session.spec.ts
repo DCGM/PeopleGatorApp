@@ -1,61 +1,55 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { login, logout, getAccessToken, safeReturnPath } from '@/query/auth'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  login,
+  logout,
+  getAccessToken,
+  safeReturnPath,
+  initializeAuthentication,
+} from '@/query/auth'
+import { authenticationProvider } from '@/query/auth-provider'
 
-afterEach(() => {
-  sessionStorage.clear()
-  vi.unstubAllGlobals()
+vi.mock('@/query/auth-provider', async (original) => {
+  const source = await original<typeof import('@/query/auth-provider')>()
+  const provider = {
+    initialize: vi.fn(),
+    accessToken: vi.fn(),
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+    finishSignOut: vi.fn(),
+  }
+  return { ...source, authenticationProvider: () => provider }
 })
+const provider = authenticationProvider()
+beforeEach(() => vi.clearAllMocks())
+afterEach(() => sessionStorage.clear())
 
-describe('issuer session transport', () => {
+describe('provider-independent authentication facade', () => {
   it.each([
     'https://evil.test',
     '//evil.test',
     '/\\evil.test',
     '/login.html',
     '/staging-login.html',
-  ])('rejects unsafe return %s', (path) => {
-    expect(safeReturnPath(path)).toBe('/')
-  })
-  it('retains application query and fragment', () => {
-    expect(safeReturnPath('/people?name=Ada#faces')).toBe('/people?name=Ada#faces')
-  })
-  it('logs in directly without bundled credentials and coalesces refresh', async () => {
-    const token = `h.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'actor' }))}.s`
-    const fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ access_token: token, refresh_token: 'refresh' }),
-    })
-    vi.stubGlobal('fetch', fetch)
-    await login('alice', 'entered-password')
-    expect(fetch.mock.calls[0]![0]).toContain('/token/login')
-    expect(String(fetch.mock.calls[0]![1].body)).toBe('username=alice&password=entered-password')
-    sessionStorage.removeItem('people-gator.access-token')
-    await Promise.all([getAccessToken(), getAccessToken(), getAccessToken()])
-    expect(fetch).toHaveBeenCalledTimes(2)
-    expect(fetch.mock.calls[1]![0]).toContain('/token/refresh')
-  })
-  it('reports failed login without storing a session', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }))
-    await expect(login('alice', 'wrong')).rejects.toThrow('Check your username and password.')
-    expect(sessionStorage.length).toBe(0)
-  })
-  it('allows docs to check an expired session without navigation', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'expired')
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }))
-    await expect(getAccessToken({ redirect: false })).rejects.toThrow('Session expired')
-    expect(sessionStorage.getItem('people-gator.refresh-token')).toBeNull()
-    expect(sessionStorage.getItem('people-gator.access-token')).toBeNull()
-  })
-
-  it('revokes and clears the refresh session on logout', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
-    // jsdom records unsupported navigation; session revocation still completes.
+    '/auth-callback.html',
+  ])('rejects unsafe return %s', (path) => expect(safeReturnPath(path)).toBe('/'))
+  it('preserves query and fragment', () =>
+    expect(safeReturnPath('/people?q=Ada#faces')).toBe('/people?q=Ada#faces'))
+  it('delegates sign-in, initialization and logout without collecting credentials', async () => {
+    await initializeAuthentication()
+    await login('/docs?view=test#operation')
     await logout()
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/token/logout'),
-      expect.objectContaining({ body: '{"refresh_token":"refresh"}' }),
-    )
+    expect(provider.initialize).toHaveBeenCalledOnce()
+    expect(provider.signIn).toHaveBeenCalledWith('/docs?view=test#operation')
+    expect(provider.signOut).toHaveBeenCalledOnce()
     expect(sessionStorage.length).toBe(0)
+  })
+  it('returns opaque provider tokens without assuming UUID or expiry claims', async () => {
+    vi.mocked(provider.accessToken).mockResolvedValue('opaque-provider-token')
+    expect(await getAccessToken()).toBe('opaque-provider-token')
+  })
+  it('allows anonymous docs without redirecting', async () => {
+    vi.mocked(provider.accessToken).mockResolvedValue(undefined)
+    await expect(getAccessToken({ redirect: false })).rejects.toThrow('Sign in required')
+    expect(provider.signIn).not.toHaveBeenCalled()
   })
 })

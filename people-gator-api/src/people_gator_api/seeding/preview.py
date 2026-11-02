@@ -848,6 +848,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             }),
             "auth-api-docs": "/login.html?" + urlencode({"return": "/docs"}),
             "auth-preview-login": "/login.html?" + urlencode({"return": "/people?q=Ada"}),
+            "auth-oidc-sso": "/login.html?" + urlencode({"return": "/docs?view=oidc"}),
             "auth-document-navigation": "/login.html?" + urlencode({
                 "return": "/documents?library=preview-table",
             }),

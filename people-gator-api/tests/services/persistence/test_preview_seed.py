@@ -2954,9 +2954,9 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
     import httpx
     from fastapi import FastAPI
     from joserfc.jwk import KeySet
-    from people_gator_api.auth import accounts, keys
-    from people_gator_api.auth.app import get_app as issuer_app
-    from people_gator_api.auth.settings import settings as issuer_settings
+    from people_gator_auth import accounts, keys
+    from people_gator_auth.app import get_app as issuer_app
+    from people_gator_auth.settings import settings as issuer_settings
     from people_gator_api.routes.v1 import router
     from people_gator_api.schemas.users import UserCreateRequest, UserListFilter, UserListRequest, UserPatchRequest, UserResponse
     from people_gator_api.services import auth_service, database_service, jwk_service
@@ -2964,8 +2964,6 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
     db, fs, _ = seed_target
     seed = await preview.seed_preview(db, fs)
     monkeypatch.setattr(issuer_settings, "state_dir", tmp_path)
-    monkeypatch.setattr(accounts, "_sessions", {})
-    monkeypatch.setattr(accounts, "_lock", asyncio.Lock())
     monkeypatch.setattr(keys, "_keyset", None)
     monkeypatch.setattr(keys, "_last_fetch_time", None)
     monkeypatch.setattr(keys, "_keyset_lock", asyncio.Lock())
@@ -3025,9 +3023,37 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
 
     async with (
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://resource") as client,
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=issuer_app()), base_url="http://issuer") as auth_client,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=issuer_app()), base_url=issuer_settings.issuer) as auth_client,
     ):
-        login = await auth_client.post("/token/login", data=login_form)
+        async def browser_login():
+            import base64, hashlib, re, secrets
+            from urllib.parse import parse_qs, urlsplit
+            verifier = secrets.token_urlsafe(48)
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+            callback = issuer_settings.issuer + "/auth-callback.html"
+            page = await auth_client.get("/token/authorize", params={
+                "client_id": "people-gator-browser", "redirect_uri": callback,
+                "response_type": "code", "scope": "openid offline_access " + login_form["scope"],
+                "nonce": secrets.token_urlsafe(16), "state": secrets.token_urlsafe(16),
+                "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "login",
+            })
+            handle = re.search('name="interaction" value="([^\"]+)"', page.text).group(1)
+            logged_in = await auth_client.post("/token/login", data={
+                "interaction": handle, "username": login_form["username"], "password": login_form["password"],
+            }, follow_redirects=False)
+            if logged_in.status_code != 302:
+                return logged_in
+            code = parse_qs(urlsplit(logged_in.headers["location"]).query)["code"][0]
+            return await auth_client.post("/token/oidc", data={
+                "grant_type": "authorization_code", "client_id": "people-gator-browser",
+                "redirect_uri": callback, "code": code, "code_verifier": verifier,
+            })
+
+        async def renew(refresh_token):
+            return await auth_client.post("/token/oidc", data={"grant_type": "refresh_token",
+                "client_id": "people-gator-browser", "refresh_token": refresh_token})
+
+        login = await browser_login()
         assert login.status_code == 200, login.text
         assert contexts.entries == 0
         [user] = await identities()
@@ -3058,20 +3084,20 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
 
         account.is_active = False
         save_account()
-        assert (await auth_client.post("/token/login", data=login_form)).status_code == 403
-        refused = await auth_client.post("/token/refresh", json={"refresh_token": tokens.refresh_token})
-        assert refused.status_code == 403
+        assert "Check your username and password." in (await browser_login()).text
+        refused = await renew(tokens.refresh_token)
+        assert refused.status_code == 400
         assert "access_token" not in refused.json()
         await db.users.patch(user.user_id, UserPatchRequest(is_active=True))
         account.is_active = True
         save_account()
         # The rejected refresh revoked its session; reactivation does not revive it.
-        revoked = await auth_client.post("/token/refresh", json={"refresh_token": tokens.refresh_token})
-        assert revoked.status_code == 401
+        revoked = await renew(tokens.refresh_token)
+        assert revoked.status_code == 400
         assert [item.user_id for item in await identities()] == [user.user_id]
 
-        relogin = TokenResponse.model_validate((await auth_client.post("/token/login", data=login_form)).json())
-        refreshed = await auth_client.post("/token/refresh", json={"refresh_token": relogin.refresh_token})
+        relogin = TokenResponse.model_validate((await browser_login()).json())
+        refreshed = await renew(relogin.refresh_token)
         assert refreshed.status_code == 200
         renewed = TokenResponse.model_validate(refreshed.json())
         assert (await jwk_service.verify_access_token(renewed.access_token))["uid"] == user.user_id
@@ -3084,9 +3110,9 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
 @pytest.mark.asyncio
 async def test_auth_provisioning_preserves_actors_accounts_and_seed_links(seed_target, tmp_path, monkeypatch):
     from urllib.parse import parse_qs, urlsplit
-    from people_gator_api.auth import accounts
-    from people_gator_api.auth.provision import provision_accounts
-    from people_gator_api.auth.settings import settings as issuer_settings
+    from people_gator_auth import accounts
+    from people_gator_api.cli.auth_provision import provision_accounts
+    from people_gator_auth.settings import settings as issuer_settings
     from people_gator_api.schemas.users import UserCreateRequest
     from people_gator_api.schemas.entities import EntityPatchRequest
     from people_gator_api.services.auth_service import AuthContext
@@ -3103,6 +3129,9 @@ async def test_auth_provisioning_preserves_actors_accounts_and_seed_links(seed_t
     preview_gateway = urlsplit(seed.filter_examples["auth-preview-login"])
     assert preview_gateway.path == "/login.html"
     assert parse_qs(preview_gateway.query)["return"] == ["/people?q=Ada"]
+    oidc_gateway = urlsplit(seed.filter_examples["auth-oidc-sso"])
+    assert oidc_gateway.path == "/login.html"
+    assert parse_qs(oidc_gateway.query)["return"] == ["/docs?view=oidc"]
     document_gateway = urlsplit(seed.filter_examples["auth-document-navigation"])
     assert document_gateway.path == "/login.html"
     assert parse_qs(document_gateway.query)["return"] == ["/documents?library=preview-table"]

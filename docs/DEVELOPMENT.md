@@ -93,9 +93,10 @@ not an account to expose with private collection data. For API reload, set
 Create `people-gator-app/.env.local`:
 
 ```dotenv
-VITE_API_BASE_URL=http://localhost:8000
-VITE_AUTH_BASE_URL=http://localhost:8002
+VITE_API_BASE_URL=http://localhost:5173
+VITE_OIDC_AUTHORITY=http://localhost:5173
 API_PROXY_TARGET=http://127.0.0.1:8000
+AUTH_PROXY_TARGET=http://127.0.0.1:8002
 ```
 
 In a second terminal, from `people-gator-app`:
@@ -106,7 +107,8 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 
 Set the API base explicitly: without it the client falls back to a remote
 development server. Open `http://localhost:5173/docs` for Swagger at the gateway origin; the dev
-proxy forwards docs, OpenAPI and API requests to `API_PROXY_TARGET`. Swagger
+proxy forwards docs, OpenAPI and API requests to `API_PROXY_TARGET`, and issuer
+authorization/token/discovery requests to `AUTH_PROXY_TARGET`. Swagger
 **Authorize → Sign in** opens the existing login page and returns with the shared
 session. Opening the raw API origin's `/docs` still permits manual bearer/API-key
 authorization, but gateway session sharing requires the frontend origin.
@@ -128,7 +130,7 @@ curl --fail http://127.0.0.1:5173/
 Health should return `{"status":"ok"}` and the frontend should return Vite's
 application HTML. In a browser, use people search for Ada Novak and inspect her
 faces and OCR mentions, then open a seeded document/page. Authenticate an API
-request through the issuer's `http://127.0.0.1:8002/token/login` and verify `/api/v1/entities` returns fixtures;
+login through the browser's `/login.html` using OIDC/PKCE and verify `/api/v1/entities` returns fixtures;
 see [Start here](START_HERE.md). A running PID alone does not establish readiness.
 Codex onboarding supports local HTTP validation, not user-facing localhost links.
 

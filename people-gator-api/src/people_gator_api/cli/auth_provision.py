@@ -4,8 +4,8 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from people_gator_api.auth.accounts import Account, _adapter
-from people_gator_api.auth.settings import settings as auth_settings
+from people_gator_auth.accounts import Account, _adapter
+from people_gator_auth.settings import settings as auth_settings
 
 
 async def provision(source: Path):

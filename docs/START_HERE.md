@@ -35,33 +35,15 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
 
 ## Check the API without printing credentials
 
-From `people-gator-api`, with the native instance running, this local smoke check
-logs in, reads identities and performs a filtered search. It keeps tokens in
-memory and prints only outcomes:
+With the synthetic native instance running, open `/login.html` at the frontend
+origin and submit the provisioned demo account at the issuer. The OIDC callback
+returns to the app. Open `/docs`, authorize with the same provider session and
+use **Try it out** for `/api/v1/me` or an entity search. Tokens stay in memory and
+are not printed. For a reproducible desktop/mobile journey, run:
 
 ```sh
-uv run --locked python - <<'PY'
-import httpx
-
-with httpx.Client(base_url="http://127.0.0.1:8000") as client:
-    health = client.get("/api/v1/health")
-    health.raise_for_status()
-    assert health.json()["status"] == "ok"
-    login = httpx.post("http://127.0.0.1:8002/token/login", data={
-        "username": "test", "password": "test", "scope": "people-gator:browse",
-    })
-    login.raise_for_status()
-    client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
-    entities = client.get("/api/v1/entities", params={"return_total_count": "true"})
-    entities.raise_for_status()
-    assert entities.json()["items"], "Seeded identities are missing"
-    search = client.get("/api/v1/search-entities", params={
-        "query.text": "Ada", "filter.entity_type": "person",
-    })
-    search.raise_for_status()
-    assert search.json()["items"], "Expected synthetic search results"
-    print("Health, login, identity list and filtered search passed")
-PY
+OIDC_APP_ORIGIN=http://localhost:5173 OIDC_AUTHORITY=http://localhost:5173 \
+  node people-gator-app/scripts/check-oidc-login.mjs
 ```
 
 For exact endpoint bodies and parameter names use the running API's `/docs` or

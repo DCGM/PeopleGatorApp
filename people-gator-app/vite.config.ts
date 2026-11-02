@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
     .filter(Boolean)
 
   const apiTarget = env.API_PROXY_TARGET || undefined
+  const authTarget = env.AUTH_PROXY_TARGET || undefined
   return {
     build: {
       rollupOptions: {
@@ -35,6 +36,7 @@ export default defineConfig(({ mode }) => {
         input: {
           app: fileURLToPath(new URL('./index.html', import.meta.url)),
           login: fileURLToPath(new URL('./login.html', import.meta.url)),
+          callback: fileURLToPath(new URL('./auth-callback.html', import.meta.url)),
           'swagger-auth': fileURLToPath(new URL('./src/swagger-auth.ts', import.meta.url)),
         },
       },
@@ -46,14 +48,24 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      proxy: apiTarget
-        ? Object.fromEntries(
-            ['/api', '/docs', '/redoc', '/openapi.json'].map((path) => [
-              path,
-              { target: apiTarget, changeOrigin: true },
-            ]),
-          )
-        : undefined,
+      proxy: {
+        ...(authTarget
+          ? Object.fromEntries(
+              ['/token/', '/.well-known/', '/auth/health'].map((path) => [
+                path,
+                { target: authTarget, changeOrigin: true },
+              ]),
+            )
+          : {}),
+        ...(apiTarget
+          ? Object.fromEntries(
+              ['/api', '/docs', '/redoc', '/openapi.json'].map((path) => [
+                path,
+                { target: apiTarget, changeOrigin: true },
+              ]),
+            )
+          : {}),
+      },
       allowedHosts: allowedHosts && allowedHosts.length > 0 ? allowedHosts : ['localhost'],
     },
   }

@@ -98,7 +98,7 @@ async def test_alternate_provider_and_claim_mapping(consumer, monkeypatch):
 
 
 async def test_issuer_import_is_independent():
-    result = subprocess.run([sys.executable, "-c", "import sys; import people_gator_api.auth.app; "
+    result = subprocess.run([sys.executable, "-c", "import sys; import people_gator_auth.app; "
         "assert 'people_gator_api.settings' not in sys.modules; "
         "assert 'people_gator_api.services.database_service' not in sys.modules; "
         "assert 'people_gator_api.app' not in sys.modules"], capture_output=True, text=True)
@@ -108,7 +108,7 @@ async def test_issuer_import_is_independent():
 async def test_resource_import_does_not_load_issuer_or_expose_token_routes():
     result = subprocess.run([sys.executable, "-c", "import sys; import people_gator_api.schemas; "
         "from people_gator_api.app import app; "
-        "assert not any(name.startswith('people_gator_api.auth.') for name in sys.modules); "
+        "assert not any(name.startswith('people_gator_auth.') for name in sys.modules); "
         "assert not any(route.path.startswith(('/token/', '/.well-known/')) for route in app.routes); "
         "from people_gator_api.settings import settings; assert not hasattr(settings, 'jwk')"],
         capture_output=True, text=True)

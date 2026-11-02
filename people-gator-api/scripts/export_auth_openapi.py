@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from people_gator_api.auth.app import get_app
+from people_gator_auth.app import get_app
 
 
 def main():

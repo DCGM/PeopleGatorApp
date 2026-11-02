@@ -51,11 +51,12 @@ dependencies = [
     "uvicorn>=0.46.0",
     "weaviate-client>=4.21.2",
     "aiofile>=3.12.3",
+    "authlib>=1.6,<2",
 ]
 
 [project.scripts]
-people-gator-auth = "people_gator_api.auth.app:server"
-people-gator-auth-provision = "people_gator_api.auth.provision:main"
+people-gator-auth = "people_gator_auth.app:server"
+people-gator-auth-provision = "people_gator_api.cli.auth_provision:main"
 people-gator-api = "people_gator_api.cli.server:server"
 people-gator-init-db = "people_gator_api.cli.server:init_db"
 people-gator-version = "people_gator_api.cli.version:write_version_file"
@@ -73,3 +74,6 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-xdist>=3.8,<4",
 ]
+
+[tool.uv.build-backend]
+module-name = ["people_gator_api", "people_gator_auth"]

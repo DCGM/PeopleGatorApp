@@ -7,8 +7,6 @@ import {
 import { getAccessToken, redirectToLogin } from '@/query/auth'
 
 vi.mock('@/query/auth', () => ({
-  accessTokenKey: 'people-gator.access-token',
-  refreshTokenKey: 'people-gator.refresh-token',
   getAccessToken: vi.fn(),
   redirectToLogin: vi.fn(),
 }))
@@ -37,15 +35,15 @@ beforeEach(() => {
 
 describe('Swagger gateway session', () => {
   it('keeps anonymous docs and manual authorization available', async () => {
+    vi.mocked(getAccessToken).mockRejectedValue(new Error('Sign in required'))
     const { ui, bridge } = swagger()
     await bridge.ready()
-    expect(getAccessToken).not.toHaveBeenCalled()
+    expect(getAccessToken).toHaveBeenCalledWith({ redirect: false })
     expect(ui.preauthorizeApiKey).not.toHaveBeenCalled()
     expect(redirectToLogin).not.toHaveBeenCalled()
   })
 
   it('uses an existing app session and refreshes its token before resource requests', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
     const { ui, bridge } = swagger()
     await bridge.ready()
     expect(getAccessToken).toHaveBeenCalledWith({ redirect: false })
@@ -60,7 +58,6 @@ describe('Swagger gateway session', () => {
   })
 
   it('does not redirect anonymous docs when a saved session has expired', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'expired')
     vi.mocked(getAccessToken).mockRejectedValue(new Error('Session expired'))
     const { ui, bridge } = swagger()
     await bridge.ready()
@@ -71,7 +68,6 @@ describe('Swagger gateway session', () => {
   it.each(['PeopleGatorAPIKey', 'PeopleGatorBearer'])(
     'preserves manual %s authorization',
     async (name) => {
-      sessionStorage.setItem('people-gator.refresh-token', 'refresh')
       const { ui, entries, bridge } = swagger()
       entries.set(name, new Map([['value', 'manual']]))
       await bridge.ready()
@@ -81,7 +77,6 @@ describe('Swagger gateway session', () => {
   )
 
   it('removes only its own bearer when an API key is selected later', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
     const { ui, entries, bridge } = swagger()
     await bridge.ready()
     entries.set('PeopleGatorAPIKey', new Map([['value', 'api-key']]))
@@ -91,13 +86,11 @@ describe('Swagger gateway session', () => {
     })
     expect(request.headers).toEqual({ 'X-API-Key': 'api-key' })
     expect(ui.authActions.logout).toHaveBeenCalledWith(['PeopleGatorBearer'])
-    expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('refresh')
   })
 
   it.each(['https://elsewhere.test/api/v1/entities', '/openapi.json'])(
     'never sends the app bearer outside trusted resource URLs: %s',
     async (url) => {
-      sessionStorage.setItem('people-gator.refresh-token', 'refresh')
       const { bridge } = swagger()
       await bridge.ready()
       const request = await bridge.intercept({
@@ -109,7 +102,6 @@ describe('Swagger gateway session', () => {
   )
 
   it('does not overwrite manual bearer changes or reauthorize after Swagger logout', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
     const { entries, bridge } = swagger()
     await bridge.ready()
     entries.set('PeopleGatorBearer', new Map([['value', 'manual-token']]))
@@ -125,7 +117,6 @@ describe('Swagger gateway session', () => {
   })
 
   it('does not restore a managed bearer after authorization changes during refresh', async () => {
-    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
     const { entries, bridge } = swagger()
     await bridge.ready()
     let resolve: (token: string) => void = () => {}

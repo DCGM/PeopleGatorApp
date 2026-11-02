@@ -1,5 +1,5 @@
 /** Share the gateway's browser session with Swagger without moving issuer code into the API. */
-import { accessTokenKey, refreshTokenKey, getAccessToken, redirectToLogin } from './auth'
+import { getAccessToken, redirectToLogin } from './auth'
 
 const bearerScheme = 'PeopleGatorBearer'
 const apiKeyScheme = 'PeopleGatorAPIKey'
@@ -24,7 +24,6 @@ export function connectSwaggerSession(ui: SwaggerSessionUI) {
 
   async function ready() {
     if (authorization(bearerScheme) || authorization(apiKeyScheme)) return
-    if (!sessionStorage.getItem(accessTokenKey) && !sessionStorage.getItem(refreshTokenKey)) return
     try {
       const token = await getAccessToken({ redirect: false })
       if (authorization(bearerScheme) || authorization(apiKeyScheme)) return

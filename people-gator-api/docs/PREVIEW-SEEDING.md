@@ -1129,7 +1129,12 @@ fallback. Search/filter/sort URLs and counts retain their existing semantics.
 ### Standalone login and actor attribution (#89)
 
 The `auth-preview-login` link opens the gateway and returns to the existing Ada
-search. On PR preview hostnames the synthetic test account is prefilled; other
+search. The `auth-oidc-sso` link starts OIDC Authorization Code + S256 PKCE and
+returns to Swagger. After login, open Ada in the app and return to docs to explore
+issuer SSO across the two entries; access/refresh tokens are kept in memory.
+The existing linked actors and evidence retain their UUIDs through the protocol
+upgrade. Authentication accounts and issuer sessions are owned outside the seed.
+On PR preview hostnames the synthetic test account is prefilled; other
 environments keep empty fields. Credentials are provisioned outside the seed.
 The `auth-attribution-login` link opens the separate browser gateway and returns
 to Ada Novak, whose linked faces and mentions are local synthetic fixtures.

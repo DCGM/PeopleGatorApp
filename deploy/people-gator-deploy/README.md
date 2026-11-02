@@ -404,6 +404,17 @@ Release environments must configure a separate trusted issuer and route it at
 the app origin (or build with an explicit CORS-enabled auth origin); release
 provider infrastructure is operator-owned.
 
+The OIDC upgrade preserves this same reviewed topology and capability label.
+Authorization, issuer-owned login, code/refresh exchange, revocation and logout
+stay under `/token/`; the frontend adds `/auth-callback.html`, while Swagger
+finishes its callback at `/docs`. Default registrations use those exact URLs at
+the configured issuer origin. Other frontend origins require explicit issuer
+client registration and CORS. Preserve issuer `oidc.sqlite3` alongside accounts
+and keys; do not put it in resource storage or database-refresh inputs. Existing
+access tokens retain their validity with retained keys/claims, while legacy
+custom browser refresh tokens require a new OIDC login. Subsequent sessions
+survive issuer restarts. See [Issuer implementation](../../people-gator-api/docs/ISSUER.md).
+
 ### Preview application capabilities
 
 The reviewed controller inspects the tested backend image's

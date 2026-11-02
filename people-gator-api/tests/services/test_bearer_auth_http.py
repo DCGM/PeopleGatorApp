@@ -16,8 +16,8 @@ from joserfc.jwk import ECKey, Key, KeyParameters, KeySet
 from joserfc.jwt import encode
 
 from people_gator_api.services import auth_service, jwk_service
-from people_gator_api.auth import keys
-from people_gator_api.auth.settings import settings as issuer_settings
+from people_gator_auth import keys
+from people_gator_auth.settings import settings as issuer_settings
 from people_gator_api.services.database_service import get_database, get_database_context
 from people_gator_api.settings import LocalStorageSettings, StorageSettings, settings
 
