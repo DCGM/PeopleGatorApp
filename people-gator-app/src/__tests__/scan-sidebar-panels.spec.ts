@@ -152,9 +152,12 @@ describe('People panel (#103)', () => {
     ])
   })
 
-  it('shows no attachment row without context', () => {
+  it('keeps an empty, fixed-height attachment row without context', () => {
     const wrapper = panel()
-    expect(wrapper.findAll('[data-align="block-end"]')).toHaveLength(1)
+    const [context] = wrapper.findAll('[data-align="block-end"]')
+    expect(context!.attributes('aria-label')).toBe('Search context')
+    expect(context!.classes()).toContain('h-9')
+    expect(context!.find('[data-search-face]').exists()).toBe(false)
     expect(wrapper.find('[aria-label="Add search context"]').exists()).toBe(true)
   })
 
