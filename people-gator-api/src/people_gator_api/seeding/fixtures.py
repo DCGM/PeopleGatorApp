@@ -26,6 +26,9 @@ class Person:
 PAGINATION_ITEMS = 14
 
 PEOPLE = (
+    *(Person(f"merge-{i}", f"Rina Merge {i}", (f"R. Merge {i}",),
+             "Synthetic duplicate for first/last-selected merge practice.", "importer")
+      for i in range(1, 4)),
     Person("actions", "Lina Actions", (), "Synthetic detection action practice.", "importer"),
     Person("count-subject", "Mira Counts", (), "Synthetic annotation count study subject.", "importer"),
     Person("review", "Lina Archivist", ("L. Archivist", "Lina of the reading room", "Lina Catalogue Editor"),
@@ -135,6 +138,7 @@ class Document:
 
 
 DOCUMENTS = (
+    Document("search-merge", "preview-merge", "Search merge practice"),
     Document("detection-actions", "preview-mzk", "Detection action practice"),
     Document("count-faces", "preview-counts", "Count study: faces"),
     Document("count-mentions", "preview-counts", "Count study: mentions"),
@@ -289,6 +293,10 @@ PAGE_GALLERY_PAGES = 14
 PAGE_GALLERY_MISSING_MEDIA = 9
 
 PAGES = (
+    *(Page(f"search-merge-{i}", "search-merge", i,
+           (Face(f"search-merge-{i}", f"merge-{i}", 0, 0, embedded=False),),
+           (Mention(f"search-merge-{i}", f"merge-{i}", f"Rina Merge {i} signed this register."),))
+      for i in range(1, 4)),
     Page("detection-actions-1", "detection-actions", 1, (
         Face("actions-linked", "actions", 0, 0, embedded=False),
         Face("actions-false-positive", None, 1, 0, embedded=False),

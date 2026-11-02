@@ -22,3 +22,16 @@ def test_entity_merge_route_has_explicit_request_and_result() -> None:
     assert {"description", "short_description"} <= batch_schema["properties"].keys()
     assert batch_schema["properties"]["source_entity_ids"]["minItems"] == 1
     assert "200" in batch_operation["responses"]
+
+
+def test_single_and_batch_merge_require_admin_scope() -> None:
+    app = FastAPI()
+    app.include_router(router)
+    paths = app.openapi()["paths"]
+    for suffix in ("merge", "merge-batch"):
+        operation = paths[f"/entities/{{target_entity_id}}:{suffix}"]["post"]
+        assert any(
+            "people-gator:admin" in scopes
+            for item in operation["security"]
+            for scopes in item.values()
+        )

@@ -1197,3 +1197,21 @@ gets fresh element-owned resources while retaining the view for the same page;
 new pages and Reset return to the default view. Mentions have tighter padding and
 thin outlines while keeping the blue selected/orange person states and state
 underlines. Test both a phone-sized panel and a wide panel, including wrapped names.
+
+### People search merge (#107)
+
+Search People for **Rina Merge** to find three synthetic duplicate records, each
+with an alias, a local portrait and a text mention on **Search merge practice**
+(`preview-merge`). With admin permission, select two or three records and use
+**Last selected (name)** or **First selected (name)** to merge immediately. The named
+person survives and receives the sources' faces, mentions and aliases under the
+existing API rules. Try each action on a fresh disposable preview.
+
+Selection includes only explicitly selected, loaded results. Loading more adds no
+selection. Shift appends an inclusive range in display order, retaining the order
+of already selected IDs (even for a backward range). Sorting retains that order
+for records still in the loaded results; unavailable records drop out. Search,
+filter or cursor changes clear selection. Deselect/reselect appends a person to
+the end; Clear resets the order. Pending requests freeze selection and use a
+snapshot. Failed requests preserve available selections for retry. Seed reruns
+keep merged source IDs as tombstones and preserve evidence reassignment and edits.
