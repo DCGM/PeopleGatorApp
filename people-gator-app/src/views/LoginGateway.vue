@@ -5,7 +5,13 @@ import { login, finishLogout, safeReturnPath } from '@/query/auth'
 
 const busy = ref(false)
 const params = new URLSearchParams(location.search)
-const message = ref(params.has('error') ? 'Sign-in could not be completed. Try again.' : '')
+const message = ref(
+  params.get('error') === 'api-rejected'
+    ? 'Sign-in was not accepted by the API.'
+    : params.has('error')
+      ? 'Sign-in could not be completed. Try again.'
+      : '',
+)
 async function submit() {
   busy.value = true
   message.value = ''

@@ -73,3 +73,17 @@ provider logout, expired SSO recovery and no persisted tokens. Tests also check
 keyboard access and absence of an application header Sign out button. Non-Chromium
 and physical-device checks were not run. Keycloak is a compatibility test, not a
 new production deployment dependency.
+
+## Rejected API-token recovery
+
+A separate real API at port 8096 was configured with an intentionally unmapped
+actor claim; frontend 5196 used the built-in issuer on frontend origin 5189 with
+explicitly registered cross-origin callbacks. Desktop/mobile login completed,
+the API rejected the signed token, and exactly one automatic reauthentication
+was attempted before an explicit retry screen. No API responses were mocked.
+This also verifies the issuer form CSP permits registered callback origins.
+
+Reproduce with `OIDC_EXPECT_API_REJECTION=1`, `OIDC_APP_ORIGIN` set to that second
+frontend and `OIDC_AUTHORITY` set to the issuer origin when running the same
+browser script. These captures correspond to the recovery-hardening commit;
+the earlier captures use the unchanged main OIDC flow from `db957cb`.

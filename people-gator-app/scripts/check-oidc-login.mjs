@@ -72,6 +72,24 @@ try {
       for (const key of ['access_token', 'refresh_token', 'id_token', 'code', 'state'])
         assert.equal(params.has(key), false)
     }
+    if (process.env.OIDC_EXPECT_API_REJECTION === '1') {
+      stage = label + ': repeated API rejection'
+      await page.goto(origin + '/people?q=Ada')
+      await page.locator('[name=username]').fill(username)
+      await page.locator('[name=password]').fill(password)
+      await page.getByRole('button', { name: /^sign in$/i }).click()
+      await page.getByText('Sign-in was not accepted by the API.', { exact: true }).waitFor()
+      assert.equal(new URL(page.url()).searchParams.get('error'), 'api-rejected')
+      assert.equal(pkceRequests, 2)
+      await page.waitForTimeout(1000)
+      assert.equal(pkceRequests, 2)
+      await page.screenshot({ path: `${output}/${label}-api-rejected.png` })
+      await context.close()
+      console.log(
+        label + ': real API rejection stops after one reauthentication and shows explicit retry',
+      )
+      continue
+    }
     stage = label + ': anonymous docs'
     await page.goto(origin + docsPath)
     await ready(false)

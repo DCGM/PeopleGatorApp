@@ -3,8 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listEntitiesRouteApiV1EntitiesGet } from '@/client'
 import { createClient } from '@/client/client'
 import { apiClient } from '@/query/client'
-import { getAccessToken } from '@/query/auth'
-vi.mock('@/query/auth', () => ({ getAccessToken: vi.fn(), requireLogin: vi.fn() }))
+import { getAccessToken, recordAuthenticatedResponse } from '@/query/auth'
+vi.mock('@/query/auth', () => ({
+  getAccessToken: vi.fn(),
+  requireLogin: vi.fn(),
+  recordAuthenticatedResponse: vi.fn(),
+}))
 
 afterEach(() => {
   sessionStorage.clear()
@@ -56,5 +60,22 @@ describe('generated client authentication alternatives', () => {
     if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
     expect(await auth({ type: 'http', scheme: 'bearer' })).toBe('provider-renewed-token')
     expect(getAccessToken).toHaveBeenCalled()
+  })
+  it('only resets reauthentication recovery after a successful bearer request', async () => {
+    vi.mocked(recordAuthenticatedResponse).mockClear()
+    const adapter = async (config: import('axios').InternalAxiosRequestConfig) => ({
+      data: {},
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })
+    await apiClient.instance.get('/api/v1/health', { adapter })
+    expect(recordAuthenticatedResponse).not.toHaveBeenCalled()
+    await apiClient.instance.get('/api/v1/me', {
+      adapter,
+      headers: { Authorization: 'Bearer valid' },
+    })
+    expect(recordAuthenticatedResponse).toHaveBeenCalledOnce()
   })
 })

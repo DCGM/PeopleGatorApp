@@ -34,6 +34,9 @@ trip using the provider's HttpOnly login-session cookie. This does not rely on
 third-party iframe cookies. Without a valid provider session, docs remain public;
 protected app use starts an interactive sign-in. Callback failures show an
 explicit retry, never automatically replay a code or loop redirects.
+After a resource API rejection, one automatic reauthentication is allowed;
+repeated rejection shows an explicit retry instead of looping through provider
+SSO. Successful authenticated resource requests reset that recovery guard.
 
 Application callbacks are `/auth-callback.html` for app pages and `/docs` for
 Swagger. The app callback initializes OIDC before mounting the router in that

@@ -201,6 +201,7 @@ def test_form_is_csrf_bound_and_bad_password_does_not_issue_code(issuer):
     client, _ = issuer
     _, params = authorization()
     page = client.get('/token/authorize', params=params)
+    assert "form-action 'self' https://app.test" in page.headers['content-security-policy']
     handle = re.search('name="interaction" value="([^"]+)"', page.text).group(1)
     denied = client.post('/token/login', data=dict(interaction=handle, username='alice', password='wrong'))
     assert 'Check your username and password.' in denied.text and 'location' not in denied.headers

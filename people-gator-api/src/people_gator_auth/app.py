@@ -33,6 +33,11 @@ def login_page(interaction, *, username=None, error=""):
     password = "test" if preview and not error else ""
     escape = html.escape
     message = f'<p role="alert">{escape(error)}</p>' if error else ""
+    callback_origins = {
+        f"{urlsplit(uri).scheme}://{urlsplit(uri).netloc}"
+        for client in settings.browser_clients() for uri in client.redirect_uris
+    }
+    form_targets = "'self' " + " ".join(sorted(callback_origins))
     # The issuer owns this form; it has no app bundle or resource dependencies.
     return HTMLResponse(f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -50,7 +55,9 @@ input:focus-visible,button:focus-visible{{outline:2px solid #668c98;outline-offs
 <label for="username">Username</label><input id="username" name="username" autocomplete="username" required value="{escape(username, quote=True)}">
 <label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required value="{password}">
 {message}<button type="submit">Sign in</button></form></main></body></html>''', headers={
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+        # Browsers also check form-action on the post-login redirect chain.
+        # Permit registered callback origins while grants still enforce exact URIs.
+        "Content-Security-Policy": f"default-src 'none'; style-src 'unsafe-inline'; form-action {form_targets}; base-uri 'none'; frame-ancestors 'none'",
     })
 
 
