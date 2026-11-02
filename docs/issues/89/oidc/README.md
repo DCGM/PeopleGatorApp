@@ -11,7 +11,8 @@ server-only proxies target the API/issuer, with OIDC authority at the frontend
 origin. Run `node people-gator-app/scripts/check-oidc-login.mjs` after following
 [Development](../../../DEVELOPMENT.md) with those ports. Existing auth-gateway and
 Swagger check scripts remain compatibility entries for this standard journey.
-Captures show anonymous docs/Sign in, issuer login and failure, authenticated
+Captures show light/dark issuer login, explicit failed-callback retry,
+anonymous docs/Sign in, issuer login and failure, authenticated
 docs, returned seeded app, logout and anonymous docs after SSO expires.
 
 PR-prefill captures run the same independent issuer with the configured public
