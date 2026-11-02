@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { ChevronDown, Search } from '@lucide/vue'
+import { ChevronDown, Plus, ScanFace, Search } from '@lucide/vue'
 import ListPagination from './ListPagination.vue'
 import SearchFaceAttachment from './SearchFaceAttachment.vue'
 import SimilarPersonItem from './SimilarPersonItem.vue'
@@ -9,6 +9,7 @@ import SortSelect from './SortSelect.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -51,6 +52,8 @@ const scope = defineModel<PeopleScope>('scope', { required: true })
 const order = defineModel<PeopleOrder>('order', { required: true })
 const emit = defineEmits<{
   removeFace: []
+  /** Attach the face selected on the scan as the search reference. */
+  attachSelectedFace: []
   preview: [person: SimilarPersonCandidate]
   assign: [person: SimilarPersonCandidate]
 }>()
@@ -82,6 +85,11 @@ const orderValue = computed({
   get: () => order.value,
   set: (value: string) => (order.value = value as PeopleOrder),
 })
+// Search attaches one face for now; the menu is where aliases and more faces will go.
+const canAttachSelected = computed(
+  () =>
+    Boolean(props.selectedFace?.embeddingModel) && props.selectedFace?.id !== props.searchFaceId,
+)
 const countLabel = computed(() =>
   props.loading || props.totalCount === undefined
     ? ''
@@ -119,12 +127,32 @@ defineExpose({ focus: () => group.value?.querySelector('textarea')?.focus() })
           placeholder="Name or alias"
           @keydown="keydown"
         />
+        <InputGroupAddon
+          v-if="searchFaceId"
+          align="block-end"
+          aria-label="Search context"
+          class="flex-wrap pb-0"
+        >
+          <SearchFaceAttachment :face-id="searchFaceId" @remove="emit('removeFace')" />
+        </InputGroupAddon>
         <InputGroupAddon align="block-end">
-          <SearchFaceAttachment
-            v-if="searchFaceId"
-            :face-id="searchFaceId"
-            @remove="emit('removeFace')"
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <InputGroupButton
+                variant="outline"
+                class="rounded-full"
+                size="icon-xs"
+                aria-label="Add search context"
+              >
+                <Plus class="size-4" aria-hidden="true" />
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" class="[--radius:0.95rem]">
+              <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
+                <ScanFace aria-hidden="true" />Selected face
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
               <InputGroupButton variant="ghost" :aria-label="`Scope: ${scopeLabel}`">

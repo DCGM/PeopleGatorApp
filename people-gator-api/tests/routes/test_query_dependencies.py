@@ -171,8 +171,8 @@ def _sort_values(openapi: dict[str, Any], path: str) -> list[str]:
     ("/search-documents", ["relevance", "name", "document_id", "library", "page_count", "last_touched_at"]),
     ("/pages", ["page_number", "library", "document_id", "page_id", "last_touched_at"]),
     ("/search-pages", ["page_number", "relevance", "library", "document_id", "page_id", "last_touched_at"]),
-    ("/faces", ["detection_id", "last_touched_at", "link_state", "confidence", "source"]),
-    ("/search-faces", ["relevance", "detection_id", "last_touched_at", "link_state", "confidence", "source"]),
+    ("/faces", ["detection_id", "last_touched_at", "link_state", "confidence", "source", "person"]),
+    ("/search-faces", ["relevance", "detection_id", "last_touched_at", "link_state", "confidence", "source", "person"]),
     ("/text-mentions", ["text", "mention_id", "last_touched_at", "link_state", "source"]),
     ("/text-mention-groups", ["text", "count", "last_touched_at"]),
 ])

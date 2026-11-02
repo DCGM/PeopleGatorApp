@@ -901,6 +901,7 @@ onBeforeUnmount(() => {
           :load-more="people.loadMore"
           :retry="people.retry"
           @remove-face="removeSearchFace"
+          @attach-selected-face="selectedFace && searchByFace(selectedFace)"
           @preview="previewSimilarPerson"
           @assign="assignSimilarPerson"
         />
