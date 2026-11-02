@@ -9,16 +9,21 @@ import { sortParams, type SortState } from '@/lib/sorting'
 import { useTextMentionListQuery, type TextMentionListParams } from '@/query/text-mentions'
 import { useMentionViews } from '@/viewmodels/person-mentions'
 
-const props = defineProps<{
-  name?: string
-  compact?: boolean
-  selection?: { all: boolean; ids: string[] }
-  disabled?: boolean
-  filters: TextMentionListParams
-  sort: SortState<TextMentionSortField>
-  personId?: string
-  linkStates: EntityLinkState[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    name?: string
+    compact?: boolean
+    /** Offer selection and the selected-mention review actions. */
+    selectable?: boolean
+    selection?: { all: boolean; ids: string[] }
+    disabled?: boolean
+    filters: TextMentionListParams
+    sort: SortState<TextMentionSortField>
+    personId?: string
+    linkStates: EntityLinkState[]
+  }>(),
+  { selectable: true },
+)
 const emit = defineEmits<{
   selectMention: [id: string, value: boolean, shift: boolean]
   loaded: [ids: string[], verifiedIds: string[]]
@@ -63,6 +68,7 @@ watch(
       :person-id="personId"
       :link-states="linkStates"
       :compact="compact"
+      :selectable="selectable"
       :selection="selection"
       :disabled="disabled"
       @select-mention="(id, value, shift) => emit('selectMention', id, value, shift)"
