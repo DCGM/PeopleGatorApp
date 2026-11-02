@@ -106,8 +106,8 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (37, 120, 79)
-    assert len(result.documents) == 53 and len(result.pages) == 108
+    assert await counts(database) == (37, 120, 80)
+    assert len(result.documents) == 53 and len(result.pages) == 109
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     await validate_postgres_schema(engine)
@@ -368,7 +368,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (37, 120, 79)
+    assert await counts(database) == (37, 120, 80)
 
 
 @pytest.mark.asyncio
@@ -388,7 +388,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (37, 120, 79)
+    assert await counts(database) == (37, 120, 80)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -411,7 +411,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (38, 120, 79)
+    assert await counts(database) == (38, 120, 80)
 
 
 
@@ -437,7 +437,7 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
     assert len(result.entities) == 37 and len(result.faces) == 120
-    assert await counts(database) == (37, 120, 79)
+    assert await counts(database) == (37, 120, 80)
 
 
 
@@ -458,7 +458,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (36, 119, 78)
+    assert await counts(database) == (36, 119, 79)
 
 
 
@@ -3549,7 +3549,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (37, 120, 79)
+    assert await counts(db) == (37, 120, 80)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -4445,3 +4445,28 @@ async def test_teleprompter_upgrade_recovers_an_interrupted_checkpoint(seed_targ
     assert sorted(mention.name for mention in listed) == [
         "Ada Novak", "Nora Svoboda", "Viktor Marek",
     ]
+
+
+@pytest.mark.asyncio
+async def test_teleprompter_wrapped_line_is_additive_and_keeps_its_original_mapping(seed_target):
+    database, filesystem, _ = seed_target
+    # Simulate a retained preview before the wrapped-line scenario was added.
+    from unittest.mock import patch
+    with patch.object(preview, "PAGES", tuple(page for page in preview.PAGES if page.key != "teleprompter-wrap-2")):
+        before = await preview.seed_preview(database, filesystem)
+    result = await preview.seed_preview(database, filesystem)
+    page = await database.sources.get_page(result.pages["teleprompter-wrap-2"])
+    assert result.filter_examples["teleprompter-wrapped"].endswith(f"/pages/{page.page_id}")
+    layout = await get_page_layout(page.library, page.document_id, page.page_id)
+    lines = layout.regions[0].lines
+    assert len(lines) == 3 and len(lines[0].transcription) > 250
+    assert lines[0].id == "teleprompter-wrap-2-line-01"
+    by_entity, _ = await _page_mention_lines(database, page)
+    assert by_entity[result.entities["ada"]] == {"teleprompter-wrap-2-line-02"}
+    image = await get_page_image(page.library, page.document_id, page.page_id)
+    with Image.open(io.BytesIO(image.content)) as scan:
+        assert scan.size == (800, 1100)
+    for name in ("entities", "documents", "pages", "faces", "mentions"):
+        assert getattr(before, name).items() <= getattr(result, name).items()
+    assert await preview.seed_preview(database, filesystem) == result
+    assert await database.sources.get_page(page.source_id) == page

@@ -144,7 +144,13 @@ def page_image(page: Page, document: Document) -> bytes:
         )
     line_font = ImageFont.load_default(size=15) if page.lines else font
     for line in page_layout(page).regions[0].lines:
-        draw.text((50, line.polygon[0][1]), line.transcription, fill="#303030", font=line_font)
+        fitted_font = line_font
+        if page.lines:
+            # A long OCR line can wrap across screenfuls in the teleprompter;
+            # keep its synthetic scan text inside the same stored polygon too.
+            while draw.textlength(line.transcription, font=fitted_font) > 510 and fitted_font.size > 1:
+                fitted_font = ImageFont.load_default(size=fitted_font.size - 1)
+        draw.text((50, line.polygon[0][1]), line.transcription, fill="#303030", font=fitted_font)
     if not page.faces and not page.mentions:
         draw.text(
             (50, 220),
