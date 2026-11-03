@@ -2,16 +2,17 @@
 
 Actual Playwright Chromium captures from the implementation with the synthetic
 **Rina Merge** scenario. Desktop uses a 1440 × 900 CSS viewport; mobile uses
-390 × 844. Images capture the full document.
+390 × 844. Images capture the viewport to show the floating toolbar.
 
-- `*-selection.png`: three explicitly selected people; last and first named merge
-  actions, then Clear.
+- `*-selection.png`: three explicitly selected people; the shared person-detail
+  toolbar floats at the bottom with last/first named merge actions, then Clear.
 - `*-pending.png`: held batch request; selection and actions disabled.
 - `*-error.png`: deliberately aborted request; selected people retained for retry.
 - `*-dark.png`: the same selected state in dark mode.
 
 Browser checks exercised Space and Shift+Space selection, forward/backward Shift
-ranges, Clear, no horizontal overflow at both sizes, pending locking, a simulated
+ranges, Clear, no horizontal overflow at both sizes, fixed placement while
+scrolling, the last result scrolling above the toolbar, pending locking, a simulated
 network failure and retry, and real API merges using both actions. The batch
 last-selected action transferred two faces and two mentions to Rina Merge 3;
 the single first-selected action transferred all three faces and mentions into a

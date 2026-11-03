@@ -1215,3 +1215,8 @@ filter or cursor changes clear selection. Deselect/reselect appends a person to
 the end; Clear resets the order. Pending requests freeze selection and use a
 snapshot. Failed requests preserve available selections for retry. Seed reruns
 keep merged source IDs as tombstones and preserve evidence reassignment and edits.
+
+The selected-person toolbar floats at the bottom like the person-detail face
+and people toolbars. Scroll the Rina Merge results on desktop and mobile to
+check that the count, merge actions, Clear and pending/error feedback stay visible.
+This layout uses the existing scenario; no fixture or persistence upgrade is needed.

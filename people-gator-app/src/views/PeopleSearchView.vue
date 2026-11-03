@@ -11,6 +11,7 @@ import { Merge, UserRound } from '@lucide/vue'
 import PeopleCard from '@/components/custom/PeopleCard.vue'
 import PeopleCardSkeleton from '@/components/custom/PeopleCardSkeleton.vue'
 import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
+import SelectedEvidenceActions from '@/components/custom/SelectedEvidenceActions.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/viewmodels/people-search'
@@ -88,7 +89,10 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full max-w-6xl px-2 md:px-4">
+  <main
+    class="mx-auto w-full max-w-6xl px-2 md:px-4"
+    :class="{ 'pb-56 sm:pb-32': allowed && selected.length }"
+  >
     <header class="pb-4 pt-6">
       <small class="font-semibold uppercase text-secondary">People index</small>
       <h1>Browse people</h1>
@@ -102,13 +106,20 @@ useAutomaticPagination({
       :result-count="resultCount"
     />
 
-    <div
+    <SelectedEvidenceActions
       v-if="allowed && selected.length"
-      role="toolbar"
-      aria-label="Selected person actions"
-      class="mt-4 flex w-full flex-wrap items-center gap-2"
+      :count="selected.length"
+      :busy="busy"
+      singular="person"
+      plural="people"
+      label="Selected person actions"
+      clear-last
+      @clear="clear"
     >
-      <span>{{ selected.length }} {{ selected.length === 1 ? 'person' : 'people' }} selected</span>
+      <template #description>
+        <span v-if="busy" role="status">Merging…</span>
+        <span v-else-if="message" role="alert">{{ message }}</span>
+      </template>
       <Button
         type="button"
         size="sm"
@@ -131,12 +142,10 @@ useAutomaticPagination({
           >First selected ({{ selected[0]?.name }})</span
         >
       </Button>
-      <Button type="button" size="sm" variant="outline" :disabled="busy" @click="clear"
-        >Clear</Button
-      >
-    </div>
-    <p v-if="busy" role="status">Merging…</p>
-    <p v-if="message" :role="message === 'People merged.' ? 'status' : 'alert'">{{ message }}</p>
+    </SelectedEvidenceActions>
+    <p v-if="!selected.length && message" :role="message === 'People merged.' ? 'status' : 'alert'">
+      {{ message }}
+    </p>
 
     <section class="stable-search-results pt-6" aria-live="polite">
       <h2 class="mb-4">Search Results</h2>

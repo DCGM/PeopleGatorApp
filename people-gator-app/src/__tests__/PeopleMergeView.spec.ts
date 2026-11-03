@@ -90,11 +90,11 @@ it('disables selection and actions during pending and exposes error recovery fee
   busy.value = true
   const wrapper = await setup()
   expect(wrapper.findAll('button').every((b) => b.attributes('disabled') !== undefined)).toBe(true)
-  expect(wrapper.get('[role="status"]').text()).toBe('Merging…')
+  expect(wrapper.get('[role="toolbar"]').get('[role="status"]').text()).toBe('Merging…')
   busy.value = false
   message.value = 'Merge failed. Check your connection and try again.'
   await wrapper.vm.$nextTick()
-  expect(wrapper.get('[role="alert"]').text()).toContain('try again')
+  expect(wrapper.get('[role="toolbar"]').get('[role="alert"]').text()).toContain('try again')
   expect(wrapper.get('[role="toolbar"]').text()).toContain('2 people selected')
   wrapper.unmount()
 })
