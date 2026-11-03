@@ -21,10 +21,11 @@ on `main` as described in [Contributing](../CONTRIBUTING.md).
    documents in the table across libraries. Compare document-wide page/evidence
    totals and last-change metadata. Use
    **Columns** to choose fields, including All annotations, Faces and Text mentions
-   count groups and the optional **First page** thumbnail.
-   Click a sortable heading to sort; click again to reverse the order. Horizontal
-   scrolling keeps the page width bounded, and reaching the final row loads the
-   next cursor batch. The PeopleGator logo
+   count groups. Defaults show First page, Document name, Library, Pages, Linked
+   entities, Annotations, Faces and Mentions. Column selections persist for the
+   browser tab. Use a header’s separate sort icon to cycle ascending, descending
+   and default ordering. The bounded table scrolls in both directions with a sticky
+   header; reaching its last row loads the next cursor batch. The PeopleGator logo
    and first breadcrumb return here. Open **Scan search** for pages and evidence;
    follow a result into its page workspace and inspect the OCR/face overlays. Use the
    **Document pages** strip below the scan to open other pages of that document.

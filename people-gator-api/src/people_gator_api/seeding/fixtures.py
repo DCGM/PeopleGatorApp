@@ -147,6 +147,9 @@ DOCUMENTS = (
     Document("review-a", "preview-review-a", "Review ledger"),
     Document("review-b", "preview-review-b", "Review ledger"),
     Document("review-c", "preview-review-a", "Reading room notes"),
+    # #111: empty/missing-media navigation alongside existing wide/count/pagination rows.
+    Document("table-nav-empty", "preview-table-navigation", "Navigation: no pages"),
+    Document("table-nav-missing", "preview-table-navigation", "Navigation: missing preview"),
     # #93: additive contrasting content beside the unchanged pagination fixtures.
     Document("table-width-short", "preview-table-widths", "A"),
     Document("table-width-long", "preview-table-widths-long-archive-label",
@@ -333,6 +336,7 @@ PAGES = (
          tuple(Mention(f"count-mention-{i}", "count-subject", f"Mira Counts counted reference {i}.", state)
                for i, state in enumerate(("automatic", "manual", "verified", None)))),
     Page("count-empty-1", "count-empty", 1),
+    Page("table-nav-missing-1", "table-nav-missing", 1, has_image=False),
     Page("table-width-long-1", "table-width-long", 1,
          mentions=(Mention("table-width-long-mention", "ada", "Ada Novak reviewed the wide catalogue."),)),
     Page("table-1", "table-ledger", 1,

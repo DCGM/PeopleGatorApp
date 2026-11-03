@@ -1305,7 +1305,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     expected_libraries = [
         'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
-        'preview-table-widths', 'preview-table-widths-long-archive-label',
+        'preview-table-widths', 'preview-table-widths-long-archive-label', 'preview-table-navigation',
     ]
     assert first.total_count == len(expected_libraries) and batches[-1].cursor is None
     assert all(len(batch.items) == 1 for batch in batches)
@@ -4567,3 +4567,48 @@ async def test_reset_navigation_scenario_has_results_outside_source_filters(seed
     with Image.open(io.BytesIO(image.content)) as stored:
         assert stored.width > 0 and stored.height > 0
     assert await preview.seed_preview(db, filesystem) == seed
+
+
+@pytest.mark.asyncio
+async def test_document_navigation_defaults_scenario_is_additive_and_preserves_review(seed_target, monkeypatch):
+    from people_gator_api.schemas.sources import DocumentListFilter
+    database, filesystem, _ = seed_target
+    with monkeypatch.context() as old:
+        old.setattr(preview, "DOCUMENTS", tuple(d for d in DOCUMENTS if not d.key.startswith("table-nav-")))
+        old.setattr(preview, "PAGES", tuple(p for p in PAGES if not p.key.startswith("table-nav-")))
+        previous = await preview.seed_preview(database, filesystem)
+    ledger_before = await database.sources.get_document(previous.documents["table-ledger"])
+    seeded = await preview.seed_preview(database, filesystem)
+    assert await database.sources.get_document(previous.documents["table-ledger"]) == ledger_before
+    query = parse_qs(urlsplit(seeded.filter_examples["document-table-navigation"]).query)
+    request = DocumentListRequest(limit=12, sort="name", filter_=DocumentListFilter(library=query["library"]))
+    first = await database.sources.list_documents(request)
+    second = await database.sources.list_documents(request.model_copy(update={"cursor": first.cursor}))
+    assert len(first.items) == 12 and first.cursor
+    assert len(second.items) == 7 and second.cursor is None
+    rows = {row.source_id: row for row in [*first.items, *second.items]}
+    empty = rows[seeded.documents["table-nav-empty"]]
+    missing = rows[seeded.documents["table-nav-missing"]]
+    assert empty.registered_page_count == 0 and empty.first_page_source_id is None
+    assert empty.linked_entity_count == 0
+    assert empty.entity_link_stats.faces.total == empty.entity_link_stats.mentions.total == 0
+    assert missing.registered_page_count == 1
+    page = await database.sources.get_page(missing.first_page_source_id)
+    assert page.source_id == seeded.pages["table-nav-missing-1"]
+    assert page.library == missing.library and page.document_id == missing.document_id
+    with pytest.raises(SourceResolutionError, match="Page image not found"):
+        await get_page_image(page.library, page.document_id, page.page_id, max_width=256)
+    ledger = rows[seeded.documents["table-ledger"]]
+    assert ledger.registered_page_count == 2 and ledger.linked_entity_count == 2
+    assert ledger.entity_link_stats.faces.total == 4
+    assert ledger.entity_link_stats.mentions.total == 5
+    thumbnail_page = await database.sources.get_page(ledger.first_page_source_id)
+    image = await get_page_image(thumbnail_page.library, thumbnail_page.document_id, thumbnail_page.page_id, max_width=256)
+    assert Image.open(io.BytesIO(image.content)).width == 256
+    actor = GenericActor(user_id=seeded.users["reviewer"])
+    await database.text_mentions.patch(seeded.mentions["table-manual-mention"], TextMentionPatchRequest(entity_id=None), actor)
+    edited = await database.sources.get_document(ledger.source_id)
+    rerun = await preview.seed_preview(database, filesystem)
+    assert rerun.documents == seeded.documents and rerun.pages == seeded.pages
+    assert await database.sources.get_document(ledger.source_id) == edited
+    assert (await database.text_mentions.get(seeded.mentions["table-manual-mention"])).entity_id is None
