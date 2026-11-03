@@ -32,23 +32,22 @@ const heading =
 
 <template>
   <ItemTitle class="min-w-0 w-full max-w-full">
-    <RouterLink
-      v-if="to"
-      :to="to"
-      class="group flex min-w-0 w-full items-center gap underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      :class="linkClass"
-      :aria-label="ariaLabel"
-    >
-      <h4 :class="heading">
+    <h4 :class="heading">
+      <!-- Only the name and its arrow link to the person, not the whole line. -->
+      <RouterLink
+        v-if="to"
+        :to="to"
+        class="group inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        :class="linkClass"
+        :aria-label="ariaLabel"
+      >
         <span class="min-w-0 truncate">{{ name }}</span>
         <ChevronRight
           class="size-[1.15em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
           aria-hidden="true"
         />
-      </h4>
-    </RouterLink>
-    <h4 v-else :class="heading">
-      <span class="min-w-0 truncate">{{ name }}</span>
+      </RouterLink>
+      <span v-else class="min-w-0 truncate">{{ name }}</span>
     </h4>
   </ItemTitle>
 </template>
