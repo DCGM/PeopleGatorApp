@@ -298,7 +298,7 @@ describe('exact appearance mention groups', () => {
         documentId: 'doc-uuid',
         pageId: '27dc15af-7658-5d33-9a8e-4ca8af2a16ff',
       },
-      query: { selectedPerson: 'person-ada', link_state: ['manual'] },
+      query: { selectedPerson: 'person-ada' },
     })
     expect(wrapper.find('li small').exists()).toBe(false)
   })
@@ -354,7 +354,7 @@ describe('exact appearance mention groups', () => {
         documentId: 'doc-uuid',
         pageId: '27dc15af-7658-5d33-9a8e-4ca8af2a16ff',
       },
-      query: { selectedPerson: 'person-ada', link_state: ['manual'] },
+      query: { selectedPerson: 'person-ada' },
     })
     expect(wrapper.find('li small').exists()).toBe(false)
   })

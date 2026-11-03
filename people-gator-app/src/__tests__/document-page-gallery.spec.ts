@@ -13,11 +13,7 @@ vi.mock('@/client', () => ({
   getPageImageByIdRouteApiV1PagesPageSourceIdImageGet: mocks.pageImage,
 }))
 
-import {
-  pageGalleryLabel,
-  pageGalleryQuery,
-  useDocumentPageGallery,
-} from '@/viewmodels/document-page-gallery'
+import { pageGalleryLabel, useDocumentPageGallery } from '@/viewmodels/document-page-gallery'
 
 const LIBRARY = 'preview-mzk'
 const DOCUMENT = '00000000-0000-4000-8000-00000000d0c0'
@@ -132,9 +128,7 @@ describe('document page gallery', () => {
       thumbnailLoading: false,
       thumbnailFailed: true,
     })
-    expect(mocks.pageImage).toHaveBeenCalledWith(
-      expect.objectContaining({ query: { width: 256 } }),
-    )
+    expect(mocks.pageImage).toHaveBeenCalledWith(expect.objectContaining({ query: { width: 256 } }))
     wrapper.unmount()
   })
 
@@ -152,23 +146,7 @@ describe('document page gallery', () => {
     wrapper.unmount()
   })
 
-  it('labels pages with their archive identifier and drops page-specific selections', () => {
+  it('labels pages with their archive identifier', () => {
     expect(pageGalleryLabel(page(3).page_id)).toBe('00000003')
-    expect(
-      pageGalleryQuery({
-        person: 'face',
-        selectedPerson: 'entity',
-        line: 'l1',
-        link_state: ['manual', 'verified'],
-        evidence_user: 'user',
-        translate: 'on',
-        panel: 'activity',
-      }),
-    ).toEqual({
-      link_state: ['manual', 'verified'],
-      evidence_user: 'user',
-      translate: 'on',
-      panel: 'activity',
-    })
   })
 })

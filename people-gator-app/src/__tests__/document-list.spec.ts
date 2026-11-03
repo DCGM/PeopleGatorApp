@@ -116,17 +116,14 @@ describe('document table results', () => {
     expect(wrapper.find('.document-row').exists()).toBe(false)
     expect(documentTitle({ document_id: 'legacy', name: ' ' })).toBe('Document legacy')
   })
-  it('carries shared filters into document links, leaving search and document-only settings behind', async () => {
+  it('opens the selected document without inherited filters or search settings', async () => {
     const { wrapper, router } = await render(
       `/documents?library=a&api_key=${key}&link_state=verified&unassigned=yes&q=Album`,
     )
     await wrapper.get('tbody a').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({
-      library: ['a'],
       document: 'a-shared',
-      api_key: [key],
-      link_state: ['verified'],
     })
   })
   it('retains document results after a next-page error and retries that cursor', async () => {

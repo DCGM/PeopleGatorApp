@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import ArchiveLink from './ArchiveLink.vue'
 import { usePageLookupQuery } from '@/query/media'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
@@ -29,13 +28,13 @@ const breadcrumbs = computed(() => {
   const items = [
     {
       label: 'PeopleGator',
-      to: { name: 'document-list', query: relatedQuery(route) } as RouteLocationRaw,
+      to: { name: 'document-list' } as RouteLocationRaw,
     },
   ]
   if (route.name === 'person-detail') {
     items.push({
       label: 'People',
-      to: { name: 'people-search', query: relatedQuery(route) },
+      to: { name: 'people-search' },
     })
     items.push({
       label: String(route.params.personId),
@@ -46,7 +45,7 @@ const breadcrumbs = computed(() => {
   if (route.name === 'document-list') {
     items.push({
       label: 'Documents',
-      to: { name: 'document-list', query: relatedQuery(route) },
+      to: { name: 'document-list' },
     })
     return items
   }
@@ -55,14 +54,14 @@ const breadcrumbs = computed(() => {
   if (route.name === 'document-page' && typeof library === 'string') {
     items.push({
       label: library,
-      to: { name: 'document-search', query: relatedQuery(route, { library }) },
+      to: { name: 'document-search', query: { library } },
     })
     if (typeof document === 'string') {
       items.push({
         label: document,
         to: {
           name: 'document-search',
-          query: relatedQuery(route, { library, archive_document: document }),
+          query: { library, archive_document: document },
         },
       })
     }
@@ -71,11 +70,11 @@ const breadcrumbs = computed(() => {
       to: { path: route.path, query: route.query },
     })
   } else if (route.name === 'document-search') {
-    items.push({ label: 'Scans', to: { name: 'document-search', query: route.query } })
+    items.push({ label: 'Scans', to: { name: 'document-search' } })
   } else if (route.name === 'people-search' || route.name === 'person-detail') {
     items.push({
       label: 'People',
-      to: { name: 'people-search', query: relatedQuery(route) },
+      to: { name: 'people-search' },
     })
     if (route.name === 'person-detail') {
       items.push({
@@ -90,12 +89,8 @@ const breadcrumbs = computed(() => {
 const isScanRoute = computed(
   () => route.name === 'document-search' || route.name === 'document-page',
 )
-// Top-level navigation carries only the shared configuration; on Scans the
-// tab keeps the current scan search.
-const scansLink = computed(() => ({
-  name: 'document-search',
-  query: route.name === 'document-search' ? route.query : relatedQuery(route),
-}))
+// Top-level navigation always starts a fresh default listing (#109).
+const scansLink = { name: 'document-search' }
 const isPeopleRoute = computed(
   () => route.name === 'people-search' || route.name === 'person-detail',
 )
@@ -107,7 +102,7 @@ const isPeopleRoute = computed(
   >
     <div class="flex shrink-0 items-center gap-2">
       <RouterLink
-        :to="{ name: 'document-list', query: relatedQuery(route) }"
+        :to="{ name: 'document-list' }"
         aria-label="PeopleGator"
         class="z-20 flex size-12 shrink-0 items-center justify-center bg-background"
       >
@@ -174,7 +169,7 @@ const isPeopleRoute = computed(
         </RouterLink>
 
         <RouterLink
-          :to="{ name: 'document-list', query: relatedQuery(route) }"
+          :to="{ name: 'document-list' }"
           aria-label="Documents"
           :aria-current="route.name === 'document-list' ? 'page' : undefined"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
@@ -191,7 +186,7 @@ const isPeopleRoute = computed(
         </RouterLink>
 
         <RouterLink
-          :to="{ name: 'people-search', query: relatedQuery(route) }"
+          :to="{ name: 'people-search' }"
           aria-label="People"
           class="flex flex-col items-center gap-1 border-b-2 pb-1 transition-colors"
           :class="

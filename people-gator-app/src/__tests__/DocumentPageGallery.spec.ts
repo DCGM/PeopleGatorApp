@@ -4,7 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DocumentPageGallery from '@/components/custom/DocumentPageGallery.vue'
-import { pageGalleryQuery, type PageGalleryItem } from '@/viewmodels/document-page-gallery'
+import { type PageGalleryItem } from '@/viewmodels/document-page-gallery'
 
 const item = (index: number, current = false): PageGalleryItem => ({
   sourceId: `source-${index}`,
@@ -42,7 +42,6 @@ async function mountGallery(props: Record<string, unknown> = {}) {
       location: (target: PageGalleryItem) => ({
         name: 'document-page',
         params: { libraryId: target.library, documentId: target.documentId, pageId: target.pageId },
-        query: pageGalleryQuery(router.currentRoute.value.query),
       }),
       ...props,
     },
@@ -90,15 +89,12 @@ describe('DocumentPageGallery', () => {
     wrapper.unmount()
   })
 
-  it('opens another page in the workspace, keeping filters and dropping page selections', async () => {
+  it('opens another page in the workspace, dropping filters and page selections', async () => {
     const { wrapper, router } = await mountGallery()
     await wrapper.findAll('a')[2]!.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.params.pageId).toBe('page-3')
-    expect(router.currentRoute.value.query).toEqual({
-      link_state: 'manual',
-      evidence_user: 'user',
-    })
+    expect(router.currentRoute.value.query).toEqual({})
     wrapper.unmount()
   })
 

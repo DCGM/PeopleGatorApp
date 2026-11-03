@@ -18,7 +18,6 @@ import PersonMentionOccurrences from './PersonMentionOccurrences.vue'
 import PersonMentionListSkeleton from './PersonMentionListSkeleton.vue'
 import { sortParams, type SortState } from '@/lib/sorting'
 import { useTextMentionGroupsQuery, type TextMentionListParams } from '@/query/text-mentions'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 
 const props = withDefaults(
   defineProps<{
@@ -239,7 +238,7 @@ watch(groups, (items) => {
               ><RouterLink
                 :to="{
                   name: 'document-search',
-                  query: relatedQuery(route, { document: group.source_id! }),
+                  query: { document: group.source_id! },
                 }"
                 class="block truncate underline"
                 :title="`${group.library} · ${group.document_id}`"
@@ -258,9 +257,7 @@ watch(groups, (items) => {
                     pageId: group.page_id!,
                   },
                   query: {
-                    ...relatedQuery(route),
                     selectedPerson: personId,
-                    ...(linkStates.length && { link_state: linkStates }),
                   },
                 }"
                 class="block truncate underline"

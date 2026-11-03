@@ -1,4 +1,4 @@
-import { mount, RouterLinkStub } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -79,7 +79,7 @@ describe('PersonDetailView', () => {
         },
       ],
     })
-    await router.push('/people/person-ada?tab=mentions')
+    await router.push('/people/person-ada?tab=mentions&library=preview-mzk&link_state=manual&q=Ada')
     await router.isReady()
 
     const wrapper = mount(PersonDetailView, {
@@ -125,8 +125,16 @@ describe('PersonDetailView', () => {
     expect(mentionLink?.props('to')).toEqual({
       name: 'document-page',
       params: { libraryId: 'nlp', documentId: 'document-1', pageId: 'page-1' },
-      query: expect.objectContaining({ selectedPerson: 'person-ada' }),
+      query: { selectedPerson: 'person-ada' },
     })
+    const { Tabs } = await import('@/components/ui/tabs')
+    wrapper.getComponent(Tabs).vm.$emit('update:modelValue', 'faces')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({})
+    wrapper.getComponent(Tabs).vm.$emit('update:modelValue', 'mentions')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ tab: 'mentions' })
+    wrapper.unmount()
   })
 })
 

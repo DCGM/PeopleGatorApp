@@ -62,9 +62,7 @@ describe('person evidence cards', () => {
     expect(wrapper.text()).toContain('Preview reviewer')
     expect(wrapper.find('details').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Detection origin')
-    expect(wrapper.get('a').attributes('href')).toContain(
-      'api_key=00000000-0000-4000-8000-000000000001',
-    )
+    expect(wrapper.get('a').attributes('href')).not.toContain('api_key=')
     expect(wrapper.get('a').attributes('href')).toContain('person=detection')
     expect(wrapper.find('a a').exists()).toBe(false)
     const editor = wrapper.get('[title="Evidence changed by Preview reviewer"]')

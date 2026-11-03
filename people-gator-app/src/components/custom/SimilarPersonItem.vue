@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 import {
   Check,
   ChevronRight,
@@ -29,7 +27,6 @@ import {
   ItemTitle,
 } from '@/components/ui/item'
 
-const route = useRoute()
 const props = defineProps<{
   person: SimilarPersonCandidate
   assigned?: boolean
@@ -132,10 +129,10 @@ function formatTextScore(score: number) {
           :to="{
             name: 'person-detail',
             params: { personId: person.id },
-            query: relatedQuery(route, {
+            query: {
               origin_matched_face: person.faceId || undefined,
               origin_reference_face: person.referenceFaceId || undefined,
-            }),
+            },
           }"
           class="group z-20 flex min-w-0 w-full items-center gap underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           :aria-label="`Open ${person.name}`"

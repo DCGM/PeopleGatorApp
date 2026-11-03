@@ -196,9 +196,7 @@ describe('document table', () => {
     expect(wrapper.findAll('th')[0]!.text()).toBe('Document name')
     expect(wrapper.findAll('tbody a[href^="/scans"]')).toHaveLength(1)
     const link = wrapper.get('tbody a[href^="/scans"]')
-    expect(link.attributes('href')).toBe(
-      '/scans?library=Archive&link_state=verified&document=source-a',
-    )
+    expect(link.attributes('href')).toBe('/scans?document=source-a')
     expect(link.attributes('aria-label')).toContain('archive-id')
     expect(wrapper.get('[role="region"]').attributes('tabindex')).toBe('0')
     const description = wrapper.get('table').attributes('aria-describedby')
@@ -251,8 +249,6 @@ describe('document table', () => {
     await wrapper.get('tbody a[href^="/scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({
-      library: ['Archive'],
-      link_state: ['verified'],
       document: 'source-a',
     })
   })
