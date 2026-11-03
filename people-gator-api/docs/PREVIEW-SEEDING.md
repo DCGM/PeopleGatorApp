@@ -1315,6 +1315,10 @@ GET /api/v1/audit-sources?filter.library=preview-audit
 [Audit history](AUDIT-HISTORY.md) documents each concrete snapshot schema,
 resource-specific filters, version preconditions, sorting and deletion retention.
 
+Open Eva History in two sessions to try a stale profile save. Reopening an old
+draft retains its reviewed version until fresh profile data is accepted;
+navigating to another person discards that draft.
+
 The profile upgrade is narrowly scoped to the untouched initial fixture. Its
 checkpoint survives interruption between mutation and checkpoint completion.
 Reruns add missing examples and preserve review changes, versions, history,

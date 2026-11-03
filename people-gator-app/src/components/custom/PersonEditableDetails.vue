@@ -38,6 +38,7 @@ const identifierDraft = reactive<PersonIdentifiers>({
   nationalLibraryAuthorityId: props.nationalLibraryAuthorityId,
 })
 const editingField = ref<EditableField | null>(null)
+let draftVersion = props.version
 let savedVersion: number
 let savedFieldValue: string | string[] | null = null
 
@@ -61,7 +62,7 @@ function nameFromId(id: string) {
 }
 
 function beginEditing(field: EditableField) {
-  savedVersion = props.version
+  savedVersion = draftVersion
   savedFieldValue =
     field === 'aliases'
       ? [...draft.aliases]
@@ -109,21 +110,26 @@ function removeAlias(index: number) {
 }
 
 watch(
-  () => props.modelValue,
-  (profile) => {
+  () =>
+    [
+      props.personId,
+      props.modelValue,
+      props.version,
+      props.wikidataId,
+      props.nationalLibraryAuthorityId,
+    ] as const,
+  ([personId, profile, version, wikidataId, nationalLibraryAuthorityId], previous) => {
+    if (previous && previous[0] !== personId) {
+      editingField.value = null
+      savedFieldValue = null
+    }
     if (editingField.value) return
     Object.assign(draft, profile, { aliases: [...profile.aliases] })
-  },
-  { deep: true },
-)
-
-watch(
-  () => [props.wikidataId, props.nationalLibraryAuthorityId] as const,
-  ([wikidataId, nationalLibraryAuthorityId]) => {
-    if (isIdentifierField(editingField.value ?? 'name')) return
     identifierDraft.wikidataId = wikidataId
     identifierDraft.nationalLibraryAuthorityId = nationalLibraryAuthorityId
+    draftVersion = version
   },
+  { deep: true },
 )
 </script>
 
