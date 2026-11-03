@@ -67,9 +67,9 @@ npm run openapi-ts -- --input /tmp/people-gator-openapi.json
 Documents, pages, entities, faces and mentions share `library`,
 `document_source_id`, `page_source_id`, `entity_link_state` and `last_touched_*`.
 The latest-modification criteria always describe the records returned by that
-collection. A user's document selection transfers to People as an entity's own
-latest modifier; it does not mean an entity with a face/mention edited by that
-user. Faces and mentions apply these same fields to their own metadata. Creation,
+collection. Selecting user U in People filters the entity's own latest modifier;
+it does not mean an entity with a face/mention edited by U. Selections are local
+to each view; application navigation does not transfer them (#109). Faces and mentions apply these same fields to their own metadata. Creation,
 ownership, verification and historical edits remain independent.
 
 Scope follows real source relationships. A registered document includes its

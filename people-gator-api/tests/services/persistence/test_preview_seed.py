@@ -2554,8 +2554,8 @@ async def test_entity_discovery_choices_many_faces_and_degenerate_vectors(seed_t
 
 
 @pytest.mark.asyncio
-async def test_shared_filter_scenario_transfers_own_latest_changes(seed_target):
-    """#52: one curator selection finds each view's own latest change."""
+async def test_shared_filter_scenario_matches_own_latest_changes(seed_target):
+    """#52: explicit curator selections find each collection's own latest change."""
     from people_gator_api.schemas.faces import FaceListFilter
     from people_gator_api.schemas.sources import DocumentListFilter
 
@@ -4470,3 +4470,47 @@ async def test_teleprompter_wrapped_line_is_additive_and_keeps_its_original_mapp
         assert getattr(before, name).items() <= getattr(result, name).items()
     assert await preview.seed_preview(database, filesystem) == result
     assert await database.sources.get_page(page.source_id) == page
+
+
+@pytest.mark.asyncio
+async def test_reset_navigation_scenario_has_results_outside_source_filters(seed_target):
+    """#109: a fresh default destination visibly broadens each seeded source view."""
+    from people_gator_api.schemas.sources import DocumentListFilter
+
+    db, filesystem, _ = seed_target
+    seed = await preview.seed_preview(db, filesystem)
+    for view, path in (("documents", "/documents"), ("scans", "/scans"), ("people", "/people")):
+        url = urlsplit(seed.filter_examples[f"reset-navigation-{view}"])
+        assert url.path == path
+        assert parse_qs(url.query) == {"library": ["preview-mzk"]}
+
+    mirror = seed.documents["shared-mirror"]
+    mirror_page = seed.pages["shared-mirror-1"]
+    unlinked = seed.entities["lenka"]
+    documents = await db.sources.list_documents(DocumentListRequest(limit=100))
+    scoped_documents = await db.sources.list_documents(DocumentListRequest(
+        limit=100, filter_=DocumentListFilter(library=["preview-mzk"])))
+    assert mirror in {item.source_id for item in documents.items}
+    assert mirror not in {item.source_id for item in scoped_documents.items}
+    people = await db.entities.list(EntityListRequest(limit=100))
+    scoped_people = await db.entities.list(EntityListRequest(
+        limit=100, filter_=EntityListFilter(library=["preview-mzk"])))
+    assert unlinked in {item.entity_id for item in people.items}
+    assert unlinked not in {item.entity_id for item in scoped_people.items}
+
+    async def page_ids(filter_):
+        ids, cursor = set(), None
+        while True:
+            batch = await db.sources.list_pages(PageListRequest(limit=100, cursor=cursor, filter_=filter_))
+            ids.update(item.source_id for item in batch.items)
+            if not batch.cursor:
+                return ids
+            cursor = batch.cursor
+
+    assert mirror_page in await page_ids(PageListFilter())
+    assert mirror_page not in await page_ids(PageListFilter(library=["preview-mzk"]))
+    page = await db.sources.get_page(mirror_page)
+    image = await get_page_image(page.library, page.document_id, page.page_id)
+    with Image.open(io.BytesIO(image.content)) as stored:
+        assert stored.width > 0 and stored.height > 0
+    assert await preview.seed_preview(db, filesystem) == seed
