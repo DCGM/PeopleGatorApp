@@ -140,6 +140,7 @@ it('sends count bounds to browse/search and restarts at the first cursor', async
     ...page('old-count-cursor'),
     items: [
       {
+        version: 1,
         entity_id: 'nora',
         name: 'Nora',
         entity_link_stats: { faces: { total: 0 }, mentions: { total: 5 } },
@@ -187,7 +188,7 @@ it('keeps unavailable statistics unknown without per-person count queries', asyn
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   mocks.list.mockResolvedValue({
     ...page(),
-    items: [{ entity_id: 'legacy', name: 'Unknown projection' }],
+    items: [{ version: 1, entity_id: 'legacy', name: 'Unknown projection' }],
   })
   const wrapper = mount(
     defineComponent({
@@ -213,6 +214,7 @@ it('shows active state counts from batched statistics in browse and search', asy
     ...page(),
     items: [
       {
+        version: 1,
         entity_id: 'mixed',
         name: 'Mixed',
         entity_link_stats: {

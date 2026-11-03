@@ -36,6 +36,7 @@ import { documentTitle } from '@/viewmodels/document-list'
 import { useDocumentSearch } from '@/viewmodels/document-search'
 
 const doc = (library: string, id = 'shared', name: string | null = 'Album') => ({
+  version: 1,
   source_id: `${library}-${id}`,
   source_type: 'document',
   library,
@@ -44,6 +45,7 @@ const doc = (library: string, id = 'shared', name: string | null = 'Album') => (
   url: 'https://example.test',
 })
 const page = (library: string, id: string) => ({
+  version: 1,
   source_id: id,
   source_type: 'page',
   library,

@@ -1,4 +1,8 @@
+from version_preconditions import merge_request
 """Portrait state must survive graph transitions without turning reads into edits."""
+
+from version_preconditions import merge_targets
+from people_gator_api.schemas.common import VersionedTarget
 import asyncio
 import uuid
 from types import SimpleNamespace
@@ -84,7 +88,7 @@ async def choose(r, face_id, person=None):
         (person or r.person).entity_id,
         EntityPatchRequest(
             thumbnail_face_id=face_id,
-            expected_version=(
+            version=(
                 await r.session.scalar(
                     select(Entity.version).where(
                         Entity.id == (person or r.person).entity_id
@@ -113,20 +117,20 @@ async def test_selection_reset_response_parity_noops_and_later_faces(portraits):
     assert manual.last_touched_by_user_id == r.actor.user_id
     assert manual.last_touched_by_api_key_id == r.actor.api_key_id
     for patch in (
-        EntityPatchRequest(expected_version=manual.version),
-        EntityPatchRequest(
-            thumbnail_face_id=manual_id, expected_version=manual.version
-        ),
+        EntityPatchRequest(version=manual.version),
+        EntityPatchRequest(thumbnail_face_id=manual_id, version=manual.version),
     ):
         unchanged = await r.db.entities.patch(r.person.entity_id, patch, r.actor)
         assert unchanged == manual
     assert await get(r) == manual  # reads preserve timestamp and mode
     from people_gator_api.schemas.entities import EntityListFilter
+
     listed = await r.db.entities.list(EntityListRequest(limit=100, filter_=EntityListFilter(entity_type=["person"])))
     searched = await r.db.entities.search(SearchEntitiesRequest(query=QueryBase(text=["Ada"]), limit=100))
     for item in (next(x for x in listed.items if x.entity_id == r.person.entity_id), searched.items[0]):
         assert item.thumbnail_face_id == manual_id and item.thumbnail_mode == "manual"
     from people_gator_api.schemas.faces import FaceListRequest, FaceListFilter
+
     first_page = await r.db.faces.list(FaceListRequest(limit=1,
         filter_=FaceListFilter(entity_id=[r.person.entity_id])))
     assert manual_id not in {f.detection_id for f in first_page.items}
@@ -156,17 +160,13 @@ async def test_validation_and_batch_failure_are_atomic(portraits):
                     EntityPatchBatchItem(
                         entity_id=r.other.entity_id,
                         name="Must roll back",
-                        expected_version=(
-                            await r.db.entities.get(r.other.entity_id)
-                        ).version,
+                        version=(await r.db.entities.get(r.other.entity_id)).version,
                     ),
                     EntityPatchBatchItem(
                         entity_id=r.person.entity_id,
                         thumbnail_face_id=invalid,
                         name="Also rollback",
-                        expected_version=(
-                            await r.db.entities.get(r.person.entity_id)
-                        ).version,
+                        version=(await r.db.entities.get(r.person.entity_id)).version,
                     ),
                 ],
                 r.actor,
@@ -178,6 +178,7 @@ async def test_validation_and_batch_failure_are_atomic(portraits):
             await choose(r, selection, r.organization)
     # Database guard also rejects bypassing the repository's ownership check.
     from sqlalchemy.exc import IntegrityError
+
     with pytest.raises(IntegrityError):
         await r.session.execute(text("UPDATE pg_demo_entities SET thumbnail_face_id=:face WHERE id=:id"),
                                 {"face": foreign.detection_id, "id": r.person.entity_id})
@@ -195,7 +196,7 @@ async def test_reassignment_unlink_face_and_source_deletion(portraits):
         first.detection_id,
         FacePatchRequest(
             entity_id=r.other.entity_id,
-            expected_version=(await r.db.faces.get(first.detection_id)).version,
+            version=(await r.db.faces.get(first.detection_id)).version,
         ),
         r.actor,
     )
@@ -207,7 +208,7 @@ async def test_reassignment_unlink_face_and_source_deletion(portraits):
         second.detection_id,
         FacePatchRequest(
             entity_id=None,
-            expected_version=(await r.db.faces.get(second.detection_id)).version,
+            version=(await r.db.faces.get(second.detection_id)).version,
         ),
         r.actor,
     )
@@ -216,26 +217,26 @@ async def test_reassignment_unlink_face_and_source_deletion(portraits):
         second.detection_id,
         FacePatchRequest(
             entity_id=r.person.entity_id,
-            expected_version=(await r.db.faces.get(second.detection_id)).version,
+            version=(await r.db.faces.get(second.detection_id)).version,
         ),
         r.actor,
     )
     await choose(r, second.detection_id)
     await r.db.faces.delete(
-        second.detection_id,
-        context=r.actor,
-        expected_version=(
-            await read_version(r.db.faces, second.detection_id)
+        VersionedTarget(
+            object_id=second.detection_id,
+            version=await read_version(r.db.faces, second.detection_id),
         ),
+        context=r.actor,
     )
     assert (await get(r)).thumbnail_face_id is None
     await choose(r, first.detection_id, r.other)
     await r.db.sources.delete(
-        r.page.source_id,
-        context=r.actor,
-        expected_version=(
-            await read_version(r.db.sources, r.page.source_id)
+        VersionedTarget(
+            object_id=r.page.source_id,
+            version=await read_version(r.db.sources, r.page.source_id),
         ),
+        context=r.actor,
     )
     other = await get(r, r.other)
     assert other.thumbnail_face_id is None and other.thumbnail_mode == "automatic"
@@ -247,26 +248,26 @@ async def test_merge_preserves_target_manual_and_resolves_empty_target(portraits
     first = await face(r, r.person.entity_id)
     second = await face(r, r.other.entity_id)
     await choose(r, first.detection_id)
-    result = await r.db.entities.merge(
-        r.person.entity_id,
-        r.other.entity_id,
-        context=r.actor,
-        target_patch=EntityMergeTargetPatch(
-            expected_versions=await read_versions(r.db.entities, [r.person.entity_id, r.other.entity_id])
-        ),
-    )
+    result = await r.db.entities.merge(r.person.entity_id, merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(
+                    r.db.entities, [r.person.entity_id, r.other.entity_id]
+                ),
+                r.person.entity_id,
+            )
+        ), [r.other.entity_id]), context=r.actor)
     assert result.merged_entity.thumbnail_face_id == first.detection_id
     assert result.merged_entity.thumbnail_mode == "manual"
     assert (await r.db.faces.get(second.detection_id)).entity_id == r.person.entity_id
     empty = await r.db.entities.create(EntityCreateRequest(entity_type="person", name="Empty target"), r.actor)
-    result = await r.db.entities.merge(
-        empty.entity_id,
-        r.person.entity_id,
-        context=r.actor,
-        target_patch=EntityMergeTargetPatch(
-            expected_versions=await read_versions(r.db.entities, [empty.entity_id, r.person.entity_id])
-        ),
-    )
+    result = await r.db.entities.merge(empty.entity_id, merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(
+                    r.db.entities, [empty.entity_id, r.person.entity_id]
+                ),
+                empty.entity_id,
+            )
+        ), [r.person.entity_id]), context=r.actor)
     assert result.merged_entity.thumbnail_face_id == min(first.detection_id, second.detection_id)
     assert result.merged_entity.thumbnail_mode == "automatic"
 
@@ -276,6 +277,7 @@ async def test_concurrent_selection_and_reassignment(portraits):
     r = portraits
     first = await face(r, r.person.entity_id)
     second = await face(r, r.person.entity_id)
+
     async def select():
         async with r.sessions() as session:
             try:
@@ -283,7 +285,7 @@ async def test_concurrent_selection_and_reassignment(portraits):
                     r.person.entity_id,
                     EntityPatchRequest(
                         thumbnail_face_id=first.detection_id,
-                        expected_version=(
+                        version=(
                             await postgres_database(session).entities.get(
                                 r.person.entity_id
                             )
@@ -293,13 +295,14 @@ async def test_concurrent_selection_and_reassignment(portraits):
                 )
             except ValueError:
                 pass  # reassignment won; selection must be rejected
+
     async def reassign():
         async with r.sessions() as session:
             await postgres_database(session).faces.patch(
                 first.detection_id,
                 FacePatchRequest(
                     entity_id=r.other.entity_id,
-                    expected_version=(
+                    version=(
                         await postgres_database(session).faces.get(first.detection_id)
                     ).version,
                 ),
@@ -343,30 +346,30 @@ async def test_first_assignment_survives_lower_ids_identity_edits_and_merge(port
         r.person.entity_id,
         EntityPatchRequest(
             name="Renamed",
-            expected_version=(await r.db.entities.get(r.person.entity_id)).version,
+            version=(await r.db.entities.get(r.person.entity_id)).version,
         ),
         r.actor,
     )
     assert renamed.thumbnail_face_id == first.detection_id
     assert (await choose(r, None)) == renamed
-    merged = await r.db.entities.merge(
-        r.person.entity_id,
-        r.other.entity_id,
-        context=r.actor,
-        target_patch=EntityMergeTargetPatch(
-            expected_versions=await read_versions(r.db.entities, [r.person.entity_id, r.other.entity_id])
-        ),
-    )
+    merged = await r.db.entities.merge(r.person.entity_id, merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(
+                    r.db.entities, [r.person.entity_id, r.other.entity_id]
+                ),
+                r.person.entity_id,
+            )
+        ), [r.other.entity_id]), context=r.actor)
     assert merged.merged_entity.thumbnail_face_id == first.detection_id
     assert merged.merged_entity.thumbnail_mode == "automatic"
     # Only losing the saved face permits automatic replacement. The fallback
     # is persisted and survives independent sessions and another automatic reset.
     await r.db.faces.delete(
-        first.detection_id,
-        context=r.actor,
-        expected_version=(
-            await read_version(r.db.faces, first.detection_id)
+        VersionedTarget(
+            object_id=first.detection_id,
+            version=await read_version(r.db.faces, first.detection_id),
         ),
+        context=r.actor,
     )
     recovered = await get(r)
     assert recovered.thumbnail_face_id == source.detection_id
@@ -388,7 +391,7 @@ async def test_batch_reset_returns_database_resolved_choices(portraits):
             EntityPatchBatchItem(
                 entity_id=person.entity_id,
                 thumbnail_face_id=None,
-                expected_version=(await r.db.entities.get(person.entity_id)).version,
+                version=(await r.db.entities.get(person.entity_id)).version,
             )
             for person in (r.person, r.other)
         ],
@@ -436,13 +439,14 @@ async def test_schema_validation_rejects_weakened_thumbnail_checks(migrated_post
 @pytest.mark.asyncio
 async def test_bulk_face_insert_repairs_each_owner_once(portraits):
     from people_gator_api.persistence.postgres.face_repository import PostgresFaceRepository
+
     r = portraits
     original = await face(r, r.person.entity_id)
     await r.db.faces.patch(
         original.detection_id,
         FacePatchRequest(
             entity_id=None,
-            expected_version=(await r.db.faces.get(original.detection_id)).version,
+            version=(await r.db.faces.get(original.detection_id)).version,
         ),
         r.actor,
     )
@@ -503,8 +507,11 @@ async def test_schema_validation_rejects_drifted_thumbnail_triggers(migrated_pos
 
 
 @pytest.mark.asyncio
-async def test_merge_preserves_manual_choice_made_after_session_cached_target(portraits):
+async def test_merge_preserves_manual_choice_made_after_session_cached_target(
+    portraits,
+):
     from people_gator_api.persistence.postgres.models import Entity
+
     r = portraits
     # Keep a strong reference: the identity map retains this portrait-less state.
     stale = await r.session.get(Entity, r.person.entity_id)
@@ -516,14 +523,14 @@ async def test_merge_preserves_manual_choice_made_after_session_cached_target(po
         chosen = await face(other, r.person.entity_id, uuid.UUID(int=20))
         await face(other, r.other.entity_id, uuid.UUID(int=5))
         await choose(other, chosen.detection_id)
-    result = await r.db.entities.merge(
-        r.person.entity_id,
-        r.other.entity_id,
-        context=r.actor,
-        target_patch=EntityMergeTargetPatch(
-            expected_versions=await read_versions(r.db.entities, [r.person.entity_id, r.other.entity_id])
-        ),
-    )
+    result = await r.db.entities.merge(r.person.entity_id, merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(
+                    r.db.entities, [r.person.entity_id, r.other.entity_id]
+                ),
+                r.person.entity_id,
+            )
+        ), [r.other.entity_id]), context=r.actor)
     assert result.merged_entity.thumbnail_face_id == chosen.detection_id
     assert result.merged_entity.thumbnail_mode == "manual"
 
@@ -542,14 +549,14 @@ async def test_bulk_reassignment_rewrites_emptied_owner_once(portraits):
         FOR EACH ROW EXECUTE FUNCTION count_portrait_writes()"""))
     # The merge moves every source face in one UPDATE; row triggers repair both
     # owners per face. The emptied source is written once, the valid target never.
-    await r.db.entities.merge(
-        r.person.entity_id,
-        r.other.entity_id,
-        context=r.actor,
-        target_patch=EntityMergeTargetPatch(
-            expected_versions=await read_versions(r.db.entities, [r.person.entity_id, r.other.entity_id])
-        ),
-    )
+    await r.db.entities.merge(r.person.entity_id, merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(
+                    r.db.entities, [r.person.entity_id, r.other.entity_id]
+                ),
+                r.person.entity_id,
+            )
+        ), [r.other.entity_id]), context=r.actor)
     writes = dict((await r.session.execute(text(
         "SELECT id, count(*) FROM portrait_writes GROUP BY id"))).all())
     assert writes.get(r.other.entity_id) == 1

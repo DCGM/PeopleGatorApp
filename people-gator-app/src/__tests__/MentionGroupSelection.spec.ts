@@ -1,4 +1,3 @@
-vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -45,7 +44,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockImplementation(async ({ query }) => ({
     data: {
-      items: (query.cursor ? ['m3'] : ['m1', 'm2']).map((mention_id) => ({ mention_id })),
+      items: (query.cursor ? ['m3'] : ['m1', 'm2']).map((mention_id) => ({
+        version: 1,
+        mention_id,
+      })),
       cursor: query.cursor ? null : 'last',
       total_count: 3,
       limit: 2,
@@ -156,7 +158,7 @@ it.each(['mention', 'document', 'page'] as const)(
 it('combines selected groups and individual occurrences, applying exclusions after cursor deduplication', async () => {
   const ids = await resolveMentionTargets({
     scopes: [{ 'filter.name': ['Ada'] }],
-    ids: ['standalone', 'm3'],
+    items: ['standalone', 'm3'].map((id) => ({ id, version: 1 })),
     excludeIds: ['m2'],
   })
   expect(ids).toEqual(['m1', 'm3', 'standalone'])
@@ -250,7 +252,7 @@ it.each(['mention', 'document', 'page'] as const)(
         query['filter.document_source_id'])[0]
       return {
         data: {
-          items: [1, 2].map((i) => ({ mention_id: `${name}${i}` })),
+          items: [1, 2].map((i) => ({ version: 1, mention_id: `${name}${i}` })),
           cursor: null,
           limit: 20,
         },

@@ -5,10 +5,11 @@ import { Minus, Check, BadgeCheck, Unlink } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useCanAnnotate } from '@/composables/can-annotate'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
-import { useReviewMentionsMutation } from '@/query/mention-review'
+import { resolveMentionTargets, useReviewMentionsMutation } from '@/query/mention-review'
 import { useRoute } from 'vue-router'
 import type {
   TextMentionGroup,
+  TextMentionResponse,
   EntityLinkState,
   TextMentionGroupSortField,
   TextMentionSortField,
@@ -73,9 +74,16 @@ const selected = ref<Record<string, Selection>>({})
 const groupAnchor = ref<string | null>(null)
 const mentionAnchor = ref<string | null>(null)
 const shiftSelecting = ref(false)
+type SelectedMention = { id: string; version: number; verified?: boolean }
+const groupSnapshots = new Map<string, Promise<{ items: SelectedMention[]; error?: string }>>()
+const selectedVerified = ref<Record<string, boolean>>({})
+const loadedVersions = ref<Record<string, number>>({})
+const selectedVersions = ref<Record<string, number>>({})
 const loadedMentions = ref<Record<string, string[]>>({})
 const verifiedMentions = ref<Record<string, string[]>>({})
 function clear() {
+  groupSnapshots.clear()
+  selectedVersions.value = {}
   selected.value = {}
   groupAnchor.value = null
   mentionAnchor.value = null
@@ -113,6 +121,27 @@ function select(group: TextMentionGroup, value: boolean | 'indeterminate') {
   const targets = range
     ? groups.value.slice(Math.min(start, end), Math.max(start, end) + 1)
     : [group]
+  for (const item of targets) {
+    if (range || value === true) {
+      const versions = new Map<string, number>()
+      const records = new Map<string, TextMentionResponse>()
+      groupSnapshots.set(
+        key(item),
+        resolveMentionTargets({ scopes: [scope(item)] }, 'unlink', versions, records)
+          .then((ids) => ({
+            items: ids.map((id) => ({
+              id,
+              version: versions.get(id)!,
+              verified: records.get(id)?.entity_link_state === 'verified',
+            })),
+          }))
+          .catch(() => ({
+            items: [],
+            error: 'Could not load the selection. Select the group again.',
+          })),
+      )
+    } else groupSnapshots.delete(key(item))
+  }
   selected.value = {
     ...selected.value,
     ...Object.fromEntries(
@@ -138,6 +167,10 @@ function selectMention(group: TextMentionGroup, id: string, value: boolean, shif
   }
 }
 function setMention(group: TextMentionGroup, id: string, value: boolean) {
+  if (value) {
+    selectedVersions.value[id] = loadedVersions.value[id]!
+    selectedVerified.value[id] = Object.values(verifiedMentions.value).flat().includes(id)
+  } else delete selectedVersions.value[id]
   const state = selection(group)
   const ids = new Set(state.ids)
   if (value !== state.all) ids.add(id)
@@ -148,15 +181,26 @@ function setMention(group: TextMentionGroup, id: string, value: boolean) {
 async function review(action: 'verify' | 'unlink') {
   if (!allowed.value || mutation.isPending.value) return
   try {
+    const items: SelectedMention[] = []
+    for (const group of selectedGroups.value) {
+      const state = selection(group)
+      if (state.all) {
+        const snapshot = await groupSnapshots.get(key(group))
+        if (!snapshot || snapshot.error)
+          throw new Error(snapshot?.error ?? 'Select the group again before updating.')
+        items.push(...snapshot.items.filter((item) => !state.ids.includes(item.id)))
+      } else {
+        items.push(
+          ...state.ids.map((id) => ({
+            id,
+            version: selectedVersions.value[id]!,
+            verified: selectedVerified.value[id],
+          })),
+        )
+      }
+    }
     const count = await mutation.mutateAsync({
-      targets: {
-        scopes: selectedGroups.value.filter((g) => selection(g).all).map(scope),
-        ids: selectedGroups.value.filter((g) => !selection(g).all).flatMap((g) => selection(g).ids),
-        excludeIds: selectedGroups.value
-          .filter((g) => selection(g).all)
-          .flatMap((g) => selection(g).ids),
-        verifiedIds: Object.values(verifiedMentions.value).flat(),
-      },
+      targets: { items: action === 'verify' ? items.filter((item) => !item.verified) : items },
       action,
     })
     feedback.value = `${count} mentions ${action === 'verify' ? 'verified' : 'unlinked'}.`
@@ -309,7 +353,8 @@ watch(groups, (items) => {
             :selection="selection(group)"
             :disabled="mutation.isPending.value"
             @loaded="
-              (ids, verified) => {
+              (ids, verified, items) => {
+                for (const item of items) loadedVersions[item.id] = item.version
                 loadedMentions[key(group)] = ids
                 verifiedMentions[key(group)] = verified
               }

@@ -20,6 +20,7 @@ describe('person identity portraits', () => {
       mount(PersonEditableDetails, {
         global,
         props: {
+          version: 1,
           modelValue: { name: 'Ada', shortDescription: '', article: '', aliases: [] },
           personId: 'ada',
           thumbnailFaceId: canonicalFace,
@@ -33,11 +34,13 @@ describe('person identity portraits', () => {
       mount(PersonDiscoveryPanel, {
         global,
         props: {
+          personVersion: 1,
           currentName: 'Other Person',
           referenceFaceCount: 1,
           faces: [],
           people: [
             {
+              version: 1,
               id: 'ada',
               name: 'Ada',
               shortDescription: '',

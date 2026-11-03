@@ -16,6 +16,7 @@ beforeEach(() => {
 })
 const documents: DocumentResponse[] = [
   {
+    version: 1,
     source_id: 'source-a',
     source_type: 'document',
     url: 'https://example.test',

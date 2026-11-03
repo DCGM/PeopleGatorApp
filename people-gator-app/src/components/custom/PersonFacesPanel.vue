@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSelectedSnapshots } from '@/composables/selected-snapshots'
 import { BadgeCheck, Image, Unlink } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -17,6 +18,7 @@ const props = defineProps<{
   matchingCount?: number
   faces: PersonFace[]
   personName: string
+  personVersion: number
   personId: string
   thumbnailFaceId?: string | null
   thumbnailMode?: 'automatic' | 'manual'
@@ -40,8 +42,16 @@ const mutation = useReviewFacesMutation()
 const portraitMutation = usePatchEntityMutation()
 const route = useRoute()
 const selectedIds = ref(new Set<string>())
+const selectedPersonVersion = ref(props.personVersion)
+watch(
+  selectedIds,
+  (next, previous) => {
+    if (next.size && !previous.size) selectedPersonVersion.value = props.personVersion
+  },
+  { flush: 'sync' },
+)
 const anchor = ref<string | null>(null)
-const selected = computed(() => props.faces.filter((face) => selectedIds.value.has(face.id)))
+const selected = useSelectedSnapshots(selectedIds, () => props.faces)
 const unverified = computed(() => selected.value.filter((face) => face.linkState !== 'verified'))
 const busy = computed(() => mutation.isPending.value || portraitMutation.isPending.value)
 const currentPortrait = computed(
@@ -85,7 +95,10 @@ async function review(action: 'verify' | 'unassign') {
   feedback.value = ''
   failed.value = false
   try {
-    await mutation.mutateAsync({ detectionIds: targets.map((face) => face.id), action })
+    await mutation.mutateAsync({
+      targets: targets.map(({ id, version }) => ({ id, version })),
+      action,
+    })
     clear()
     feedback.value = `${targets.length} ${targets.length === 1 ? 'face' : 'faces'} ${action === 'verify' ? 'verified' : 'unassigned'}.`
   } catch {
@@ -103,7 +116,7 @@ async function useAsPortrait() {
   try {
     await portraitMutation.mutateAsync({
       entityId: props.personId,
-      body: { thumbnail_face_id: automatic ? null : face.id },
+      body: { version: selectedPersonVersion.value, thumbnail_face_id: automatic ? null : face.id },
     })
     feedback.value = automatic ? 'Automatic portrait.' : 'Portrait saved.'
   } catch {

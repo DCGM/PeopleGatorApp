@@ -46,16 +46,19 @@ export const mentionStateFillClasses = {
   unassigned: 'fill-muted-foreground',
 }
 export type LinkMetadata = {
+  version?: number
   linkState?: EntityLinkState | null
   verifiedBy?: string | null
   verifiedAt?: string | null
 }
 export function linkMetadata(record: {
+  version?: number
   entity_link_state?: EntityLinkState | null
   entity_link_verified_by_user_id?: string | null
   entity_link_verified_at?: string | null
 }): LinkMetadata {
   return {
+    version: record.version,
     linkState: record.entity_link_state ?? null,
     verifiedBy: record.entity_link_verified_by_user_id ?? null,
     verifiedAt: record.entity_link_verified_at ?? null,

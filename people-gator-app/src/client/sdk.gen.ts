@@ -142,7 +142,11 @@ export const createEntityRouteApiV1EntitiesPost = <ThrowOnError extends boolean 
 export const deleteEntityRouteApiV1EntitiesEntityIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteEntityRouteApiV1EntitiesEntityIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteEntityRouteApiV1EntitiesEntityIdDeleteResponses, DeleteEntityRouteApiV1EntitiesEntityIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/entities/{entity_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -312,7 +316,11 @@ export const getFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGet = <Throw
 export const deleteFaceRouteApiV1FacesDetectionIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteFaceRouteApiV1FacesDetectionIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteFaceRouteApiV1FacesDetectionIdDeleteResponses, DeleteFaceRouteApiV1FacesDetectionIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/faces/{detection_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -447,7 +455,11 @@ export const createTextMentionBatchRouteApiV1TextMentionsBatchPost = <ThrowOnErr
 export const deleteTextMentionRouteApiV1TextMentionsMentionIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteResponses, DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/text-mentions/{mention_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -502,7 +514,11 @@ export const lookupSourceRouteApiV1SourcesLookupGet = <ThrowOnError extends bool
 export const deleteSourceRouteApiV1SourcesSourceIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteSourceRouteApiV1SourcesSourceIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteSourceRouteApiV1SourcesSourceIdDeleteResponses, DeleteSourceRouteApiV1SourcesSourceIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/sources/{source_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -571,7 +587,11 @@ export const lookupDocumentRouteApiV1DocumentsLookupGet = <ThrowOnError extends 
 export const deleteDocumentRouteApiV1DocumentsDocumentSourceIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteResponses, DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/documents/{document_source_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -640,7 +660,11 @@ export const lookupPageRouteApiV1PagesLookupGet = <ThrowOnError extends boolean 
 export const deletePageRouteApiV1PagesPageSourceIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeletePageRouteApiV1PagesPageSourceIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeletePageRouteApiV1PagesPageSourceIdDeleteResponses, DeletePageRouteApiV1PagesPageSourceIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/pages/{page_source_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -791,7 +815,11 @@ export const lookupImageRouteApiV1ImagesLookupGet = <ThrowOnError extends boolea
 export const deleteImageRouteApiV1ImagesImageIdDelete = <ThrowOnError extends boolean = false>(options: Options<DeleteImageRouteApiV1ImagesImageIdDeleteData, ThrowOnError>) => (options.client ?? client).delete<DeleteImageRouteApiV1ImagesImageIdDeleteResponses, DeleteImageRouteApiV1ImagesImageIdDeleteErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'X-API-Key', type: 'apiKey' }],
     url: '/api/v1/images/{image_id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

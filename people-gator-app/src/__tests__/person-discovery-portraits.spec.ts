@@ -36,6 +36,7 @@ vi.mock('@/query/search', async () => {
     useEntitySearchQuery: () =>
       query([
         {
+          version: 1,
           entity_id: 'candidate',
           entity_type: 'person',
           name: 'Ada',

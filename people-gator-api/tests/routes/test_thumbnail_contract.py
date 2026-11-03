@@ -15,10 +15,11 @@ def test_openapi_selection_is_optional_nullable_and_in_response_variants():
         assert {'type': 'null'} in schema['properties']['thumbnail_face_id']['anyOf']
         assert 'omit to preserve' in schema['properties']['thumbnail_face_id']['description']
     assert {'thumbnail_face_id', 'thumbnail_mode'} <= schemas['EntityResponse']['properties'].keys()
-    assert is_missing(EntityPatchRequest(expected_version=1).thumbnail_face_id)
-    assert EntityPatchRequest(
-        thumbnail_face_id=None, expected_version=1
-    ).model_dump() == {"thumbnail_face_id": None, "expected_version": 1}
+    assert is_missing(EntityPatchRequest(version=1).thumbnail_face_id)
+    assert EntityPatchRequest(thumbnail_face_id=None, version=1).model_dump() == {
+        "thumbnail_face_id": None,
+        "version": 1,
+    }
 
 
 def test_thumbnail_patch_keeps_annotator_authorization():

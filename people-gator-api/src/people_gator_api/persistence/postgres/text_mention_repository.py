@@ -1,5 +1,6 @@
 from __future__ import annotations
-from .audit import prepare_audit, audit_transaction
+from people_gator_api.schemas.common import VersionedTarget
+from .audit import prepare_audit, audit_transaction, checked_target_versions
 
 import uuid
 from people_gator_api.persistence.entity_links import create_link_state, link_transition, apply_link
@@ -66,6 +67,7 @@ from .sorting import (
     person_keys,
 )
 from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
+
 
 class PostgresTextMentionRepository(TextMentionRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -289,7 +291,13 @@ class PostgresTextMentionRepository(TextMentionRepository):
             raise ValueError("text mention patch batch requires unique object IDs")
         if not commands:
             return []
-        await prepare_audit(self._session, "mention", ids, context, {c.mention_id: c.expected_version for c in commands})
+        await prepare_audit(
+            self._session,
+            "mention",
+            ids,
+            context,
+            {c.mention_id: c.version for c in commands},
+        )
         await lock_annotation_graph(self._session)
         await ensure_ids(
             self._session,
@@ -322,15 +330,21 @@ class PostgresTextMentionRepository(TextMentionRepository):
             for item_id in ids
         ]
 
-    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
-        return bool(await self.delete_batch([mention_id], context=context, expected_versions={mention_id: expected_version}))
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        return bool(await self.delete_batch([target], context=context))
 
     @audit_transaction
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]) -> int:
+    async def delete_batch(
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
+    ) -> int:
+        mention_ids = [target.object_id for target in targets]
+        versions = checked_target_versions(targets)
         unique = list(dict.fromkeys(mention_ids))
         if not unique:
             return 0
-        await prepare_audit(self._session, "mention", unique, context, expected_versions)
+        await prepare_audit(self._session, "mention", unique, context, versions)
         removed = list(await self._session.execute(
             delete(TextMention).where(TextMention.id.in_(unique)).returning(TextMention.entity_id, TextMention.source_id)
         ))

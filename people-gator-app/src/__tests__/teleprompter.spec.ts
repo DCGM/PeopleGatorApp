@@ -34,6 +34,7 @@ function mention(
   extra: Partial<TranscriptionEntitySpan> = {},
 ): TranscriptionEntitySpan {
   return {
+    version: 1,
     mention_id: `${entityId}-${lineId}-${start}`,
     entity_id: entityId,
     label: 'person',
@@ -69,9 +70,9 @@ function sample(): TranscriptionLine[] {
   lines[1]!.entities = [mention('L2', 'ada', 'Ada Novak', 0, { linkState: 'verified' })]
   lines[3]!.entities = [mention('L4', 'other-ada', 'Ada Novak', 0)]
   lines[6]!.entities = [mention('L7', 'ada', 'Ada Novak', 0, { linkState: 'manual' })]
-  lines[8]!.entities = [mention('L9', 'ada', 'Ada', 11, { mention_id: 'multi' })]
+  lines[8]!.entities = [mention('L9', 'ada', 'Ada', 11, { version: 1, mention_id: 'multi' })]
   lines[9]!.entities = [
-    mention('L10', 'ada', 'Novak', 0, { mention_id: 'multi', firstFragment: false }),
+    mention('L10', 'ada', 'Novak', 0, { version: 1, mention_id: 'multi', firstFragment: false }),
   ]
   return lines
 }
@@ -392,6 +393,7 @@ describe('DocumentTeleprompter', () => {
   it('selects one occurrence in the scan colors, even when a mention record repeats', async () => {
     // One mention record resolved twice (L1, and across L2–L3), as span resolution does.
     const occurrence = (line: string, start: number) => ({
+      version: 1,
       mention_id: 'm',
       occurrence: `m:${line}:${start}`,
     })
@@ -669,8 +671,10 @@ describe('DocumentTeleprompter', () => {
     // L2 is 200px high; all others are 20px. A 60px viewport starts with
     // L1 and the first 40px of L2. Selecting L2 must not reveal its far edge.
     lines.forEach((line, index) => {
-      Object.defineProperty(line, 'offsetTop', { get: () => index < 2 ? index * 20 : 220 + (index - 2) * 20 })
-      Object.defineProperty(line, 'offsetHeight', { get: () => index === 1 ? 200 : 20 })
+      Object.defineProperty(line, 'offsetTop', {
+        get: () => (index < 2 ? index * 20 : 220 + (index - 2) * 20),
+      })
+      Object.defineProperty(line, 'offsetHeight', { get: () => (index === 1 ? 200 : 20) })
     })
     Object.defineProperty(scroller, 'clientHeight', { get: () => 60 })
     Object.defineProperty(scroller, 'scrollHeight', { get: () => 380, configurable: true })
@@ -700,5 +704,4 @@ describe('DocumentTeleprompter', () => {
       expect(scroller.scrollTop).toBe(expected)
     }
   })
-
 })

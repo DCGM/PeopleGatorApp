@@ -1,3 +1,4 @@
+from version_preconditions import versioned_targets
 from people_gator_api.schemas.common import GenericActor
 # pyright: reportPrivateUsage=false
 
@@ -121,6 +122,7 @@ def test_list_response_enforces_page_shape() -> None:
 
 def test_text_mention_can_represent_entity_unlinking() -> None:
     response = TextMentionResponse(
+        version=1,
         mention_id=uuid.uuid4(),
         name="Ada",
         context=None,
@@ -137,10 +139,9 @@ async def test_empty_entity_delete_batch_is_a_noop() -> None:
             raise AssertionError("delete_many must not be called")
 
     response = await EntityRepository.delete_batch(
-        type_cast(EntityRepository, Repository()),
+        versioned_targets({}),
         [],
         context=GenericActor(user_id=uuid.uuid4()),
-        expected_versions={},
     )
     assert response.deleted_count == 0
 
@@ -154,6 +155,7 @@ async def test_typed_source_get_returns_none_for_wrong_kind() -> None:
             self, lookup: GenericSourceLookupRequest
         ) -> GenericSourceResponse:
             return GenericSourceResponse(
+                version=1,
                 source_id=source_id,
                 source_type=SourceKind.document,
                 library="mzk",

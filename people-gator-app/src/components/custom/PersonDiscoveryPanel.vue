@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSelectedSnapshots } from '@/composables/selected-snapshots'
 import { useRoute, useRouter } from 'vue-router'
 import { addSelectionRange } from '@/lib/range-selection'
 import ArchiveLink from './ArchiveLink.vue'
@@ -42,6 +43,7 @@ const props = defineProps<{
   loadingMoreFaces?: boolean
   moreFacesFailed?: boolean
   people: PersonDiscoveryCandidate[]
+  personVersion: number
   currentName: string
   referenceFaceCount: number
   modelOptions?: { value: string; label: string }[]
@@ -76,12 +78,20 @@ const emit = defineEmits<{
   retry: []
   clearFilters: []
   clearPeopleFilters: []
-  assignFaces: [faceIds: string[]]
-  mergePeople: [entityIds: string[]]
+  assignFaces: [faces: { id: string; version: number }[]]
+  mergePeople: [people: { id: string; version: number }[], version: number]
 }>()
 
 const selectedFaceIds = ref<Set<string>>(new Set())
 const selectedPersonIds = ref<Set<string>>(new Set())
+const selectedTargetVersion = ref(props.personVersion)
+watch(
+  selectedPersonIds,
+  (next, previous) => {
+    if (next.size && !previous.size) selectedTargetVersion.value = props.personVersion
+  },
+  { flush: 'sync' },
+)
 const selectionAnchorId = ref<string | null>(null)
 const personSelectionAnchorId = ref<string | null>(null)
 type FaceFilter = 'all' | 'unassigned' | 'assigned'
@@ -146,12 +156,8 @@ watch(
   },
   { deep: true },
 )
-const selectedFaces = computed(() =>
-  props.faces.filter((face) => selectedFaceIds.value.has(face.id)),
-)
-const selectedPeople = computed(() =>
-  props.people.filter((person) => selectedPersonIds.value.has(person.id)),
-)
+const selectedFaces = useSelectedSnapshots(selectedFaceIds, () => props.faces)
+const selectedPeople = useSelectedSnapshots(selectedPersonIds, () => props.people)
 const selectionEnabled = computed(() => selectedFaceIds.value.size > 0)
 const selectedReassignmentCount = computed(
   () => selectedFaces.value.filter((face) => face.assignedEntityId).length,
@@ -241,14 +247,15 @@ function clearPersonSelection() {
 function mergeSelectedPeople() {
   emit(
     'mergePeople',
-    selectedPeople.value.map((person) => person.id),
+    selectedPeople.value.map(({ id, version }) => ({ id, version })),
+    selectedTargetVersion.value,
   )
 }
 
 function assignSelectedFaces() {
   emit(
     'assignFaces',
-    selectedFaces.value.map((face) => face.id),
+    selectedFaces.value.map(({ id, version }) => ({ id, version })),
   )
 }
 

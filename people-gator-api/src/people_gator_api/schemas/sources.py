@@ -1,5 +1,7 @@
-from people_gator_api.schemas.audit import VersionedEdit
+from __future__ import annotations
 """Pydantic schemas for source endpoints (spec §2.7 simplified source model)."""
+
+from people_gator_api.schemas.common import ActivityMetadata, VersionedObject
 
 from abc import abstractmethod
 from datetime import timezone
@@ -37,7 +39,7 @@ from people_gator_api.schemas.missing import MISSING, MissingType, is_missing
 type PageNumber = Annotated[int, Field(strict=True, ge=1, le=2147483647)]
 
 
-class PagePatchRequest(VersionedEdit):
+class PagePatchRequest(VersionedObject):
     """Omission preserves numbering; null explicitly clears it."""
 
     model_config = ConfigDict(extra="forbid")
@@ -169,6 +171,7 @@ class GenericSourceCreateRequest(BaseModel):
 # Page create request
 # ---------------------------------------------------------------------------
 
+
 class SourceCreateRequestBase(BaseModel):
     """Base class for all source create requests."""
 
@@ -177,6 +180,7 @@ class SourceCreateRequestBase(BaseModel):
     @abstractmethod
     def to_generic(self) -> GenericSourceCreateRequest:
         raise NotImplementedError()
+
 
 class PageCreateRequest(SourceCreateRequestBase):
     """Typed page descriptor backed by a page Source record."""
@@ -371,24 +375,18 @@ class ImageLookupRequest(BaseModel):
         )
 
 
-
 # ---------------------------------------------------------------------------
 # Source response types
 # ---------------------------------------------------------------------------
 
 
-class SourceResponseBase(BaseModel):
+class SourceResponseBase(ActivityMetadata, VersionedObject):
     """A linkable reference to a typed source."""
-
-    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
 
     model_config = ConfigDict(extra="forbid")
     source_id: uuid.UUID
     source_type: SourceKind
     url: AnyUrl
-    last_touched_at: AwareDatetime | None = None
-    last_touched_by_user_id: uuid.UUID | None = None
-    last_touched_by_api_key_id: uuid.UUID | None = None
 
     @classmethod
     def from_generic(cls, generic: GenericSourceResponse) -> Self:
@@ -572,6 +570,7 @@ PageListResponse = GenericListResponse[PageResponse]
 DocumentListResponse = GenericListResponse[DocumentResponse]
 ImageListResponse = GenericListResponse[ImageResponse]
 
+
 def to_source_list_response(generic_list: GenericSourceListResponse) -> SourceListResponse:
     return SourceListResponse(
         items=[SourceResponseBase.from_generic(item) for item in generic_list.items],
@@ -579,6 +578,7 @@ def to_source_list_response(generic_list: GenericSourceListResponse) -> SourceLi
         cursor=generic_list.cursor,
         limit=generic_list.limit,
     )
+
 
 def to_page_list_response(generic_list: GenericSourceListResponse) -> PageListResponse:
     return PageListResponse(
@@ -588,6 +588,7 @@ def to_page_list_response(generic_list: GenericSourceListResponse) -> PageListRe
         limit=generic_list.limit,
     )
 
+
 def to_document_list_response(generic_list: GenericSourceListResponse) -> DocumentListResponse:
     return DocumentListResponse(
         items=[DocumentResponse.from_generic(item) for item in generic_list.items],
@@ -596,6 +597,7 @@ def to_document_list_response(generic_list: GenericSourceListResponse) -> Docume
         limit=generic_list.limit,
     )
 
+
 def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageListResponse:
     return ImageListResponse(
         items=[ImageResponse.from_generic(item) for item in generic_list.items],
@@ -603,6 +605,7 @@ def to_image_list_response(generic_list: GenericSourceListResponse) -> ImageList
         cursor=generic_list.cursor,
         limit=generic_list.limit,
     )
+
 
 # ---------------------------------------------------------------------------
 # List filters
@@ -881,6 +884,7 @@ def to_generic_list_filter(
 # ---------------------------------------------------------------------------
 # List requests
 # ---------------------------------------------------------------------------
+
 
 class SourceListRequest(GenericListRequest):
     filter_: SourceListFilter | MissingType = Field(

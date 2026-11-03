@@ -1,4 +1,3 @@
-import { readVersion } from './versions'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -149,12 +148,20 @@ export function useCreateFacesMutation() {
 export function useAssignFaceMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ detectionId, entityId }: { detectionId: string; entityId: string | null }) =>
+    mutationFn: ({
+      detectionId,
+      entityId,
+      version,
+    }: {
+      detectionId: string
+      entityId: string | null
+      version: number
+    }) =>
       responseData(
         patchFaceRouteApiV1FacesDetectionIdPatch({
           path: { detection_id: detectionId },
           body: {
-            expected_version: readVersion(queryClient, 'face', detectionId),
+            version,
             entity_id: entityId,
             entity_link_state: entityId ? 'manual' : null,
           },
@@ -181,12 +188,18 @@ export function useAssignFaceMutation() {
 export function useAssignFacesMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ detectionIds, entityId }: { detectionIds: string[]; entityId: string }) =>
+    mutationFn: ({
+      targets,
+      entityId,
+    }: {
+      targets: { id: string; version: number }[]
+      entityId: string
+    }) =>
       responseData(
         patchFaceBatchRouteApiV1FacesBatchPatch({
-          body: detectionIds.map((detectionId) => ({
-            detection_id: detectionId,
-            expected_version: readVersion(queryClient, 'face', detectionId),
+          body: targets.map(({ id, version }) => ({
+            detection_id: id,
+            version,
             entity_id: entityId,
             entity_link_state: 'manual',
           })),
@@ -220,17 +233,17 @@ export function useReviewFacesMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({
-      detectionIds,
+      targets,
       action,
     }: {
-      detectionIds: string[]
+      targets: { id: string; version: number }[]
       action: 'verify' | 'unassign'
     }) => {
       const faces = await responseData(
         patchFaceBatchRouteApiV1FacesBatchPatch({
-          body: [...new Set(detectionIds)].map((detection_id) => ({
-            detection_id,
-            expected_version: readVersion(queryClient, 'face', detection_id),
+          body: targets.map(({ id, version }) => ({
+            detection_id: id,
+            version,
             ...(action === 'verify'
               ? { entity_link_state: 'verified' as const }
               : { entity_id: null, entity_link_state: null }),
@@ -265,15 +278,15 @@ export function useReviewFacesMutation() {
 export function useDeleteFaceMutation() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (detectionId: string) =>
+    mutationFn: ({ id: detectionId, version }: { id: string; version: number }) =>
       responseData(
         deleteFaceRouteApiV1FacesDetectionIdDelete({
           path: { detection_id: detectionId },
-          query: { expected_version: readVersion(client, 'face', detectionId) },
+          body: { object_id: detectionId, version },
           throwOnError: true,
         }),
       ),
-    onSuccess: async (_data, detectionId) => {
+    onSuccess: async (_data, { id: detectionId }) => {
       restartPeoplePages(client)
       // A deleted detail must not remain available as a selected reference face.
       client.removeQueries({ queryKey: queryKeys.faces.detail(detectionId), exact: true })

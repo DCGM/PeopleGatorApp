@@ -41,23 +41,34 @@ describe('page numbering', () => {
     expect(card.find('small[aria-label]').exists()).toBe(false)
   })
   it('validates edits and sends explicit clears without changing page identity', async () => {
-    const page = { source_id: 'source', page_number: 10, registered_page_count: 3 } as PageResponse
+    const page = {
+      version: 1,
+      source_id: 'source',
+      page_number: 10,
+      registered_page_count: 3,
+    } as PageResponse
     const wrapper = mount(PageNumberEditor, { props: { page } })
     const input = wrapper.get('input')
     await input.setValue('1.5')
     expect(wrapper.get('button').attributes('disabled')).toBeDefined()
     await input.setValue('2')
     await wrapper.get('form').trigger('submit')
-    expect(mocks.mutate).toHaveBeenLastCalledWith({
-      sourceId: 'source',
-      payload: { page_number: 2 },
-    })
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      {
+        sourceId: 'source',
+        payload: { version: 1, page_number: 2 },
+      },
+      { onSuccess: expect.any(Function) },
+    )
     await input.setValue('')
     await wrapper.get('form').trigger('submit')
-    expect(mocks.mutate).toHaveBeenLastCalledWith({
-      sourceId: 'source',
-      payload: { page_number: null },
-    })
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      {
+        sourceId: 'source',
+        payload: { version: 1, page_number: null },
+      },
+      { onSuccess: expect.any(Function) },
+    )
     await wrapper.setProps({ page: { ...page, page_number: 3 } })
     expect((input.element as HTMLInputElement).value).toBe('3')
   })

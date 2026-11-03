@@ -57,6 +57,7 @@ beforeEach(() => {
     data: {
       items: [
         {
+          version: 1,
           detection_id: 'face',
           entity_id: null,
           entity_link_state: null,
@@ -73,6 +74,7 @@ beforeEach(() => {
     mock.mockResolvedValue({ data: { items: [], limit: 100, cursor: null } })
   api.face.mockResolvedValue({
     data: {
+      version: 1,
       detection_id: 'face',
       source_id: 'page',
       embeddings: ['model'],

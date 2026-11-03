@@ -1,4 +1,3 @@
-import { readVersion } from './versions'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { isAxiosError } from 'axios'
@@ -379,11 +378,11 @@ export function useDeleteDocumentMutation() {
   const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (sourceId: string) =>
+    mutationFn: ({ object_id: sourceId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteDocumentRouteApiV1DocumentsDocumentSourceIdDelete({
           path: { document_source_id: sourceId },
-          query: { expected_version: readVersion(client, 'source', sourceId) },
+          body: { object_id: sourceId, version },
           throwOnError: true,
         }),
       ),
@@ -395,11 +394,11 @@ export function useDeletePageMutation() {
   const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (sourceId: string) =>
+    mutationFn: ({ object_id: sourceId, version }: { object_id: string; version: number }) =>
       responseData(
         deletePageRouteApiV1PagesPageSourceIdDelete({
           path: { page_source_id: sourceId },
-          query: { expected_version: readVersion(client, 'source', sourceId) },
+          body: { object_id: sourceId, version },
           throwOnError: true,
         }),
       ),
@@ -411,11 +410,11 @@ export function useDeleteImageMutation() {
   const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (imageId: string) =>
+    mutationFn: ({ object_id: imageId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteImageRouteApiV1ImagesImageIdDelete({
           path: { image_id: imageId },
-          query: { expected_version: readVersion(client, 'source', imageId) },
+          body: { object_id: imageId, version },
           throwOnError: true,
         }),
       ),
@@ -427,11 +426,11 @@ export function useDeleteSourceMutation() {
   const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (sourceId: string) =>
+    mutationFn: ({ object_id: sourceId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteSourceRouteApiV1SourcesSourceIdDelete({
           path: { source_id: sourceId },
-          query: { expected_version: readVersion(client, 'source', sourceId) },
+          body: { object_id: sourceId, version },
           throwOnError: true,
         }),
       ),

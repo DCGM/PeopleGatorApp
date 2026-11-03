@@ -435,6 +435,7 @@ describe('App', () => {
   it('selects a person when its transcription span is clicked', async () => {
     documentWorkspaceMock.faces = [
       {
+        version: 1,
         id: 'face-ada',
         embeddingModel: 'face-model',
         personId: 'person-ada',

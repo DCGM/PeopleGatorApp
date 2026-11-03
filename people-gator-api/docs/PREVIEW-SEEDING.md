@@ -1315,5 +1315,6 @@ The profile upgrade is narrowly scoped to the untouched initial fixture. Its
 checkpoint survives interruption between mutation and checkpoint completion.
 Reruns add missing examples and preserve review changes, versions, history,
 assignments, source identities and activity timestamps. Integration coverage
-queries snapshots and actors through `Database.audit`, reruns the seed and
+queries flat typed snapshots and original creation/last-touch actors through
+`Database.audit`, checks required ordinary/historical versions, reruns the seed and
 checks that reviewed data and history counts remain unchanged.

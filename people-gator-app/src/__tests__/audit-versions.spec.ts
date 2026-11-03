@@ -1,37 +1,24 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import { readVersion } from '@/query/versions'
+import { useSelectedSnapshots } from '@/composables/selected-snapshots'
 import { usePatchEntityMutation } from '@/query/entities'
 
 const api = vi.hoisted(() => ({ patch: vi.fn() }))
 vi.mock('@/client', () => ({ patchEntityRouteApiV1EntitiesEntityIdPatch: api.patch }))
 
 describe('versions read by mutation callers', () => {
-  it('reads versions from paginated results and avoids related-object versions', () => {
-    const client = new QueryClient()
-    client.setQueryData(['faces'], {
-      pages: [
-        { items: [{ detection_id: 'face', entity_id: 'person', source_id: 'page', version: 7 }] },
-      ],
-    })
-    client.setQueryData(['people'], {
-      pages: [{ items: [{ entity_id: 'person', entity_type: 'person', version: 3 }] }],
-    })
-    client.setQueryData(['pages'], { source_id: 'page', source_type: 'page', version: 2 })
-    expect(readVersion(client, 'face', 'face')).toBe(7)
-    expect(readVersion(client, 'entity', 'person')).toBe(3)
-    expect(readVersion(client, 'source', 'page')).toBe(2)
-    expect(() => readVersion(client, 'mention', 'missing')).toThrow('Reload')
-    client.clear()
-  })
-
-  it('refuses to invent a version for an unread object', () => {
-    const client = new QueryClient()
-    client.setQueryData(['legacy'], { entity_id: 'person' })
-    expect(() => readVersion(client, 'entity', 'person')).toThrow('Reload')
-    client.clear()
+  it('preserves the selected representation after a background refresh', () => {
+    const ids = ref(new Set<string>())
+    const records = ref([{ id: 'face', version: 7, name: 'Reviewed' }])
+    const selection = useSelectedSnapshots(ids, () => records.value)
+    ids.value = new Set(['face'])
+    records.value = [{ id: 'face', version: 8, name: 'Another edit' }]
+    expect(selection.value).toEqual([{ id: 'face', version: 7, name: 'Reviewed' }])
+    ids.value = new Set()
+    ids.value = new Set(['face'])
+    expect(selection.value[0]?.version).toBe(8)
   })
 
   it('surfaces a conflict without rereading or retrying an overwrite', async () => {
@@ -52,10 +39,10 @@ describe('versions read by mutation callers', () => {
       },
     )
     await expect(
-      mutation.mutateAsync({ entityId: 'person', body: { name: 'Draft', expected_version: 3 } }),
+      mutation.mutateAsync({ entityId: 'person', body: { name: 'Draft', version: 3 } }),
     ).rejects.toThrow('Version conflict')
     expect(api.patch).toHaveBeenCalledTimes(1)
-    expect(api.patch.mock.calls[0]![0].body.expected_version).toBe(3)
+    expect(api.patch.mock.calls[0]![0].body.version).toBe(3)
     expect(client.getQueryData(['entities', 'detail', 'person'])).toEqual({
       entity_id: 'person',
       version: 4,

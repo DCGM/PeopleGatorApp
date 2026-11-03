@@ -19,18 +19,17 @@ from people_gator_api.schemas.common import BoundingBox
 from people_gator_api.schemas.enums import EntityLinkState, SourceKind
 
 
-class HistoricalActivity(BaseModel):
+from .common import VersionedObject, ActivityMetadata, GenericListResponse
+from .creation import CreationMetadata
+
+
+class HistoricalActivity(VersionedObject, ActivityMetadata):
     model_config = ConfigDict(populate_by_name=True)
-    version: int = Field(ge=1)
-    last_touched_at: AwareDatetime | None = None
-    last_touched_by_user_id: UUID | None = None
-    last_touched_by_api_key_id: UUID | None = None
+    deleted: bool
 
 
-class HistoricalCreation(HistoricalActivity):
-    created_at: AwareDatetime | None = None
-    created_by_user_id: UUID | None = None
-    created_by_api_key_id: UUID | None = None
+class HistoricalCreation(HistoricalActivity, CreationMetadata):
+    pass
 
 
 class EntityAliasAuditState(BaseModel):
@@ -122,40 +121,6 @@ class ImageAuditState(SourceAuditStateBase):
     source_type: Literal["image"]
 
 
-type SourceAuditState = Annotated[
-    PageAuditState | DocumentAuditState | ImageAuditState,
-    Field(discriminator="source_type"),
-]
-
-
-class AuditItemMetadata(BaseModel):
-    version: int = Field(ge=1)
-    changed_at: AwareDatetime
-    actor_user_id: UUID
-    actor_api_key_id: UUID | None
-    deleted: bool
-
-
-class EntityAuditItem(AuditItemMetadata):
-    entity_id: UUID
-    state: EntityAuditState
-
-
-class FaceAuditItem(AuditItemMetadata):
-    detection_id: UUID
-    state: FaceAuditState
-
-
-class TextMentionAuditItem(AuditItemMetadata):
-    mention_id: UUID
-    state: TextMentionAuditState
-
-
-class SourceAuditItem(AuditItemMetadata):
-    source_id: UUID
-    state: SourceAuditState
-
-
 class AuditListOptions(BaseModel):
     """AND between criteria; OR between repeated IDs within one criterion."""
 
@@ -234,24 +199,12 @@ class SourceAuditListRequest(AuditListOptions):
     )
 
 
-class TypedAuditListResponse[T: AuditItemMetadata](BaseModel):
-    items: list[T]
-    total_count: int
-    limit: int
-    offset: int
-
-
-class EntityAuditListResponse(TypedAuditListResponse[EntityAuditItem]):
-    pass
-
-
-class FaceAuditListResponse(TypedAuditListResponse[FaceAuditItem]):
-    pass
-
-
-class TextMentionAuditListResponse(TypedAuditListResponse[TextMentionAuditItem]):
-    pass
-
-
-class SourceAuditListResponse(TypedAuditListResponse[SourceAuditItem]):
-    pass
+EntityAuditListResponse = GenericListResponse[EntityAuditState]
+FaceAuditListResponse = GenericListResponse[FaceAuditState]
+TextMentionAuditListResponse = GenericListResponse[TextMentionAuditState]
+SourceAuditListResponse = GenericListResponse[
+    Annotated[
+        PageAuditState | DocumentAuditState | ImageAuditState,
+        Field(discriminator="source_type"),
+    ]
+]

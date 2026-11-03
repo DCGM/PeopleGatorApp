@@ -213,6 +213,7 @@ export function usePersonDetail(
           sourceLoading:
             pageQueries.value[sourceIds.value.indexOf(face.source_id)]?.isPending ?? false,
           id: face.detection_id,
+          version: face.version,
           portrait,
           portraitLoading:
             !portrait &&
@@ -232,11 +233,11 @@ export function usePersonDetail(
 
   const mentions = useMentionViews(mentionRecords)
 
-  function updateProfile(nextProfile: PersonProfile, expectedVersion?: number) {
+  function updateProfile(nextProfile: PersonProfile, version: number) {
     patchEntity.mutate({
       entityId: toValue(personId),
       body: {
-        expected_version: expectedVersion ?? entityQuery.data.value!.version!,
+        version,
         name: nextProfile.name,
         short_description: nextProfile.shortDescription || null,
         description: nextProfile.article || null,
@@ -245,11 +246,11 @@ export function usePersonDetail(
     })
   }
 
-  function updateIdentifiers(nextIdentifiers: PersonIdentifiers, expectedVersion?: number) {
+  function updateIdentifiers(nextIdentifiers: PersonIdentifiers, version: number) {
     patchEntity.mutate({
       entityId: toValue(personId),
       body: {
-        expected_version: expectedVersion ?? entityQuery.data.value!.version!,
+        version,
         wikidata_id: nextIdentifiers.wikidataId || null,
         nlcr_authority_id: nextIdentifiers.nationalLibraryAuthorityId || null,
       },

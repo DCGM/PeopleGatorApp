@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import UiTooltip from './UiTooltip.vue'
 import { useVerifyLinkMutation } from '@/query/entity-links'
 import { useCanAnnotate } from '@/composables/can-annotate'
-defineProps<LinkMetadata & { id: string; kind: 'face' | 'mention'; inline?: boolean }>()
+defineProps<
+  LinkMetadata & { id: string; version: number; kind: 'face' | 'mention'; inline?: boolean }
+>()
 const mutation = useVerifyLinkMutation()
 const allowed = useCanAnnotate()
 </script>
@@ -23,7 +25,7 @@ const allowed = useCanAnnotate()
           class="border-emerald-600 text-emerald-700 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-400"
           :disabled="mutation.isPending.value"
           aria-label="Verify this link"
-          @click="mutation.mutate({ id, kind })"
+          @click="mutation.mutate({ id, kind, version })"
           ><BadgeCheck aria-hidden="true"
         /></Button>
       </UiTooltip>
@@ -32,7 +34,7 @@ const allowed = useCanAnnotate()
         variant="outline"
         size="xs"
         :disabled="mutation.isPending.value"
-        @click="mutation.mutate({ id, kind })"
+        @click="mutation.mutate({ id, kind, version })"
         ><BadgeCheck class="size-3" aria-hidden="true" />{{
           mutation.isPending.value ? 'Verifying…' : 'Verify link'
         }}</Button

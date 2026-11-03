@@ -33,6 +33,7 @@ os.environ.setdefault("PEOPLE_GATOR_API__OPENROUTER__API_KEY", "test")
 from people_gator_api.app import app
 from people_gator_api.routes.v1.sources import delete_source_route, get_source_route
 from people_gator_api.schemas.enums import SourceKind
+from people_gator_api.schemas.common import VersionedTarget
 from people_gator_api.schemas.sources import SourceResponseBase
 from people_gator_api.schemas.users import UserResponse
 
@@ -46,9 +47,9 @@ class FakeSources:
         return self.objects.get(source_id)
 
     async def delete(
-        self, source_id: uuid.UUID, *, context: UserResponse, expected_version: int
+        self, target: VersionedTarget[uuid.UUID], *, context: UserResponse
     ) -> bool:
-        return self.objects.pop(source_id, None) is not None
+        return self.objects.pop(target.object_id, None) is not None
 
 
 def _user() -> UserResponse:
@@ -87,6 +88,7 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
     source_id = uuid.uuid4()
     url = "https://example.test/roundtrip-image.jpg"
     sources.objects[source_id] = SourceResponseBase(
+        version=1,
         source_id=source_id,
         source_type=SourceKind.image,
         url=AnyUrl(url),
@@ -102,7 +104,7 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
     assert fetched.source_type == SourceKind.image
 
     await delete_source_route(
-        expected_version=1,
+        target=VersionedTarget(object_id=source_id, version=1),
         source_id=source_id,
         user=_user(),
         database=database,  # type: ignore[arg-type]
@@ -118,16 +120,26 @@ async def test_source_get_delete_roundtrip_through_contract() -> None:
     assert exc_info.value.status_code == 404
 
 
-@pytest.mark.parametrize('kind', list(SourceKind))
+@pytest.mark.parametrize("kind", list(SourceKind))
 def test_processing_survives_all_source_response_conversions(kind):
     from datetime import datetime, timezone
     from people_gator_api.schemas.sources import GenericSourceResponse, PageResponse, DocumentResponse, ImageResponse, document_url, page_url
+
     identity, page = uuid.uuid4(), uuid.uuid4()
     timestamp, actor, key = datetime.now(timezone.utc), uuid.uuid4(), uuid.uuid4()
     archive = {'library':'test','document_id':identity} if kind != SourceKind.image else {}
     if kind == SourceKind.page: archive['page_id'] = page
     url = page_url('test',identity,page) if kind == SourceKind.page else document_url('test',identity) if kind == SourceKind.document else 'https://preview.invalid/source.png'
-    generic = GenericSourceResponse(source_id=uuid.uuid4(),source_type=kind,url=url,last_touched_at=timestamp,last_touched_by_user_id=actor,last_touched_by_api_key_id=key,**archive)
+    generic = GenericSourceResponse(
+        version=1,
+        source_id=uuid.uuid4(),
+        source_type=kind,
+        url=url,
+        last_touched_at=timestamp,
+        last_touched_by_user_id=actor,
+        last_touched_by_api_key_id=key,
+        **archive,
+    )
     cls = {SourceKind.page:PageResponse,SourceKind.document:DocumentResponse,SourceKind.image:ImageResponse}[kind]
     for response in [SourceResponseBase.from_generic(generic),cls.from_generic(generic)]:
         assert (response.last_touched_at,response.last_touched_by_user_id,response.last_touched_by_api_key_id) == (timestamp,actor,key)

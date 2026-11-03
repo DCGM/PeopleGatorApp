@@ -1,3 +1,4 @@
+from version_preconditions import versioned_targets
 import uuid
 from people_gator_api.schemas.common import GenericActor
 from types import SimpleNamespace
@@ -20,6 +21,7 @@ async def test_versioned_entity_delete_batch_is_explicitly_unsupported() -> None
             return SimpleNamespace(successful=2)
 
     from unittest.mock import AsyncMock
+
     collection = SimpleNamespace(data=_Data(), query=SimpleNamespace(fetch_objects=AsyncMock(return_value=SimpleNamespace(objects=[]))))
 
     def get_collection(_name: str) -> SimpleNamespace:
@@ -30,9 +32,8 @@ async def test_versioned_entity_delete_batch_is_explicitly_unsupported() -> None
 
     with pytest.raises(NotImplementedError, match="require PostgreSQL"):
         await repository.delete_batch(
-            [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()],
+            versioned_targets({}),
             context=GenericActor(user_id=uuid.uuid4()),
-            expected_versions={},
         )
 
     assert calls == []
@@ -45,7 +46,7 @@ async def test_empty_entity_delete_batch_skips_weaviate() -> None:
 
     with pytest.raises(NotImplementedError, match="require PostgreSQL"):
         await repository.delete_batch(
-            [], context=GenericActor(user_id=uuid.uuid4()), expected_versions={}
+            versioned_targets({}), context=GenericActor(user_id=uuid.uuid4())
         )
 
 
@@ -53,6 +54,7 @@ async def test_empty_entity_delete_batch_skips_weaviate() -> None:
 async def test_thumbnail_batch_rejected_before_any_weaviate_write():
     from unittest.mock import AsyncMock
     from people_gator_api.schemas.entities import EntityPatchBatchItem, EntityPatchRequest
+
     repository = WeaviateEntityRepository(cast(Any, SimpleNamespace()))
     repository.get = AsyncMock()
     actor = GenericActor(user_id=uuid.uuid4())
@@ -62,10 +64,10 @@ async def test_thumbnail_batch_rejected_before_any_weaviate_write():
                 EntityPatchBatchItem(
                     entity_id=uuid.uuid4(),
                     name="Must stay unchanged",
-                    expected_version=1,
+                    version=1,
                 ),
                 EntityPatchBatchItem(
-                    entity_id=uuid.uuid4(), thumbnail_face_id=None, expected_version=1
+                    entity_id=uuid.uuid4(), thumbnail_face_id=None, version=1
                 ),
             ],
             actor,
@@ -73,7 +75,7 @@ async def test_thumbnail_batch_rejected_before_any_weaviate_write():
     with pytest.raises(NotImplementedError, match="require PostgreSQL"):
         await repository.patch(
             uuid.uuid4(),
-            EntityPatchRequest(thumbnail_face_id=uuid.uuid4(), expected_version=1),
+            EntityPatchRequest(thumbnail_face_id=uuid.uuid4(), version=1),
             actor,
         )
     repository.get.assert_not_awaited()

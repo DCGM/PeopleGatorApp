@@ -90,6 +90,7 @@ export function useMentionViews(records: MaybeRefOrGetter<TextMentionResponse[]>
         sourceLoading:
           pageQueries.value[sourceIds.value.indexOf(mention.source_id)]?.isPending ?? false,
         id: mention.mention_id,
+        version: mention.version,
         excerpt: mention.context || mention.name,
         matchedText: mention.name,
         library: page?.library ?? 'Source unavailable',

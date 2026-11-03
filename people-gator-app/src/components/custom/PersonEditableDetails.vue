@@ -14,7 +14,7 @@ type ProfileTextField = Exclude<keyof PersonProfile, 'aliases'>
 const props = defineProps<{
   hideStatistics?: boolean
   modelValue: PersonProfile
-  version?: number
+  version: number
   personId: string
   thumbnailFaceId?: string | null
   faceCount: number
@@ -25,8 +25,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [profile: PersonProfile, version?: number]
-  'update:identifiers': [identifiers: PersonIdentifiers, version?: number]
+  'update:modelValue': [profile: PersonProfile, version: number]
+  'update:identifiers': [identifiers: PersonIdentifiers, version: number]
 }>()
 
 const draft = reactive<PersonProfile>({
@@ -38,7 +38,7 @@ const identifierDraft = reactive<PersonIdentifiers>({
   nationalLibraryAuthorityId: props.nationalLibraryAuthorityId,
 })
 const editingField = ref<EditableField | null>(null)
-let savedVersion: number | undefined
+let savedVersion: number
 let savedFieldValue: string | string[] | null = null
 
 function isIdentifierField(field: EditableField): field is keyof PersonIdentifiers {
@@ -304,7 +304,11 @@ watch(
         :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'"
       />
     </div>
-    <aside v-if="!hideStatistics" aria-label="Person statistics" class="min-w-0 border-l-0 text-sm md:border-l md:pl-5">
+    <aside
+      v-if="!hideStatistics"
+      aria-label="Person statistics"
+      class="min-w-0 border-l-0 text-sm md:border-l md:pl-5"
+    >
       <dl class="grid content-start gap-3">
         <div>
           <dt class="text-muted-foreground">Face detections</dt>

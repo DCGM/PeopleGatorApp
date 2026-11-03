@@ -8,7 +8,7 @@ vi.mock('@/client', async (original) => ({
   ...(await original<typeof import('@/client')>()),
   listFacesRouteApiV1FacesGet: api.list,
 }))
-const face = (id: string, entity = 'ada') => ({ detection_id: id, entity_id: entity })
+const face = (id: string, entity = 'ada') => ({ version: 1, detection_id: id, entity_id: entity })
 const batch = (
   items: ReturnType<typeof face>[],
   cursor: string | null = null,

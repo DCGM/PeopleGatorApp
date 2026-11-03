@@ -177,6 +177,7 @@ export function usePersonDiscovery(
       const page = face.source_id ? matchedPages.value.get(face.source_id) : undefined
       return {
         id: face.detection_id,
+        version: face.version,
         portrait: matchedCropUrls.value.get(face.detection_id) ?? '',
         portraitLoading:
           !matchedCropUrls.value.has(face.detection_id) &&
@@ -213,6 +214,7 @@ export function usePersonDiscovery(
     entityMatches.value.map((entity) => {
       return {
         id: entity.entity_id,
+        version: entity.version,
         matchedFaceIds: entity.matched_detection_ids ?? [],
         textMatch: entity.text_score != null,
         name: entity.name || 'Unnamed person',
@@ -228,20 +230,23 @@ export function usePersonDiscovery(
   const mergeEntitiesMutation = useMergeEntitiesMutation()
 
   return {
-    assignFaces: (faceIdsToAssign: string[]) => {
-      if (!faceIdsToAssign.length) return
+    assignFaces: (targets: { id: string; version: number }[]) => {
+      if (!targets.length) return
       assignFacesMutation.mutate({
-        detectionIds: [...new Set(faceIdsToAssign)],
+        targets,
         entityId: toValue(personId),
       })
     },
     assignmentStatus: assignFacesMutation.status,
-    mergePeople: (sourceEntityIds: string[]) => {
-      const uniqueSourceIds = [...new Set(sourceEntityIds)].filter((id) => id !== toValue(personId))
-      if (!uniqueSourceIds.length) return
+    mergePeople: (people: { id: string; version: number }[], version: number) => {
+      const sources = people
+        .filter(({ id }) => id !== toValue(personId))
+        .map(({ id, version }) => ({ object_id: id, version }))
+      if (!sources.length) return
       mergeEntitiesMutation.mutate({
         targetEntityId: toValue(personId),
-        sourceEntityIds: uniqueSourceIds,
+        sources,
+        version,
       })
     },
     mergeStatus: mergeEntitiesMutation.status,

@@ -235,7 +235,8 @@ async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
                 tables=[
                     t
                     for t in Base.metadata.sorted_tables
-                    if t.name not in ("pg_demo_audit_changes", "pg_demo_object_history")
+                    if t.name != "pg_demo_audit_changes"
+                    and not t.name.endswith("_history")
                 ],
             )
         )

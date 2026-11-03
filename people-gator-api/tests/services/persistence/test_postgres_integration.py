@@ -1,5 +1,8 @@
 """Opt-in end-to-end checks for the PostgreSQL contract implementation."""
 
+from version_preconditions import versioned_targets
+from people_gator_api.schemas.common import VersionedTarget
+
 import os
 import uuid
 
@@ -168,7 +171,7 @@ async def test_postgres_contract_round_trip() -> None:
                 entities[0].entity_id,
                 EntityPatchRequest(
                     description="mathematician",
-                    expected_version=(
+                    version=(
                         await database.entities.get(entities[0].entity_id)
                     ).version,
                 ),
@@ -275,7 +278,7 @@ async def test_postgres_contract_round_trip() -> None:
                 mention.mention_id,
                 TextMentionPatchRequest(
                     entity_id=None,
-                    expected_version=(
+                    version=(
                         await database.text_mentions.get(mention.mention_id)
                     ).version,
                 ),
@@ -387,11 +390,13 @@ async def test_postgres_contract_round_trip() -> None:
                 await database.users.delete(user.user_id)
 
             assert await database.entities.delete(
-                entities[0].entity_id,
-                context=user,
-                expected_version=(
-                    await read_version(database.entities, entities[0].entity_id)
+                VersionedTarget(
+                    object_id=entities[0].entity_id,
+                    version=await read_version(
+                        database.entities, entities[0].entity_id
+                    ),
                 ),
+                context=user,
             )
             created_entity_ids.remove(entities[0].entity_id)
             unassigned_face = await database.faces.get(face.detection_id)
@@ -399,41 +404,41 @@ async def test_postgres_contract_round_trip() -> None:
             assert unassigned_face.entity_id is None
 
             assert await database.sources.delete(
-                image.source_id,
-                context=user,
-                expected_version=(
-                    await read_version(database.sources, image.source_id)
+                VersionedTarget(
+                    object_id=image.source_id,
+                    version=await read_version(database.sources, image.source_id),
                 ),
+                context=user,
             )
             created_source_ids.remove(image.source_id)
             assert await database.faces.get(face.detection_id) is None
             assert await database.faces.get(other_face.detection_id) is None
 
             assert await database.sources.delete(
-                page.source_id,
-                context=user,
-                expected_version=(
-                    await read_version(database.sources, page.source_id)
+                VersionedTarget(
+                    object_id=page.source_id,
+                    version=await read_version(database.sources, page.source_id),
                 ),
+                context=user,
             )
             created_source_ids.remove(page.source_id)
             assert await database.text_mentions.get(mention.mention_id) is None
         finally:
             await session.rollback()
             await database.sources.delete_batch(
-                created_source_ids,
+                versioned_targets(
+                    {
+                        item_id: (await read_version(database.sources, item_id))
+                        for item_id in created_source_ids
+                    }
+                ),
                 context=user,
-                expected_versions={
-                    item_id: (
-                        await read_version(database.sources, item_id)
-                    )
-                    for item_id in created_source_ids
-                },
             )
             await database.entities.delete_batch(
-                created_entity_ids,
+                versioned_targets(
+                    await read_versions(database.entities, created_entity_ids)
+                ),
                 context=user,
-                expected_versions=await read_versions(database.entities, created_entity_ids),
             )
             await database.users.delete(user.user_id)
 

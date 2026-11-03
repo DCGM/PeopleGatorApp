@@ -220,7 +220,7 @@ async def collection(sorted_records):
             FacePatchBatchItem(
                 detection_id=faces[3].detection_id,
                 entity_link_state="verified",
-                expected_version=(await r.db.faces.get(faces[3].detection_id)).version,
+                version=(await r.db.faces.get(faces[3].detection_id)).version,
             )
         ],
         r.actor,

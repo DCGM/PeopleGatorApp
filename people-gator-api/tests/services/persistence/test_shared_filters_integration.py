@@ -132,7 +132,7 @@ async def matrix():
             f2.detection_id,
             FacePatchRequest(
                 entity_id=e3.entity_id,
-                expected_version=(await db.faces.get(f2.detection_id)).version,
+                version=(await db.faces.get(f2.detection_id)).version,
             ),
             v,
         )
@@ -140,7 +140,7 @@ async def matrix():
             f2.detection_id,
             FacePatchRequest(
                 entity_id=None,
-                expected_version=(await db.faces.get(f2.detection_id)).version,
+                version=(await db.faces.get(f2.detection_id)).version,
             ),
             v,
         )
@@ -159,7 +159,7 @@ async def matrix():
             e1.entity_id,
             EntityPatchRequest(
                 short_description="edited",
-                expected_version=(await db.entities.get(e1.entity_id)).version,
+                version=(await db.entities.get(e1.entity_id)).version,
             ),
             u,
         )

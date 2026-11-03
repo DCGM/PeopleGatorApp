@@ -1,6 +1,7 @@
-from people_gator_api.schemas.audit import VersionedEdit
-from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, SharedFilter
 """Pydantic schemas for text mention endpoints."""
+
+from people_gator_api.schemas.common import VersionedObject
+from people_gator_api.schemas.entity_links import EntityLinkCreate, EntityLinkPatch, EntityLinkResponse, SharedFilter
 
 import uuid
 
@@ -48,7 +49,7 @@ type TextMentionsBatchCreateRequest = Annotated[
 ]
 
 
-class TextMentionPatchRequest(EntityLinkPatch, VersionedEdit):
+class TextMentionPatchRequest(EntityLinkPatch, VersionedObject):
     """Assign a mention to an entity, or unassign it with null."""
 
     entity_id: uuid.UUID | None | MissingType = MISSING
@@ -66,8 +67,6 @@ type TextMentionsBatchPatchRequest = Annotated[
 
 class TextMentionResponse(EntityLinkResponse):
     """A single mention of an entity name in a text source."""
-
-    version: int = Field(default=1, ge=1, description="Server-managed current object version.")
 
     mention_id: uuid.UUID
     name: str

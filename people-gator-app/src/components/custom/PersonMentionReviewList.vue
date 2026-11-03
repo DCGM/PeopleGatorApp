@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSelectedSnapshots } from '@/composables/selected-snapshots'
 import { computed, ref, watch } from 'vue'
 import { BadgeCheck, Unlink } from '@lucide/vue'
 import { useRoute } from 'vue-router'
@@ -36,7 +37,7 @@ const allowed = computed(() => props.selectable && canAnnotate.value)
 const mutation = useReviewMentionsMutation()
 const route = useRoute()
 const feedback = ref('')
-const selectedMentions = computed(() => props.mentions.filter((m) => selected.value.has(m.id)))
+const selectedMentions = useSelectedSnapshots(selected, () => props.mentions)
 function toggle(id: string, value: boolean | 'indeterminate') {
   const shift = shiftSelecting.value
   shiftSelecting.value = false
@@ -62,9 +63,9 @@ async function review(action: 'verify' | 'unlink') {
   if (!allowed.value || mutation.isPending.value) return
   const ids = selectedMentions.value
     .filter((m) => action === 'unlink' || m.linkState !== 'verified')
-    .map((m) => m.id)
+    .map(({ id, version }) => ({ id, version }))
   try {
-    const count = await mutation.mutateAsync({ targets: { ids }, action })
+    const count = await mutation.mutateAsync({ targets: { items: ids }, action })
     feedback.value = `${count} mentions ${action === 'verify' ? 'verified' : 'unlinked'}.`
     clear()
   } catch (error) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from .audit import prepare_audit, audit_transaction
+from people_gator_api.schemas.common import VersionedTarget
+from .audit import prepare_audit, audit_transaction, checked_target_versions
 
 import uuid
 from collections.abc import Sequence
@@ -228,7 +229,13 @@ class PostgresEntityRepository(EntityRepository):
             raise ValueError("entity patch batch requires unique object IDs")
         if not commands:
             return []
-        await prepare_audit(self._session, "entity", ids, context, {c.entity_id: c.expected_version for c in commands})
+        await prepare_audit(
+            self._session,
+            "entity",
+            ids,
+            context,
+            {c.entity_id: c.version for c in commands},
+        )
         # Selection and evidence transitions share the same outer lock. Validate
         # the entire batch before changing anything, including unrelated fields.
         if any(not is_missing(c.thumbnail_face_id) for c in commands):
@@ -289,18 +296,21 @@ class PostgresEntityRepository(EntityRepository):
             for item_id in ids
         ]
 
-    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor, expected_version: int) -> bool:
-        result = await self.delete_batch([entity_id], context=context, expected_versions={entity_id: expected_version})
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        result = await self.delete_batch([target], context=context)
         return result.deleted_count == 1
 
     @audit_transaction
     async def merge_batch(
         self,
         target_entity_id: uuid.UUID,
-        source_entity_ids: Sequence[uuid.UUID],
-        target_patch: EntityMergeTargetPatch | None = None,
-        *, context: GenericActor,
+        target_patch: EntityMergeTargetPatch,
+        *,
+        context: GenericActor,
     ) -> EntityMergeBatchResponse | None:
+        source_entity_ids = [target.object_id for target in target_patch.sources]
         if not source_entity_ids:
             raise ValueError("source_entity_ids must not be empty")
         if len(source_entity_ids) != len(set(source_entity_ids)):
@@ -308,8 +318,16 @@ class PostgresEntityRepository(EntityRepository):
         if target_entity_id in source_entity_ids:
             raise ValueError("source and target entity must differ")
 
-        await prepare_audit(self._session, "entity", [target_entity_id, *source_entity_ids], context,
-                            target_patch.expected_versions if target_patch is not None else None)
+        await prepare_audit(
+            self._session,
+            "entity",
+            [target_entity_id, *source_entity_ids],
+            context,
+            (
+                {target_entity_id: target_patch.version}
+                | {target.object_id: target.version for target in target_patch.sources}
+            ),
+        )
         try:
             # A stable lock order avoids deadlocks between simultaneous merges.
             entities = {
@@ -403,12 +421,14 @@ class PostgresEntityRepository(EntityRepository):
 
     @audit_transaction
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor, expected_versions: dict[uuid.UUID, int]
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
     ) -> EntityDeleteManyResponse:
+        entity_ids = [target.object_id for target in targets]
+        versions = checked_target_versions(targets)
         unique = list(dict.fromkeys(entity_ids))
         if not unique:
             return EntityDeleteManyResponse(deleted_count=0)
-        await prepare_audit(self._session, "entity", unique, context, expected_versions)
+        await prepare_audit(self._session, "entity", unique, context, versions)
         affected_sources = await self._annotation_sources(unique)
         await self._session.execute(
             update(ImageOccurrence)
@@ -440,7 +460,12 @@ class PostgresEntityRepository(EntityRepository):
                 .limit(selector.limit)
             )
         )
-        return await self.delete_batch(ids, context=context, expected_versions=selector.expected_versions)
+        if not set(ids).issubset({target.object_id for target in selector.targets}):
+            raise ValueError("versioned target required for every selected entity")
+        return await self.delete_batch(
+            [target for target in selector.targets if target.object_id in ids],
+            context=context,
+        )
 
     async def _text_scores(
         self, query: SearchEntitiesRequest, filters: Sequence[ColumnElement[bool]]

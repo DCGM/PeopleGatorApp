@@ -26,7 +26,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{
   selectMention: [id: string, value: boolean, shift: boolean]
-  loaded: [ids: string[], verifiedIds: string[]]
+  loaded: [ids: string[], verifiedIds: string[], items: { id: string; version: number }[]]
 }>()
 const query = useTextMentionListQuery(
   computed(() => ({
@@ -50,12 +50,16 @@ useAutomaticPagination({
 })
 const mentions = useMentionViews(records)
 watch(
-  () => records.value.map((record) => [record.mention_id, record.entity_link_state] as const),
+  () =>
+    records.value.map(
+      (record) => [record.mention_id, record.entity_link_state, record.version] as const,
+    ),
   (items) =>
     emit(
       'loaded',
       items.map(([id]) => id),
       items.filter(([, state]) => state === 'verified').map(([id]) => id),
+      items.map(([id, , version]) => ({ id, version })),
     ),
   { immediate: true },
 )

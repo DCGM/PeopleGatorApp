@@ -1,4 +1,8 @@
+from people_gator_api.schemas.common import VersionedTarget
+from people_gator_api.schemas.entities import EntityMergeTargetPatch
 """Opt-in contract checks against a disposable Weaviate server."""
+
+from version_preconditions import versioned_targets
 
 import os
 import uuid
@@ -149,11 +153,11 @@ async def test_weaviate_link_contract_and_additive_upgrade():
         with pytest.raises(NotImplementedError, match="require PostgreSQL"):
             await db.text_mentions.patch(
                 mention.mention_id,
-                TextMentionPatchRequest(entity_id=emil.entity_id, expected_version=1),
+                TextMentionPatchRequest(entity_id=emil.entity_id, version=1),
                 actor,
             )
         with pytest.raises(NotImplementedError, match="require PostgreSQL"):
-            await db.entities.merge(ada.entity_id, emil.entity_id, context=actor)
+            await db.entities.merge(ada.entity_id, EntityMergeTargetPatch(version=ada.version, sources=[VersionedTarget(object_id=emil.entity_id, version=emil.version)]), context=actor)
         assert (
             await db.text_mentions.get(mention.mention_id)
         ).entity_id == ada.entity_id
@@ -185,7 +189,7 @@ async def test_weaviate_link_contract_and_additive_upgrade():
         ).entity_link_state == EntityLinkState.automatic
         with pytest.raises(NotImplementedError, match="require PostgreSQL"):
             await db.entities.delete_batch(
-                [ada.entity_id], context=actor, expected_versions={ada.entity_id: 1}
+                versioned_targets({ada.entity_id: 1}), context=actor
             )
         assert (await db.faces.get(face.detection_id)).entity_id == ada.entity_id
         assert (

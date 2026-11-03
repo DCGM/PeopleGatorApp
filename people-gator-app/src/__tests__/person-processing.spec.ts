@@ -1,4 +1,3 @@
-vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
@@ -33,6 +32,7 @@ import PersonProcessingDetails from '@/components/custom/PersonProcessingDetails
 import { usePersonDetail } from '@/viewmodels/person-detail'
 
 const historical: EntityResponse = {
+  version: 1,
   entity_id: 'person-ada',
   entity_type: 'person',
   name: 'Ada Lovelace',
@@ -176,7 +176,7 @@ describe('person processing information', () => {
         last_touched_by_api_key_id: null,
       },
     })
-    app.result.updateProfile({ name: 'Ada', shortDescription: '', article: '', aliases: [] })
+    app.result.updateProfile({ name: 'Ada', shortDescription: '', article: '', aliases: [] }, 1)
     await flushPromises()
     expect(app.wrapper.get('time').attributes('datetime')).toBe('2026-10-13T12:35:01Z')
     expect(app.wrapper.text()).toContain('Annotator')

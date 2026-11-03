@@ -56,6 +56,7 @@ _SOURCE_ID = uuid.UUID("3acb3510-cf49-4d62-9dc0-0f9cce68bdf7")
 
 def _face(*, left_eye_x: float = 38.0) -> FaceResponse:
     return FaceResponse(
+        version=1,
         detection_id=_DETECTION_ID,
         source_id=_SOURCE_ID,
         bounding_box=BoundingBox(x=10, y=20, width=100, height=100),
@@ -75,6 +76,7 @@ def _source() -> GenericSourceResponse:
     document_id = uuid.UUID("57877a35-c00a-42d2-9515-05a8a6843d8f")
     page_id = uuid.UUID("88400acc-fb2f-41af-ae63-a1e77a21b1db")
     return GenericSourceResponse(
+        version=1,
         source_id=_SOURCE_ID,
         source_type=SourceKind.page,
         url=AnyUrl(page_url("mzk", document_id, page_id)),

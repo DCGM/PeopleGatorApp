@@ -8,7 +8,7 @@ this API revision. Deploy the regenerated SDK and mutation callers together.
 
 ## Editing and deleting
 
-Every patch body requires `expected_version`, taken from the object the caller
+Every patch body requires `version`, taken from the object the caller
 read. A matching actual change archives the complete previous persisted state
 and advances the current version once. A matching no-op retains its version and
 creates no history. A stale request, including a stale no-op, returns HTTP 409
@@ -16,13 +16,23 @@ with `detail.code=version_conflict`. Reload and review the data before making a
 new edit; clients never automatically retry an overwrite with a newer version.
 The caller cannot assign the stored version.
 
-Single-object DELETE endpoints require the `expected_version` query parameter.
-Face and text-mention batch DELETE endpoints accept a JSON object mapping target
-UUIDs to expected versions. Entity bulk deletion and merge bodies require
-`expected_versions`, mapping every selected entity (including the merge target)
-to its read version. Missing preconditions are invalid; all existing explicit
-targets are checked before any write. Conflicts and other failures roll back the
-entire repository operation, including history inserts and server effects.
+Single-object DELETE endpoints take a JSON `VersionedTarget` body:
+`{"object_id": "<UUID from the URL>", "version": 3}`. Batch face/mention
+DELETE endpoints take a list of these targets. Entity bulk deletion uses a
+`targets` list alongside its filter and limit; every matched object needs a
+supplied target. Merge bodies carry the target's `version` and a `sources`
+list of versioned targets. The single-source merge accepts exactly one source.
+Missing preconditions are invalid; all existing explicit targets are checked
+before any write. Conflicts and failures roll back the entire operation,
+including history inserts and server effects.
+
+All ordinary list/search/detail objects and historical states require the shared
+`version` field. Responses never substitute version 1 for missing data.
+Creation initializes the version on the server. Frontend drafts and selections
+retain the version of their exact data through background refreshes; mutations
+never search the query cache or fetch newer versions to authorize older edits.
+Group selections enumerate their occurrences when selected and retain those
+versions before any mutation is submitted.
 
 Repository graph mutations use the existing transaction advisory lock, followed
 by stable object row locks. Capture, comparison, archival, version updates and
@@ -45,12 +55,22 @@ portrait selection does archive its previous selection and advance that profile.
 Source activity propagation likewise does not create source content revisions;
 editing a page number does. Original creation metadata remains unchanged.
 
-`pg_demo_audit_changes` records the transition time and real user/API-key IDs.
-`pg_demo_object_history` stores predecessors under the composite key
-`(object_type, object_id, version)`. Deletion archives the final current state
-with `deleted=true`, at that state's existing version. Merge archives the deleted
-source profiles and revisions of changed dependent annotations and target
-profiles. Live cascades are preceded by capture of affected annotations.
+`pg_demo_audit_changes` records transition time and real user/API-key IDs for
+internal transition filters. Separate `pg_demo_entity_history`,
+`pg_demo_face_history`, `pg_demo_text_mention_history` and
+`pg_demo_source_history` tables store predecessors under `(id, version)`.
+They retain original column types, stored normalized/search values, verification
+fields, subtype fields and filter indexes. Versioned alias and embedding tables
+reference their immutable historical parent with composite foreign keys.
+There are no foreign keys from history to live entities, sources, annotations,
+users or models, so live deletion neither blocks on history nor rewrites its IDs.
+Migration `d34a021b0016` converts previously deployed JSON snapshots and their
+children into these tables without resetting preview data or checkpoints.
+
+Deletion archives the final current state with `deleted=true`, at that state's
+existing version. Merge archives deleted source profiles and revisions of
+changed dependent annotations and target profiles. Live cascades are preceded
+by capture of affected annotations.
 
 Historical IDs are plain UUID values, without foreign keys to live objects or
 users; audit rows survive deletion of referenced live data. Related objects are
@@ -67,7 +87,7 @@ key explicitly; for bearer login request `scope=people-gator:audit`. Existing
 tokens must be reissued with that scope. The frontend keeps its existing scopes
 because it has no audit UI; the example demo user also permits audit requests.
 
-| GET endpoint | Identity/relationship filters | Typed `state` |
+| GET endpoint | Identity/relationship filters | Typed historical item |
 | --- | --- | --- |
 | `/api/v1/audit-entities` | `filter.entity_id` | Entity profile, aliases and portrait selection |
 | `/api/v1/audit-faces` | `filter.detection_id`, `filter.entity_id`, `filter.source_id` | Face, keypoints, vectors and assignment/verification |
@@ -78,11 +98,13 @@ Lists return archived revisions and final deleted states; current records remain
 available through the ordinary resource endpoints. A never-edited current object
 has no archived revision yet.
 
-Each item has its resource-specific UUID, version, transition time, actor IDs,
-deletion marker and a concrete snapshot schema. There is no generic object-kind
-selector or untyped snapshot dictionary in the public API. Vectors are numeric
-arrays. Source states discriminate on `source_type`. Audit queries never require
-the referenced entity/source/annotation to remain alive.
+Items are the historical states themselves, including their resource-specific
+UUID, required version, original creation/last-touch metadata and deletion marker.
+There is no redundant metadata/state wrapper, generic object-kind selector or
+untyped snapshot dictionary. Vectors are numeric arrays. Source states
+discriminate on `source_type`. Audit queries never require the referenced live
+objects. Public repository access provides resource-specific lists and
+`get_entity`, `get_face`, `get_text_mention` and `get_source` methods.
 
 For faces previously linked to an entity, use:
 
@@ -108,7 +130,8 @@ All lists also accept:
 | `direction` | `asc` or `desc` (default) |
 | `limit`, `offset` | Page size 1–500 (default 50) and offset (default 0) |
 
-Responses include `items`, `total_count`, `limit` and `offset`. Use the same
+Responses reuse `GenericListResponse`: `items`, `total_count`, `limit` and
+`cursor` (null for these offset-paginated audit requests). Use the same
 minimum and maximum version to select an exact archived version. A list with no
 matching revision returns an empty `items` array. The old generic `/api/v1/audit`
 and generic single-version route have been removed.

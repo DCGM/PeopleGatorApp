@@ -8,6 +8,7 @@ describe('PersonEditableDetails', () => {
     const wrapper = mount(PersonEditableDetails, {
       global: { stubs: { PersonPortrait: true } },
       props: {
+        version: 1,
         modelValue: {
           name: 'Ada Lovelace',
           shortDescription: 'Mathematician',

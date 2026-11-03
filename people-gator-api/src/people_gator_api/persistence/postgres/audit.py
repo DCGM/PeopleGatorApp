@@ -5,6 +5,8 @@ predecessor. The lock also covers server effects and deletes of dependent rows.
 Only selected objects and their deletion/merge dependents are read.
 """
 
+import json
+
 from datetime import datetime, timezone
 from functools import wraps
 from uuid import UUID, uuid4
@@ -12,7 +14,7 @@ from typing import Any
 from collections.abc import Iterable, Mapping
 from sqlalchemy.ext.asyncio import AsyncSession
 from people_gator_api.schemas.common import GenericActor
-from sqlalchemy import select, text, update
+from sqlalchemy import inspect, select, text, update
 from sqlalchemy.orm.attributes import set_committed_value
 from people_gator_api.schemas.audit import VersionConflict
 from .models import (
@@ -21,7 +23,12 @@ from .models import (
     ImageOccurrence,
     TextMention,
     AuditChange,
-    ObjectHistory,
+    EntityHistory,
+    FaceHistory,
+    TextMentionHistory,
+    SourceHistory,
+    AliasHistory,
+    FaceEmbeddingHistory,
 )
 from .touch import lock_annotation_graph
 
@@ -30,6 +37,12 @@ MODELS = {
     "source": Source,
     "face": ImageOccurrence,
     "mention": TextMention,
+}
+HISTORY_MODELS = {
+    "entity": EntityHistory,
+    "face": FaceHistory,
+    "mention": TextMentionHistory,
+    "source": SourceHistory,
 }
 # Static SQL fragments only; object IDs are always bound parameters.
 SNAPSHOTS = {
@@ -61,7 +74,7 @@ async def prepare_audit(
     kind: str,
     ids: Iterable[UUID],
     context: GenericActor,
-    expected_versions: Mapping[UUID, int] | None,
+    versions: Mapping[UUID, int] | None,
 ) -> None:
     """Lock/check all explicit targets before any mutation; capture cascade effects."""
     await lock_annotation_graph(session)
@@ -72,9 +85,9 @@ async def prepare_audit(
     )
     old = await snapshots(session, kind, ids)
     for item_id, state in old.items():
-        if expected_versions is None or item_id not in expected_versions:
+        if versions is None or item_id not in versions:
             raise ValueError(f"expected version required for {kind} {item_id}")
-        if expected_versions[item_id] != state["version"]:
+        if versions[item_id] != state["version"]:
             raise VersionConflict(
                 f"{kind} {item_id} has changed; reload before editing"
             )
@@ -138,30 +151,7 @@ async def finish_audit(session: AsyncSession) -> None:
                 kind, new
             ):
                 continue
-            histories.append(
-                ObjectHistory(
-                    object_type=kind,
-                    object_id=item_id,
-                    version=old["version"],
-                    change_id=change_id,
-                    deleted=new is None,
-                    entity_id=(
-                        item_id
-                        if kind == "entity"
-                        else UUID(old["entity_id"])
-                        if old.get("entity_id")
-                        else None
-                    ),
-                    source_id=(
-                        item_id
-                        if kind == "source"
-                        else UUID(old["source_id"])
-                        if old.get("source_id")
-                        else None
-                    ),
-                    state=old,
-                )
-            )
+            histories.append((kind, old, new is None))
             if new is not None:
                 version = old["version"] + 1
                 model = MODELS[kind]
@@ -179,7 +169,18 @@ async def finish_audit(session: AsyncSession) -> None:
             )
         )
         await session.flush()
-        session.add_all(histories)
+        for kind, old, deleted in histories:
+            table = HISTORY_MODELS[kind].__table__
+            payload = old | {"change_id": str(change_id), "deleted": deleted}
+            await insert_snapshot(session, table, payload)
+            for key, child in (
+                ("aliases", AliasHistory),
+                ("embeddings", FaceEmbeddingHistory),
+            ):
+                for value in old.get(key, []):
+                    await insert_snapshot(
+                        session, child.__table__, value | {"version": old["version"]}
+                    )
     for obj in session.identity_map.values():
         kind = (
             "entity"
@@ -192,8 +193,12 @@ async def finish_audit(session: AsyncSession) -> None:
             if isinstance(obj, TextMention)
             else None
         )
-        if kind is not None and (kind, obj.id) in versions:
-            set_committed_value(obj, "version", versions[kind, obj.id])
+        # Rollback may expire attributes of unrelated objects still in the
+        # identity map. Reading their primary key through the descriptor can
+        # trigger synchronous IO on AsyncSession; inspect the stable identity.
+        identity = inspect(obj).identity
+        if kind is not None and identity and (kind, identity[0]) in versions:
+            set_committed_value(obj, "version", versions[kind, identity[0]])
 
 
 def audit_transaction(method):
@@ -211,3 +216,26 @@ def audit_transaction(method):
                 await self._session.rollback()
 
     return wrapped
+
+
+async def insert_snapshot(session, table, payload):
+    # PostgreSQL decodes UUIDs, timestamps, vectors, enums and arrays using the
+    # same column types as the live tables. SQL identifiers are static metadata.
+    columns = ", ".join(column.name for column in table.columns)
+    await session.execute(
+        text(
+            f"INSERT INTO {table.name} ({columns}) "
+            f"SELECT {columns} FROM jsonb_populate_record(NULL::{table.name}, CAST(:state AS jsonb))"
+        ),
+        {"state": json.dumps(payload)},
+    )
+
+
+def checked_target_versions(targets):
+    """Repeated identical targets are harmless; contradictory reads are invalid."""
+    versions = {}
+    for target in targets:
+        if target.object_id in versions and versions[target.object_id] != target.version:
+            raise ValueError("duplicate targets must carry the same version")
+        versions[target.object_id] = target.version
+    return versions

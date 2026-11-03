@@ -1,4 +1,3 @@
-vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -95,8 +94,10 @@ describe('canonical person media', () => {
 
   it('reuses crop bytes after portrait saves and face reviews', async () => {
     mocks.crop.mockResolvedValue({ data: new Blob(['portrait']) })
-    mocks.patchEntity.mockResolvedValue({ data: { entity_id: 'ada', thumbnail_face_id: 'face' } })
-    mocks.patchFaces.mockResolvedValue({ data: [{ detection_id: 'face' }] })
+    mocks.patchEntity.mockResolvedValue({
+      data: { version: 1, entity_id: 'ada', thumbnail_face_id: 'face' },
+    })
+    mocks.patchFaces.mockResolvedValue({ data: [{ version: 1, detection_id: 'face' }] })
     const queryClient = new QueryClient()
     let patch!: ReturnType<typeof usePatchEntityMutation>
     let review!: ReturnType<typeof useReviewFacesMutation>
@@ -111,9 +112,15 @@ describe('canonical person media', () => {
       { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
     )
     await flushPromises()
-    await patch.mutateAsync({ entityId: 'ada', body: { thumbnail_face_id: 'face' } })
-    await review.mutateAsync({ detectionIds: ['face'], action: 'verify' })
-    await review.mutateAsync({ detectionIds: ['face'], action: 'unassign' })
+    await patch.mutateAsync({ entityId: 'ada', body: { version: 1, thumbnail_face_id: 'face' } })
+    await review.mutateAsync({
+      targets: ['face'].map((id) => ({ id, version: 1 })),
+      action: 'verify',
+    })
+    await review.mutateAsync({
+      targets: ['face'].map((id) => ({ id, version: 1 })),
+      action: 'unassign',
+    })
     await flushPromises()
     expect(mocks.crop).toHaveBeenCalledTimes(1)
     expect(wrapper.findComponent({ name: 'AvatarImage' }).props('src')).toBe('blob:portrait')

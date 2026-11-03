@@ -639,6 +639,7 @@ from .entity_link_queries import (
     LINK_FIELDS, document_sources, library_sources, page_sources, scope_conditions,
 )
 
+
 def creation_metadata(record) -> dict:
     return {"created_at": record.created_at,
             "created_by_user_id": record.created_by_user_id, "created_by_api_key_id": record.created_by_api_key_id}
@@ -656,7 +657,8 @@ def entity_response(entity: Entity) -> EntityResponse:
             f"entity {entity.id} does not satisfy the persistence contract"
         )
     return EntityResponse(
-        version=entity.version or 1,        **creation_metadata(entity),
+        version=entity.version,
+        **creation_metadata(entity),
         entity_id=entity.id,
         thumbnail_face_id=entity.thumbnail_face_id,
         thumbnail_mode=entity.thumbnail_mode or "automatic",
@@ -677,7 +679,7 @@ def entity_response(entity: Entity) -> EntityResponse:
 
 def source_response(source: Source) -> GenericSourceResponse:
     common: dict[str, Any] = {
-        "version": source.version or 1,
+        "version": source.version,
         "entity_link_stats": getattr(source, "_entity_link_stats", None) or {},
         "source_id": source.id,
         "last_touched_at": source.last_touched_at,
@@ -703,7 +705,8 @@ def source_response(source: Source) -> GenericSourceResponse:
 def face_response(face: Face) -> FaceResponse:
     box = face.roi
     return FaceResponse(
-        version=face.version or 1,        **annotation_values(face),
+        version=face.version,
+        **annotation_values(face),
         detection_id=face.id,
         identifier=face.identifier,
         source_id=face.source_id,
@@ -729,7 +732,8 @@ def face_response(face: Face) -> FaceResponse:
 
 def mention_response(mention: TextMention) -> TextMentionResponse:
     return TextMentionResponse(
-        version=mention.version or 1,        **annotation_values(mention),
+        version=mention.version,
+        **annotation_values(mention),
         mention_id=mention.id,
         name=mention.mention,
         context=mention.context,

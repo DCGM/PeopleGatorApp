@@ -1,4 +1,3 @@
-import { readVersion } from './versions'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
   patchFaceRouteApiV1FacesDetectionIdPatch,
@@ -13,18 +12,18 @@ export function useVerifyLinkMutation() {
     mutationFn: async ({
       kind,
       id,
-      expectedVersion,
+      version,
     }: {
       kind: 'face' | 'mention'
       id: string
-      expectedVersion?: number
+      version: number
     }) =>
       kind === 'face'
         ? responseData(
             patchFaceRouteApiV1FacesDetectionIdPatch({
               path: { detection_id: id },
               body: {
-                expected_version: expectedVersion ?? readVersion(client, kind, id),
+                version,
                 entity_link_state: 'verified',
               },
               throwOnError: true,
@@ -34,7 +33,7 @@ export function useVerifyLinkMutation() {
             patchTextMentionRouteApiV1TextMentionsMentionIdPatch({
               path: { mention_id: id },
               body: {
-                expected_version: expectedVersion ?? readVersion(client, kind, id),
+                version,
                 entity_link_state: 'verified',
               },
               throwOnError: true,

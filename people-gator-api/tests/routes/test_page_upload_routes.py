@@ -32,6 +32,7 @@ from people_gator_api.settings import (
 def page() -> PageResponse:
     document_id, page_id = uuid.uuid4(), uuid.uuid4()
     return PageResponse(
+        version=1,
         source_id=uuid.uuid4(),
         source_type=SourceKind.page,
         url=AnyUrl(page_url("mzk", document_id, page_id)),

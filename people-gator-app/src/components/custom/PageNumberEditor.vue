@@ -8,10 +8,15 @@ import { usePageNumberMutation } from '@/query/media'
 const props = defineProps<{ page: PageResponse }>()
 const allowed = useCanAnnotate()
 const value = ref('')
+const draftVersion = ref(props.page.version)
+const editing = ref(false)
 watch(
   () => [props.page.source_id, props.page.page_number],
   () => {
-    value.value = String(props.page.page_number ?? '')
+    if (!editing.value) {
+      value.value = String(props.page.page_number ?? '')
+      draftVersion.value = props.page.version
+    }
   },
   { immediate: true },
 )
@@ -21,16 +26,35 @@ const valid = computed(
 )
 function save() {
   if (!valid.value) return
-  mutation.mutate({
-    sourceId: props.page.source_id,
-    payload: { expected_version: props.page.version!, page_number: value.value === '' ? null : Number(value.value) },
-  })
+  mutation.mutate(
+    {
+      sourceId: props.page.source_id,
+      payload: {
+        version: draftVersion.value,
+        page_number: value.value === '' ? null : Number(value.value),
+      },
+    },
+    {
+      onSuccess: () => {
+        editing.value = false
+        draftVersion.value = props.page.version
+      },
+    },
+  )
 }
 </script>
 <template>
   <form v-if="allowed" class="mb-4 flex flex-wrap items-center gap-2" @submit.prevent="save">
     <Input
       v-model="value"
+      @focus="
+        () => {
+          if (!editing) {
+            draftVersion = page.version
+            editing = true
+          }
+        }
+      "
       class="w-28"
       inputmode="numeric"
       aria-label="Page number"

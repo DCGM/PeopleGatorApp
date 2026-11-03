@@ -1,4 +1,8 @@
+from version_preconditions import merge_request
 """Opt-in checks against an isolated PostgreSQL/pgvector database."""
+
+from version_preconditions import merge_targets
+from people_gator_api.schemas.common import VersionedTarget
 
 import asyncio
 import os
@@ -159,8 +163,8 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
     # Reads, empty patches, identical fields and alias-only reordering are no-ops.
     before = (await entity(r)).last_touched_at
     for patch in (
-        EntityPatchRequest(expected_version=1),
-        EntityPatchRequest(name=first.name, aliases=[], expected_version=1),
+        EntityPatchRequest(version=1),
+        EntityPatchRequest(name=first.name, aliases=[], version=1),
     ):
         after = await r.db.entities.patch(first.entity_id, patch, r.user)
         assert after.last_touched_at == before
@@ -169,7 +173,7 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         first.entity_id,
         EntityPatchRequest(
             aliases=["Ada", "Countess"],
-            expected_version=(await r.db.entities.get(first.entity_id)).version,
+            version=(await r.db.entities.get(first.entity_id)).version,
         ),
         r.actor,
     )
@@ -178,7 +182,7 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         first.entity_id,
         EntityPatchRequest(
             aliases=["Countess", "Ada"],
-            expected_version=(await r.db.entities.get(first.entity_id)).version,
+            version=(await r.db.entities.get(first.entity_id)).version,
         ),
         r.user,
     )
@@ -188,7 +192,7 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         first.entity_id,
         EntityPatchRequest(
             aliases=["Ada", "Lovelace"],
-            expected_version=(await r.db.entities.get(first.entity_id)).version,
+            version=(await r.db.entities.get(first.entity_id)).version,
         ),
         r.user,
     )
@@ -201,7 +205,7 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         f.detection_id,
         FacePatchRequest(
             entity_id=first.entity_id,
-            expected_version=(await r.db.faces.get(f.detection_id)).version,
+            version=(await r.db.faces.get(f.detection_id)).version,
         ),
         r.user,
     )
@@ -210,7 +214,7 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         f.detection_id,
         FacePatchRequest(
             entity_id=second.entity_id,
-            expected_version=(await r.db.faces.get(f.detection_id)).version,
+            version=(await r.db.faces.get(f.detection_id)).version,
         ),
         r.user,
     )
@@ -219,20 +223,20 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
     assert (await entity(r, 1)).last_touched_by_api_key_id is None
     before = (await entity(r, 1)).last_touched_at
     await r.db.faces.delete(
-        f.detection_id,
-        context=r.actor,
-        expected_version=(
-            await read_version(r.db.faces, f.detection_id)
+        VersionedTarget(
+            object_id=f.detection_id,
+            version=await read_version(r.db.faces, f.detection_id),
         ),
+        context=r.actor,
     )
     assert (await entity(r, 1)).last_touched_at > before
     before = (await entity(r, 1)).last_touched_at
     assert not await r.db.faces.delete(
-        f.detection_id,
-        context=r.user,
-        expected_version=(
-            await read_version(r.db.faces, f.detection_id)
+        VersionedTarget(
+            object_id=f.detection_id,
+            version=await read_version(r.db.faces, f.detection_id),
         ),
+        context=r.user,
     )
     assert (await entity(r, 1)).last_touched_at == before
     m = await mention(r, first.entity_id)
@@ -241,7 +245,7 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         m.mention_id,
         TextMentionPatchRequest(
             entity_id=first.entity_id,
-            expected_version=(await r.db.text_mentions.get(m.mention_id)).version,
+            version=(await r.db.text_mentions.get(m.mention_id)).version,
         ),
         r.user,
     )
@@ -250,18 +254,18 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
         m.mention_id,
         TextMentionPatchRequest(
             entity_id=second.entity_id,
-            expected_version=(await r.db.text_mentions.get(m.mention_id)).version,
+            version=(await r.db.text_mentions.get(m.mention_id)).version,
         ),
         r.user,
     )
     assert (await entity(r)).last_touched_by_api_key_id is None
     before = (await entity(r, 1)).last_touched_at
     await r.db.text_mentions.delete(
-        m.mention_id,
-        context=r.actor,
-        expected_version=(
-            await read_version(r.db.text_mentions, m.mention_id)
+        VersionedTarget(
+            object_id=m.mention_id,
+            version=await read_version(r.db.text_mentions, m.mention_id),
         ),
+        context=r.actor,
     )
     assert (await entity(r, 1)).last_touched_at > before
 
@@ -379,7 +383,7 @@ async def test_batch_merge_cascade_and_transaction_rollback(records, monkeypatch
             EntityPatchBatchItem(
                 entity_id=item,
                 name="Updated",
-                expected_version=(await r.db.entities.get(item)).version,
+                version=(await r.db.entities.get(item)).version,
             )
             for item in ids
         ],
@@ -394,7 +398,7 @@ async def test_batch_merge_cascade_and_transaction_rollback(records, monkeypatch
             FacePatchBatchItem(
                 detection_id=f.detection_id,
                 entity_id=ids[1],
-                expected_version=(await r.db.faces.get(f.detection_id)).version,
+                version=(await r.db.faces.get(f.detection_id)).version,
             )
         ],
         r.user,
@@ -404,7 +408,7 @@ async def test_batch_merge_cascade_and_transaction_rollback(records, monkeypatch
             TextMentionPatchBatchItem(
                 mention_id=m.mention_id,
                 entity_id=ids[1],
-                expected_version=(await r.db.text_mentions.get(m.mention_id)).version,
+                version=(await r.db.text_mentions.get(m.mention_id)).version,
             )
         ],
         r.user,
@@ -424,30 +428,27 @@ async def test_batch_merge_cascade_and_transaction_rollback(records, monkeypatch
             m.mention_id,
             TextMentionPatchRequest(
                 entity_id=ids[2],
-                expected_version=(await r.db.text_mentions.get(m.mention_id)).version,
+                version=(await r.db.text_mentions.get(m.mention_id)).version,
             ),
             r.actor,
         )
     monkeypatch.setattr(text_mention_repository, "commit", original)
     assert (await entity(r, 1)).last_touched_at == before
     assert (await r.db.text_mentions.get(m.mention_id)).entity_id == ids[1]
-    result = await r.db.entities.merge_batch(
-        ids[2],
-        ids[:2],
-        context=r.actor,
-        target_patch=EntityMergeTargetPatch(
-            expected_versions=await read_versions(r.db.entities, [ids[2], *ids[:2]])
-        ),
-    )
+    result = await r.db.entities.merge_batch(ids[2], merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(r.db.entities, [ids[2], *ids[:2]]), ids[2]
+            )
+        ), ids[:2]), context=r.actor)
     assert result.merged_entity.last_touched_by_api_key_id == r.key.api_key_id
     assert result.faces_reassigned == result.text_mentions_reassigned == 1
     before = result.merged_entity.last_touched_at
     await r.db.sources.delete(
-        r.pages[0].source_id,
-        context=r.user,
-        expected_version=(
-            await read_version(r.db.sources, r.pages[0].source_id)
+        VersionedTarget(
+            object_id=r.pages[0].source_id,
+            version=await read_version(r.db.sources, r.pages[0].source_id),
         ),
+        context=r.user,
     )
     target = await entity(r, 2)
     assert target.last_touched_at > before
@@ -559,14 +560,14 @@ async def test_equivalent_stored_face_embeddings_do_not_touch(records):
     f = await face(r, r.entities[0].entity_id)
     patch = FacePatchRequest(
         embeddings=[FaceEmbedding(model_identifier=model, vector=[0.1, 0.2])],
-        expected_version=1,
+        version=1,
     )
     await r.db.faces.patch(f.detection_id, patch, r.actor)
     before = await entity(r)
     await r.db.faces.patch(
         f.detection_id,
         patch.model_copy(
-            update={"expected_version": (await r.db.faces.get(f.detection_id)).version}
+            update={"version": (await r.db.faces.get(f.detection_id)).version}
         ),
         r.user,
     )
@@ -577,7 +578,7 @@ async def test_equivalent_stored_face_embeddings_do_not_touch(records):
         f.detection_id,
         FacePatchRequest(
             embeddings=[FaceEmbedding(model_identifier=model, vector=[0.2, 0.2])],
-            expected_version=(await r.db.faces.get(f.detection_id)).version,
+            version=(await r.db.faces.get(f.detection_id)).version,
         ),
         r.user,
     )

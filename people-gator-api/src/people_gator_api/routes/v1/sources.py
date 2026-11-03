@@ -1,5 +1,7 @@
 """Generic source endpoints backed only by persistence contracts."""
 
+from people_gator_api.schemas.common import VersionedTarget
+
 import uuid
 
 from fastapi import APIRouter, status
@@ -87,9 +89,11 @@ async def get_source_route(
 @router.delete("/sources/{source_id:uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source_route(
     source_id: uuid.UUID,
-    expected_version: int,
+    target: VersionedTarget[uuid.UUID],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.sources.delete(source_id, context=user, expected_version=expected_version):
+    if target.object_id != source_id:
+        raise_api_error(422, "invalid_target", "Target must match the URL")
+    if not await database.sources.delete(target, context=user):
         raise_api_error(404, "not_found", "Source not found")

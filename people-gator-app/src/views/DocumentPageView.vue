@@ -423,17 +423,17 @@ function closeDeletion(open: boolean) {
 }
 function requestDeletion(face: Face | null) {
   if (!face || actionBusy.value) return
-  deletionTarget.value = face
+  deletionTarget.value = { ...face }
 }
 function verifyFace(face: Face) {
   if (actionBusy.value) return
-  verifyMutation.mutate({ id: face.id, kind: 'face' })
+  verifyMutation.mutate({ id: face.id, kind: 'face', version: face.version })
 }
 async function deleteDetection() {
   const face = deletionTarget.value
   if (!face || actionBusy.value) return
   try {
-    await deleteMutation.mutateAsync(face.id)
+    await deleteMutation.mutateAsync({ id: face.id, version: face.version })
     clearFace()
     closeDeletion(false)
     viewerElement.value?.focus()
@@ -497,7 +497,7 @@ function clearFace() {
 
 function unassignSelectedFace() {
   if (!selectedFace.value?.personId || actionBusy.value) return
-  unassignFace(selectedFace.value.id)
+  unassignFace(selectedFace.value)
   selectedPersonId.value = null
   syncRoute()
 }
@@ -571,7 +571,7 @@ function previewSimilarPerson(person: SimilarPersonCandidate) {
 
 function assignSimilarPerson(person: SimilarPersonCandidate) {
   if (!selectedFace.value || actionBusy.value) return
-  assignFace(selectedFace.value.id, person.id)
+  assignFace(selectedFace.value, person.id)
   selectedPersonId.value = person.id
   syncRoute()
 }
@@ -581,7 +581,7 @@ async function createSimilarPerson(person: { name: string; shortDescription?: st
   creatingPerson.value = true
   try {
     const entity = await createAndAssign(
-      selectedFace.value.id,
+      { ...selectedFace.value },
       person.name,
       person.shortDescription,
     )

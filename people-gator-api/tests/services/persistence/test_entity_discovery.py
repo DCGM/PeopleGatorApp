@@ -428,7 +428,9 @@ async def test_entity_search_resolves_beyond_one_hundred_linked_faces(discovery)
 
 
 @pytest.mark.asyncio
-async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(discovery):
+async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(
+    discovery,
+):
     from people_gator_api.schemas.faces import FaceListFilter
     from people_gator_api.persistence.postgres.utils import TEXT_SEARCH_CANDIDATE_LIMIT
 
@@ -445,7 +447,7 @@ async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(
         candidate.entity_id,
         EntityPatchRequest(
             aliases=["Catalogue Alias"],
-            expected_version=(await db.entities.get(candidate.entity_id)).version,
+            version=(await db.entities.get(candidate.entity_id)).version,
         ),
         actor,
     )

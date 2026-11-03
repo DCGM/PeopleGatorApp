@@ -361,6 +361,8 @@ function retrySearch() {
             <SortControl v-model="faceSort" :options="faceSortOptions" label="Sort faces" />
           </div>
           <PersonFacesPanel
+            v-if="entity"
+            :person-version="entity!.version"
             :key="personId"
             collapsible
             :has-more="hasMoreFaces"
@@ -392,6 +394,8 @@ function retrySearch() {
             </p>
           </div>
           <PersonDiscoveryPanel
+            v-if="entity"
+            :person-version="entity.version"
             v-model:search-term="personSearchTerm"
             v-model:face-search-term="legacyFaceText"
             v-model:annotations="discoveryAnnotations"
@@ -519,7 +523,8 @@ function retrySearch() {
 
         <TabsContent value="details">
           <PersonEditableDetails
-            :version="entity?.version"
+            v-if="entity"
+            :version="entity!.version"
             hide-statistics
             :model-value="profile"
             :person-id="personId"

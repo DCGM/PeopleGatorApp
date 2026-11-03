@@ -1,4 +1,3 @@
-vi.mock('@/query/versions', () => ({ readVersion: () => 1 }))
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
 import { computed, defineComponent, h, ref } from 'vue'
@@ -65,7 +64,12 @@ beforeEach(() => {
   api.faces.mockResolvedValue({ data: { items: [], limit: 100, total_count: 0, cursor: null } })
   api.mentions.mockResolvedValue({ data: { items: [], limit: 100, total_count: 0, cursor: null } })
   api.entity.mockResolvedValue({
-    data: { entity_id: 'ada', name: 'Ada', entity_link_stats: { faces: counts, mentions: counts } },
+    data: {
+      version: 1,
+      entity_id: 'ada',
+      name: 'Ada',
+      entity_link_stats: { faces: counts, mentions: counts },
+    },
   })
 })
 afterEach(() =>
@@ -195,7 +199,7 @@ describe('entity link review', () => {
           })
         : Promise.resolve({
             data: {
-              items: [{ detection_id: 'verified-face' }],
+              items: [{ version: 1, detection_id: 'verified-face' }],
               limit: 1,
               total_count: 1,
               cursor: null,
@@ -213,7 +217,9 @@ describe('entity link review', () => {
     states.value = ['verified']
     await flushPromises()
     expect(api.faces.mock.calls[api.faces.mock.calls.length - 1]![0].query.cursor).toBeNull()
-    resolveOld({ data: { items: [{ detection_id: 'old-face' }], limit: 1, cursor: 'old-next' } })
+    resolveOld({
+      data: { items: [{ version: 1, detection_id: 'old-face' }], limit: 1, cursor: 'old-next' },
+    })
     await flushPromises()
     expect(query!.data.value?.pages[0]?.items[0]?.detection_id).toBe('verified-face')
   })
@@ -284,6 +290,7 @@ describe('entity link review', () => {
             position: { left: 0, top: 0, width: 1, height: 1 },
             entities: [
               {
+                version: 1,
                 mention_id: 'm1',
                 entity_id: 'ada',
                 label: 'person',
@@ -302,6 +309,7 @@ describe('entity link review', () => {
             position: { left: 0, top: 0, width: 1, height: 1 },
             entities: [
               {
+                version: 1,
                 mention_id: 'm1',
                 entity_id: 'ada',
                 label: 'person',
@@ -313,6 +321,7 @@ describe('entity link review', () => {
                 firstFragment: false,
               },
               {
+                version: 1,
                 mention_id: 'm2',
                 entity_id: 'ada',
                 label: 'person',
@@ -368,7 +377,7 @@ describe('entity link review', () => {
     }
     expect(wrapper.emitted('select-entity')).toHaveLength(3)
     expect(wrapper.emitted('select-entity')![0]![0]).toBe(1)
-    expect(wrapper.emitted('select-entity')![0]![1]).toMatchObject({ mention_id: 'm2' })
+    expect(wrapper.emitted('select-entity')![0]![1]).toMatchObject({ version: 1, mention_id: 'm2' })
     // One selected mention, blue as in the scan overlay; orange outline when it
     // also belongs to the selected person.
     await wrapper.setProps({ selectedEntityKey: 'm2' })
@@ -391,9 +400,12 @@ describe('entity link review', () => {
     async (inline) => {
       api.patchFace
         .mockRejectedValueOnce(new Error('Try again'))
-        .mockResolvedValueOnce({ data: { expected_version: 1, detection_id: 'f1', entity_link_state: 'verified' } })
+        .mockResolvedValueOnce({
+          data: { version: 1, detection_id: 'f1', entity_link_state: 'verified' },
+        })
       const { wrapper, queryClient } = renderQuery(
-        () => () => h(VerifyEntityLink, { id: 'f1', kind: 'face', linkState: 'manual', inline }),
+        () => () =>
+          h(VerifyEntityLink, { version: 1, id: 'f1', kind: 'face', linkState: 'manual', inline }),
       )
       const countParams = {
         'filter.min_annotations_verified_count': 2,
@@ -449,7 +461,7 @@ describe('entity link review', () => {
         ]),
       )
       expect(api.patchFace.mock.calls[api.patchFace.mock.calls.length - 1]![0].body).toEqual({
-        expected_version: 1,
+        version: 1,
         entity_link_state: 'verified',
       })
       for (const key of peopleKeys) {
@@ -468,6 +480,7 @@ describe('entity link review', () => {
     const { wrapper } = renderQuery(
       () => () =>
         h(VerifyEntityLink, {
+          version: 1,
           id: 'f1',
           kind: 'face',
           linkState: 'verified',
@@ -534,13 +547,13 @@ it('preserves a rejected deletion, then removes cached detail/crops and refreshe
     return () =>
       h(
         'button',
-        { onClick: () => mutation.mutate('f1') },
+        { onClick: () => mutation.mutate({ id: 'f1', version: 1 }) },
         mutation.error.value ? 'Failed' : 'Delete',
       )
   })
-  queryClient.setQueryData(['faces', 'detail', 'f1'], { detection_id: 'f1' })
+  queryClient.setQueryData(['faces', 'detail', 'f1'], { version: 1, detection_id: 'f1' })
   queryClient.setQueryData(['face-crops', 'aligned', 'f1', 128], new Blob())
-  queryClient.setQueryData(['faces', 'detail', 'other'], { detection_id: 'other' })
+  queryClient.setQueryData(['faces', 'detail', 'other'], { version: 1, detection_id: 'other' })
   const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
   await wrapper.get('button').trigger('click')
   await flushPromises()
@@ -551,7 +564,7 @@ it('preserves a rejected deletion, then removes cached detail/crops and refreshe
   await flushPromises()
   expect(api.deleteFace).toHaveBeenLastCalledWith({
     path: { detection_id: 'f1' },
-    query: { expected_version: 1 },
+    body: { object_id: 'f1', version: 1 },
     throwOnError: true,
   })
   expect(queryClient.getQueryData(['faces', 'detail', 'f1'])).toBeUndefined()

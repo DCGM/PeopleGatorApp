@@ -49,7 +49,7 @@ def _client(collection: Mock) -> WeaviateAsyncClient:
 def _stored(properties: dict[str, object], **references: uuid.UUID) -> SimpleNamespace:
     return SimpleNamespace(
         uuid=uuid.uuid4(),
-        properties=properties,
+        properties={"version": 1, **properties},
         vector={},
         references={
             name: SimpleNamespace(objects=[SimpleNamespace(uuid=value)])
@@ -301,12 +301,13 @@ async def test_face_model_reregistration_checks_stored_dimension() -> None:
 @pytest.mark.asyncio
 async def test_versioned_mention_patch_is_explicitly_unsupported():
     from people_gator_api.schemas.mentions import TextMentionPatchRequest
+
     collection = _collection()
     repo = WeaviateTextMentionRepository(_client(collection))
     with pytest.raises(NotImplementedError, match="require PostgreSQL"):
         await repo.patch(
             uuid.uuid4(),
-            TextMentionPatchRequest(expected_version=1, entity_link_state="verified"),
+            TextMentionPatchRequest(version=1, entity_link_state="verified"),
             GenericActor(user_id=uuid.uuid4()),
         )
     collection.data.replace.assert_not_awaited()

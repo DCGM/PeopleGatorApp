@@ -5,6 +5,7 @@ export type FaceStatus = 'assigned' | 'unassigned'
 
 export type Face = LinkMetadata & {
   id: string
+  version: number
   sourceId?: string
   embeddingModel?: string
   personId: string | null

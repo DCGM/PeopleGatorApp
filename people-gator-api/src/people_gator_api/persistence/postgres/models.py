@@ -38,6 +38,7 @@ from people_gator_api.schemas.enums import EntityLinkState
 
 ENTITY_LINK_ENUM = Enum(EntityLinkState, name="pg_demo_entity_link_state", values_callable=lambda enum: [item.value for item in enum])
 
+
 def link_constraints(table):
     return (
         CheckConstraint("(entity_id IS NULL) = (entity_link_state IS NULL)", name=f"ck_pg_demo_{table}_link"),
@@ -88,6 +89,7 @@ TABLE_NAME_PREFIX = PG + PREFIX
 INDEX_NAME_PREFIX = IX + PG + PREFIX
 TABLE_NAME_FORMAT = TABLE_NAME_PREFIX + "{}"
 INDEX_NAME_FORMAT = INDEX_NAME_PREFIX + "{}"
+
 
 class User(Base):
     """Application user referenced by owner-aware records."""
@@ -306,7 +308,10 @@ class Document(Source):
     library: Mapped[str] = mapped_column(String(255), nullable=False)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
-    name_normalized: Mapped[str | None] = mapped_column(Text, Computed("lower(demo_unaccent(name))", persisted=True))
+    name_normalized: Mapped[str | None] = mapped_column(
+        Text,
+        Computed("lower(demo_unaccent(name))", persisted=True),
+    )
 
     __mapper_args__ = {"polymorphic_identity": "document"}  # noqa: RUF012
 
@@ -507,7 +512,6 @@ class FaceEmbedding(Base):
     model: Mapped[FaceModel] = relationship(back_populates="embeddings")
 
 
-
 def face_embedding_hnsw_index(model_stub: str, embedding_dim: int) -> Index:
     """Build the stable partial HNSW index definition for one face model."""
     digest = hashlib.sha256(model_stub.encode()).hexdigest()[:16]
@@ -522,6 +526,7 @@ def face_embedding_hnsw_index(model_stub: str, embedding_dim: int) -> Index:
         postgresql_with={"m": 16, "ef_construction": 64},
     )
     return index
+
 
 # FK SET NULL also runs this trigger, keeping raw SQL deletes consistent.
 CLEAR_LINK_FUNCTION = """CREATE OR REPLACE FUNCTION pg_demo_clear_entity_link() RETURNS trigger
@@ -567,14 +572,123 @@ class AuditChange(Base):
     actor_api_key_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
 
-class ObjectHistory(Base):
-    """Complete predecessors and final deleted states. Related IDs have no live FKs."""
-    __tablename__ = "pg_demo_object_history"
-    object_type: Mapped[str] = mapped_column(String(16), primary_key=True)
-    object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, primary_key=True)
-    change_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pg_demo_audit_changes.id", ondelete="RESTRICT"), nullable=False, index=True)
-    deleted: Mapped[bool] = mapped_column(nullable=False)
-    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
-    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
-    state: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+# Audit tables deliberately have no foreign keys to live objects. Their only
+# relationships bind child snapshots to an immutable historical parent version.
+# Copy field types/nullability, not live defaults, generated expressions or FKs.
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Table
+
+
+def historical_table(name, *originals, child_of=None):
+    columns = {}
+    for original in originals:
+        for column in original.__table__.columns:
+            if column.name in columns:
+                continue
+            columns[column.name] = Column(
+                column.name,
+                column.type.copy(),
+                nullable=False if column.name in ("id", "version") else column.nullable,
+                primary_key=column.name in ("id", "version"),
+            )
+    if "version" not in columns:
+        columns["version"] = Column("version", Integer, primary_key=True)
+    constraints = [CheckConstraint("version >= 1", name=f"ck_{name}_version")]
+    for original in originals:
+        for constraint in original.__table__.constraints:
+            if isinstance(constraint, CheckConstraint):
+                constraints.append(
+                    CheckConstraint(
+                        str(constraint.sqltext),
+                        name=f"ck_{name}_{str(constraint.name).removeprefix('ck_pg_demo_')}"[
+                            :63
+                        ],
+                    )
+                )
+    if child_of:
+        parent, reference = child_of
+        constraints.append(
+            ForeignKeyConstraint(
+                [reference, "version"],
+                [f"{parent}.id", f"{parent}.version"],
+                ondelete="RESTRICT",
+            )
+        )
+    else:
+        columns["deleted"] = Column("deleted", Boolean, nullable=False)
+        columns["change_id"] = Column(
+            "change_id",
+            UUID(as_uuid=True),
+            ForeignKey("pg_demo_audit_changes.id", ondelete="RESTRICT"),
+            nullable=False,
+        )
+    table = Table(name, Base.metadata, *columns.values(), *constraints)
+    for field in (
+        "change_id",
+        "entity_id",
+        "source_id",
+        "last_touched_at",
+        "last_touched_by_user_id",
+        "source_type",
+        "library",
+        "document_id",
+        "page_id",
+        "entity_link_state",
+        "entity_link_verified_by_user_id",
+        "entity_link_verified_at",
+    ):
+        if field in table.c:
+            Index(f"ix_{name}_{field}", table.c[field])
+    return table
+
+
+class EntityHistory(Base):
+    __table__ = historical_table("pg_demo_entity_history", Entity)
+
+
+class FaceHistory(Base):
+    __table__ = historical_table("pg_demo_face_history", ImageOccurrence, Face)
+
+
+class TextMentionHistory(Base):
+    __table__ = historical_table("pg_demo_text_mention_history", TextMention)
+
+
+class SourceHistory(Base):
+    __table__ = historical_table("pg_demo_source_history", Source, Page, Document)
+    # Subtype-required columns are nullable on the polymorphic root; checks below
+    # enforce the same required fields for page/document snapshots.
+    __table__.c.library.nullable = True
+    __table__.c.document_id.nullable = True
+    __table__.c.page_id.nullable = True
+    __table__.append_constraint(
+        CheckConstraint(
+            "source_type IN ('page', 'document', 'image') AND "
+            "(source_type NOT IN ('page', 'document') OR (library IS NOT NULL AND document_id IS NOT NULL)) AND "
+            "(source_type <> 'page' OR page_id IS NOT NULL)",
+            name="ck_pg_demo_source_history_subtype",
+        )
+    )
+
+
+class AliasHistory(Base):
+    __table__ = historical_table(
+        "pg_demo_alias_history", Alias, child_of=("pg_demo_entity_history", "entity_id")
+    )
+
+
+class FaceEmbeddingHistory(Base):
+    __table__ = Table(
+        "pg_demo_face_embedding_history",
+        Base.metadata,
+        Column("face_id", UUID(as_uuid=True), primary_key=True),
+        Column("version", Integer, primary_key=True),
+        Column(
+            "model_id", FaceEmbedding.__table__.c.model_id.type.copy(), primary_key=True
+        ),
+        Column("embedding", VECTOR(), nullable=False),
+        ForeignKeyConstraint(
+            ["face_id", "version"],
+            ["pg_demo_face_history.id", "pg_demo_face_history.version"],
+            ondelete="RESTRICT",
+        ),
+    )
