@@ -5180,10 +5180,10 @@ async def test_search_merge_scenario_preserves_batch_merge_and_target_edits_on_r
         loaded_ids.update(item.entity_id for item in page.items)
     assert merge_ids <= loaded_ids
     actor = GenericActor(user_id=first.users["reviewer"])
-    result = await database.entities.merge_batch(target, sources, context=actor)
+    result = await database.entities.merge_batch(target, EntityMergeTargetPatch(**merge_targets(await read_versions(database.entities, [target, *sources]), target)), context=actor)
     assert result.faces_reassigned == result.text_mentions_reassigned == 2
     assert set(result.merged_entity.aliases) == {f"R. Merge {i}" for i in range(1, 4)}
-    edited = await database.entities.patch(target, EntityPatchRequest(name="Reviewed Rina"), context=actor)
+    edited = await database.entities.patch(target, EntityPatchRequest(version=result.merged_entity.version, name="Reviewed Rina"), context=actor)
     second = await preview.seed_preview(database, filesystem)
     assert second.entities["merge-3"] == target
     assert "merge-1" not in second.entities and "merge-2" not in second.entities
@@ -5403,10 +5403,17 @@ async def test_scan_sidebar_upgrade_is_additive_and_preserves_reviews(seed_targe
         authentication_method="bearer",
     )
     unlinked = await database.faces.patch(
-        seed.faces["sidebar-crowd-2-1"], FacePatchRequest(entity_id=None), reviewer)
+        seed.faces["sidebar-crowd-2-1"], FacePatchRequest(
+            entity_id=None,
+            version=await read_version(database.faces, seed.faces["sidebar-crowd-2-1"]),
+        ), reviewer)
     relinked = await database.text_mentions.patch(
         seed.mentions["sidebar-hana-unlinked"],
-        TextMentionPatchRequest(entity_id=seed.entities["sidebar-hana"]), reviewer)
+        TextMentionPatchRequest(
+            entity_id=seed.entities["sidebar-hana"],
+            version=await read_version(
+                database.text_mentions, seed.mentions["sidebar-hana-unlinked"]),
+        ), reviewer)
     before = await counts(database)
     assert await preview.seed_preview(database, filesystem) == seed
     assert await counts(database) == before

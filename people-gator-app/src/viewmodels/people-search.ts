@@ -15,6 +15,7 @@ import { useEntityResultsQuery, type EntitySearchRecord } from '@/query/search'
 export type PeopleSearchItem = {
   thumbnailFaceId?: string | null
   id: string
+  version: number
   name: string
   aliases: string[]
   faces: number | null
@@ -74,6 +75,7 @@ export function usePeopleSearch(
   const people = computed<PeopleSearchItem[]>(() =>
     pageRecords.value.map((person) => ({
       id: person.entity_id,
+      version: person.version,
       thumbnailFaceId: person.thumbnail_face_id,
       name: person.name || 'Unnamed person',
       aliases: person.aliases ?? [],

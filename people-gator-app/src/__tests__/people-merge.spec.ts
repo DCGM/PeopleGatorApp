@@ -25,9 +25,9 @@ vi.mock('@/client', () => ({
 vi.mock('@/composables/can-annotate', () => ({ useHasScope: () => permission }))
 const permission = ref(true)
 const people = ref([
-  { id: 'a', name: 'Ada' },
-  { id: 'b', name: 'Bea' },
-  { id: 'c', name: 'Cia' },
+  { version: 1, id: 'a', name: 'Ada' },
+  { version: 1, id: 'b', name: 'Bea' },
+  { version: 1, id: 'c', name: 'Cia' },
 ])
 const scope = ref('query-one')
 const loading = ref(false)
@@ -53,9 +53,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   permission.value = true
   people.value = [
-    { id: 'a', name: 'Ada' },
-    { id: 'b', name: 'Bea' },
-    { id: 'c', name: 'Cia' },
+    { version: 1, id: 'a', name: 'Ada' },
+    { version: 1, id: 'b', name: 'Bea' },
+    { version: 1, id: 'c', name: 'Cia' },
   ]
   scope.value = 'query-one'
   loading.value = false
@@ -63,7 +63,7 @@ beforeEach(() => {
     fn.mockImplementation(async ({ path }) => ({
       data: {
         target_entity_id: path.target_entity_id,
-        merged_entity: { entity_id: path.target_entity_id, name: 'Merged' },
+        merged_entity: { version: 1, entity_id: path.target_entity_id, name: 'Merged' },
       },
     }))
 })
@@ -97,7 +97,13 @@ it.each(['first', 'last'] as const)(
     expect(api.batch).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         path: { target_entity_id: target },
-        body: { source_entity_ids: which === 'first' ? ['b', 'c'] : ['a', 'b'] },
+        body: {
+          version: 1,
+          sources: (which === 'first' ? ['b', 'c'] : ['a', 'b']).map((object_id) => ({
+            object_id,
+            version: 1,
+          })),
+        },
       }),
     )
     expect(api.single).not.toHaveBeenCalled()
@@ -134,7 +140,7 @@ it('uses one single merge for two people and freezes the request against repeate
   expect(api.single).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       path: { target_entity_id: 'a' },
-      body: { source_entity_id: 'b' },
+      body: { version: 1, sources: [{ object_id: 'b', version: 1 }] },
     }),
   )
   finish({ data: { target_entity_id: 'a', merged_entity: { entity_id: 'a' } } })
@@ -158,7 +164,7 @@ it('keeps selection on append, prunes unavailable results, and clears on query/f
   const wrapper = setup()
   click('a')
   click('b')
-  people.value.push({ id: 'd', name: 'Dee' })
+  people.value.push({ version: 1, id: 'd', name: 'Dee' })
   await flushPromises()
   expect([...state.selectedIds.value]).toEqual(['a', 'b'])
   people.value = people.value.filter((p) => p.id !== 'a')
@@ -207,10 +213,22 @@ it('reconciles only confirmed missing records after a stale merge fails', async 
 })
 
 it.each([
-  { targetEntityId: 'a', sourceEntityIds: [] },
-  { targetEntityId: 'a', sourceEntityIds: ['b', 'b'] },
-  { targetEntityId: 'a', sourceEntityIds: ['a'] },
-  { targetEntityId: '', sourceEntityIds: ['b'] },
+  { targetEntityId: 'a', version: 1, sources: [].map((object_id) => ({ object_id, version: 1 })) },
+  {
+    targetEntityId: 'a',
+    version: 1,
+    sources: ['b', 'b'].map((object_id) => ({ object_id, version: 1 })),
+  },
+  {
+    targetEntityId: 'a',
+    version: 1,
+    sources: ['a'].map((object_id) => ({ object_id, version: 1 })),
+  },
+  {
+    targetEntityId: '',
+    version: 1,
+    sources: ['b'].map((object_id) => ({ object_id, version: 1 })),
+  },
 ])('rejects invalid merge payloads before an API request: %j', async (payload) => {
   const { useMergeEntitiesMutation } = await import('@/query/entities')
   let mutation!: ReturnType<typeof useMergeEntitiesMutation>
@@ -304,6 +322,7 @@ it.each([
     const fetchPage = vi.fn(async ({ query: params }) => ({
       data: {
         items: (params.cursor ? (deleted ? ['c'] : ['b', 'c']) : ['a']).map((id) => ({
+          version: 1,
           entity_id: id,
           name: id.toUpperCase(),
         })),
@@ -353,7 +372,7 @@ it.each([
       expect(api.single).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           path: { target_entity_id: which === 'first' ? 'a' : 'c' },
-          body: { source_entity_id: which === 'first' ? 'c' : 'a' },
+          body: { version: 1, sources: [{ object_id: which === 'first' ? 'c' : 'a', version: 1 }] },
         }),
       )
       expect(selection.message.value).toBe('People merged.')
@@ -363,3 +382,30 @@ it.each([
     }
   },
 )
+
+it('retains the target and source versions selected before a background refresh', async () => {
+  people.value = [
+    { id: 'a', name: 'Ada', version: 2 },
+    { id: 'b', name: 'Bea', version: 7 },
+  ]
+  const wrapper = setup()
+  click('a')
+  click('b')
+  people.value = people.value.map((person) => ({
+    ...person,
+    version: 99,
+    name: 'Changed elsewhere',
+  }))
+  await flushPromises()
+  const conflict = new AxiosError('stale')
+  conflict.response = { status: 409 } as never
+  api.single.mockRejectedValueOnce(conflict)
+  await state.merge('first')
+  expect(api.single.mock.lastCall?.[0].body).toEqual({
+    version: 2,
+    sources: [{ object_id: 'b', version: 7 }],
+  })
+  expect([...state.selectedIds.value]).toEqual(['a', 'b'])
+  expect(api.get).not.toHaveBeenCalled()
+  wrapper.unmount()
+})

@@ -298,8 +298,10 @@ async def test_face_sorts_by_state_confidence_and_source(collection):
 async def test_face_person_sort_keeps_each_person_contiguous_across_pages(collection):
     c = collection
     bea = c.r.entities[4].entity_id  # "Bea Ortiz" precedes c.person, "Émil Zorn"
-    await c.r.db.faces.patch_batch([FacePatchBatchItem(detection_id=c.faces[1].detection_id,
-                                                       entity_id=bea)], c.r.actor)
+    await c.r.db.faces.patch_batch([FacePatchBatchItem(
+        detection_id=c.faces[1].detection_id, entity_id=bea,
+        version=(await c.r.db.faces.get(c.faces[1].detection_id)).version,
+    )], c.r.actor)
     scope = FaceListFilter(source_id=[page.source_id for page in c.pages])
     expected = {
         "asc": [bea, c.person, c.person, c.person, None],
@@ -320,8 +322,14 @@ async def test_mention_person_sort_keeps_each_person_contiguous_across_pages(col
     c = collection
     bea = c.r.entities[4].entity_id  # "Bea Ortiz" precedes c.person, "Émil Zorn"
     await c.r.db.text_mentions.patch_batch([
-        TextMentionPatchBatchItem(mention_id=c.mentions[1].mention_id, entity_id=bea),
-        TextMentionPatchBatchItem(mention_id=c.mentions[2].mention_id, entity_id=None),
+        TextMentionPatchBatchItem(
+            mention_id=c.mentions[1].mention_id, entity_id=bea,
+            version=(await c.r.db.text_mentions.get(c.mentions[1].mention_id)).version,
+        ),
+        TextMentionPatchBatchItem(
+            mention_id=c.mentions[2].mention_id, entity_id=None,
+            version=(await c.r.db.text_mentions.get(c.mentions[2].mention_id)).version,
+        ),
     ], c.r.actor)
     scope = TextMentionListFilter(source_id=[page.source_id for page in c.pages])
     expected = {
