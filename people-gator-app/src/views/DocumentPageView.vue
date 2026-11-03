@@ -379,9 +379,9 @@ function focusPeopleSearch() {
   if (sidebarState.value.tab === 'people') void nextTick(applyPeopleFocus)
   else sidebar.update({ tab: 'people' })
 }
+// Face Search opens People with the results; focus stays on the scan card.
 function searchByFace(face: Face) {
   sidebar.searchByFace(face.id)
-  focusPeopleSearch()
 }
 const canAnnotate = useCanAnnotate()
 const canDelete = useCanDeleteDetection()

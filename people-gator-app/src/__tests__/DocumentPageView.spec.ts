@@ -828,11 +828,10 @@ describe('scan sidebar (#103)', () => {
       candidate_sort: 'relevance',
       people_scope: 'document',
     })
-    // Focus follows once the People tab opens.
-    expect(mocks.focusPeople).not.toHaveBeenCalled()
+    // Unlike Link/Reassign, Search leaves focus where it is, even once People opens.
     route.query = { ...route.query, panel: undefined } as unknown as Record<string, string>
     await flushPromises()
-    expect(mocks.focusPeople).toHaveBeenCalledTimes(1)
+    expect(mocks.focusPeople).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
