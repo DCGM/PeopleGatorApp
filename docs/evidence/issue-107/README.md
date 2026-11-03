@@ -4,13 +4,18 @@ Actual Playwright Chromium captures from the implementation with the synthetic
 **Rina Merge** scenario. Desktop uses a 1440 × 900 CSS viewport; mobile uses
 390 × 844. Images capture the viewport to show the floating toolbar.
 
+- `*-browse.png`: unchecked corner controls and normal card navigation using
+  the synthetic Pagination people.
 - `*-selection.png`: three explicitly selected people; the shared person-detail
   toolbar floats at the bottom with last/first named merge actions, then Clear.
+  Cards use the person-detail checkbox, selected border and background.
 - `*-pending.png`: held batch request; selection and actions disabled.
 - `*-error.png`: deliberately aborted request; selected people retained for retry.
 - `*-dark.png`: the same selected state in dark mode.
 
-Browser checks exercised Space and Shift+Space selection, forward/backward Shift
+Browser checks exercised normal person navigation, checkbox-only removal,
+additive card clicks, selected-card clicks preserving selection/order, Clear
+restoring navigation, Space and Shift+Space selection, forward/backward Shift
 ranges, Clear, no horizontal overflow at both sizes, fixed placement while
 scrolling, the last result scrolling above the toolbar, pending locking, a simulated
 network failure and retry, and real API merges using both actions. The batch

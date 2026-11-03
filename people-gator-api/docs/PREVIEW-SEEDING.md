@@ -1220,3 +1220,9 @@ The selected-person toolbar floats at the bottom like the person-detail face
 and people toolbars. Scroll the Rina Merge results on desktop and mobile to
 check that the count, merge actions, Clear and pending/error feedback stay visible.
 This layout uses the existing scenario; no fixture or persistence upgrade is needed.
+
+Rina Merge cards share the person-detail corner checkbox and selected border/fill.
+Start with a checkbox, then click cards to add people. Clicking a selected card
+keeps it selected; only its checkbox removes it. Shift-click either control to add
+a range, and Clear restores card navigation. Existing linked fixtures demonstrate
+these interactions without a fixture or persistence upgrade.

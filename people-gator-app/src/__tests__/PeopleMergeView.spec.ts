@@ -4,10 +4,11 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PeopleSearchView from '@/views/PeopleSearchView.vue'
 
-const state = vi.hoisted(() => ({ merge: vi.fn(), clear: vi.fn(), toggle: vi.fn() }))
+const state = vi.hoisted(() => ({ merge: vi.fn(), clear: vi.fn(), toggle: vi.fn(), add: vi.fn() }))
 const allowed = ref(true),
   busy = ref(false),
   message = ref('')
+const selectedIds = ref(new Set(['c', 'a']))
 const selected = ref([
   { id: 'c', name: 'Cia' },
   { id: 'a', name: 'Ada' },
@@ -19,7 +20,7 @@ vi.mock('@/viewmodels/people-merge', () => ({
     busy,
     message,
     selected,
-    selectedIds: ref(new Set(['c', 'a'])),
+    selectedIds,
   }),
 }))
 vi.mock('@/viewmodels/people-counts', async (original) => ({
@@ -32,7 +33,11 @@ vi.mock('@/viewmodels/shared-filters', () => ({
 }))
 vi.mock('@/viewmodels/people-search', () => ({
   usePeopleSearch: () => ({
-    people: ref([{ id: 'a', name: 'Ada' }]),
+    people: ref([
+      { id: 'a', name: 'Ada' },
+      { id: 'b', name: 'Bea' },
+      { id: 'c', name: 'Cia' },
+    ]),
     error: ref(null),
     isFetching: ref(false),
     hasNextPage: ref(false),
@@ -53,7 +58,8 @@ async function setup() {
     global: {
       plugins: [router],
       stubs: {
-        RouterLink: true, PeopleSearchBar: true,
+        RouterLink: true,
+        PeopleSearchBar: true,
         PeopleCard: true,
         PeopleCardSkeleton: true,
       },
@@ -65,6 +71,11 @@ beforeEach(() => {
   allowed.value = true
   busy.value = false
   message.value = ''
+  selectedIds.value = new Set(['c', 'a'])
+  selected.value = [
+    { id: 'c', name: 'Cia' },
+    { id: 'a', name: 'Ada' },
+  ]
 })
 it('shows exactly the two named merge actions then Clear and submits without a dialog', async () => {
   const wrapper = await setup()
@@ -83,7 +94,9 @@ it('shows exactly the two named merge actions then Clear and submits without a d
   await buttons[2]!.trigger('click')
   expect(state.clear).toHaveBeenCalledOnce()
   expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
-  expect(wrapper.get('[aria-label="Select Ada for merge"]').attributes('aria-pressed')).toBe('true')
+  expect(wrapper.get('[aria-label="Remove Ada from merge"]').attributes('aria-pressed')).toBe(
+    'true',
+  )
   wrapper.unmount()
 })
 it('disables selection and actions during pending and exposes error recovery feedback', async () => {
@@ -103,5 +116,31 @@ it('hides merge selection and actions from non-admin users', async () => {
   const wrapper = await setup()
   expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
   expect(wrapper.find('[aria-label="Select Ada for merge"]').exists()).toBe(false)
+  wrapper.unmount()
+})
+
+it('uses additive card clicks in selection mode and leaves removal to the corner control', async () => {
+  const wrapper = await setup()
+  expect(wrapper.find('[aria-label="Open Ada"]').exists()).toBe(false)
+  await wrapper.get('[aria-label="Ada is selected"]').trigger('click')
+  expect(state.add).toHaveBeenLastCalledWith('a', expect.objectContaining({ shiftKey: false }))
+  expect(state.toggle).not.toHaveBeenCalled()
+  await wrapper.get('[aria-label="Add Bea to selection"]').trigger('click', { shiftKey: true })
+  expect(state.add).toHaveBeenLastCalledWith('b', expect.objectContaining({ shiftKey: true }))
+  await wrapper.get('[aria-label="Remove Ada from merge"]').trigger('click')
+  expect(state.toggle).toHaveBeenLastCalledWith('a', expect.anything())
+  wrapper.unmount()
+})
+
+it('opens cards normally until the first person is selected', async () => {
+  selectedIds.value = new Set()
+  selected.value = []
+  const wrapper = await setup()
+  expect(wrapper.find('[aria-label="Open Ada"]').exists()).toBe(true)
+  expect(wrapper.find('[aria-label="Add Ada to selection"]').exists()).toBe(false)
+  const control = wrapper.get('[aria-label="Select Ada for merge"]')
+  expect(control.attributes('aria-pressed')).toBe('false')
+  await control.trigger('click')
+  expect(state.toggle).toHaveBeenLastCalledWith('a', expect.anything())
   wrapper.unmount()
 })

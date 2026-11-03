@@ -23,7 +23,7 @@ export function usePeopleMerge(people: Ref<Person[]>, scope: Ref<string>, loadin
     anchor.value = null
     message.value = ''
   }
-  function toggle(id: string, event: { shiftKey: boolean }) {
+  function select(id: string, event: { shiftKey: boolean }, addOnly = false) {
     if (!allowed.value || busy.value || loading.value || !people.value.some((p) => p.id === id))
       return
     const range =
@@ -36,6 +36,7 @@ export function usePeopleMerge(people: Ref<Person[]>, scope: Ref<string>, loadin
       )
     if (range) selectedIds.value = range
     else {
+      if (addOnly && selectedIds.value.has(id)) return
       const next = new Set(selectedIds.value)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -95,5 +96,15 @@ export function usePeopleMerge(people: Ref<Person[]>, scope: Ref<string>, loadin
       if (requestScope !== scope.value) clear()
     }
   }
-  return { allowed, selectedIds, selected, busy, message, clear, toggle, merge }
+  return {
+    allowed,
+    selectedIds,
+    selected,
+    busy,
+    message,
+    clear,
+    merge,
+    toggle: (id: string, event: { shiftKey: boolean }) => select(id, event),
+    add: (id: string, event: { shiftKey: boolean }) => select(id, event, true),
+  }
 }

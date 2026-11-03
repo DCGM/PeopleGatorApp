@@ -119,3 +119,8 @@ adds an inclusive range in display order), then choose **Last selected (name)** 
 resets selection. Only loaded, explicitly selected people participate; changing
 search/filters clears selection, while sorting preserves selection order for
 people still loaded. See the seed guide for disposable practice data.
+
+The corner checkbox starts or toggles person selection. Before selecting, a card
+opens its person; while selecting, card clicks only add people and never remove
+them. Use a checkbox to remove someone, or Shift-click a checkbox or card to add
+an inclusive range. Clear restores normal navigation.

@@ -204,10 +204,15 @@ it.each([
 ])('rejects invalid merge payloads before an API request: %j', async (payload) => {
   const { useMergeEntitiesMutation } = await import('@/query/entities')
   let mutation!: ReturnType<typeof useMergeEntitiesMutation>
-  const wrapper = mount(defineComponent({ setup() {
-    mutation = useMergeEntitiesMutation()
-    return () => null
-  } }), { global: { plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]] } })
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        mutation = useMergeEntitiesMutation()
+        return () => null
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]] } },
+  )
   await expect(mutation.mutateAsync(payload)).rejects.toThrow('Select distinct people')
   expect(api.single).not.toHaveBeenCalled()
   expect(api.batch).not.toHaveBeenCalled()
@@ -216,9 +221,15 @@ it.each([
 
 it('clears selection after a query change during a failed pending request', async () => {
   let fail!: (error: unknown) => void
-  api.single.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
+  api.single.mockImplementation(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject
+      }),
+  )
   const wrapper = setup()
-  click('a'); click('b')
+  click('a')
+  click('b')
   const pending = state.merge('first')
   await flushPromises()
   scope.value = 'different-query'
@@ -226,5 +237,45 @@ it('clears selection after a query change during a failed pending request', asyn
   await pending
   expect(state.selectedIds.value.size).toBe(0)
   expect(state.message.value).toBe('')
+  wrapper.unmount()
+})
+
+it('makes card selection additive, keeps existing selection order and toggles only via controls', async () => {
+  const wrapper = setup()
+  click('c')
+  state.add('a', { shiftKey: false })
+  state.add('c', { shiftKey: false })
+  expect([...state.selectedIds.value]).toEqual(['c', 'a'])
+  // Clicking an already-selected card must not replace the range anchor (Ada).
+  state.add('c', { shiftKey: true })
+  expect([...state.selectedIds.value]).toEqual(['c', 'a', 'b'])
+  click('a')
+  expect([...state.selectedIds.value]).toEqual(['c', 'b'])
+  click('a')
+  expect([...state.selectedIds.value]).toEqual(['c', 'b', 'a'])
+  wrapper.unmount()
+})
+
+it('blocks additive card selection during pending merge and loading', async () => {
+  const wrapper = setup()
+  loading.value = true
+  state.add('a', { shiftKey: false })
+  expect(state.selectedIds.value.size).toBe(0)
+  loading.value = false
+  click('a')
+  click('b')
+  let finish!: (value: unknown) => void
+  api.single.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const pending = state.merge('first')
+  await flushPromises()
+  state.add('c', { shiftKey: false })
+  expect([...state.selectedIds.value]).toEqual(['a', 'b'])
+  finish({ data: { target_entity_id: 'a', merged_entity: { entity_id: 'a' } } })
+  await pending
   wrapper.unmount()
 })

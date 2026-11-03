@@ -9,6 +9,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Merge, UserRound } from '@lucide/vue'
 
 import PeopleCard from '@/components/custom/PeopleCard.vue'
+import PersonSelectionControl from '@/components/custom/PersonSelectionControl.vue'
 import PeopleCardSkeleton from '@/components/custom/PeopleCardSkeleton.vue'
 import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
 import SelectedEvidenceActions from '@/components/custom/SelectedEvidenceActions.vue'
@@ -72,7 +73,7 @@ const selectionScope = computed(() =>
       .sort(),
   ),
 )
-const { allowed, selectedIds, selected, busy, message, clear, toggle, merge } = usePeopleMerge(
+const { allowed, selectedIds, selected, busy, message, clear, toggle, add, merge } = usePeopleMerge(
   people,
   selectionScope,
   isFetching,
@@ -152,36 +153,44 @@ useAutomaticPagination({
       <Separator orientation="horizontal" />
 
       <div v-if="people.length || isLoading" class="grid gap-0 pt-6 sm:grid-cols-2 lg:grid-cols-3">
-        <div v-for="person in people" :key="person.id" class="relative min-w-0">
-          <Button
-            v-if="allowed"
-            type="button"
-            variant="outline"
-            size="sm"
-            class="absolute right-2 top-2 z-10"
-            :disabled="busy || isFetching"
-            :aria-label="`Select ${person.name} for merge`"
-            :aria-pressed="selectedIds.has(person.id)"
-            @click="toggle(person.id, $event)"
-            >{{ selectedIds.has(person.id) ? 'Selected' : 'Select' }}</Button
-          >
+        <div v-for="person in people" :key="person.id" class="group relative min-w-0">
           <RouterLink
-            class="group block h-full min-w-0"
-            :class="allowed && 'pt-8'"
+            v-if="!allowed || !selectedIds.size"
+            class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :aria-label="`Open ${person.name}`"
             :to="{
               name: 'person-detail',
               params: { personId: person.id },
               query: relatedQuery(route),
             }"
-          >
-            <PeopleCard
-              :thumbnail-face-id="person.thumbnailFaceId"
-              :name="person.name"
-              :faces="person.faces"
-              :names="person.names"
-              :count-details="person.countDetails"
-            />
-          </RouterLink>
+          />
+          <button
+            v-else
+            type="button"
+            class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :disabled="busy || isFetching"
+            :aria-label="
+              selectedIds.has(person.id)
+                ? `${person.name} is selected`
+                : `Add ${person.name} to selection`
+            "
+            @click="add(person.id, $event)"
+          ></button>
+          <PersonSelectionControl
+            v-if="allowed"
+            :name="person.name"
+            :selected="selectedIds.has(person.id)"
+            :disabled="busy || isFetching"
+            @toggle="toggle(person.id, $event)"
+          />
+          <PeopleCard
+            :selected="allowed && selectedIds.has(person.id)"
+            :thumbnail-face-id="person.thumbnailFaceId"
+            :name="person.name"
+            :faces="person.faces"
+            :names="person.names"
+            :count-details="person.countDetails"
+          />
         </div>
         <PeopleCardSkeleton
           v-for="index in isLoading || isFetchingNextPage ? 3 : 0"
