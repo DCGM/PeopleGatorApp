@@ -49,7 +49,7 @@ describe('selected face card (#103)', () => {
     expect(wrapper.emitted('findProfile')).toHaveLength(1)
   })
 
-  it('is compact: face with a + for more faces, state, and left-aligned actions', () => {
+  it('is compact: face with a gallery button, state, and left-aligned actions', () => {
     const wrapper = mount(SelectedFaceItem, {
       props: {
         face: { ...face, shortDescription: 'Synthetic archivist', wikidataId: 'Q1' },
@@ -58,8 +58,8 @@ describe('selected face card (#103)', () => {
       global: { stubs },
     })
     const preview = wrapper.getComponent({ name: 'IdentityFacePreview' })
-    expect(preview.props()).toMatchObject({ personId: 'person', name: 'Lina', compact: true })
-    // The + sits over the thumbnail, beside the name and state.
+    expect(preview.props()).toEqual({ personId: 'person', name: 'Lina' })
+    // The gallery button sits over the thumbnail, beside the name and state.
     expect(wrapper.get('[data-slot="item-media"]').element.contains(preview.element)).toBe(true)
     expect(wrapper.text()).toContain('Lina')
     expect(wrapper.text()).not.toContain('Synthetic archivist')
@@ -231,6 +231,19 @@ describe('People panel (#103)', () => {
     ])
     expect(badges.findAll('svg')).toHaveLength(3)
     expect(badges.find('.lucide-scan').exists()).toBe(false)
+  })
+
+  it('shows more faces from the same gallery button over the result portrait', () => {
+    const wrapper = panel()
+    const media = wrapper.get('[data-slot="item-media"]')
+    expect(media.findComponent({ name: 'IdentityFacePreview' }).props()).toEqual({
+      personId: 'ada',
+      name: 'Ada',
+    })
+    // No separate labelled button remains in the card footer.
+    expect(wrapper.findAllComponents({ name: 'IdentityFacePreview' })).toHaveLength(1)
+    // With nothing to link or assign, the card has no empty footer.
+    expect(wrapper.find('[data-slot="item-footer"]').exists()).toBe(false)
   })
 
   it('assigns only a selected face, separately from preview', async () => {

@@ -8,17 +8,13 @@ const active = ref<{ id: symbol; pinned: boolean } | null>(null)
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, watch } from 'vue'
-import { Plus, ScanFace } from '@lucide/vue'
+import { Images } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import IdentityFaceGallery from './IdentityFaceGallery.vue'
 
-const props = defineProps<{
-  personId: string
-  name: string
-  /** A small round + for overlaying a thumbnail instead of a labelled button. */
-  compact?: boolean
-}>()
+// A small round gallery button that sits over a face thumbnail.
+const props = defineProps<{ personId: string; name: string }>()
 const self = Symbol('identity-face-preview')
 const open = computed(() => active.value?.id === self)
 const pinned = computed(() => open.value && active.value!.pinned)
@@ -111,9 +107,8 @@ onBeforeUnmount(() => {
         ref="trigger"
         type="button"
         variant="outline"
-        :size="compact ? 'icon-xs' : 'xs'"
-        class="border-sky-600 text-sky-700 hover:text-sky-700 dark:border-sky-500 dark:text-sky-400 dark:hover:text-sky-400"
-        :class="compact && 'size-5 rounded-full bg-background dark:bg-background'"
+        size="icon-xs"
+        class="size-6 rounded-full border-sky-600 bg-background text-sky-700 hover:text-sky-700 dark:border-sky-500 dark:bg-background dark:text-sky-400 dark:hover:text-sky-400"
         :aria-label="`View faces of ${name}`"
         @pointerenter="hover"
         @pointerleave="leave"
@@ -121,8 +116,8 @@ onBeforeUnmount(() => {
         @click.stop
         @keydown="isolateKeys"
       >
-        <Plus v-if="compact" class="size-3" aria-hidden="true" />
-        <template v-else><ScanFace aria-hidden="true" />View faces</template>
+        <Images class="size-3.5" aria-hidden="true" />
+        <span class="sr-only">View faces</span>
       </Button>
     </PopoverTrigger>
     <PopoverContent
