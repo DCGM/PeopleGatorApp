@@ -105,7 +105,7 @@ class PostgresFaceRepository(FaceRepository):
         builders: Builders = {
             **annotation_builders(Face),
             "confidence": lambda desc: [SortKey(Face.confidence, "number", desc)],
-            "person": person_keys,
+            "person": person_keys(Face),
         }
         return build_spec(field, direction, Face.id, builders, "detection_id")
 

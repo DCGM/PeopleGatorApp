@@ -9,8 +9,9 @@ Text fields compare case- and accent-insensitively (lowercased, unaccented) in
 Unicode code-point order, then by the exact recorded text in code-point order.
 Counts compare numerically and times chronologically. Assignment state orders
 ``verified``, ``manual``, ``automatic``, then unassigned (unknown) last.
-Face ``person`` orders by the assigned person's name and then identity, so each
-person's faces are contiguous; unassigned faces are unknown and last.
+Face and mention ``person`` order by the assigned person's name and then
+identity, so each person's annotations are contiguous; unassigned annotations
+are unknown and last.
 ``relevance`` is the final search score and is valid only for searches.
 """
 
@@ -111,6 +112,7 @@ class TextMentionSortField(StrEnum):
     LAST_TOUCHED_AT = "last_touched_at"
     LINK_STATE = "link_state"
     SOURCE = "source"
+    PERSON = "person"
 
 
 class TextMentionGroupSortField(StrEnum):

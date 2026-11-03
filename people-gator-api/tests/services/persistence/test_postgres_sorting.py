@@ -158,6 +158,7 @@ from people_gator_api.schemas.faces import (  # noqa: E402
 )
 from people_gator_api.schemas.mentions import (  # noqa: E402
     TextMentionCreateRequest,
+    TextMentionPatchBatchItem,
     TextMentionGroupListRequest,
     TextMentionListFilter,
     TextMentionListRequest,
@@ -304,6 +305,28 @@ async def test_face_person_sort_keeps_each_person_contiguous_across_pages(collec
         assert [item.entity_id for item in items] == people
         # Faces of one person tie-break by detection identity ascending.
         same = [item.detection_id for item in items if item.entity_id == c.person]
+        assert same == sorted(same, key=lambda item: item.int)
+
+
+async def test_mention_person_sort_keeps_each_person_contiguous_across_pages(collection):
+    c = collection
+    bea = c.r.entities[4].entity_id  # "Bea Ortiz" precedes c.person, "Émil Zorn"
+    await c.r.db.text_mentions.patch_batch([
+        TextMentionPatchBatchItem(mention_id=c.mentions[1].mention_id, entity_id=bea),
+        TextMentionPatchBatchItem(mention_id=c.mentions[2].mention_id, entity_id=None),
+    ], c.r.actor)
+    scope = TextMentionListFilter(source_id=[page.source_id for page in c.pages])
+    expected = {
+        "asc": [bea, *[c.person] * 5, None],
+        # Unlinked mentions are unknown and stay last in both directions.
+        "desc": [*[c.person] * 5, bea, None],
+    }
+    for direction, people in expected.items():
+        items, total = await pages(c.r.db.text_mentions.list, TextMentionListRequest,
+                                   filter_=scope, sort="person", sort_direction=direction, limit=2)
+        assert total == 7
+        assert [item.entity_id for item in items] == people
+        same = [item.mention_id for item in items if item.entity_id == c.person]
         assert same == sorted(same, key=lambda item: item.int)
 
 
