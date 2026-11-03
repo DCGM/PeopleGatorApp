@@ -8,6 +8,7 @@ import SearchFaceAttachment from './SearchFaceAttachment.vue'
 import SimilarPersonItem from './SimilarPersonItem.vue'
 import SimilarPersonItemSkeleton from './SimilarPersonItemSkeleton.vue'
 import SortSelect from './SortSelect.vue'
+import { SIDEBAR_TITLE } from './sidebar-title'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,10 +21,9 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupText,
-  InputGroupTextarea,
+  InputGroupInput,
 } from '@/components/ui/input-group'
-import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
 import type { Face } from '@/viewmodels/document-workspace.types'
 import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import {
@@ -73,11 +73,6 @@ watchDebounced(draft, () => search(), { debounce: 300 })
 function search() {
   if (changed.value) text.value = draft.value.trim()
 }
-function keydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
-  event.preventDefault()
-  search()
-}
 
 const scopeLabel = computed(
   () => PEOPLE_SCOPES.find((item) => item.value === scope.value)?.label ?? '',
@@ -111,120 +106,126 @@ const group = ref<HTMLElement | null>(null)
 const results = ref<HTMLElement | null>(null)
 const resetKey = computed(() => `${scope.value}:${order.value}:${text.value}:${props.searchFaceId}`)
 
-// Keep the previewed candidate visible without scrolling the scan away.
+// Bring a newly previewed candidate into view once it is loaded. Later batches
+// leave the scroll position alone, so loading more never jumps back to it.
+let revealPending = false
+watch(
+  () => props.viewedPersonId,
+  (id) => (revealPending = Boolean(id)),
+  { immediate: true },
+)
 watch(
   () => [props.viewedPersonId, props.people.length],
   async () => {
-    if (!props.viewedPersonId) return
+    if (!revealPending) return
     await nextTick()
-    results.value
-      ?.querySelector<HTMLElement>('[data-person-viewed="true"]')
-      ?.scrollIntoView?.({ block: 'nearest' })
+    const viewed = results.value?.querySelector<HTMLElement>('[data-person-viewed="true"]')
+    if (!viewed) return
+    revealPending = false
+    viewed.scrollIntoView?.({ block: 'nearest' })
   },
-  { flush: 'post' },
+  { flush: 'post', immediate: true },
 )
 
-defineExpose({ focus: () => group.value?.querySelector('textarea')?.focus() })
+defineExpose({ focus: () => group.value?.querySelector('input')?.focus() })
 </script>
 
 <template>
   <section class="flex min-h-0 flex-1 flex-col" aria-label="People">
-    <form ref="group" class="shrink-0 px-3 pt-3" role="search" @submit.prevent="search">
+    <form
+      ref="group"
+      class="flex shrink-0 flex-col gap-2 px-3 pt-3"
+      role="search"
+      aria-labelledby="people-search-title"
+      @submit.prevent="search"
+    >
+      <h3 id="people-search-title" :class="SIDEBAR_TITLE">Search</h3>
       <InputGroup>
-        <InputGroupTextarea
-          v-model="draft"
-          rows="1"
-          class="min-h-0"
-          aria-label="Search people"
-          placeholder="Name or alias"
-          @keydown="keydown"
-        />
-        <!-- Always present at a fixed height, so attaching context never resizes search. -->
-        <InputGroupAddon
-          align="block-end"
-          aria-label="Search context"
-          class="h-9 flex-nowrap overflow-x-auto pb-0"
-        >
-          <SearchFaceAttachment
-            v-if="searchFaceId"
-            :face-id="searchFaceId"
-            @remove="emit('removeFace')"
-          />
-        </InputGroupAddon>
-        <InputGroupAddon align="block-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <InputGroupButton
-                variant="outline"
-                class="rounded-full"
-                size="icon-xs"
-                aria-label="Add search context"
-              >
-                <Plus class="size-4" aria-hidden="true" />
-              </InputGroupButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" class="[--radius:0.95rem]">
-              <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
-                <ScanFace aria-hidden="true" />Selected face
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <InputGroupButton variant="ghost" :aria-label="`Scope: ${scopeLabel}`">
-                {{ scopeLabel }}<ChevronDown aria-hidden="true" />
-              </InputGroupButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" class="[--radius:0.95rem]">
-              <DropdownMenuRadioGroup v-model="scopeValue">
-                <DropdownMenuRadioItem
-                  v-for="option in PEOPLE_SCOPES"
-                  :key="option.value"
-                  :value="option.value"
-                  >{{ option.label }}</DropdownMenuRadioItem
-                >
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu v-if="searchFaceId && faceModels?.length">
-            <DropdownMenuTrigger as-child>
-              <InputGroupButton
-                variant="ghost"
-                class="min-w-0 shrink"
-                :aria-label="`Face model: ${faceModel ?? ''}`"
-                :title="faceModel ?? undefined"
-              >
-                <span class="min-w-0 truncate">{{ faceModel }}</span
-                ><ChevronDown aria-hidden="true" />
-              </InputGroupButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" class="[--radius:0.95rem]">
-              <DropdownMenuRadioGroup v-model="faceModelValue">
-                <DropdownMenuRadioItem v-for="model in faceModels" :key="model" :value="model">{{
-                  model
-                }}</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <InputGroupText class="ml-auto whitespace-nowrap" role="status">{{
-            countLabel
-          }}</InputGroupText>
-          <Separator orientation="vertical" class="!h-4" />
-          <InputGroupButton
-            type="submit"
-            variant="default"
-            class="rounded-full"
-            size="icon-xs"
-            :disabled="!changed"
-          >
-            <Search class="size-4" aria-hidden="true" />
+        <InputGroupInput v-model="draft" aria-label="Search people" placeholder="Name or alias" />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton type="submit" size="icon-xs" :disabled="!changed">
+            <Search aria-hidden="true" />
             <span class="sr-only">Search</span>
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
+      <!-- Always present at a fixed height, so attaching context never shifts results. -->
+      <div
+        class="flex h-8 min-w-0 flex-row flex-nowrap items-center gap-2 overflow-x-auto"
+        role="group"
+        aria-label="Search context"
+      >
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button
+              type="button"
+              variant="outline"
+              class="rounded-full"
+              size="icon-xs"
+              aria-label="Add search context"
+            >
+              <Plus aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+            <DropdownMenuItem :disabled="!canAttachSelected" @select="emit('attachSelectedFace')">
+              <ScanFace aria-hidden="true" />Selected face
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <SearchFaceAttachment
+          v-if="searchFaceId"
+          :face-id="searchFaceId"
+          @remove="emit('removeFace')"
+        />
+      </div>
+      <div class="flex min-w-0 flex-row flex-nowrap items-center gap-1" aria-label="Search options">
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button type="button" variant="ghost" size="sm" :aria-label="`Scope: ${scopeLabel}`">
+              {{ scopeLabel }}<ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+            <DropdownMenuRadioGroup v-model="scopeValue">
+              <DropdownMenuRadioItem
+                v-for="option in PEOPLE_SCOPES"
+                :key="option.value"
+                :value="option.value"
+                >{{ option.label }}</DropdownMenuRadioItem
+              >
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu v-if="searchFaceId && faceModels?.length">
+          <DropdownMenuTrigger as-child>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-w-0 shrink"
+              :aria-label="`Face model: ${faceModel ?? ''}`"
+              :title="faceModel ?? undefined"
+            >
+              <span class="min-w-0 truncate">{{ faceModel }}</span
+              ><ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start" class="[--radius:0.95rem]">
+            <DropdownMenuRadioGroup v-model="faceModelValue">
+              <DropdownMenuRadioItem v-for="model in faceModels" :key="model" :value="model">{{
+                model
+              }}</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <small class="ml-auto shrink-0 whitespace-nowrap text-muted-foreground" role="status">{{
+          countLabel
+        }}</small>
+      </div>
     </form>
     <div class="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2 px-3 pt-3">
-      <h3 id="people-results-title" class="text-sm font-semibold">Results</h3>
+      <h3 id="people-results-title" :class="SIDEBAR_TITLE">Results</h3>
       <SortSelect v-model="orderValue" :strategies="orderOptions" label="Sort people" size="sm" />
     </div>
     <ScrollArea

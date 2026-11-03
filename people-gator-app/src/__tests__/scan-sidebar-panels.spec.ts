@@ -1,4 +1,4 @@
-import { mount, RouterLinkStub } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { h } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import ScanPeoplePanel from '@/components/custom/ScanPeoplePanel.vue'
@@ -122,25 +122,36 @@ describe('People panel (#103)', () => {
     })
   }
 
-  it('keeps face, scope, result count and Search in one input group', async () => {
+  it('stacks Search, a one-line field, attachments, then options and the count', async () => {
     const wrapper = panel({ searchFaceId: 'face-a', scored: true, order: 'relevance' })
-    const group = wrapper.get('[data-slot="input-group"]')
-    // Attachments sit on their own row below the text, above the controls.
-    const rows = group.findAll('[data-align="block-end"]')
-    expect(rows).toHaveLength(2)
-    const [context, addon] = rows as [(typeof rows)[0], (typeof rows)[0]]
-    expect(context.attributes('aria-label')).toBe('Search context')
+    const form = wrapper.get('form[role="search"]')
+    expect(form.get('#people-search-title').text()).toBe('Search')
+    // The bordered field holds only the text and the search button at its end.
+    const group = form.get('[data-slot="input-group"]')
+    expect(group.findAll('input')).toHaveLength(1)
+    expect(group.find('textarea').exists()).toBe(false)
+    expect(group.findAll('button').map((button) => button.text())).toEqual(['Search'])
+    expect(group.find('[data-align="inline-end"] button[type="submit"]').exists()).toBe(true)
+    // Below it: attachments, then the scope and model with the count at the end.
+    const context = form.get('[aria-label="Search context"]')
+    const options = form.get('[aria-label="Search options"]')
+    const order = [group, context, options].map((part) =>
+      [...form.element.children].indexOf(part.element as Element),
+    )
+    expect(order).toEqual([...order].sort((left, right) => left - right))
     expect(context.find('[data-search-face][data-face-id="face-a"]').exists()).toBe(true)
-    expect(addon.find('[data-search-face]').exists()).toBe(false)
-    expect(addon.get('button').attributes('aria-label')).toBe('Add search context')
-    expect(addon.get('[aria-label="Scope: All people"]').text()).toBe('All people')
-    expect(addon.get('[role="status"]').text()).toBe('1 result')
+    expect(context.get('button').attributes('aria-label')).toBe('Add search context')
+    expect(options.get('[aria-label="Scope: All people"]').text()).toBe('All people')
+    expect(options.element.lastElementChild!.textContent).toBe('1 result')
     await context.get('[aria-label="Remove search face"]').trigger('click')
     expect(wrapper.emitted('removeFace')).toHaveLength(1)
-    // Sorting sits beside the Results heading, not in the search group.
-    expect(group.findComponent({ name: 'SortSelect' }).exists()).toBe(false)
-    expect(wrapper.get('#people-results-title').text()).toBe('Results')
+    // Titles share the grouped-name heading style.
+    const results = wrapper.get('#people-results-title')
+    expect(results.text()).toBe('Results')
+    expect(form.get('#people-search-title').classes()).toEqual(results.classes())
+    expect(results.classes()).toEqual(['font-heading', 'text-lg', 'font-normal'])
     const sort = wrapper.findComponent({ name: 'SortSelect' })
+    expect(form.findComponent({ name: 'SortSelect' }).exists()).toBe(false)
     expect(sort.props('strategies')).toContainEqual(
       expect.objectContaining({ value: 'relevance', label: 'Similarity' }),
     )
@@ -152,7 +163,7 @@ describe('People panel (#103)', () => {
     ])
   })
 
-  it("offers the attached face's embedding models beside the scope", async () => {
+  it("offers the attached face's embedding models after the scope", async () => {
     const wrapper = panel()
     expect(wrapper.find('[aria-label^="Face model:"]').exists()).toBe(false)
     await wrapper.setProps({
@@ -160,28 +171,53 @@ describe('People panel (#103)', () => {
       faceModels: ['model-a', 'model-b'],
       faceModel: 'model-b',
     })
-    const [, controls] = wrapper.findAll('[data-align="block-end"]')
-    const trigger = controls!.get('[aria-label="Face model: model-b"]')
-    expect(trigger.text()).toBe('model-b')
-    // It sits in the controls row after the scope, like the scope menu.
-    const labels = controls!.findAll('button[aria-label]').map((b) => b.attributes('aria-label'))
-    expect(labels.indexOf('Face model: model-b')).toBe(labels.indexOf('Scope: All people') + 1)
+    const options = wrapper.get('[aria-label="Search options"]')
+    expect(options.get('[aria-label="Face model: model-b"]').text()).toBe('model-b')
+    const labels = options.findAll('button[aria-label]').map((b) => b.attributes('aria-label'))
+    expect(labels).toEqual(['Scope: All people', 'Face model: model-b'])
   })
 
   it('keeps an empty, fixed-height attachment row without context', () => {
     const wrapper = panel()
-    const [context] = wrapper.findAll('[data-align="block-end"]')
-    expect(context!.attributes('aria-label')).toBe('Search context')
-    expect(context!.classes()).toContain('h-9')
-    expect(context!.find('[data-search-face]').exists()).toBe(false)
-    expect(wrapper.find('[aria-label="Add search context"]').exists()).toBe(true)
+    const context = wrapper.get('[aria-label="Search context"]')
+    expect(context.classes()).toContain('h-8')
+    expect(context.find('[data-search-face]').exists()).toBe(false)
+    expect(context.find('[aria-label="Add search context"]').exists()).toBe(true)
+  })
+
+  it('reveals a newly previewed person once, not again as more results load', async () => {
+    const scrolled: string[] = []
+    const original = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
+      scrolled.push(this.textContent ?? '')
+    }
+    try {
+      const wrapper = panel({ viewedPersonId: 'ada' })
+      await flushPromises()
+      expect(scrolled).toHaveLength(1)
+      const more = (id: string) => ({ ...candidate, id, name: id })
+      await wrapper.setProps({ people: [candidate, more('b1'), more('b2')] })
+      await flushPromises()
+      await wrapper.setProps({ people: [candidate, more('b1'), more('b2'), more('b3')] })
+      await flushPromises()
+      expect(scrolled).toHaveLength(1)
+      // Previewing someone else reveals them, once loaded.
+      await wrapper.setProps({ viewedPersonId: 'b4' })
+      await flushPromises()
+      expect(scrolled).toHaveLength(1)
+      await wrapper.setProps({ people: [candidate, more('b1'), more('b4')] })
+      await flushPromises()
+      expect(scrolled).toHaveLength(2)
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original
+    }
   })
 
   it('applies name text after a typing pause, or at once on Enter or Search', async () => {
     vi.useFakeTimers()
     try {
       const wrapper = panel({ text: 'Ada' })
-      const field = wrapper.get('textarea[aria-label="Search people"]')
+      const field = wrapper.get('input[aria-label="Search people"]')
       const submit = wrapper.get('button[type="submit"]')
       expect(submit.text()).toBe('Search')
       expect(submit.attributes('disabled')).toBeDefined()
@@ -193,10 +229,9 @@ describe('People panel (#103)', () => {
       vi.advanceTimersByTime(1)
       expect(wrapper.emitted('update:text')).toEqual([['Novak']])
       await wrapper.setProps({ text: 'Novak' })
+      // Enter in the one-line field submits its form.
       await field.setValue(' Lina ')
-      await field.trigger('keydown', { key: 'Enter', shiftKey: true })
-      expect(wrapper.emitted('update:text')).toHaveLength(1)
-      await field.trigger('keydown', { key: 'Enter' })
+      await wrapper.get('form').trigger('submit')
       expect(wrapper.emitted('update:text')).toEqual([['Novak'], ['Lina']])
       await wrapper.setProps({ text: 'Lina' })
       await field.setValue('Ida')
@@ -208,7 +243,7 @@ describe('People panel (#103)', () => {
       expect(wrapper.emitted('update:text')).toHaveLength(3)
       // A restored or cleared applied text replaces the draft.
       await wrapper.setProps({ text: '' })
-      expect((field.element as HTMLTextAreaElement).value).toBe('')
+      expect((field.element as HTMLInputElement).value).toBe('')
     } finally {
       vi.useRealTimers()
     }

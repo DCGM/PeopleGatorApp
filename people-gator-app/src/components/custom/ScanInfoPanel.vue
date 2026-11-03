@@ -5,6 +5,7 @@ import AnnotationLastChange from './AnnotationLastChange.vue'
 import ListPagination from './ListPagination.vue'
 import PageNumberEditor from './PageNumberEditor.vue'
 import SortSelect from './SortSelect.vue'
+import { SIDEBAR_TITLE } from './sidebar-title'
 import type { PageResponse } from '@/client'
 import { linkStateVisuals } from '@/lib/entity-links'
 import { usePeopleFilterOptions } from '@/query/people-filter-options'
@@ -44,7 +45,7 @@ function dayLabel(key: string) {
     <section class="p-3" aria-label="Page info">
       <div class="space-y-5">
         <section aria-labelledby="page-info-title" class="min-w-0 space-y-3">
-          <h3 id="page-info-title" class="font-semibold">This page</h3>
+          <h3 id="page-info-title" :class="SIDEBAR_TITLE">This page</h3>
           <PageNumberEditor v-if="page" :page="page" />
           <AnnotationLastChange
             v-if="page"
@@ -87,7 +88,7 @@ function dayLabel(key: string) {
 
         <section aria-labelledby="page-activity-title" class="min-w-0 space-y-3">
           <div class="flex flex-row flex-wrap items-center justify-between gap-2">
-            <h3 id="page-activity-title" class="font-semibold">Latest changes</h3>
+            <h3 id="page-activity-title" :class="SIDEBAR_TITLE">Latest changes</h3>
             <SortSelect
               v-model="directionValue"
               :strategies="orders"
