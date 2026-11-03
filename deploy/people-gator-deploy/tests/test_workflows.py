@@ -136,115 +136,27 @@ class LifecycleWorkflowTests(unittest.TestCase):
                 self.assertEqual(self.invocations(workflow, "Deliver release", **{**base, **environment}), [expected])
 
 
-class ImageCredentialTests(unittest.TestCase):
-    """Execute pr-ci image registry steps with a fake daemon and private config."""
+class RunnerPlacementTests(unittest.TestCase):
+    """PR code runs on ephemeral hosted runners; self-hosted runners serve only lifecycles."""
 
-    def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
-        self.workflow = (WORKFLOWS / "pr-ci.yml").read_text()
-        self.bin = self.root / "bin"
-        self.bin.mkdir()
-        docker = self.bin / "docker"
-        docker.write_text(textwrap.dedent('''\
-            #!/usr/bin/env python3
-            import json, os, pathlib, sys
-            args = sys.argv[1:]
-            config = pathlib.Path(os.environ['DOCKER_CONFIG'])
-            with open(os.environ['DOCKER_TEST_LOG'], 'a') as log:
-                log.write(json.dumps({'args': args, 'config': str(config)}) + '\\n')
-            if os.environ.get('DOCKER_TEST_FAIL') == ' '.join(args[:2]):
-                sys.exit(1)
-            if args == ['context', 'show']:
-                print(os.environ['DOCKER_TEST_CONTEXT'])
-            elif args[:2] == ['context', 'export']:
-                pathlib.Path(args[3]).write_text('synthetic context')
-            elif args[:2] == ['context', 'import']:
-                assert pathlib.Path(args[3]).read_text() == 'synthetic context'
-                (config / 'imported-context').write_text(args[2])
-            elif args[:2] == ['context', 'use']:
-                if args[2] != 'default':
-                    assert (config / 'imported-context').read_text() == args[2]
-                assert not (config / 'config.json').exists()
-                (config / 'config.json').write_text(json.dumps({'currentContext': args[2]}))
-            elif args[0] == 'login':
-                assert sys.stdin.read() == 'synthetic-job-token'
-                data = json.loads((config / 'config.json').read_text())
-                assert 'auths' not in data
-                data['auths'] = {'ghcr.io': {'auth': 'synthetic-job-login'}}
-                (config / 'config.json').write_text(json.dumps(data))
-            elif args[0] == 'pull':
-                data = json.loads((config / 'config.json').read_text())
-                assert data['currentContext'] == os.environ['DOCKER_TEST_CONTEXT']
-                assert data['auths']['ghcr.io']['auth'] == 'synthetic-job-login'
-            else:
-                sys.exit('Unexpected fake Docker operation')
-            '''))
-        docker.chmod(0o755)
-        self.ambient = self.root / "ambient"
-        self.ambient.mkdir()
-        (self.ambient / "config.json").write_text('{"auths":{"other":{"auth":"retained-login"}}}')
+    @staticmethod
+    def placements(workflow):
+        return re.findall(r"^    runs-on: (.+)$", (WORKFLOWS / workflow).read_text(), re.MULTILINE)
 
-    def step(self, name):
-        return self.workflow.split(f"      - name: {name}\n", 1)[1].split("      - name:", 1)[0]
+    def test_pull_request_code_runs_only_on_github_hosted_runners(self):
+        workflow = (WORKFLOWS / "pr-ci.yml").read_text()
+        self.assertEqual(self.placements("pr-ci.yml"), ["ubuntu-24.04"] * 3)
+        for forbidden in ("people-gator-ci", "runner.tool_cache", "keep-state"):
+            self.assertNotIn(forbidden, workflow)
 
-    def script(self, name):
-        step = self.step(name)
-        run = step.split("        run: ", 1)[1]
-        if run.startswith("|\n"):
-            return textwrap.dedent(run[2:])
-        return run.splitlines()[0]
-
-    def shell(self, script, environment):
-        return subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script],
-                              env=environment, text=True, capture_output=True, timeout=10)
-
-    def test_image_matrix_jobs_cannot_remove_each_others_registry_credentials(self):
-        self.workflow = (WORKFLOWS / "pr-ci.yml").read_text()
-        login, build = self.step("Log into image registry"), self.step("Build and publish image")
-        self.assertIn("logout: false", login)
-        for step in (login, build):
-            self.assertIn("DOCKER_CONFIG: ${{ steps.registry-config.outputs.path }}", step)
-        self.assertIn("BUILDX_CONFIG: ${{ steps.registry-config.outputs.buildx-config }}", build)
-        self.assertIn("if: always() && steps.registry-config.outputs.path != ''",
-                      self.step("Remove image registry credentials"))
-        for context in ("default", "rootless-ci"):
-            configurations = []
-            environment = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}",
-                           "RUNNER_TEMP": str(self.root), "DOCKER_CONFIG": str(self.ambient),
-                           "DOCKER_TEST_LOG": str(self.root / "image-docker-log"),
-                           "DOCKER_TEST_CONTEXT": context, "DOCKER_TEST_FAIL": "",
-                           "GH_TOKEN": "synthetic-job-token", "GH_ACTOR": "synthetic-actor"}
-            environment.pop("BUILDX_CONFIG", None)
-            try:
-                for job in ("backend", "frontend"):
-                    output = self.root / f"image-output-{job}"
-                    output.write_text("")
-                    environment["GITHUB_OUTPUT"] = str(output)
-                    result = self.shell(self.script("Prepare image registry configuration"), environment)
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
-                    configurations.append(values["path"])
-                    self.assertEqual(values["buildx-config"], str(self.ambient / "buildx"))
-                    result = self.shell('printf %s "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin',
-                                        {**environment, "DOCKER_CONFIG": values["path"]})
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotEqual(*configurations)
-                result = self.shell(self.script("Remove image registry credentials"),
-                                    {**environment, "IMAGE_DOCKER_CONFIG": configurations[0]})
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertFalse(Path(configurations[0]).exists())
-                # The later-finishing frontend can still authenticate after
-                # backend completion; the ambient context/config stays intact.
-                result = self.shell("docker pull image", {**environment, "DOCKER_CONFIG": configurations[1]})
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("retained-login", (self.ambient / "config.json").read_text())
-            finally:
-                for configuration in configurations:
-                    self.shell(self.script("Remove image registry credentials"),
-                               {**environment, "IMAGE_DOCKER_CONFIG": configuration})
-            self.assertEqual(list(self.root.glob("people-gator-ci-docker.*")), [])
+    def test_each_lifecycle_uses_only_its_deployment_runner(self):
+        labels = {"pr-preview.yml": "people-gator-preview", "staging.yml": "people-gator-staging",
+                  "release.yml": "people-gator-release"}
+        for name, label in labels.items():
+            with self.subTest(workflow=name):
+                self.assertEqual(self.placements(name), [f"[self-hosted, linux, x64, {label}]"])
+        configured = re.findall(r"^    - (.+)$", (REPOSITORY / ".github/actionlint.yaml").read_text(), re.MULTILINE)
+        self.assertEqual(sorted(configured), sorted(labels.values()))
 
 
 if __name__ == "__main__":
