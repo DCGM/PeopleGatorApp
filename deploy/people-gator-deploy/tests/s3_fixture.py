@@ -6,7 +6,10 @@ import tempfile
 import time
 
 
-MINIO_IMAGE = "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z"
+# MinIO's own registries no longer serve anonymous pulls. Bitnami's frozen legacy
+# build packages the same RELEASE.2025-04-22T22-12-26Z (commit 0d7408fc) binary.
+MINIO_IMAGE = ("docker.io/bitnamilegacy/minio:2025.4.22"
+               "@sha256:50cec18ac4184af4671a78aedd5554942c8ae105d51a465fa82037949046da01")
 
 
 class S3Fixture:
@@ -31,12 +34,17 @@ class S3Fixture:
                 name = "backup-test-s3-" + secrets.token_hex(8)
                 self.names.append(name)
                 secret = secrets.token_hex(24)
-                subprocess.run(["docker", "run", "--rm", "-d", "--name", name, "--log-driver", "none",
+                # Root inside the container reads the private certificate directory
+                # under both rootful and rootless daemons.
+                started = subprocess.run(["docker", "run", "--rm", "-d", "--name", name, "--log-driver", "none",
                     "--network", self.network, "--network-alias", kind + "-s3", "-p", "127.0.0.1::9000",
                     "--tmpfs", "/data:size=256m", "--mount", f"type=bind,src={certs},dst=/certs,readonly",
+                    "--user", "0:0", "--entrypoint", "/opt/bitnami/minio/bin/minio",
                     "-e", "MINIO_ROOT_USER=fixture-" + kind, "-e", "MINIO_ROOT_PASSWORD=" + secret,
                     MINIO_IMAGE, "server", "/data", "--certs-dir", "/certs", "--address", ":9000"],
-                    capture_output=True, check=True)
+                    capture_output=True, text=True)
+                if started.returncode:
+                    raise RuntimeError(f"Cannot start S3 fixture: {started.stderr.strip()}")
                 port = subprocess.check_output(["docker", "inspect", "--format",
                     '{{(index (index .NetworkSettings.Ports "9000/tcp") 0).HostPort}}', name], text=True).strip()
                 client = boto3.client("s3", endpoint_url="https://127.0.0.1:" + port,
