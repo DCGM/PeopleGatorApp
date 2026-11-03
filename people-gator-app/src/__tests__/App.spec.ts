@@ -206,7 +206,7 @@ describe('App', () => {
       'Info',
     ])
     expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('Info')
-    expect(sidebar.find('textarea[aria-label="Search people"]').exists()).toBe(false)
+    expect(sidebar.find('input[aria-label="Search people"]').exists()).toBe(false)
 
     await router.push({ query: { ...router.currentRoute.value.query, panel: 'statistics' } })
     await flushPromises()
@@ -215,7 +215,7 @@ describe('App', () => {
     await router.push({ query: { ...router.currentRoute.value.query, panel: undefined } })
     await flushPromises()
     expect(sidebar.get('[role="tab"][data-state="active"]').text()).toBe('People')
-    expect(sidebar.get('textarea[aria-label="Search people"]').element).toHaveProperty(
+    expect(sidebar.get('input[aria-label="Search people"]').element).toHaveProperty(
       'value',
       'Ada',
     )
@@ -249,7 +249,7 @@ describe('App', () => {
       expect(sidebar.find('[role="alert"]').exists()).toBe(false)
       expect(sidebar.text()).not.toContain('Clear filters')
       expect(
-        sidebar.get('textarea[aria-label="Search people"]').attributes('disabled'),
+        sidebar.get('input[aria-label="Search people"]').attributes('disabled'),
       ).toBeUndefined()
       expect(router.currentRoute.value.query).toEqual(original)
       const tools = wrapper.get('[aria-label="Scan tools"]')
