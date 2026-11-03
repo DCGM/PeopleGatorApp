@@ -121,10 +121,21 @@ const isPeopleRoute = computed(
           class="min-w-0 flex-nowrap gap-1 font-heading text-base font-extralight leading-normal sm:gap-2"
         >
           <template v-for="(crumb, index) in breadcrumbs" :key="index">
-            <BreadcrumbSeparator v-if="index" class="shrink-0" />
+            <BreadcrumbSeparator
+              v-if="index"
+              class="shrink-0"
+              :class="index === 1 && route.name === 'document-page' ? 'hidden sm:block' : undefined"
+            />
             <BreadcrumbItem
               class="min-w-0"
-              :class="index === breadcrumbs.length - 1 ? 'flex-[0_1_auto]' : 'flex-[0_2_auto]'"
+              :class="[
+                index === 0 && route.name === 'document-page' ? 'hidden sm:inline-flex' : undefined,
+                index === breadcrumbs.length - 1 && pageQuery.data.value?.page_number != null
+                  ? 'shrink-0'
+                  : index === breadcrumbs.length - 1
+                    ? 'flex-[0_1_auto]'
+                    : 'flex-[0_2_auto]',
+              ]"
             >
               <BreadcrumbLink
                 as-child
