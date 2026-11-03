@@ -50,6 +50,7 @@ import { useRouteSort } from '@/lib/sorting'
 import { GALLERY_DEFAULT, GALLERY_SORT_KEYS, GALLERY_SORTS } from '@/viewmodels/sort-options'
 import {
   effectivePeopleOrder,
+  resolveSearchModel,
   SCAN_SELECTED_MENTION,
   useScanSidebarState,
   type ScanSidebarState,
@@ -314,13 +315,19 @@ const sources = computed(() => {
 // People search may carry one attached reference face, independent of selection.
 const searchFaceId = computed(() => sidebarState.value.searchFaceId)
 const searchFaceQuery = useFaceQuery(() => searchFaceId.value ?? '')
-const searchFace = computed(() => {
+// Models the attached face has embeddings for; the chosen one, else its first.
+const searchFaceModels = computed(() => {
   const record = searchFaceQuery.data.value
-  const embeddingModel = record?.embeddings?.[0]
-  return record?.detection_id === searchFaceId.value && embeddingModel
-    ? { id: record.detection_id, embeddingModel }
-    : null
+  return record?.detection_id === searchFaceId.value ? (record.embeddings ?? []) : []
 })
+const searchModel = computed(() =>
+  resolveSearchModel(sidebarState.value.searchModel, searchFaceModels.value),
+)
+const searchFace = computed(() =>
+  searchFaceId.value && searchModel.value
+    ? { id: searchFaceId.value, embeddingModel: searchModel.value }
+    : null,
+)
 // A deleted face, or one without an embedding, cannot score People; drop it.
 watch(
   () => [searchFaceId.value, searchFaceQuery.data.value, searchFaceQuery.isError.value] as const,
@@ -363,6 +370,7 @@ function removeSearchFace() {
   // Typed name text stays; Similarity needs a name or face to score.
   sidebar.update({
     searchFaceId: null,
+    searchModel: null,
     ...(!sidebarState.value.peopleText.trim() && { peopleOrder: 'context' as const }),
   })
 }
@@ -957,6 +965,9 @@ onBeforeUnmount(() => {
           :is-fetching="people.isFetching"
           :error="people.error"
           :search-face-id="searchFaceId"
+          :face-models="searchFaceModels"
+          :face-model="searchModel"
+          @update:face-model="(model) => sidebar.update({ searchModel: model })"
           :selected-face="selectedFace ?? null"
           :viewed-person-id="selectedPersonId"
           :assignment-pending="actionBusy"

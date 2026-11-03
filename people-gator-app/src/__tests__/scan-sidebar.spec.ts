@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   effectivePeopleOrder,
+  resolveSearchModel,
   readSidebarState,
   sidebarQuery,
   type ScanSidebarState,
@@ -12,6 +13,7 @@ describe('scan sidebar URL state (#103)', () => {
       tab: 'people',
       peopleText: '',
       searchFaceId: null,
+      searchModel: null,
       peopleScope: 'all',
       peopleOrder: 'context',
       faceScope: 'page',
@@ -67,6 +69,7 @@ describe('scan sidebar URL state (#103)', () => {
       tab: 'mentions',
       peopleText: 'Novak',
       searchFaceId: 'face-a',
+      searchModel: 'model-b',
       peopleScope: 'document',
       peopleOrder: 'relevance',
       faceScope: 'document',
@@ -89,6 +92,13 @@ describe('scan sidebar URL state (#103)', () => {
       candidate_face: 'face-a',
       candidate_mode: undefined,
     })
+  })
+
+  it('searches with the chosen model only when the attached face has it', () => {
+    expect(resolveSearchModel('model-b', ['model-a', 'model-b'])).toBe('model-b')
+    expect(resolveSearchModel('model-c', ['model-a', 'model-b'])).toBe('model-a')
+    expect(resolveSearchModel(null, ['model-a'])).toBe('model-a')
+    expect(resolveSearchModel('model-a', [])).toBeNull()
   })
 
   it('falls back from Similarity to context order without a name or face', () => {
