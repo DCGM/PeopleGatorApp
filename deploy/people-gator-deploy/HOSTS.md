@@ -40,8 +40,11 @@ release tags whose commit is on `main`:
 install -D -m 755 deploy/runner/job-started.sh ~/.local/libexec/people-gator/job-started.sh
 # In each runner directory; the script itself must live outside it:
 echo "ACTIONS_RUNNER_HOOK_JOB_STARTED=$HOME/.local/libexec/people-gator/job-started.sh" >> .env
-sudo ./svc.sh stop && sudo ./svc.sh start
 ```
+
+Restart each runner service while idle so it reads `.env`, for example
+`sudo ./svc.sh stop && sudo ./svc.sh start`, or
+`systemctl --user restart github-runner@<runner>` for a user unit.
 
 Copy the script from reviewed `main`, and refresh the copy when it changes.
 Refused jobs fail in their `Set up runner` step. Also set **Settings → Actions →
