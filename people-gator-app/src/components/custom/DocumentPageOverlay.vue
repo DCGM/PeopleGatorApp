@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { linkTooltip } from '@/lib/entity-links'
-import { computed, nextTick, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { SCAN_DRAG_THRESHOLD } from '@/composables/scan-viewport'
 
@@ -87,15 +87,22 @@ function finishOutsidePress(event: PointerEvent) {
   if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > SCAN_DRAG_THRESHOLD) return
   if (props.selectedFaceId === press.faceId) dismissedFaceId.value = press.faceId
 }
+// Reka reports a touch press only on the next click. A touch drag has none, so a later
+// click elsewhere, such as on the toolbar, would report that stale press.
+let latestPress: PointerEvent | null = null
+function notePress(event: PointerEvent) {
+  latestPress = event
+}
+onMounted(() => window.addEventListener('pointerdown', notePress, true))
 // Close on an outside click on the scan, but not when the press starts a scan
 // drag or pinch. Work elsewhere, such as searching People for this face, keeps it.
 function pressOutside(event: CustomEvent<{ originalEvent: PointerEvent }>, faceId: string) {
   event.preventDefault()
-  const { clientX, clientY, pointerType, target } = event.detail.originalEvent
+  const press = event.detail.originalEvent
+  const { clientX, clientY, pointerType, target } = press
   if (props.viewer && !(target instanceof Node && props.viewer.contains(target))) return
-  // Reka reports touch only after a tap's click; touch drags never get here.
   if (pointerType === 'touch') {
-    if (props.selectedFaceId === faceId) dismissedFaceId.value = faceId
+    if (press === latestPress && props.selectedFaceId === faceId) dismissedFaceId.value = faceId
     return
   }
   if (outsidePress) {
@@ -107,6 +114,7 @@ function pressOutside(event: CustomEvent<{ originalEvent: PointerEvent }>, faceI
   window.addEventListener('pointercancel', finishOutsidePress, true)
 }
 onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', notePress, true)
   window.removeEventListener('pointerup', finishOutsidePress, true)
   window.removeEventListener('pointercancel', finishOutsidePress, true)
 })
