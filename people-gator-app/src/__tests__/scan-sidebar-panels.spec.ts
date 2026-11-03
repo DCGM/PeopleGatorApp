@@ -161,25 +161,41 @@ describe('People panel (#103)', () => {
     expect(wrapper.find('[aria-label="Add search context"]').exists()).toBe(true)
   })
 
-  it('applies name text on Enter or Search, not while typing', async () => {
-    const wrapper = panel({ text: 'Ada' })
-    const field = wrapper.get('textarea[aria-label="Search people"]')
-    const submit = wrapper.get('button[type="submit"]')
-    expect(submit.text()).toBe('Search')
-    expect(submit.attributes('disabled')).toBeDefined()
-    await field.setValue('Novak')
-    expect(wrapper.emitted('update:text')).toBeUndefined()
-    await field.trigger('keydown', { key: 'Enter', shiftKey: true })
-    expect(wrapper.emitted('update:text')).toBeUndefined()
-    await field.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('update:text')).toEqual([['Novak']])
-    await wrapper.setProps({ text: 'Novak' })
-    await field.setValue(' Lina ')
-    await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('update:text')).toEqual([['Novak'], ['Lina']])
-    // A restored or cleared applied text replaces the draft.
-    await wrapper.setProps({ text: '' })
-    expect((field.element as HTMLTextAreaElement).value).toBe('')
+  it('applies name text after a typing pause, or at once on Enter or Search', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = panel({ text: 'Ada' })
+      const field = wrapper.get('textarea[aria-label="Search people"]')
+      const submit = wrapper.get('button[type="submit"]')
+      expect(submit.text()).toBe('Search')
+      expect(submit.attributes('disabled')).toBeDefined()
+      await field.setValue('Nov')
+      await field.setValue('Novak')
+      vi.advanceTimersByTime(299)
+      expect(wrapper.emitted('update:text')).toBeUndefined()
+      // One search after the pause, with the latest text.
+      vi.advanceTimersByTime(1)
+      expect(wrapper.emitted('update:text')).toEqual([['Novak']])
+      await wrapper.setProps({ text: 'Novak' })
+      await field.setValue(' Lina ')
+      await field.trigger('keydown', { key: 'Enter', shiftKey: true })
+      expect(wrapper.emitted('update:text')).toHaveLength(1)
+      await field.trigger('keydown', { key: 'Enter' })
+      expect(wrapper.emitted('update:text')).toEqual([['Novak'], ['Lina']])
+      await wrapper.setProps({ text: 'Lina' })
+      await field.setValue('Ida')
+      await wrapper.get('form').trigger('submit')
+      expect(wrapper.emitted('update:text')).toEqual([['Novak'], ['Lina'], ['Ida']])
+      // The pending pause finds nothing left to apply.
+      await wrapper.setProps({ text: 'Ida' })
+      vi.advanceTimersByTime(300)
+      expect(wrapper.emitted('update:text')).toHaveLength(3)
+      // A restored or cleared applied text replaces the draft.
+      await wrapper.setProps({ text: '' })
+      expect((field.element as HTMLTextAreaElement).value).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('marks page text, page faces and document membership with one icon each', () => {

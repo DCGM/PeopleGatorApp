@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed, nextTick, ref, watch } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { ChevronDown, Plus, ScanFace, Search } from '@lucide/vue'
 import ListPagination from './ListPagination.vue'
 import SearchFaceAttachment from './SearchFaceAttachment.vue'
@@ -47,7 +48,7 @@ const props = defineProps<{
   loadMore: () => Promise<unknown>
   retry: () => unknown
 }>()
-/** The applied name text; typing edits a draft until Search. */
+/** The applied name text; typing applies it after a pause, or at once on Search. */
 const text = defineModel<string>('text', { required: true })
 const scope = defineModel<PeopleScope>('scope', { required: true })
 const order = defineModel<PeopleOrder>('order', { required: true })
@@ -63,6 +64,8 @@ const draft = ref(text.value)
 // Back/Forward, links and face Search replace the draft with the applied text.
 watch([text, () => props.searchFaceId], () => (draft.value = text.value))
 const changed = computed(() => draft.value.trim() !== text.value.trim())
+// Typing searches after a short pause; Enter or Search apply it at once.
+watchDebounced(draft, () => search(), { debounce: 300 })
 function search() {
   if (changed.value) text.value = draft.value.trim()
 }
