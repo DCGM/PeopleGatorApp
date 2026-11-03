@@ -246,6 +246,18 @@ describe('People panel (#103)', () => {
     expect(wrapper.find('[data-slot="item-footer"]').exists()).toBe(false)
   })
 
+  it('hides the gallery button for a person without linked faces', () => {
+    const wrapper = panel({
+      people: [
+        { ...candidate, id: 'tomas', name: 'Tomas', linkedFaces: 0 },
+        { ...candidate, id: 'hana', name: 'Hana', linkedFaces: 2 },
+      ],
+    })
+    expect(wrapper.find('[aria-label="View faces of Tomas"]').exists()).toBe(false)
+    expect(wrapper.findAllComponents({ name: 'IdentityFacePreview' })).toHaveLength(1)
+    expect(wrapper.findComponent({ name: 'IdentityFacePreview' }).props('name')).toBe('Hana')
+  })
+
   it('assigns only a selected face, separately from preview', async () => {
     const wrapper = panel()
     expect(wrapper.find('button[aria-label^="Assign to"]').exists()).toBe(false)

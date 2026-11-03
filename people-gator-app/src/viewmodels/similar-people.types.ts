@@ -15,6 +15,8 @@ export type SimilarPersonCandidate = {
   score?: number
   nerMentions: number
   detections: number
+  /** Faces linked to the person anywhere; their gallery shows only when some exist. */
+  linkedFaces?: number
   closestMentionDistancePx?: number
   source: SimilarPersonSource
   matchSources?: SimilarPersonMatchSource[]

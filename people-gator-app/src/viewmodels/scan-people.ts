@@ -258,6 +258,7 @@ export function useScanPeople(options: {
         score: found ? percentage(found.score) : undefined,
         nerMentions: mentionCount,
         detections,
+        linkedFaces: record.entity_link_stats?.faces?.total ?? 0,
         source: tierName === 'page' || mentionCount || detections ? 'page' : 'database',
         matchSources: [
           ...(textScore !== undefined
