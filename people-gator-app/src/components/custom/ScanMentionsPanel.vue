@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import ActiveFilters, { type ActiveFilter } from './ActiveFilters.vue'
 import FilterSingleSelect from './FilterSingleSelect.vue'
 import PersonMentionGroups from './PersonMentionGroups.vue'
+import ScanMentionsByPerson from './ScanMentionsByPerson.vue'
 import PersonMentionOccurrences from './PersonMentionOccurrences.vue'
 import SearchFilterPanel from './SearchFilterPanel.vue'
 import SortControl from './SortControl.vue'
@@ -58,7 +59,12 @@ const tags = computed<ActiveFilter[]>(() =>
           :options="MENTION_GROUP_SORTS"
           label="Sort mention groups"
         />
-        <SortControl v-else v-model="sort" :options="SCAN_MENTION_SORTS" label="Sort mentions" />
+        <SortControl
+          v-else-if="view === 'flat'"
+          v-model="sort"
+          :options="SCAN_MENTION_SORTS"
+          label="Sort mentions"
+        />
       </SearchFilterPanel>
       <ActiveFilters
         :filters="tags"
@@ -81,6 +87,11 @@ const tags = computed<ActiveFilter[]>(() =>
             automatic
             :selectable="false"
             @broaden="emit('resetFilters')"
+          />
+          <ScanMentionsByPerson
+            v-else-if="view === 'person'"
+            :filters="filters"
+            :link-states="linkStates"
           />
           <PersonMentionOccurrences
             v-else

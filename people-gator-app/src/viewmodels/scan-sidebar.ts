@@ -54,9 +54,10 @@ export const FACE_VIEWS: { value: FaceView; label: string }[] = [
   { value: 'flat', label: 'Flat' },
   { value: 'person', label: 'Group by person' },
 ]
-export type MentionView = 'group' | 'flat'
+export type MentionView = 'group' | 'person' | 'flat'
 export const MENTION_VIEWS: { value: MentionView; label: string }[] = [
   { value: 'group', label: 'Group by text' },
+  { value: 'person', label: 'Group by person' },
   { value: 'flat', label: 'Flat' },
 ]
 export type ActivityDirection = 'desc' | 'asc'
@@ -116,7 +117,7 @@ export function readSidebarState(query: LocationQuery, hash = ''): ScanSidebarSt
     faceView: oneOf(single(query.face_view), ['flat', 'person'] as const, 'flat'),
     faceSort: readSort(query, FACE_SORT_KEYS, WORKSPACE_FACE_SORTS, FACE_DEFAULT),
     mentionScope: oneOf(single(query.mention_scope), ['page', 'document'] as const, 'page'),
-    mentionView: oneOf(single(query.mention_view), ['group', 'flat'] as const, 'group'),
+    mentionView: oneOf(single(query.mention_view), ['group', 'person', 'flat'] as const, 'group'),
     mentionSort: readSort(query, MENTION_SORT_KEYS, SCAN_MENTION_SORTS, MENTION_DEFAULT),
     mentionGroupSort: readSort(
       query,
