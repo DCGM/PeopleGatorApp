@@ -376,8 +376,8 @@ preservation.
 The `document-pages-without-annotations` example finds **Příběhy archivářů**.
 Open its heading or +more link to browse all six registered pages, including
 its page without faces or mentions. Navigation adds only the document's library
-and archive ID; it does not invent annotation criteria. Explicit modification
-user/key/date and link-state selections still carry through and narrow results.
+and archive ID; it does not invent annotation criteria. Source-view modification
+user/key/date and link-state selections do not carry through (#109).
 The repository test paginates all six pages and checks that selecting the importer
 reduces the list to four annotated pages. Twice-run preservation retains the
 unannotated page and its source/processing metadata.
@@ -389,13 +389,12 @@ opening the scan must not silently add an evidence-source filter. Explicitly
 selected annotation filters still apply. Repository coverage checks candidate
 lookup, reassignment, local media and twice-run preservation of the review edit.
 
-The `shared-filter-navigation` example searches for Irena with the importer API
-key selected. Open her profile, change that key or clear it, then use the normal
-**People** breadcrumb. The destination must use the current filters rather than
-restore the original key. Profiles use the standard breadcrumb hierarchy; no
-custom source/return breadcrumb is shown, including for older URLs containing
-`origin_return`. Seed tests check real key-filtered people/faces, changed-key
-empty results, clearing and twice-run preservation of annotation metadata.
+The stable `shared-filter-navigation` example searches for Irena within
+preview-mzk. Opening her profile drops that library filter and shows her evidence
+in both libraries. The **People** breadcrumb opens default People, including after
+editing a profile filter. Explicit filtered profile links still apply locally;
+reload and browser Back/Forward reproduce their URL state. Older `origin_return`
+values never introduce a custom return link.
 
 The `annotation-editor-filters` example opens Irena's profile with the importer
 user and API key selected together, showing the three faces last changed by
@@ -459,10 +458,8 @@ Faces tab; compare Found faces below the linked overview and select linked faces
 for verification/unassignment. Verify selected uses a green outline; Unassign
 selected uses a red outline, with the same behavior in light/dark themes.
 Existing source identities, records/media and
-review edits are reused. The normal **People** breadcrumb forwards the current
-shared evidence filters; it does not restore a saved source URL. Shared evidence criteria populate the
-actual controls, while resource-specific processing and search settings remain
-separate. These entry points reuse existing
+review edits are reused. The normal **People** breadcrumb opens the default list. Explicit copied filter
+URLs populate the local controls; application links do not forward those filters. These entry points reuse existing
 stable records/media and never reset checkpoints or reviewer edits. Integration
 coverage resolves every source/media link, checks attributed annotation records
 and page/document statistics through repositories, and verifies an unchanged rerun.
@@ -623,31 +620,48 @@ apply migration `d34a021b0012` before seed/startup to install its identifier ind
 
 
 
-## Transferable source and modification filters (#52)
+## View-local source and modification filters (#52, #109)
 
-The `shared-filters-*` report links demonstrate one configuration across views:
+The stable `shared-filters-*` report links continue to demonstrate each view's
+own-record predicates through explicit URLs:
 
-1. Open `shared-filters-documents`: **Modified by: Preview curator** finds
-   **Shared filter ledger**. Use the top-level People navigation; the same
-   selection finds **Ivo Ledger** and **Hana Ledger** by their own latest edits.
-2. Add **Modified via key: preview-curator** (or open `shared-filters-api-key`).
-   Ivo remains; Hana's own curator edit used bearer authentication, without a key.
-   Remove the key tag and switch back to Documents; the removal travels too.
-3. Open `shared-filters-person-faces` (Hana). Her identity matches the curator,
-   while her reviewer-edited face is absent under the same selection. Remove
-   the modifier tag to show it. Compare Ivo's curator-linked faces and mentions.
-4. Open `shared-filters-page` in Scans: only the ledger's first page appears.
-   Switch to People (or open `shared-filters-page-people`): Hana matches through
-   her face on that page. Switch to Documents with the same page selection:
-   no documents match, including the containing ledger. Remove the Page tag
-   to browse documents again. Document/image UUIDs used as page selections
-   match nothing; selecting a document instead still includes its pages.
-5. Select the ledger in **Documents**, then switch to Scans. **Shared filter mirror** in `preview-nlk`
-   reuses the ledger's archive UUID but has separate internal source identities
-   and an unannotated page that remains browsable in Scans. Library/document/page
-   scope must not leak across it.
-6. Copy/reload a filtered URL, use Back/Forward, and expand/collapse mobile filters.
-   Controls, tags and API predicates restore the same effective configuration.
+1. `shared-filters-documents` finds **Shared filter ledger** last modified by
+   **Preview curator**. Top-level People opens its default list. Open the separate
+   `shared-filters-people` link to select the curator explicitly: **Ivo Ledger**
+   and **Hana Ledger** match their own latest edits.
+2. `shared-filters-api-key` also selects the curator key: Ivo remains; Hana's edit
+   used bearer authentication. Removing the key changes only that view.
+3. `shared-filters-person-faces` opens Hana under the curator selection. Her
+   reviewer-edited face is absent until the modifier tag is removed. Changing to
+   Mentions resets the filters rather than applying face criteria to mentions.
+4. `shared-filters-page` selects only the ledger's first page. Top-level People
+   and Documents reset that selection. `shared-filters-page-people` explicitly
+   applies the page filter to People and finds Hana through her face.
+5. A document's name link selects only its internal document UUID in Scans.
+   **Shared filter mirror** in preview-nlk has a separate identity despite reusing
+   the ledger's archive UUID; its unannotated page remains browsable.
+6. Copy/reload a filtered URL and use Back/Forward to restore actual URL state.
+   Ordinary application links always start fresh; mobile collapse preserves the
+   current view's filters.
+
+## Fresh destination navigation (#109)
+
+Open `reset-navigation-documents`, `reset-navigation-scans` or
+`reset-navigation-people`. Each explicitly selects preview-mzk. Click each
+Documents, Scans and People navigation control, including the active section:
+there must be no filter tags or inherited URL criteria at the destination.
+Default Documents/Scans include **Shared filter mirror** and its local scan in
+preview-nlk; default People includes **Lenka Vesela**, who has no linked evidence
+and therefore does not match a library selection. Those examples are excluded by the source links' library filter.
+Return through application navigation and check that old selections stay cleared.
+The logo and People breadcrumb also reset; explicit document/page/person links
+retain only their requested context. Capture desktop and collapsed-filter mobile
+states, and inspect requests/counts as well as the URL.
+
+This additive scenario reuses existing stable records and local media, adds only
+report entry points and never rewrites assignments or processing timestamps.
+Integration coverage compares default and scoped repository results for all three
+collections, resolves the excluded page image and checks repeatable report links.
 
 New fixtures and the `shared-filters-own-edit-v1` upgrade use stable keys. Before
 editing Hana once, the manifest records her expected touch time; recovery checks
@@ -692,7 +706,7 @@ batches, check distinct IDs, order, totals, exhausted cursors and document scope
 read a real page image, and preserve an edited person/unassigned mention on
 rerun. Existing interrupted-checkpoint recovery covers the new fixture keys.
 
-## Global Discover with a retained workspace (#67)
+## Global Discover from a filtered URL (#67, #109)
 
 Open the seed report's `global-discovery` link for **Zora Cartographer**.
 The URL retains `preview-mzk`, **Entity discovery practice**, its first page,
@@ -701,17 +715,18 @@ Portrait** and two matching faces from **Discovery beyond the workspace** in
 `preview-nlk`, including one unassigned face. Modalities starts at Faces
 with the synthetic 8D model; name, aliases, text and sorting remain available.
 
-The linked Faces overview and Mentions retain the local criteria;
+The copied URL applies local criteria to the initial linked overview; switching
+between Faces and Mentions resets those criteria (#109).
 Found faces and Similar people below the overview search globally. On disposable
 data, assign the outside unassigned face or merge the duplicate person. Candidate
-navigation also carries the original shared configuration. All searches retain
+navigation opens destinations without the original filters. All searches retain
 normal API authorization. No optional face-scope control is introduced.
 
 The `global-discovery-scan` link opens the reference page in face-similarity mode.
 The right panel never inherits workspace predicates or renders workspace tags.
 It shows entities on the current page, or searches text and face candidates across
 all accessible data. Source, actor, API key, assignment and date settings remain
-in the URL for navigation back to filtered lists; invalid workspace values do not
+in a copied URL only; application links do not transfer them. Invalid workspace values do not
 block the scan. The page toolbar's explicit annotation display setting uses
 `page_link_state`, independently of the workspace's `link_state`.
 

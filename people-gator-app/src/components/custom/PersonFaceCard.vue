@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import { ChevronRight } from '@lucide/vue'
 import { linkStateVisuals, linkTooltip } from '@/lib/entity-links'
 import AnnotationLastChange from './AnnotationLastChange.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import LoadableImage from './LoadableImage.vue'
 import type { PersonFace } from '@/viewmodels/person-detail.types'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Item } from '@/components/ui/item'
 import ArchiveLink from './ArchiveLink.vue'
@@ -22,7 +20,6 @@ const props = defineProps<{
   portrait?: boolean
 }>()
 defineEmits<{ toggle: [event: MouseEvent]; add: [event: MouseEvent] }>()
-const route = useRoute()
 const assignment = computed(() => linkStateVisuals[props.face.linkState ?? 'unassigned'])
 const assignmentTextClasses = computed(() =>
   assignment.value.classes.split(' ').filter((name) => name.split(':').pop()?.startsWith('text-')),
@@ -36,7 +33,7 @@ const sourceTarget = computed(() =>
           documentId: props.face.documentId,
           pageId: props.face.pageId,
         },
-        query: relatedQuery(route, { person: props.face.id }),
+        query: { person: props.face.id },
       }
     : undefined,
 )

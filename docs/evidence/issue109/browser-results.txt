@@ -1,0 +1,10 @@
+desktop: Documents source, active reset, all destination URLs/tags/requests passed
+desktop: Scans source, active reset, all destination URLs/tags/requests passed
+desktop: People source, active reset, all destination URLs/tags/requests passed
+desktop: person/card/tab/breadcrumb/scan/gallery/logo checks passed; page errors: []
+mobile: Documents source, active reset, all destination URLs/tags/requests passed
+mobile: Scans source, active reset, all destination URLs/tags/requests passed
+mobile: People source, active reset, all destination URLs/tags/requests passed
+mobile: person/card/tab/breadcrumb/scan/gallery/logo checks passed; page errors: []
+desktop: keyboard navigation, mobile collapse (when applicable), reload/Back/Forward and profile/scan screenshots passed
+mobile: keyboard navigation, mobile collapse (when applicable), reload/Back/Forward and profile/scan screenshots passed

@@ -3,7 +3,7 @@ import { usePeopleMerge } from '@/viewmodels/people-merge'
 import { usePeopleCounts } from '@/viewmodels/people-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { computed, ref } from 'vue'
-import { relatedQuery, useSharedFilters } from '@/viewmodels/shared-filters'
+import { useSharedFilters } from '@/viewmodels/shared-filters'
 
 import { useRoute, useRouter } from 'vue-router'
 import { Merge, UserRound } from '@lucide/vue'
@@ -161,7 +161,6 @@ useAutomaticPagination({
             :to="{
               name: 'person-detail',
               params: { personId: person.id },
-              query: relatedQuery(route),
             }"
           />
           <button

@@ -241,7 +241,7 @@ for a credential-safe first request. For document search, text can match documen
 names, archive identifiers or evidence-linked entity names/aliases; ordinary
 `/documents` lists do not accept `query.text`.
 
-## One configuration across views (#52)
+## View-local filters with shared controls (#52, #109)
 
 All panels use `SharedFilterControls`, `SharedFilterTags` and `shared-filters.ts`.
 There are no separate evidence-library/document or annotation actor/date facets.
@@ -256,15 +256,21 @@ There are no separate evidence-library/document or annotation actor/date facets.
 | `touched_from`, `touched_to` | `filter.last_touched_from`, `filter.last_touched_to` |
 
 Times are UTC in URLs and browser-local in controls. Different fields AND;
-multi-select values OR. Shared controls, tags and outgoing predicates stay active
-through Documents ↔ People, profile tabs, scan lists, related cards, breadcrumbs
-and the logo. Page workspaces retain them for return navigation. In Documents, **Modified by U** filters documents; in
-People it filters entities; on profile Faces/Mentions it filters each annotation's own change.
-Scan page panels ignore these predicates. A profile identity remains visible even when
-none of its annotations match. Discover searches similar faces and people across all data accessible to the
-current user. It does not inherit source, modifier, date or assignment predicates
-from shared browsing filters. Those filters remain in the URL and still apply
-when returning to Faces/Mentions or navigating to related views. Reference inputs,
+multi-select values OR. Filters apply only in the current view. Top-level
+Documents, Scans and People links, including the active section, open their
+default listings. The logo and home breadcrumb open default Documents. Related
+cards, profile tabs and page-gallery navigation do not copy filters, search text,
+sort or cursors. Returning through application links never restores old filters.
+An explicit document-to-pages action or source breadcrumb sets only its named
+document/library context; record links retain their person/page identity and
+explicit face/person selection.
+
+In Documents, **Modified by U** filters documents; in People it filters entities;
+on profile Faces/Mentions it filters each annotation's own change. Scan page
+panels ignore these predicates. A profile identity remains visible even when
+none of its annotations match. Discover searches similar faces and people across
+all accessible data and ignores surrounding source, modifier, date and assignment
+predicates. Reference inputs,
 face model, discovery text and each result list’s sort remain explicit discovery
 choices; only changes to those effective criteria change the discovery cache key
 and restart pagination. Invalid shared filters do not block global discovery.
@@ -280,8 +286,7 @@ identify real detections; they are not hidden filters. Witness faces are loaded
 inside the current person and shared scope, independently of the first result page.
 
 A document table name/identity link explicitly selects that document's internal
-source UUID for its scan list. Opening a page keeps existing shared scope without adding
-an implicit page filter. Page document breadcrumbs use a scans-only
+source UUID for its scan list. Opening a page drops the source view's filters. Page document breadcrumbs use a scans-only
 `archive_document` scope, resolved to the registered internal document when one
 exists. Without a registered document it remains an explicit, removable archive
 scope alongside its library on Scans; it does not restrict unrelated resources.
@@ -339,8 +344,7 @@ its preservation tests; follow [AGENTS.md](../AGENTS.md).
 The scan editor's right panel shows entities on the current page, or text/face
 search results across all accessible data. It does not inherit workspace source,
 assignment, actor/date or API key predicates, and shows no workspace tags or
-validation messages. Retained workspace URL values still apply when navigating
-back to ordinary lists. Invalid workspace values cannot block page entities or
+validation messages. Copied workspace URL values are not forwarded to other views. Invalid workspace values cannot block page entities or
 search. Text lookup works without selecting a face. The explicit page annotation
 link-state control uses `page_link_state`; it affects annotation display rather
 than the page's identity membership or global candidates. The workspace's

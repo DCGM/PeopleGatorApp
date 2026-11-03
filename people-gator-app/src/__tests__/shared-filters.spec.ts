@@ -5,7 +5,6 @@ import {
   localTimeToUtc,
   migrateLegacyFilters,
   readSharedFilters,
-  relatedQuery,
   sharedFilterError,
   sharedFiltersQuery,
   sharedFiltersUrl,
@@ -65,41 +64,12 @@ describe('one shared filter configuration', () => {
     expect(sharedFiltersQuery(emptySharedFilters())).toEqual({})
   })
 
-  it('transfers unchanged between views, without search, sort, cursors or view choices', () => {
-    const fromDocuments = relatedQuery({
-      name: 'document-list',
-      query: { ...shared, q: 'Irena', sort: 'name', cursor: 'old', unassigned: 'yes' },
-    }) as LocationQuery
-    expect(readSharedFilters(fromDocuments)).toEqual(readSharedFilters(shared))
-    for (const name of ['q', 'sort', 'cursor', 'unassigned'])
-      expect(fromDocuments).not.toHaveProperty(name)
-    // People → profile → People: the same predicates stay active and editable.
-    const toProfile = relatedQuery({
-      name: 'people-search',
-      query: { ...fromDocuments, assignment: 'mentions' },
-    }) as LocationQuery
-    expect(toProfile.tab).toBe('mentions')
-    expect(toProfile).not.toHaveProperty('assignment')
-    const edited = relatedQuery({
-      name: 'person-detail',
-      query: { ...toProfile, touched_by: undefined } as unknown as LocationQuery,
-    }) as LocationQuery
-    expect(sharedFiltersQuery(readSharedFilters(edited))).not.toHaveProperty(
-      'filter.last_touched_by_user_id',
-    )
-    expect(
-      sharedFiltersQuery(readSharedFilters(edited))['filter.last_touched_by_api_key_id'],
-    ).toEqual([key])
-  })
-
   it('keeps invalid copied values visible and blocks their requests', () => {
     expect(sharedUrlError({ touched_from: 'not-a-date' })).toContain('invalid filter')
     expect(sharedUrlError({ touched_by: 'missing' })).toContain('invalid filter')
     expect(sharedUrlError({ ...shared, touched_from: '2027-01-01T00:00:00Z' })).toContain(
       'before or equal',
     )
-    const next = relatedQuery({ name: 'people-search', query: { touched_by: [actor, 'missing'] } })
-    expect(next.touched_by).toEqual([actor, 'missing'])
   })
 })
 

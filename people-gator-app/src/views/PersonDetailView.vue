@@ -273,7 +273,7 @@ function selectTab(tab: string | number) {
   void router.replace({
     name: 'person-detail',
     params: { personId: personId.value },
-    query: { ...route.query, tab: selectedTab === 'faces' ? undefined : selectedTab },
+    query: { tab: selectedTab === 'faces' ? undefined : selectedTab },
   })
 }
 

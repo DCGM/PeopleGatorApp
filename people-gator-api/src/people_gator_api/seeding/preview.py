@@ -587,6 +587,11 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         filter_examples={
             "people-search-merge": "/people?q=Rina+Merge&sort=name",
             "people-search-merge-paginated": "/people?sort=name",
+            # #109: reuse linked local media in both libraries. Defaults include
+            # the preview-nlk mirror and unlinked Lenka excluded by these URLs.
+            "reset-navigation-documents": "/documents?" + urlencode({"library": "preview-mzk"}),
+            "reset-navigation-scans": "/scans?" + urlencode({"library": "preview-mzk"}),
+            "reset-navigation-people": "/people?" + urlencode({"library": "preview-mzk"}),
             # Replay a synthetic person-to-page journey without telemetry credentials.
             "openobserve-replay-person": f"/people/{manifest.entities['ada']}",
             "openobserve-replay-page": reference_path,
@@ -713,15 +718,12 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
             # Open Irena's scan, then search for Ada as an assignment candidate
             # outside that page. Opening a result must not invent evidence scope.
             "scan-assignment-search": "/scans?" + urlencode({"document": documents[activity_document.key]}),
-            # Follow Irena into a profile: the library scope keeps only her
-            # preview-mzk faces. Edit it, then use the People breadcrumb.
+            # #109: Irena search is local; profile and People links start fresh.
             "shared-filter-navigation": "/people?" + urlencode({
                 "q": "Irena",
                 "library": "preview-mzk",
             }),
-            # Issue #52: one configuration, each view's own latest change.
-            # Documents → People keeps the curator selection: the ledger
-            # document, Ivo (curator's key) and Hana (curator's own edit).
+            # #52 predicate semantics remain view-local after #109.
             # Issue #66: Olga's mention stays attributed to a now-inactive
             # reviewer, who is still offered as an editor filter.
             "deactivated-reviewer": "/people?" + urlencode({

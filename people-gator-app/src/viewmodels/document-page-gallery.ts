@@ -1,6 +1,5 @@
 import { useQueries } from '@tanstack/vue-query'
 import { computed, toValue, watch, type MaybeRefOrGetter } from 'vue'
-import type { LocationQuery } from 'vue-router'
 
 import type { PageResponse, PageSortField } from '@/client'
 import { listSortParams, type SortState } from '@/lib/sorting'
@@ -13,9 +12,6 @@ import { queryKeys } from '@/query/keys'
 export const PAGE_GALLERY_BATCH_SIZE = 12
 /** Shared with document page cards so thumbnails come from one cache entry. */
 export const PAGE_GALLERY_THUMBNAIL_WIDTH = 256
-
-/** Selections that only make sense on the page where they were made. */
-const PAGE_SPECIFIC_QUERY = ['person', 'selectedPerson', 'line', 'page_link_state'] as const
 
 export type PageGalleryItem = {
   sourceId: string
@@ -32,13 +28,6 @@ export type PageGalleryItem = {
 /** Stored position when known; archive UUID prefix otherwise. */
 export function pageGalleryLabel(pageId: string, number?: number | null) {
   return number == null ? pageId.slice(0, 8) : String(number)
-}
-
-/** Keep workspace settings and evidence filters; drop page-specific selections. */
-export function pageGalleryQuery(query: LocationQuery): LocationQuery {
-  const next = { ...query }
-  for (const key of PAGE_SPECIFIC_QUERY) delete next[key]
-  return next
 }
 
 /**

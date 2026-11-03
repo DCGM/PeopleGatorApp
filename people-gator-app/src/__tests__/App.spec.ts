@@ -136,7 +136,7 @@ describe('App', () => {
   })
 
   it.each(['00000000-0000-4000-8000-000000000002', undefined])(
-    'uses normal People navigation with the current key selection: %s',
+    'opens default People regardless of the current key selection: %s',
     async (currentKey) => {
       const originalKey = '00000000-0000-4000-8000-000000000001'
       await router.push({
@@ -163,10 +163,8 @@ describe('App', () => {
       await crumb.trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('people-search')
-      expect(readSharedFilters(router.currentRoute.value.query).apiKeyIds).toEqual(
-        currentKey ? [currentKey] : [],
-      )
-      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
+      expect(readSharedFilters(router.currentRoute.value.query).apiKeyIds).toEqual([])
+      expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual([])
       expect(router.currentRoute.value.query).not.toHaveProperty('origin_return')
       expect(router.currentRoute.value.query.q).toBeUndefined()
       wrapper.unmount()
@@ -528,18 +526,17 @@ describe('App', () => {
 })
 
 describe('Scans and Documents navigation', () => {
-  it('activates independent tabs and keeps scan query filters', async () => {
+  it('activates independent tabs with fresh default destinations', async () => {
     await router.push('/scans?library=mzk&document=album&q=Ada&assignment=faces')
     const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBeUndefined()
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('assignment=faces')
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('q=Ada')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
     await router.push('/documents?library=mzk')
     expect(document.title).toBe('Documents | People Gator')
     expect(wrapper.get('a[aria-label="Documents"]').attributes('aria-current')).toBe('page')
     expect(wrapper.get('a[aria-label="Scans"]').attributes('aria-current')).toBeUndefined()
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toContain('library=mzk')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
     expect(
       wrapper
         .get('[aria-label="Breadcrumb"]')
@@ -573,15 +570,11 @@ describe('Scans and Documents navigation', () => {
     wrapper.unmount()
   })
 
-  it('preserves multiple libraries in Documents navigation without treating them as a scan scope', async () => {
+  it('resets multiple libraries in Documents and Scans navigation', async () => {
     await router.push('/documents?library=a&library=b')
     const wrapper = mount(TopBar, { global: { plugins: [router, VueQueryPlugin] } })
-    expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe(
-      '/documents?library=a&library=b',
-    )
-    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe(
-      '/scans?library=a&library=b',
-    )
+    expect(wrapper.get('a[aria-label="Documents"]').attributes('href')).toBe('/documents')
+    expect(wrapper.get('a[aria-label="Scans"]').attributes('href')).toBe('/scans')
     expect(wrapper.findAll('[data-slot="breadcrumb-link"]').map((node) => node.text())).toEqual([
       'PeopleGator',
       'Documents',
@@ -620,7 +613,7 @@ describe('Scans and Documents navigation', () => {
         control === 'logo'
           ? wrapper.get('a[aria-label="PeopleGator"]')
           : wrapper.get('[aria-label="Breadcrumb"]').findAll('a')[0]!
-      const expected = path.includes('?') ? { library: ['preview-mzk'] } : {}
+      const expected = {}
       expect(home.attributes('href')).toBe(
         router.resolve({ name: 'document-list', query: expected }).href,
       )
@@ -639,7 +632,7 @@ describe('Scans and Documents navigation', () => {
     ['/libraries/preview-mzk/documents/album/pages/page', 'document-page'],
     ['/people', 'people-search'],
     ['/people/ada', 'person-detail'],
-  ])('keeps explicit %s links and shared filters', async (path, name) => {
+  ])('loads explicit %s filters but does not forward them', async (path, name) => {
     await router.push(`${path}?evidence_library=preview-mzk&link_state=verified`)
     expect(router.currentRoute.value.name).toBe(name)
     expect(router.currentRoute.value.path).toBe(path)
@@ -651,7 +644,7 @@ describe('Scans and Documents navigation', () => {
     await wrapper.get('a[aria-label="Scans"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('document-search')
-    expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual(['preview-mzk'])
-    expect(readSharedFilters(router.currentRoute.value.query).linkStates).toEqual(['verified'])
+    expect(readSharedFilters(router.currentRoute.value.query).libraries).toEqual([])
+    expect(readSharedFilters(router.currentRoute.value.query).linkStates).toEqual([])
   })
 })

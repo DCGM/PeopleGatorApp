@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, h, ref, useId } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import {
   columnVisibilityFeature,
   columnSizingFeature,
@@ -29,7 +29,6 @@ import {
   defaultDocumentColumns,
   DOCUMENT_COLUMN_SORTS,
 } from '@/viewmodels/document-table'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -70,7 +69,6 @@ function headerSort(columnId: string) {
       : 'descending'
     : undefined
 }
-const route = useRoute()
 const features = tableFeatures({
   columnVisibilityFeature,
   columnSizingFeature,
@@ -80,7 +78,7 @@ const link = (document: DocumentResponse, text: string) =>
   h(
     RouterLink,
     {
-      to: { name: 'document-search', query: relatedQuery(route, { document: document.source_id }) },
+      to: { name: 'document-search', query: { document: document.source_id } },
       'aria-label': `Open ${documentTitle(document)} in ${document.library}, document ${document.document_id}`,
       class: 'underline underline-offset-4',
     },
