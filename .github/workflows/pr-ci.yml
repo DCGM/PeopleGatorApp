@@ -38,7 +38,8 @@ jobs:
 
   backend:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Hosted public-repository runners have 4 vCPUs; the suite takes ~18 minutes.
+    timeout-minutes: 40
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -61,6 +62,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      # The runner image's Compose predates develop.watch options the repository's
+      # Compose files use; match the version used for local development.
+      - uses: docker/setup-compose-action@v2
+        with:
+          version: v5.5.1
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
