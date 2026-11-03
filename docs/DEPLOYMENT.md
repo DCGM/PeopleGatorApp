@@ -119,7 +119,8 @@ optional `OPENROUTER_API_KEY`; it maps them to container settings.
 ## CI and preview lifecycle
 
 [`pr-ci.yml`](../.github/workflows/pr-ci.yml) runs on pull requests using the exact
-head commit on a self-hosted Linux x64 runner labeled `people-gator-ci`:
+head commit on ephemeral GitHub-hosted `ubuntu-24.04` runners. PR code never runs
+on self-hosted deployment runners:
 
 1. Frontend: Node 24, `npm ci`, type-check and Vitest.
 2. Backend: Python 3.14/uv locked sync, isolated PostgreSQL test databases,
@@ -128,7 +129,7 @@ head commit on a self-hosted Linux x64 runner labeled `people-gator-ci`:
    separate location, including DB isolation checks, a wheel built and run
    outside the checkout, and snapshot/runtime suites with the backend environment.
 4. After checks pass, same-repository PRs build both production Dockerfiles and
-   publish run/attempt-specific tags to GHCR. Fork PRs receive tests but no image
+   publish run/attempt-specific tags to GHCR, reusing layers from the Actions cache. Fork PRs receive tests but no image
    publication/deployment. Images carry the tested revision label.
 
 [`pr-preview.yml`](../.github/workflows/pr-preview.yml),
@@ -139,8 +140,9 @@ head), installs or reuses that exact `people-gator-deploy` revision through
 `deploy/install.py --user` without sudo, runs `<environment> preflight` and then
 one lifecycle operation with the pinned versioned executable. The installer
 rejects non-default workflow sources (release tags must point at commits on
-`main`); restrict runner access to the trusted workflows and protect/review
-`main`. The utility verifies repository/open-PR/current-head identity, pulls
+`main`). The self-hosted runners' [job-started guard](../deploy/runner/job-started.sh)
+refuses every other workflow before its first step; protect and review `main`
+(see [host prerequisites](../deploy/people-gator-deploy/HOSTS.md#github-runners-and-tokens)). The utility verifies repository/open-PR/current-head identity, pulls
 candidate images with temporary registry credentials, verifies their revisions
 and deploys by immutable digest. Preview order is selected PR container removal → storage initialization →
 migration → seed → backend/frontend health → routed readiness. A failed seed
