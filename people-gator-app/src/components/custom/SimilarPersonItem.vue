@@ -69,8 +69,12 @@ function formatTextScore(score: number) {
       @click="emit('preview', person)"
     ></button>
 
-    <ItemMedia class="self-start">
+    <ItemMedia class="relative self-start">
       <PersonPortrait :name="person.name" :face-id="person.thumbnailFaceId" class="size-15" />
+      <!-- Above the card's preview layer, like the card's other controls. -->
+      <span class="absolute -right-1 -bottom-1 z-20">
+        <IdentityFacePreview :person-id="person.id" :name="person.name" />
+      </span>
     </ItemMedia>
     <ItemActions
       v-if="person.matchSources?.length"
@@ -132,10 +136,10 @@ function formatTextScore(score: number) {
     </ItemContent>
 
     <ItemFooter
+      v-if="person.wikidataId || person.nlcrAuthorityId || !props.assignmentDisabled"
       class="relative z-20 w-full shrink-0 items-center border-t pt-2 text-muted-foreground"
     >
       <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <IdentityFacePreview :person-id="person.id" :name="person.name" />
         <a
           v-if="person.wikidataId"
           :href="wikidataHref(person.wikidataId)"

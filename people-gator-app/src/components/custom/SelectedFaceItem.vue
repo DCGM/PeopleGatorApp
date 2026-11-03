@@ -90,12 +90,7 @@ watch(() => props.face.id, cancelCreating)
       </div>
       <!-- The person's other faces open from a small + over this face. -->
       <span v-if="face.personId && !isCreating" class="absolute -right-1 -bottom-1">
-        <IdentityFacePreview
-          :key="face.personId"
-          :person-id="face.personId"
-          :name="face.name"
-          compact
-        />
+        <IdentityFacePreview :key="face.personId" :person-id="face.personId" :name="face.name" />
       </span>
     </ItemMedia>
 
