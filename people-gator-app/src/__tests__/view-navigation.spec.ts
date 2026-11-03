@@ -6,6 +6,7 @@ import TopBar from '@/components/custom/TopBar.vue'
 import { sharedFiltersQuery, useSharedFilters } from '@/viewmodels/shared-filters'
 
 vi.mock('@/query/media', () => ({
+  useDocumentLookupQuery: () => ({ data: ref(undefined) }),
   usePageLookupQuery: () => ({ data: ref(undefined) }),
 }))
 

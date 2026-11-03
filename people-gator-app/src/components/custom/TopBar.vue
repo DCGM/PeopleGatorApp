@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ArchiveLink from './ArchiveLink.vue'
-import { usePageLookupQuery } from '@/query/media'
+import { useDocumentLookupQuery, usePageLookupQuery } from '@/query/media'
 import { FileText, Scan, User } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
@@ -20,6 +20,11 @@ const pageQuery = usePageLookupQuery(
   () => (route.name === 'document-page' ? String(route.params.libraryId) : ''),
   () => (route.name === 'document-page' ? String(route.params.documentId) : ''),
   () => (route.name === 'document-page' ? String(route.params.pageId) : ''),
+)
+
+const documentQuery = useDocumentLookupQuery(
+  () => (route.name === 'document-page' ? String(route.params.libraryId) : ''),
+  () => (route.name === 'document-page' ? String(route.params.documentId) : ''),
 )
 
 const breadcrumbs = computed(() => {
@@ -58,7 +63,7 @@ const breadcrumbs = computed(() => {
     })
     if (typeof document === 'string') {
       items.push({
-        label: document,
+        label: documentQuery.data.value?.name?.trim() || document,
         to: {
           name: 'document-search',
           query: { library, archive_document: document },
@@ -66,7 +71,7 @@ const breadcrumbs = computed(() => {
       })
     }
     items.push({
-      label: `Page ${String(route.params.pageId)}`,
+      label: `Page ${pageQuery.data.value?.page_number ?? String(route.params.pageId)}`,
       to: { path: route.path, query: route.query },
     })
   } else if (route.name === 'document-search') {
