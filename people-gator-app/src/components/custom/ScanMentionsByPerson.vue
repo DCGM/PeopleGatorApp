@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PersonNameTitle from './PersonNameTitle.vue'
 import { computed, reactive } from 'vue'
 import ListPagination from './ListPagination.vue'
 import PersonMentionListSkeleton from './PersonMentionListSkeleton.vue'
@@ -33,7 +34,7 @@ const sections = computed(() =>
       class="mb-3 min-w-0"
       :aria-label="`Mentions of ${section.name}`"
     >
-      <h3 class="truncate py-2 font-serif text-base">{{ section.name }}</h3>
+      <PersonNameTitle :name="section.name" :person-id="section.personId" />
       <PersonMentionReviewList
         class="pl-3"
         :mentions="section.views"

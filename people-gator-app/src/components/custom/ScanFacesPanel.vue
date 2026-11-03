@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PersonNameTitle from './PersonNameTitle.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -102,9 +103,11 @@ function location(item: ScanFaceItem) {
           class="mb-4 min-w-0"
           :aria-label="view === 'person' ? groupName(group) : 'Faces'"
         >
-          <h3 v-if="view === 'person'" class="mb-2 truncate text-sm font-semibold">
-            {{ groupName(group) }}
-          </h3>
+          <PersonNameTitle
+            v-if="view === 'person'"
+            :name="groupName(group)"
+            :person-id="group.personId"
+          />
           <ul class="flex flex-row flex-wrap gap-3 p-1">
             <li v-for="item in group.items" :key="item.face.detection_id">
               <ScanFaceThumbnail

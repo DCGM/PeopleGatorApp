@@ -84,6 +84,7 @@ const tags = computed<ActiveFilter[]>(() =>
             :occurrence-sort="sort"
             :link-states="linkStates"
             compact-occurrences
+            card-titles
             automatic
             :selectable="false"
             @broaden="emit('resetFilters')"
