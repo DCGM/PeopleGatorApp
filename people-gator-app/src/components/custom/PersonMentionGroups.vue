@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PersonNameTitle from './PersonNameTitle.vue'
 import { computed, ref, watch } from 'vue'
 import { Minus, Check, BadgeCheck, Unlink } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -32,6 +33,8 @@ const props = withDefaults(
     compact?: boolean
     /** Show occurrences under each group in their compact form. */
     compactOccurrences?: boolean
+    /** Show phrase headings in the person-card name style (the scan sidebar). */
+    cardTitles?: boolean
     /** Load further groups when the list end scrolls into view. */
     automatic?: boolean
     /** Offer selection and the selected-mention review actions. */
@@ -282,6 +285,9 @@ watch(groups, (items) => {
                 >{{ group.library }} · {{ group.name }} · {{ group.page_id }}</RouterLink
               ></span
             >
+            <div v-else-if="cardTitles && mode === 'mention'" class="min-w-0 flex-1">
+              <PersonNameTitle :name="group.name" />
+            </div>
             <span v-else class="min-w-0 flex-1 break-words font-sans"
               ><span :class="mode === 'mention' && 'font-serif'">{{ group.name }}</span>
               <small v-if="mode !== 'mention'" class="block text-muted-foreground wrap-anywhere"

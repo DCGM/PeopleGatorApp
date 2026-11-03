@@ -1,31 +1,16 @@
 <script setup lang="ts">
-import {
-  Check,
-  ChevronRight,
-  ExternalLink,
-  FileText,
-  LetterText,
-  ScanFace,
-  Search,
-  UserRound,
-} from '@lucide/vue'
+import { Check, ExternalLink, FileText, LetterText, ScanFace, Search, UserRound } from '@lucide/vue'
 
 import type {
   SimilarPersonCandidate,
   SimilarPersonMatchSource,
 } from '@/viewmodels/similar-people.types'
+import PersonNameTitle from './PersonNameTitle.vue'
 import PersonPortrait from './PersonPortrait.vue'
 import IdentityFacePreview from './IdentityFacePreview.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemFooter,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item'
+import { Item, ItemActions, ItemContent, ItemFooter, ItemMedia } from '@/components/ui/item'
 
 const props = defineProps<{
   person: SimilarPersonCandidate
@@ -128,30 +113,16 @@ function formatTextScore(score: number) {
     </ItemActions>
 
     <ItemContent class="min-w-0 gap-1 overflow-hidden pt-1">
-      <ItemTitle class="min-w-0 w-full max-w-full">
-        <RouterLink
-          :to="{
-            name: 'person-detail',
-            params: { personId: person.id },
-            query: {
-              origin_matched_face: person.faceId || undefined,
-              origin_reference_face: person.referenceFaceId || undefined,
-            },
-          }"
-          class="group z-20 flex min-w-0 w-full items-center gap underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          :aria-label="`Open ${person.name}`"
-        >
-          <h4
-            class="flex min-h-8 min-w-0 w-full items-center gap-1.5 rounded-sm border border-transparent px-1 py-0.5"
-          >
-            <span class="min-w-0 truncate">{{ person.name }}</span>
-            <ChevronRight
-              class="size-[1.15em] shrink-0 transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1"
-              aria-hidden="true"
-            />
-          </h4>
-        </RouterLink>
-      </ItemTitle>
+      <PersonNameTitle
+        :name="person.name"
+        :person-id="person.id"
+        :query="{
+          origin_matched_face: person.faceId || undefined,
+          origin_reference_face: person.referenceFaceId || undefined,
+        }"
+        link-class="z-20"
+        :aria-label="`Open ${person.name}`"
+      />
       <p
         class="min-h-[calc(2lh+0.25rem)] min-w-0 truncate text-wrap rounded-sm border border-transparent px-1 py-0.5 text-xs leading-snug text-muted-foreground"
         :title="person.shortDescription"
