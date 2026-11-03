@@ -95,17 +95,27 @@ describe('scan sidebar navigation (#103)', () => {
     expect(links[0]!.get('mark').classes()).toEqual(
       expect.arrayContaining(['bg-accent/20', 'outline-1', 'outline-accent']),
     )
+    const linkQuery = () =>
+      (wrapper.getComponent(RouterLinkStub).props('to') as { query: Record<string, unknown> }).query
+    // Another page keeps the sidebar's settings; the evidence filter stays behind (#109).
     expect(wrapper.getComponent(RouterLinkStub).props('to')).toMatchObject({
       params: { pageId: 'two' },
       query: {
         panel: 'mentions',
         mention_scope: 'document',
-        page_link_state: 'manual',
         person: undefined,
         line: undefined,
         mention: 'm1',
         selectedPerson: 'ada',
       },
+    })
+    expect(linkQuery()).not.toHaveProperty('page_link_state')
+    // A mention on the current page keeps every setting of this view.
+    await wrapper.setProps({ mention: { ...wrapper.props('mention'), pageId: 'one' } })
+    expect(linkQuery()).toMatchObject({
+      page_link_state: 'manual',
+      panel: 'mentions',
+      mention: 'm1',
     })
   })
 
