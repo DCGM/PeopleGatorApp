@@ -1037,9 +1037,11 @@ onBeforeUnmount(() => {
   height: max(34rem, calc(100dvh - 3.25rem));
 }
 
+/* Narrow screens: the sidebar sits below the workspace and grows with its
+   content, so its lists scroll with the page instead of an inner container. */
 .workspace-sidebar {
-  height: 85dvh;
-  min-height: 36rem;
+  height: auto;
+  overflow: visible;
 }
 
 .bg-viewer {
@@ -1075,6 +1077,7 @@ onBeforeUnmount(() => {
   .workspace-sidebar {
     height: auto;
     min-height: 0;
+    overflow: hidden;
     border-left-width: 1px;
     border-top-width: 0;
   }
