@@ -177,6 +177,7 @@ try {
       assert.equal(requests.at(-1).searchParams.get('sort_direction'), direction || 'asc')
       assert.equal(await page.locator('th[aria-sort]').count(), direction ? 1 : 0)
       assert.deepEqual(await widths(), expanded)
+      if (direction) await capture(`sort-${direction}`)
     }
     await page.goBack()
     await settled()

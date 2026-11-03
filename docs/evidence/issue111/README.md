@@ -48,5 +48,5 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
   missing media, and light/dark rendering without browser page errors.
 
 The after images show defaults, Columns settings, a vertically/horizontally
-scrolled table and dark mode. The mobile default capture scrolls the normal page
+scrolled table, ascending/descending sort controls and dark mode. The mobile default capture scrolls the normal page
 slightly to show the complete table region below the five active library tags.
