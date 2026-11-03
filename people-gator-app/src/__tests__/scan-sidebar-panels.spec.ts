@@ -152,6 +152,22 @@ describe('People panel (#103)', () => {
     ])
   })
 
+  it("offers the attached face's embedding models beside the scope", async () => {
+    const wrapper = panel()
+    expect(wrapper.find('[aria-label^="Face model:"]').exists()).toBe(false)
+    await wrapper.setProps({
+      searchFaceId: 'face-a',
+      faceModels: ['model-a', 'model-b'],
+      faceModel: 'model-b',
+    })
+    const [, controls] = wrapper.findAll('[data-align="block-end"]')
+    const trigger = controls!.get('[aria-label="Face model: model-b"]')
+    expect(trigger.text()).toBe('model-b')
+    // It sits in the controls row after the scope, like the scope menu.
+    const labels = controls!.findAll('button[aria-label]').map((b) => b.attributes('aria-label'))
+    expect(labels.indexOf('Face model: model-b')).toBe(labels.indexOf('Scope: All people') + 1)
+  })
+
   it('keeps an empty, fixed-height attachment row without context', () => {
     const wrapper = panel()
     const [context] = wrapper.findAll('[data-align="block-end"]')

@@ -42,6 +42,9 @@ const props = defineProps<{
   isFetching: boolean
   error?: unknown
   searchFaceId: string | null
+  /** Embedding models available for the attached face. */
+  faceModels?: string[]
+  faceModel?: string | null
   selectedFace: Face | null
   viewedPersonId: string | null
   assignmentPending?: boolean
@@ -53,6 +56,7 @@ const text = defineModel<string>('text', { required: true })
 const scope = defineModel<PeopleScope>('scope', { required: true })
 const order = defineModel<PeopleOrder>('order', { required: true })
 const emit = defineEmits<{
+  'update:faceModel': [model: string]
   removeFace: []
   /** Attach the face selected on the scan as the search reference. */
   attachSelectedFace: []
@@ -78,6 +82,10 @@ function keydown(event: KeyboardEvent) {
 const scopeLabel = computed(
   () => PEOPLE_SCOPES.find((item) => item.value === scope.value)?.label ?? '',
 )
+const faceModelValue = computed({
+  get: () => props.faceModel ?? '',
+  set: (value: string) => emit('update:faceModel', value),
+})
 const scopeValue = computed({
   get: () => scope.value,
   set: (value: string) => (scope.value = value as PeopleScope),
@@ -175,6 +183,26 @@ defineExpose({ focus: () => group.value?.querySelector('textarea')?.focus() })
                   :value="option.value"
                   >{{ option.label }}</DropdownMenuRadioItem
                 >
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu v-if="searchFaceId && faceModels?.length">
+            <DropdownMenuTrigger as-child>
+              <InputGroupButton
+                variant="ghost"
+                class="min-w-0 shrink"
+                :aria-label="`Face model: ${faceModel ?? ''}`"
+                :title="faceModel ?? undefined"
+              >
+                <span class="min-w-0 truncate">{{ faceModel }}</span
+                ><ChevronDown aria-hidden="true" />
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" class="[--radius:0.95rem]">
+              <DropdownMenuRadioGroup v-model="faceModelValue">
+                <DropdownMenuRadioItem v-for="model in faceModels" :key="model" :value="model">{{
+                  model
+                }}</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>

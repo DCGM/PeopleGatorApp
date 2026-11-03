@@ -69,6 +69,8 @@ export type ScanSidebarState = {
   tab: SidebarTab
   peopleText: string
   searchFaceId: string | null
+  /** Embedding model for face search; the face's first model when unset or unavailable. */
+  searchModel: string | null
   peopleScope: PeopleScope
   peopleOrder: PeopleOrder
   faceScope: EvidenceScope
@@ -103,6 +105,7 @@ export function readSidebarState(query: LocationQuery, hash = ''): ScanSidebarSt
     tab: readTab(query, hash),
     peopleText: single(query.candidate_text) ?? '',
     searchFaceId: single(query.candidate_face) || legacyFace || null,
+    searchModel: single(query.face_model) || null,
     peopleScope: oneOf(
       single(query.people_scope),
       PEOPLE_SCOPES.map((scope) => scope.value),
@@ -129,6 +132,11 @@ export function readSidebarState(query: LocationQuery, hash = ''): ScanSidebarSt
   }
 }
 
+/** The chosen face-search model when the face has it, otherwise its first model. */
+export function resolveSearchModel(chosen: string | null, available: readonly string[]) {
+  return chosen && available.includes(chosen) ? chosen : (available[0] ?? null)
+}
+
 /** Similarity needs a name or face to score; without one, Context applies. */
 export function effectivePeopleOrder(order: PeopleOrder, scored: boolean): PeopleOrder {
   return order === 'relevance' && !scored ? 'context' : order
@@ -141,6 +149,7 @@ export function sidebarQuery(changes: Partial<ScanSidebarState>): LocationQueryR
     query.panel = changes.tab === 'people' ? undefined : changes.tab
   }
   if ('peopleText' in changes) query.candidate_text = changes.peopleText || undefined
+  if ('searchModel' in changes) query.face_model = changes.searchModel ?? undefined
   if ('searchFaceId' in changes) {
     query.candidate_face = changes.searchFaceId ?? undefined
     query.candidate_mode = undefined
