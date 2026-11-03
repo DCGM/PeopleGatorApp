@@ -127,5 +127,5 @@ an inclusive range. Clear restores normal navigation.
 
 The scan workspace's top-bar breadcrumbs show the stored document name and page
 number when available, falling back independently to archive UUIDs. The document
-breadcrumb opens that document's pages. Explore the seed manifest's
+breadcrumb opens that document's pages. Explore the seed CLI's
 `breadcrumb-*` links for named, missing-metadata and long-title examples.

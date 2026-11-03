@@ -1250,7 +1250,7 @@ these interactions without a fixture or persistence upgrade.
 
 ### Top-bar document and page breadcrumbs (#114)
 
-The seed manifest and CLI provide five direct page links: `breadcrumb-named`
+The seed result and CLI provide five direct page links: `breadcrumb-named`
 (Page gallery navigation, Page 1), `breadcrumb-missing-number` (the same named
 document with an unknown page number and a deliberately missing scan), `breadcrumb-unnamed` (document UUID,
 Page 1), `breadcrumb-unregistered` (unregistered parent UUID, Page 1), and
