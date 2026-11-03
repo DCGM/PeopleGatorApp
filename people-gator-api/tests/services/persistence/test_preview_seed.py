@@ -107,7 +107,7 @@ async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
     assert await counts(database) == (40, 123, 83)
-    assert len(result.documents) == 54 and len(result.pages) == 112
+    assert len(result.documents) == 56 and len(result.pages) == 113
     assert len(result.users) == 5 and len(result.api_keys) == 3
 
     # #107: all three duplicates are discoverable together, with usable evidence.
@@ -1305,7 +1305,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
     expected_libraries = [
         'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
-        'preview-table-widths', 'preview-table-widths-long-archive-label', 'preview-table-navigation',
+        'preview-table-navigation', 'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
     assert first.total_count == len(expected_libraries) and batches[-1].cursor is None
     assert all(len(batch.items) == 1 for batch in batches)
