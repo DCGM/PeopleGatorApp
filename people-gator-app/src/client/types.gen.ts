@@ -2681,7 +2681,7 @@ export type TextMentionResponse = {
 /**
  * TextMentionSortField
  */
-export type TextMentionSortField = 'text' | 'mention_id' | 'last_touched_at' | 'link_state' | 'source';
+export type TextMentionSortField = 'text' | 'mention_id' | 'last_touched_at' | 'link_state' | 'source' | 'person';
 
 /**
  * TextMentionSpanModel

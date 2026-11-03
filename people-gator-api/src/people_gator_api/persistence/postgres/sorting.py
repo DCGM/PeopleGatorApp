@@ -324,19 +324,23 @@ def source_context_keys(source_id: ColumnElement[Any], descending: bool) -> list
     ]
 
 
-def person_keys(descending: bool) -> list[SortKey]:
-    """Assigned person name, then person identity; unassigned faces are unknown and last.
+def person_keys(model: Any) -> Callable[[bool], list[SortKey]]:
+    """Assigned person name, then person identity, for faces or mentions.
 
-    Equal people stay contiguous, so a person-grouped view can be paged.
+    Unassigned annotations are unknown and last. Equal people stay contiguous,
+    so a person-grouped view can be paged.
     """
-    from .models import Entity, Face
+    from .models import Entity
 
-    people = Entity.__table__.alias("sort_people")
-    joins: tuple[SortJoin, ...] = ((people, people.c.id == Face.entity_id),)
-    return [
-        SortKey(key.expression, key.kind, key.descending, joins)
-        for key in text_keys(normalized_text(people.c.name), people.c.name, descending)
-    ] + [SortKey(Face.entity_id, "uuid", descending)]
+    def keys(descending: bool) -> list[SortKey]:
+        people = Entity.__table__.alias("sort_people")
+        joins: tuple[SortJoin, ...] = ((people, people.c.id == model.entity_id),)
+        return [
+            SortKey(key.expression, key.kind, key.descending, joins)
+            for key in text_keys(normalized_text(people.c.name), people.c.name, descending)
+        ] + [SortKey(model.entity_id, "uuid", descending)]
+
+    return keys
 
 
 def annotation_builders(model: Any) -> Builders:

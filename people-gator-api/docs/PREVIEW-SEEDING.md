@@ -1272,7 +1272,8 @@ faces of Karel Crowd (every fourth unassigned), Rosa Elsewhere's single face and
   their page with the face selected.
 - Open `scan-sidebar-mentions` for document mentions grouped by phrase. Hana's
   group lists 24 occurrences, including the unlinked one, and loads further
-  occurrences while scrolling. Switch **View** to **Flat** for one list.
+  occurrences while scrolling. Switch **View** to **Group by person** for Hana, Tomas and
+  **Unlinked**, or to **Flat** for one list.
   Select a mention's text to select it in the transcription and on the scan;
   one on another page opens there. The unlinked caption selects its line.
 - Open `scan-sidebar-info` for this page's statistics, last change and the
