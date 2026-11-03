@@ -748,6 +748,43 @@ provide(
   }),
 )
 
+// Narrow screens scroll the sidebar with the page. A tab switch keeps the tab
+// bar where it was; when scrolled past it, the new tab starts at its top.
+const sidebarTabs = ref<{ $el: HTMLElement } | null>(null)
+let tabBarTop: number | null = null
+function tabBar() {
+  return sidebarTabs.value?.$el?.querySelector<HTMLElement>('[role="tablist"]') ?? null
+}
+function appBarHeight() {
+  return 3.25 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16')
+}
+watch(
+  () => sidebarState.value.tab,
+  () => {
+    tabBarTop = isWideWorkspace.value ? null : (tabBar()?.getBoundingClientRect().top ?? null)
+  },
+  { flush: 'pre' },
+)
+watch(
+  () => sidebarState.value.tab,
+  () => {
+    const before = tabBarTop
+    tabBarTop = null
+    if (before === null) return
+    const target = Math.max(before, appBarHeight())
+    // Once the new tab has laid out, return the tab bar to its place.
+    const place = () => {
+      const bar = tabBar()
+      if (bar) window.scrollBy({ top: bar.getBoundingClientRect().top - target })
+    }
+    requestAnimationFrame(() => {
+      place()
+      requestAnimationFrame(place)
+    })
+  },
+  { flush: 'post' },
+)
+
 onMounted(() => {
   window.addEventListener('keydown', handleNavigationKeydown)
   if (selectedFaceId.value) requestFocus({ kind: 'face', id: selectedFaceId.value })
@@ -939,6 +976,7 @@ onBeforeUnmount(() => {
     </div>
 
     <Tabs
+      ref="sidebarTabs"
       class="workspace-sidebar flex min-h-0 min-w-0 flex-col gap-0 overflow-hidden border-t bg-background"
       :model-value="sidebarState.tab"
       @update:model-value="(tab) => sidebar.update({ tab: tab as ScanSidebarState['tab'] })"
@@ -1053,6 +1091,11 @@ onBeforeUnmount(() => {
 .workspace-sidebar {
   height: auto;
   overflow: visible;
+  /* At least one screen tall, so a shorter tab never pulls the page (and the
+     tab bar) up when switching tabs, and the tab bar can rest under the app bar. */
+  min-height: 100dvh;
+  /* The tab switch places the page itself; browser anchoring would undo it. */
+  overflow-anchor: none;
 }
 
 .bg-viewer {
