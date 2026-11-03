@@ -34,7 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const annotationStateLabel = (id: string) =>
-  DOCUMENT_ANNOTATION_STATES.find(state => id === state.id || id.endsWith(`_${state.id}`))?.label
+  DOCUMENT_ANNOTATION_STATES.find((state) => id === state.id || id.endsWith(`_${state.id}`))?.label
 
 const tableId = useId()
 const columnHeaderId = (id: string) => `${tableId}-${id}`
@@ -361,7 +361,11 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
                   />
                   <ArrowUpDown v-else class="size-4" aria-hidden="true" />
                 </Button>
-                <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
+                <span class="min-w-0 [overflow-wrap:anywhere]"
+                  ><FlexRender
+                    :render="header.column.columnDef.header"
+                    :props="header.getContext()"
+                /></span>
               </div>
               <Button
                 v-if="!header.column.columns.length"

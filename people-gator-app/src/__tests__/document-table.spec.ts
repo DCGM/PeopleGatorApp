@@ -127,7 +127,7 @@ describe('document table', () => {
       `${Object.keys(original).reduce((n, id) => n + documentColumnSizing(id).size, 0)}px`,
     )
     expect(documentColumnSizing('ndk').size).toBe(80)
-    expect(documentColumnSizing('total').size).toBe(128)
+    expect(documentColumnSizing('total').size).toBe(144)
   })
   it('resizes through keyboard headers without sorting and preserves widths when columns hide', async () => {
     const { wrapper } = await render()

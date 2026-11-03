@@ -258,36 +258,29 @@ blocked required captures keep the PR draft. Keep these results separate from
 proposed tests. Update this guide when the runner, coverage boundaries, live-test
 prerequisites or CI execution change.
 
-### Documents column geometry and header resizing (#93)
+### Documents scrolling, sorting and column preferences (#93 / #111)
 
-`people-gator-app/scripts/check-document-widths.mjs` exercises actual Chromium
-layout against the running application and synthetic preview. It checks leaf,
-group and body widths, multiline titles (including uninterrupted text), loading,
-empty/error recovery, shared/header sorting and history, media, hidden/restored
-columns, mouse/touch/keyboard sizing and bounds/reset, bounded horizontal scroll,
-and automatic opaque-cursor loading from the middle/far right. Touch coverage
-uses browser TouchEvents with the actual resize handler, not a physical device.
-It runs separately from the jsdom unit suite and needs the seeded API and Vite.
+`people-gator-app/scripts/check-document-navigation.mjs` checks actual Chromium
+layout against a running, migrated, twice-seeded synthetic instance. It verifies
+header/body geometry, bounded wheel/keyboard scrolling and sticky headers,
+opaque cursor loading at left/middle/right, keyboard sizing, tri-state header
+sorting and shared sort/history/search defaults, session reload/navigation,
+usable document/library/first-page links, canonical counts, missing media and
+dark theme. The mobile context also checks horizontal/vertical touch swipes
+through Chromium touch events. Physical touch/trackpad devices are not tested. Unit tests cover storage failures,
+invalid/obsolete IDs, column controls, resizing bounds and pagination errors.
 
-Use the disposable local setup in [Development](DEVELOPMENT.md), migrate and seed
-twice, and start the API. From `people-gator-app`, point Vite to that API:
-
-```sh
-VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev -- --host 127.0.0.1 --port 5193 --strictPort
-```
-
-In another shell in `people-gator-app`:
+Use [Development](DEVELOPMENT.md), including local demo authentication, and start
+API and Vite from this revision. In `people-gator-app`:
 
 ```sh
-npm ci --prefer-offline --no-audit --no-fund
 npx playwright install chromium
-DOCUMENT_WIDTHS_ORIGIN=http://127.0.0.1:5193 \
-DOCUMENT_WIDTHS_EVIDENCE=/tmp/document-width-evidence npm run test:document-widths
+DOCUMENT_TABLE_ORIGIN=http://127.0.0.1:5211 \
+DOCUMENT_TABLE_EVIDENCE=/tmp/document-table-evidence node scripts/check-document-navigation.mjs
 ```
 
-Captures use desktop 1440 × 900 and mobile 390 × 844 CSS pixels. Width preferences
-are local to the mounted Documents view; there is no saved browser preference.
-For a before comparison, run the original table on the same fixture store and
-compare Document name sorting in both directions. Keep baseline captures separate
-from the script's after captures. Tests can fulfill requests with synthetic 503
-responses for error checks but do not change the seeded records.
+Captures use desktop 1440 × 900 and mobile 390 × 844 CSS pixels. Visible-column
+preferences persist for the browser tab; resized widths remain local to the
+mounted view. `npm run test:document-widths` remains a compatibility entry point
+for the same maintained browser checks and accepts `DOCUMENT_WIDTHS_ORIGIN`
+and `DOCUMENT_WIDTHS_EVIDENCE` (default origin port 5193).

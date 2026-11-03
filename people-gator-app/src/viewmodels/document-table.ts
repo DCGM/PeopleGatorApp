@@ -133,6 +133,7 @@ export function documentColumnSizing(id: string) {
     library: 200,
     document_id: 320,
     registered_page_count: 104,
+    total: 144,
     last_modified: 208,
     modified_by: 224,
     api_key: 224,
