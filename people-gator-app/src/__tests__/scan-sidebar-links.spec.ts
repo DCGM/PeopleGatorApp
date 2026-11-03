@@ -83,13 +83,18 @@ describe('scan sidebar navigation (#103)', () => {
         provide: { [SCAN_SELECTED_MENTION as symbol]: computed(() => 'm1') },
       },
     })
-    // The page label and the mention text both select the mention there.
+    // Only the mention text (context and name) selects; the page is plain text.
     const links = wrapper.findAllComponents(RouterLinkStub)
-    expect(links).toHaveLength(2)
-    expect(links[1]!.attributes('aria-label')).toBe('Select mention: Ada wrote.')
-    expect(links[1]!.attributes('aria-current')).toBe('true')
+    expect(links).toHaveLength(1)
+    expect(links[0]!.attributes('aria-label')).toBe('Select mention: Ada wrote.')
+    expect(links[0]!.attributes('aria-current')).toBe('true')
+    expect(wrapper.text()).toContain('two')
     expect(wrapper.find('[data-mention-selected]').exists()).toBe(true)
-    expect(links[1]!.props('to')).toEqual(links[0]!.props('to'))
+    // The transcription's look: a muted line and the name selected in blue.
+    expect(links[0]!.classes()).toContain('bg-muted')
+    expect(links[0]!.get('mark').classes()).toEqual(
+      expect.arrayContaining(['bg-accent/20', 'outline-1', 'outline-accent']),
+    )
     expect(wrapper.getComponent(RouterLinkStub).props('to')).toMatchObject({
       params: { pageId: 'two' },
       query: {
