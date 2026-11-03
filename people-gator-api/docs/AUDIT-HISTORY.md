@@ -69,10 +69,10 @@ because it has no audit UI; the example demo user also permits audit requests.
 
 | GET endpoint | Identity/relationship filters | Typed `state` |
 | --- | --- | --- |
-| `/api/v1/entities/audit` | `filter.entity_id` | Entity profile, aliases and portrait selection |
-| `/api/v1/faces/audit` | `filter.detection_id`, `filter.entity_id`, `filter.source_id` | Face, keypoints, vectors and assignment/verification |
-| `/api/v1/text-mentions/audit` | `filter.mention_id`, `filter.entity_id`, `filter.source_id` | Recorded text/context and assignment/verification |
-| `/api/v1/sources/audit` | `filter.source_id`, `filter.source_type`, `filter.library`, `filter.document_id`, `filter.page_id` | Discriminated page, document or image state |
+| `/api/v1/audit-entities` | `filter.entity_id` | Entity profile, aliases and portrait selection |
+| `/api/v1/audit-faces` | `filter.detection_id`, `filter.entity_id`, `filter.source_id` | Face, keypoints, vectors and assignment/verification |
+| `/api/v1/audit-text-mentions` | `filter.mention_id`, `filter.entity_id`, `filter.source_id` | Recorded text/context and assignment/verification |
+| `/api/v1/audit-sources` | `filter.source_id`, `filter.source_type`, `filter.library`, `filter.document_id`, `filter.page_id` | Discriminated page, document or image state |
 
 Lists return archived revisions and final deleted states; current records remain
 available through the ordinary resource endpoints. A never-edited current object
@@ -87,7 +87,7 @@ the referenced entity/source/annotation to remain alive.
 For faces previously linked to an entity, use:
 
 ```text
-GET /api/v1/faces/audit?filter.entity_id=<entity-UUID>&sort=version&direction=asc
+GET /api/v1/audit-faces?filter.entity_id=<entity-UUID>&sort=version&direction=asc
 ```
 
 Repeat an ID parameter to match any of several IDs, and combine different

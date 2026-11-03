@@ -3708,7 +3708,7 @@ export type ValidationError = {
     };
 };
 
-export type ListEntityAuditRouteApiV1EntitiesAuditGetData = {
+export type ListEntityAuditRouteApiV1AuditEntitiesGetData = {
     body?: never;
     path?: never;
     query?: {
@@ -3757,28 +3757,28 @@ export type ListEntityAuditRouteApiV1EntitiesAuditGetData = {
          */
         'filter.entity_id'?: Array<string> | null;
     };
-    url: '/api/v1/entities/audit';
+    url: '/api/v1/audit-entities';
 };
 
-export type ListEntityAuditRouteApiV1EntitiesAuditGetErrors = {
+export type ListEntityAuditRouteApiV1AuditEntitiesGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ListEntityAuditRouteApiV1EntitiesAuditGetError = ListEntityAuditRouteApiV1EntitiesAuditGetErrors[keyof ListEntityAuditRouteApiV1EntitiesAuditGetErrors];
+export type ListEntityAuditRouteApiV1AuditEntitiesGetError = ListEntityAuditRouteApiV1AuditEntitiesGetErrors[keyof ListEntityAuditRouteApiV1AuditEntitiesGetErrors];
 
-export type ListEntityAuditRouteApiV1EntitiesAuditGetResponses = {
+export type ListEntityAuditRouteApiV1AuditEntitiesGetResponses = {
     /**
      * Successful Response
      */
     200: EntityAuditListResponse;
 };
 
-export type ListEntityAuditRouteApiV1EntitiesAuditGetResponse = ListEntityAuditRouteApiV1EntitiesAuditGetResponses[keyof ListEntityAuditRouteApiV1EntitiesAuditGetResponses];
+export type ListEntityAuditRouteApiV1AuditEntitiesGetResponse = ListEntityAuditRouteApiV1AuditEntitiesGetResponses[keyof ListEntityAuditRouteApiV1AuditEntitiesGetResponses];
 
-export type ListFaceAuditRouteApiV1FacesAuditGetData = {
+export type ListFaceAuditRouteApiV1AuditFacesGetData = {
     body?: never;
     path?: never;
     query?: {
@@ -3835,28 +3835,28 @@ export type ListFaceAuditRouteApiV1FacesAuditGetData = {
          */
         'filter.source_id'?: Array<string> | null;
     };
-    url: '/api/v1/faces/audit';
+    url: '/api/v1/audit-faces';
 };
 
-export type ListFaceAuditRouteApiV1FacesAuditGetErrors = {
+export type ListFaceAuditRouteApiV1AuditFacesGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ListFaceAuditRouteApiV1FacesAuditGetError = ListFaceAuditRouteApiV1FacesAuditGetErrors[keyof ListFaceAuditRouteApiV1FacesAuditGetErrors];
+export type ListFaceAuditRouteApiV1AuditFacesGetError = ListFaceAuditRouteApiV1AuditFacesGetErrors[keyof ListFaceAuditRouteApiV1AuditFacesGetErrors];
 
-export type ListFaceAuditRouteApiV1FacesAuditGetResponses = {
+export type ListFaceAuditRouteApiV1AuditFacesGetResponses = {
     /**
      * Successful Response
      */
     200: FaceAuditListResponse;
 };
 
-export type ListFaceAuditRouteApiV1FacesAuditGetResponse = ListFaceAuditRouteApiV1FacesAuditGetResponses[keyof ListFaceAuditRouteApiV1FacesAuditGetResponses];
+export type ListFaceAuditRouteApiV1AuditFacesGetResponse = ListFaceAuditRouteApiV1AuditFacesGetResponses[keyof ListFaceAuditRouteApiV1AuditFacesGetResponses];
 
-export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetData = {
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetData = {
     body?: never;
     path?: never;
     query?: {
@@ -3913,28 +3913,28 @@ export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetData = {
          */
         'filter.source_id'?: Array<string> | null;
     };
-    url: '/api/v1/text-mentions/audit';
+    url: '/api/v1/audit-text-mentions';
 };
 
-export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetErrors = {
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetError = ListTextMentionAuditRouteApiV1TextMentionsAuditGetErrors[keyof ListTextMentionAuditRouteApiV1TextMentionsAuditGetErrors];
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetError = ListTextMentionAuditRouteApiV1AuditTextMentionsGetErrors[keyof ListTextMentionAuditRouteApiV1AuditTextMentionsGetErrors];
 
-export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponses = {
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponses = {
     /**
      * Successful Response
      */
     200: TextMentionAuditListResponse;
 };
 
-export type ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponse = ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponses[keyof ListTextMentionAuditRouteApiV1TextMentionsAuditGetResponses];
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponse = ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponses[keyof ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponses];
 
-export type ListSourceAuditRouteApiV1SourcesAuditGetData = {
+export type ListSourceAuditRouteApiV1AuditSourcesGetData = {
     body?: never;
     path?: never;
     query?: {
@@ -3999,26 +3999,26 @@ export type ListSourceAuditRouteApiV1SourcesAuditGetData = {
          */
         'filter.source_id'?: Array<string> | null;
     };
-    url: '/api/v1/sources/audit';
+    url: '/api/v1/audit-sources';
 };
 
-export type ListSourceAuditRouteApiV1SourcesAuditGetErrors = {
+export type ListSourceAuditRouteApiV1AuditSourcesGetErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type ListSourceAuditRouteApiV1SourcesAuditGetError = ListSourceAuditRouteApiV1SourcesAuditGetErrors[keyof ListSourceAuditRouteApiV1SourcesAuditGetErrors];
+export type ListSourceAuditRouteApiV1AuditSourcesGetError = ListSourceAuditRouteApiV1AuditSourcesGetErrors[keyof ListSourceAuditRouteApiV1AuditSourcesGetErrors];
 
-export type ListSourceAuditRouteApiV1SourcesAuditGetResponses = {
+export type ListSourceAuditRouteApiV1AuditSourcesGetResponses = {
     /**
      * Successful Response
      */
     200: SourceAuditListResponse;
 };
 
-export type ListSourceAuditRouteApiV1SourcesAuditGetResponse = ListSourceAuditRouteApiV1SourcesAuditGetResponses[keyof ListSourceAuditRouteApiV1SourcesAuditGetResponses];
+export type ListSourceAuditRouteApiV1AuditSourcesGetResponse = ListSourceAuditRouteApiV1AuditSourcesGetResponses[keyof ListSourceAuditRouteApiV1AuditSourcesGetResponses];
 
 export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     body?: never;

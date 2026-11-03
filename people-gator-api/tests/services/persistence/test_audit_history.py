@@ -321,7 +321,7 @@ async def test_http_requires_versions_exposes_conflicts_and_filters(audit_graph)
         )
         assert (await client.delete(url)).status_code == 422
         result = await client.get(
-            "/api/v1/entities/audit",
+            "/api/v1/audit-entities",
             params={
                 "filter.entity_id": str(r.first.entity_id),
                 "sort": "version",
@@ -331,7 +331,7 @@ async def test_http_requires_versions_exposes_conflicts_and_filters(audit_graph)
         assert result.status_code == 200 and result.json()["total_count"] == 1
         assert result.json()["items"][0]["state"]["name"] == "Ada"
         archived = await client.get(
-            "/api/v1/entities/audit",
+            "/api/v1/audit-entities",
             params={
                 "filter.entity_id": str(r.first.entity_id),
                 "filter.version_min": 1,
@@ -342,7 +342,7 @@ async def test_http_requires_versions_exposes_conflicts_and_filters(audit_graph)
             "entity_id"
         ] == str(r.first.entity_id)
         current = await client.get(
-            "/api/v1/entities/audit",
+            "/api/v1/audit-entities",
             params={
                 "filter.entity_id": str(r.first.entity_id),
                 "filter.version_min": 2,
@@ -358,7 +358,7 @@ async def test_http_requires_versions_exposes_conflicts_and_filters(audit_graph)
             {"object_type": "face"},
         ):
             assert (
-                await client.get("/api/v1/entities/audit", params=params)
+                await client.get("/api/v1/audit-entities", params=params)
             ).status_code == 422
     app.dependency_overrides.clear()
 
@@ -554,7 +554,7 @@ async def test_typed_face_history_filters_past_assignments_after_live_deletion(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.get(
-            "/api/v1/faces/audit",
+            "/api/v1/audit-faces",
             params=[
                 ("filter.entity_id", str(r.first.entity_id)),
                 ("filter.entity_id", str(r.second.entity_id)),
@@ -571,7 +571,7 @@ async def test_typed_face_history_filters_past_assignments_after_live_deletion(
         assert "object_type" not in response.json()["items"][0]
         assert (
             await client.get(
-                "/api/v1/faces/audit", params={"filter.entity_id": "not-a-uuid"}
+                "/api/v1/audit-faces", params={"filter.entity_id": "not-a-uuid"}
             )
         ).status_code == 422
 
@@ -684,7 +684,7 @@ def test_audit_openapi_has_resource_specific_snapshot_schemas():
         ("text-mentions", "TextMention", "TextMentionAuditState"),
         ("sources", "Source", None),
     ]:
-        route = spec["paths"][f"/api/v1/{resource}/audit"]["get"]
+        route = spec["paths"][f"/api/v1/audit-{resource}"]["get"]
         assert route["responses"]["200"]["content"]["application/json"]["schema"][
             "$ref"
         ].endswith(f"/{prefix}AuditListResponse")
@@ -702,5 +702,5 @@ def test_audit_openapi_has_resource_specific_snapshot_schemas():
         assert "object_type" not in params and "object_id" not in params
         assert "filter.version_min" in params
     assert "filter.entity_id" in {
-        p["name"] for p in spec["paths"]["/api/v1/faces/audit"]["get"]["parameters"]
+        p["name"] for p in spec["paths"]["/api/v1/audit-faces"]["get"]["parameters"]
     }

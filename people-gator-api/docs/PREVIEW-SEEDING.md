@@ -1304,8 +1304,8 @@ filters the entity list to version 1. Authenticate with `people-gator:audit`;
 neither browse nor admin is required. For example:
 
 ```text
-GET /api/v1/faces/audit?filter.entity_id=<Eva-entity-UUID>&sort=version&direction=asc
-GET /api/v1/sources/audit?filter.library=preview-audit
+GET /api/v1/audit-faces?filter.entity_id=<Eva-entity-UUID>&sort=version&direction=asc
+GET /api/v1/audit-sources?filter.library=preview-audit
 ```
 
 [Audit history](AUDIT-HISTORY.md) documents each concrete snapshot schema,

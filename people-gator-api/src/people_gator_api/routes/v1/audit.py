@@ -19,7 +19,7 @@ from people_gator_api.utils.http_errors import raise_api_error
 router = APIRouter(tags=["audit"])
 
 
-@router.get("/entities/audit", response_model=EntityAuditListResponse)
+@router.get("/audit-entities", response_model=EntityAuditListResponse)
 async def list_entity_audit_route(
     database: DatabaseDependency,
     user: AuditorActorDependency,
@@ -31,7 +31,7 @@ async def list_entity_audit_route(
         raise_api_error(501, "unsupported_operation", str(exc))
 
 
-@router.get("/faces/audit", response_model=FaceAuditListResponse)
+@router.get("/audit-faces", response_model=FaceAuditListResponse)
 async def list_face_audit_route(
     database: DatabaseDependency,
     user: AuditorActorDependency,
@@ -43,7 +43,7 @@ async def list_face_audit_route(
         raise_api_error(501, "unsupported_operation", str(exc))
 
 
-@router.get("/text-mentions/audit", response_model=TextMentionAuditListResponse)
+@router.get("/audit-text-mentions", response_model=TextMentionAuditListResponse)
 async def list_text_mention_audit_route(
     database: DatabaseDependency,
     user: AuditorActorDependency,
@@ -55,7 +55,7 @@ async def list_text_mention_audit_route(
         raise_api_error(501, "unsupported_operation", str(exc))
 
 
-@router.get("/sources/audit", response_model=SourceAuditListResponse)
+@router.get("/audit-sources", response_model=SourceAuditListResponse)
 async def list_source_audit_route(
     database: DatabaseDependency,
     user: AuditorActorDependency,

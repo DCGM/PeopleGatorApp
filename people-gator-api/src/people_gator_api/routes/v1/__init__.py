@@ -16,7 +16,6 @@ from people_gator_api.routes.v1.text_mentions import (
 from people_gator_api.routes.v1.translation import router as translation_router
 
 router = APIRouter(prefix="/api/v1")
-# Static audit paths must precede resource UUID parameters.
 router.include_router(audit_router)
 router.include_router(search_router)
 router.include_router(identities_router)

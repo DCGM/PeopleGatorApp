@@ -300,10 +300,10 @@ def test_audit_endpoints_require_their_own_scope(
         else {"X-API-Key": "test-key"}
     )
     for path in (
-        "/api/v1/entities/audit",
-        "/api/v1/faces/audit",
-        "/api/v1/text-mentions/audit",
-        "/api/v1/sources/audit",
+        "/api/v1/audit-entities",
+        "/api/v1/audit-faces",
+        "/api/v1/audit-text-mentions",
+        "/api/v1/audit-sources",
     ):
         response = authenticated.client.get(path, headers=headers)
         assert response.status_code == expected, response.text
@@ -329,10 +329,10 @@ def test_audit_scope_is_published_in_openapi():
         not in schema["paths"]
     )
     for path in (
-        "/api/v1/entities/audit",
-        "/api/v1/faces/audit",
-        "/api/v1/text-mentions/audit",
-        "/api/v1/sources/audit",
+        "/api/v1/audit-entities",
+        "/api/v1/audit-faces",
+        "/api/v1/audit-text-mentions",
+        "/api/v1/audit-sources",
     ):
         security = schema["paths"][path]["get"]["security"]
         assert {
