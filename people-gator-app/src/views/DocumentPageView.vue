@@ -101,8 +101,11 @@ function setting<Key extends keyof ScanSidebarState>(key: Key) {
     set: (value: ScanSidebarState[Key]) => sidebar.update({ [key]: value }),
   })
 }
-// People search applies name text on Search, not while typing.
-const peopleText = setting('peopleText')
+// Typed name text replaces the current history entry instead of adding one per pause.
+const peopleText = computed({
+  get: () => sidebarState.value.peopleText,
+  set: (value: string) => sidebar.update({ peopleText: value }, 'replace'),
+})
 const faceScope = setting('faceScope')
 const faceView = setting('faceView')
 const mentionScope = setting('mentionScope')
