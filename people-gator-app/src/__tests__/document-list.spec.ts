@@ -85,6 +85,7 @@ async function render(url = '/documents') {
 }
 
 beforeEach(() => {
+  window.sessionStorage.clear()
   vi.clearAllMocks()
   desktop.value = true
   api.libraries.mockResolvedValue(response([{ library: 'a' }, { library: 'b' }]))
@@ -102,7 +103,7 @@ describe('document table results', () => {
   it('renders document identities without legacy previews or extra page/name requests', async () => {
     const { wrapper } = await render()
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
-    expect(wrapper.findAll('tbody td:first-child').map((cell) => cell.text())).toEqual([
+    expect(wrapper.findAll('tbody td[data-column="name"]').map((cell) => cell.text())).toEqual([
       'Album',
       'Document shared',
     ])
@@ -295,33 +296,48 @@ describe('table-only document navigation', () => {
         '/documents?view=table&library=a&unassigned=no' + search,
       )
       const params = () => (search ? api.search : api.documents).mock.calls.slice(-1)[0]![0].query
-      const pages = wrapper.get('button[aria-label="Sort by Pages"]')
+      const pages = wrapper.get('button[aria-label="Sort by Pages: sort ascending"]')
+      for (const [direction, label] of [
+        ['asc', 'Lowest'],
+        ['desc', 'Highest'],
+      ] as const) {
+        await pages.trigger('click')
+        await flushPromises()
+        expect(params()).toMatchObject({
+          sort: 'page_count',
+          sort_direction: direction,
+          cursor: null,
+          'filter.library': ['a'],
+          'filter.has_unassigned_faces': false,
+        })
+        expect(router.currentRoute.value.query.sort).toBe('page_count')
+        expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe(
+          direction === 'asc' ? 'ascending' : 'descending',
+        )
+        expect(wrapper.get('[aria-label="Sort by"]').text()).toContain(`Pages · ${label} first`)
+      }
       await pages.trigger('click')
       await flushPromises()
-      expect(router.currentRoute.value.query).toMatchObject({
-        view: 'table',
-        library: 'a',
-        unassigned: 'no',
-        sort: 'page_count',
-      })
+      expect(router.currentRoute.value.query.sort).toBeUndefined()
+      expect(router.currentRoute.value.query.dir).toBeUndefined()
       expect(params()).toMatchObject({
-        sort: 'page_count',
-        sort_direction: 'desc',
+        sort: search ? 'relevance' : 'name',
+        sort_direction: search ? 'desc' : 'asc',
         cursor: null,
-        'filter.library': ['a'],
-        'filter.has_unassigned_faces': false,
       })
-      expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
-      expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Pages · Highest first')
-      await pages.trigger('click')
-      await flushPromises()
-      expect(params()).toMatchObject({ sort: 'page_count', sort_direction: 'asc', cursor: null })
-      expect(router.currentRoute.value.query.dir).toBe('asc')
-      expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('ascending')
-      expect(wrapper.get('[aria-label="Sort by"]').text()).toContain('Pages · Lowest first')
+      expect(wrapper.find('th[aria-sort]').exists()).toBe(false)
       router.back()
       await flushPromises()
       expect(pages.element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
+      router.forward()
+      await flushPromises()
+      expect(wrapper.find('th[aria-sort]').exists()).toBe(false)
+      const name = wrapper.get('button[aria-label="Sort by Document name: sort ascending"]')
+      await name.trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.query.sort).toBe('name')
+      expect(name.element.closest('th')?.getAttribute('aria-sort')).toBe('ascending')
+
       if (search) {
         expect(params()['query.text']).toEqual(['Album'])
         await router.push('/documents?view=table&q=Album')

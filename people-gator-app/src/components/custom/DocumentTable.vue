@@ -13,9 +13,8 @@ import {
   type ColumnSizingState,
   type Header,
 } from '@tanstack/vue-table'
-import { ArrowUp, ArrowDown, GripVertical } from '@lucide/vue'
-import { defaultDirection, type SortState } from '@/lib/sorting'
-import { DOCUMENT_BROWSE_DEFAULT } from '@/viewmodels/sort-options'
+import { ArrowUp, ArrowDown, ArrowUpDown, Settings2, GripVertical } from '@lucide/vue'
+import { type SortState } from '@/lib/sorting'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
@@ -32,42 +31,37 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+const annotationStateLabel = (id: string) =>
+  DOCUMENT_ANNOTATION_STATES.find(state => id === state.id || id.endsWith(`_${state.id}`))?.label
 
 const tableId = useId()
 const columnHeaderId = (id: string) => `${tableId}-${id}`
 
 const props = defineProps<{ documents: DocumentResponse[] }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
-const sort = defineModel<SortState<DocumentSortField>>('sort', {
-  default: () => ({ ...DOCUMENT_BROWSE_DEFAULT }),
-})
+const sort = defineModel<SortState<DocumentSortField> | undefined>('sort')
 function toggleSort(columnId: string) {
   const field = DOCUMENT_COLUMN_SORTS[columnId]
   if (!field) return
-  sort.value = {
-    field,
-    direction:
-      sort.value.field === field
-        ? sort.value.direction === 'asc'
-          ? 'desc'
-          : 'asc'
-        : defaultDirection(field),
-  }
+  sort.value =
+    sort.value?.field !== field
+      ? { field, direction: 'asc' }
+      : sort.value.direction === 'asc'
+        ? { field, direction: 'desc' }
+        : undefined
 }
 function headerSort(columnId: string) {
-  return DOCUMENT_COLUMN_SORTS[columnId] === sort.value.field
-    ? sort.value.direction === 'asc'
+  return sort.value && DOCUMENT_COLUMN_SORTS[columnId] === sort.value.field
+    ? sort.value?.direction === 'asc'
       ? 'ascending'
       : 'descending'
     : undefined
+}
+function sortLabel(columnId: string, label: unknown) {
+  const state = headerSort(columnId)
+  return `Sort by ${label}: ${state === 'ascending' ? 'sort descending' : state === 'descending' ? 'clear sorting' : 'sort ascending'}`
 }
 const features = tableFeatures({
   columnVisibilityFeature,
@@ -112,7 +106,20 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: 'First page',
     cell: ({ row }) => h(DocumentFirstPage, { document: row.original }),
   },
-  { accessorKey: 'library', header: 'Library', ...documentColumnSizing('library') },
+  {
+    accessorKey: 'library',
+    header: 'Library',
+    ...documentColumnSizing('library'),
+    cell: ({ row }) =>
+      h(
+        RouterLink,
+        {
+          to: { name: 'document-list', query: { library: row.original.library } },
+          class: 'underline underline-offset-4',
+        },
+        () => row.original.library,
+      ),
+  },
   {
     accessorKey: 'document_id',
     ...documentColumnSizing('document_id'),
@@ -151,18 +158,38 @@ const columns: ColumnDef<typeof features, DocumentResponse>[] = [
     header: 'Linked entities',
     cell: ({ getValue }) => getValue() ?? 'Unknown',
   },
-  ...DOCUMENT_ANNOTATION_GROUPS.map((group) => ({
-    id: group.id,
-    header: group.label,
-    columns: DOCUMENT_ANNOTATION_STATES.map((state) => ({
+  ...DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
+    DOCUMENT_ANNOTATION_STATES.map((state) => ({
       id: annotationColumnId(group.scope, state.id),
       ...documentColumnSizing(annotationColumnId(group.scope, state.id)),
-      header: state.label,
+      header:
+        state.id === 'total'
+          ? { all: 'Annotations', faces: 'Faces', mentions: 'Mentions' }[group.scope]
+          : `${group.label}: ${state.label}`,
       accessorFn: (d: DocumentResponse) => annotationCount(d, state.id, group.scope),
       cell: ({ getValue }: { getValue: () => unknown }) => getValue() ?? 'Unknown',
     })),
-  })),
+  ),
 ]
+// Keep the eight default fields first, retaining stable IDs for saved selections.
+const leading = [
+  'first_page',
+  'name',
+  'library',
+  'registered_page_count',
+  'linked_entity_count',
+  'total',
+  'faces_total',
+  'mentions_total',
+]
+columns.sort((a, b) => {
+  const rank = (c: typeof a) => {
+    const i = leading.indexOf(c.id ?? ('accessorKey' in c ? String(c.accessorKey) : ''))
+    return i < 0 ? leading.length : i
+  }
+  return rank(a) - rank(b)
+})
+
 const table = useTable({
   features,
   columns,
@@ -213,14 +240,28 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
   <div class="flex min-w-0 flex-col gap-3">
     <div class="flex flex-wrap items-center gap-2">
       <Popover>
-        <PopoverTrigger as-child><Button variant="outline">Columns</Button></PopoverTrigger>
+        <PopoverTrigger as-child
+          ><Button variant="outline"
+            ><Settings2 aria-hidden="true" />Columns</Button
+          ></PopoverTrigger
+        >
         <PopoverContent
           align="start"
           class="max-h-[min(70dvh,var(--reka-popover-content-available-height))] overflow-y-auto"
         >
           <div class="flex flex-col gap-3" aria-label="Shown document fields">
             <label
-              v-for="column in table.getAllLeafColumns().filter((c) => !c.parent && c.getCanHide())"
+              v-for="column in table
+                .getAllLeafColumns()
+                .filter(
+                  (c) =>
+                    c.getCanHide() &&
+                    !DOCUMENT_ANNOTATION_GROUPS.some((g) =>
+                      DOCUMENT_ANNOTATION_STATES.some(
+                        (s) => annotationColumnId(g.scope, s.id) === c.id,
+                      ),
+                    ),
+                )"
               :key="column.id"
               class="flex items-center gap-2"
             >
@@ -231,22 +272,28 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               {{ column.columnDef.header }}
             </label>
             <fieldset
-              v-for="group in table.getAllColumns().filter((c) => c.columns.length)"
+              v-for="group in DOCUMENT_ANNOTATION_GROUPS"
               :key="group.id"
               class="flex flex-col gap-3"
             >
-              <legend class="mb-3">{{ group.columnDef.header }}</legend>
+              <legend class="mb-3">{{ group.label }}</legend>
               <label
-                v-for="column in group.columns"
+                v-for="column in table
+                  .getAllLeafColumns()
+                  .filter((c) =>
+                    DOCUMENT_ANNOTATION_STATES.some(
+                      (s) => annotationColumnId(group.scope, s.id) === c.id,
+                    ),
+                  )"
                 :key="column.id"
                 class="flex items-center gap-2"
               >
                 <Checkbox
-                  :aria-label="`${group.columnDef.header}: ${column.columnDef.header}`"
+                  :aria-label="`${group.label}: ${annotationStateLabel(column.id)}`"
                   :model-value="column.getIsVisible()"
                   @update:model-value="column.toggleVisibility($event === true)"
                 />
-                {{ column.columnDef.header }}
+                {{ annotationStateLabel(column.id) }}
               </label>
             </fieldset>
             <Button variant="outline" @click="visibility = defaultDocumentColumns()"
@@ -255,19 +302,21 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
           </div>
         </PopoverContent>
       </Popover>
-      <Button variant="outline" @click="table.resetColumnSizing(true)"
-        >Restore column widths</Button
-      >
     </div>
     <p :id="`${tableId}-counts`" class="sr-only">
       Counts cover the entire registered document. All annotations combines faces and text mentions;
       each group includes total, automatic, manual, verified and unassigned counts. Pages counts
       registered pages only. Unknown means no recorded value.
     </p>
-    <div class="w-full min-w-0 max-w-full">
-      <Table
+    <div
+      class="relative max-h-[min(65dvh,26rem)] w-full min-w-0 max-w-full overflow-auto rounded-md border"
+      tabindex="0"
+      role="region"
+      aria-label="Documents table, scroll for more rows and columns"
+    >
+      <table
         :aria-describedby="`${tableId}-counts`"
-        class="table-fixed"
+        class="table-fixed caption-bottom text-sm"
         :style="{ width: `${table.getTotalSize()}px` }"
       >
         <colgroup>
@@ -278,7 +327,7 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
             :style="{ width: `${column.getSize()}px` }"
           />
         </colgroup>
-        <TableHeader>
+        <TableHeader class="sticky top-0 z-10 bg-background">
           <TableRow v-for="group in table.getHeaderGroups()" :key="group.id">
             <TableHead
               v-for="header in group.headers.filter((h) => group.depth === 0 || h.column.parent)"
@@ -291,25 +340,29 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               :style="{ width: `${header.getSize()}px` }"
               class="relative border-r pr-4 last:border-r-0"
             >
-              <Button
-                v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
-                variant="ghost"
-                size="sm"
-                class="-ml-2.5"
-                :aria-label="`Sort by ${header.column.parent ? header.column.parent.columnDef.header + ': ' : ''}${header.column.columnDef.header}`"
-                @click="toggleSort(header.column.id)"
-              >
+              <div class="flex items-center gap-1 py-2 whitespace-normal">
+                <Button
+                  v-if="DOCUMENT_COLUMN_SORTS[header.column.id]"
+                  variant="ghost"
+                  size="icon"
+                  class="size-8 shrink-0"
+                  :aria-label="sortLabel(header.column.id, header.column.columnDef.header)"
+                  @click="toggleSort(header.column.id)"
+                >
+                  <ArrowUp
+                    v-if="headerSort(header.column.id) === 'ascending'"
+                    class="size-4"
+                    aria-hidden="true"
+                  />
+                  <ArrowDown
+                    v-else-if="headerSort(header.column.id) === 'descending'"
+                    class="size-4"
+                    aria-hidden="true"
+                  />
+                  <ArrowUpDown v-else class="size-4" aria-hidden="true" />
+                </Button>
                 <FlexRender :render="header.column.columnDef.header" :props="header.getContext()" />
-                <span class="inline-flex size-4 shrink-0" aria-hidden="true">
-                  <ArrowUp v-if="headerSort(header.column.id) === 'ascending'" />
-                  <ArrowDown v-else-if="headerSort(header.column.id) === 'descending'" />
-                </span>
-              </Button>
-              <FlexRender
-                v-else
-                :render="header.column.columnDef.header"
-                :props="header.getContext()"
-              />
+              </div>
               <Button
                 v-if="!header.column.columns.length"
                 variant="ghost"
@@ -352,7 +405,8 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
             </TableCell>
           </TableRow>
         </TableBody>
-      </Table>
+      </table>
+      <slot name="list-end" />
     </div>
   </div>
 </template>

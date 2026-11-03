@@ -5,7 +5,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), search: vi.fn() }))
-vi.mock('@/query/entities', () => ({ fetchEntities: api.list, useMergeEntitiesMutation: () => ({ mutateAsync: vi.fn() }) }))
+vi.mock('@/query/entities', () => ({
+  fetchEntities: api.list,
+  useMergeEntitiesMutation: () => ({ mutateAsync: vi.fn() }),
+}))
 vi.mock('@/query/media', () => ({ fetchPages: api.list, fetchDocuments: api.list }))
 vi.mock('@/query/faces', () => ({ fetchFaces: vi.fn() }))
 vi.mock('@/query/text-mentions', () => ({ fetchTextMentions: vi.fn() }))
@@ -155,7 +158,7 @@ for (const screen of screens)
             DocumentTable: {
               props: ['documents'],
               template:
-                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span></div>',
+                '<div><span v-for="document in documents" :key="document.source_id" class="result">{{ document.name }}</span><slot name="list-end" /></div>',
             },
             PeopleCard: { props: ['name'], template: '<span class="result">{{ name }}</span>' },
             DocumentCard: { props: ['library'], template: '<span class="result">scan</span>' },

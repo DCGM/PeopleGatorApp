@@ -3,9 +3,9 @@ import { useAnnotationCounts } from '@/viewmodels/annotation-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { hasSharedFilters, useSharedFilters } from '@/viewmodels/shared-filters'
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DocumentTable from '@/components/custom/DocumentTable.vue'
-import { defaultDocumentColumns } from '@/viewmodels/document-table'
+import { useDocumentColumns } from '@/viewmodels/document-table'
 import DocumentListSearchBar from '@/components/custom/DocumentListSearchBar.vue'
 import { Button } from '@/components/ui/button'
 import { useDocumentList } from '@/viewmodels/document-list'
@@ -18,16 +18,31 @@ import {
   scoredOptions,
 } from '@/viewmodels/sort-options'
 const route = useRoute()
-const visibility = ref(defaultDocumentColumns())
+const router = useRouter()
+const visibility = useDocumentColumns()
 const shared = useSharedFilters()
 const counts = useAnnotationCounts()
 const sourceParams = computed(() => ({ ...shared.params.value, ...counts.params.value }))
 const { searchTerm, unassigned } = useDocumentFilters()
 const searching = computed(() => Boolean(searchTerm.value.trim()))
 const sortOptions = computed(() => scoredOptions(DOCUMENT_SORTS, searching.value))
-const sort = useRouteSort(DEFAULT_SORT_KEYS, sortOptions, () =>
-  searching.value ? RELEVANCE : DOCUMENT_BROWSE_DEFAULT,
+const sort = useRouteSort(
+  DEFAULT_SORT_KEYS,
+  sortOptions,
+  () => (searching.value ? RELEVANCE : DOCUMENT_BROWSE_DEFAULT),
+  'push',
+  true,
 )
+const explicitSort = computed({
+  get: () => (route.query.sort === sort.value.field ? sort.value : undefined),
+  set: (value) => {
+    if (value) sort.value = value
+    else
+      void router.push({
+        query: { ...route.query, sort: undefined, dir: undefined, cursor: undefined },
+      })
+  },
+})
 const {
   documents,
   resultCount,
@@ -66,7 +81,7 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full min-w-0 max-w-6xl px-2 md:px-4">
+  <main class="mx-auto w-full min-w-0 px-2 md:px-4">
     <header class="pb-4 pt-6">
       <small class="font-semibold uppercase text-secondary">Documents index</small>
       <h1>Browse documents</h1>
@@ -84,10 +99,14 @@ useAutomaticPagination({
     </p>
     <DocumentTable
       v-model:visibility="visibility"
-      v-model:sort="sort"
+      v-model:sort="explicitSort"
       :documents="documents"
       class="pt-4"
-    />
+    >
+      <template #list-end
+        ><div ref="listEnd" class="sticky left-0 h-px w-px" aria-hidden="true"
+      /></template>
+    </DocumentTable>
     <p
       v-if="isLoading || isFetchingNextPage"
       class="py-6 text-center text-sm text-muted-foreground"
@@ -111,8 +130,6 @@ useAutomaticPagination({
           : 'No documents have been registered yet.'
       }}
     </p>
-
-    <div ref="listEnd" class="h-px" aria-hidden="true" />
 
     <div v-if="hasNextPage && !error" class="flex justify-center pt-6">
       <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{

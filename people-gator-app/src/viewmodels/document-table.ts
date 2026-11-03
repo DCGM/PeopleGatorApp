@@ -1,3 +1,4 @@
+import { ref, watch } from 'vue'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import type { ColumnVisibilityState } from '@tanstack/vue-table'
 
@@ -22,21 +23,74 @@ export function annotationColumnId(scope: AnnotationScope, state: AnnotationStat
   return scope === 'all' ? state : `${scope}_${state}`
 }
 
+export const DOCUMENT_COLUMN_IDS = [
+  'first_page',
+  'name',
+  'library',
+  'registered_page_count',
+  'linked_entity_count',
+  ...DOCUMENT_ANNOTATION_GROUPS.flatMap((group) =>
+    DOCUMENT_ANNOTATION_STATES.map((state) => annotationColumnId(group.scope, state.id)),
+  ),
+  'ndk',
+  'document_id',
+  'last_modified',
+  'modified_by',
+  'api_key',
+] as const
+const DEFAULT_COLUMNS = new Set([
+  'first_page',
+  'name',
+  'library',
+  'registered_page_count',
+  'linked_entity_count',
+  'total',
+  'faces_total',
+  'mentions_total',
+])
+export const DOCUMENT_COLUMNS_STORAGE_KEY = 'people-gator:document-columns'
+
 export function defaultDocumentColumns(): ColumnVisibilityState {
-  return {
-    first_page: false,
-    document_id: false,
-    modified_by: false,
-    api_key: false,
-    ...Object.fromEntries(
-      DOCUMENT_ANNOTATION_GROUPS.filter((group) => group.scope !== 'all').flatMap((group) =>
-        DOCUMENT_ANNOTATION_STATES.map((state) => [
-          annotationColumnId(group.scope, state.id),
-          false,
-        ]),
-      ),
-    ),
+  return Object.fromEntries(DOCUMENT_COLUMN_IDS.map((id) => [id, DEFAULT_COLUMNS.has(id)]))
+}
+
+export function readDocumentColumns(storage: Pick<Storage, 'getItem'>): ColumnVisibilityState {
+  const fallback = defaultDocumentColumns()
+  try {
+    const saved: unknown = JSON.parse(storage.getItem(DOCUMENT_COLUMNS_STORAGE_KEY) ?? 'null')
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return fallback
+    const valid = Object.entries(saved).filter(
+      ([id, value]) =>
+        DOCUMENT_COLUMN_IDS.includes(id as (typeof DOCUMENT_COLUMN_IDS)[number]) &&
+        typeof value === 'boolean',
+    )
+    if (!valid.length) return fallback
+    return { ...fallback, ...Object.fromEntries(valid) }
+  } catch {
+    return fallback
   }
+}
+
+export function useDocumentColumns() {
+  let initial = defaultDocumentColumns()
+  try {
+    initial = readDocumentColumns(window.sessionStorage)
+  } catch {
+    /* Storage can be disabled. */
+  }
+  const visibility = ref(initial)
+  watch(
+    visibility,
+    (value) => {
+      try {
+        window.sessionStorage.setItem(DOCUMENT_COLUMNS_STORAGE_KEY, JSON.stringify(value))
+      } catch {
+        /* Keep in-memory choices usable. */
+      }
+    },
+    { deep: true },
+  )
+  return visibility
 }
 
 export function annotationCount(
@@ -74,17 +128,17 @@ export function documentColumnSizing(id: string) {
   const widths: Record<string, number> = {
     identity: 280,
     name: 320,
-    ndk: 96,
-    first_page: 144,
-    library: 224,
+    ndk: 80,
+    first_page: 120,
+    library: 200,
     document_id: 320,
-    registered_page_count: 128,
+    registered_page_count: 104,
     last_modified: 208,
     modified_by: 224,
     api_key: 224,
-    linked_entity_count: 160,
+    linked_entity_count: 144,
   }
-  const size = widths[id] ?? 160 // Annotation counts include the longest label + arrow.
+  const size = widths[id] ?? 128 // Count labels can wrap without changing the width model.
   const minSize = id === 'name' || id === 'identity' || id === 'document_id' ? 200 : size
   const maxSize =
     id === 'name' || id === 'identity' || id === 'document_id' ? 720 : Math.max(size * 2, 240)
