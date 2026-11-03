@@ -1,15 +1,9 @@
 import { computed, ref, watch } from 'vue'
-import {
-  useRoute,
-  useRouter,
-  type LocationQuery,
-  type LocationQueryRaw,
-  type RouteLocationNormalizedLoaded,
-} from 'vue-router'
+import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 import type { EntityLinkState } from '@/client'
 import { parseLinkStates } from '@/lib/entity-links'
 
-// One transferable filter configuration (#52). Every list applies it to its own
+// Reusable, view-local filter configuration (#52, #109). Each list applies it to its own
 // records: source scope through real library/document/page relationships, and
 // "modified" criteria through each record's own latest recorded change.
 
@@ -230,28 +224,6 @@ export function useSharedFilters() {
       })
     },
   }
-}
-
-/**
- * Query for a related view: the same shared configuration, applied there to that
- * view's records. View-specific choices, search text, sort and cursors stay behind.
- */
-export function relatedQuery(
-  route: Pick<RouteLocationNormalizedLoaded, 'name' | 'query'> | undefined,
-  extra: LocationQueryRaw = {},
-): LocationQueryRaw {
-  if (!route) return extra
-  const result: LocationQueryRaw = Object.fromEntries(
-    Object.entries(sharedFiltersUrl(readSharedFilters(route.query))).filter(
-      ([, value]) => value !== undefined,
-    ),
-  )
-  // Invalid values remain visible on the destination rather than disappearing.
-  for (const { key, value } of invalidSharedValues(route.query))
-    result[key] = [...queryValues(result[key] as LocationQuery[string]), value]
-  if (route.name === 'people-search' && route.query.assignment === 'mentions')
-    result.tab = 'mentions'
-  return { ...result, ...extra }
 }
 
 // Removed #31 keys. Same-meaning keys are renamed; annotation-edit keys keep

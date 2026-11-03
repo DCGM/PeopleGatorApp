@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 import ArchiveLink from './ArchiveLink.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
@@ -382,7 +381,7 @@ watch(
                 documentId: face.documentId,
                 pageId: face.pageId,
               },
-              query: relatedQuery(route, { person: face.id, origin_matched_face: face.id }),
+              query: { person: face.id, origin_matched_face: face.id },
             }"
             class="absolute inset-0 z-10 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             :aria-label="`Open face ${face.id} on its source document`"
@@ -443,7 +442,7 @@ watch(
                     ? {
                         name: 'person-detail',
                         params: { personId: face.assignedEntityId },
-                        query: relatedQuery(route, { origin_matched_face: face.id }),
+                        query: { origin_matched_face: face.id },
                       }
                     : undefined
                 "
@@ -586,11 +585,11 @@ watch(
             :to="{
               name: 'person-detail',
               params: { personId: person.id },
-              query: relatedQuery(route, {
+              query: {
                 origin_matched_face: person.matchedFaceIds?.length
                   ? person.matchedFaceIds
                   : undefined,
-              }),
+              },
             }"
             class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :aria-label="`Open ${person.name}`"

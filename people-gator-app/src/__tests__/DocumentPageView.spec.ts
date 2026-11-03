@@ -274,7 +274,6 @@ describe('document page gallery navigation', () => {
     expect(location({ library: 'lib', documentId: 'doc', pageId: 'two' })).toEqual({
       name: 'document-page',
       params: { libraryId: 'lib', documentId: 'doc', pageId: 'two' },
-      query: { link_state: 'manual' },
     })
     wrapper.unmount()
   })

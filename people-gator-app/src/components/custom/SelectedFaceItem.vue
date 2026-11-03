@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import { relatedQuery } from '@/viewmodels/shared-filters'
-const route = useRoute()
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import IdentityFacePreview from './IdentityFacePreview.vue'
 import UiTooltip from './UiTooltip.vue'
@@ -145,9 +142,9 @@ watch(() => props.face.id, cancelCreating)
           :to="{
             name: 'person-detail',
             params: { personId: face.personId },
-            query: relatedQuery(route, {
+            query: {
               origin_matched_face: face.id,
-            }),
+            },
           }"
           class="flex min-w-0 w-full items-center gap-1 underline-offset-4 transition-transform group hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

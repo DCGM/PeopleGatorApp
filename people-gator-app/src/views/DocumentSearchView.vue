@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAnnotationCounts } from '@/viewmodels/annotation-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
-import { relatedQuery, useSharedFilters, queryValues } from '@/viewmodels/shared-filters'
+import { useSharedFilters, queryValues } from '@/viewmodels/shared-filters'
 import { useDocumentScopeResolution } from '@/viewmodels/document-scope'
 import { useRoute, useRouter } from 'vue-router'
 import { computed, ref, watch } from 'vue'
@@ -151,7 +151,6 @@ useAutomaticPagination({
           class="group"
           :to="{
             name: 'document-page',
-            query: relatedQuery(route),
             params: {
               libraryId: result.library,
               documentId: result.documentId,

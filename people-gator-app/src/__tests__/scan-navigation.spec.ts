@@ -33,7 +33,6 @@ media.fetchDocuments.mockImplementation(async ({ 'filter.source_id': ids = [] })
     : [],
 }))
 import DocumentSearchView from '@/views/DocumentSearchView.vue'
-import { readSharedFilters } from '@/viewmodels/shared-filters'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 
 describe('opening a scan from search', () => {
@@ -47,7 +46,7 @@ describe('opening a scan from search', () => {
       touched_from: '2026-01-01T00:00:00Z',
       link_state: 'manual',
     },
-  ])('preserves the shared configuration without inventing a page filter: %j', async (query) => {
+  ])('opens the target page without inheriting search filters: %j', async (query) => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -71,9 +70,7 @@ describe('opening a scan from search', () => {
       await flushPromises()
       expect(router.currentRoute.value.name).toBe('document-page')
       expect(router.currentRoute.value.params.pageId).toBe('page')
-      expect(readSharedFilters(router.currentRoute.value.query)).toEqual(
-        readSharedFilters(query),
-      )
+      expect(router.currentRoute.value.query).toEqual({})
     } finally {
       wrapper.unmount()
     }

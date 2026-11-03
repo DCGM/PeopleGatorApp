@@ -64,7 +64,6 @@ import {
 } from '@/viewmodels/sort-options'
 import {
   PAGE_GALLERY_BATCH_SIZE,
-  pageGalleryQuery,
   useDocumentPageGallery,
   type PageGalleryItem,
 } from '@/viewmodels/document-page-gallery'
@@ -167,7 +166,6 @@ function galleryLocation(item: PageGalleryItem) {
   return {
     name: 'document-page',
     params: { libraryId: item.library, documentId: item.documentId, pageId: item.pageId },
-    query: pageGalleryQuery(route.query),
   }
 }
 

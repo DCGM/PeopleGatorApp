@@ -17,7 +17,7 @@ vi.mock('@/client', () => ({
   listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
   getEntityRouteApiV1EntitiesEntityIdGet: api.entity,
 }))
-import { useSharedFilters, relatedQuery } from '@/viewmodels/shared-filters'
+import { useSharedFilters } from '@/viewmodels/shared-filters'
 import { usePersonDetail } from '@/viewmodels/person-detail'
 const one = '00000000-0000-4000-8000-000000000001',
   two = '00000000-0000-4000-8000-000000000002'
@@ -90,7 +90,9 @@ describe('copied profile URLs and evidence requests', () => {
       cursor: null,
       return_total_count: true,
     })
-    expect(Object.keys(evidenceRequests().slice(-1)[0]!).some((key) => key.includes('evidence'))).toBe(false)
+    expect(
+      Object.keys(evidenceRequests().slice(-1)[0]!).some((key) => key.includes('evidence')),
+    ).toBe(false)
     expect(evidenceRequests().slice(-1)[0]).not.toHaveProperty('query.text')
     expect(wrapper.text()).toContain('2 matching of 7 faces')
     await wrapper.get('button').trigger('click')
@@ -109,12 +111,12 @@ describe('copied profile URLs and evidence requests', () => {
     router.forward()
     await flushPromises()
     expect(wrapper.text()).toContain('0 matching of 7 faces')
-    const destination = relatedQuery(router.currentRoute.value)
-    expect(destination.api_key).toEqual([two])
-    expect(destination).not.toHaveProperty('q')
-    await router.push({ name: 'person-detail', params: { personId: two }, query: destination })
+    await router.push({ name: 'person-detail', params: { personId: two } })
     await flushPromises()
     expect(evidenceRequests().slice(-1)[0]?.['filter.entity_id']).toEqual([two])
+    expect(evidenceRequests().slice(-1)[0]).not.toHaveProperty('filter.last_touched_by_api_key_id')
+    expect(evidenceRequests().slice(-1)[0]?.cursor).toBeNull()
+    expect(wrapper.text()).toContain('2 matching of 7 faces')
     wrapper.unmount()
     client.clear()
   })

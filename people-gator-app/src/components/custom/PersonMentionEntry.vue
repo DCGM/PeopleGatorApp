@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount } from 'vue'
-import { useRoute } from 'vue-router'
 import { Info } from '@lucide/vue'
 import type { EntityLinkState } from '@/client'
 import AnnotationLastChange from './AnnotationLastChange.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { relatedQuery } from '@/viewmodels/shared-filters'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   mention: PersonMention
@@ -15,7 +13,6 @@ const props = defineProps<{
   linkStates: EntityLinkState[]
   compact?: boolean
 }>()
-const route = useRoute()
 const infoOpen = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | undefined
 function openInfo() {
@@ -53,9 +50,7 @@ const parts = computed(() => {
               pageId: mention.pageId,
             },
             query: {
-              ...relatedQuery(route),
               selectedPerson: personId,
-              ...(linkStates.length && { link_state: linkStates }),
             },
           }"
           class="min-w-0 text-sm underline wrap-anywhere"
