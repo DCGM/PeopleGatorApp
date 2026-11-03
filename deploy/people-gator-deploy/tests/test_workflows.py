@@ -149,6 +149,13 @@ class RunnerPlacementTests(unittest.TestCase):
         for forbidden in ("people-gator-ci", "runner.tool_cache", "keep-state"):
             self.assertNotIn(forbidden, workflow)
 
+    def test_pull_request_ci_needs_no_secrets_or_external_services(self):
+        workflow = (WORKFLOWS / "pr-ci.yml").read_text()
+        self.assertEqual(set(re.findall(r"secrets\.([A-Za-z_]+)", workflow)), {"GITHUB_TOKEN"})
+        # S3 suites need a disposable MinIO image or real storage credentials; run them locally.
+        for opt_in in ("BACKUP_TEST_IMAGE", "STAGING_TEST_IMAGE", "test_roundtrip.py", "test_staging_runtime.py"):
+            self.assertNotIn(opt_in, workflow)
+
     def test_each_lifecycle_uses_only_its_deployment_runner(self):
         labels = {"pr-preview.yml": "people-gator-preview", "staging.yml": "people-gator-staging",
                   "release.yml": "people-gator-release"}

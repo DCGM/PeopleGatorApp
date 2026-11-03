@@ -127,7 +127,9 @@ on self-hosted deployment runners:
    migration → seed → seed → check CLI smoke test, then pytest.
 3. Trusted deployment-utility tests checked out from the workflow commit in a
    separate location, including DB isolation checks, a wheel built and run
-   outside the checkout, and snapshot/runtime suites with the backend environment.
+   outside the checkout, and the database-only snapshot suite with the backend
+   environment. CI uses no secrets or external services; the S3 backup and
+   snapshot-restore suites run locally only.
 4. After checks pass, same-repository PRs build both production Dockerfiles and
    publish run/attempt-specific tags to GHCR, reusing layers from the Actions cache. Fork PRs receive tests but no image
    publication/deployment. Images carry the tested revision label.

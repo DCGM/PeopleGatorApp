@@ -271,3 +271,4 @@ Build the worker and set `BACKUP_TEST_IMAGE` when running
 `deploy/backup/tests/test_roundtrip.py` with the backend Python interpreter. It
 uses only disposable synthetic PostgreSQL16/pgvector and TLS S3 containers,
 including a real scheduled Compose agent; no operator private files are read.
+PR CI does not run it; run it locally before changing the backup worker.

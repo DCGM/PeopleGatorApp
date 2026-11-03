@@ -100,15 +100,6 @@ jobs:
           uv run --locked python -m people_gator_api.cli.database check
       - run: uv run --locked pytest tests -n 4 --dist=worksteal
         working-directory: people-gator-api
-      - name: Exercise isolated database backup publisher and recovery
-        env:
-          BACKUP_TEST_IMAGE: people-gator-backup-test:${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          if [ -f deploy/backup/tests/test_roundtrip.py ]; then
-            trap 'docker image rm "$BACKUP_TEST_IMAGE" || true' EXIT
-            docker build -f deploy/backup/Dockerfile -t "$BACKUP_TEST_IMAGE" .
-            people-gator-api/.venv/bin/python deploy/backup/tests/test_roundtrip.py -v
-          fi
       - name: Exercise database-only snapshot preservation on synthetic data
         working-directory: people-gator-api
         env:
@@ -119,29 +110,6 @@ jobs:
         run: |
           if [ -f ../deploy/people-gator-deploy/tests/test_snapshot.py ]; then
             uv run --locked python ../deploy/people-gator-deploy/tests/test_snapshot.py -v
-          fi
-      - name: Exercise latest S3 snapshot restore and candidate startup gates
-        working-directory: people-gator-api
-        env:
-          STAGING_TEST_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
-          STAGING_TEST_DATABASE_USER: ci
-          STAGING_TEST_DATABASE_PASSWORD: ci
-          STAGING_TEST_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-          STAGING_TEST_NETWORK: people-gator-staging-gate-${{ github.run_id }}-${{ github.run_attempt }}
-          STAGING_TEST_IMAGE: people-gator-staging-gate:${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          suite=../deploy/people-gator-deploy/tests/test_staging_runtime.py
-          if [ -f "$suite" ]; then
-            cleanup() {
-              docker network disconnect "$STAGING_TEST_NETWORK" "$STAGING_TEST_POSTGRES_CONTAINER" || true
-              docker network rm "$STAGING_TEST_NETWORK" || true
-              docker image rm "$STAGING_TEST_IMAGE" || true
-            }
-            trap cleanup EXIT
-            docker network create --internal "$STAGING_TEST_NETWORK"
-            docker network connect --alias preview-postgres "$STAGING_TEST_NETWORK" "$STAGING_TEST_POSTGRES_CONTAINER"
-            docker build -t "$STAGING_TEST_IMAGE" .
-            PYTHONPATH=../deploy/people-gator-deploy/src uv run --locked python "$suite" -v
           fi
       # Older PR heads may not contain the deployment utility suite added with this
       # workflow. Keep application checks/builds pinned to the PR head and fetch

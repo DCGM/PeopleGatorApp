@@ -354,7 +354,19 @@ PREVIEW_TEST_OTEL=1 python3 -B deploy/people-gator-deploy/tests/test_observabili
 ```
 
 `test_staging_runtime.py` needs a backend image, an internal network aliasing
-PostgreSQL as `preview-postgres` and Docker; see the PR CI workflow for the setup.
+PostgreSQL as `preview-postgres` and Docker. PR CI does not run it; from
+`people-gator-api`, with a disposable PostgreSQL container and its published port:
+
+```sh
+docker network create --internal staging-gate
+docker network connect --alias preview-postgres staging-gate "$POSTGRES_CONTAINER"
+docker build -t people-gator-staging-gate .
+STAGING_TEST_NETWORK=staging-gate STAGING_TEST_IMAGE=people-gator-staging-gate \
+STAGING_TEST_POSTGRES_CONTAINER="$POSTGRES_CONTAINER" STAGING_TEST_DATABASE_PORT=… \
+STAGING_TEST_DATABASE_USER=… STAGING_TEST_DATABASE_PASSWORD=… \
+PYTHONPATH=../deploy/people-gator-deploy/src uv run --locked python ../deploy/people-gator-deploy/tests/test_staging_runtime.py -v
+```
+
 It runs both legacy local restore and latest-source discovery/download/restore
 against disposable TLS MinIO. It verifies the newest archive's actual records
 and that a corrupt newer archive creates no database. The backend environment
