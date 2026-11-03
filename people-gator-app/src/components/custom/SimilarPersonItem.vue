@@ -72,7 +72,7 @@ function formatTextScore(score: number) {
     <ItemMedia class="relative self-start">
       <PersonPortrait :name="person.name" :face-id="person.thumbnailFaceId" class="size-15" />
       <!-- Above the card's preview layer, like the card's other controls. -->
-      <span class="absolute -right-1 -bottom-1 z-20">
+      <span v-if="person.linkedFaces !== 0" class="absolute -right-1 -bottom-1 z-20">
         <IdentityFacePreview :person-id="person.id" :name="person.name" />
       </span>
     </ItemMedia>

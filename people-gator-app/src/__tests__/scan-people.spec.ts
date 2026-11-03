@@ -124,7 +124,13 @@ describe('useScanPeople (#103)', () => {
           { items: [person('ada'), person('bea')], cursor: 'd2', total_count: 3 },
           { items: [person('cyril')], cursor: null, total_count: 3 },
         ],
-        all: [{ items: [person('bea'), person('dora')], cursor: null, total_count: 5 }],
+        all: [
+          {
+            items: [person('bea'), person('dora', { entity_link_stats: { faces: { total: 3 } } })],
+            cursor: null,
+            total_count: 5,
+          },
+        ],
       }[scope]
       return Promise.resolve({ data: data[query.cursor ? 1 : 0] })
     })
@@ -149,6 +155,8 @@ describe('useScanPeople (#103)', () => {
         ?.matchSources?.some((source) => source.type === 'in-document')
     // Page and document tiers are members; others are checked by a lookup.
     expect(['ada', 'bea', 'cyril', 'dora'].map(inDocument)).toEqual([true, true, true, false])
+    // Linked face totals come from each record's link statistics.
+    expect(model().people.value.map((item) => item.linkedFaces)).toEqual([0, 0, 0, 3])
     const lookups = api.entities.mock.calls.filter(([call]) => call.query['filter.entity_id'])
     expect(lookups).toHaveLength(1)
     expect(lookups[0]![0].query).toMatchObject({
