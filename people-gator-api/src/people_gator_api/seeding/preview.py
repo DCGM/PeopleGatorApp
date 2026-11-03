@@ -586,6 +586,7 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         api_keys=registered_keys,
         filter_examples={
             "people-search-merge": "/people?q=Rina+Merge&sort=name",
+            "people-search-merge-paginated": "/people?sort=name",
             # Replay a synthetic person-to-page journey without telemetry credentials.
             "openobserve-replay-person": f"/people/{manifest.entities['ada']}",
             "openobserve-replay-page": reference_path,

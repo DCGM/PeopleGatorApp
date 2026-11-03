@@ -167,7 +167,8 @@ export function useMergeEntitiesMutation() {
     },
     onError: async (error) => {
       if (!isAxiosError(error) || error.response?.status !== 404) return
-      restartPeoplePages(queryClient)
+      // Refetch every loaded page so valid later-page selections remain available.
+      // Infinite queries derive fresh continuation cursors while refetching.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),

@@ -5,12 +5,22 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { AxiosError } from 'axios'
 import { usePeopleMerge } from '@/viewmodels/people-merge'
 import { queryKeys } from '@/query/keys'
+import { usePeopleSearch } from '@/viewmodels/people-search'
 
-const api = vi.hoisted(() => ({ single: vi.fn(), batch: vi.fn(), get: vi.fn(), allowed: true }))
+const api = vi.hoisted(() => ({
+  single: vi.fn(),
+  batch: vi.fn(),
+  get: vi.fn(),
+  list: vi.fn(),
+  search: vi.fn(),
+  allowed: true,
+}))
 vi.mock('@/client', () => ({
   mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost: api.single,
   mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost: api.batch,
   getEntityRouteApiV1EntitiesEntityIdGet: api.get,
+  listEntitiesRouteApiV1EntitiesGet: api.list,
+  searchEntitiesGetApiV1SearchEntitiesGet: api.search,
 }))
 vi.mock('@/composables/can-annotate', () => ({ useHasScope: () => permission }))
 const permission = ref(true)
@@ -279,3 +289,77 @@ it('blocks additive card selection during pending merge and loading', async () =
   await pending
   wrapper.unmount()
 })
+
+it.each([
+  { query: '', which: 'first' as const },
+  { query: '', which: 'last' as const },
+  { query: 'person', which: 'first' as const },
+  { query: 'person', which: 'last' as const },
+])(
+  'preserves later-page selection and retries the $which target after a 404 (query: "$query")',
+  async ({ query, which }) => {
+    const missing = new AxiosError('missing')
+    missing.response = { status: 404 } as never
+    let deleted = false
+    const fetchPage = vi.fn(async ({ query: params }) => ({
+      data: {
+        items: (params.cursor ? (deleted ? ['c'] : ['b', 'c']) : ['a']).map((id) => ({
+          entity_id: id,
+          name: id.toUpperCase(),
+        })),
+        cursor: params.cursor ? null : deleted ? 'refreshed-page-two' : 'page-two',
+        total_count: deleted ? 2 : 3,
+      },
+    }))
+    api.list.mockImplementation(fetchPage)
+    api.search.mockImplementation(fetchPage)
+    api.batch.mockImplementationOnce(async () => {
+      deleted = true
+      throw missing
+    })
+    api.get.mockImplementation(({ path }) =>
+      path.entity_id === 'b' ? Promise.reject(missing) : Promise.resolve({ data: {} }),
+    )
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    let results!: ReturnType<typeof usePeopleSearch>
+    let selection!: ReturnType<typeof usePeopleMerge>
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          results = usePeopleSearch(query, 'all')
+          selection = usePeopleMerge(results.people, ref(query), results.isFetching)
+          return () => null
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    )
+    try {
+      await flushPromises()
+      await results.loadMore()
+      await flushPromises()
+      expect(results.people.value.map((person) => person.id)).toEqual(['a', 'b', 'c'])
+      for (const id of ['a', 'b', 'c']) selection.toggle(id, { shiftKey: false })
+      await selection.merge(which)
+      await flushPromises()
+      expect(results.people.value.map((person) => person.id)).toEqual(['a', 'c'])
+      expect(selection.selected.value.map((person) => person.id)).toEqual(['a', 'c'])
+      expect(selection.message.value).toContain('unavailable')
+      expect(fetchPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.objectContaining({ cursor: 'refreshed-page-two' }),
+        }),
+      )
+      await selection.merge(which)
+      expect(api.single).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          path: { target_entity_id: which === 'first' ? 'a' : 'c' },
+          body: { source_entity_id: which === 'first' ? 'c' : 'a' },
+        }),
+      )
+      expect(selection.message.value).toBe('People merged.')
+    } finally {
+      wrapper.unmount()
+      queryClient.clear()
+    }
+  },
+)

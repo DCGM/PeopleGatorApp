@@ -1207,6 +1207,12 @@ with an alias, a local portrait and a text mention on **Search merge practice**
 person survives and receives the sources' faces, mentions and aliases under the
 existing API rules. Try each action on a fresh disposable preview.
 
+For stale-record recovery, open `people-search-merge-paginated` from the seed
+manifest and load more people until the Rina Merge records appear. Select all
+three, delete one source in another tab, then try merging into a remaining Rina.
+The failure refreshes all loaded pages and removes the missing selection while
+keeping the other Rina records selected in their original order for retry.
+
 Selection includes only explicitly selected, loaded results. Loading more adds no
 selection. Shift appends an inclusive range in display order, retaining the order
 of already selected IDs (even for a backward range). Sorting retains that order

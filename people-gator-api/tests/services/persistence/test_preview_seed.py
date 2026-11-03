@@ -4498,6 +4498,15 @@ async def test_search_merge_scenario_preserves_batch_merge_and_target_edits_on_r
     first = await preview.seed_preview(database, filesystem)
     target = first.entities["merge-3"]
     sources = [first.entities["merge-1"], first.entities["merge-2"]]
+    assert first.filter_examples["people-search-merge-paginated"] == "/people?sort=name"
+    page = await database.entities.list(EntityListRequest(limit=12, sort="name"))
+    merge_ids = {target, *sources}
+    assert merge_ids.isdisjoint(item.entity_id for item in page.items)
+    loaded_ids = {item.entity_id for item in page.items}
+    while page.cursor is not None:
+        page = await database.entities.list(EntityListRequest(limit=12, sort="name", cursor=page.cursor))
+        loaded_ids.update(item.entity_id for item in page.items)
+    assert merge_ids <= loaded_ids
     actor = GenericActor(user_id=first.users["reviewer"])
     result = await database.entities.merge_batch(target, sources, context=actor)
     assert result.faces_reassigned == result.text_mentions_reassigned == 2
