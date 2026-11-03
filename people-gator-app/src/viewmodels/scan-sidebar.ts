@@ -132,6 +132,38 @@ export function readSidebarState(query: LocationQuery, hash = ''): ScanSidebarSt
   }
 }
 
+/** URL keys of the sidebar's own settings, never evidence or shared filters. */
+export const SIDEBAR_QUERY_KEYS = [
+  'panel',
+  'candidate_text',
+  'candidate_face',
+  'face_model',
+  'people_scope',
+  'candidate_sort',
+  'candidate_dir',
+  'face_scope',
+  'face_view',
+  'face_sort',
+  'face_dir',
+  'mention_scope',
+  'mention_view',
+  'mention_sort',
+  'mention_dir',
+  'group_sort',
+  'group_dir',
+  'activity_dir',
+] as const
+
+/**
+ * Query for opening another scan page from the sidebar: the sidebar keeps its
+ * tab and settings, while filters stay behind as for any navigation (#109).
+ */
+export function sidebarSettingsQuery(query: LocationQuery): LocationQueryRaw {
+  return Object.fromEntries(
+    SIDEBAR_QUERY_KEYS.flatMap((key) => (query[key] === undefined ? [] : [[key, query[key]]])),
+  )
+}
+
 /** The chosen face-search model when the face has it, otherwise its first model. */
 export function resolveSearchModel(chosen: string | null, available: readonly string[]) {
   return chosen && available.includes(chosen) ? chosen : (available[0] ?? null)

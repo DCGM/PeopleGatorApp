@@ -7,7 +7,7 @@ import AnnotationLastChange from './AnnotationLastChange.vue'
 import EntityLinkStateBadge from './EntityLinkStateBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { SCAN_SELECTED_MENTION } from '@/viewmodels/scan-sidebar'
+import { SCAN_SELECTED_MENTION, sidebarSettingsQuery } from '@/viewmodels/scan-sidebar'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
 const props = defineProps<{
   mention: PersonMention
@@ -20,6 +20,12 @@ const route = useRoute()
 const onScan = computed(() => route.name === 'document-page')
 const selectedOnScan = inject(SCAN_SELECTED_MENTION, null)
 const selected = computed(() => selectedOnScan?.value === props.mention.id)
+const samePage = computed(
+  () =>
+    route.params.libraryId === props.mention.library &&
+    route.params.documentId === props.mention.documentId &&
+    route.params.pageId === props.mention.pageId,
+)
 // The transcription's selection look: a muted line and a blue selected name.
 const markClass = computed(() => [
   'text-secondary underline underline-offset-2',
@@ -36,9 +42,13 @@ const target = computed(() => ({
     pageId: props.mention.pageId,
   },
   query: {
-    ...(onScan.value
-      ? { ...route.query, person: undefined, line: undefined, mention: props.mention.id }
-      : {}),
+    ...(onScan.value && {
+      // The same page keeps every setting; another page keeps the sidebar's.
+      ...(samePage.value ? route.query : sidebarSettingsQuery(route.query)),
+      person: undefined,
+      line: undefined,
+      mention: props.mention.id,
+    }),
     selectedPerson: props.personId ?? props.mention.metadata?.entity_id ?? undefined,
   },
 }))

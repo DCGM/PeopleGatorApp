@@ -4,6 +4,7 @@ import {
   resolveSearchModel,
   readSidebarState,
   sidebarQuery,
+  sidebarSettingsQuery,
   type ScanSidebarState,
 } from '@/viewmodels/scan-sidebar'
 
@@ -99,6 +100,30 @@ describe('scan sidebar URL state (#103)', () => {
     expect(resolveSearchModel('model-c', ['model-a', 'model-b'])).toBe('model-a')
     expect(resolveSearchModel(null, ['model-a'])).toBe('model-a')
     expect(resolveSearchModel('model-a', [])).toBeNull()
+  })
+
+  it('carries only sidebar settings to another scan page (#109)', () => {
+    expect(
+      sidebarSettingsQuery({
+        panel: 'faces',
+        face_scope: 'document',
+        face_view: 'person',
+        candidate_face: 'f',
+        face_model: 'm',
+        page_link_state: 'manual',
+        library: 'lib',
+        touched_by: 'u',
+        person: 'f',
+        line: 'l1',
+        lines: 'person',
+      }),
+    ).toEqual({
+      panel: 'faces',
+      face_scope: 'document',
+      face_view: 'person',
+      candidate_face: 'f',
+      face_model: 'm',
+    })
   })
 
   it('falls back from Similarity to context order without a name or face', () => {
