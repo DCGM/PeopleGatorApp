@@ -43,6 +43,7 @@ async function render() {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/pages/:pageSourceId', name: 'page-source', component: { template: '<div />' } },
       { path: '/documents', name: 'document-list', component: { template: '<div />' } },
       { path: '/scans', name: 'document-search', component: { template: '<div />' } },
     ],
@@ -91,10 +92,10 @@ describe('document table', () => {
         .map((c) => c.text()),
     ).toEqual(['Document archive-id', 'Archive', '2', '1', '6', '4', '2'])
     expect(wrapper.get('td[data-column="first_page"] a').attributes('href')).toBe(
-      '/scans?page=first-page-source',
+      '/pages/first-page-source',
     )
     expect(wrapper.get('td[data-column="name"] a').attributes('href')).toBe(
-      '/scans?document=source-a',
+      '/pages/first-page-source',
     )
     await wrapper.get('td[data-column="library"] a').trigger('click')
     await flushPromises()
@@ -229,8 +230,6 @@ describe('document table', () => {
     await wrapper.setProps({ documents: [{ ...documents[0]!, first_page_source_id: 'missing' }] })
     await flushPromises()
     expect(wrapper.text()).toContain('No preview')
-    expect(wrapper.get('td[data-column="first_page"] a').attributes('href')).toBe(
-      '/scans?page=missing',
-    )
+    expect(wrapper.get('td[data-column="first_page"] a').attributes('href')).toBe('/pages/missing')
   })
 })

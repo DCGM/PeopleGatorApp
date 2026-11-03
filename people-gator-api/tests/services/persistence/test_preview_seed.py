@@ -4602,6 +4602,7 @@ async def test_document_navigation_defaults_scenario_is_additive_and_preserves_r
     assert ledger.registered_page_count == 2 and ledger.linked_entity_count == 2
     assert ledger.entity_link_stats.faces.total == 4
     assert ledger.entity_link_stats.mentions.total == 5
+    assert seeded.filter_examples["document-table-first-page-editor"] == f"/pages/{ledger.first_page_source_id}"
     thumbnail_page = await database.sources.get_page(ledger.first_page_source_id)
     image = await get_page_image(thumbnail_page.library, thumbnail_page.document_id, thumbnail_page.page_id, max_width=256)
     assert Image.open(io.BytesIO(image.content)).width == 256

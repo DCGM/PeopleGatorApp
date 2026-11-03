@@ -3,7 +3,7 @@ import { RouterLink } from 'vue-router'
 import type { DocumentResponse } from '@/client'
 import { usePageImageQuery } from '@/query/media'
 import { useObjectUrl } from '@/composables/object-url'
-import { documentTitle } from '@/viewmodels/document-list'
+import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import LoadableImage from './LoadableImage.vue'
 import PagePosition from './PagePosition.vue'
 
@@ -16,11 +16,7 @@ const url = useObjectUrl(() => image.data.value)
   <div class="space-y-1">
     <component
       :is="document.first_page_source_id ? RouterLink : 'div'"
-      :to="
-        document.first_page_source_id
-          ? { name: 'document-search', query: { page: document.first_page_source_id } }
-          : undefined
-      "
+      :to="document.first_page_source_id ? documentOpenLocation(document) : undefined"
       :aria-label="
         document.first_page_source_id ? `Open first page of ${documentTitle(document)}` : undefined
       "

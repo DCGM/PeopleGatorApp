@@ -127,6 +127,32 @@ describe('document table results', () => {
       document: 'a-shared',
     })
   })
+  it('keeps loaded rows and appends one aligned skeleton until the next cursor resolves', async () => {
+    let complete!: (value: ReturnType<typeof response>) => void
+    api.documents.mockImplementation(({ query }) =>
+      !query.cursor
+        ? Promise.resolve(response([doc('a')], 2, 'docs-next'))
+        : new Promise((resolve) => {
+            complete = resolve
+          }),
+    )
+    const { wrapper } = await render()
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Load more documents')!
+      .trigger('click')
+    await flushPromises()
+    const loading = wrapper.get('[data-slot="document-loading-row"]')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(loading.findAll('[data-slot="skeleton"]')).toHaveLength(8)
+    expect(loading.attributes('aria-hidden')).toBe('true')
+    expect(wrapper.text()).toContain('Album')
+    expect(wrapper.get('p.sr-only[role="status"]').text()).toBe('Loading more documents…')
+    complete(response([doc('b')], 2))
+    await flushPromises()
+    expect(wrapper.find('[data-slot="document-loading-row"]').exists()).toBe(false)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+  })
   it('retains document results after a next-page error and retries that cursor', async () => {
     let fail = true
     api.documents.mockImplementation(({ query }) =>

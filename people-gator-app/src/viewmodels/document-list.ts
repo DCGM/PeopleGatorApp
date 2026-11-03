@@ -1,6 +1,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 import type { DocumentResponse, DocumentSortField } from '@/client'
+import type { RouteLocationRaw } from 'vue-router'
 import type { SortState } from '@/lib/sorting'
 import { useDocumentResultsQuery } from '@/query/search/documents'
 import { unassignedQuery, type UnassignedFilter } from './document-filters'
@@ -14,6 +15,15 @@ function uniqueSources<T extends { source_id: string }>(pages: Array<{ items: T[
 
 export function documentTitle(document: Pick<DocumentResponse, 'name' | 'document_id'>) {
   return document.name?.trim() || `Document ${document.document_id}`
+}
+
+/** Resolve a source UUID on navigation, without one page lookup per table row. */
+export function documentOpenLocation(
+  document: Pick<DocumentResponse, 'first_page_source_id' | 'source_id'>,
+): RouteLocationRaw {
+  return document.first_page_source_id
+    ? { name: 'page-source', params: { pageSourceId: document.first_page_source_id } }
+    : { name: 'document-search', query: { document: document.source_id } }
 }
 
 export function useDocumentList(

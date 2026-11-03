@@ -18,7 +18,7 @@ import { type SortState } from '@/lib/sorting'
 import type { DocumentResponse, DocumentSortField } from '@/client'
 import DocumentFirstPage from './DocumentFirstPage.vue'
 import DocumentSourceLink from './DocumentSourceLink.vue'
-import { documentTitle } from '@/viewmodels/document-list'
+import { documentTitle, documentOpenLocation } from '@/viewmodels/document-list'
 import {
   documentColumnSizing,
   annotationCount,
@@ -28,6 +28,8 @@ import {
   defaultDocumentColumns,
   DOCUMENT_COLUMN_SORTS,
 } from '@/viewmodels/document-table'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -39,7 +41,7 @@ const annotationStateLabel = (id: string) =>
 const tableId = useId()
 const columnHeaderId = (id: string) => `${tableId}-${id}`
 
-const props = defineProps<{ documents: DocumentResponse[] }>()
+const props = defineProps<{ documents: DocumentResponse[]; loadingMore?: boolean }>()
 const visibility = defineModel<ColumnVisibilityState>('visibility', { required: true })
 const sort = defineModel<SortState<DocumentSortField> | undefined>('sort')
 function toggleSort(columnId: string) {
@@ -72,7 +74,7 @@ const link = (document: DocumentResponse, text: string) =>
   h(
     RouterLink,
     {
-      to: { name: 'document-search', query: { document: document.source_id } },
+      to: documentOpenLocation(document),
       'aria-label': `Open ${documentTitle(document)} in ${document.library}, document ${document.document_id}`,
       class: 'underline underline-offset-4',
     },
@@ -237,8 +239,8 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
 </script>
 
 <template>
-  <div class="flex min-w-0 flex-col gap-3">
-    <div class="flex flex-wrap items-center gap-2">
+  <div class="flex h-dvh min-w-0 flex-col gap-3 lg:h-auto lg:min-h-0">
+    <div class="flex flex-wrap items-center gap-2 lg:shrink-0">
       <Popover>
         <PopoverTrigger as-child
           ><Button variant="outline"
@@ -308,11 +310,15 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
       each group includes total, automatic, manual, verified and unassigned counts. Pages counts
       registered pages only. Unknown means no recorded value.
     </p>
-    <div
-      class="relative max-h-[min(65dvh,26rem)] w-full min-w-0 max-w-full overflow-auto rounded-md border"
-      tabindex="0"
-      role="region"
-      aria-label="Documents table, scroll for more rows and columns"
+    <ScrollArea
+      class="relative min-h-0 flex-1 w-full min-w-0 max-w-full overflow-hidden rounded-md border"
+      orientation="both"
+      type="always"
+      :viewport-props="{
+        tabindex: 0,
+        role: 'region',
+        'aria-label': 'Documents table, scroll for more rows and columns',
+      }"
     >
       <table
         :aria-describedby="`${tableId}-counts`"
@@ -408,9 +414,20 @@ function resizeKey(event: KeyboardEvent, header: Header<typeof features, Documen
               <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
             </TableCell>
           </TableRow>
+          <TableRow v-if="loadingMore" data-slot="document-loading-row" aria-hidden="true">
+            <TableCell
+              v-for="column in table.getVisibleLeafColumns()"
+              :key="column.id"
+              :data-column="column.id"
+              class="border-r last:border-r-0"
+              :style="{ width: `${column.getSize()}px` }"
+            >
+              <Skeleton :class="column.id === 'first_page' ? 'h-28 w-20' : 'h-4 w-2/3'" />
+            </TableCell>
+          </TableRow>
         </TableBody>
       </table>
       <slot name="list-end" />
-    </div>
+    </ScrollArea>
   </div>
 </template>

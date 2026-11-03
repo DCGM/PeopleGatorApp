@@ -81,62 +81,64 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full min-w-0 px-2 md:px-4">
-    <header class="pb-4 pt-6">
-      <small class="font-semibold uppercase text-secondary">Documents index</small>
-      <h1>Browse documents</h1>
-      <p class="mt-2 text-sm text-muted-foreground">Registered documents and their page scans.</p>
-    </header>
-    <DocumentListSearchBar
-      v-model:search-term="searchTerm"
-      v-model:unassigned="unassigned"
-      v-model:sort="sort"
-      :sort-options="sortOptions"
-      :result-count="resultCount"
-    />
-    <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
-      Search reports a bounded set of ranked document candidates.
-    </p>
+  <main class="mx-auto w-full min-w-0 px-2 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+    <div class="lg:shrink-0">
+      <header class="pb-4 pt-6">
+        <small class="font-semibold uppercase text-secondary">Documents index</small>
+        <h1>Browse documents</h1>
+        <p class="mt-2 text-sm text-muted-foreground">Registered documents and their page scans.</p>
+      </header>
+      <DocumentListSearchBar
+        v-model:search-term="searchTerm"
+        v-model:unassigned="unassigned"
+        v-model:sort="sort"
+        :sort-options="sortOptions"
+        :result-count="resultCount"
+      />
+      <p v-if="searchTerm.trim()" class="mt-2 text-sm text-muted-foreground">
+        Search reports a bounded set of ranked document candidates.
+      </p>
+    </div>
     <DocumentTable
       v-model:visibility="visibility"
       v-model:sort="explicitSort"
       :documents="documents"
-      class="pt-4"
+      :loading-more="isFetchingNextPage"
+      class="pt-4 lg:min-h-0 lg:flex-1"
     >
       <template #list-end
         ><div ref="listEnd" class="sticky left-0 h-px w-px" aria-hidden="true"
       /></template>
     </DocumentTable>
-    <p
-      v-if="isLoading || isFetchingNextPage"
-      class="py-6 text-center text-sm text-muted-foreground"
-      role="status"
-    >
-      Loading documents…
-    </p>
-    <div v-if="error" class="py-6 text-center" role="alert">
-      <p class="text-sm text-destructive">Could not load documents.</p>
-      <Button type="button" variant="outline" class="mt-2" :disabled="isFetching" @click="retry()"
-        >Retry documents</Button
+    <footer class="pb-4 pt-6 lg:shrink-0">
+      <p v-if="isLoading" class="py-6 text-center text-sm text-muted-foreground" role="status">
+        Loading documents…
+      </p>
+      <p v-if="isFetchingNextPage" class="sr-only" role="status">Loading more documents…</p>
+      <div v-if="error" class="py-6 text-center" role="alert">
+        <p class="text-sm text-destructive">Could not load documents.</p>
+        <Button type="button" variant="outline" class="mt-2" :disabled="isFetching" @click="retry()"
+          >Retry documents</Button
+        >
+      </div>
+      <p
+        v-else-if="
+          !isLoading && !shared.error.value && !counts.error.value && documents.length === 0
+        "
+        class="py-10 text-center text-sm text-muted-foreground"
       >
-    </div>
-    <p
-      v-else-if="!isLoading && !shared.error.value && !counts.error.value && documents.length === 0"
-      class="py-10 text-center text-sm text-muted-foreground"
-    >
-      {{
-        filtered
-          ? 'No documents match your search and filters.'
-          : 'No documents have been registered yet.'
-      }}
-    </p>
+        {{
+          filtered
+            ? 'No documents match your search and filters.'
+            : 'No documents have been registered yet.'
+        }}
+      </p>
 
-    <div v-if="hasNextPage && !error" class="flex justify-center pt-6">
-      <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{
-        isFetchingNextPage ? 'Loading documents…' : 'Load more documents'
-      }}</Button>
-    </div>
-    <footer class="pb-4 pt-6">
+      <div v-if="hasNextPage && !error" class="flex justify-center pb-4">
+        <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{
+          isFetchingNextPage ? 'Loading documents…' : 'Load more documents'
+        }}</Button>
+      </div>
       <p class="text-center text-sm text-muted-foreground">PeopleGator</p>
     </footer>
   </main>

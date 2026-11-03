@@ -802,14 +802,14 @@ Direct annotation ledger demonstrates a user-only modification without a key.
 Documents uses the table only; the Items listing and view switch are removed.
 Existing links with `view=items` or `view=table` also open the table. Search,
 filters and server sorting retain their existing behavior. Columns can hide each data field, including Document name, and restore defaults. Document
-name follows First page in the default columns and links to its scans. There is no
+name follows First page in the default columns and opens its first registered page in the viewer/editor. There is no
 separate Open column. With the name hidden, Document ID links to the same page;
 when both are hidden, a compact library/ID link keeps navigation available.
 The `document-table-unnamed` manifest link demonstrates the document-ID fallback
 using the existing unnamed legacy document and its registered page.
 The table uses document-wide counts even when evidence filters select matching documents. Scroll horizontally to reach
 all fields and vertically to append cursor batches; Load more and Retry remain
-keyboard accessible. The **First page** column is shown by default, with a single thumbnail and a link to that registered scan. The document response supplies its source
+keyboard accessible. The **First page** column is shown by default, with a single thumbnail and a link to that registered page in the viewer/editor. The document response supplies its source
 UUID in the same batched projection as the page total; enabling the column adds
 only thumbnail requests, without page-list or annotation/name queries. Hidden
 previews make no media requests. First means the first registered numbered page, with unknown numbers last and
@@ -1253,17 +1253,14 @@ scan result. No existing fixture, assignment, timestamp or checkpoint is reset.
 
 A fresh tab shows First page, Document name, Library, Pages, Linked entities,
 Annotations, Faces and Mentions in that order. The Library link opens Documents
-filtered to that library; the document name opens its scans; First page opens
-Scan search filtered to the canonical first-page source. Columns has a settings
+filtered to that library; the document name opens its first page; First page and the document name open the viewer/editor on the canonical first-page source. Documents with no registered pages still open their empty scan listing. Columns has a settings
 icon and saves visible fields in sessionStorage, including reload/navigation back.
 Restore defaults restores the eight fields; unavailable/invalid storage recovers
 safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 104px, Linked entities 144px, Annotations 144px, Faces/Mentions 128px and
 optional NDK 80px. Header text wraps independently of sort icons.
 
-The Documents view uses the available content width. Its table has one bounded,
-keyboard-focusable overflow region (up to 65dvh/26rem) with a sticky header, so
-both axes and the scrollbar remain reachable without growing the page width.
+The Documents view uses the available content width. On desktop (1024px and wider), the table and footer fill the remaining viewport height below the heading and filters. The table receives the flexible space above the footer. On mobile, the table section, including Columns, occupies one viewport height, with the heading, filters and footer reachable by page scrolling. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
 Choose extra fields and scroll vertically at left, middle and right positions;
 the loading sentinel remains visible across the horizontal content. Counts retain
 full-document semantics, including unassigned and direct document evidence.
@@ -1273,3 +1270,16 @@ sort → ascending → descending → no explicit sort. The shared selector, URL
 Back/Forward follow the same server order. Clearing returns to name ascending
 for browse and relevance for search. The new seed integration scenario checks
 cursor batches, totals, media/link identities and additive rerun/edit preservation.
+
+
+The `document-table-first-page-editor` example links directly by the first page's
+stable source UUID. The application resolves its archive identifiers on navigation
+and opens the existing viewer/editor without listing all pages or prefetching
+page metadata per document row. Document name/ID/fallback links and First page
+use the same destination; missing image media does not prevent opening the editor.
+A failed metadata lookup offers Retry page and a Documents link.
+
+While the next document batch is loading, a standard shadcn Skeleton row appears
+after the loaded rows, aligned with the visible columns. Existing rows remain
+usable; the skeleton disappears after success or failure, and the existing retry
+control handles failed requests. Desktop loading keeps the footer height stable.
