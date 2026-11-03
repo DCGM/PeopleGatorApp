@@ -20,15 +20,15 @@ precise stuck-scroll interaction.
 
 ## Result and browser validation
 
-The Documents view now uses available content width with one table overflow
-region bounded to min(65dvh, 26rem). Its header stays at that region's top while
-rows scroll. The loading sentinel is inside it and sticks to its left edge, so
+The Documents view uses available content width. On desktop, the table and footer fill the remaining viewport below the heading and filters. On mobile, the table section including Columns fills one viewport height. The standard shadcn-vue ScrollArea supplies both scrollbars; the header stays at its viewport top while rows scroll. The loading sentinel is inside it and sticks to its left edge, so
 horizontal position cannot hide the cursor-loading trigger. The normal page can
 still scroll to reach the table below expanded filters or many active tags.
 
 `people-gator-app/scripts/check-document-navigation.mjs` ran successfully at both
 viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 
+- Desktop table/footer fill the remaining viewport, and resizing from 900px to 1200px gives the table the additional 300px. The mobile table section fills one viewport.
+- Both standard shadcn scrollbars are present.
 - Exact eight-column defaults, header/body/colgroup alignment, stable pixel
   widths and no document-level horizontal overflow.
 - Wheel and focused-region keyboard scrolling; sticky header visibility;
@@ -36,6 +36,7 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
   19 scenario documents reachable and horizontal position retained.
 - Mobile horizontal/vertical touch swipes dispatched through Chromium's input
   protocol. Physical touch and trackpad hardware were not tested.
+- A held cursor request keeps the twelve existing rows and appends exactly one aligned skeleton row, which disappears when the seven additional rows arrive.
 - Keyboard resizing and restoring a title column; sort and load operations
   preserve its width model.
 - Header keyboard sorting through ascending, descending and clearing; shared
@@ -44,9 +45,8 @@ viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 - Session column choices survive reload and navigation away/back; Restore defaults
   restores the eight fields. Unit tests separately cover invalid/obsolete stored
   IDs and blocked storage reads/writes.
-- Document/library/first-page links, canonical full-document totals, empty pages,
+- Document/library/first-page links (document links and thumbnails open the first-page viewer/editor), canonical full-document totals, empty pages,
   missing media, and light/dark rendering without browser page errors.
 
 The after images show defaults, Columns settings, a vertically/horizontally
-scrolled table, ascending/descending sort controls and dark mode. The mobile default capture scrolls the normal page
-slightly to show the complete table region below the five active library tags.
+scrolled table, ascending/descending sort controls and dark mode. The mobile default capture scrolls the normal page to show its full-height table section below the filters. First-page editor captures show the destination of document and thumbnail links.

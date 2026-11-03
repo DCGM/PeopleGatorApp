@@ -61,6 +61,18 @@ try {
       assert.deepEqual(actual.header, sizes)
       for (const row of actual.rows) assert.deepEqual(row, sizes)
       assert.ok(actual.page <= actual.viewport, 'no page overflow')
+      assert.equal(
+        await page
+          .locator('[data-slot="scroll-area-scrollbar"][data-orientation="vertical"]')
+          .count(),
+        1,
+      )
+      assert.equal(
+        await page
+          .locator('[data-slot="scroll-area-scrollbar"][data-orientation="horizontal"]')
+          .count(),
+        1,
+      )
     }
     async function toggleColumn(name) {
       await page.getByRole('button', { name: 'Columns', exact: true }).click()
@@ -87,6 +99,31 @@ try {
     await region.evaluate((e) => e.scrollIntoView({ block: 'end' }))
     const bounds = await region.boundingBox()
     assert.ok(bounds.y + bounds.height <= height, 'scrollbar reachable after positioning the table')
+    const layout = await region.evaluate((e) => ({
+      sectionHeight: e.closest('[data-slot="scroll-area"]').parentElement.getBoundingClientRect()
+        .height,
+      footerBottom: document.querySelector('main footer').getBoundingClientRect().bottom,
+      pageHeight: document.documentElement.scrollHeight,
+      viewport: innerHeight,
+    }))
+    if (label === 'desktop') {
+      assert.ok(Math.abs(layout.footerBottom - height) <= 1, 'footer reaches viewport bottom')
+      assert.ok(layout.pageHeight <= height, 'desktop scroll belongs to the table')
+      await page.setViewportSize({ width, height: 1200 })
+      await page.waitForTimeout(150)
+      const taller = await region.boundingBox()
+      assert.ok(
+        Math.abs(taller.height - bounds.height - 300) <= 1,
+        'table grows with remaining desktop height',
+      )
+      await page.setViewportSize({ width, height })
+      await page.waitForTimeout(150)
+    } else {
+      assert.ok(
+        Math.abs(layout.sectionHeight - height) <= 1,
+        'mobile table section fills viewport height',
+      )
+    }
     await capture('defaults')
     await page.getByRole('button', { name: 'Columns', exact: true }).click()
     await capture('columns')
@@ -104,10 +141,31 @@ try {
         e.scrollLeft = (e.scrollWidth - e.clientWidth) * f
       }, fraction)
       const left = await region.evaluate((e) => e.scrollLeft)
+      let release
+      if (fraction === 0) {
+        const held = new Promise((resolve) => {
+          release = resolve
+        })
+        await page.route('**/api/v1/documents?**', async (route) => {
+          if (new URL(route.request().url()).searchParams.has('cursor')) await held
+          await route.continue()
+        })
+      }
       await region.hover()
       await page.mouse.wheel(0, 10000)
+      if (fraction === 0) {
+        await page.locator('[data-slot="document-loading-row"]').waitFor()
+        assert.equal(await rows.count(), 13, 'existing twelve rows plus one loading row')
+        await region.evaluate((e) => {
+          e.scrollTop = e.scrollHeight
+        })
+        await capture('loading-more')
+        release()
+      }
       await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 19)
       await settled()
+      if (fraction === 0) await page.unroute('**/api/v1/documents?**')
+      assert.equal(await page.locator('[data-slot="document-loading-row"]').count(), 0)
       assert.equal(requests.filter((u) => u.searchParams.has('cursor')).length, 1)
       assert.equal(await region.evaluate((e) => e.scrollLeft), left)
       const sticky = await region.evaluate((e) => ({
@@ -236,7 +294,29 @@ try {
       1,
     )
     await ledger.getByRole('link', { name: /Open first page/ }).click()
-    await page.waitForURL('**/scans?page=*')
+    await page.waitForURL('**/libraries/*/documents/*/pages/*')
+    const firstPageEditor = page.url()
+    await page.goBack()
+    await rows.first().waitFor()
+    await settled()
+    await ledger.locator('td[data-column="name"] a').click()
+    await page.waitForURL('**/libraries/*/documents/*/pages/*')
+    assert.equal(
+      page.url(),
+      firstPageEditor,
+      'document name and preview open the same first-page editor',
+    )
+    await page.waitForFunction(() => !document.querySelector('main p[role="status"]'))
+    await page.getByRole('img', { name: /^Scan / }).waitFor()
+    await page.waitForFunction(() => {
+      const image = document.querySelector('img[alt^="Scan "]')
+      return (
+        image?.complete &&
+        image.naturalWidth > 0 &&
+        !document.querySelector('[data-slot="skeleton"]')
+      )
+    })
+    await capture('first-page-editor')
     await page.goBack()
     await rows.first().waitFor()
     await settled()
