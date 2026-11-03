@@ -10,9 +10,14 @@ const allowed = useCanAnnotate()
 const value = ref('')
 const draftVersion = ref(props.page.version)
 const editing = ref(false)
+let sourceGeneration = 0
 watch(
-  () => [props.page.source_id, props.page.page_number],
-  () => {
+  () => [props.page.source_id, props.page.page_number, props.page.version] as const,
+  ([sourceId], previous) => {
+    if (previous && previous[0] !== sourceId) {
+      editing.value = false
+      sourceGeneration += 1
+    }
     if (!editing.value) {
       value.value = String(props.page.page_number ?? '')
       draftVersion.value = props.page.version
@@ -25,7 +30,9 @@ const valid = computed(
   () => value.value === '' || (/^[1-9]\d*$/.test(value.value) && Number(value.value) <= 2147483647),
 )
 function save() {
-  if (!valid.value) return
+  if (!valid.value || mutation.isPending.value) return
+  const generation = sourceGeneration
+  const submittedValue = value.value
   mutation.mutate(
     {
       sourceId: props.page.source_id,
@@ -35,9 +42,13 @@ function save() {
       },
     },
     {
-      onSuccess: () => {
-        editing.value = false
-        draftVersion.value = props.page.version
+      onSuccess: (saved) => {
+        if (generation !== sourceGeneration || saved.source_id !== props.page.source_id) return
+        draftVersion.value = saved.version
+        if (value.value === submittedValue) {
+          editing.value = false
+          value.value = String(saved.page_number ?? '')
+        }
       },
     },
   )

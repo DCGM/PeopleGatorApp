@@ -1300,7 +1300,11 @@ all four object kinds without an embedding or OCR service.
 The seed report includes typed API examples: `audit-history` for Eva's entity
 profile revisions, `audit-faces` and `audit-text-mentions` filtered by her historical
 entity assignment, and `audit-sources` for the page. `audit-first-profile-version`
-filters the entity list to version 1. Authenticate with `people-gator:audit`;
+filters the entity list to version 1. The ledger page is currently at version 2
+with page number 1; its archived version 1 retains the original unknown number.
+Use that page to try a page-number draft alongside a second editing session.
+Navigating to another page resets the draft to that page; a late save response
+from the earlier page cannot replace it. Authenticate with `people-gator:audit`;
 neither browse nor admin is required. For example:
 
 ```text

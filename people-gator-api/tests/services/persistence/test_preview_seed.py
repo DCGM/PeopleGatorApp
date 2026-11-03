@@ -5459,7 +5459,9 @@ async def test_audit_preview_has_predecessors_and_preserves_review_edits(seed_ta
     page = await database.audit.list_sources(
         SourceAuditListRequest(source_id=[first.pages["audit-page"]])
     )
-    assert page.items[0].page_number is None
+    assert page.items[0].page_number is None and page.items[0].version == 1
+    current_page = await database.sources.get_page(first.pages["audit-page"])
+    assert current_page.page_number == 1 and current_page.version == 2
 
 
 @pytest.mark.asyncio

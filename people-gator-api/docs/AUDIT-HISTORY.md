@@ -31,7 +31,8 @@ All ordinary list/search/detail objects and historical states require the shared
 Creation initializes the version on the server. Frontend drafts and selections
 retain the version of their exact data through background refreshes; mutations
 never search the query cache or fetch newer versions to authorize older edits.
-Group selections enumerate their occurrences when selected and retain those
+Page-number drafts reset on source navigation and ignore late responses for an
+earlier page. Group selections enumerate their occurrences when selected and retain those
 versions before any mutation is submitted.
 
 Repository graph mutations use the existing transaction advisory lock, followed
