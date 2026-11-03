@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
+import { addSelectionRange } from '@/lib/range-selection'
 import ArchiveLink from './ArchiveLink.vue'
 import FaceSelectionControl from './FaceSelectionControl.vue'
+import PersonSelectionControl from './PersonSelectionControl.vue'
 import SelectedFaceActions from './SelectedFaceActions.vue'
 import PersonDiscoverySettings from './PersonDiscoverySettings.vue'
 import {
-  Check,
   ChevronRight,
   CircleUserRound,
   Images,
@@ -203,17 +204,14 @@ function clearFaceSelection() {
 }
 
 function addPersonRangeToSelection(personId: string) {
-  const personIndex = props.people.findIndex((person) => person.id === personId)
-  const anchorIndex = props.people.findIndex(
-    (person) => person.id === personSelectionAnchorId.value,
+  const next = addSelectionRange(
+    selectedPersonIds.value,
+    props.people.map((person) => person.id),
+    personSelectionAnchorId.value,
+    personId,
   )
-  if (personIndex < 0 || anchorIndex < 0) return false
-  const start = Math.min(personIndex, anchorIndex)
-  const end = Math.max(personIndex, anchorIndex)
-  selectedPersonIds.value = new Set([
-    ...selectedPersonIds.value,
-    ...props.people.slice(start, end + 1).map((person) => person.id),
-  ])
+  if (!next) return false
+  selectedPersonIds.value = next
   return true
 }
 
@@ -610,26 +608,12 @@ watch(
             class="h-full flex-row items-center gap-4 rounded-none p-4 shadow-none transition-colors group-hover:border-accent group-focus-visible:border-ring group-focus-visible:ring-2 group-focus-visible:ring-ring/50"
             :class="selectedPersonIds.has(person.id) && 'border-secondary bg-secondary/20'"
           >
-            <button
-              type="button"
+            <PersonSelectionControl
+              :name="person.name"
+              :selected="selectedPersonIds.has(person.id)"
               :disabled="props.mergingPeople"
-              class="absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-sm border-2 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              :class="
-                selectedPersonIds.has(person.id)
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : 'border-border bg-card text-muted-foreground hover:border-accent hover:text-primary'
-              "
-              :aria-label="`${selectedPersonIds.has(person.id) ? 'Remove' : 'Select'} ${person.name} ${selectedPersonIds.has(person.id) ? 'from merge' : 'for merge'}`"
-              :aria-pressed="selectedPersonIds.has(person.id)"
-              @click="togglePersonSelection(person.id, $event)"
-            >
-              <Check v-if="selectedPersonIds.has(person.id)" class="size-4" aria-hidden="true" />
-              <span
-                v-else
-                class="size-2 rounded-full border border-current"
-                aria-hidden="true"
-              ></span>
-            </button>
+              @toggle="togglePersonSelection(person.id, $event)"
+            />
             <PersonPortrait
               :name="person.name"
               :face-id="person.thumbnailFaceId"

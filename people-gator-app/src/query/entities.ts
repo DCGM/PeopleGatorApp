@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios'
 import { restartPeoplePages } from './people-count-invalidation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
@@ -139,6 +140,14 @@ export function useMergeEntitiesMutation() {
       targetEntityId: string
       sourceEntityIds: string[]
     }) => {
+      if (
+        !targetEntityId ||
+        !sourceEntityIds.length ||
+        sourceEntityIds.some((id) => !id || id === targetEntityId) ||
+        new Set(sourceEntityIds).size !== sourceEntityIds.length
+      ) {
+        throw new Error('Select distinct people and a target before merging.')
+      }
       if (sourceEntityIds.length === 1) {
         return await responseData(
           mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost({
@@ -156,6 +165,15 @@ export function useMergeEntitiesMutation() {
         }),
       )
     },
+    onError: async (error) => {
+      if (!isAxiosError(error) || error.response?.status !== 404) return
+      // Refetch every loaded page so valid later-page selections remain available.
+      // Infinite queries derive fresh continuation cursors while refetching.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
+      ])
+    },
     onSuccess: (result, { sourceEntityIds }) => {
       restartPeoplePages(queryClient)
       for (const sourceEntityId of sourceEntityIds) {
@@ -165,7 +183,7 @@ export function useMergeEntitiesMutation() {
         queryKeys.entities.detail(result.target_entity_id),
         result.merged_entity,
       )
-      void Promise.all([
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.entities.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.faces.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.textMentions.all }),

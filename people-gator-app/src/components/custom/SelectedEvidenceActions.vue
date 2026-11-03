@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
-defineProps<{ count: number; busy?: boolean; singular: string; plural: string; label: string }>()
+defineProps<{
+  count: number
+  busy?: boolean
+  singular: string
+  plural: string
+  label: string
+  clearLast?: boolean
+}>()
 defineEmits<{ clear: [] }>()
 </script>
 <template>
@@ -13,11 +20,26 @@ defineEmits<{ clear: [] }>()
       <p class="font-semibold">{{ count }} {{ count === 1 ? singular : plural }} selected</p>
       <div class="text-xs text-muted-foreground"><slot name="description" /></div>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <Button type="button" size="sm" variant="outline" :disabled="busy" @click="$emit('clear')"
+    <div class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+      <Button
+        v-if="!clearLast"
+        type="button"
+        size="sm"
+        variant="outline"
+        :disabled="busy"
+        @click="$emit('clear')"
         >Clear</Button
       >
       <slot />
+      <Button
+        v-if="clearLast"
+        type="button"
+        size="sm"
+        variant="outline"
+        :disabled="busy"
+        @click="$emit('clear')"
+        >Clear</Button
+      >
     </div>
   </div>
 </template>

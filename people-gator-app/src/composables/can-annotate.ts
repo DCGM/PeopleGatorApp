@@ -9,7 +9,7 @@ export function useCanDeleteDetection() {
   return useHasScope('people-gator:admin')
 }
 
-function useHasScope(scope: string) {
+export function useHasScope(scope: string) {
   const allowed = ref(false)
   onMounted(async () => {
     try {

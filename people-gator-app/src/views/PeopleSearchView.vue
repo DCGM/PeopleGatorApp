@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import { usePeopleMerge } from '@/viewmodels/people-merge'
 import { usePeopleCounts } from '@/viewmodels/people-counts'
 import { useAutomaticPagination } from '@/composables/automatic-pagination'
 import { computed, ref } from 'vue'
 import { useSharedFilters } from '@/viewmodels/shared-filters'
 
 import { useRoute, useRouter } from 'vue-router'
-import { UserRound } from '@lucide/vue'
+import { Merge, UserRound } from '@lucide/vue'
 
 import PeopleCard from '@/components/custom/PeopleCard.vue'
+import PersonSelectionControl from '@/components/custom/PersonSelectionControl.vue'
 import PeopleCardSkeleton from '@/components/custom/PeopleCardSkeleton.vue'
 import PeopleSearchBar from '@/components/custom/PeopleSearchBar.vue'
+import SelectedEvidenceActions from '@/components/custom/SelectedEvidenceActions.vue'
 import { Button } from '@/components/ui/button'
 import Separator from '@/components/ui/separator/Separator.vue'
 import { usePeopleSearch } from '@/viewmodels/people-search'
@@ -63,6 +66,18 @@ const {
   computed(() => !shared.error.value && !counts.error.value),
   sort,
 )
+const selectionScope = computed(() =>
+  JSON.stringify(
+    Object.entries(route.query)
+      .filter(([key]) => !['sort', 'dir'].includes(key))
+      .sort(),
+  ),
+)
+const { allowed, selectedIds, selected, busy, message, clear, toggle, add, merge } = usePeopleMerge(
+  people,
+  selectionScope,
+  isFetching,
+)
 const listEnd = ref<HTMLElement | null>(null)
 useAutomaticPagination({
   target: listEnd,
@@ -75,7 +90,10 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full max-w-6xl px-2 md:px-4">
+  <main
+    class="mx-auto w-full max-w-6xl px-2 md:px-4"
+    :class="{ 'pb-56 sm:pb-32': allowed && selected.length }"
+  >
     <header class="pb-4 pt-6">
       <small class="font-semibold uppercase text-secondary">People index</small>
       <h1>Browse people</h1>
@@ -89,28 +107,90 @@ useAutomaticPagination({
       :result-count="resultCount"
     />
 
+    <SelectedEvidenceActions
+      v-if="allowed && selected.length"
+      :count="selected.length"
+      :busy="busy"
+      singular="person"
+      plural="people"
+      label="Selected person actions"
+      clear-last
+      @clear="clear"
+    >
+      <template #description>
+        <span v-if="busy" role="status">Merging…</span>
+        <span v-else-if="message" role="alert">{{ message }}</span>
+      </template>
+      <Button
+        type="button"
+        size="sm"
+        class="max-w-full"
+        :disabled="busy || isFetching || selected.length < 2"
+        @click="merge('last')"
+      >
+        <Merge aria-hidden="true" /><span class="truncate"
+          >Last selected ({{ selected[selected.length - 1]?.name }})</span
+        >
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        class="max-w-full"
+        :disabled="busy || isFetching || selected.length < 2"
+        @click="merge('first')"
+      >
+        <Merge aria-hidden="true" /><span class="truncate"
+          >First selected ({{ selected[0]?.name }})</span
+        >
+      </Button>
+    </SelectedEvidenceActions>
+    <p v-if="!selected.length && message" :role="message === 'People merged.' ? 'status' : 'alert'">
+      {{ message }}
+    </p>
+
     <section class="stable-search-results pt-6" aria-live="polite">
       <h2 class="mb-4">Search Results</h2>
       <Separator orientation="horizontal" />
 
       <div v-if="people.length || isLoading" class="grid gap-0 pt-6 sm:grid-cols-2 lg:grid-cols-3">
-        <RouterLink
-          v-for="person in people"
-          :key="person.id"
-          class="group min-w-0"
-          :to="{
-            name: 'person-detail',
-            params: { personId: person.id },
-          }"
-        >
+        <div v-for="person in people" :key="person.id" class="group relative min-w-0">
+          <RouterLink
+            v-if="!allowed || !selectedIds.size"
+            class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :aria-label="`Open ${person.name}`"
+            :to="{
+              name: 'person-detail',
+              params: { personId: person.id },
+            }"
+          />
+          <button
+            v-else
+            type="button"
+            class="absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :disabled="busy || isFetching"
+            :aria-label="
+              selectedIds.has(person.id)
+                ? `${person.name} is selected`
+                : `Add ${person.name} to selection`
+            "
+            @click="add(person.id, $event)"
+          ></button>
+          <PersonSelectionControl
+            v-if="allowed"
+            :name="person.name"
+            :selected="selectedIds.has(person.id)"
+            :disabled="busy || isFetching"
+            @toggle="toggle(person.id, $event)"
+          />
           <PeopleCard
+            :selected="allowed && selectedIds.has(person.id)"
             :thumbnail-face-id="person.thumbnailFaceId"
             :name="person.name"
             :faces="person.faces"
             :names="person.names"
             :count-details="person.countDetails"
           />
-        </RouterLink>
+        </div>
         <PeopleCardSkeleton
           v-for="index in isLoading || isFetchingNextPage ? 3 : 0"
           :key="`loading-${index}`"

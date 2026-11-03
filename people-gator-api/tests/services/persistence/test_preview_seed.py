@@ -106,9 +106,29 @@ async def counts(database):
 async def test_seed_graph_vectors_filters_and_media_are_usable(seed_target):
     database, filesystem, engine = seed_target
     result = await preview.seed_preview(database, filesystem)
-    assert await counts(database) == (37, 120, 80)
-    assert len(result.documents) == 53 and len(result.pages) == 109
+    assert await counts(database) == (40, 123, 83)
+    assert len(result.documents) == 54 and len(result.pages) == 112
     assert len(result.users) == 5 and len(result.api_keys) == 3
+
+    # #107: all three duplicates are discoverable together, with usable evidence.
+    merge_people = await database.entities.search(SearchEntitiesRequest(
+        limit=100, query=QueryBase(text=["Rina Merge"]),
+        filter_=EntityListFilter(entity_type=["person"]),
+    ))
+    assert {item.entity_id for item in merge_people.items} == {
+        result.entities[f"merge-{i}"] for i in range(1, 4)
+    }
+    for i in range(1, 4):
+        entity_id = result.entities[f"merge-{i}"]
+        faces = await database.faces.list(FaceListRequest(limit=10, filter_=FaceListFilter(entity_id=[entity_id])))
+        mentions = await database.text_mentions.list(TextMentionListRequest(
+            limit=10, filter_=TextMentionListFilter(entity_id=[entity_id])))
+        assert len(faces.items) == len(mentions.items) == 1
+        assert faces.items[0].source_id == mentions.items[0].source_id
+        assert (await database.entities.get(entity_id)).aliases == [f"R. Merge {i}"]
+        source = await database.sources.lookup(GenericSourceLookupRequest(source_id=faces.items[0].source_id))
+        crop = await get_aligned_face_crop(result.users["reviewer"], faces.items[0], source, max_width=128)
+        assert crop is not None
 
     await validate_postgres_schema(engine)
     demo = parse_qs(urlsplit(result.filter_examples["mobile-filters"]).query)
@@ -368,7 +388,7 @@ async def test_alignment_fixture_additive_recovery_http_and_review_preservation(
         assert await preview.seed_preview(database, filesystem) == seed
         assert await database.faces.get(invalid.detection_id) == reviewed
         assert await database.entities.get(reviewed_person.entity_id) == reviewed_person
-    assert await counts(database) == (37, 120, 80)
+    assert await counts(database) == (40, 123, 83)
 
 
 @pytest.mark.asyncio
@@ -388,7 +408,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     )
     second = await preview.seed_preview(database, filesystem)
     assert second == first
-    assert await counts(database) == (37, 120, 80)
+    assert await counts(database) == (40, 123, 83)
 
     stored = await database.entities.get(first.entities["ada"])
     assert (
@@ -411,7 +431,7 @@ async def test_reruns_preserve_review_edits_and_add_new_scenarios(
     updated = await preview.seed_preview(database, filesystem)
     assert updated.entities["ada"] == first.entities["ada"]
     assert "new-feature" in updated.entities
-    assert await counts(database) == (38, 120, 80)
+    assert await counts(database) == (41, 123, 83)
 
 
 
@@ -436,8 +456,8 @@ async def test_retry_recovers_a_write_before_its_checkpoint(
     with pytest.raises(OSError, match="interrupted"):
         await preview.seed_preview(database, filesystem)
     result = await preview.seed_preview(database, filesystem)
-    assert len(result.entities) == 37 and len(result.faces) == 120
-    assert await counts(database) == (37, 120, 80)
+    assert len(result.entities) == 40 and len(result.faces) == 123
+    assert await counts(database) == (40, 123, 83)
 
 
 
@@ -458,7 +478,7 @@ async def test_reruns_do_not_resurrect_merged_people_or_deleted_evidence(seed_ta
     assert (
         await database.faces.get(first.faces["ada-candidate"])
     ).entity_id == first.entities["ada"]
-    assert await counts(database) == (36, 119, 79)
+    assert await counts(database) == (39, 122, 82)
 
 
 
@@ -1283,7 +1303,7 @@ async def test_issue8_document_search_processing_filters_and_options(seed_target
             DocumentLibraryOptionsRequest(limit=1, cursor=batches[-1].cursor, return_total_count=True)
         ))
     expected_libraries = [
-        'preview-counts', 'preview-mzk', 'preview-nlk', 'preview-pagination',
+        'preview-counts', 'preview-merge', 'preview-mzk', 'preview-nlk', 'preview-pagination',
         'preview-review-a', 'preview-review-b', 'preview-table', 'preview-table-mirror',
         'preview-table-widths', 'preview-table-widths-long-archive-label',
     ]
@@ -3549,7 +3569,7 @@ async def test_person_review_overflow_upgrade_recovers_without_resetting_edits(s
     assert grown.faces == again.faces
     assert all(grown.faces[key] == value for key, value in first.faces.items())
     assert len(grown.faces) - len(first.faces) == 24
-    assert await counts(db) == (37, 120, 80)
+    assert await counts(db) == (40, 123, 83)
     assert await db.faces.get(edited.detection_id) == edited
     linked = await db.faces.list(FaceListRequest(limit=100, filter_=FaceListFilter(entity_id=[grown.entities['review']])))
     assert len(linked.items) == 41
@@ -4470,6 +4490,39 @@ async def test_teleprompter_wrapped_line_is_additive_and_keeps_its_original_mapp
         assert getattr(before, name).items() <= getattr(result, name).items()
     assert await preview.seed_preview(database, filesystem) == result
     assert await database.sources.get_page(page.source_id) == page
+
+
+@pytest.mark.asyncio
+async def test_search_merge_scenario_preserves_batch_merge_and_target_edits_on_rerun(seed_target):
+    database, filesystem, _ = seed_target
+    first = await preview.seed_preview(database, filesystem)
+    target = first.entities["merge-3"]
+    sources = [first.entities["merge-1"], first.entities["merge-2"]]
+    assert first.filter_examples["people-search-merge-paginated"] == "/people?sort=name"
+    page = await database.entities.list(EntityListRequest(limit=12, sort="name"))
+    merge_ids = {target, *sources}
+    assert merge_ids.isdisjoint(item.entity_id for item in page.items)
+    loaded_ids = {item.entity_id for item in page.items}
+    while page.cursor is not None:
+        page = await database.entities.list(EntityListRequest(limit=12, sort="name", cursor=page.cursor))
+        loaded_ids.update(item.entity_id for item in page.items)
+    assert merge_ids <= loaded_ids
+    actor = GenericActor(user_id=first.users["reviewer"])
+    result = await database.entities.merge_batch(target, sources, context=actor)
+    assert result.faces_reassigned == result.text_mentions_reassigned == 2
+    assert set(result.merged_entity.aliases) == {f"R. Merge {i}" for i in range(1, 4)}
+    edited = await database.entities.patch(target, EntityPatchRequest(name="Reviewed Rina"), context=actor)
+    second = await preview.seed_preview(database, filesystem)
+    assert second.entities["merge-3"] == target
+    assert "merge-1" not in second.entities and "merge-2" not in second.entities
+    stored = await database.entities.get(target)
+    assert stored.name == "Reviewed Rina" and stored.last_touched_at == edited.last_touched_at
+    for i in range(1, 4):
+        face = await database.faces.get(first.faces[f"search-merge-{i}"])
+        mention = await database.text_mentions.get(first.mentions[f"search-merge-{i}"])
+        assert face.entity_id == mention.entity_id == target
+    for source in sources:
+        assert await database.entities.get(source) is None
 
 
 @pytest.mark.asyncio

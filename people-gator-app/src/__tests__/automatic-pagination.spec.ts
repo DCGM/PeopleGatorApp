@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), search: vi.fn() }))
-vi.mock('@/query/entities', () => ({ fetchEntities: api.list }))
+vi.mock('@/query/entities', () => ({ fetchEntities: api.list, useMergeEntitiesMutation: () => ({ mutateAsync: vi.fn() }) }))
 vi.mock('@/query/media', () => ({ fetchPages: api.list, fetchDocuments: api.list }))
 vi.mock('@/query/faces', () => ({ fetchFaces: vi.fn() }))
 vi.mock('@/query/text-mentions', () => ({ fetchTextMentions: vi.fn() }))

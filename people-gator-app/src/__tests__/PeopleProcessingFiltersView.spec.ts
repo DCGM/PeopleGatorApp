@@ -1,5 +1,6 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readSharedFilters, utcToLocalTime } from '@/viewmodels/shared-filters'
@@ -47,6 +48,7 @@ vi.mock('@/viewmodels/people-search', () => ({
     error: ref(null),
     hasNextPage: ref(false),
     isFetchingNextPage: ref(false),
+    isFetching: ref(false),
     isLoading: ref(false),
     loadMore: vi.fn<() => void>(),
     people: ref([]),
@@ -85,7 +87,7 @@ async function mountedView(query: Record<string, string | string[]> = {}) {
   await router.isReady()
   const wrapper = mount(PeopleSearchView, {
     attachTo: document.body,
-    global: { plugins: [router] },
+    global: { plugins: [router, [VueQueryPlugin, { queryClient: new QueryClient() }]] },
   })
   await flushPromises()
   return { wrapper, router }

@@ -1212,3 +1212,38 @@ gets fresh element-owned resources while retaining the view for the same page;
 new pages and Reset return to the default view. Mentions have tighter padding and
 thin outlines while keeping the blue selected/orange person states and state
 underlines. Test both a phone-sized panel and a wide panel, including wrapped names.
+
+### People search merge (#107)
+
+Search People for **Rina Merge** to find three synthetic duplicate records, each
+with an alias, a local portrait and a text mention on **Search merge practice**
+(`preview-merge`). With admin permission, select two or three records and use
+**Last selected (name)** or **First selected (name)** to merge immediately. The named
+person survives and receives the sources' faces, mentions and aliases under the
+existing API rules. Try each action on a fresh disposable preview.
+
+For stale-record recovery, open `people-search-merge-paginated` from the seed
+manifest and load more people until the Rina Merge records appear. Select all
+three, delete one source in another tab, then try merging into a remaining Rina.
+The failure refreshes all loaded pages and removes the missing selection while
+keeping the other Rina records selected in their original order for retry.
+
+Selection includes only explicitly selected, loaded results. Loading more adds no
+selection. Shift appends an inclusive range in display order, retaining the order
+of already selected IDs (even for a backward range). Sorting retains that order
+for records still in the loaded results; unavailable records drop out. Search,
+filter or cursor changes clear selection. Deselect/reselect appends a person to
+the end; Clear resets the order. Pending requests freeze selection and use a
+snapshot. Failed requests preserve available selections for retry. Seed reruns
+keep merged source IDs as tombstones and preserve evidence reassignment and edits.
+
+The selected-person toolbar floats at the bottom like the person-detail face
+and people toolbars. Scroll the Rina Merge results on desktop and mobile to
+check that the count, merge actions, Clear and pending/error feedback stay visible.
+This layout uses the existing scenario; no fixture or persistence upgrade is needed.
+
+Rina Merge cards share the person-detail corner checkbox and selected border/fill.
+Start with a checkbox, then click cards to add people. Clicking a selected card
+keeps it selected; only its checkbox removes it. Shift-click either control to add
+a range, and Clear restores card navigation. Existing linked fixtures demonstrate
+these interactions without a fixture or persistence upgrade.

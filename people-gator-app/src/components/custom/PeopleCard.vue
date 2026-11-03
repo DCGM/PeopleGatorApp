@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 const props = defineProps<{
   thumbnailFaceId?: string | null
   name: string
+  selected?: boolean
   faces: number | null
   names: number | null
   countDetails?: { field: string; label: string; value: number | null }[]
@@ -15,7 +16,12 @@ const props = defineProps<{
 
 <template>
   <Card
-    class="h-full w-full min-w-0 flex-row items-center gap-4 overflow-hidden rounded-none bg-transparent p-4 text-muted-foreground shadow-none outline-none transition-colors group-hover:bg-card group-hover:text-primary group-focus-visible:bg-card group-focus:text-primary sm:gap-6"
+    class="h-full w-full min-w-0 flex-row items-center gap-4 overflow-hidden rounded-none p-4 text-muted-foreground shadow-none outline-none transition-colors group-hover:border-accent group-hover:text-primary group-focus-visible:bg-card group-focus:text-primary sm:gap-6"
+    :class="
+      props.selected
+        ? 'border-secondary bg-secondary/20 text-primary group-hover:bg-secondary/20'
+        : 'bg-transparent group-hover:bg-card'
+    "
   >
     <CardHeader class="size-20 shrink-0 px-0">
       <PersonPortrait

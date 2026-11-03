@@ -585,6 +585,8 @@ async def seed_preview(database: Database, filesystem: Filesystem) -> SeedResult
         users={key: actor.user_id for key, actor in actors.items()},
         api_keys=registered_keys,
         filter_examples={
+            "people-search-merge": "/people?q=Rina+Merge&sort=name",
+            "people-search-merge-paginated": "/people?sort=name",
             # #109: reuse linked local media in both libraries. Defaults include
             # the preview-nlk mirror and unlinked Lenka excluded by these URLs.
             "reset-navigation-documents": "/documents?" + urlencode({"library": "preview-mzk"}),
