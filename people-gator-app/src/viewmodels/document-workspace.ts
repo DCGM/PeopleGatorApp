@@ -2,12 +2,11 @@ import { useQueries } from '@tanstack/vue-query'
 import { watch, computed, ref, toValue, type MaybeRefOrGetter } from 'vue'
 
 import { linkMetadata } from '@/lib/entity-links'
-import { listSortParams, sortParams, type SortState } from '@/lib/sorting'
+import { listSortParams, type SortState } from '@/lib/sorting'
 import { FACE_DEFAULT } from '@/viewmodels/sort-options'
 import {
   type FaceResponse,
   type EntityLinkState,
-  type EntitySortField,
   type FaceSortField,
   type BoundingBox,
   type EntityType,
@@ -19,8 +18,6 @@ import type {
   TranscriptionEntitySpan,
   TranscriptionLine,
 } from '@/viewmodels/document-workspace.types'
-import { lineMentionsEntity, transcriptionEntityKey } from '@/viewmodels/document-workspace.types'
-import type { SimilarPersonCandidate } from '@/viewmodels/similar-people.types'
 import { useCreateEntityMutation, useEntityListQuery } from '@/query/entities'
 import {
   fetchFaceAlignedCrop,
@@ -32,9 +29,6 @@ import { usePageImageQuery, usePageLookupQuery } from '@/query/media'
 import { usePageLayoutQuery, usePageMentionSpansQuery } from '@/query/pages'
 import { useObjectUrl, useObjectUrlMap } from '@/composables/object-url'
 import { queryKeys } from '@/query/keys'
-import { useEntitySearchQuery, type EntitySearchRecord } from '@/query/search'
-import { useTextMentionListQuery } from '@/query/text-mentions'
-import { candidateSearchParams, type CandidateBrowseMode } from '@/viewmodels/similar-people'
 
 function percentage(value: number) {
   return Math.round((value <= 1 ? value * 100 : value) * 10) / 10
@@ -136,11 +130,8 @@ export function useDocumentWorkspace(
   documentId: MaybeRefOrGetter<string>,
   pageId: MaybeRefOrGetter<string>,
   selectedFaceId: MaybeRefOrGetter<string | null>,
-  candidateTerm: MaybeRefOrGetter<string>,
-  candidateBrowseMode: MaybeRefOrGetter<CandidateBrowseMode> = 'page',
   linkStates: MaybeRefOrGetter<EntityLinkState[]> = [],
   faceSort: MaybeRefOrGetter<SortState<FaceSortField>> = FACE_DEFAULT,
-  candidateSort?: MaybeRefOrGetter<SortState<EntitySortField> | undefined>,
 ) {
   const pageQuery = usePageLookupQuery(library, documentId, pageId)
   const sourceId = computed(() => pageQuery.data.value?.source_id ?? '')
@@ -165,30 +156,15 @@ export function useDocumentWorkspace(
     const face = selectedFaceQuery.data.value
     return face?.source_id === sourceId.value ? face : undefined
   })
-  const candidateOrder = computed(() => toValue(candidateSort))
+  // Names and descriptions of the people linked on this page.
   const onPageEntityQuery = useEntityListQuery(
-    computed(() => ({
-      'filter.source_id': [sourceId.value],
-      ...(candidateOrder.value && listSortParams(candidateOrder.value)),
-      limit: 100,
-    })),
+    computed(() => ({ 'filter.source_id': [sourceId.value], limit: 100 })),
     hasPage,
   )
   const onPageEntityRecords = computed(() =>
     (onPageEntityQuery.data.value?.pages ?? []).flatMap((page) => page.items),
   )
-  const mentionQuery = useTextMentionListQuery(
-    computed(() => ({
-      'filter.source_id': [sourceId.value],
-      'filter.entity_link_state': toValue(linkStates).length ? toValue(linkStates) : undefined,
-      limit: 100,
-    })),
-    hasPage,
-  )
-  const mentions = computed(() =>
-    (mentionQuery.data.value?.pages ?? []).flatMap((page) => page.items),
-  )
-  for (const query of [faceQuery, mentionQuery, onPageEntityQuery]) {
+  for (const query of [faceQuery, onPageEntityQuery]) {
     watch(
       () => [query.data.value, query.hasNextPage.value, query.isFetchingNextPage.value],
       () => {
@@ -254,9 +230,6 @@ export function useDocumentWorkspace(
   })
   const alignedCropUrls = useObjectUrlMap(alignedCropBlobs)
 
-  // Source-filtered entities are authoritative for the "On this page" state;
-  // ranked entity search results do not expose source membership.
-
   function toFace(face: FaceResponse): Face {
     const person = face.entity_id
       ? onPageEntityRecords.value.find((entity) => entity.entity_id === face.entity_id)
@@ -287,129 +260,16 @@ export function useDocumentWorkspace(
     makeTranscription(layoutQuery.data.value ?? undefined, spanQuery.data.value),
   )
 
-  const textTerm = computed(() => toValue(candidateTerm).trim())
-  const selectedFaceEmbedding = computed(() => selectedFaceRecord.value?.embeddings?.[0])
-  const searchParams = computed(() =>
-    candidateSearchParams(
-      toValue(selectedFaceId),
-      textTerm.value,
-      selectedFaceEmbedding.value,
-      toValue(candidateBrowseMode),
-    ),
-  )
-  const resultMode = computed<'page' | 'face' | 'text'>(() =>
-    textTerm.value ? 'text' : toValue(candidateBrowseMode),
-  )
-  const searchEnabled = computed(() => Boolean(searchParams.value))
-  const candidateSearchQuery = useEntitySearchQuery(
-    computed(() => ({
-      ...(searchParams.value ?? { limit: 0 }),
-      // Both text and face candidates search all accessible data.
-      ...(candidateOrder.value && sortParams(candidateOrder.value)),
-    })),
-    searchEnabled,
-  )
-  const candidateMatches = computed(() =>
-    (candidateSearchQuery.data.value?.pages ?? []).flatMap((page) => page.items),
-  )
-  const onPageEntities = computed(
-    () => new Map(onPageEntityRecords.value.map((entity) => [entity.entity_id, entity])),
-  )
   // Names for linked mentions on this page, shown when hovering them in the text.
   const entityNames = computed(
     () =>
       new Map(
-        onPageEntityRecords.value.map((entity) => [entity.entity_id, entity.name || 'Unnamed person']),
+        onPageEntityRecords.value.map((entity) => [
+          entity.entity_id,
+          entity.name || 'Unnamed person',
+        ]),
       ),
   )
-  const candidateRecords = computed<EntitySearchRecord[]>(() =>
-    resultMode.value === 'page' ? onPageEntityRecords.value : candidateMatches.value,
-  )
-
-  const similarPeople = computed<SimilarPersonCandidate[]>(() => {
-    const pageIds = new Set(onPageEntities.value.keys())
-    const matches = candidateMatches.value
-    const matchingScores = new Map(
-      matches.map((entity) => [
-        entity.entity_id,
-        textTerm.value ? (entity.text_score ?? entity.score) : (entity.face_score ?? entity.score),
-      ]),
-    )
-    const lines = transcription.value
-    return candidateRecords.value.map((entity) => {
-      const entityLineIndex = lines.findIndex((line) => lineMentionsEntity(line, entity.entity_id))
-      const entitySpan =
-        entityLineIndex >= 0
-          ? lines[entityLineIndex]?.entities?.find((span) => span.entity_id === entity.entity_id)
-          : undefined
-      const nerMentions = mentions.value.filter(
-        (mention) => mention.entity_id === entity.entity_id,
-      ).length
-      const detections = faces.value.filter((face) => face.personId === entity.entity_id).length
-      const matchingScore = matchingScores.get(entity.entity_id)
-      const normalizedFaceSimilarity =
-        matchingScore === undefined
-          ? undefined
-          : matchingScore > 1
-            ? matchingScore / 100
-            : matchingScore
-      const faceId =
-        ('matched_detection_ids' in entity ? entity.matched_detection_ids?.[0] : undefined) ??
-        faces.value.find((face) => face.personId === entity.entity_id)?.id
-      return {
-        id: entity.entity_id,
-        sourceId: resultMode.value === 'page' ? sourceId.value : undefined,
-        referenceFaceId: toValue(selectedFaceId) ?? undefined,
-        candidateMode: resultMode.value,
-        candidateText: textTerm.value || undefined,
-        name: entity.name || 'Unnamed person',
-        // Stores without persisted portraits (Weaviate) show the related face.
-        thumbnailFaceId: entity.thumbnail_face_id ?? faceId,
-        shortDescription: entity.short_description || undefined,
-        score: matchingScore === undefined ? undefined : percentage(matchingScore),
-        nerMentions,
-        detections,
-        source: pageIds.has(entity.entity_id) ? 'page' : 'database',
-        matchSources: [
-          ...(textTerm.value && matchingScore !== undefined
-            ? ([{ type: 'text-search', score: percentage(matchingScore) }] as const)
-            : []),
-          ...(!textTerm.value && normalizedFaceSimilarity !== undefined
-            ? ([
-                {
-                  type: 'face-match',
-                  distance: Math.max(0, 1 - normalizedFaceSimilarity),
-                },
-              ] as const)
-            : []),
-          ...(nerMentions > 0 ? ([{ type: 'scan-text' }] as const) : []),
-          ...(detections > 0 ? ([{ type: 'scan-face' }] as const) : []),
-        ],
-        wikidataId: entity.wikidata_id || undefined,
-        nlcrAuthorityId: entity.nlcr_authority_id || undefined,
-        faceId,
-        entityKey: entitySpan ? transcriptionEntityKey(entitySpan) : undefined,
-        entityLineIndex: entityLineIndex >= 0 ? entityLineIndex : undefined,
-      }
-    })
-  })
-
-  const hasNextPage = computed(() =>
-    resultMode.value === 'page'
-      ? onPageEntityQuery.hasNextPage.value
-      : candidateSearchQuery.hasNextPage.value,
-  )
-  const isFetchingNextPage = computed(() =>
-    resultMode.value === 'page'
-      ? onPageEntityQuery.isFetchingNextPage.value
-      : candidateSearchQuery.isFetchingNextPage.value,
-  )
-
-  function loadMore() {
-    return resultMode.value === 'page'
-      ? onPageEntityQuery.fetchNextPage()
-      : candidateSearchQuery.fetchNextPage()
-  }
 
   const createEntity = useCreateEntityMutation()
   const assignFaceMutation = useAssignFaceMutation()
@@ -441,25 +301,17 @@ export function useDocumentWorkspace(
         layoutQuery.error.value ||
         spanQuery.error.value ||
         faceQuery.error.value ||
-        selectedFaceQuery.error.value ||
-        mentionQuery.error.value ||
-        (resultMode.value === 'page'
-          ? onPageEntityQuery.error.value
-          : candidateSearchQuery.error.value),
+        selectedFaceQuery.error.value,
     ),
     faces,
     referenceFace,
-    hasNextPage,
-    isFetchingNextPage,
     isLoading: computed(
       () =>
         pageQuery.isPending.value ||
         layoutQuery.isPending.value ||
         spanQuery.isPending.value ||
-        faceQuery.isPending.value ||
-        mentionQuery.isPending.value,
+        faceQuery.isPending.value,
     ),
-    loadMore,
     page: pageQuery.data,
     annotationsLoading: computed(
       () =>
@@ -474,14 +326,6 @@ export function useDocumentWorkspace(
     pageImageLoading: pageImageQuery.isPending,
     pageImageError: computed(() => Boolean(pageImageQuery.error.value)),
     pageImageUrl,
-    similarPeopleLoading: computed(
-      () =>
-        (resultMode.value === 'page' && onPageEntityQuery.isPending.value) ||
-        (resultMode.value !== 'page' &&
-          searchEnabled.value &&
-          candidateSearchQuery.isPending.value),
-    ),
-    similarPeople,
     transcription,
     entityNames,
   }

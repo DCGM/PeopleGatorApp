@@ -1,139 +1,134 @@
-import { describe, expect, it, vi } from 'vitest'
-import { computed, ref } from 'vue'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
-import { activityGroups, localDayBounds } from '@/viewmodels/page-activity'
-const user = '00000000-0000-4000-8000-000000000001'
-const records = [
-  {
-    id: 'face-a',
-    kind: 'face' as const,
-    label: 'First face',
-    touchedAt: '2026-01-01T12:00:00Z',
-    userId: user,
-  },
-  {
-    id: 'mention-a',
-    kind: 'mention' as const,
-    label: 'Irena',
-    touchedAt: '2026-01-01T13:00:00Z',
-    userId: user,
-  },
-  { id: 'face-b', kind: 'face' as const, label: 'Historical face', touchedAt: null, userId: null },
-]
-vi.mock('@/viewmodels/page-activity', async (original) => ({
-  ...(await original<typeof import('@/viewmodels/page-activity')>()),
-  usePageActivity: () => ({
-    items: ref(records),
-    loading: ref(false),
-    error: ref(null),
-    retry: vi.fn<() => void>(),
-  }),
+import { defineComponent, h, ref } from 'vue'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  activityDays,
+  mergeActivity,
+  usePageActivity,
+  type PageActivityItem,
+} from '@/viewmodels/page-activity'
+
+const api = vi.hoisted(() => ({ faces: vi.fn(), mentions: vi.fn() }))
+vi.mock('@/client', async (original) => ({
+  ...(await original<typeof import('@/client')>()),
+  listFacesRouteApiV1FacesGet: api.faces,
+  listTextMentionsRouteApiV1TextMentionsGet: api.mentions,
 }))
-vi.mock('@/query/people-filter-options', () => ({
-  usePeopleFilterOptions: () => ({ labels: computed(() => ({ [user]: 'Preview reviewer' })) }),
-}))
-import PageActivityPanel from '@/components/custom/PageActivityPanel.vue'
-describe('page annotation activity', () => {
-  it('groups both annotation kinds, leaves unknown history explicit and computes local inclusive day bounds', () => {
-    const groups = activityGroups(records, 'user')
-    expect(groups[0]).toMatchObject({ key: user, faces: 1, mentions: 1 })
-    expect(groups[1]).toMatchObject({ key: '', faces: 1, mentions: 0 })
-    const bounds = localDayBounds('2026-03-29')
-    expect(bounds.touchedFrom).toMatch(/^2026-03-29T00:00:00/)
-    expect(bounds.touchedTo).toMatch(/^2026-03-29T23:59:59.999999$/)
+
+const item = (
+  id: string,
+  touchedAt: string | null,
+  kind: PageActivityItem['kind'] = 'face',
+): PageActivityItem => ({ id, kind, label: id, touchedAt, userId: null })
+
+describe('page activity merge (#103)', () => {
+  it('shows only records every unfinished stream has loaded past', () => {
+    const faces = [item('f1', '2026-01-03T10:00:00Z'), item('f2', '2026-01-01T10:00:00Z')]
+    const mentions = [item('m1', '2026-01-02T10:00:00Z', 'mention')]
+    // Mentions may still hold a record between m1 and f2, so f2 waits.
+    expect(
+      mergeActivity(
+        [
+          { items: faces, done: true },
+          { items: mentions, done: false },
+        ],
+        'desc',
+      ),
+    ).toEqual({ items: [faces[0], mentions[0]], limitedBy: 1 })
+    expect(
+      mergeActivity(
+        [
+          { items: faces, done: true },
+          { items: mentions, done: true },
+        ],
+        'desc',
+      ).items.map((record) => record.id),
+    ).toEqual(['f1', 'm1', 'f2'])
+    // A stream that has not loaded yet shows nothing rather than guessing.
+    expect(
+      mergeActivity(
+        [
+          { items: faces, done: false },
+          { items: [], done: false },
+        ],
+        'asc',
+      ),
+    ).toEqual({ items: [], limitedBy: 1 })
   })
-  it('sets workspace day and user filters without losing other criteria', async () => {
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/', component: PageActivityPanel }],
+
+  it('keeps unknown times last in both directions and orders microseconds', () => {
+    const records = [
+      item('old', '2026-01-01T09:00:00Z'),
+      item('unknown', null),
+      item('new', '2026-01-02T09:00:00Z'),
+    ]
+    for (const [direction, order] of [
+      ['desc', ['new', 'old', 'unknown']],
+      ['asc', ['old', 'new', 'unknown']],
+    ] as const) {
+      const { items } = mergeActivity([{ items: records, done: true }], direction)
+      expect(items.map((record) => record.id)).toEqual(order)
+      const days = activityDays(items)
+      expect(days).toHaveLength(3)
+      expect(days[2]).toMatchObject({ key: '' })
+    }
+    // The API orders below the millisecond; the merge must agree.
+    const close = [
+      item('a', '2026-01-01T09:00:00.000100+00:00'),
+      item('b', '2026-01-01T09:00:00.000900+00:00'),
+    ]
+    expect(
+      mergeActivity([{ items: close, done: true }], 'desc').items.map((record) => record.id),
+    ).toEqual(['b', 'a'])
+  })
+
+  it('pages the limiting stream by last change without duplicates', async () => {
+    const face = (id: string, at: string) => ({
+      detection_id: id,
+      last_touched_at: at,
+      identifier: id,
     })
-    await router.push({
-      path: '/',
-      query: {
-        panel: 'activity',
-        library: 'preview-mzk',
-        link_state: 'verified',
+    api.faces.mockImplementation(({ query }) =>
+      Promise.resolve({
+        data: query.cursor
+          ? { items: [face('f2', '2026-01-01T00:00:00Z')], cursor: null, total_count: 2 }
+          : { items: [face('f1', '2026-01-03T00:00:00Z')], cursor: 'next', total_count: 2 },
+      }),
+    )
+    api.mentions.mockResolvedValue({
+      data: {
+        items: [{ mention_id: 'm1', name: 'Ada', last_touched_at: '2026-01-02T00:00:00Z' }],
+        cursor: null,
+        total_count: 1,
       },
     })
-    const wrapper = mount(PageActivityPanel, {
-      props: { sourceId: 'page' },
-      global: { plugins: [router] },
-    })
-    const day = wrapper
-      .findAll('button')
-      .find((button) => button.attributes('aria-label')?.startsWith('Filter day '))!
-    await day.trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.touched_from).toBeDefined()
-    expect(router.currentRoute.value.query.touched_to).toBeDefined()
-    await router.push({ query: { ...router.currentRoute.value.query, activity_group: 'user' } })
-    await flushPromises()
-    await wrapper.get('button[aria-label="Filter user Preview reviewer"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.touched_by).toEqual([user])
-    expect(router.currentRoute.value.query.link_state).toEqual(['verified'])
-    expect(wrapper.text()).toContain('User not recorded')
-    expect(wrapper.text()).toContain('Historical face')
-    expect(
-      wrapper.findAll('button').filter((button) => button.text() === 'Clear activity filters'),
-    ).toHaveLength(1)
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Clear activity filters')!
-      .trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.touched_by).toBeUndefined()
-    expect(router.currentRoute.value.query.touched_from).toBeUndefined()
-    expect(router.currentRoute.value.query.library).toEqual(['preview-mzk'])
-    wrapper.unmount()
-  })
-  it('shows informational groups without workspace actions in the scan pane', async () => {
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/', component: PageActivityPanel }],
-    })
-    await router.push({
-      path: '/',
-      query: { panel: 'activity', activity_group: 'user', touched_by: user },
-    })
-    const wrapper = mount(PageActivityPanel, {
-      props: { sourceId: 'page', workspaceFilters: false },
-      global: { plugins: [router] },
-    })
-    await flushPromises()
-    expect(wrapper.text()).toContain('Preview reviewer')
-    expect(wrapper.text()).toContain('Historical face')
-    expect(wrapper.find('button[aria-label^="Filter "]').exists()).toBe(false)
-    expect(wrapper.find('[aria-label="Active filters"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('set workspace filters')
-    expect(wrapper.text()).not.toContain('filter the scan')
-    wrapper.unmount()
-  })
-  it('combines day and edit order in one select', async () => {
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/', component: PageActivityPanel }],
-    })
-    await router.push({ path: '/', query: { panel: 'activity' } })
-    const wrapper = mount(PageActivityPanel, {
-      props: { sourceId: 'page' },
-      global: { plugins: [router] },
-    })
-    await flushPromises()
-    expect(wrapper.get('[aria-label="Sort activity"]').text()).toContain(
-      'Days newest first · Edits newest first',
+    let model!: ReturnType<typeof usePageActivity>
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          model = usePageActivity(ref('page'), 'desc')
+          return () => h('div')
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
     )
-    expect(wrapper.findAll('button[aria-label*="order:"]')).toHaveLength(0)
-    wrapper.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', 'asc:asc')
     await flushPromises()
-    expect(router.currentRoute.value.query).toMatchObject({
-      activity_order: 'asc',
-      activity_items: 'asc',
+    expect(api.faces.mock.calls[0]![0].query).toMatchObject({
+      'filter.page_source_id': ['page'],
+      sort: 'last_touched_at',
+      sort_direction: 'desc',
     })
-    expect(wrapper.get('[aria-label="Sort activity"]').text()).toContain(
-      'Days oldest first · Edits oldest first',
-    )
+    expect(model.items.value.map((record) => record.id)).toEqual(['f1'])
+    expect(model.hasNextPage.value).toBe(true)
+    await model.loadMore()
+    await flushPromises()
+    expect(model.items.value.map((record) => record.id)).toEqual(['f1', 'm1', 'f2'])
+    expect(model.hasNextPage.value).toBe(false)
+    expect(model.totalCount.value).toBe(3)
+    expect(api.mentions).toHaveBeenCalledTimes(1)
     wrapper.unmount()
+    client.clear()
   })
 })

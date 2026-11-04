@@ -37,12 +37,23 @@ const overlay = ref<HTMLElement | null>(null)
 const drawableFaces = computed(() =>
   props.faces.filter((face) => face.position.width > 0 && face.position.height > 0),
 )
-// Hidden by an outside click; the face stays selected until another selection.
+// Only the selected face expands its name tag into its details card. An outside
+// click collapses the card; the face stays selected until another selection.
 const dismissedFaceId = ref<string | null>(null)
 watch(
   () => props.selectedFaceId,
   () => (dismissedFaceId.value = null),
 )
+
+const slots = defineSlots<{ card?: (props: { face: Face }) => unknown }>()
+function cardOpen(faceId: string) {
+  return (
+    props.actionsEnabled &&
+    Boolean(slots.card) &&
+    props.selectedFaceId === faceId &&
+    dismissedFaceId.value !== faceId
+  )
+}
 
 function detectionButton(faceId: string) {
   return overlay.value?.querySelector<HTMLButtonElement>(`[data-detection-id="${faceId}"]`)
@@ -53,15 +64,15 @@ function activateFace(faceId: string) {
   emit('selectFace', faceId)
 }
 
-// Move focus into the actions only when the box itself was activated, so
+// Move focus into the card only when the box itself was activated, so
 // selections from the keyboard shortcuts, toolbar or gallery keep their focus.
-// The panel itself takes focus, not its first button, so no tooltip pops up.
+// The card itself takes focus, not its first button, so no tooltip pops up.
 async function openFocus(event: Event, faceId: string) {
   event.preventDefault()
   if (document.activeElement !== detectionButton(faceId)) return
   await nextTick()
   document
-    .querySelector<HTMLElement>(`[data-detection-actions="${faceId}"]`)
+    .querySelector<HTMLElement>(`[data-detection-card="${faceId}"]`)
     ?.focus({ preventScroll: true })
 }
 
@@ -76,10 +87,12 @@ function finishOutsidePress(event: PointerEvent) {
   if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > dragThreshold) return
   if (props.selectedFaceId === press.faceId) dismissedFaceId.value = press.faceId
 }
-// Close on an outside click, but not when the press starts a scan drag or pinch.
+// Close on an outside click on the scan, but not when the press starts a scan
+// drag or pinch. Work elsewhere, such as searching People for this face, keeps it.
 function pressOutside(event: CustomEvent<{ originalEvent: PointerEvent }>, faceId: string) {
   event.preventDefault()
-  const { clientX, clientY, pointerType } = event.detail.originalEvent
+  const { clientX, clientY, pointerType, target } = event.detail.originalEvent
+  if (props.viewer && !(target instanceof Node && props.viewer.contains(target))) return
   // Reka reports touch only after a tap's click; touch drags never get here.
   if (pointerType === 'touch') {
     if (props.selectedFaceId === faceId) dismissedFaceId.value = faceId
@@ -176,11 +189,7 @@ function regionStyle(position: Face['position']): CSSProperties {
       @click.stop="emit('selectLine', index)"
     />
 
-    <Popover
-      v-for="face in drawableFaces"
-      :key="face.id"
-      :open="actionsEnabled && selectedFaceId === face.id && dismissedFaceId !== face.id"
-    >
+    <Popover v-for="face in drawableFaces" :key="face.id" :open="cardOpen(face.id)">
       <PopoverAnchor as-child>
         <button
           type="button"
@@ -191,15 +200,14 @@ function regionStyle(position: Face['position']): CSSProperties {
           :style="regionStyle(face.position)"
           :aria-label="`Select ${face.name}: ${linkTooltip(face)}`"
           :aria-pressed="face.id === selectedFaceId"
-          :aria-expanded="
-            actionsEnabled ? face.id === selectedFaceId && dismissedFaceId !== face.id : undefined
-          "
-          :aria-haspopup="actionsEnabled ? 'dialog' : undefined"
+          :aria-expanded="actionsEnabled && $slots.card ? cardOpen(face.id) : undefined"
+          :aria-haspopup="actionsEnabled && $slots.card ? 'dialog' : undefined"
           @pointerdown.stop
           @click.stop="activateFace(face.id)"
           @keydown.esc="face.id === selectedFaceId && emit('clearFace')"
         >
           <EntityLinkStateBadge
+            v-show="!cardOpen(face.id)"
             v-bind="face"
             :focusable="false"
             :tooltip="false"
@@ -211,23 +219,26 @@ function regionStyle(position: Face['position']): CSSProperties {
         </button>
       </PopoverAnchor>
       <PopoverContent
-        v-if="$slots.actions"
-        :data-detection-actions="face.id"
+        v-if="$slots.card"
+        :data-detection-card="face.id"
         side="top"
-        class="w-auto p-1"
+        align="start"
+        :side-offset="4"
+        class="max-h-(--reka-popover-content-available-height) w-64 max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
         :collision-boundary="viewer ?? undefined"
         :collision-padding="8"
         sticky="always"
+        hide-when-detached
         update-position-strategy="always"
         prioritize-position
-        :aria-label="`Actions for ${face.name}`"
+        :aria-label="`Details for ${face.personId ? face.name : 'unassigned face'}`"
         @open-auto-focus="openFocus($event, face.id)"
         @focus-outside.prevent
         @pointer-down-outside="pressOutside($event, face.id)"
         @keydown.esc="emit('clearFace')"
         @close-auto-focus="returnFocus($event, face.id)"
       >
-        <slot name="actions" :face="face" />
+        <slot name="card" :face="face" />
       </PopoverContent>
     </Popover>
   </div>

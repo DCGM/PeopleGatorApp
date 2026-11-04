@@ -266,6 +266,7 @@ __all__ = [
     "link_state_rank",
     "normalized_text",
     "order_by",
+    "person_keys",
     "python_sort_key",
     "sort_columns",
     "sort_ranked",
@@ -321,6 +322,25 @@ def source_context_keys(source_id: ColumnElement[Any], descending: bool) -> list
         SortKey(func.coalesce(pages.c.document_id, documents.c.document_id), "uuid", descending, joins),
         SortKey(pages.c.page_id, "uuid", descending, joins),
     ]
+
+
+def person_keys(model: Any) -> Callable[[bool], list[SortKey]]:
+    """Assigned person name, then person identity, for faces or mentions.
+
+    Unassigned annotations are unknown and last. Equal people stay contiguous,
+    so a person-grouped view can be paged.
+    """
+    from .models import Entity
+
+    def keys(descending: bool) -> list[SortKey]:
+        people = Entity.__table__.alias("sort_people")
+        joins: tuple[SortJoin, ...] = ((people, people.c.id == model.entity_id),)
+        return [
+            SortKey(key.expression, key.kind, key.descending, joins)
+            for key in text_keys(normalized_text(people.c.name), people.c.name, descending)
+        ] + [SortKey(model.entity_id, "uuid", descending)]
+
+    return keys
 
 
 def annotation_builders(model: Any) -> Builders:

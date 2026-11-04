@@ -10,14 +10,19 @@ import { useCanAnnotate } from '@/composables/can-annotate'
 import { useReviewMentionsMutation } from '@/query/mention-review'
 import type { EntityLinkState } from '@/client'
 import type { PersonMention } from '@/viewmodels/person-detail.types'
-const props = defineProps<{
-  mentions: PersonMention[]
-  personId: string
-  linkStates: EntityLinkState[]
-  compact?: boolean
-  selection?: { all: boolean; ids: string[] }
-  disabled?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    mentions: PersonMention[]
+    personId?: string
+    linkStates: EntityLinkState[]
+    compact?: boolean
+    /** Offer selection and the selected-mention review actions. */
+    selectable?: boolean
+    selection?: { all: boolean; ids: string[] }
+    disabled?: boolean
+  }>(),
+  { selectable: true },
+)
 const emit = defineEmits<{ selectMention: [id: string, value: boolean, shift: boolean] }>()
 const selected = ref(new Set<string>())
 const anchor = ref<string | null>(null)
@@ -26,7 +31,8 @@ function clear() {
   selected.value = new Set()
   anchor.value = null
 }
-const allowed = useCanAnnotate()
+const canAnnotate = useCanAnnotate()
+const allowed = computed(() => props.selectable && canAnnotate.value)
 const mutation = useReviewMentionsMutation()
 const route = useRoute()
 const feedback = ref('')

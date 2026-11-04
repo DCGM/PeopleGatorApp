@@ -1,4 +1,4 @@
-import { computed, toValue, watchEffect, type MaybeRefOrGetter } from 'vue'
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useFaceListQuery } from '@/query/faces'
 import { useTextMentionListQuery } from '@/query/text-mentions'
 import { utcToLocalTime } from './shared-filters'
@@ -11,111 +11,129 @@ export type PageActivityItem = {
   touchedAt: string | null
   userId: string | null
 }
-export type ActivityOrder = {
-  /** Days compare chronologically; users compare by their displayed label. */
-  groups: SortDirection
-  /** Annotation last-change time within each group. */
-  items: SortDirection
-}
 
-const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+export const ACTIVITY_BATCH_SIZE = 25
 
 /**
- * Group the complete page collection by local day or last editor. Unknown
- * metadata forms an explicit group and unknown times stay last in both directions.
+ * The API order of each stream: last change with unknown times last in both
+ * directions, then identity ascending. Faces precede mentions on equal times.
  */
-export function activityGroups(
-  items: PageActivityItem[],
-  mode: 'time' | 'user',
-  order: ActivityOrder = { groups: mode === 'user' ? 'asc' : 'desc', items: 'desc' },
-  label: (key: string) => string = (key) => key,
-) {
-  const groups = new Map<string, PageActivityItem[]>()
-  for (const item of items) {
-    const key =
-      mode === 'user' ? (item.userId ?? '') : (utcToLocalTime(item.touchedAt).split('T')[0] ?? '')
-    groups.set(key, [...(groups.get(key) ?? []), item])
-  }
-  const groupSign = order.groups === 'asc' ? 1 : -1
-  const itemSign = order.items === 'asc' ? 1 : -1
-  return [...groups]
-    .sort(([a], [b]) => {
-      if (!a || !b) return a ? -1 : b ? 1 : 0
+export function compareActivity(direction: SortDirection) {
+  const sign = direction === 'asc' ? 1 : -1
+  return (left: PageActivityItem, right: PageActivityItem) => {
+    if (left.touchedAt !== right.touchedAt) {
+      if (!left.touchedAt) return 1
+      if (!right.touchedAt) return -1
       const compared =
-        mode === 'user'
-          ? collator.compare(label(a), label(b)) || a.localeCompare(b)
-          : a.localeCompare(b)
-      return groupSign * compared
-    })
-    .map(([key, records]) => ({
-      key,
-      records: records.sort((a, b) => {
-        if (!a.touchedAt || !b.touchedAt)
-          return a.touchedAt ? -1 : b.touchedAt ? 1 : a.id.localeCompare(b.id)
-        return itemSign * a.touchedAt.localeCompare(b.touchedAt) || a.id.localeCompare(b.id)
-      }),
-      faces: records.filter((item) => item.kind === 'face').length,
-      mentions: records.filter((item) => item.kind === 'mention').length,
-    }))
-}
-export function localDayBounds(day: string) {
-  const [year, month, date] = day.split('-').map(Number)
-  const from = new Date(year!, month! - 1, date!)
-  const to = new Date(year!, month! - 1, date! + 1)
-  to.setMilliseconds(to.getMilliseconds() - 1)
-  return {
-    touchedFrom: utcToLocalTime(from.toISOString()),
-    touchedTo: utcToLocalTime(to.toISOString().replace('.999Z', '.999999Z')),
+        Date.parse(left.touchedAt) - Date.parse(right.touchedAt) ||
+        microseconds(left.touchedAt) - microseconds(right.touchedAt)
+      if (compared) return sign * compared
+    }
+    return left.kind.localeCompare(right.kind) || left.id.localeCompare(right.id)
   }
 }
-export function usePageActivity(sourceId: MaybeRefOrGetter<string>) {
-  const enabled = computed(() => !!toValue(sourceId))
-  // These source-only collections remain stable while a group filters the workspace.
+
+/** The API orders by microseconds, below the millisecond precision of Date. */
+function microseconds(time: string) {
+  const fraction = /\.(\d+)/.exec(time)?.[1] ?? ''
+  return Number(fraction.padEnd(6, '0').slice(3, 6))
+}
+
+type Stream = { items: PageActivityItem[]; done: boolean }
+
+/**
+ * Merge independently paged streams in the same order. An item is shown only
+ * once every unfinished stream has loaded past it, so later batches append and
+ * never insert above records already shown. `limitedBy` names the stream to load next.
+ */
+export function mergeActivity(streams: Stream[], direction: SortDirection) {
+  const merged = streams.flatMap((stream) => stream.items).sort(compareActivity(direction))
+  let visible = merged.length
+  let limitedBy = -1
+  for (const [index, stream] of streams.entries()) {
+    if (stream.done) continue
+    const last = stream.items[stream.items.length - 1]
+    const end = last ? merged.indexOf(last) + 1 : 0
+    if (end < visible || limitedBy < 0) {
+      visible = Math.min(visible, end)
+      limitedBy = index
+    }
+  }
+  return { items: merged.slice(0, visible), limitedBy }
+}
+
+/** Contiguous local days of an ordered activity list; unknown times form one group. */
+export function activityDays(items: PageActivityItem[]) {
+  const days = new Map<string, PageActivityItem[]>()
+  for (const item of items) {
+    const key = item.touchedAt ? (utcToLocalTime(item.touchedAt).split('T')[0] ?? '') : ''
+    days.set(key, [...(days.get(key) ?? []), item])
+  }
+  return [...days].map(([key, records]) => ({ key, records }))
+}
+
+/** Recorded latest changes of the page's faces and mentions, paged by last change. */
+export function usePageActivity(
+  sourceId: MaybeRefOrGetter<string>,
+  direction: MaybeRefOrGetter<SortDirection> = 'desc',
+  enabled: MaybeRefOrGetter<boolean> = true,
+) {
+  const active = computed(() => Boolean(toValue(sourceId)) && toValue(enabled))
   const params = computed(() => ({
-    'filter.source_id': [toValue(sourceId)],
-    limit: 100,
+    'filter.page_source_id': [toValue(sourceId)],
+    sort: 'last_touched_at' as const,
+    sort_direction: toValue(direction),
+    limit: ACTIVITY_BATCH_SIZE,
     return_total_count: true,
   }))
-  const faces = useFaceListQuery(params, enabled),
-    mentions = useTextMentionListQuery(params, enabled)
-  for (const query of [faces, mentions])
-    watchEffect(() => {
-      if (query.hasNextPage.value && !query.isFetchingNextPage.value && !query.isError.value)
-        void query.fetchNextPage()
-    })
-  const items = computed<PageActivityItem[]>(() => [
-    ...(faces.data.value?.pages ?? [])
-      .flatMap((page) => page.items)
-      .map((face) => ({
-        id: face.detection_id,
-        kind: 'face' as const,
-        label: face.identifier || face.detection_id,
-        touchedAt: face.last_touched_at ?? null,
-        userId: face.last_touched_by_user_id ?? null,
-      })),
-    ...(mentions.data.value?.pages ?? [])
-      .flatMap((page) => page.items)
-      .map((mention) => ({
-        id: mention.mention_id,
-        kind: 'mention' as const,
-        label: mention.name,
-        touchedAt: mention.last_touched_at ?? null,
-        userId: mention.last_touched_by_user_id ?? null,
-      })),
+  const faces = useFaceListQuery(params, active)
+  const mentions = useTextMentionListQuery(params, active)
+  const streams = computed<Stream[]>(() => [
+    {
+      done: Boolean(faces.data.value) && !faces.hasNextPage.value,
+      items: (faces.data.value?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((face) => ({
+          id: face.detection_id,
+          kind: 'face' as const,
+          label: face.identifier || 'Face',
+          touchedAt: face.last_touched_at ?? null,
+          userId: face.last_touched_by_user_id ?? null,
+        })),
+    },
+    {
+      done: Boolean(mentions.data.value) && !mentions.hasNextPage.value,
+      items: (mentions.data.value?.pages ?? [])
+        .flatMap((page) => page.items)
+        .map((mention) => ({
+          id: mention.mention_id,
+          kind: 'mention' as const,
+          label: mention.name,
+          touchedAt: mention.last_touched_at ?? null,
+          userId: mention.last_touched_by_user_id ?? null,
+        })),
+    },
   ])
+  const merged = computed(() => mergeActivity(streams.value, toValue(direction)))
+  const queries = [faces, mentions]
   return {
-    items,
-    loading: computed(
+    items: computed(() => merged.value.items),
+    days: computed(() => activityDays(merged.value.items)),
+    totalCount: computed(
       () =>
-        faces.isPending.value ||
-        mentions.isPending.value ||
-        faces.hasNextPage.value ||
-        mentions.hasNextPage.value,
+        (faces.data.value?.pages[0]?.total_count ?? 0) +
+        (mentions.data.value?.pages[0]?.total_count ?? 0),
     ),
+    loading: computed(() => faces.isPending.value || mentions.isPending.value),
+    hasNextPage: computed(() => streams.value.some((stream) => !stream.done)),
+    isFetching: computed(() => faces.isFetching.value || mentions.isFetching.value),
     error: computed(() => faces.error.value || mentions.error.value),
+    loadMore: async () => {
+      const query = queries[merged.value.limitedBy]
+      if (query?.hasNextPage.value) await query.fetchNextPage()
+    },
     retry: () => {
-      void faces.refetch()
-      void mentions.refetch()
+      for (const query of queries) if (query.error.value) void query.refetch()
     },
   }
 }

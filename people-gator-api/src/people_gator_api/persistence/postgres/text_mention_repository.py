@@ -62,6 +62,7 @@ from .sorting import (
     sort_columns,
     with_sort_joins,
     text_keys,
+    person_keys,
 )
 from .touch import touch_entities, touch_sources, lock_annotation_graph, creation_values, touch_values, apply_touch
 
@@ -90,6 +91,7 @@ class PostgresTextMentionRepository(TextMentionRepository):
         builders: Builders = {
             **annotation_builders(TextMention),
             "text": lambda desc: text_keys(TextMention.mention_normalized, TextMention.mention, desc),
+            "person": person_keys(TextMention),
         }
         return build_spec(field, direction, TextMention.id, builders, "mention_id")
 

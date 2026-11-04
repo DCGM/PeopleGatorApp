@@ -103,6 +103,11 @@ describe('in-place identity faces', () => {
         stubs: { RouterLink: RouterLinkStub, PersonPortrait: true },
       },
     })
+    // One round gallery-icon button over the portrait opens the faces.
+    const trigger = mounted.get('[aria-label="View faces of Ada Novak"]')
+    expect(trigger.classes()).toContain('rounded-full')
+    expect(trigger.find('svg.lucide-images').exists()).toBe(true)
+    expect(trigger.element.closest('[data-slot="item-media"]')).not.toBeNull()
     await click('View faces')
     expect(mounted.emitted('preview')).toBeUndefined()
     expect(mounted.emitted('assign')).toBeUndefined()
