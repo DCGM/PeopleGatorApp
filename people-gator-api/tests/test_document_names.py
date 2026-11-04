@@ -13,6 +13,7 @@ def test_document_name_survives_all_internal_conversions():
     assert request.name == "Archive album"
     source = PostgresSourceRepository._new(request.to_generic())
     source.id = uuid.uuid4()
+    source.version = 1  # Simulate the persisted state, after server initialization.
     response = DocumentResponse.from_generic(source_response(source))
     assert response.name == "Archive album"
     assert response.document_id == request.document_id

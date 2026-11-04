@@ -27,6 +27,11 @@ vi.mock('@/query/faces', async () => {
   const { ref } = await import('vue')
   return {
     fetchFaceAlignedCrop: vi.fn().mockResolvedValue(new Blob()),
+    useReviewFacesMutation: () => ({
+      isPending: ref(false),
+      isError: ref(false),
+      error: ref(null),
+    }),
     useAssignFacesMutation: () => ({ status: ref('idle'), mutate: api.assign }),
   }
 })
@@ -40,7 +45,7 @@ vi.mock('@/viewmodels/person-detail', async () => {
     usePersonDetail: (...args: unknown[]) => {
       api.detail(...args)
       return {
-        entity: ref({ entity_id: 'current' }),
+        entity: ref({ entity_id: 'current', version: 1 }),
         error: ref(null),
         isLoading: ref(false),
         faceCount: ref(1),
@@ -79,8 +84,8 @@ it('discovers globally while preserving local state, explicit criteria, cache is
         items: Object.keys(query).some((k) => k.startsWith('filter.'))
           ? []
           : [
-              { detection_id: 'outside-face', face_score: 0.9 },
-              { detection_id: 'own-face', entity_id: 'current' },
+              { version: 1, detection_id: 'outside-face', face_score: 0.9 },
+              { version: 1, detection_id: 'own-face', entity_id: 'current' },
             ],
         cursor: null,
       },
@@ -92,9 +97,9 @@ it('discovers globally while preserving local state, explicit criteria, cache is
         items: Object.keys(query).some((k) => k.startsWith('filter.') && k !== 'filter.entity_type')
           ? []
           : [
-              { entity_id: 'outside-person', entity_type: 'person', name: 'Outside' },
-              { entity_id: 'current', entity_type: 'person' },
-              { entity_id: 'place', entity_type: 'place' },
+              { version: 1, entity_id: 'outside-person', entity_type: 'person', name: 'Outside' },
+              { version: 1, entity_id: 'current', entity_type: 'person' },
+              { version: 1, entity_id: 'place', entity_type: 'place' },
             ],
         cursor: null,
       },
@@ -182,12 +187,23 @@ it('discovers globally while preserving local state, explicit criteria, cache is
     'filter.last_touched_by_user_id': [one],
     'filter.last_touched_by_api_key_id': [one],
   })
-  panel().vm.$emit('assignFaces', ['outside-face', 'outside-face'])
-  panel().vm.$emit('mergePeople', ['outside-person', 'outside-person', 'current'])
-  expect(api.assign).toHaveBeenCalledWith({ detectionIds: ['outside-face'], entityId: 'current' })
+  panel().vm.$emit('assignFaces', [{ id: 'outside-face', version: 1 }])
+  panel().vm.$emit(
+    'mergePeople',
+    [
+      { id: 'outside-person', version: 1 },
+      { id: 'current', version: 1 },
+    ],
+    1,
+  )
+  expect(api.assign).toHaveBeenCalledWith({
+    targets: ['outside-face'].map((id) => ({ id, version: 1 })),
+    entityId: 'current',
+  })
   expect(api.merge).toHaveBeenCalledWith({
     targetEntityId: 'current',
-    sourceEntityIds: ['outside-person'],
+    sources: [{ object_id: 'outside-person', version: 1 }],
+    version: 1,
   })
   expect(router.currentRoute.value.query).toMatchObject(workspace)
   await router.replace({ query: { ...router.currentRoute.value.query, tab: 'faces' } })
@@ -251,6 +267,7 @@ it('loads the next face cursor, keeps prior results on failure and restarts assi
     Promise.resolve({
       data: {
         items: Array.from({ length: query.cursor ? 6 : 14 }, (_, i) => ({
+          version: 1,
           detection_id: `candidate-${query.cursor ? i + 14 : i}`,
           entity_id: null,
         })),

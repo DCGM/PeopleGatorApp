@@ -431,3 +431,20 @@ async def test_access_token_lifetime_is_configurable(
     with pytest.raises(HTTPException) as expired:
         await jwk_service.verify_access_token(token.access_token)
     assert expired.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auditor_can_login_and_refresh_without_admin(users_file):
+    users = json.loads(users_file.read_text())
+    users["alice"]["scopes"] = [auth_service.AUDIT_SCOPE]
+    users_file.write_text(json.dumps(users))
+    tokens = await login(scope=auth_service.AUDIT_SCOPE)
+    claims = await jwk_service.verify_access_token(tokens.access_token)
+    assert claims["scopes"] == [auth_service.AUDIT_SCOPE]
+    renewed = await refresh(tokens.refresh_token)
+    assert (await jwk_service.verify_access_token(renewed.access_token))["scopes"] == [
+        auth_service.AUDIT_SCOPE
+    ]
+    with pytest.raises(HTTPException) as error:
+        await login(scope=auth_service.ADMIN_SCOPE)
+    assert error.value.status_code == 403

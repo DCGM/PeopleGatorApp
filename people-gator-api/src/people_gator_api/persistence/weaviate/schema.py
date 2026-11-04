@@ -234,6 +234,7 @@ USER_PROPERTIES: list[Property] = [
 ]
 
 SOURCE_PROPERTIES: list[Property] = [
+    _int_property("version", "Server-initialized object version."),
     _text_property("source_type", "Source kind.", searchable=False),
     _text_property("uri", "Source URI."),
     _text_property("library", "Archive library identifier.", searchable=False),
@@ -242,6 +243,7 @@ SOURCE_PROPERTIES: list[Property] = [
 ]
 
 ENTITY_PROPERTIES: list[Property] = [
+    _int_property("version", "Server-initialized object version."),
     _text_property("entity_type", "Entity type discriminator.", searchable=False),
     _text_property("name", "Entity-level aggregated name value."),
     _text_property("description", "Entity-level aggregated description value."),
@@ -276,6 +278,7 @@ ENTITY_PROPERTIES.extend(
 SOURCE_PROPERTIES.append(_text_property("name", "Optional document title."))
 
 FACE_PROPERTIES: list[Property] = [
+    _int_property("version", "Server-initialized object version."),
     *ENTITY_LINK_PROPERTIES,
     _text_property(
         "identifier",
@@ -296,6 +299,7 @@ FACE_PROPERTIES: list[Property] = [
 ]
 
 TEXT_MENTION_PROPERTIES: list[Property] = [
+    _int_property("version", "Server-initialized object version."),
     *ENTITY_LINK_PROPERTIES,
     _text_property("name", "Entity name as it appears in the source."),
     _text_property("context", "Optional surrounding text for the mention."),
@@ -388,11 +392,12 @@ ALL_COLLECTION_SPECS: dict[str, CollectionSpec] = {
 ADDITIVE_PROPERTY_MIGRATIONS: dict[str, list[Property]] = {
     FACE_COLLECTION: [
         *ENTITY_LINK_PROPERTIES,
+        next(p for p in FACE_PROPERTIES if p.name == "version"),
         next(p for p in FACE_PROPERTIES if p.name == "identifier"),
     ],
-    TEXT_MENTION_COLLECTION: ENTITY_LINK_PROPERTIES,
+    TEXT_MENTION_COLLECTION: [*ENTITY_LINK_PROPERTIES, next(p for p in TEXT_MENTION_PROPERTIES if p.name == "version")],
     ENTITY_COLLECTION: [
-        p for p in ENTITY_PROPERTIES if p.name.startswith("last_touched")
+        p for p in ENTITY_PROPERTIES if p.name.startswith("last_touched") or p.name == "version"
     ],
-    SOURCE_COLLECTION: [p for p in SOURCE_PROPERTIES if p.name == "name"],
+    SOURCE_COLLECTION: [p for p in SOURCE_PROPERTIES if p.name in ("name", "version")],
 }

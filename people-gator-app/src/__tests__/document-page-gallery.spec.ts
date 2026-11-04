@@ -18,6 +18,7 @@ import { pageGalleryLabel, useDocumentPageGallery } from '@/viewmodels/document-
 const LIBRARY = 'preview-mzk'
 const DOCUMENT = '00000000-0000-4000-8000-00000000d0c0'
 const page = (index: number, overrides: Record<string, string> = {}) => ({
+  version: 1,
   source_id: `source-${index}`,
   source_type: 'page',
   url: `https://preview.invalid/${index}`,

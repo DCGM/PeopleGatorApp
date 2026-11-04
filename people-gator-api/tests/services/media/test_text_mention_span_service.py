@@ -73,12 +73,14 @@ def test_fuzzy_text_mention_spans_are_word_aligned_and_can_cross_lines() -> None
             ada_entity_id,
             EntityType.person,
             "Ada Lovelace",
+            version=1,
         ),
         _TextMentionText(
             alice_mention_id,
             alice_entity_id,
             EntityType.person,
             "Alice",
+            version=1,
         ),
     ]
 
@@ -112,6 +114,7 @@ def test_text_mention_name_matches_every_ocr_appearance() -> None:
         uuid.uuid4(),
         EntityType.person,
         "Ada",
+        version=1,
     )
 
     spans = _match_text_mention_spans(layout, [mention])
@@ -150,6 +153,7 @@ def test_text_mention_spans_do_not_cross_layout_regions() -> None:
                 uuid.uuid4(),
                 EntityType.person,
                 "Ada Lovelace",
+                version=1,
             )
         ],
     )
@@ -172,6 +176,7 @@ async def test_fetch_text_mentions_uses_persistence_contracts() -> None:
             return TextMentionListResponse(
                 items=[
                     TextMentionResponse(
+                        version=1,
                         mention_id=mention_id,
                         name="Ada Lovelace",
                         context=None,
@@ -179,6 +184,7 @@ async def test_fetch_text_mentions_uses_persistence_contracts() -> None:
                         source_id=page_source_id,
                     ),
                     TextMentionResponse(
+                        version=1,
                         mention_id=unassigned_mention_id,
                         name="Unassigned",
                         context=None,
@@ -197,6 +203,7 @@ async def test_fetch_text_mentions_uses_persistence_contracts() -> None:
             return GenericListResponse[EntityResponse](
                 items=[
                     EntityResponse(
+                        version=1,
                         entity_id=entity_id,
                         entity_type=EntityType.person,
                         name="Ada Lovelace",
@@ -220,6 +227,7 @@ async def test_fetch_text_mentions_uses_persistence_contracts() -> None:
             entity_id,
             EntityType.person,
             "Ada Lovelace",
+            version=1,
         )
     ]
     assert len(mention_queries) == 1

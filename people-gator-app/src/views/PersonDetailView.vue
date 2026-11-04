@@ -104,6 +104,7 @@ const {
   portraitFaceId,
   profile,
   processing,
+  updateError,
   updateIdentifiers,
   updateProfile,
 } = usePersonDetail(
@@ -360,6 +361,8 @@ function retrySearch() {
             <SortControl v-model="faceSort" :options="faceSortOptions" label="Sort faces" />
           </div>
           <PersonFacesPanel
+            v-if="entity"
+            :person-version="entity!.version"
             :key="personId"
             collapsible
             :has-more="hasMoreFaces"
@@ -391,6 +394,8 @@ function retrySearch() {
             </p>
           </div>
           <PersonDiscoveryPanel
+            v-if="entity"
+            :person-version="entity.version"
             v-model:search-term="personSearchTerm"
             v-model:face-search-term="legacyFaceText"
             v-model:annotations="discoveryAnnotations"
@@ -518,6 +523,8 @@ function retrySearch() {
 
         <TabsContent value="details">
           <PersonEditableDetails
+            v-if="entity"
+            :version="entity!.version"
             hide-statistics
             :model-value="profile"
             :person-id="personId"
@@ -531,6 +538,7 @@ function retrySearch() {
             @update:identifiers="updateIdentifiers"
           >
           </PersonEditableDetails>
+          <small v-if="updateError" role="alert">Could not save. Reload and try again.</small>
         </TabsContent>
         <TabsContent value="statistics" class="space-y-4 pt-4">
           <PersonLibraryCount :person-id="personId" />

@@ -6,6 +6,7 @@ The contract adapter talks to the v4 client directly.
 """
 
 from __future__ import annotations
+from people_gator_api.schemas.common import VersionedTarget
 
 import asyncio
 from contextlib import AsyncExitStack, nullcontext
@@ -223,6 +224,7 @@ def _parse_source(o: _StoredObject) -> GenericSourceResponse:
     return GenericSourceResponse.model_validate(
         {
             "source_id": o.uuid,
+            "version": p["version"],
             "source_type": p["source_type"],
             "url": p["uri"],
             "library": p.get("library"),
@@ -870,6 +872,7 @@ class WeaviateEntityRepository(EntityRepository):
         await _require(self._client, USER_COLLECTION, context.user_id, "user")
         i = new_uuid6()
         p = _props(payload)
+        p["version"] = 1
         p["aliases"] = p.get("aliases") or []
         await self._client.collections.get(ENTITY_COLLECTION).data.insert(
             uuid=i, properties=p, references={"user": context.user_id}
@@ -887,144 +890,36 @@ class WeaviateEntityRepository(EntityRepository):
     async def patch(
         self, entity_id: uuid.UUID, payload: EntityPatchRequest, context: GenericActor
     ) -> EntityResponse | None:
-        if not is_missing(payload.thumbnail_face_id):
-            raise ValueError("persisted person thumbnails require PostgreSQL")
-        del context
-        old = await self.get(entity_id)
-        if old is None:
-            return None
-        p = _props(payload)
-        if p.get("aliases") is None and "aliases" in p:
-            p["aliases"] = []
-        await self._client.collections.get(ENTITY_COLLECTION).data.update(
-            uuid=entity_id, properties=p
-        )
-        if p.get("aliases") == []:
-            p["aliases"] = None
-        return old.model_copy(update=p)
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def patch_batch(
         self, commands: Sequence[EntityPatchBatchItem], context: GenericActor
     ) -> list[EntityResponse | None]:
-        _unique([x.entity_id for x in commands], "entity patch batch")
-        if any(not is_missing(x.thumbnail_face_id) for x in commands):
-            raise ValueError("persisted person thumbnails require PostgreSQL")
-        return [
-            await self.patch(
-                x.entity_id,
-                EntityPatchRequest.model_validate(_props(x, {"entity_id"})),
-                context,
-            )
-            for x in commands
-        ]
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
-    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
-        if not await _exists(self._client, ENTITY_COLLECTION, entity_id):
-            return False
-        for name in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
-            async for objects in _scan(
-                self._client, name, _reference("entity", [entity_id])
-            ):
-                for obj in objects:
-                    async with _link_lock(name, obj.uuid):
-                        stored = await _get(self._client, name, obj.uuid)
-                        if stored is not None:
-                            await _replace_link(
-                                self._client, name, stored, (None, None, None, None)
-                            )
-        await self._client.collections.get(ENTITY_COLLECTION).data.delete_by_id(
-            entity_id
-        )
-        return True
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def merge_batch(
         self,
         target_entity_id: uuid.UUID,
-        source_entity_ids: Sequence[uuid.UUID],
-        target_patch: EntityMergeTargetPatch | None = None,
+        target_patch: EntityMergeTargetPatch,
         *,
         context: GenericActor,
     ) -> EntityMergeBatchResponse | None:
-        _unique(list(source_entity_ids), "entity merge batch")
-        if target_entity_id in source_entity_ids:
-            raise ValueError("source and target must differ")
-        target = await self.get(target_entity_id)
-        sources = [await self.get(item_id) for item_id in source_entity_ids]
-        if target is None or any(item is None for item in sources):
-            return None
-        counts = []
-        for name in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
-            count = 0
-            async for objects in _scan(
-                self._client, name, _reference("entity", source_entity_ids)
-            ):
-                for obj in objects:
-                    patch = (
-                        FacePatchRequest(
-                            entity_id=target_entity_id,
-                            entity_link_state=EntityLinkState.manual,
-                        )
-                        if name == FACE_COLLECTION
-                        else TextMentionPatchRequest(
-                            entity_id=target_entity_id,
-                            entity_link_state=EntityLinkState.manual,
-                        )
-                    )
-                    await _patch_annotation(
-                        self._client, name, obj.uuid, patch, context
-                    )
-                    count += 1
-            counts.append(count)
-        aliases = list(
-            dict.fromkeys(
-                [
-                    *(target.aliases or []),
-                    *(alias for source in sources for alias in (source.aliases or [])),
-                ]
-            )
-        )
-        fields = target_patch.model_dump() if target_patch else {}
-        await self.patch(
-            target_entity_id, EntityPatchRequest(aliases=aliases, **fields), context
-        )
-        for item_id in source_entity_ids:
-            await self.delete(item_id, context=context)
-        return EntityMergeBatchResponse(
-            source_entity_ids=list(source_entity_ids),
-            target_entity_id=target_entity_id,
-            faces_reassigned=counts[0],
-            text_mentions_reassigned=counts[1],
-            merged_entity=await self.get(target_entity_id),
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
     ) -> EntityDeleteManyResponse:
-        unique = list(dict.fromkeys(entity_ids))
-        if not unique:
-            return EntityDeleteManyResponse(deleted_count=0)
-        for name in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
-            async for objects in _scan(
-                self._client, name, _reference("entity", unique)
-            ):
-                for obj in objects:
-                    async with _link_lock(name, obj.uuid):
-                        stored = await _get(self._client, name, obj.uuid)
-                        if stored is not None:
-                            await _replace_link(
-                                self._client, name, stored, (None, None, None, None)
-                            )
-        return EntityDeleteManyResponse(
-            deleted_count=await _delete_many(self._client, ENTITY_COLLECTION, unique)
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def delete_many(
         self, selector: EntityDeleteManyRequest, *, context: GenericActor
     ) -> EntityDeleteManyResponse:
-        r = await self.list(
-            EntityListRequest(filter_=selector.filter, limit=selector.limit)
-        )
-        return await self.delete_batch([x.entity_id for x in r.items], context=context)
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def search(
         self, query: SearchEntitiesRequest
@@ -1152,6 +1047,7 @@ class WeaviateSourceRepository(SourceRepository):
         self, spec: GenericSourceCreateRequest
     ) -> tuple[GenericSourceResponse, CreateResult]:
         i, p = _source_data(spec)
+        p["version"] = 1
         o = await _get(self._client, SOURCE_COLLECTION, i)
         if o:
             result = _parse_source(o)
@@ -1164,6 +1060,7 @@ class WeaviateSourceRepository(SourceRepository):
             GenericSourceResponse.model_validate(
                 {
                     "source_id": i,
+                    "version": p["version"],
                     "source_type": spec.source_type,
                     "url": p["uri"],
                     "library": p["library"],
@@ -1180,25 +1077,15 @@ class WeaviateSourceRepository(SourceRepository):
     ) -> list[tuple[GenericSourceResponse, CreateResult]]:
         return [await self.get_or_create(x) for x in specs]
 
-    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
-        if not await _exists(self._client, SOURCE_COLLECTION, source_id):
-            return False
-        for n in (FACE_COLLECTION, TEXT_MENTION_COLLECTION):
-            r = await self._client.collections.get(n).query.fetch_objects(
-                filters=_reference("source", [source_id]), limit=10000
-            )
-            await _delete_many(self._client, n, [x.uuid for x in r.objects])
-        await self._client.collections.get(SOURCE_COLLECTION).data.delete_by_id(
-            source_id
-        )
-        return True
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def delete_batch(
-        self, source_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
     ) -> int:
-        return sum(
-            [await self.delete(x, context=context) for x in dict.fromkeys(source_ids)]
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def search_documents(
         self, query: SearchDocumentsRequest
@@ -1378,6 +1265,7 @@ class WeaviateFaceRepository(FaceRepository):
             await _require(self._client, ENTITY_COLLECTION, entity, "entity")
         i = new_uuid6()
         props = _props(payload, {"source_id", "entity_id", "embeddings"})
+        props["version"] = 1
         props.update(_link_properties((entity, create_link_state(payload), None, None)))
         props["annotation_source_id"] = str(payload.source_id)
         refs = {"source": payload.source_id, "user": context.user_id}
@@ -1412,35 +1300,22 @@ class WeaviateFaceRepository(FaceRepository):
     async def patch(
         self, detection_id: uuid.UUID, payload: FacePatchRequest, context: GenericActor
     ) -> FaceResponse | None:
-        return await _patch_annotation(
-            self._client,
-            FACE_COLLECTION,
-            detection_id,
-            payload,
-            context,
-            models=self._models,
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def patch_batch(
         self, commands: Sequence[FacePatchBatchItem], context: GenericActor
     ) -> list[FaceResponse | None]:
-        return await _patch_annotations(
-            self._client, FACE_COLLECTION, commands, context, models=self._models
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
-    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
-        return bool(
-            await _delete_annotations(
-                self._client, FACE_COLLECTION, [detection_id], context
-            )
-        )
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def delete_batch(
-        self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
     ) -> int:
-        return await _delete_annotations(
-            self._client, FACE_COLLECTION, detection_ids, context
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def search(self, query: SearchFacesRequest) -> SearchFacesResultListResponse:
         _require_default_sort(query)
@@ -1513,6 +1388,7 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         await self._client.collections.get(TEXT_MENTION_COLLECTION).data.insert(
             uuid=i,
             properties={
+                "version": 1,
                 "context": payload.context,
                 **_link_properties(
                     (payload.entity_id, create_link_state(payload), None, None)
@@ -1526,6 +1402,7 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         return TextMentionResponse.model_validate(
             {
                 **payload.model_dump(),
+                "version": 1,
                 "entity_link_state": create_link_state(payload),
                 "mention_id": i,
             }
@@ -1542,30 +1419,22 @@ class WeaviateTextMentionRepository(TextMentionRepository):
         payload: TextMentionPatchRequest,
         context: GenericActor,
     ) -> TextMentionResponse | None:
-        return await _patch_annotation(
-            self._client, TEXT_MENTION_COLLECTION, mention_id, payload, context
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def patch_batch(
         self, commands: Sequence[TextMentionPatchBatchItem], context: GenericActor
     ) -> list[TextMentionResponse | None]:
-        return await _patch_annotations(
-            self._client, TEXT_MENTION_COLLECTION, commands, context
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
-    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
-        return bool(
-            await _delete_annotations(
-                self._client, TEXT_MENTION_COLLECTION, [mention_id], context
-            )
-        )
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
     async def delete_batch(
-        self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
     ) -> int:
-        return await _delete_annotations(
-            self._client, TEXT_MENTION_COLLECTION, mention_ids, context
-        )
+        raise NotImplementedError("Versioned edits and audit history require PostgreSQL")
 
 
 class WeaviateUserRepository(UserRepository):

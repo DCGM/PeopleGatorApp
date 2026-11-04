@@ -55,6 +55,7 @@ function mountQuery(setup: () => void) {
 
 describe('assignment search filters', () => {
   const page = {
+    version: 1,
     source_id: 'page-1',
     source_type: 'page',
     url: 'https://example.test/page-1',

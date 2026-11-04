@@ -1,9 +1,14 @@
+from version_preconditions import merge_request
 """PostgreSQL checks for atomic entity consolidation."""
+
+from version_preconditions import merge_targets
+from people_gator_api.schemas.common import VersionedTarget
 
 import os
 import uuid
 
 import pytest
+from version_preconditions import read_version, read_versions
 from sqlalchemy.engine import make_url
 from pydantic import AnyUrl
 
@@ -125,15 +130,16 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             with monkeypatch.context() as patch:
                 patch.setattr(entity_repository, "commit", fail_commit)
                 with pytest.raises(RuntimeError, match="injected failure"):
-                    await database.entities.merge(
-                        target_id,
-                        source_id,
-                        target_patch=EntityMergeTargetPatch(
+                    await database.entities.merge(target_id, merge_request(EntityMergeTargetPatch(
                             description="Replacement description",
                             short_description=None,
-                        ),
-                        context=user,
-                    )
+                            **merge_targets(
+                                await read_versions(
+                                    database.entities, [target_id, source_id]
+                                ),
+                                target_id,
+                            ),
+                        ), [source_id]), context=user)
 
             assert await database.entities.get(source_id) is not None
             unchanged_target = await database.entities.get(target_id)
@@ -149,15 +155,14 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert stored_face is not None and stored_face.entity_id == source_id
             assert stored_mention is not None and stored_mention.entity_id == source_id
 
-            result = await database.entities.merge(
-                target_id,
-                source_id,
-                target_patch=EntityMergeTargetPatch(
+            result = await database.entities.merge(target_id, merge_request(EntityMergeTargetPatch(
                     description="Replacement description",
                     short_description=None,
-                ),
-                context=user,
-            )
+                    **merge_targets(
+                        await read_versions(database.entities, [target_id, source_id]),
+                        target_id,
+                    ),
+                ), [source_id]), context=user)
             assert result is not None
             assert result.faces_reassigned == 1
             assert result.text_mentions_reassigned == 1
@@ -177,11 +182,25 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert stored_mention is not None and stored_mention.entity_id == target_id
 
             assert (
-                await database.entities.merge(target_id, source_id, context=user)
+                await database.entities.merge(target_id, merge_request(EntityMergeTargetPatch(
+                        **merge_targets(
+                            await read_versions(
+                                database.entities, [target_id, source_id]
+                            ),
+                            target_id,
+                        )
+                    ), [source_id]), context=user)
                 is None
             )
             with pytest.raises(ValueError, match="must differ"):
-                await database.entities.merge(target_id, target_id, context=user)
+                await database.entities.merge(target_id, merge_request(EntityMergeTargetPatch(
+                        **merge_targets(
+                            await read_versions(
+                                database.entities, [target_id, target_id]
+                            ),
+                            target_id,
+                        )
+                    ), [target_id]), context=user)
 
             more_sources = await database.entities.create_batch(
                 [
@@ -201,22 +220,34 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             more_source_ids = [entity.entity_id for entity in more_sources]
             await database.faces.patch(
                 face.detection_id,
-                FacePatchRequest(entity_id=more_source_ids[0]),
+                FacePatchRequest(
+                    entity_id=more_source_ids[0],
+                    version=(await database.faces.get(face.detection_id)).version,
+                ),
                 user,
             )
             await database.text_mentions.patch(
                 mention.mention_id,
-                TextMentionPatchRequest(entity_id=more_source_ids[1]),
+                TextMentionPatchRequest(
+                    entity_id=more_source_ids[1],
+                    version=(
+                        await database.text_mentions.get(mention.mention_id)
+                    ).version,
+                ),
                 user,
             )
 
             assert (
-                await database.entities.merge_batch(
-                    target_id,
-                    [more_source_ids[0], uuid.uuid4()],
-                    target_patch=EntityMergeTargetPatch(description="Must not persist"),
-                    context=user,
-                )
+                await database.entities.merge_batch(target_id, merge_request(EntityMergeTargetPatch(
+                        description="Must not persist",
+                        **merge_targets(
+                            await read_versions(
+                                database.entities,
+                                [target_id, more_source_ids[0], uuid.uuid4()],
+                            ),
+                            target_id,
+                        ),
+                    ), [more_source_ids[0], uuid.uuid4()]), context=user)
                 is None
             )
             unchanged_target = await database.entities.get(target_id)
@@ -237,14 +268,15 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 and stored_mention.entity_id == more_source_ids[1]
             )
 
-            batch_result = await database.entities.merge_batch(
-                target_id,
-                more_source_ids,
-                target_patch=EntityMergeTargetPatch(
-                    short_description="Batch short description"
-                ),
-                context=user,
-            )
+            batch_result = await database.entities.merge_batch(target_id, merge_request(EntityMergeTargetPatch(
+                    short_description="Batch short description",
+                    **merge_targets(
+                        await read_versions(
+                            database.entities, [target_id, *more_source_ids]
+                        ),
+                        target_id,
+                    ),
+                ), more_source_ids), context=user)
             assert batch_result is not None
             assert batch_result.source_entity_ids == more_source_ids
             assert batch_result.faces_reassigned == 1
@@ -272,9 +304,14 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
             assert stored_mention is not None and stored_mention.entity_id == target_id
 
             with pytest.raises(ValueError, match="unique"):
-                await database.entities.merge_batch(
-                    target_id, [target_id, target_id], context=user
-                )
+                await database.entities.merge_batch(target_id, merge_request(EntityMergeTargetPatch(
+                        **merge_targets(
+                            await read_versions(
+                                database.entities, [target_id, target_id, target_id]
+                            ),
+                            target_id,
+                        )
+                    ), [target_id, target_id]), context=user)
 
             final_source = await database.entities.create(
                 EntityCreateRequest(
@@ -282,18 +319,33 @@ async def test_entity_merge_reassigns_annotations_and_rolls_back_on_failure(
                 ),
                 user,
             )
-            cleared = await database.entities.merge(
-                target_id,
-                final_source.entity_id,
-                target_patch=EntityMergeTargetPatch(description=None),
-                context=user,
-            )
+            cleared = await database.entities.merge(target_id, merge_request(EntityMergeTargetPatch(
+                    description=None,
+                    **merge_targets(
+                        await read_versions(
+                            database.entities, [target_id, final_source.entity_id]
+                        ),
+                        target_id,
+                    ),
+                ), [final_source.entity_id]), context=user)
             assert cleared is not None
             assert cleared.merged_entity.description is None
             assert cleared.merged_entity.short_description == "Batch short description"
 
-            await database.sources.delete(source.source_id, context=user)
-            await database.entities.delete(target_id, context=user)
+            await database.sources.delete(
+                VersionedTarget(
+                    object_id=source.source_id,
+                    version=await read_version(database.sources, source.source_id),
+                ),
+                context=user,
+            )
+            await database.entities.delete(
+                VersionedTarget(
+                    object_id=target_id,
+                    version=await read_version(database.entities, target_id),
+                ),
+                context=user,
+            )
             await database.users.delete(user.user_id)
     finally:
         await engine.dispose()

@@ -1,5 +1,7 @@
 """Text mention endpoints backed only by persistence contracts."""
 
+from people_gator_api.schemas.common import VersionedTarget
+
 import uuid
 from typing import Literal
 
@@ -140,11 +142,14 @@ async def patch_text_mention_batch_route(
 
 @router.delete("/text-mentions:batch", response_model=int)
 async def delete_text_mention_batch_route(
-    mention_id: list[uuid.UUID],
+    targets: list[VersionedTarget[uuid.UUID]],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> int:
-    return await database.text_mentions.delete_batch(mention_id, context=user)
+    try:
+        return await database.text_mentions.delete_batch(targets, context=user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_precondition", str(exc))
 
 
 @router.get(
@@ -188,8 +193,11 @@ async def patch_text_mention_route(
 )
 async def delete_text_mention_route(
     mention_id: uuid.UUID,
+    target: VersionedTarget[uuid.UUID],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.text_mentions.delete(mention_id, context=user):
+    if target.object_id != mention_id:
+        raise_api_error(422, "invalid_target", "Target must match the URL")
+    if not await database.text_mentions.delete(target, context=user):
         raise_api_error(404, "not_found", "Text mention not found")

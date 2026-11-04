@@ -12,6 +12,7 @@ vi.mock('@/query/faces', () => ({
 }))
 
 const face: Face = {
+  version: 1,
   id: 'face',
   personId: 'person',
   name: 'Lina',

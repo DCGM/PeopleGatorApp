@@ -1,9 +1,13 @@
 """Opt-in end-to-end checks for the PostgreSQL contract implementation."""
 
+from version_preconditions import versioned_targets
+from people_gator_api.schemas.common import VersionedTarget
+
 import os
 import uuid
 
 import pytest
+from version_preconditions import read_version, read_versions
 from pydantic import AnyUrl
 from sqlalchemy.engine import make_url
 
@@ -165,7 +169,12 @@ async def test_postgres_contract_round_trip() -> None:
 
             patched = await database.entities.patch(
                 entities[0].entity_id,
-                EntityPatchRequest(description="mathematician"),
+                EntityPatchRequest(
+                    description="mathematician",
+                    version=(
+                        await database.entities.get(entities[0].entity_id)
+                    ).version,
+                ),
                 user,
             )
             assert patched is not None
@@ -267,7 +276,12 @@ async def test_postgres_contract_round_trip() -> None:
             ]
             mention = await database.text_mentions.patch(
                 mention.mention_id,
-                TextMentionPatchRequest(entity_id=None),
+                TextMentionPatchRequest(
+                    entity_id=None,
+                    version=(
+                        await database.text_mentions.get(mention.mention_id)
+                    ).version,
+                ),
                 user,
             )
             assert mention is not None
@@ -375,24 +389,57 @@ async def test_postgres_contract_round_trip() -> None:
             with pytest.raises(ValueError, match="referenced"):
                 await database.users.delete(user.user_id)
 
-            assert await database.entities.delete(entities[0].entity_id, context=user)
+            assert await database.entities.delete(
+                VersionedTarget(
+                    object_id=entities[0].entity_id,
+                    version=await read_version(
+                        database.entities, entities[0].entity_id
+                    ),
+                ),
+                context=user,
+            )
             created_entity_ids.remove(entities[0].entity_id)
             unassigned_face = await database.faces.get(face.detection_id)
             assert unassigned_face is not None
             assert unassigned_face.entity_id is None
 
-            assert await database.sources.delete(image.source_id, context=user)
+            assert await database.sources.delete(
+                VersionedTarget(
+                    object_id=image.source_id,
+                    version=await read_version(database.sources, image.source_id),
+                ),
+                context=user,
+            )
             created_source_ids.remove(image.source_id)
             assert await database.faces.get(face.detection_id) is None
             assert await database.faces.get(other_face.detection_id) is None
 
-            assert await database.sources.delete(page.source_id, context=user)
+            assert await database.sources.delete(
+                VersionedTarget(
+                    object_id=page.source_id,
+                    version=await read_version(database.sources, page.source_id),
+                ),
+                context=user,
+            )
             created_source_ids.remove(page.source_id)
             assert await database.text_mentions.get(mention.mention_id) is None
         finally:
             await session.rollback()
-            await database.sources.delete_batch(created_source_ids, context=user)
-            await database.entities.delete_batch(created_entity_ids, context=user)
+            await database.sources.delete_batch(
+                versioned_targets(
+                    {
+                        item_id: (await read_version(database.sources, item_id))
+                        for item_id in created_source_ids
+                    }
+                ),
+                context=user,
+            )
+            await database.entities.delete_batch(
+                versioned_targets(
+                    await read_versions(database.entities, created_entity_ids)
+                ),
+                context=user,
+            )
             await database.users.delete(user.user_id)
 
     await engine.dispose()

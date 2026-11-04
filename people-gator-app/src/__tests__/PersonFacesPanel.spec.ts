@@ -22,6 +22,7 @@ vi.mock('@/query/people-filter-options', () => ({
 }))
 const faces: PersonFace[] = ['automatic', 'manual', 'verified', 'automatic'].map(
   (linkState, index) => ({
+    version: 1,
     id: `f${index}`,
     linkState,
     portrait: '',
@@ -41,7 +42,7 @@ beforeEach(() => {
   api.scopes = ['people-gator:annotate']
   api.patch.mockResolvedValue({ data: [] })
   api.portrait.mockResolvedValue({
-    data: { entity_id: 'person', thumbnail_face_id: 'f0', thumbnail_mode: 'manual' },
+    data: { version: 1, entity_id: 'person', thumbnail_face_id: 'f0', thumbnail_mode: 'manual' },
   })
 })
 async function render() {
@@ -60,7 +61,7 @@ async function render() {
   await router.push('/people/person')
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   const wrapper = mount(PersonFacesPanel, {
-    props: { faces, personName: 'Irena', personId: 'person' },
+    props: { personVersion: 1, faces, personName: 'Irena', personId: 'person' },
     global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
   })
   cleanup.push(() => {
@@ -90,8 +91,8 @@ describe('assigned face selection and review', () => {
       .trigger('click')
     await flushPromises()
     expect(api.patch.mock.calls[0]![0].body).toEqual([
-      { detection_id: 'f0', entity_link_state: 'verified' },
-      { detection_id: 'f1', entity_link_state: 'verified' },
+      { version: 1, detection_id: 'f0', entity_link_state: 'verified' },
+      { version: 1, detection_id: 'f1', entity_link_state: 'verified' },
     ])
     expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
     expect(wrapper.get('[role="status"]').text()).toBe('2 faces verified.')
@@ -151,7 +152,7 @@ describe('assigned face selection and review', () => {
       .trigger('click')
     await flushPromises()
     expect(api.patch.mock.calls[1]![0].body).toEqual([
-      { detection_id: 'f2', entity_id: null, entity_link_state: null },
+      { version: 1, detection_id: 'f2', entity_id: null, entity_link_state: null },
     ])
     expect(wrapper.text()).toContain('1 face unassigned.')
   })
@@ -202,11 +203,12 @@ describe('assigned face selection and review', () => {
     await flushPromises()
     expect(api.portrait.mock.lastCall?.[0]).toMatchObject({
       path: { entity_id: 'person' },
-      body: { thumbnail_face_id: 'f0' },
+      body: { version: 1, thumbnail_face_id: 'f0' },
     })
     expect(api.patch).not.toHaveBeenCalled()
     expect(wrapper.get('[role="status"]').text()).toBe('Portrait saved.')
     expect(queryClient.getQueryData(['entities', 'detail', 'person'])).toMatchObject({
+      version: 1,
       thumbnail_face_id: 'f0',
     })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['entities', 'list'] })
@@ -214,14 +216,19 @@ describe('assigned face selection and review', () => {
     await wrapper.setProps({ thumbnailFaceId: 'f0', thumbnailMode: 'manual' })
     expect(wrapper.findAll('[data-person-portrait]')).toHaveLength(1)
     api.portrait.mockResolvedValueOnce({
-      data: { entity_id: 'person', thumbnail_face_id: 'f0', thumbnail_mode: 'automatic' },
+      data: {
+        version: 1,
+        entity_id: 'person',
+        thumbnail_face_id: 'f0',
+        thumbnail_mode: 'automatic',
+      },
     })
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Use automatic')!
       .trigger('click')
     await flushPromises()
-    expect(api.portrait.mock.lastCall?.[0].body).toEqual({ thumbnail_face_id: null })
+    expect(api.portrait.mock.lastCall?.[0].body).toEqual({ version: 1, thumbnail_face_id: null })
     expect(wrapper.get('[role="status"]').text()).toBe('Automatic portrait.')
     expect(queryClient.getQueryData(['entities', 'detail', 'person'])).toMatchObject({
       thumbnail_mode: 'automatic',

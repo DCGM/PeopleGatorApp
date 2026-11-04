@@ -1,5 +1,7 @@
 """Face annotation endpoints backed by the persistence contracts."""
 
+from people_gator_api.schemas.common import VersionedTarget
+
 import uuid
 
 from fastapi import APIRouter, Query, Response, status
@@ -105,11 +107,14 @@ async def patch_face_batch_route(
 
 @router.delete("/faces:batch", response_model=int)
 async def delete_face_batch_route(
-    detection_id: list[uuid.UUID],
+    targets: list[VersionedTarget[uuid.UUID]],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> int:
-    return await database.faces.delete_batch(detection_id, context=user)
+    try:
+        return await database.faces.delete_batch(targets, context=user)
+    except ValueError as exc:
+        raise_api_error(422, "invalid_precondition", str(exc))
 
 
 @router.get("/faces/{detection_id}/aligned_crop", response_class=Response)
@@ -176,8 +181,11 @@ async def patch_face_route(
 @router.delete("/faces/{detection_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_face_route(
     detection_id: uuid.UUID,
+    target: VersionedTarget[uuid.UUID],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.faces.delete(detection_id, context=user):
+    if target.object_id != detection_id:
+        raise_api_error(422, "invalid_target", "Target must match the URL")
+    if not await database.faces.delete(target, context=user):
         raise_api_error(404, "not_found", "Face not found")

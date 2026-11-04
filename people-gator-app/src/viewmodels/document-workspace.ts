@@ -237,6 +237,7 @@ export function useDocumentWorkspace(
     return {
       ...linkMetadata(face),
       id: face.detection_id,
+      version: face.version,
       sourceId: face.source_id,
       embeddingModel: face.embeddings?.[0],
       personId: face.entity_id ?? null,
@@ -274,23 +275,24 @@ export function useDocumentWorkspace(
   const createEntity = useCreateEntityMutation()
   const assignFaceMutation = useAssignFaceMutation()
 
-  function assignFace(detectionId: string, entityId: string | null) {
-    assignFaceMutation.mutate({ detectionId, entityId })
+  function assignFace(face: Face, entityId: string | null) {
+    assignFaceMutation.mutate({ detectionId: face.id, entityId, version: face.version })
   }
 
-  async function createAndAssign(detectionId: string, name: string, shortDescription?: string) {
+  async function createAndAssign(face: Face, name: string, shortDescription?: string) {
+    const { id: detectionId, version } = face
     const entity = await createEntity.mutateAsync({
       entity_type: 'person',
       name,
       short_description: shortDescription || null,
     })
-    await assignFaceMutation.mutateAsync({ detectionId, entityId: entity.entity_id })
+    await assignFaceMutation.mutateAsync({ detectionId, version, entityId: entity.entity_id })
     return entity
   }
 
   return {
     assignFace,
-    unassignFace: (detectionId: string) => assignFace(detectionId, null),
+    unassignFace: (face: Face) => assignFace(face, null),
     assignmentStatus: assignFaceMutation.status,
     assignmentError: assignFaceMutation.error,
     resetAssignment: assignFaceMutation.reset,

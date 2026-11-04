@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from people_gator_api.persistence.contracts import Database
 
+from .audit_repository import PostgresAuditRepository
 from .entity_repository import PostgresEntityRepository
 from .source_repository import PostgresSourceRepository
 from .face_repository import PostgresFaceRepository
@@ -19,6 +20,7 @@ def postgres_database(session: AsyncSession) -> Database:
         text_mentions=PostgresTextMentionRepository(session),
         users=PostgresUserRepository(session),
         api_keys=PostgresAPIKeyRepository(session),
+        audit=PostgresAuditRepository(session),
     )
 
 

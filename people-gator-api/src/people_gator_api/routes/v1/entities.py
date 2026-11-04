@@ -1,5 +1,7 @@
 """Entity endpoints backed only by the persistence contracts."""
 
+from people_gator_api.schemas.common import VersionedTarget
+
 import uuid
 
 from fastapi import APIRouter, status
@@ -140,10 +142,13 @@ async def patch_entity_route(
 @router.delete("/entities/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entity_route(
     entity_id: uuid.UUID,
+    target: VersionedTarget[uuid.UUID],
     database: DatabaseDependency,
     user: AdminActorDependency,
 ) -> None:
-    if not await database.entities.delete(entity_id, context=user):
+    if target.object_id != entity_id:
+        raise_api_error(422, "invalid_target", "Target must match the URL")
+    if not await database.entities.delete(target, context=user):
         raise_api_error(404, "not_found", "Entity not found")
 
 
@@ -161,7 +166,7 @@ async def merge_entity_route(
 ) -> EntityMergeResponse:
     try:
         result = await database.entities.merge(
-            target_entity_id, payload.source_entity_id, target_patch=payload, context=user
+            target_entity_id, payload, context=user,
         )
     except ValueError as exc:
         raise_api_error(409, "invalid_merge", str(exc))
@@ -184,7 +189,7 @@ async def merge_entity_batch_route(
 ) -> EntityMergeBatchResponse:
     try:
         result = await database.entities.merge_batch(
-            target_entity_id, payload.source_entity_ids, target_patch=payload, context=user
+            target_entity_id, payload, context=user,
         )
     except ValueError as exc:
         raise_api_error(409, "invalid_merge", str(exc))

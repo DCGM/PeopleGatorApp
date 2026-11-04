@@ -35,6 +35,7 @@ const disconnectIntersection = vi.fn()
 const disconnectResize = vi.fn()
 const cleanups: Array<() => void> = []
 const record = (id: string) => ({
+  version: 1,
   entity_id: id,
   source_id: id,
   name: id,

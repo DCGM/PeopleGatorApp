@@ -57,8 +57,11 @@ beforeEach(() => {
   api.list.mockImplementation(async ({ query }) => ({
     data: {
       items: query.cursor
-        ? [{ mention_id: 'last' }, { mention_id: 'm0' }]
-        : Array.from({ length: 100 }, (_, i) => ({ mention_id: `m${i}` })),
+        ? [
+            { version: 1, mention_id: 'last' },
+            { version: 1, mention_id: 'm0' },
+          ]
+        : Array.from({ length: 100 }, (_, i) => ({ version: 1, mention_id: `m${i}` })),
       cursor: query.cursor ? null : 'next',
       limit: 100,
     },
@@ -81,8 +84,8 @@ it('skips already-verified occurrences only when verifying', async () => {
   api.list.mockResolvedValueOnce({
     data: {
       items: [
-        { mention_id: 'auto', entity_link_state: 'automatic' },
-        { mention_id: 'done', entity_link_state: 'verified' },
+        { version: 1, mention_id: 'auto', entity_link_state: 'automatic' },
+        { version: 1, mention_id: 'done', entity_link_state: 'verified' },
       ],
       cursor: null,
       limit: 100,
@@ -90,13 +93,13 @@ it('skips already-verified occurrences only when verifying', async () => {
   })
   const targets = {
     scopes: [{ 'filter.name': ['Ada'] }],
-    ids: ['picked', 'loaded-done'],
+    items: ['picked', 'loaded-done'].map((id) => ({ id, version: 1 })),
     verifiedIds: ['loaded-done'],
   }
   expect(await resolveMentionTargets(targets, 'verify')).toEqual(['auto', 'picked'])
   api.list.mockResolvedValueOnce({
     data: {
-      items: [{ mention_id: 'done', entity_link_state: 'verified' }],
+      items: [{ version: 1, mention_id: 'done', entity_link_state: 'verified' }],
       cursor: null,
       limit: 100,
     },
@@ -126,7 +129,7 @@ it('selects exact text independently of expansion and reviews unloaded occurrenc
   await flushPromises()
   await wrapper.get('[aria-label="Select group Ada"]').trigger('click')
   expect(wrapper.get('[role="toolbar"]').text()).toContain('102 mentions selected')
-  expect(api.list).not.toHaveBeenCalled()
+  expect(api.patch).not.toHaveBeenCalled()
   await wrapper
     .findAll('button')
     .find((b) => b.text() === 'Verify')!
@@ -139,7 +142,7 @@ it('selects exact text independently of expansion and reviews unloaded occurrenc
   })
   expect(api.patch.mock.calls.flatMap((call) => call[0].body)).toHaveLength(101)
   expect(api.patch.mock.calls[api.patch.mock.calls.length - 1]![0].body).toEqual([
-    { mention_id: 'last', entity_link_state: 'verified' },
+    { version: 1, mention_id: 'last', entity_link_state: 'verified' },
   ])
   await wrapper.get('[aria-label="Select group Ada"]').trigger('click')
   await router.push('/?mention_view=page')
@@ -163,11 +166,15 @@ it('reports confirmed chunks on failure and invalidates counts and lists', async
     { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
   )
   api.patch
-    .mockResolvedValueOnce({ data: Array.from({ length: 50 }, () => ({ mention_id: 'ok' })) })
+    .mockResolvedValueOnce({
+      data: Array.from({ length: 50 }, () => ({ version: 1, mention_id: 'ok' })),
+    })
     .mockRejectedValueOnce(new Error('network'))
   await expect(
     mutation!.mutateAsync({
-      targets: { ids: Array.from({ length: 60 }, (_, i) => String(i)) },
+      targets: {
+        items: Array.from({ length: 60 }, (_, i) => String(i)).map((id) => ({ id, version: 1 })),
+      },
       action: 'unlink',
     }),
   ).rejects.toThrow('50 of 60 updates confirmed')
@@ -196,7 +203,10 @@ it.each(['unlink', 'verify'] as const)(
       }),
       { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
     )
-    await mutation.mutateAsync({ targets: { ids: ['one'] }, action })
+    await mutation.mutateAsync({
+      targets: { items: ['one'].map((id) => ({ id, version: 1 })) },
+      action,
+    })
     expectPeopleRestarted(client, peopleKeys)
     expect(client.getQueryData(detailKey)).toEqual({ name: 'Ada' })
     wrapper.unmount()

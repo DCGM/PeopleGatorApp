@@ -128,8 +128,22 @@ async def matrix():
         f1 = await db.faces.create(_face(p1a.source_id, e1.entity_id), v)
         # F2: U's unassigned face, superseded by V. P1b/D1 latest change becomes V.
         f2 = await db.faces.create(_face(p1b.source_id), u_key)
-        f2 = await db.faces.patch(f2.detection_id, FacePatchRequest(entity_id=e3.entity_id), v)
-        f2 = await db.faces.patch(f2.detection_id, FacePatchRequest(entity_id=None), v)
+        f2 = await db.faces.patch(
+            f2.detection_id,
+            FacePatchRequest(
+                entity_id=e3.entity_id,
+                version=(await db.faces.get(f2.detection_id)).version,
+            ),
+            v,
+        )
+        f2 = await db.faces.patch(
+            f2.detection_id,
+            FacePatchRequest(
+                entity_id=None,
+                version=(await db.faces.get(f2.detection_id)).version,
+            ),
+            v,
+        )
         # E3 has a manual face in L1 and an automatic mention in L2.
         f3 = await db.faces.create(_face(
             p1a.source_id, e3.entity_id, entity_link_state=EntityLinkState.manual,
@@ -141,7 +155,14 @@ async def matrix():
         m1 = await db.text_mentions.create(TextMentionCreateRequest(
             name="Two", entity_id=e2.entity_id, source_id=p2a.source_id,
         ), u_key)
-        e1 = await db.entities.patch(e1.entity_id, EntityPatchRequest(short_description="edited"), u)
+        e1 = await db.entities.patch(
+            e1.entity_id,
+            EntityPatchRequest(
+                short_description="edited",
+                version=(await db.entities.get(e1.entity_id)).version,
+            ),
+            u,
+        )
         yield SimpleNamespace(
             db=db, u=u, u_key=u_key, v=v, l1=l1, l2=l2,
             d1=d1, d2=d2, d3=d3, p1a=p1a, p1b=p1b, p2a=p2a, p3=p3,

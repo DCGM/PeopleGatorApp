@@ -135,11 +135,14 @@ export function useMergeEntitiesMutation() {
   return useMutation({
     mutationFn: async ({
       targetEntityId,
-      sourceEntityIds,
+      sources,
+      version,
     }: {
       targetEntityId: string
-      sourceEntityIds: string[]
+      sources: { object_id: string; version: number }[]
+      version: number
     }) => {
+      const sourceEntityIds = sources.map((source) => source.object_id)
       if (
         !targetEntityId ||
         !sourceEntityIds.length ||
@@ -152,7 +155,7 @@ export function useMergeEntitiesMutation() {
         return await responseData(
           mergeEntityRouteApiV1EntitiesTargetEntityIdMergePost({
             path: { target_entity_id: targetEntityId },
-            body: { source_entity_id: sourceEntityIds[0]! },
+            body: { version, sources },
             throwOnError: true,
           }),
         )
@@ -160,7 +163,7 @@ export function useMergeEntitiesMutation() {
       return await responseData(
         mergeEntityBatchRouteApiV1EntitiesTargetEntityIdMergeBatchPost({
           path: { target_entity_id: targetEntityId },
-          body: { source_entity_ids: sourceEntityIds },
+          body: { version, sources },
           throwOnError: true,
         }),
       )
@@ -174,7 +177,8 @@ export function useMergeEntitiesMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.search.all }),
       ])
     },
-    onSuccess: (result, { sourceEntityIds }) => {
+    onSuccess: (result, { sources }) => {
+      const sourceEntityIds = sources.map((source) => source.object_id)
       restartPeoplePages(queryClient)
       for (const sourceEntityId of sourceEntityIds) {
         queryClient.removeQueries({ queryKey: queryKeys.entities.detail(sourceEntityId) })
@@ -200,14 +204,15 @@ export function useMergeEntitiesMutation() {
 export function useDeleteEntityMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (entityId: string) =>
+    mutationFn: ({ object_id: entityId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteEntityRouteApiV1EntitiesEntityIdDelete({
           path: { entity_id: entityId },
+          body: { object_id: entityId, version },
           throwOnError: true,
         }),
       ),
-    onSuccess: (_data, entityId) => {
+    onSuccess: (_data, { object_id: entityId }) => {
       restartPeoplePages(queryClient)
       queryClient.removeQueries({ queryKey: queryKeys.entities.detail(entityId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.entities.lists() })

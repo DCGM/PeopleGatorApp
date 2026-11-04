@@ -1,6 +1,9 @@
 """Pydantic schemas for entity and annotation endpoints."""
 
 from __future__ import annotations
+from people_gator_api.schemas.common import VersionedTarget
+from people_gator_api.schemas.common import VersionedObject
+
 
 import uuid
 from typing import Annotated, Literal
@@ -73,7 +76,7 @@ type EntityBatchCreateRequest = Annotated[
 ]
 
 
-class EntityPatchRequest(BaseModel):
+class EntityPatchRequest(VersionedObject):
     """Request body for patching an existing entity."""
 
     thumbnail_face_id: uuid.UUID | None | MissingType = Field(
@@ -121,7 +124,7 @@ type EntityBatchPatchRequest = Annotated[
 ]
 
 
-class EntityResponse(CreationMetadata):
+class EntityResponse(CreationMetadata, VersionedObject):
     """A single entity record."""
 
     entity_id: uuid.UUID = Field(description="The unique identifier of the entity.")
@@ -146,7 +149,6 @@ class EntityResponse(CreationMetadata):
         description="The unique identifier of the user who created or owns the entity."
     )
 
-
     thumbnail_face_id: uuid.UUID | None = Field(
         default=None, description="Persisted effective portrait face; null means no eligible portrait. Load through authenticated GET /api/v1/faces/{id}/aligned_crop.",
     )
@@ -155,9 +157,6 @@ class EntityResponse(CreationMetadata):
     )
 
     entity_link_stats: EntityLinkStats = Field(default_factory=EntityLinkStats)
-    last_touched_at: AwareDatetime | None = None
-    last_touched_by_user_id: uuid.UUID | None = None
-    last_touched_by_api_key_id: uuid.UUID | None = None
 
 
 EntityListResponse = GenericListResponse[EntityResponse]
@@ -212,6 +211,7 @@ class EntityListRequest(GenericListRequest, SortableRequest[EntitySortField]):
 
 
 class EntityDeleteManyRequest(BaseModel):
+    targets: list[VersionedTarget[uuid.UUID]] = Field(min_length=1)
     """Request body for deleting multiple entities by filter criteria."""
 
     filter: EntityListFilter | MissingType = Field(
@@ -227,7 +227,10 @@ class EntityDeleteManyResponse(BaseModel):
     deleted_count: int = Field(ge=0)
 
 
-class EntityMergeTargetPatch(BaseModel):
+class EntityMergeTargetPatch(VersionedObject):
+    sources: list[VersionedTarget[uuid.UUID]] = Field(
+        min_length=1, max_length=MAX_ENTITY_BATCH_SIZE
+    )
     """Optional target fields to update as part of an entity merge."""
 
     description: str | None | MissingType = Field(
@@ -243,22 +246,20 @@ class EntityMergeTargetPatch(BaseModel):
 class EntityMergeFromRequest(EntityMergeTargetPatch):
     """Identify the source to merge into the entity addressed by the URL."""
 
-    source_entity_id: uuid.UUID
+    @model_validator(mode="after")
+    def single_source(self):
+        if len(self.sources) != 1:
+            raise ValueError("single merge requires one source")
+        return self
 
 
 class EntityMergeBatchRequest(EntityMergeTargetPatch):
-    """Identify the sources to merge into the entity addressed by the URL."""
-
-    source_entity_ids: list[uuid.UUID] = Field(
-        min_length=1, max_length=MAX_ENTITY_BATCH_SIZE
-    )
-
-    @field_validator("source_entity_ids")
-    @classmethod
-    def validate_unique_source_ids(cls, source_entity_ids: list[uuid.UUID]) -> list[uuid.UUID]:
-        if len(source_entity_ids) != len(set(source_entity_ids)):
-            raise ValueError("source_entity_ids must be unique")
-        return source_entity_ids
+    @model_validator(mode="after")
+    def unique_sources(self):
+        ids = [target.object_id for target in self.sources]
+        if len(ids) != len(set(ids)):
+            raise ValueError("sources must be unique")
+        return self
 
 
 class EntityMergeResponse(BaseModel):

@@ -1,3 +1,4 @@
+from people_gator_api.schemas.common import VersionedObject
 import uuid
 
 from pydantic import BaseModel, Field
@@ -36,7 +37,8 @@ class PageLayoutModel(BaseModel):
 
 from .entity_links import EntityLinkResponse
 
-class TextMentionSpanModel(EntityLinkResponse):
+
+class TextMentionSpanModel(EntityLinkResponse, VersionedObject):
     """A text mention located in one or more OCR text lines.
 
     Character offsets are zero-based within their respective lines and

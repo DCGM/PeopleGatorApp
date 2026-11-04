@@ -1,4 +1,6 @@
 from __future__ import annotations
+from people_gator_api.schemas.common import VersionedTarget
+from .audit import prepare_audit, audit_transaction, checked_target_versions
 
 import uuid
 from collections.abc import Sequence
@@ -111,6 +113,7 @@ from .sorting import (
 )
 from .touch import touch_entities, touch_sources, source_touch_ids, lock_annotation_graph
 from people_gator_api.schemas.common import GenericActor
+
 
 class PostgresSourceRepository(SourceRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -367,9 +370,18 @@ class PostgresSourceRepository(SourceRepository):
             for item, result in outcomes
         ]
 
+    @audit_transaction
     async def patch_page(
-        self, source_id: uuid.UUID, payload: PagePatchRequest, *, context: GenericActor, touch: bool = True,
+        self,
+        source_id: uuid.UUID,
+        payload: PagePatchRequest,
+        *,
+        context: GenericActor,
+        touch: bool = True,
     ) -> PageResponse | None:
+        await prepare_audit(
+            self._session, "source", [source_id], context, {source_id: payload.version}
+        )
         row = (await self._session.execute(select(Page.page_number).where(Page.id == source_id))).first()
         if row is None:
             return None
@@ -395,14 +407,21 @@ class PostgresSourceRepository(SourceRepository):
                 await self._session.rollback()
         return await self.get_page(source_id)
 
-    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
-        return bool(await self.delete_batch([source_id], context=context))
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
+        return bool(await self.delete_batch([target], context=context))
 
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    @audit_transaction
+    async def delete_batch(
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
+    ) -> int:
+        source_ids = [target.object_id for target in targets]
+        versions = checked_target_versions(targets)
         unique = list(dict.fromkeys(source_ids))
         if not unique:
             return 0
-        await lock_annotation_graph(self._session)
+        await prepare_audit(self._session, "source", unique, context, versions)
         survivors = set(await source_touch_ids(self._session, unique)) - set(unique)
         touched: set[uuid.UUID | None] = set()
         for evidence in (ImageOccurrence, TextMention):

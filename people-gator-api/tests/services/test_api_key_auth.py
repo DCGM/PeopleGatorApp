@@ -248,3 +248,93 @@ def test_bearer_requests_do_not_resolve_users(authenticated: AuthenticatedClient
     assert response.json()["user_id"] == str(authenticated.user.user_id)
     assert authenticated.store.users.calls == []
     assert authenticated.store.entries == 0
+
+
+@pytest.mark.parametrize("method", ["bearer", "api_key"])
+@pytest.mark.parametrize(
+    "scopes,expected",
+    [
+        (["people-gator:audit"], 200),
+        (["people-gator:browse"], 403),
+        (["people-gator:admin"], 403),
+        ([], 403),
+    ],
+)
+def test_audit_endpoints_require_their_own_scope(
+    authenticated, method, scopes, expected
+):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from people_gator_api.routes.v1.audit import router
+    from people_gator_api.schemas.audit_history import (
+        EntityAuditListResponse,
+        FaceAuditListResponse,
+        TextMentionAuditListResponse,
+        SourceAuditListResponse,
+    )
+
+    audit = SimpleNamespace(
+        **{
+            name: AsyncMock(
+                return_value=response(items=[], total_count=0, limit=50, offset=0)
+            )
+            for name, response in [
+                ("list_entities", EntityAuditListResponse),
+                ("list_faces", FaceAuditListResponse),
+                ("list_text_mentions", TextMentionAuditListResponse),
+                ("list_sources", SourceAuditListResponse),
+            ]
+        }
+    )
+    authenticated.app.include_router(router, prefix="/api/v1")
+    authenticated.app.dependency_overrides[get_database] = lambda: SimpleNamespace(
+        audit=audit
+    )
+    authenticated.verify.claims["scopes"] = scopes
+    config = json.loads(authenticated.keys_path.read_text())
+    config["importer"]["scopes"] = scopes
+    authenticated.keys_path.write_text(json.dumps(config))
+    headers = (
+        {"Authorization": "Bearer good"}
+        if method == "bearer"
+        else {"X-API-Key": "test-key"}
+    )
+    for path in (
+        "/api/v1/audit-entities",
+        "/api/v1/audit-faces",
+        "/api/v1/audit-text-mentions",
+        "/api/v1/audit-sources",
+    ):
+        response = authenticated.client.get(path, headers=headers)
+        assert response.status_code == expected, response.text
+    if expected == 200:
+        assert authenticated.client.get("/admin", headers=headers).status_code == 403
+        assert authenticated.client.get("/browse", headers=headers).status_code == 403
+    else:
+        for method in vars(audit).values():
+            method.assert_not_awaited()
+
+
+def test_audit_scope_is_published_in_openapi():
+    schema = get_app().openapi()
+    schemes = schema["components"]["securitySchemes"]
+    oauth = schemes["PeopleGator API OAuth2PasswordBearer"]
+    assert (
+        oauth["flows"]["password"]["scopes"]["people-gator:audit"]
+        == "Read audit history"
+    )
+    assert "/api/v1/audit" not in schema["paths"]
+    assert (
+        "/api/v1/audit/{object_type}/{object_id}/versions/{version}"
+        not in schema["paths"]
+    )
+    for path in (
+        "/api/v1/audit-entities",
+        "/api/v1/audit-faces",
+        "/api/v1/audit-text-mentions",
+        "/api/v1/audit-sources",
+    ):
+        security = schema["paths"][path]["get"]["security"]
+        assert {
+            "PeopleGator API OAuth2PasswordBearer": ["people-gator:audit"]
+        } in security

@@ -227,8 +227,19 @@ async def test_link_migration_reuses_bootstrap_enum_and_preserves_old_data(
     async with engine.begin() as connection:
         if not adopt:
             await connection.execute(text("UPDATE alembic_version SET version_num = 'd34a021b0003'"))
-        # Reproduce starting the newer ORM in bootstrap mode against old tables.
-        await connection.run_sync(Base.metadata.create_all)
+        # Reproduce the pre-audit ORM bootstrap scenario against the old tables.
+        # Audit tables were introduced later and are created by their own migration.
+        await connection.run_sync(
+            lambda sync: Base.metadata.create_all(
+                sync,
+                tables=[
+                    t
+                    for t in Base.metadata.sorted_tables
+                    if t.name != "pg_demo_audit_changes"
+                    and not t.name.endswith("_history")
+                ],
+            )
+        )
         assert await connection.scalar(text("SELECT to_regtype('pg_demo_entity_link_state')"))
         assert await connection.scalar(text("""
             SELECT count(*) FROM information_schema.columns

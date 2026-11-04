@@ -8,6 +8,7 @@ describe('PersonEditableDetails', () => {
     const wrapper = mount(PersonEditableDetails, {
       global: { stubs: { PersonPortrait: true } },
       props: {
+        version: 1,
         modelValue: {
           name: 'Ada Lovelace',
           shortDescription: 'Mathematician',
@@ -39,4 +40,78 @@ describe('PersonEditableDetails', () => {
       nationalLibraryAuthorityId: 'xx0000000',
     })
   })
+
+  it('keeps the version read when editing began after a background refresh', async () => {
+    const profile = { name: 'Ada', shortDescription: '', article: '', aliases: [] }
+    const wrapper = mount(PersonEditableDetails, {
+      global: { stubs: { PersonPortrait: true } },
+      props: {
+        modelValue: profile,
+        version: 3,
+        personId: 'ada',
+        faceCount: 0,
+        mentionCount: 0,
+        libraryCount: 0,
+        wikidataId: '',
+        nationalLibraryAuthorityId: '',
+      },
+    })
+    await wrapper.get('[aria-label="Edit name"]').trigger('click')
+    await wrapper.setProps({ version: 4, modelValue: { ...profile, name: 'Newer Ada' } })
+    await wrapper.get('[aria-label="Save name"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[1]).toBe(3)
+    await wrapper.get('[aria-label="Edit name"]').trigger('click')
+    await wrapper.get('[aria-label="Save name"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[1]?.[1]).toBe(3)
+    wrapper.unmount()
+  })
+})
+
+it('discards a profile draft when a cached different person replaces the current person', async () => {
+  const wrapper = mount(PersonEditableDetails, {
+    global: { stubs: { PersonPortrait: true } },
+    props: {
+      modelValue: {
+        name: 'Ada',
+        shortDescription: 'Old description',
+        article: '',
+        aliases: ['Old alias'],
+      },
+      version: 1,
+      personId: 'ada',
+      faceCount: 0,
+      mentionCount: 0,
+      libraryCount: 0,
+      wikidataId: 'Q1',
+      nationalLibraryAuthorityId: 'old',
+    },
+  })
+  await wrapper.get('[aria-label="Edit name"]').trigger('click')
+  const editable = wrapper.get('[role="textbox"]')
+  editable.element.textContent = 'Unsaved old draft'
+  await editable.trigger('input')
+  await wrapper.setProps({
+    personId: 'bea',
+    version: 1,
+    modelValue: {
+      name: 'Bea',
+      shortDescription: 'New description',
+      article: '',
+      aliases: ['New alias'],
+    },
+    wikidataId: 'Q2',
+    nationalLibraryAuthorityId: 'new',
+  })
+  expect(wrapper.find('[aria-label="Save name"]').exists()).toBe(false)
+  expect(wrapper.get('header').text()).toContain('Bea')
+  expect(wrapper.get('header').text()).not.toContain('Unsaved old draft')
+  expect(wrapper.get('header').text()).not.toContain('Old alias')
+  expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  await wrapper.get('[aria-label="Edit name"]').trigger('click')
+  await wrapper.get('[aria-label="Save name"]').trigger('click')
+  expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([
+    { name: 'Bea', shortDescription: 'New description', article: '', aliases: ['New alias'] },
+    1,
+  ])
+  wrapper.unmount()
 })

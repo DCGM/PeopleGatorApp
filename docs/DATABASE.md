@@ -165,3 +165,8 @@ Entity count ranges/orderings additionally derive automatic, manual and verified
 buckets from the same assigned evidence union, grouped by entity. Combined state
 counts sum faces and mentions of that state. Ownerless records have no entity
 bucket; no unassigned-person count, stored counter, index or migration is added.
+
+Object content versions and immutable predecessor snapshots are described in
+[Audit history](../people-gator-api/docs/AUDIT-HISTORY.md). The audit repository
+is available as `Database.audit`; historical IDs have no live-object foreign
+keys, so retained snapshots remain readable after deletion.

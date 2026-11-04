@@ -30,6 +30,7 @@ export type PersonFace = LinkMetadata & {
   sourceLoading?: boolean
   pageUrl?: string
   id: string
+  version: number
   portrait: string
   portraitLoading: boolean
   confidence: number
@@ -46,6 +47,7 @@ export type PersonMention = LinkMetadata & {
   sourceLoading?: boolean
   pageUrl?: string
   id: string
+  version: number
   excerpt: string
   matchedText: string
   library: string
@@ -57,6 +59,7 @@ export type PersonMention = LinkMetadata & {
 
 export type PersonDiscoveryFace = {
   id: string
+  version: number
   portrait: string
   portraitLoading: boolean
   score: number | null
@@ -73,6 +76,7 @@ export type PersonDiscoveryCandidate = {
   textMatch?: boolean
   matchedFaceIds?: string[]
   id: string
+  version: number
   name: string
   shortDescription: string
   aliases: string[]

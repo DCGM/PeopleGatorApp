@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Self
+from typing import Self, Annotated
 import uuid
 
 from pydantic import AwareDatetime, BaseModel, Field, FiniteFloat, model_validator
@@ -130,6 +130,7 @@ class ModelEmbedding[T: str](BaseModel):
         ),
     )
 
+
 class BoundingBox(BaseModel):
     """Face detection bounding box."""
 
@@ -146,6 +147,7 @@ class Keypoint[T: StrEnum](BaseModel):
     x: FiniteFloat
     y: FiniteFloat
 
+
 def require_unique_model_embeddings[T: str](
     embeddings: list[ModelEmbedding[T]],
 ) -> None:
@@ -155,6 +157,10 @@ def require_unique_model_embeddings[T: str](
 
 
 __all__ = [
+    "ObjectVersion",
+    "VersionedObject",
+    "VersionedTarget",
+    "ActivityMetadata",
     "ErrorResponse",
     "FileUploadResponse",
     "GenericActor",
@@ -164,3 +170,24 @@ __all__ = [
     "ModelEmbedding",
     "require_unique_model_embeddings",
 ]
+
+
+# Required on every representation and edit of a persisted versioned object.
+# Creation requests intentionally do not inherit this schema.
+type ObjectVersion = Annotated[
+    int, Field(ge=1, description="Version of the exact object read by the caller.")
+]
+
+
+class VersionedObject(BaseModel):
+    version: ObjectVersion
+
+
+class VersionedTarget[T](VersionedObject):
+    object_id: T
+
+
+class ActivityMetadata(BaseModel):
+    last_touched_at: AwareDatetime | None = None
+    last_touched_by_user_id: uuid.UUID | None = None
+    last_touched_by_api_key_id: uuid.UUID | None = None

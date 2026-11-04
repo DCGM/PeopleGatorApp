@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from people_gator_api.routes.v1.audit import router as audit_router
 from people_gator_api.routes.v1.annotations import router as annotations_router
 from people_gator_api.routes.v1.entities import router as identities_router
 from people_gator_api.routes.v1.face_models import router as face_models_router
@@ -15,6 +16,7 @@ from people_gator_api.routes.v1.text_mentions import (
 from people_gator_api.routes.v1.translation import router as translation_router
 
 router = APIRouter(prefix="/api/v1")
+router.include_router(audit_router)
 router.include_router(search_router)
 router.include_router(identities_router)
 router.include_router(annotations_router)

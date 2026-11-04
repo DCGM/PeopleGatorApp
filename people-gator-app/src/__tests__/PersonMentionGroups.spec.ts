@@ -38,6 +38,7 @@ describe('exact appearance mention groups', () => {
       data: {
         items: [
           {
+            version: 1,
             mention_id: 'm1',
             name: 'Ada Novak',
             context: 'Ada Novak signed the letter.',

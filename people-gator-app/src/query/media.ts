@@ -375,12 +375,14 @@ export function useCreateImagesMutation() {
 }
 
 export function useDeleteDocumentMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (sourceId: string) =>
+    mutationFn: ({ object_id: sourceId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteDocumentRouteApiV1DocumentsDocumentSourceIdDelete({
           path: { document_source_id: sourceId },
+          body: { object_id: sourceId, version },
           throwOnError: true,
         }),
       ),
@@ -389,12 +391,14 @@ export function useDeleteDocumentMutation() {
 }
 
 export function useDeletePageMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (sourceId: string) =>
+    mutationFn: ({ object_id: sourceId, version }: { object_id: string; version: number }) =>
       responseData(
         deletePageRouteApiV1PagesPageSourceIdDelete({
           path: { page_source_id: sourceId },
+          body: { object_id: sourceId, version },
           throwOnError: true,
         }),
       ),
@@ -403,12 +407,14 @@ export function useDeletePageMutation() {
 }
 
 export function useDeleteImageMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (imageId: string) =>
+    mutationFn: ({ object_id: imageId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteImageRouteApiV1ImagesImageIdDelete({
           path: { image_id: imageId },
+          body: { object_id: imageId, version },
           throwOnError: true,
         }),
       ),
@@ -417,12 +423,14 @@ export function useDeleteImageMutation() {
 }
 
 export function useDeleteSourceMutation() {
+  const client = useQueryClient()
   const invalidate = useMediaInvalidation()
   return useMutation({
-    mutationFn: (sourceId: string) =>
+    mutationFn: ({ object_id: sourceId, version }: { object_id: string; version: number }) =>
       responseData(
         deleteSourceRouteApiV1SourcesSourceIdDelete({
           path: { source_id: sourceId },
+          body: { object_id: sourceId, version },
           throwOnError: true,
         }),
       ),

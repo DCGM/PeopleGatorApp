@@ -428,7 +428,9 @@ async def test_entity_search_resolves_beyond_one_hundred_linked_faces(discovery)
 
 
 @pytest.mark.asyncio
-async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(discovery):
+async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(
+    discovery,
+):
     from people_gator_api.schemas.faces import FaceListFilter
     from people_gator_api.persistence.postgres.utils import TEXT_SEARCH_CANDIDATE_LIMIT
 
@@ -440,7 +442,15 @@ async def test_face_text_candidates_bound_fanout_and_apply_filters_before_limit(
     )
     created = await db.faces.create_batch([template] * (TEXT_SEARCH_CANDIDATE_LIMIT + 5), actor)
     from people_gator_api.schemas.entities import EntityPatchRequest
-    await db.entities.patch(candidate.entity_id, EntityPatchRequest(aliases=["Catalogue Alias"]), actor)
+
+    await db.entities.patch(
+        candidate.entity_id,
+        EntityPatchRequest(
+            aliases=["Catalogue Alias"],
+            version=(await db.entities.get(candidate.entity_id)).version,
+        ),
+        actor,
+    )
     # Each branch is independently bounded, even when one identity has many faces.
     for term in ("Catalogue Witness", "Useful Portrait", "Catalogue Alias"):
         result = await db.faces.search(SearchFacesRequest(

@@ -154,11 +154,23 @@ export function useCreateTextMentionsMutation() {
 export function useReassignTextMentionMutation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ mentionId, entityId }: { mentionId: string; entityId: string | null }) =>
+    mutationFn: ({
+      mentionId,
+      entityId,
+      version,
+    }: {
+      mentionId: string
+      entityId: string | null
+      version: number
+    }) =>
       responseData(
         patchTextMentionRouteApiV1TextMentionsMentionIdPatch({
           path: { mention_id: mentionId },
-          body: { entity_id: entityId, entity_link_state: entityId ? 'manual' : null },
+          body: {
+            version,
+            entity_id: entityId,
+            entity_link_state: entityId ? 'manual' : null,
+          },
           throwOnError: true,
         }),
       ),

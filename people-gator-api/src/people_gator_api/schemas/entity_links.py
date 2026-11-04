@@ -1,5 +1,7 @@
 """Shared annotation link schemas. Omission and null have distinct meanings."""
 
+from people_gator_api.schemas.common import VersionedObject
+
 from datetime import datetime, timezone
 from pydantic import AwareDatetime
 from .creation import CreationMetadata
@@ -27,7 +29,7 @@ class EntityLinkPatch(BaseModel):
     entity_link_state: EntityLinkState | None | MissingType = MISSING
 
 
-class EntityLinkResponse(CreationMetadata):
+class EntityLinkResponse(CreationMetadata, VersionedObject):
     last_touched_at: AwareDatetime | None = None
     last_touched_by_user_id: uuid.UUID | None = None
     last_touched_by_api_key_id: uuid.UUID | None = None

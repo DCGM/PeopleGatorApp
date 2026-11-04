@@ -91,6 +91,57 @@ export type BoundingBox = {
 };
 
 /**
+ * DocumentAuditState
+ */
+export type DocumentAuditState = {
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    version: ObjectVersion;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Source Type
+     */
+    source_type: 'document';
+    /**
+     * Library
+     */
+    library: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Name Normalized
+     */
+    name_normalized?: string | null;
+};
+
+/**
  * DocumentCreateRequest
  *
  * Typed document descriptor backed by a document Source record.
@@ -130,15 +181,7 @@ export type DocumentName = string;
  * A document with its archive identity.
  */
 export type DocumentResponse = {
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -151,6 +194,15 @@ export type DocumentResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -199,9 +251,122 @@ export type DocumentResponse = {
 export type DocumentSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'relevance' | 'name' | 'document_id' | 'library' | 'page_count' | 'last_touched_at';
 
 /**
+ * EntityAliasAuditState
+ */
+export type EntityAliasAuditState = {
+    /**
+     * Alias Id
+     */
+    alias_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Name Normalized
+     */
+    name_normalized?: string | null;
+    /**
+     * Search Document
+     */
+    search_document?: string | null;
+};
+
+/**
  * EntityAnnotation
  */
 export type EntityAnnotation = 'faces' | 'aliases' | 'name';
+
+/**
+ * EntityAuditState
+ */
+export type EntityAuditState = {
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Entity Id
+     */
+    entity_id: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Entity Type
+     */
+    entity_type: string | null;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Name Normalized
+     */
+    name_normalized?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Short Description
+     */
+    short_description?: string | null;
+    /**
+     * Wikidata Id
+     */
+    wikidata_id?: string | null;
+    /**
+     * Nlcr Authority Id
+     */
+    nlcr_authority_id?: string | null;
+    /**
+     * Thumbnail Face Id
+     */
+    thumbnail_face_id?: string | null;
+    /**
+     * Thumbnail Mode
+     */
+    thumbnail_mode: 'automatic' | 'manual';
+    /**
+     * Aliases
+     */
+    aliases: Array<EntityAliasAuditState>;
+    /**
+     * Search Document
+     */
+    search_document?: string | null;
+};
 
 /**
  * EntityCreateRequest
@@ -253,10 +418,12 @@ export type EntityCreateRequest = {
 
 /**
  * EntityDeleteManyRequest
- *
- * Request body for deleting multiple entities by filter criteria.
  */
 export type EntityDeleteManyRequest = {
+    /**
+     * Targets
+     */
+    targets: Array<VersionedTargetUuid>;
     /**
      * Filter
      *
@@ -586,10 +753,13 @@ export type EntityListSortField = 'faces_total_count' | 'faces_verified_count' |
 
 /**
  * EntityMergeBatchRequest
- *
- * Identify the sources to merge into the entity addressed by the URL.
  */
 export type EntityMergeBatchRequest = {
+    version: ObjectVersion;
+    /**
+     * Sources
+     */
+    sources: Array<VersionedTargetUuid>;
     /**
      * Description
      *
@@ -602,10 +772,6 @@ export type EntityMergeBatchRequest = {
      * New target short description; null clears it and omission preserves it.
      */
     short_description?: string | null;
-    /**
-     * Source Entity Ids
-     */
-    source_entity_ids: Array<string>;
 };
 
 /**
@@ -639,6 +805,11 @@ export type EntityMergeBatchResponse = {
  * Identify the source to merge into the entity addressed by the URL.
  */
 export type EntityMergeFromRequest = {
+    version: ObjectVersion;
+    /**
+     * Sources
+     */
+    sources: Array<VersionedTargetUuid>;
     /**
      * Description
      *
@@ -651,10 +822,6 @@ export type EntityMergeFromRequest = {
      * New target short description; null clears it and omission preserves it.
      */
     short_description?: string | null;
-    /**
-     * Source Entity Id
-     */
-    source_entity_id: string;
 };
 
 /**
@@ -688,6 +855,7 @@ export type EntityMergeResponse = {
  * An item representing a single entity patch operation in a batch.
  */
 export type EntityPatchBatchItem = {
+    version: ObjectVersion;
     /**
      * Thumbnail Face Id
      *
@@ -744,6 +912,7 @@ export type EntityPatchBatchItem = {
  * Request body for patching an existing entity.
  */
 export type EntityPatchRequest = {
+    version: ObjectVersion;
     /**
      * Thumbnail Face Id
      *
@@ -794,6 +963,19 @@ export type EntityPatchRequest = {
  * A single entity record.
  */
 export type EntityResponse = {
+    version: ObjectVersion;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     /**
      * Created At
      */
@@ -871,18 +1053,6 @@ export type EntityResponse = {
      */
     thumbnail_mode?: 'automatic' | 'manual';
     entity_link_stats?: EntityLinkStats;
-    /**
-     * Last Touched At
-     */
-    last_touched_at?: string | null;
-    /**
-     * Last Touched By User Id
-     */
-    last_touched_by_user_id?: string | null;
-    /**
-     * Last Touched By Api Key Id
-     */
-    last_touched_by_api_key_id?: string | null;
 };
 
 /**
@@ -896,6 +1066,94 @@ export type EntitySortField = 'faces_total_count' | 'faces_verified_count' | 'fa
  * Entity type discriminator for normalized identity classes.
  */
 export type EntityType = 'person';
+
+/**
+ * FaceAuditState
+ */
+export type FaceAuditState = {
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string | null;
+    entity_link_state: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
+    /**
+     * Detection Id
+     */
+    detection_id: string;
+    /**
+     * Occurrence Type
+     */
+    occurrence_type: 'face';
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Identifier
+     */
+    identifier: string | null;
+    /**
+     * Confidence
+     */
+    confidence: number;
+    bounding_box: BoundingBox;
+    /**
+     * Keypoints
+     */
+    keypoints: Array<[
+        number,
+        number
+    ]>;
+    /**
+     * Keypoint Types
+     */
+    keypoint_types: Array<string>;
+    /**
+     * Embeddings
+     */
+    embeddings: Array<FaceEmbeddingAuditState>;
+};
 
 /**
  * FaceCreateRequest
@@ -953,6 +1211,24 @@ export type FaceCreateRequest = {
      * The unique identifier of the entity associated with the face detection.
      */
     entity_id?: string;
+};
+
+/**
+ * FaceEmbeddingAuditState
+ */
+export type FaceEmbeddingAuditState = {
+    /**
+     * Face Id
+     */
+    face_id: string;
+    /**
+     * Model Id
+     */
+    model_id: string;
+    /**
+     * Embedding
+     */
+    embedding: Array<number>;
 };
 
 /**
@@ -1014,6 +1290,7 @@ export type FaceModelStub = string;
  * Patch body for assigning a face, or unassigning it with a null entity ID in a batch.
  */
 export type FacePatchBatchItem = {
+    version: ObjectVersion;
     /**
      * Entity Link State
      */
@@ -1044,6 +1321,7 @@ export type FacePatchBatchItem = {
  * Patch body for assigning a face, or unassigning it with a null entity ID.
  */
 export type FacePatchRequest = {
+    version: ObjectVersion;
     /**
      * Entity Link State
      */
@@ -1068,18 +1346,7 @@ export type FacePatchRequest = {
  * A single face detection record.
  */
 export type FaceResponse = {
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -1092,6 +1359,18 @@ export type FaceResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -1222,15 +1501,7 @@ export type FoundDocument = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -1243,6 +1514,15 @@ export type FoundDocument = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -1307,6 +1587,19 @@ export type FoundEntity = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
+    version: ObjectVersion;
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
     /**
      * Created At
      */
@@ -1385,18 +1678,6 @@ export type FoundEntity = {
     thumbnail_mode?: 'automatic' | 'manual';
     entity_link_stats?: EntityLinkStats;
     /**
-     * Last Touched At
-     */
-    last_touched_at?: string | null;
-    /**
-     * Last Touched By User Id
-     */
-    last_touched_by_user_id?: string | null;
-    /**
-     * Last Touched By Api Key Id
-     */
-    last_touched_by_api_key_id?: string | null;
-    /**
      * Matched Detection Ids
      *
      * Actual face-similarity witnesses for this result; never an arbitrary portrait.
@@ -1428,18 +1709,7 @@ export type FoundFace = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -1452,6 +1722,18 @@ export type FoundFace = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -1545,15 +1827,7 @@ export type FoundPage = {
      * Final reciprocal-rank-fusion score. Higher values rank first.
      */
     score: number;
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -1566,6 +1840,15 @@ export type FoundPage = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -1596,6 +1879,40 @@ export type GenericListResponseApiKeyResponse = {
      * Items
      */
     items: Array<ApiKeyResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[Annotated[Union[PageAuditState, DocumentAuditState, ImageAuditState], FieldInfo(annotation=NoneType, required=True, discriminator='source_type')]]
+ */
+export type GenericListResponseAnnotatedUnionPageAuditStateDocumentAuditStateImageAuditStateFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorSourceType = {
+    /**
+     * Items
+     */
+    items: Array<({
+        source_type: 'page';
+    } & PageAuditState) | ({
+        source_type: 'document';
+    } & DocumentAuditState) | ({
+        source_type: 'image';
+    } & ImageAuditState)>;
     /**
      * Limit
      *
@@ -1673,6 +1990,34 @@ export type GenericListResponseDocumentResponse = {
 };
 
 /**
+ * GenericListResponse[EntityAuditState]
+ */
+export type GenericListResponseEntityAuditState = {
+    /**
+     * Items
+     */
+    items: Array<EntityAuditState>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
  * GenericListResponse[EntityResponse]
  */
 export type GenericListResponseEntityResponse = {
@@ -1680,6 +2025,34 @@ export type GenericListResponseEntityResponse = {
      * Items
      */
     items: Array<EntityResponse>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
+ * GenericListResponse[FaceAuditState]
+ */
+export type GenericListResponseFaceAuditState = {
+    /**
+     * Items
+     */
+    items: Array<FaceAuditState>;
     /**
      * Limit
      *
@@ -1925,6 +2298,34 @@ export type GenericListResponseSourceResponseBase = {
 };
 
 /**
+ * GenericListResponse[TextMentionAuditState]
+ */
+export type GenericListResponseTextMentionAuditState = {
+    /**
+     * Items
+     */
+    items: Array<TextMentionAuditState>;
+    /**
+     * Limit
+     *
+     * The requested page size, not the number of returned items.
+     */
+    limit: number;
+    /**
+     * Total Count
+     *
+     * Count of all records matching the filter before cursor and limit, or None when it was not requested.
+     */
+    total_count?: number | null;
+    /**
+     * Cursor
+     *
+     * Opaque exclusive cursor for the next page, or None when no later item exists. It is valid only with the same query inputs; clients must not parse or construct it.
+     */
+    cursor?: string | null;
+};
+
+/**
  * GenericListResponse[TextMentionGroup]
  */
 export type GenericListResponseTextMentionGroup = {
@@ -2029,6 +2430,41 @@ export type HealthResponse = {
 };
 
 /**
+ * ImageAuditState
+ */
+export type ImageAuditState = {
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    version: ObjectVersion;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Source Type
+     */
+    source_type: 'image';
+};
+
+/**
  * ImageCreateRequest
  *
  * Typed image descriptor backed by an arbitrary URL Source record.
@@ -2046,15 +2482,7 @@ export type ImageCreateRequest = {
  * An image identified by an arbitrary URL.
  */
 export type ImageResponse = {
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -2067,6 +2495,15 @@ export type ImageResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
 };
 
 /**
@@ -2163,6 +2600,11 @@ export type ModelEmbeddingFaceModelStub = {
 };
 
 /**
+ * Version of the exact object read by the caller.
+ */
+export type ObjectVersion = number;
+
+/**
  * OpenIDConfigurationResponse
  *
  * OpenID Connect discovery metadata for the People Gator token service.
@@ -2196,6 +2638,57 @@ export type OpenIdConfigurationResponse = {
      * Token Endpoint Auth Methods Supported
      */
     token_endpoint_auth_methods_supported: Array<string>;
+};
+
+/**
+ * PageAuditState
+ */
+export type PageAuditState = {
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    version: ObjectVersion;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Source Type
+     */
+    source_type: 'page';
+    /**
+     * Library
+     */
+    library: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Page Id
+     */
+    page_id: string;
+    /**
+     * Page Number
+     */
+    page_number: number | null;
 };
 
 /**
@@ -2262,6 +2755,7 @@ export type PageNumber = number;
  * Omission preserves numbering; null explicitly clears it.
  */
 export type PagePatchRequest = {
+    version: ObjectVersion;
     page_number?: PageNumber | null;
 };
 
@@ -2271,15 +2765,7 @@ export type PagePatchRequest = {
  * A page with its archive identity.
  */
 export type PageResponse = {
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -2292,6 +2778,15 @@ export type PageResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
     entity_link_stats?: EntityLinkStats;
     /**
      * Library
@@ -2407,15 +2902,7 @@ export type SourceKind = 'page' | 'document' | 'image';
  * A linkable reference to a typed source.
  */
 export type SourceResponseBase = {
-    /**
-     * Source Id
-     */
-    source_id: string;
-    source_type: SourceKind;
-    /**
-     * Url
-     */
-    url: string;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -2428,6 +2915,15 @@ export type SourceResponseBase = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    source_type: SourceKind;
+    /**
+     * Url
+     */
+    url: string;
 };
 
 /**
@@ -2462,6 +2958,74 @@ export type TextLineModel = {
      * Index
      */
     index?: number | null;
+};
+
+/**
+ * TextMentionAuditState
+ */
+export type TextMentionAuditState = {
+    /**
+     * Last Touched At
+     */
+    last_touched_at?: string | null;
+    /**
+     * Last Touched By User Id
+     */
+    last_touched_by_user_id?: string | null;
+    /**
+     * Last Touched By Api Key Id
+     */
+    last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Source Id
+     */
+    source_id: string;
+    /**
+     * Entity Id
+     */
+    entity_id: string | null;
+    entity_link_state: EntityLinkState | null;
+    /**
+     * Entity Link Verified By User Id
+     */
+    entity_link_verified_by_user_id?: string | null;
+    /**
+     * Entity Link Verified At
+     */
+    entity_link_verified_at?: string | null;
+    /**
+     * Mention Id
+     */
+    mention_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Mention Normalized
+     */
+    mention_normalized?: string | null;
+    /**
+     * Context
+     */
+    context: string | null;
 };
 
 /**
@@ -2587,6 +3151,7 @@ export type TextMentionListResponse = {
  * Request body for assigning a mention to another entity in a batch.
  */
 export type TextMentionPatchBatchItem = {
+    version: ObjectVersion;
     /**
      * Entity Link State
      */
@@ -2607,6 +3172,7 @@ export type TextMentionPatchBatchItem = {
  * Assign a mention to an entity, or unassign it with null.
  */
 export type TextMentionPatchRequest = {
+    version: ObjectVersion;
     /**
      * Entity Link State
      */
@@ -2623,18 +3189,7 @@ export type TextMentionPatchRequest = {
  * A single mention of an entity name in a text source.
  */
 export type TextMentionResponse = {
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -2647,6 +3202,18 @@ export type TextMentionResponse = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -2692,18 +3259,7 @@ export type TextMentionSortField = 'text' | 'mention_id' | 'last_touched_at' | '
  * ``end_character`` is exclusive.
  */
 export type TextMentionSpanModel = {
-    /**
-     * Created At
-     */
-    created_at?: string | null;
-    /**
-     * Created By User Id
-     */
-    created_by_user_id?: string | null;
-    /**
-     * Created By Api Key Id
-     */
-    created_by_api_key_id?: string | null;
+    version: ObjectVersion;
     /**
      * Last Touched At
      */
@@ -2716,6 +3272,18 @@ export type TextMentionSpanModel = {
      * Last Touched By Api Key Id
      */
     last_touched_by_api_key_id?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id?: string | null;
+    /**
+     * Created By Api Key Id
+     */
+    created_by_api_key_id?: string | null;
     entity_link_state?: EntityLinkState | null;
     /**
      * Entity Link Verified By User Id
@@ -2939,6 +3507,329 @@ export type ValidationError = {
         [key: string]: unknown;
     };
 };
+
+/**
+ * VersionedTarget[UUID]
+ */
+export type VersionedTargetUuid = {
+    version: ObjectVersion;
+    /**
+     * Object Id
+     */
+    object_id: string;
+};
+
+export type ListEntityAuditRouteApiV1AuditEntitiesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Entity Id
+         */
+        'filter.entity_id'?: Array<string> | null;
+    };
+    url: '/api/v1/audit-entities';
+};
+
+export type ListEntityAuditRouteApiV1AuditEntitiesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListEntityAuditRouteApiV1AuditEntitiesGetError = ListEntityAuditRouteApiV1AuditEntitiesGetErrors[keyof ListEntityAuditRouteApiV1AuditEntitiesGetErrors];
+
+export type ListEntityAuditRouteApiV1AuditEntitiesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseEntityAuditState;
+};
+
+export type ListEntityAuditRouteApiV1AuditEntitiesGetResponse = ListEntityAuditRouteApiV1AuditEntitiesGetResponses[keyof ListEntityAuditRouteApiV1AuditEntitiesGetResponses];
+
+export type ListFaceAuditRouteApiV1AuditFacesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Detection Id
+         */
+        'filter.detection_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
+    url: '/api/v1/audit-faces';
+};
+
+export type ListFaceAuditRouteApiV1AuditFacesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListFaceAuditRouteApiV1AuditFacesGetError = ListFaceAuditRouteApiV1AuditFacesGetErrors[keyof ListFaceAuditRouteApiV1AuditFacesGetErrors];
+
+export type ListFaceAuditRouteApiV1AuditFacesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseFaceAuditState;
+};
+
+export type ListFaceAuditRouteApiV1AuditFacesGetResponse = ListFaceAuditRouteApiV1AuditFacesGetResponses[keyof ListFaceAuditRouteApiV1AuditFacesGetResponses];
+
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Mention Id
+         */
+        'filter.mention_id'?: Array<string> | null;
+        /**
+         * Filter.Entity Id
+         */
+        'filter.entity_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
+    url: '/api/v1/audit-text-mentions';
+};
+
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetError = ListTextMentionAuditRouteApiV1AuditTextMentionsGetErrors[keyof ListTextMentionAuditRouteApiV1AuditTextMentionsGetErrors];
+
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseTextMentionAuditState;
+};
+
+export type ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponse = ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponses[keyof ListTextMentionAuditRouteApiV1AuditTextMentionsGetResponses];
+
+export type ListSourceAuditRouteApiV1AuditSourcesGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Filter.Actor User Id
+         */
+        'filter.actor_user_id'?: Array<string> | null;
+        /**
+         * Filter.Since
+         */
+        'filter.since'?: string | null;
+        /**
+         * Filter.Until
+         */
+        'filter.until'?: string | null;
+        /**
+         * Filter.Version Min
+         */
+        'filter.version_min'?: number | null;
+        /**
+         * Filter.Version Max
+         */
+        'filter.version_max'?: number | null;
+        /**
+         * Filter.Deleted
+         */
+        'filter.deleted'?: boolean | null;
+        /**
+         * Sort
+         */
+        sort?: 'time' | 'version';
+        /**
+         * Direction
+         */
+        direction?: 'asc' | 'desc';
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Filter.Source Type
+         */
+        'filter.source_type'?: Array<SourceKind> | null;
+        /**
+         * Filter.Library
+         */
+        'filter.library'?: Array<string> | null;
+        /**
+         * Filter.Document Id
+         */
+        'filter.document_id'?: Array<string> | null;
+        /**
+         * Filter.Page Id
+         */
+        'filter.page_id'?: Array<string> | null;
+        /**
+         * Filter.Source Id
+         */
+        'filter.source_id'?: Array<string> | null;
+    };
+    url: '/api/v1/audit-sources';
+};
+
+export type ListSourceAuditRouteApiV1AuditSourcesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListSourceAuditRouteApiV1AuditSourcesGetError = ListSourceAuditRouteApiV1AuditSourcesGetErrors[keyof ListSourceAuditRouteApiV1AuditSourcesGetErrors];
+
+export type ListSourceAuditRouteApiV1AuditSourcesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: GenericListResponseAnnotatedUnionPageAuditStateDocumentAuditStateImageAuditStateFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorSourceType;
+};
+
+export type ListSourceAuditRouteApiV1AuditSourcesGetResponse = ListSourceAuditRouteApiV1AuditSourcesGetResponses[keyof ListSourceAuditRouteApiV1AuditSourcesGetResponses];
 
 export type SearchEntitiesGetApiV1SearchEntitiesGetData = {
     body?: never;
@@ -4365,7 +5256,7 @@ export type CreateEntityRouteApiV1EntitiesPostResponses = {
 export type CreateEntityRouteApiV1EntitiesPostResponse = CreateEntityRouteApiV1EntitiesPostResponses[keyof CreateEntityRouteApiV1EntitiesPostResponses];
 
 export type DeleteEntityRouteApiV1EntitiesEntityIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Entity Id
@@ -4729,9 +5620,9 @@ export type CreateFaceRouteApiV1FacesPostResponse = CreateFaceRouteApiV1FacesPos
 
 export type DeleteFaceBatchRouteApiV1FacesBatchDeleteData = {
     /**
-     * Detection Id
+     * Targets
      */
-    body: Array<string>;
+    body: Array<VersionedTargetUuid>;
     path?: never;
     query?: never;
     url: '/api/v1/faces:batch';
@@ -4851,7 +5742,7 @@ export type GetFaceAlignedCropRouteApiV1FacesDetectionIdAlignedCropGetResponses 
 };
 
 export type DeleteFaceRouteApiV1FacesDetectionIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Detection Id
@@ -5256,9 +6147,9 @@ export type ListTextMentionGroupsRouteApiV1TextMentionGroupsGetResponse = ListTe
 
 export type DeleteTextMentionBatchRouteApiV1TextMentionsBatchDeleteData = {
     /**
-     * Mention Id
+     * Targets
      */
-    body: Array<string>;
+    body: Array<VersionedTargetUuid>;
     path?: never;
     query?: never;
     url: '/api/v1/text-mentions:batch';
@@ -5345,7 +6236,7 @@ export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses = {
 export type CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponse = CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses[keyof CreateTextMentionBatchRouteApiV1TextMentionsBatchPostResponses];
 
 export type DeleteTextMentionRouteApiV1TextMentionsMentionIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Mention Id
@@ -5593,7 +6484,7 @@ export type LookupSourceRouteApiV1SourcesLookupGetResponses = {
 export type LookupSourceRouteApiV1SourcesLookupGetResponse = LookupSourceRouteApiV1SourcesLookupGetResponses[keyof LookupSourceRouteApiV1SourcesLookupGetResponses];
 
 export type DeleteSourceRouteApiV1SourcesSourceIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Source Id
@@ -5978,7 +6869,7 @@ export type LookupDocumentRouteApiV1DocumentsLookupGetResponses = {
 export type LookupDocumentRouteApiV1DocumentsLookupGetResponse = LookupDocumentRouteApiV1DocumentsLookupGetResponses[keyof LookupDocumentRouteApiV1DocumentsLookupGetResponses];
 
 export type DeleteDocumentRouteApiV1DocumentsDocumentSourceIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Document Source Id
@@ -6385,7 +7276,7 @@ export type LookupPageRouteApiV1PagesLookupGetResponses = {
 export type LookupPageRouteApiV1PagesLookupGetResponse = LookupPageRouteApiV1PagesLookupGetResponses[keyof LookupPageRouteApiV1PagesLookupGetResponses];
 
 export type DeletePageRouteApiV1PagesPageSourceIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Page Source Id
@@ -6904,7 +7795,7 @@ export type LookupImageRouteApiV1ImagesLookupGetResponses = {
 export type LookupImageRouteApiV1ImagesLookupGetResponse = LookupImageRouteApiV1ImagesLookupGetResponses[keyof LookupImageRouteApiV1ImagesLookupGetResponses];
 
 export type DeleteImageRouteApiV1ImagesImageIdDeleteData = {
-    body?: never;
+    body: VersionedTargetUuid;
     path: {
         /**
          * Image Id

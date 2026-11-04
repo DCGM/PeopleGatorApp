@@ -102,6 +102,7 @@ describe('DocumentPageOverlay', () => {
         ],
         faces: [
           {
+            version: 1,
             id: 'face-identifier',
             personId: 'person-1',
             name: 'Ada',
@@ -169,6 +170,7 @@ describe('DocumentPageOverlay', () => {
         ],
         faces: [
           {
+            version: 1,
             id: 'face-1',
             personId: 'person-1',
             name: 'Ada',
@@ -179,6 +181,7 @@ describe('DocumentPageOverlay', () => {
             portraitLoading: false,
           },
           {
+            version: 1,
             id: 'face-2',
             personId: null,
             name: 'Unknown',
@@ -222,6 +225,7 @@ it('expands the selected tag into one card through viewport movement and collaps
     },
   )
   const detectionFace = (id: string, width = 20) => ({
+    version: 1,
     id,
     personId: null,
     name: 'Unknown',

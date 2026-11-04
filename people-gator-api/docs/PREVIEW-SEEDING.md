@@ -1285,3 +1285,44 @@ Integration tests check page/document membership through faces or mentions,
 person-grouped face batches, phrase groups with unlinked occurrences, face and
 combined name/face search within the document, local media and aligned crops,
 additive upgrade with an interrupted checkpoint, and review preservation.
+
+
+## Audit history (#104)
+
+Search for **Eva History**, then open **Audit history ledger** in the
+`preview-audit` library. The `audit-profile`, `audit-page`, `audit-face`, and
+`audit-mention` fixture keys are stable. The page includes local synthetic media,
+a face and a text mention. Its number is upgraded from unknown to 1; its evidence
+is verified by the synthetic reviewer. Eva's profile advances once with a new
+alias and short description. These transitions provide archived predecessors for
+all four object kinds without an embedding or OCR service.
+
+The seed report includes typed API examples: `audit-history` for Eva's entity
+profile revisions, `audit-faces` and `audit-text-mentions` filtered by her historical
+entity assignment, and `audit-sources` for the page. `audit-first-profile-version`
+filters the entity list to version 1. The ledger page is currently at version 2
+with page number 1; its archived version 1 retains the original unknown number.
+Use that page to try a page-number draft alongside a second editing session.
+Navigating to another page resets the draft to that page; a late save response
+from the earlier page cannot replace it. Authenticate with `people-gator:audit`;
+neither browse nor admin is required. For example:
+
+```text
+GET /api/v1/audit-faces?filter.entity_id=<Eva-entity-UUID>&sort=version&direction=asc
+GET /api/v1/audit-sources?filter.library=preview-audit
+```
+
+[Audit history](AUDIT-HISTORY.md) documents each concrete snapshot schema,
+resource-specific filters, version preconditions, sorting and deletion retention.
+
+Open Eva History in two sessions to try a stale profile save. Reopening an old
+draft retains its reviewed version until fresh profile data is accepted;
+navigating to another person discards that draft.
+
+The profile upgrade is narrowly scoped to the untouched initial fixture. Its
+checkpoint survives interruption between mutation and checkpoint completion.
+Reruns add missing examples and preserve review changes, versions, history,
+assignments, source identities and activity timestamps. Integration coverage
+queries flat typed snapshots and original creation/last-touch actors through
+`Database.audit`, checks required ordinary/historical versions, reruns the seed and
+checks that reviewed data and history counts remain unchanged.

@@ -14,6 +14,7 @@ type ProfileTextField = Exclude<keyof PersonProfile, 'aliases'>
 const props = defineProps<{
   hideStatistics?: boolean
   modelValue: PersonProfile
+  version: number
   personId: string
   thumbnailFaceId?: string | null
   faceCount: number
@@ -24,8 +25,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [profile: PersonProfile]
-  'update:identifiers': [identifiers: PersonIdentifiers]
+  'update:modelValue': [profile: PersonProfile, version: number]
+  'update:identifiers': [identifiers: PersonIdentifiers, version: number]
 }>()
 
 const draft = reactive<PersonProfile>({
@@ -37,6 +38,8 @@ const identifierDraft = reactive<PersonIdentifiers>({
   nationalLibraryAuthorityId: props.nationalLibraryAuthorityId,
 })
 const editingField = ref<EditableField | null>(null)
+let draftVersion = props.version
+let savedVersion: number
 let savedFieldValue: string | string[] | null = null
 
 function isIdentifierField(field: EditableField): field is keyof PersonIdentifiers {
@@ -59,6 +62,7 @@ function nameFromId(id: string) {
 }
 
 function beginEditing(field: EditableField) {
+  savedVersion = draftVersion
   savedFieldValue =
     field === 'aliases'
       ? [...draft.aliases]
@@ -73,13 +77,13 @@ function saveEditing(field: EditableField) {
     draft.aliases = draft.aliases.map((alias) => alias.trim()).filter(Boolean)
   } else if (isIdentifierField(field)) {
     identifierDraft[field] = identifierDraft[field].trim()
-    emit('update:identifiers', { ...identifierDraft })
+    emit('update:identifiers', { ...identifierDraft }, savedVersion)
   } else {
     draft[field] = draft[field].trim()
     if (field === 'name' && !draft.name) draft.name = nameFromId(props.personId)
   }
   if (!isIdentifierField(field)) {
-    emit('update:modelValue', { ...draft, aliases: [...draft.aliases] })
+    emit('update:modelValue', { ...draft, aliases: [...draft.aliases] }, savedVersion)
   }
   savedFieldValue = null
   editingField.value = null
@@ -106,21 +110,26 @@ function removeAlias(index: number) {
 }
 
 watch(
-  () => props.modelValue,
-  (profile) => {
+  () =>
+    [
+      props.personId,
+      props.modelValue,
+      props.version,
+      props.wikidataId,
+      props.nationalLibraryAuthorityId,
+    ] as const,
+  ([personId, profile, version, wikidataId, nationalLibraryAuthorityId], previous) => {
+    if (previous && previous[0] !== personId) {
+      editingField.value = null
+      savedFieldValue = null
+    }
     if (editingField.value) return
     Object.assign(draft, profile, { aliases: [...profile.aliases] })
-  },
-  { deep: true },
-)
-
-watch(
-  () => [props.wikidataId, props.nationalLibraryAuthorityId] as const,
-  ([wikidataId, nationalLibraryAuthorityId]) => {
-    if (isIdentifierField(editingField.value ?? 'name')) return
     identifierDraft.wikidataId = wikidataId
     identifierDraft.nationalLibraryAuthorityId = nationalLibraryAuthorityId
+    draftVersion = version
   },
+  { deep: true },
 )
 </script>
 
@@ -301,7 +310,11 @@ watch(
         :class="editingField === 'article' && 'bg-accent/10 outline-1 outline-ring'"
       />
     </div>
-    <aside v-if="!hideStatistics" aria-label="Person statistics" class="min-w-0 border-l-0 text-sm md:border-l md:pl-5">
+    <aside
+      v-if="!hideStatistics"
+      aria-label="Person statistics"
+      class="min-w-0 border-l-0 text-sm md:border-l md:pl-5"
+    >
       <dl class="grid content-start gap-3">
         <div>
           <dt class="text-muted-foreground">Face detections</dt>

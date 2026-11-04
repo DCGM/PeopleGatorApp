@@ -7,7 +7,7 @@ import re
 import unicodedata
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
 from people_gator_api.persistence.contracts import Database
@@ -32,6 +32,7 @@ _WORD_PATTERN = re.compile(r"[^\W_]+(?:[’'\-][^\W_]+)*", re.UNICODE)
 @dataclass(frozen=True, slots=True)
 class _TextMentionText:
     mention_id: uuid.UUID
+    version: int = field(kw_only=True)
     entity_id: uuid.UUID
     entity_type: EntityType | None
     name: str
@@ -113,6 +114,7 @@ async def _fetch_text_mentions(
         mentions.extend(
             _TextMentionText(
                 mention_id=item.mention_id,
+                version=item.version,
                 entity_id=entity_id,
                 entity_type=entity_types.get(entity_id),
                 name=item.name,
@@ -150,6 +152,7 @@ def _match_text_mention_spans(
                     match.start_word,
                     TextMentionSpanModel(
                         mention_id=mention.mention_id,
+                        version=mention.version,
                         entity_link_state=mention.entity_link_state,
                         entity_link_verified_by_user_id=mention.entity_link_verified_by_user_id,
                         entity_link_verified_at=mention.entity_link_verified_at,

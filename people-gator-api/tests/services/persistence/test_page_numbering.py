@@ -1,4 +1,5 @@
 """Stored sequence metadata, registered totals and shared numeric pagination."""
+
 import uuid
 
 import pytest
@@ -17,17 +18,19 @@ from people_gator_api.schemas.users import UserCreateRequest
 from people_gator_api.services.auth_service import AuthContext
 
 
-@pytest.mark.parametrize('value', [0, -1, 1.5, True, False, '3', 2147483648])
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, False, "3", 2147483648])
 def test_page_number_rejects_invalid_values(value):
     with pytest.raises(ValidationError):
         PageCreateRequest(library='x', document_id=uuid.uuid4(), page_id=uuid.uuid4(), page_number=value)
     with pytest.raises(ValidationError):
-        PagePatchRequest(page_number=value)
+        PagePatchRequest(page_number=value, version=1)
 
 
 @pytest.mark.asyncio
 async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
-    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+    async with async_sessionmaker(
+        migrated_postgres, expire_on_commit=False
+    )() as session:
         db = postgres_database(session)
         user = await db.users.get_or_create(UserCreateRequest(display_name='Number editor', is_active=True, external_subject='editor', external_issuer='issue53'))
         actor = AuthContext(user_id=user.user_id, api_key_id=None, authentication_method='bearer', scopes=set())
@@ -47,6 +50,7 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
             page, _ = await db.sources.get_or_create_page(PageCreateRequest(library=library, document_id=document, page_id=uuid.uuid4(), page_number=1))
             assert page.registered_page_count == 1
         scope = PageListFilter(library=['numbers'], document_id=[doc])
+
         async def collect(direction):
             found, cursor = [], None
             while True:
@@ -57,6 +61,7 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
                 cursor = batch.cursor
                 if cursor is None:
                     return found
+
         for direction in ['asc', 'desc']:
             ordered = await collect(direction)
             known = sorted([p for p in records if p.page_number is not None], key=lambda p: ((-p.page_number if direction == 'desc' else p.page_number), p.source_id))
@@ -69,9 +74,12 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
         assert sorted(p.registered_page_count for p in global_order.items) == [1, 6, 6, 6, 6, 6, 6]
         # Counts are one grouped query per response, regardless of page size.
         from sqlalchemy import event
+
         statements = []
+
         def capture(*args):
             statements.append(args[2])
+
         event.listen(migrated_postgres.sync_engine, 'before_cursor_execute', capture)
         try:
             await db.sources.list_pages(PageListRequest(filter_=scope, limit=1))
@@ -85,18 +93,48 @@ async def test_numbering_roundtrip_order_totals_and_edits(migrated_postgres):
         with pytest.raises(ValueError):
             await db.sources.list_pages(PageListRequest(filter_=scope, sort='page_number', sort_direction='desc', cursor=batch.cursor))
         first = records[0]
-        untouched = await db.sources.patch_page(first.source_id, PagePatchRequest(), context=actor)
+        untouched = await db.sources.patch_page(
+            first.source_id,
+            PagePatchRequest(
+                version=(await db.sources.get_page(first.source_id)).version
+            ),
+            context=actor,
+        )
         assert untouched.page_number == 10 and untouched.last_touched_at is None
-        updated = await db.sources.patch_page(first.source_id, PagePatchRequest(page_number=3), context=actor)
+        updated = await db.sources.patch_page(
+            first.source_id,
+            PagePatchRequest(
+                page_number=3,
+                version=(await db.sources.get_page(first.source_id)).version,
+            ),
+            context=actor,
+        )
         assert updated.page_number == 3
         assert updated.last_touched_by_user_id == user.user_id and updated.last_touched_at
         assert updated.registered_page_count == 6
         parent_after = await db.sources.get_document(parent.source_id)
         assert parent_after.last_touched_by_user_id == user.user_id
-        cleared = await db.sources.patch_page(first.source_id, PagePatchRequest(page_number=None), context=actor)
+        cleared = await db.sources.patch_page(
+            first.source_id,
+            PagePatchRequest(
+                page_number=None,
+                version=(await db.sources.get_page(first.source_id)).version,
+            ),
+            context=actor,
+        )
         assert cleared.page_number is None
         assert (await db.sources.get_or_create_page(PageCreateRequest(library=first.library, document_id=doc, page_id=first.page_id, page_number=10)))[0].page_number is None
-        assert await db.sources.patch_page(parent.source_id, PagePatchRequest(page_number=1), context=actor) is None
+        assert (
+            await db.sources.patch_page(
+                parent.source_id,
+                PagePatchRequest(
+                    page_number=1,
+                    version=(await db.sources.get_document(parent.source_id)).version,
+                ),
+                context=actor,
+            )
+            is None
+        )
         filtered = await db.sources.list_pages(PageListRequest(filter_=PageListFilter(source_id=[records[2].source_id]), limit=1))
         assert filtered.items[0].registered_page_count == 6
         documents = await db.sources.list_documents(DocumentListRequest(limit=1, filter_=DocumentListFilter(source_id=[parent.source_id])))
@@ -143,8 +181,12 @@ async def test_mixed_import_batches_project_final_totals(migrated_postgres, new_
 
 
 @pytest.mark.asyncio
-async def test_number_edits_lock_only_when_writing_and_batches_share_totals(migrated_postgres):
-    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+async def test_number_edits_lock_only_when_writing_and_batches_share_totals(
+    migrated_postgres,
+):
+    async with async_sessionmaker(
+        migrated_postgres, expire_on_commit=False
+    )() as session:
         db = postgres_database(session)
         user = await db.users.get_or_create(UserCreateRequest(display_name='Upgrade', is_active=True, external_subject='upgrade', external_issuer='issue53'))
         actor = AuthContext(user_id=user.user_id, api_key_id=None, authentication_method='bearer', scopes=set())
@@ -157,15 +199,28 @@ async def test_number_edits_lock_only_when_writing_and_batches_share_totals(migr
         ])
         assert [page.registered_page_count for page, _ in created] == [3, 3, 3]
         page = created[0][0]
+
         async def graph_lock_free():
             async with migrated_postgres.connect() as other:
                 return await other.scalar(text('SELECT pg_try_advisory_lock(817308, 8)')) and await other.scalar(text('SELECT pg_advisory_unlock(817308, 8)'))
-        for payload in (PagePatchRequest(), PagePatchRequest(page_number=None)):
+
+        for payload in (
+            PagePatchRequest(version=1),
+            PagePatchRequest(page_number=None, version=1),
+        ):
             unchanged = await db.sources.patch_page(page.source_id, payload, context=actor)
             assert unchanged.page_number is None and unchanged.last_touched_at is None
             assert await graph_lock_free()
         # Additive data upgrades number a page without becoming its last edit.
-        upgraded = await db.sources.patch_page(page.source_id, PagePatchRequest(page_number=1), context=actor, touch=False)
+        upgraded = await db.sources.patch_page(
+            page.source_id,
+            PagePatchRequest(
+                page_number=1,
+                version=(await db.sources.get_page(page.source_id)).version,
+            ),
+            context=actor,
+            touch=False,
+        )
         assert upgraded.page_number == 1
         assert upgraded.last_touched_at is None and upgraded.last_touched_by_user_id is None
         assert (await db.sources.get_document(parent.source_id)).last_touched_at is None
@@ -193,13 +248,18 @@ async def test_migration_retains_legacy_identity_and_unknowns(migrated_postgres)
 
 
 @pytest.mark.asyncio
-async def test_numbering_api_validation_scopes_and_key_attribution(migrated_postgres, monkeypatch):
+async def test_numbering_api_validation_scopes_and_key_attribution(
+    migrated_postgres, monkeypatch
+):
     import httpx
     from fastapi import FastAPI
     from people_gator_api.routes.v1 import router
     from people_gator_api.services import database_service, auth_service
     from people_gator_api.schemas.api_keys import APIKeyCreateRequest
-    async with async_sessionmaker(migrated_postgres, expire_on_commit=False)() as session:
+
+    async with async_sessionmaker(
+        migrated_postgres, expire_on_commit=False
+    )() as session:
         db = postgres_database(session)
         user = await db.users.get_or_create(UserCreateRequest(display_name='Importer', is_active=True, external_subject='key-editor', external_issuer='issue53'))
         key = await db.api_keys.get_or_create(APIKeyCreateRequest(identifier='number-importer', display_name='Number importer', user_id=user.user_id))
@@ -207,19 +267,29 @@ async def test_numbering_api_validation_scopes_and_key_attribution(migrated_post
         app = FastAPI()
         app.include_router(router)
         app.dependency_overrides[database_service.get_database] = lambda: db
+
         async def authenticated_token(token):
             return actor
+
         monkeypatch.setattr(auth_service, 'authenticate_bearer', authenticated_token)
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test', headers={'Authorization': 'Bearer synthetic'}) as client:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": "Bearer synthetic"},
+        ) as client:
             spec = {'library': 'http', 'document_id': str(uuid.uuid4()), 'page_id': str(uuid.uuid4()), 'page_number': 10}
             # Repository creation avoids depending on ingest scope aliases here.
             page, _ = await db.sources.get_or_create_page(PageCreateRequest(**spec))
             url = f'/api/v1/pages/{page.source_id}'
-            assert (await client.patch(url, json={'page_number': 2})).status_code == 403
+            assert (
+                await client.patch(url, json={"version": 1, "page_number": 2})
+            ).status_code == 403
             actor.scopes.add('people-gator:annotate')
-            for invalid in [True, 0, -1, 2.5, '2']:
-                assert (await client.patch(url, json={'page_number': invalid})).status_code == 422
-            response = await client.patch(url, json={'page_number': 2})
+            for invalid in [True, 0, -1, 2.5, "2"]:
+                assert (
+                    await client.patch(url, json={"version": 1, "page_number": invalid})
+                ).status_code == 422
+            response = await client.patch(url, json={"version": 1, "page_number": 2})
             assert response.status_code == 200, response.text
             assert response.json()['page_number'] == 2
             assert response.json()['last_touched_by_api_key_id'] == str(key.api_key_id)
@@ -227,5 +297,9 @@ async def test_numbering_api_validation_scopes_and_key_attribution(migrated_post
             assert response.json()['registered_page_count'] == 1
             lookup = await client.get('/api/v1/pages/lookup', params={k: v for k, v in spec.items() if k != 'page_number'})
             assert lookup.status_code == 200 and lookup.json()['page_number'] == 2
-            assert (await client.patch(url, json={})).json()['page_number'] == 2
-            assert (await client.patch(url, json={'page_number': None})).json()['page_number'] is None
+            assert (await client.patch(url, json={"version": 2})).json()[
+                "page_number"
+            ] == 2
+            assert (
+                await client.patch(url, json={"version": 2, "page_number": None})
+            ).json()["page_number"] is None

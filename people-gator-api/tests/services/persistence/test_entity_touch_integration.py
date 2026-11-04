@@ -1,4 +1,8 @@
+from version_preconditions import merge_request
 """Opt-in checks against an isolated PostgreSQL/pgvector database."""
+
+from version_preconditions import merge_targets
+from people_gator_api.schemas.common import VersionedTarget
 
 import asyncio
 import os
@@ -7,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from version_preconditions import read_version, read_versions
+from people_gator_api.schemas.entities import EntityMergeTargetPatch
 import pytest_asyncio
 from sqlalchemy import select, update
 from sqlalchemy.engine import make_url
@@ -157,23 +163,38 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
     # Reads, empty patches, identical fields and alias-only reordering are no-ops.
     before = (await entity(r)).last_touched_at
     for patch in (
-        EntityPatchRequest(),
-        EntityPatchRequest(name=first.name, aliases=[]),
+        EntityPatchRequest(version=1),
+        EntityPatchRequest(name=first.name, aliases=[], version=1),
     ):
         after = await r.db.entities.patch(first.entity_id, patch, r.user)
         assert after.last_touched_at == before
         assert after.last_touched_by_api_key_id == r.key.api_key_id
     updated = await r.db.entities.patch(
-        first.entity_id, EntityPatchRequest(aliases=["Ada", "Countess"]), r.actor
+        first.entity_id,
+        EntityPatchRequest(
+            aliases=["Ada", "Countess"],
+            version=(await r.db.entities.get(first.entity_id)).version,
+        ),
+        r.actor,
     )
     before = updated.last_touched_at
     after = await r.db.entities.patch(
-        first.entity_id, EntityPatchRequest(aliases=["Countess", "Ada"]), r.user
+        first.entity_id,
+        EntityPatchRequest(
+            aliases=["Countess", "Ada"],
+            version=(await r.db.entities.get(first.entity_id)).version,
+        ),
+        r.user,
     )
     assert after.last_touched_at == before
     # Reconcile overlapping alias sets without inserting duplicate alias rows.
     after = await r.db.entities.patch(
-        first.entity_id, EntityPatchRequest(aliases=["Ada", "Lovelace"]), r.user
+        first.entity_id,
+        EntityPatchRequest(
+            aliases=["Ada", "Lovelace"],
+            version=(await r.db.entities.get(first.entity_id)).version,
+        ),
+        r.user,
     )
     assert set(after.aliases) == {"Ada", "Lovelace"}
     assert after.last_touched_by_api_key_id is None
@@ -181,33 +202,71 @@ async def test_touch_create_noops_patches_reassignment_and_deletion(records):
     assert (await entity(r)).last_touched_by_api_key_id == r.key.api_key_id
     before = (await entity(r)).last_touched_at
     await r.db.faces.patch(
-        f.detection_id, FacePatchRequest(entity_id=first.entity_id), r.user
+        f.detection_id,
+        FacePatchRequest(
+            entity_id=first.entity_id,
+            version=(await r.db.faces.get(f.detection_id)).version,
+        ),
+        r.user,
     )
     assert (await entity(r)).last_touched_at == before
     await r.db.faces.patch(
-        f.detection_id, FacePatchRequest(entity_id=second.entity_id), r.user
+        f.detection_id,
+        FacePatchRequest(
+            entity_id=second.entity_id,
+            version=(await r.db.faces.get(f.detection_id)).version,
+        ),
+        r.user,
     )
     assert (await entity(r)).last_touched_at > before
     assert (await entity(r)).last_touched_by_api_key_id is None
     assert (await entity(r, 1)).last_touched_by_api_key_id is None
     before = (await entity(r, 1)).last_touched_at
-    await r.db.faces.delete(f.detection_id, context=r.actor)
+    await r.db.faces.delete(
+        VersionedTarget(
+            object_id=f.detection_id,
+            version=await read_version(r.db.faces, f.detection_id),
+        ),
+        context=r.actor,
+    )
     assert (await entity(r, 1)).last_touched_at > before
     before = (await entity(r, 1)).last_touched_at
-    assert not await r.db.faces.delete(f.detection_id, context=r.user)
+    assert not await r.db.faces.delete(
+        VersionedTarget(
+            object_id=f.detection_id,
+            version=await read_version(r.db.faces, f.detection_id),
+        ),
+        context=r.user,
+    )
     assert (await entity(r, 1)).last_touched_at == before
     m = await mention(r, first.entity_id)
     before = (await entity(r)).last_touched_at
     await r.db.text_mentions.patch(
-        m.mention_id, TextMentionPatchRequest(entity_id=first.entity_id), r.user
+        m.mention_id,
+        TextMentionPatchRequest(
+            entity_id=first.entity_id,
+            version=(await r.db.text_mentions.get(m.mention_id)).version,
+        ),
+        r.user,
     )
     assert (await entity(r)).last_touched_at == before
     await r.db.text_mentions.patch(
-        m.mention_id, TextMentionPatchRequest(entity_id=second.entity_id), r.user
+        m.mention_id,
+        TextMentionPatchRequest(
+            entity_id=second.entity_id,
+            version=(await r.db.text_mentions.get(m.mention_id)).version,
+        ),
+        r.user,
     )
     assert (await entity(r)).last_touched_by_api_key_id is None
     before = (await entity(r, 1)).last_touched_at
-    await r.db.text_mentions.delete(m.mention_id, context=r.actor)
+    await r.db.text_mentions.delete(
+        VersionedTarget(
+            object_id=m.mention_id,
+            version=await read_version(r.db.text_mentions, m.mention_id),
+        ),
+        context=r.actor,
+    )
     assert (await entity(r, 1)).last_touched_at > before
 
 
@@ -320,17 +379,39 @@ async def test_batch_merge_cascade_and_transaction_rollback(records, monkeypatch
     r = records
     ids = [item.entity_id for item in r.entities]
     await r.db.entities.patch_batch(
-        [EntityPatchBatchItem(entity_id=item, name="Updated") for item in ids], r.user
+        [
+            EntityPatchBatchItem(
+                entity_id=item,
+                name="Updated",
+                version=(await r.db.entities.get(item)).version,
+            )
+            for item in ids
+        ],
+        r.user,
     )
     for item in ids:
         assert (await r.db.entities.get(item)).last_touched_by_api_key_id is None
     f = await face(r, ids[0])
     m = await mention(r, ids[0])
     await r.db.faces.patch_batch(
-        [FacePatchBatchItem(detection_id=f.detection_id, entity_id=ids[1])], r.user
+        [
+            FacePatchBatchItem(
+                detection_id=f.detection_id,
+                entity_id=ids[1],
+                version=(await r.db.faces.get(f.detection_id)).version,
+            )
+        ],
+        r.user,
     )
     await r.db.text_mentions.patch_batch(
-        [TextMentionPatchBatchItem(mention_id=m.mention_id, entity_id=ids[1])], r.user
+        [
+            TextMentionPatchBatchItem(
+                mention_id=m.mention_id,
+                entity_id=ids[1],
+                version=(await r.db.text_mentions.get(m.mention_id)).version,
+            )
+        ],
+        r.user,
     )
     before = (await entity(r, 1)).last_touched_at
     from people_gator_api.persistence.postgres import text_mention_repository
@@ -344,16 +425,31 @@ async def test_batch_merge_cascade_and_transaction_rollback(records, monkeypatch
     monkeypatch.setattr(text_mention_repository, "commit", fail)
     with pytest.raises(RuntimeError, match="injected"):
         await r.db.text_mentions.patch(
-            m.mention_id, TextMentionPatchRequest(entity_id=ids[2]), r.actor
+            m.mention_id,
+            TextMentionPatchRequest(
+                entity_id=ids[2],
+                version=(await r.db.text_mentions.get(m.mention_id)).version,
+            ),
+            r.actor,
         )
     monkeypatch.setattr(text_mention_repository, "commit", original)
     assert (await entity(r, 1)).last_touched_at == before
     assert (await r.db.text_mentions.get(m.mention_id)).entity_id == ids[1]
-    result = await r.db.entities.merge_batch(ids[2], ids[:2], context=r.actor)
+    result = await r.db.entities.merge_batch(ids[2], merge_request(EntityMergeTargetPatch(
+            **merge_targets(
+                await read_versions(r.db.entities, [ids[2], *ids[:2]]), ids[2]
+            )
+        ), ids[:2]), context=r.actor)
     assert result.merged_entity.last_touched_by_api_key_id == r.key.api_key_id
     assert result.faces_reassigned == result.text_mentions_reassigned == 1
     before = result.merged_entity.last_touched_at
-    await r.db.sources.delete(r.pages[0].source_id, context=r.user)
+    await r.db.sources.delete(
+        VersionedTarget(
+            object_id=r.pages[0].source_id,
+            version=await read_version(r.db.sources, r.pages[0].source_id),
+        ),
+        context=r.user,
+    )
     target = await entity(r, 2)
     assert target.last_touched_at > before
     assert target.last_touched_by_api_key_id is None
@@ -463,18 +559,26 @@ async def test_equivalent_stored_face_embeddings_do_not_touch(records):
     )
     f = await face(r, r.entities[0].entity_id)
     patch = FacePatchRequest(
-        embeddings=[FaceEmbedding(model_identifier=model, vector=[0.1, 0.2])]
+        embeddings=[FaceEmbedding(model_identifier=model, vector=[0.1, 0.2])],
+        version=1,
     )
     await r.db.faces.patch(f.detection_id, patch, r.actor)
     before = await entity(r)
-    await r.db.faces.patch(f.detection_id, patch, r.user)
+    await r.db.faces.patch(
+        f.detection_id,
+        patch.model_copy(
+            update={"version": (await r.db.faces.get(f.detection_id)).version}
+        ),
+        r.user,
+    )
     unchanged = await entity(r)
     assert unchanged.last_touched_at == before.last_touched_at
     assert unchanged.last_touched_by_api_key_id == r.key.api_key_id
     await r.db.faces.patch(
         f.detection_id,
         FacePatchRequest(
-            embeddings=[FaceEmbedding(model_identifier=model, vector=[0.2, 0.2])]
+            embeddings=[FaceEmbedding(model_identifier=model, vector=[0.2, 0.2])],
+            version=(await r.db.faces.get(f.detection_id)).version,
         ),
         r.user,
     )

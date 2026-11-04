@@ -10,6 +10,7 @@ vi.mock('@/query/people-filter-options', () => ({
   usePeopleFilterOptions: () => ({ labels: computed(() => ({ reviewer: 'Preview reviewer' })) }),
 }))
 const face: PersonFace = {
+  version: 1,
   id: 'detection',
   portrait: '',
   portraitLoading: false,

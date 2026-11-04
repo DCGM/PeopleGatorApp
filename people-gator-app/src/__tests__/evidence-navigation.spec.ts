@@ -46,6 +46,7 @@ describe('copied profile URLs and evidence requests', () => {
     api.entity.mockImplementation(({ path }) =>
       Promise.resolve({
         data: {
+          version: 1,
           entity_id: path.entity_id,
           name: 'Irena',
           aliases: [],

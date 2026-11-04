@@ -11,12 +11,25 @@ from people_gator_api.schemas.faces import (
 
 def _face_response(**changes: object) -> FaceResponse:
     values: dict[str, object] = {
+        "version": 1,
         "detection_id": uuid.uuid4(),
         "source_id": uuid.uuid4(),
         "bounding_box": BoundingBox(x=1, y=2, width=3, height=4),
         "keypoints": [
-            FaceKeypoint(type=cast(FaceKeypointType, keypoint_type), x=float(index), y=float(index))
-            for index, keypoint_type in enumerate(["left_eye", "right_eye", "nose", "right_mouth_corner", "left_mouth_corner"])
+            FaceKeypoint(
+                type=cast(FaceKeypointType, keypoint_type),
+                x=float(index),
+                y=float(index),
+            )
+            for index, keypoint_type in enumerate(
+                [
+                    "left_eye",
+                    "right_eye",
+                    "nose",
+                    "right_mouth_corner",
+                    "left_mouth_corner",
+                ]
+            )
         ],
         "user_id": uuid.uuid4(),
         "confidence": 0.9,

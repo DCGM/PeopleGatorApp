@@ -25,8 +25,20 @@ other supplied fields using logical AND.
 Successful batch results preserve input order. Patch batches require unique
 object IDs; duplicate IDs are invalid. Delete batches de-duplicate IDs and count
 each stored object once. Empty batches succeed with an empty result or zero.
-Batches are not guaranteed to be atomic: an error is raised, but a backend that
-cannot roll back may retain earlier successful writes.
+PostgreSQL versioned patch/delete batches and merges are atomic: all explicit
+target versions are checked before writing, and any failure rolls back current
+state and audit rows together. Creation batches may retain earlier successful
+writes (notably source get-or-create). The optional Weaviate adapter rejects
+versioned edits and audit reads rather than claiming transactional guarantees.
+
+Entities, faces, mentions and sources expose independent server-managed versions.
+Edits require the version read by the caller; deletes and merges require versions
+for every explicitly targeted object. A stale request raises VersionConflict,
+including stale no-ops. Matching no-ops create no history and keep their version.
+Actual changes archive complete predecessors and advance versions once per
+operation; final deleted states and historical IDs survive live cascades. Read
+archived states through Database.audit. Activity propagation is independent of
+content revisions.
 
 References named by create or patch payloads must already exist. Missing
 references are errors. Deleting an entity unassigns its faces and text mentions;
@@ -38,12 +50,13 @@ user is rejected. Invalid cursors and duplicate patch IDs raise ValueError.
 """
 
 from __future__ import annotations
+from people_gator_api.schemas.common import VersionedTarget
 
 import enum
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from pydantic import AnyUrl
 from people_gator_api.schemas.common import GenericActor
 from people_gator_api.schemas.api_keys import APIKeyCreateRequest, APIKeyResponse, APIKeyListResponse, APIKeyListRequest
@@ -138,6 +151,92 @@ from people_gator_api.schemas.users import (
 )
 
 
+from people_gator_api.schemas.audit_history import (
+    EntityAuditState,
+    FaceAuditState,
+    TextMentionAuditState,
+    PageAuditState,
+    DocumentAuditState,
+    ImageAuditState,
+    EntityAuditListRequest,
+    EntityAuditListResponse,
+    FaceAuditListRequest,
+    FaceAuditListResponse,
+    TextMentionAuditListRequest,
+    TextMentionAuditListResponse,
+    SourceAuditListRequest,
+    SourceAuditListResponse,
+)
+
+
+class AuditRepository(ABC):
+    """Immutable predecessor/final-state history; unavailable adapters fail explicitly."""
+
+    async def list_entities(
+        self, query: EntityAuditListRequest
+    ) -> EntityAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def list_faces(self, query: FaceAuditListRequest) -> FaceAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def list_text_mentions(
+        self, query: TextMentionAuditListRequest
+    ) -> TextMentionAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def list_sources(
+        self, query: SourceAuditListRequest
+    ) -> SourceAuditListResponse:
+        raise NotImplementedError("Audit history requires PostgreSQL")
+
+    async def get_entity(
+        self, object_id: uuid.UUID, version: int
+    ) -> EntityAuditState | None:
+        result = await self.list_entities(
+            EntityAuditListRequest(
+                entity_id=[object_id], version_min=version, version_max=version, limit=1
+            )
+        )
+        return result.items[0] if result.items else None
+
+    async def get_face(
+        self, object_id: uuid.UUID, version: int
+    ) -> FaceAuditState | None:
+        result = await self.list_faces(
+            FaceAuditListRequest(
+                detection_id=[object_id],
+                version_min=version,
+                version_max=version,
+                limit=1,
+            )
+        )
+        return result.items[0] if result.items else None
+
+    async def get_text_mention(
+        self, object_id: uuid.UUID, version: int
+    ) -> TextMentionAuditState | None:
+        result = await self.list_text_mentions(
+            TextMentionAuditListRequest(
+                mention_id=[object_id],
+                version_min=version,
+                version_max=version,
+                limit=1,
+            )
+        )
+        return result.items[0] if result.items else None
+
+    async def get_source(
+        self, object_id: uuid.UUID, version: int
+    ) -> PageAuditState | DocumentAuditState | ImageAuditState | None:
+        result = await self.list_sources(
+            SourceAuditListRequest(
+                source_id=[object_id], version_min=version, version_max=version, limit=1
+            )
+        )
+        return result.items[0] if result.items else None
+
+
 class CreateResult(enum.StrEnum):
     EXISTING = "existing"
     CREATED = "created"
@@ -209,7 +308,7 @@ class EntityRepository(ABC):
 
         Always the actor performing the patch must be specified through the context.
 
-        Ideally, should persist information about actor performing the patch.
+        Archive the persisted predecessor and actor atomically with actual changes.
 
         :param self: The instance of the repository.
         :param entity_id: The unique identifier of the entity to patch.
@@ -239,7 +338,9 @@ class EntityRepository(ABC):
         """
 
     @abstractmethod
-    async def delete(self, entity_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
         """Delete an entity and unassign its faces and text mentions.
 
         Return False when the entity does not exist.
@@ -248,14 +349,14 @@ class EntityRepository(ABC):
     async def merge(
         self,
         target_entity_id: uuid.UUID,
-        source_entity_id: uuid.UUID,
-        target_patch: EntityMergeTargetPatch | None = None,
+        target_patch: EntityMergeTargetPatch,
         *, context: GenericActor,
     ) -> EntityMergeResponse | None:
         """Merge one source into the target using the batch operation."""
-        result = await self.merge_batch(
-            target_entity_id, [source_entity_id], target_patch=target_patch, context=context
-        )
+        if len(target_patch.sources) != 1:
+            raise ValueError("single merge requires one source")
+        source_entity_id = target_patch.sources[0].object_id
+        result = await self.merge_batch(target_entity_id, target_patch, context=context)
         if result is None:
             return None
         return EntityMergeResponse(
@@ -270,8 +371,7 @@ class EntityRepository(ABC):
     async def merge_batch(
         self,
         target_entity_id: uuid.UUID,
-        source_entity_ids: Sequence[uuid.UUID],
-        target_patch: EntityMergeTargetPatch | None = None,
+        target_patch: EntityMergeTargetPatch,
         *, context: GenericActor,
     ) -> EntityMergeBatchResponse | None:
         """Atomically merge all sources into the target and delete the sources.
@@ -284,14 +384,16 @@ class EntityRepository(ABC):
         """
 
     async def delete_batch(
-        self, entity_ids: Sequence[uuid.UUID], *, context: GenericActor
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
     ) -> EntityDeleteManyResponse:
+        entity_ids = [target.object_id for target in targets]
         unique_ids = list(dict.fromkeys(entity_ids))
         if not unique_ids:
             return EntityDeleteManyResponse(deleted_count=0)
         request = EntityDeleteManyRequest(
             filter=EntityListFilter(entity_id=unique_ids),
             limit=len(unique_ids),
+            targets=list(targets),
         )
         return await self.delete_many(request, context=context)
 
@@ -741,11 +843,15 @@ class SourceRepository(ABC):
         )
 
     @abstractmethod
-    async def delete(self, source_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
         """Delete a source and cascade its dependent faces and mentions."""
 
     @abstractmethod
-    async def delete_batch(self, source_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    async def delete_batch(
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
+    ) -> int:
         """Delete unique source IDs with the same cascade as delete().
 
         Duplicate IDs count once. Empty input returns zero.
@@ -888,7 +994,9 @@ class FaceRepository(ABC):
         """Patch faces and preserve command order, using None for missing IDs."""
 
     @abstractmethod
-    async def delete(self, detection_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
         """
         Delete an existing face entry based on the given detection ID.
 
@@ -900,7 +1008,9 @@ class FaceRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_batch(self, detection_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    async def delete_batch(
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
+    ) -> int:
         """
         Delete multiple existing face entries based on the given detection IDs.
 
@@ -1038,7 +1148,9 @@ class TextMentionRepository(ABC):
         """
 
     @abstractmethod
-    async def delete(self, mention_id: uuid.UUID, *, context: GenericActor) -> bool:
+    async def delete(
+        self, target: VersionedTarget[uuid.UUID], *, context: GenericActor
+    ) -> bool:
         """
         Delete an existing text mention entry by its ID.
 
@@ -1050,7 +1162,9 @@ class TextMentionRepository(ABC):
         """
 
     @abstractmethod
-    async def delete_batch(self, mention_ids: Sequence[uuid.UUID], *, context: GenericActor) -> int:
+    async def delete_batch(
+        self, targets: Sequence[VersionedTarget[uuid.UUID]], *, context: GenericActor
+    ) -> int:
         """
         Delete a batch of existing text mention entries by their IDs.
 
@@ -1155,3 +1269,4 @@ class Database:
     text_mentions: TextMentionRepository
     users: UserRepository
     api_keys: APIKeyRepository | None = None
+    audit: AuditRepository = dataclass_field(default_factory=AuditRepository)

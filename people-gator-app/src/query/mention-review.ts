@@ -9,10 +9,10 @@ import { queryKeys } from './keys'
 import { restartPeoplePages } from './people-count-invalidation'
 
 export type MentionReviewTargets =
-  | { ids: string[] }
+  | { items: { id: string; version: number }[] }
   | {
       scopes: TextMentionListParams[]
-      ids?: string[]
+      items?: { id: string; version: number }[]
       excludeIds?: string[]
       /** Loaded explicit selections already verified; skipped by Verify. */
       verifiedIds?: string[]
@@ -22,17 +22,27 @@ export type MentionReviewTargets =
 export async function resolveMentionTargets(
   targets: MentionReviewTargets,
   action: 'verify' | 'unlink' = 'unlink',
+  versions?: Map<string, number>,
+  selectedRecords?: Map<string, TextMentionResponse>,
 ) {
-  if (!('scopes' in targets)) return [...new Set(targets.ids)]
+  if (!('scopes' in targets)) {
+    for (const item of targets.items) versions?.set(item.id, item.version)
+    return [...new Set(targets.items.map((item) => item.id))]
+  }
   const records = new Map<string, TextMentionResponse>()
   for (const scope of targets.scopes) {
     let cursor: string | null = null
     do {
       const page = await fetchTextMentions({ ...scope, limit: 100, cursor })
-      for (const record of page.items) records.set(record.mention_id, record)
+      for (const record of page.items) {
+        records.set(record.mention_id, record)
+        selectedRecords?.set(record.mention_id, record)
+        versions?.set(record.mention_id, record.version)
+      }
       cursor = page.cursor ?? null
     } while (cursor)
   }
+  for (const item of targets.items ?? []) versions?.set(item.id, item.version)
   const excluded = new Set(targets.excludeIds)
   // Verify reports changed occurrences: already-verified records are no-ops.
   if (action === 'verify') {
@@ -40,7 +50,9 @@ export async function resolveMentionTargets(
       if (record.entity_link_state === 'verified') excluded.add(id)
     for (const id of targets.verifiedIds ?? []) excluded.add(id)
   }
-  return [...new Set([...records.keys(), ...(targets.ids ?? [])])].filter((id) => !excluded.has(id))
+  return [...new Set([...records.keys(), ...(targets.items ?? []).map((item) => item.id)])].filter(
+    (id) => !excluded.has(id),
+  )
 }
 
 export function useReviewMentionsMutation() {
@@ -50,10 +62,11 @@ export function useReviewMentionsMutation() {
       targets,
       action,
     }: {
-      targets: MentionReviewTargets
+      targets: { items: { id: string; version: number }[] }
       action: 'verify' | 'unlink'
     }) => {
-      const ids = await resolveMentionTargets(targets, action)
+      const versions = new Map(targets.items.map(({ id, version }) => [id, version]))
+      const ids = [...versions.keys()]
       let completed = 0
       try {
         // Stay below the API's default batch limit and report confirmed chunks on failure.
@@ -62,6 +75,7 @@ export function useReviewMentionsMutation() {
             patchTextMentionBatchRouteApiV1TextMentionsBatchPatch({
               body: ids.slice(index, index + 50).map((mention_id) => ({
                 mention_id,
+                version: versions.get(mention_id)!,
                 ...(action === 'verify'
                   ? { entity_link_state: 'verified' as const }
                   : { entity_id: null, entity_link_state: null }),

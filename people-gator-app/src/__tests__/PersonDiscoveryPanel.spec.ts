@@ -15,6 +15,7 @@ import { personDiscoverySignals } from '@/viewmodels/person-discovery'
 
 function face(id: string, score = 93): PersonDiscoveryFace {
   return {
+    version: 1,
     id,
     portrait: '',
     portraitLoading: false,
@@ -51,6 +52,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [face('face-match')],
         people: [],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 2,
       },
@@ -82,7 +84,7 @@ describe('PersonDiscoveryPanel', () => {
       .find((button) => button.text().includes('Assign to Ada Lovelace'))!
       .trigger('click')
 
-    expect(wrapper.emitted('assignFaces')).toEqual([[['face-match']]])
+    expect(wrapper.emitted('assignFaces')).toEqual([[[{ id: 'face-match', version: 1 }]]])
   })
 
   it('shift-selects the inclusive range from the selection anchor', async () => {
@@ -90,6 +92,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [face('face-1'), face('face-2'), face('face-3')],
         people: [],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
@@ -112,6 +115,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [face('face-1'), face('face-2'), face('face-3')],
         people: [],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
@@ -134,6 +138,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [face('face-1'), face('face-2'), face('face-3')],
         people: [],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
@@ -164,6 +169,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [face('face-match')],
         people: [],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
@@ -187,6 +193,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [assignedFace],
         people: [],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
@@ -206,6 +213,7 @@ describe('PersonDiscoveryPanel', () => {
         faces: [],
         people: [
           {
+            version: 1,
             id: 'ada-king',
             name: 'Ada King',
             textMatch: true,
@@ -216,6 +224,7 @@ describe('PersonDiscoveryPanel', () => {
             portraitLoading: false,
           },
         ],
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
         searchTerm: 'Ada Lovelace',
@@ -237,6 +246,7 @@ describe('PersonDiscoveryPanel', () => {
       props: {
         faces: [],
         people: ['Ada King', 'Grace Hopper', 'Joan Clarke'].map((name, index) => ({
+          version: 1,
           id: `person-${index + 1}`,
           name,
           shortDescription: '',
@@ -244,6 +254,7 @@ describe('PersonDiscoveryPanel', () => {
           portrait: '',
           portraitLoading: false,
         })),
+        personVersion: 1,
         currentName: 'Ada Lovelace',
         referenceFaceCount: 1,
       },
@@ -260,7 +271,9 @@ describe('PersonDiscoveryPanel', () => {
     )
     expect(wrapper.findAll('[aria-label$="from merge"][aria-pressed="true"]')).toHaveLength(3)
     await wrapper.get('[aria-label="Selected person actions"] button:last-child').trigger('click')
-    expect(wrapper.emitted('mergePeople')).toEqual([[['person-1', 'person-2', 'person-3']]])
+    expect(wrapper.emitted('mergePeople')).toEqual([
+      [['person-1', 'person-2', 'person-3'].map((id) => ({ id, version: 1 })), 1],
+    ])
 
     await wrapper.setProps({ mergeSucceeded: true })
     expect(wrapper.find('[aria-label="Selected person actions"]').exists()).toBe(false)
@@ -272,6 +285,7 @@ it('keeps reference tags in Similar people and retries discovery errors', async 
     props: {
       faces: [],
       people: [],
+      personVersion: 1,
       currentName: 'Zora',
       referenceFaceCount: 15,
       peopleAnnotations: ['faces', 'name'],
@@ -306,6 +320,7 @@ it('labels text-only matches without inventing cosine percentages', () => {
     props: {
       faces: [{ ...face('text-face'), score: null }],
       people: [],
+      personVersion: 1,
       currentName: 'Zora',
       referenceFaceCount: 15,
     },
@@ -320,6 +335,7 @@ it('shows and removes a model override with default sources, and clears both cho
     props: {
       faces: [],
       people: [],
+      personVersion: 1,
       currentName: 'Zora',
       referenceFaceCount: 15,
       annotations: ['faces', 'aliases', 'name'],
@@ -350,7 +366,10 @@ it('keeps failed action selections available for retry without offering a search
   const wrapper = mount(PersonDiscoveryPanel, {
     props: {
       faces: [face('retry-face')],
-      people: [{ id: 'retry-person', name: 'Orion', aliases: [], shortDescription: '' }],
+      people: [
+        { version: 1, id: 'retry-person', name: 'Orion', aliases: [], shortDescription: '' },
+      ],
+      personVersion: 1,
       currentName: 'Zora',
       referenceFaceCount: 15,
     },
@@ -365,7 +384,10 @@ it('keeps failed action selections available for retry without offering a search
   expect(wrapper.text()).not.toContain('Search failed.')
   expect(wrapper.findAll('button').some((button) => button.text() === 'Retry')).toBe(false)
   await assign().trigger('click')
-  expect(wrapper.emitted('assignFaces')).toEqual([[['retry-face']], [['retry-face']]])
+  expect(wrapper.emitted('assignFaces')).toEqual([
+    [[{ id: 'retry-face', version: 1 }]],
+    [[{ id: 'retry-face', version: 1 }]],
+  ])
   await wrapper.setProps({ assignmentFailed: false })
   await wrapper.get('[aria-label="Select Orion for merge"]').trigger('click')
   const merge = () =>
@@ -375,7 +397,10 @@ it('keeps failed action selections available for retry without offering a search
   expect(wrapper.get('[role="alert"]').text()).toContain('Merge failed.')
   expect(wrapper.text()).not.toContain('Search failed.')
   await merge().trigger('click')
-  expect(wrapper.emitted('mergePeople')).toEqual([[['retry-person']], [['retry-person']]])
+  expect(wrapper.emitted('mergePeople')).toEqual([
+    [[{ id: 'retry-person', version: 1 }], 1],
+    [[{ id: 'retry-person', version: 1 }], 1],
+  ])
 })
 
 it('keeps face modalities/model before assignment and gives people their own matching controls', () => {
@@ -383,6 +408,7 @@ it('keeps face modalities/model before assignment and gives people their own mat
     props: {
       faces: [],
       people: [],
+      personVersion: 1,
       currentName: 'Lina',
       referenceFaceCount: 42,
       modelOptions: [{ value: 'model', label: 'Model' }],
@@ -421,6 +447,7 @@ it('omits legacy text and modality controls from the face-only panel', () => {
     props: {
       faces: [],
       people: [],
+      personVersion: 1,
       currentName: 'Lina',
       referenceFaceCount: 42,
       annotations: ['name'],
@@ -455,6 +482,7 @@ it('bounds found faces to two rows, uses cached results first and keeps retry in
     props: {
       faces: records.slice(0, 14),
       people: [],
+      personVersion: 1,
       currentName: 'Lina',
       referenceFaceCount: 42,
       faceCount: 30,
