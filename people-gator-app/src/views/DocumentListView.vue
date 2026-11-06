@@ -81,12 +81,10 @@ useAutomaticPagination({
 </script>
 
 <template>
-  <main class="mx-auto w-full min-w-0 px-2 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+  <main class="mx-auto w-full min-w-0 px-2 pb-4 md:px-4 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
     <div class="lg:shrink-0">
-      <header class="pb-4 pt-6">
+      <header class="pb-2 pt-4">
         <small class="font-semibold uppercase text-secondary">Documents index</small>
-        <h1>Browse documents</h1>
-        <p class="mt-2 text-sm text-muted-foreground">Registered documents and their page scans.</p>
       </header>
       <DocumentListSearchBar
         v-model:search-term="searchTerm"
@@ -106,40 +104,38 @@ useAutomaticPagination({
       :loading-more="isFetchingNextPage"
       class="pt-4 lg:min-h-0 lg:flex-1"
     >
-      <template #list-end
-        ><div ref="listEnd" class="sticky left-0 h-px w-px" aria-hidden="true"
-      /></template>
+      <template #list-end>
+        <div class="sticky left-0 w-max max-w-full px-4" data-slot="document-list-status">
+          <p v-if="isLoading" class="py-6 text-sm text-muted-foreground" role="status">
+            Loading documents…
+          </p>
+          <p v-if="isFetchingNextPage" class="sr-only" role="status">Loading more documents…</p>
+          <div v-if="error" class="py-6" role="alert">
+            <p class="text-sm text-destructive">Could not load documents.</p>
+            <Button
+              type="button"
+              variant="outline"
+              class="mt-2"
+              :disabled="isFetching"
+              @click="retry()"
+              >Retry documents</Button
+            >
+          </div>
+          <p
+            v-else-if="
+              !isLoading && !shared.error.value && !counts.error.value && documents.length === 0
+            "
+            class="py-10 text-sm text-muted-foreground"
+          >
+            {{
+              filtered
+                ? 'No documents match your search and filters.'
+                : 'No documents have been registered yet.'
+            }}
+          </p>
+        </div>
+        <div ref="listEnd" class="sticky left-0 h-px w-px" aria-hidden="true" />
+      </template>
     </DocumentTable>
-    <footer class="pb-4 pt-6 lg:shrink-0">
-      <p v-if="isLoading" class="py-6 text-center text-sm text-muted-foreground" role="status">
-        Loading documents…
-      </p>
-      <p v-if="isFetchingNextPage" class="sr-only" role="status">Loading more documents…</p>
-      <div v-if="error" class="py-6 text-center" role="alert">
-        <p class="text-sm text-destructive">Could not load documents.</p>
-        <Button type="button" variant="outline" class="mt-2" :disabled="isFetching" @click="retry()"
-          >Retry documents</Button
-        >
-      </div>
-      <p
-        v-else-if="
-          !isLoading && !shared.error.value && !counts.error.value && documents.length === 0
-        "
-        class="py-10 text-center text-sm text-muted-foreground"
-      >
-        {{
-          filtered
-            ? 'No documents match your search and filters.'
-            : 'No documents have been registered yet.'
-        }}
-      </p>
-
-      <div v-if="hasNextPage && !error" class="flex justify-center pb-4">
-        <Button type="button" variant="outline" :disabled="isFetching" @click="loadMore()">{{
-          isFetchingNextPage ? 'Loading documents…' : 'Load more documents'
-        }}</Button>
-      </div>
-      <p class="text-center text-sm text-muted-foreground">PeopleGator</p>
-    </footer>
   </main>
 </template>

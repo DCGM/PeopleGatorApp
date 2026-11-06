@@ -20,14 +20,14 @@ precise stuck-scroll interaction.
 
 ## Result and browser validation
 
-The Documents view uses available content width. On desktop, the table and footer fill the remaining viewport below the heading and filters. On mobile, the table section including Columns fills one viewport height. The standard shadcn-vue ScrollArea supplies both scrollbars; the header stays at its viewport top while rows scroll. The loading sentinel is inside it and sticks to its left edge, so
+The Documents view uses available content width. The page has no footer, title or subtitle, only the small Documents index label. On desktop, the table fills the entire remaining viewport below the filters, and scrolling to its last row loads the next batch (there is no Load more button). On mobile, the table section including Columns fills one viewport height. The standard shadcn-vue ScrollArea supplies both scrollbars; the header stays at its viewport top while rows scroll. The loading sentinel is inside it and sticks to its left edge, so
 horizontal position cannot hide the cursor-loading trigger. The normal page can
 still scroll to reach the table below expanded filters or many active tags.
 
 `people-gator-app/scripts/check-document-navigation.mjs` ran successfully at both
 viewports against migrated, twice-seeded PostgreSQL and local media. It checked:
 
-- Desktop table/footer fill the remaining viewport, and resizing from 900px to 1200px gives the table the additional 300px. The mobile table section fills one viewport.
+- No footer, page title or Load more button; the Documents index label remains. The desktop table fills the remaining viewport, and resizing from 900px to 1200px gives the table the additional 300px. The mobile table section fills one viewport.
 - Both standard shadcn scrollbars are present.
 - Exact eight-column defaults, header/body/colgroup alignment, stable pixel
   widths and no document-level horizontal overflow.

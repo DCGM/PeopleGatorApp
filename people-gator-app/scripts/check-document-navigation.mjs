@@ -102,12 +102,23 @@ try {
     const layout = await region.evaluate((e) => ({
       sectionHeight: e.closest('[data-slot="scroll-area"]').parentElement.getBoundingClientRect()
         .height,
-      footerBottom: document.querySelector('main footer').getBoundingClientRect().bottom,
+      sectionBottom: e.closest('[data-slot="scroll-area"]').getBoundingClientRect().bottom,
+      mainPadding: parseFloat(getComputedStyle(document.querySelector('main')).paddingBottom),
+      chrome: {
+        footer: document.querySelectorAll('main footer').length,
+        title: document.querySelectorAll('main h1').length,
+        label: document.querySelector('main header')?.textContent.trim(),
+      },
       pageHeight: document.documentElement.scrollHeight,
       viewport: innerHeight,
     }))
+    assert.deepEqual(layout.chrome, { footer: 0, title: 0, label: 'Documents index' })
+    assert.equal(await page.getByRole('button', { name: /load more/i }).count(), 0)
     if (label === 'desktop') {
-      assert.ok(Math.abs(layout.footerBottom - height) <= 1, 'footer reaches viewport bottom')
+      assert.ok(
+        Math.abs(layout.sectionBottom + layout.mainPadding - height) <= 1,
+        'table fills the remaining viewport height',
+      )
       assert.ok(layout.pageHeight <= height, 'desktop scroll belongs to the table')
       await page.setViewportSize({ width, height: 1200 })
       await page.waitForTimeout(150)

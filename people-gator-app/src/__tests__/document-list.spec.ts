@@ -84,6 +84,30 @@ async function render(url = '/documents') {
   return { wrapper, router, queryClient }
 }
 
+// jsdom has no layout: give every element a visible box, then scroll so the
+// automatic pagination reads the table's list end as visible.
+async function scrollToEnd() {
+  const spies = [
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 100,
+      left: 0,
+      right: 300,
+      width: 300,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }),
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(100),
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(300),
+  ]
+  cleanups.push(() => spies.forEach((spy) => spy.mockRestore()))
+  window.dispatchEvent(new Event('scroll'))
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+  await flushPromises()
+}
+
 beforeEach(() => {
   window.sessionStorage.clear()
   vi.clearAllMocks()
@@ -127,7 +151,7 @@ describe('document table results', () => {
       document: 'a-shared',
     })
   })
-  it('keeps loaded rows and appends one aligned skeleton until the next cursor resolves', async () => {
+  it('loads the next cursor on scroll, keeping rows and one aligned skeleton until it resolves', async () => {
     let complete!: (value: ReturnType<typeof response>) => void
     api.documents.mockImplementation(({ query }) =>
       !query.cursor
@@ -137,11 +161,10 @@ describe('document table results', () => {
           }),
     )
     const { wrapper } = await render()
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Load more documents')!
-      .trigger('click')
-    await flushPromises()
+    expect(wrapper.find('footer').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Load more'))).toBe(false)
+    expect(api.documents).toHaveBeenCalledTimes(1)
+    await scrollToEnd()
     const loading = wrapper.get('[data-slot="document-loading-row"]')
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     expect(loading.findAll('[data-slot="skeleton"]')).toHaveLength(8)
@@ -163,11 +186,7 @@ describe('document table results', () => {
           : Promise.resolve(response([doc('b')], 2)),
     )
     const { wrapper } = await render()
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Load more documents')!
-      .trigger('click')
-    await flushPromises()
+    await scrollToEnd()
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.text()).toContain('Could not load documents.')
     fail = false

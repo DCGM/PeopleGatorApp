@@ -126,9 +126,10 @@ afterEach(() => {
 })
 
 const screens = [
-  { name: 'people', view: PeopleSearchView, sort: 'name' },
-  { name: 'scans', view: DocumentSearchView, sort: 'page_id' },
-  { name: 'documents', view: DocumentListView, sort: 'name' },
+  { name: 'people', view: PeopleSearchView, sort: 'name', manual: true },
+  { name: 'scans', view: DocumentSearchView, sort: 'page_id', manual: true },
+  // Documents loads only on scroll: it has no manual Load more control.
+  { name: 'documents', view: DocumentListView, sort: 'name', manual: false },
 ]
 for (const screen of screens)
   describe(`automatic ${screen.name} pagination`, () => {
@@ -240,7 +241,7 @@ for (const screen of screens)
       await settle()
       expect(wrapper.findAll('.result')).toHaveLength(3)
     })
-    it('serializes delayed requests, guards the manual button, and cleans up on navigation', async () => {
+    it('serializes delayed requests, guards any manual button, and cleans up on navigation', async () => {
       const { wrapper } = await render()
       let complete!: (value: ReturnType<typeof batch>) => void
       api.list.mockImplementation(
@@ -257,7 +258,8 @@ for (const screen of screens)
       window.dispatchEvent(new Event('resize'))
       await settle()
       expect(api.list).toHaveBeenCalledTimes(2)
-      expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      if (screen.manual) expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      else expect(wrapper.find('button').exists()).toBe(false)
       wrapper.unmount()
       complete(batch(['second'], 'last'))
       window.dispatchEvent(new Event('scroll'))
@@ -347,7 +349,7 @@ for (const screen of screens)
       await settle()
       expect(wrapper.findAll('.result')).toHaveLength(2)
     })
-    it('keeps the manual control available and guards background refetches', async () => {
+    it('guards background refetches, then loads from the manual control or scrolling', async () => {
       const { wrapper, client } = await render()
       let complete!: (value: ReturnType<typeof batch>) => void
       api.list.mockImplementationOnce(
@@ -362,13 +364,17 @@ for (const screen of screens)
       intersection()
       await settle()
       expect(api.list).toHaveBeenCalledTimes(2)
-      expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+      if (screen.manual) expect(wrapper.get('button').attributes('disabled')).toBeDefined()
       complete(batch(['first'], 'next'))
       await refetch
       endTop = 1500
       await settle()
       expect(api.list).toHaveBeenCalledTimes(2)
-      await wrapper.get('button').trigger('click')
+      if (screen.manual) await wrapper.get('button').trigger('click')
+      else {
+        endTop = 500
+        intersection()
+      }
       await settle()
       expect(wrapper.findAll('.result')).toHaveLength(2)
     })

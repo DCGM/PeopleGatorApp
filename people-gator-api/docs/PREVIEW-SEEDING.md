@@ -808,8 +808,8 @@ when both are hidden, a compact library/ID link keeps navigation available.
 The `document-table-unnamed` manifest link demonstrates the document-ID fallback
 using the existing unnamed legacy document and its registered page.
 The table uses document-wide counts even when evidence filters select matching documents. Scroll horizontally to reach
-all fields and vertically to append cursor batches; Load more and Retry remain
-keyboard accessible. The **First page** column is shown by default, with a single thumbnail and a link to that registered page in the viewer/editor. The document response supplies its source
+all fields and vertically to append cursor batches automatically; Retry remains
+keyboard accessible after a failed batch. The **First page** column is shown by default, with a single thumbnail and a link to that registered page in the viewer/editor. The document response supplies its source
 UUID in the same batched projection as the page total; enabling the column adds
 only thumbnail requests, without page-list or annotation/name queries. Hidden
 previews make no media requests. First means the first registered numbered page, with unknown numbers last and
@@ -1132,8 +1132,8 @@ header minima and purpose-specific maxima. There is no bulk width-reset action; 
 and hidden/restored columns within the mounted Documents view; reloads use default widths. Visible column selections persist in sessionStorage for the browser tab.
 
 Scroll horizontally to the middle/far right and vertically to the final row to
-load the second cursor batch automatically; Load more documents is the keyboard
-fallback. Search/filter/sort URLs and counts retain their existing semantics.
+load the second cursor batch automatically; keyboard scrolling of the focused
+table reaches it too. Search/filter/sort URLs and counts retain their existing semantics.
 
 ### People count states
 
@@ -1259,7 +1259,7 @@ safely. Widths remain fixed at every viewport: title 320px, preview 120px,
 library 200px, Pages 104px, Linked entities 144px, Annotations 144px, Faces/Mentions 128px and
 optional NDK 80px. Header text wraps independently of sort icons.
 
-The Documents view uses the available content width. On desktop (1024px and wider), the table and footer fill the remaining viewport height below the heading and filters. The table receives the flexible space above the footer. On mobile, the table section, including Columns, occupies one viewport height, with the heading, filters and footer reachable by page scrolling. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
+The Documents view uses the available content width. It has no footer, page title or subtitle; only the small **Documents index** label precedes the search panel. On desktop (1024px and wider), the table fills the entire remaining viewport height below the filters. On mobile, the table section, including Columns, occupies one viewport height, with the label and filters reachable by page scrolling. There is no Load more button: reaching the last row loads the next batch. The standard shadcn-vue ScrollArea provides both scrollbars around the sticky table header without growing page width.
 Choose extra fields and scroll vertically at left, middle and right positions;
 the loading sentinel remains visible across the horizontal content. Counts retain
 full-document semantics, including unassigned and direct document evidence.
@@ -1281,7 +1281,8 @@ A failed metadata lookup offers Retry page and a Documents link.
 While the next document batch is loading, a standard shadcn Skeleton row appears
 after the loaded rows, aligned with the visible columns. Existing rows remain
 usable; the skeleton disappears after success or failure, and the existing retry
-control handles failed requests. Desktop loading keeps the footer height stable.
+control handles failed requests. Loading, error and empty states appear inside
+the table's scroll area.
 
 ### Top-bar document and page breadcrumbs (#114)
 
