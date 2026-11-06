@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from people_gator_api.services.embedding_service.http_service import (
     close_embedding_service,
     init_embedding_service,
@@ -16,34 +15,15 @@ from people_gator_api.utils.opentelemetry import initialize_opentelemetry
 from people_gator_api.utils.logging import configure_logging
 from people_gator_api.settings import settings
 from people_gator_api.routes.v1 import router as v1_router
-from people_gator_api.routes.jwks import router as jwks_router
 from people_gator_api.services.database_service import (
     close_db,
     init_db,
 )
 from people_gator_api.utils.version_info import get_version_info
+from people_gator_api.utils.swagger import swagger_html
 import dotenv
 
 dotenv.load_dotenv()  # Load environment variables from .env file at startup
-
-
-async def well_known_cors(
-    request: Request,
-    call_next: RequestResponseEndpoint,
-) -> Response:
-    if not request.url.path.startswith("/.well-known/"):
-        return await call_next(request)
-
-    if request.method == "OPTIONS":
-        response = Response(status_code=204)
-    else:
-        response = await call_next(request)
-
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Max-Age"] = "86400"
-    return response
 
 
 @asynccontextmanager
@@ -65,6 +45,7 @@ def get_app() -> FastAPI:
         description="An API for managing people and their relationships through backend-neutral persistence contracts.",
         version=get_version_info().full_version,
         lifespan=lifespan,
+        docs_url=None,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -74,7 +55,6 @@ def get_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(BaseHTTPMiddleware, dispatch=well_known_cors)
 
     if settings.otel.enabled:
         (
@@ -86,8 +66,12 @@ def get_app() -> FastAPI:
         configure_logging()
     else:
         configure_logging()
+    @app.get("/docs", include_in_schema=False)
+    async def docs(request: Request):
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        return swagger_html(openapi_url=f"{root_path}{app.openapi_url}", title=f"{app.title} - Swagger UI")
+
     app.include_router(v1_router)
-    app.include_router(jwks_router)
     def openapi():
         if app.openapi_schema is None:
             schema = get_openapi(title=app.title, version=app.version,

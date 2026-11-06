@@ -134,7 +134,7 @@ class Staging(Host):
         identity = generation["generation"]
         if not re.fullmatch(r"[a-f0-9]{16}", identity) or not re.fullmatch(r"[a-f0-9]{64}", generation["password"]):
             raise DeployError("Invalid staging generation state")
-        return {"COMMIT_SHA": sha, "STAGING_HOST": self.host,
+        return {"AUTH_STATE_DIR": self.config.get("auth_state_dir", str(self.staging_root / "auth")), "COMMIT_SHA": sha, "STAGING_HOST": self.host,
                 "PREVIEW_LOG_ADDRESS": f"127.0.0.1:{self.config.get('preview_log_port', 24224)}",
                 "DB_NAME": f"staging_{identity}", "DB_USER": f"staging_{identity}",
                 "DB_PASSWORD": generation["password"], "RUNTIME_FILE": self.config["runtime_file"],
@@ -235,7 +235,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         write_private(directory / "provenance.json", json.dumps(generation["provenance"]))
 
     def readiness(self, attempts=30):
-        routed_readiness(self.host, extra={"/staging-login.html": b"<form>"}, attempts=attempts)
+        routed_readiness(self.host, extra={"/login.html": b"<html", "/auth/health": b"ok"}, attempts=attempts)
 
     def recover_activation(self, *, refresh_requested=False):
         journal = self.staging_root / "activation.json"
@@ -254,7 +254,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
             return  # Retry migration/check with a current image; never roll back an upgraded schema
         previous = self.staging_root / "compose.env"
         if previous.exists():
-            self.command(self.compose_staging(previous, "up", "-d", "--wait", "--wait-timeout", "180", "backend", "frontend"))
+            self.command(self.compose_staging(previous, "up", "-d", "--wait", "--wait-timeout", "180", "auth", "backend", "frontend"))
             self.readiness()
         else:
             self.command(self.compose_staging(Path(pending["candidate"]), "down", "--timeout", "30"))
@@ -308,7 +308,7 @@ ALTER DATABASE {name} ALLOW_CONNECTIONS true;
         activation = secrets.token_hex(16)
         write_private(self.staging_root / "activation.json", json.dumps({"activation": activation, "candidate": str(candidate), "refresh": refresh}))
         try:
-            self.command(self.compose_staging(candidate, "up", "-d", "--wait", "--wait-timeout", "180", "backend"))
+            self.command(self.compose_staging(candidate, "up", "-d", "--wait", "--wait-timeout", "180", "auth", "backend"))
             self.command(self.compose_staging(candidate, "up", "-d", "--wait", "--wait-timeout", "180", "frontend"))
             self.readiness()
         except BaseException:

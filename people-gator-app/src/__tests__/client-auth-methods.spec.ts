@@ -3,8 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listEntitiesRouteApiV1EntitiesGet } from '@/client'
 import { createClient } from '@/client/client'
 import { apiClient } from '@/query/client'
+import { getAccessToken, recordAuthenticatedResponse } from '@/query/auth'
+vi.mock('@/query/auth', () => ({
+  getAccessToken: vi.fn(),
+  requireLogin: vi.fn(),
+  recordAuthenticatedResponse: vi.fn(),
+}))
 
-afterEach(() => sessionStorage.clear())
+afterEach(() => {
+  sessionStorage.clear()
+  vi.unstubAllGlobals()
+})
 
 describe('generated client authentication alternatives', () => {
   it.each(['bearer', 'api-key'] as const)(
@@ -38,35 +47,35 @@ describe('generated client authentication alternatives', () => {
 
   it('the browser auth callback returns a token only for the bearer scheme', async () => {
     const token = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
-    sessionStorage.setItem('people-gator.access-token', token)
+    vi.mocked(getAccessToken).mockResolvedValue(token)
     const auth = apiClient.getConfig().auth
     if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
     expect(await auth({ type: 'http', scheme: 'bearer' })).toBe(token)
     expect(await auth({ type: 'apiKey', name: 'X-API-Key' })).toBeUndefined()
   })
 
-  it('refreshes a stored token issued before the user UUID claim', async () => {
-    const legacy = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600 }))}.signature`
-    const fresh = `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 3600, uid: 'u' }))}.signature`
-    sessionStorage.setItem('people-gator.access-token', legacy)
-    sessionStorage.setItem('people-gator.refresh-token', 'refresh')
-    const adapter = vi.fn(async (config) => ({
-      data: { access_token: fresh, refresh_token: 'rotated', token_type: 'bearer' },
+  it('delegates bearer renewal to the configured authentication provider', async () => {
+    vi.mocked(getAccessToken).mockResolvedValue('provider-renewed-token')
+    const auth = apiClient.getConfig().auth
+    if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
+    expect(await auth({ type: 'http', scheme: 'bearer' })).toBe('provider-renewed-token')
+    expect(getAccessToken).toHaveBeenCalled()
+  })
+  it('only resets reauthentication recovery after a successful bearer request', async () => {
+    vi.mocked(recordAuthenticatedResponse).mockClear()
+    const adapter = async (config: import('axios').InternalAxiosRequestConfig) => ({
+      data: {},
       status: 200,
       statusText: 'OK',
       headers: {},
       config,
-    }))
-    const previous = apiClient.getConfig().axios
-    apiClient.setConfig({ axios: axios.create({ adapter }) })
-    try {
-      const auth = apiClient.getConfig().auth
-      if (typeof auth !== 'function') throw new Error('Expected scheme-aware authentication')
-      expect(await auth({ type: 'http', scheme: 'bearer' })).toBe(fresh)
-      expect(adapter.mock.calls[0]![0].url).toContain('/token/refresh')
-      expect(sessionStorage.getItem('people-gator.refresh-token')).toBe('rotated')
-    } finally {
-      apiClient.setConfig({ axios: previous })
-    }
+    })
+    await apiClient.instance.get('/api/v1/health', { adapter })
+    expect(recordAuthenticatedResponse).not.toHaveBeenCalled()
+    await apiClient.instance.get('/api/v1/me', {
+      adapter,
+      headers: { Authorization: 'Bearer valid' },
+    })
+    expect(recordAuthenticatedResponse).toHaveBeenCalledOnce()
   })
 })

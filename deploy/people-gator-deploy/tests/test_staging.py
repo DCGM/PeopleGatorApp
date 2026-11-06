@@ -133,9 +133,9 @@ class StagingTests(unittest.TestCase):
         for field in ("generation", "password", "provenance"):
             self.assertEqual(state[field], original[field])
         self.assertNotIn("prepare", controller.events)
-        self.assertFalse(any("seed" in event or "download" in event or "auth" in event for event in controller.events))
+        self.assertFalse(any("seed" in event or "download" in event or "auth-provision" in event for event in controller.events))
         gates = ["run --rm --no-deps migrate", "worker-validate", "config --quiet",
-                 "run --rm --no-deps check", "up -d --wait --wait-timeout 180 backend",
+                 "run --rm --no-deps check", "up -d --wait --wait-timeout 180 auth backend",
                  "up -d --wait --wait-timeout 180 frontend", "https-readiness"]
         indices = [controller.events.index(gate) for gate in gates]
         self.assertEqual(indices, sorted(indices))
@@ -203,7 +203,7 @@ class StagingTests(unittest.TestCase):
         self.assertEqual(state["provenance"]["sha256"], controller.config["snapshot"]["sha256"])
         self.assertLess(controller.events.index("inspect"), controller.events.index("provision"))
         self.assertLess(controller.events.index("provision"), controller.events.index("restore"))
-        self.assertFalse(any(word in event for event in controller.events for word in ("copy", "auth", "download")))
+        self.assertFalse(any(word in event for event in controller.events for word in ("copy", "auth-provision", "download")))
         self.assertEqual(list(controller.staging_root.glob("snapshot-*")), [])
 
     def test_snapshot_writes_during_restore_are_rejected(self):
@@ -256,7 +256,7 @@ class StagingTests(unittest.TestCase):
         journal.write_text(json.dumps({"activation": "uncommitted", "refresh": True}))
         controller.recover_activation()
         self.assertFalse(journal.exists())
-        self.assertIn("up -d --wait --wait-timeout 180 backend frontend", controller.events)
+        self.assertIn("up -d --wait --wait-timeout 180 auth backend frontend", controller.events)
         journal.write_text(json.dumps({"activation": state["activation"], "refresh": True}))
         (controller.staging_root / "compose.env").write_text("interrupted env write")
         controller.recover_activation()
@@ -295,7 +295,7 @@ class StagingTests(unittest.TestCase):
         backend = rendered["services"]["backend"]
         self.assertIn("external-secret", backend["environment"]["PEOPLE_GATOR_API__STORAGE"])
         self.assertFalse(any("KEY_PREFIX" in key for key in backend["environment"]))
-        self.assertEqual(set(backend["networks"]), {"database", "web", "telemetry"})
+        self.assertEqual(set(backend["networks"]), {"database", "web", "telemetry", "authorization"})
         self.assertNotIn("storage-init", rendered["services"])
         self.assertNotIn("seed", rendered["services"])
 
@@ -313,7 +313,7 @@ class StagingTests(unittest.TestCase):
         environment = (controller.staging_root / "worker.env").read_text()
         self.assertIn('"s3":null', environment)
         self.assertNotIn("external-secret", environment)
-        for unsupported in ("copy", "auth", "download"):
+        for unsupported in ("copy", "auth-provision", "download"):
             with self.assertRaisesRegex(DeployError, "databases only"):
                 controller.worker(unsupported, values, controller.staging_root)
 

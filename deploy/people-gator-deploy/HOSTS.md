@@ -140,8 +140,8 @@ external. Only database backup objects are downloaded and verified by refresh. M
 snapshot. Operators maintain external storage/auth compatibility separately;
 staging never rewrites media prefixes or imports production auth objects.
 Sign in at `https://<host>/staging-login.html` using externally provisioned
-accounts. The page contains no credentials; the demo auto-login only works if
-those credentials have explicitly been supplied externally.
+accounts in the standalone issuer. Provision its external state directory before
+deployment; see [standalone authorization rollout](README.md#standalone-authorization-rollout-89).
 
 ## Releases
 
@@ -149,11 +149,12 @@ those credentials have explicitly been supplied externally.
   with separate **migration** and **runtime** roles. `migration_file` and
   `runtime_file` (mode 600) contain only `PEOPLE_GATOR_API__*` lines: the migration
   file the migration role's persistence settings; the runtime file the runtime
-  role, `PEOPLE_GATOR_API__STORAGE…`, JWK issuer/audience and paths. Deployment
+  role, `PEOPLE_GATOR_API__STORAGE…`, public `AUTH` issuer/audience/JWKS URL. Deployment
   fixes host/port, debug/reload off, `schema_mode=validate` and CORS.
-- Private object storage holding users, API keys and JWKs, preserved across
+- Private object storage holding media and API keys, plus separately managed
+  issuer accounts/signing keys, preserved across
   releases; back up the database before any release that migrates
   ([backup](../backup/README.md)) and record it in a mode-600 file for
   `--backup-record`.
-- The frontend embeds demo auto-login credentials. Put the release behind a
-  reviewed access boundary before setting `access_reviewed: true`.
+- The frontend uses a login gateway. Configure the separate issuer and review
+  its proxy/network boundary before setting `access_reviewed: true`.

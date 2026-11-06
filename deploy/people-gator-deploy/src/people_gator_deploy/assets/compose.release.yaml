@@ -78,7 +78,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${WEB_NETWORK:-web}
       - traefik.http.routers.pg-release-api.entrypoints=websecure
-      - 'traefik.http.routers.pg-release-api.rule=Host(`${RELEASE_HOST:?required}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`))'
+      - 'traefik.http.routers.pg-release-api.rule=Host(`${RELEASE_HOST:?required}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`))'
       - traefik.http.routers.pg-release-api.priority=100
       - traefik.http.routers.pg-release-api.service=pg-release-api
       - traefik.http.routers.pg-release-api.tls=true

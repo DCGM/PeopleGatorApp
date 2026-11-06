@@ -1,213 +1,72 @@
+"""Trusted public-JWKS consumer. Never reads issuer secrets or application storage."""
 import asyncio
-import datetime
 import time
-import json
 import uuid
-import logging
 from collections.abc import Mapping
-from typing import Any, TypedDict
-from botocore.exceptions import ClientError
+from typing import TypedDict
+import aiohttp
 from fastapi import HTTPException
 from joserfc.errors import ClaimError, InvalidKeyIdError, JoseError
-from joserfc.jwk import (
-    ECKey,
-    KeySet,
-    KeySetSerialization,
-)
+from joserfc.jwk import KeySet
 from joserfc.jws import JWSRegistry
-from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, Token, encode, decode
-from starlette import status
-from people_gator_api.services.filesystem_service import open_file
+from joserfc.jwt import ClaimsOption, JWTClaimsRegistry, decode
 from people_gator_api.settings import settings
 
-
-logger = logging.getLogger(__name__)
-
 _keyset: KeySet | None = None
-_last_fetch_time: float | None = None
-_last_key_miss_refresh_time: float | None = None
+_last_fetch_time: float = float("-inf")
+_last_attempt: float = float("-inf")
 _keyset_lock = asyncio.Lock()
-_KEY_MISS_REFRESH_INTERVAL_SECONDS = 5
 
-TOKEN_ISSUER = settings.jwk.issuer
-TOKEN_AUDIENCE = settings.jwk.audience
 
-def _should_refresh_for_key_miss(refresh_if: KeySet | None, now: float) -> bool:
-    # Unknown key IDs are untrusted; bound how often they can trigger storage I/O.
-    return refresh_if is _keyset and (
-        _last_key_miss_refresh_time is None
-        or now - _last_key_miss_refresh_time >= _KEY_MISS_REFRESH_INTERVAL_SECONDS
-    )
+async def _fetch_public_keys() -> KeySet:
+    config = settings.auth
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=config.timeout_seconds)) as client:
+        async with client.get(config.jwks_url, allow_redirects=False) as response:
+            response.raise_for_status()
+            data = bytearray()
+            async for chunk in response.content.iter_chunked(8192):
+                data.extend(chunk)
+                if len(data) > 65536:
+                    raise ValueError("JWKS exceeds limit")
+    import json
+    jwks = json.loads(data)
+    if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list) or not 1 <= len(jwks["keys"]) <= 64:
+        raise ValueError("Invalid JWKS")
+    for key in jwks["keys"]:
+        if not isinstance(key, dict) or key.get("kty") not in ("RSA", "EC") or any(
+            field in key for field in ("d", "p", "q", "dp", "dq", "qi", "oth", "k")
+        ):
+            raise ValueError("JWKS must contain public asymmetric keys only")
+    return KeySet.import_key_set(jwks)
 
 
 async def get_key_set(*, refresh_if: KeySet | None = None) -> KeySet:
-    """Load signing keys, optionally refreshing the caller's cached key set."""
-    global _keyset, _last_fetch_time, _last_key_miss_refresh_time
-    now = time.monotonic()
-    if (
-        _keyset is not None
-        and _last_fetch_time is not None
-        and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
-        and not _should_refresh_for_key_miss(refresh_if, now)
-    ):
-        return _keyset
+    global _keyset, _last_fetch_time, _last_attempt
+    config = settings.auth
     async with _keyset_lock:
         now = time.monotonic()
-        # A concurrent caller may have populated the cache while we waited.
-        if (
-            _keyset is not None
-            and _last_fetch_time is not None
-            and now - _last_fetch_time < settings.jwk.key_cache_ttl_seconds
-            and not _should_refresh_for_key_miss(refresh_if, now)
-        ):
+        fresh = _keyset is not None and now - _last_fetch_time < config.key_cache_ttl_seconds
+        refresh = refresh_if is _keyset and refresh_if is not None
+        if fresh and not refresh:
             return _keyset
+        if now - _last_attempt < config.refresh_interval_seconds:
+            if fresh:
+                return _keyset
+            raise HTTPException(503, "Authorization provider unavailable")
+        _last_attempt = now
         try:
-            async with open_file(settings.jwk.key_path, mode="r") as f:
-                jwks_data: KeySetSerialization = json.load(f)
-        except (FileNotFoundError, ClientError) as exc:
-            if isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") not in (
-                "NoSuchKey", "404", "NotFound",
-            ):
-                raise
-            logger.warning("JWK key set is not available at %s.", settings.jwk.key_path)
-            logger.warning("Generating a new ES256 JWK key set at %s.", settings.jwk.key_path)
-            key = ECKey.generate_key(
-                "P-256", parameters={"alg": "ES256", "use": "sig"}, auto_kid=True,
-            )
-            jwks_data = KeySet([key]).as_dict(private=True)
-            async with open_file(settings.jwk.key_path, mode="w") as f:
-                json.dump(jwks_data, f)
-        _keyset = KeySet.import_key_set(jwks_data)
+            keys = await _fetch_public_keys()
+        except (aiohttp.ClientError, TimeoutError, ValueError, JoseError, TypeError, KeyError) as exc:
+            if fresh:
+                return _keyset
+            raise HTTPException(503, "Authorization provider unavailable") from exc
+        _keyset = keys
         _last_fetch_time = time.monotonic()
-        if refresh_if is not None:
-            _last_key_miss_refresh_time = _last_fetch_time
-        return _keyset
+        return keys
 
-def _now_datetime() -> datetime.datetime:
-    """Return the current UTC time as a datetime object."""
-    return datetime.datetime.now(datetime.timezone.utc)
 
 def _now() -> int:
-    """Return the current UTC time as a Unix timestamp."""
-    return int(_now_datetime().timestamp())
-
-
-_access_claims_registry: JWTClaimsRegistry | None = None
-_refresh_claims_registry: JWTClaimsRegistry | None = None
-
-async def get_access_claims_registry() -> JWTClaimsRegistry:
-    global _access_claims_registry
-    if _access_claims_registry is not None:
-        return _access_claims_registry
-    _access_claims_registry = JWTClaimsRegistry(
-        now=_now,
-        leeway=0,
-        iss=ClaimsOption(value=TOKEN_ISSUER, essential=True),
-        aud=ClaimsOption(value=TOKEN_AUDIENCE, essential=True),
-        sub=ClaimsOption(allow_blank=False, essential=True),
-        # Bearer requests trust these claims alone, so expiry is mandatory.
-        exp=ClaimsOption(essential=True),
-        scopes=ClaimsOption(allow_blank=False, essential=True),
-        uid=ClaimsOption(allow_blank=False, essential=True),
-    )
-    return _access_claims_registry
-
-
-async def get_refresh_claims_registry() -> JWTClaimsRegistry:
-    global _refresh_claims_registry
-    if _refresh_claims_registry is not None:
-        return _refresh_claims_registry
-    _refresh_claims_registry = JWTClaimsRegistry(
-        now=_now,
-        leeway=0,
-        iss=ClaimsOption(value=TOKEN_ISSUER, essential=True),
-        aud=ClaimsOption(value=TOKEN_AUDIENCE, essential=True),
-        sub=ClaimsOption(allow_blank=False, essential=True),
-        scopes=ClaimsOption(allow_blank=False, essential=True),
-        jti=ClaimsOption(allow_blank=False, essential=True),
-    )
-    return _refresh_claims_registry
-
-
-_jws_registry: JWSRegistry | None = None
-
-async def get_jws_registry() -> JWSRegistry:
-    global _jws_registry
-    if _jws_registry is not None:
-        return _jws_registry
-    _jws_registry = JWSRegistry(algorithms=["ES256"])
-    return _jws_registry
-
-
-async def issue_access_token(
-    subject: str,
-    scopes: list[str],
-    user_id: uuid.UUID,
-):
-    """Sign an access token carrying the persisted user UUID for attribution."""
-    iss = TOKEN_ISSUER
-    iat = _now_datetime()
-    exp = iat + datetime.timedelta(seconds=settings.jwk.access_token_lifetime_seconds)
-    aud = TOKEN_AUDIENCE
-    claims = {
-        "iss": iss,
-        "sub": subject,
-        "aud": aud,
-        "iat": iat,
-        "exp": exp,
-        "scopes": " ".join(scopes),
-        "uid": str(user_id),
-    }
-    protected = {"alg": "ES256"}
-    key_set = await get_key_set()
-    jws_registry = await get_jws_registry()
-    return encode(protected, claims, key_set, registry=jws_registry)
-
-
-async def issue_refresh_token(
-    subject: str,
-    scopes: list[str],
-    jti: str,
-) -> str:
-    """Issue a refresh token that can be used to obtain new access tokens.
-    
-    Refresh tokens do not expire and include the caller-provided unique
-    identifier (jti) and session_id to track concurrent sessions.
-    """
-    iss = TOKEN_ISSUER
-    iat = _now_datetime()
-    aud = TOKEN_AUDIENCE
-    claims = {
-        "iss": iss,
-        "sub": subject,
-        "aud": aud,
-        "iat": iat,
-        "scopes": " ".join(scopes),
-        "jti": jti,
-    }
-    protected = {"alg": "ES256"}
-    key_set = await get_key_set()
-    jws_registry = await get_jws_registry()
-    return encode(protected, claims, key_set, registry=jws_registry)
-
-
-async def _decode_token(token: str, *, refresh: bool = False) -> Token:
-    """Verify a signature, retrying once if cached keys lack the token's kid."""
-    key_set = await get_key_set()
-    jws_registry = await get_jws_registry()
-    try:
-        try:
-            return decode(token, key_set, registry=jws_registry)
-        except InvalidKeyIdError:
-            key_set = await get_key_set(refresh_if=key_set)
-            return decode(token, key_set, registry=jws_registry)
-    except JoseError as exc:
-        label = "refresh token" if refresh else "token"
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid {label}: {exc}",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
+    return int(time.time())
 
 
 type JSONValue = str | int | float | bool | None | list[JSONValue] | dict[str, JSONValue]
@@ -251,44 +110,32 @@ def access_token_claims(claims: Mapping[str, JSONValue]) -> AccessTokenClaims:
     )
 
 
+
 async def verify_access_token(token: str) -> AccessTokenClaims:
-    """Decode and validate an access token without consulting persistence.
-
-    Tokens issued before ``uid`` existed are rejected; clients refresh or log
-    in again.
-    """
-    decoded_claims = await _decode_token(token)
+    config = settings.auth
+    keys = await get_key_set()
+    registry = JWSRegistry(algorithms=config.algorithms)
     try:
-        claims_registry = await get_access_claims_registry()
-        claims_registry.validate(decoded_claims.claims)
-        claims = access_token_claims(decoded_claims.claims)
-    except ClaimError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token claims: {str(e)}",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}",
-        )
-    return claims
-
-
-async def verify_refresh_token(token: str) -> dict[str, Any]:
-    """Decode and validate a refresh token."""
-    decoded_claims = await _decode_token(token, refresh=True)
-    try:
-        claims_registry = await get_refresh_claims_registry()
-        claims_registry.validate(decoded_claims.claims)
-    except ClaimError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid refresh token claims: {str(e)}",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid refresh token: {str(e)}",
-        )
-    return decoded_claims.claims
+        try:
+            decoded = decode(token, keys, registry=registry)
+        except InvalidKeyIdError:
+            decoded = decode(token, await get_key_set(refresh_if=keys), registry=registry)
+        claims = dict(decoded.claims)
+        claims["uid"] = claims.get(config.actor_claim)
+        claims["scopes"] = claims.get(config.scopes_claim)
+        JWTClaimsRegistry(
+            now=_now, leeway=0,
+            iss=ClaimsOption(value=config.issuer, essential=True),
+            aud=ClaimsOption(value=config.audience, essential=True),
+            sub=ClaimsOption(allow_blank=False, essential=True),
+            exp=ClaimsOption(essential=True),
+            iat=ClaimsOption(essential=True),
+            uid=ClaimsOption(allow_blank=False, essential=True),
+            scopes=ClaimsOption(allow_blank=False, essential=True),
+        ).validate(claims)
+        # Built-in refresh tokens lack uid/exp; the type marker also separates them.
+        if claims.get("token_use", "access") != "access":
+            raise ValueError("Not an access token")
+        return access_token_claims(claims)
+    except (JoseError, ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(401, "Invalid bearer token", headers={"WWW-Authenticate": "Bearer"}) from exc

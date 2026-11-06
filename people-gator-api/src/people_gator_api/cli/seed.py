@@ -18,7 +18,7 @@ async def seed_database() -> None:
         async for database in get_database():
             result = await seed_preview(database, get_filesystem())
             print(result.model_dump_json(indent=2))
-            base_url = settings.jwk.issuer.rstrip("/")
+            base_url = settings.auth.issuer.rstrip("/")
             for key, entity_id in result.entities.items():
                 print(f"{key}: {base_url}/people/{entity_id}")
             for key, relative_url in result.filter_examples.items():

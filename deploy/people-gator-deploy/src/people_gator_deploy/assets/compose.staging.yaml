@@ -1,5 +1,5 @@
 # Stable staging project; only the database switches by generation.
-# Storage, media and authentication settings are supplied externally to backend.
+# Resource storage and separate issuer account/key state are managed externally.
 x-staging-labels: &staging-labels
   people-gator.environment: staging
   people-gator.staging.sha: ${COMMIT_SHA:-unknown}
@@ -62,6 +62,43 @@ services:
       <<: *database-environment
       PEOPLE_GATOR_API__STORAGE: '{"local":{"root":"/tmp/database-tools"},"s3":null}'
 
+  auth:
+    image: ${BACKEND_IMAGE:?required}
+    logging: *staging-logging
+    user: '10001:10001'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:size=32m,mode=1777']
+    restart: unless-stopped
+    command: [auth]
+    environment:
+      PEOPLE_GATOR_AUTH__STATE_DIR: /auth
+      PEOPLE_GATOR_AUTH__ISSUER: https://${STAGING_HOST:?required}
+      PEOPLE_GATOR_AUTH__AUDIENCE: ${STAGING_HOST:?required}
+    volumes: ["${AUTH_STATE_DIR:?operator-provisioned issuer directory required}:/auth"]
+    networks:
+      web:
+      authorization:
+        aliases: ["auth-${STAGING_HOST}"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/auth/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    labels:
+      - people-gator.environment=staging
+      - people-gator.staging.sha=${COMMIT_SHA:-unknown}
+      - traefik.enable=true
+      - traefik.docker.network=${WEB_NETWORK:-web}
+      - traefik.http.routers.pg-staging-auth.entrypoints=websecure
+      - 'traefik.http.routers.pg-staging-auth.rule=Host(`${STAGING_HOST}`) && (PathPrefix(`/token/`) || PathPrefix(`/.well-known/`) || Path(`/auth/health`))'
+      - traefik.http.routers.pg-staging-auth.priority=110
+      - traefik.http.routers.pg-staging-auth.service=pg-staging-auth
+      - traefik.http.routers.pg-staging-auth.tls=true
+      - traefik.http.routers.pg-staging-auth.tls.certresolver=${CERTIFICATE_RESOLVER-tlschallenge}
+      - traefik.http.services.pg-staging-auth.loadbalancer.server.port=8002
+
   backend:
     <<: *backend
     env_file:
@@ -70,9 +107,13 @@ services:
         format: raw
     restart: unless-stopped
     command: [api]
-    networks: [database, web, telemetry]
+    networks: [database, web, telemetry, authorization]
     environment:
       <<: *database-environment
+      PEOPLE_GATOR_API__API_KEYS__IDENTITY_ISSUER: https://${STAGING_HOST:?required}
+      PEOPLE_GATOR_API__AUTH__JWKS_URL: http://auth-${STAGING_HOST}:8002/.well-known/jwks.json
+      PEOPLE_GATOR_API__AUTH__ISSUER: https://${STAGING_HOST:?required}
+      PEOPLE_GATOR_API__AUTH__AUDIENCE: ${STAGING_HOST:?required}
       PEOPLE_GATOR_API__DEPLOYMENT__ENVIRONMENT: staging
       PEOPLE_GATOR_API__DEPLOYMENT__VERSION: ${COMMIT_SHA:-unknown}
       PEOPLE_GATOR_API__DEPLOYMENT__COMMIT: ${COMMIT_SHA:-unknown}
@@ -89,7 +130,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${WEB_NETWORK:-web}
       - traefik.http.routers.pg-staging-api.entrypoints=websecure
-      - 'traefik.http.routers.pg-staging-api.rule=Host(`${STAGING_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`) || PathPrefix(`/.well-known/`) || PathPrefix(`/token/`))'
+      - 'traefik.http.routers.pg-staging-api.rule=Host(`${STAGING_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || Path(`/openapi.json`))'
       - traefik.http.routers.pg-staging-api.priority=100
       - traefik.http.routers.pg-staging-api.service=pg-staging-api
       - traefik.http.routers.pg-staging-api.tls=true
@@ -98,8 +139,6 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE:?required}
-    volumes:
-      - ./staging-login.html:/usr/share/nginx/html/staging-login.html:ro
     logging: *staging-logging
     restart: unless-stopped
     init: true
@@ -110,6 +149,8 @@ services:
     mem_limit: 128m
     pids_limit: 128
     depends_on:
+      auth:
+        condition: service_healthy
       backend:
         condition: service_healthy
     networks: [web]
@@ -127,6 +168,8 @@ services:
       - traefik.http.services.pg-staging-app.loadbalancer.server.port=8080
 
 networks:
+  authorization:
+    internal: true
   database:
     external: true
     name: ${DATABASE_NETWORK:-people-gator-preview-db}

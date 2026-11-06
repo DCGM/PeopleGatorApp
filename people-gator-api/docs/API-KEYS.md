@@ -2,8 +2,10 @@
 
 Protected routes accept either `Authorization: Bearer <JWT>` or `X-API-Key: <key>`.
 Both headers return 400; missing or invalid credentials return 401; insufficient
-endpoint scopes return 403. Login and refresh continue to issue JWTs. Swagger's
-Authorize dialog offers both methods; supply one at a time.
+endpoint scopes return 403. The standalone issuer provides login and refresh; see [Authentication](../../docs/AUTHENTICATION.md). Swagger's
+Authorize dialog offers both methods; supply one at a time. Its **Sign in** link
+opens the existing gateway and returns with the app session. Selecting an API key
+clears the automatically applied Swagger bearer without ending the app session.
 
 Set `PEOPLE_GATOR_API__API_KEYS__KEYS_PATH` to a JSON object in the configured
 filesystem (default `peoplegator_api/api-keys.json`):
@@ -22,7 +24,7 @@ filesystem (default `peoplegator_api/api-keys.json`):
 Generate a high-entropy secret and hash it with `argon2.PasswordHasher().hash`.
 Store the secret in the integration client's secret store. Object keys are stable
 identifiers; never reuse an identifier for a different identity. The username is
-a service account under the configured JWT issuer, so matching JWT and API-key
+a service account under `API_KEYS__IDENTITY_ISSUER` (set it to the retained identity issuer), so matching JWT and API-key
 users share the same database identity. Allowed scopes are browse, annotate,
 ingest and admin, each prefixed with `people-gator:`.
 
@@ -54,4 +56,4 @@ const client = createClient({
 
 For JWT clients, return a token only when `scheme.scheme === 'bearer'`. Returning
 a string for every scheme would send both headers and correctly receive 400.
-The browser app keeps its existing JWT login flow.
+The browser uses the separate same-origin login gateway and an independently configured issuer client.

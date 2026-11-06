@@ -86,9 +86,8 @@ explicitly set the unused object to null, as in [Development](DEVELOPMENT.md).
 | `PERSISTENCE__POSTGRES__STARTUP_TIMEOUT_SECONDS` | Connectivity timeout 60 seconds; retry interval 2 seconds |
 | `STORAGE__LOCAL__ROOT` | Local filesystem root; default `./storage`; volume must be writable by API UID |
 | `STORAGE__S3__ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/REGION/ENDPOINT_URL` | S3 backend, mutually exclusive with local configuration |
-| `JWK__USERS_PATH`, `JWK__KEY_PATH` | Relative storage keys `peoplegator_api/users.json`, `peoplegator_api/jwks.json` |
-| `JWK__ISSUER`, `JWK__AUDIENCE` | Match the intended application origin/identity namespace; defaults target the historical preview host |
-| `JWK__ACCESS_TOKEN_LIFETIME_SECONDS` | Access-token lifetime, default 7200; also the longest a disabled user's issued token stays usable |
+| `AUTH__ISSUER`, `AUTH__AUDIENCE`, `AUTH__JWKS_URL` | Trusted token identity and public-key endpoint; no issuer secrets in API settings |
+| `AUTH__ALGORITHMS`, `AUTH__ACTOR_CLAIM`, `AUTH__SCOPES_CLAIM` | Allowed asymmetric algorithms and existing actor/scope claims |
 | `API_KEYS__KEYS_PATH` | API-key credential file key, default `peoplegator_api/api-keys.json` |
 | `CORS__ALLOW_ORIGINS`, `CORS__ALLOW_ORIGIN_REGEX` | JSON list and regex; default regex permits loopback HTTP(S) |
 | `BATCH__MAX_*_BATCH_SIZE` | Entity, face, text-mention and media limits; each defaults to 10,000 |
@@ -103,15 +102,17 @@ For local storage in `runtime.env`, for example:
 PEOPLE_GATOR_API__STORAGE={"local":{"root":"/data"},"s3":null}
 ```
 
-Users and API-key credential files contain Argon2 hashes and allowed scopes and
-are read through the selected filesystem. Preserve their keys and JWK material
-across deployments. A missing users file is initialized empty, not with a built-in
-account. The shipped example supplies demo `test` / `test`. Refresh sessions live
-in memory and do not survive API restarts. See
+The standalone issuer owns account hashes/scopes and private signing keys in its
+separate `PEOPLE_GATOR_AUTH__STATE_DIR`. Provision accounts explicitly before
+startup; retain that directory across deployments. Only API-key credentials
+remain in the resource filesystem. Refresh sessions are single-process and do
+not survive issuer restarts. See [Authentication](AUTHENTICATION.md) for rollout,
+claim mapping, key caching and account policy, and
 [API-key authentication](../people-gator-api/docs/API-KEYS.md).
 
-Frontend `VITE_API_BASE_URL`, `VITE_API_USERNAME` and `VITE_API_PASSWORD` are
-browser-visible build-time variables. `ALLOWED_VITE_HOSTS` affects the development
+Frontend `VITE_API_BASE_URL` and `VITE_AUTH_BASE_URL` are browser-visible build-time
+variables; no credential settings or automatic demo login remain.
+`ALLOWED_VITE_HOSTS` affects the development
 server only. Development Compose uses root `.env` values `POSTGRES_*`,
 `HTTP_HOST`, `HTTP_PORT`, `PUBLIC_ORIGIN`, `HTTP_API_BASE_URL`, `DOCKER_SOCKET` and
 optional `OPENROUTER_API_KEY`; it maps them to container settings.

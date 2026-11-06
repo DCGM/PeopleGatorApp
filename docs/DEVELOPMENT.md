@@ -55,8 +55,14 @@ PEOPLE_GATOR_API__PERSISTENCE={"postgres":{"host":"127.0.0.1","port":55432,"user
 PEOPLE_GATOR_API__STORAGE={"local":{"root":".cache/storage"},"s3":null}
 PEOPLE_GATOR_API__HOST=127.0.0.1
 PEOPLE_GATOR_API__PORT=8000
-PEOPLE_GATOR_API__JWK__ISSUER=http://localhost:5173
-PEOPLE_GATOR_API__JWK__AUDIENCE=localhost
+PEOPLE_GATOR_API__AUTH__ISSUER=http://localhost:5173
+PEOPLE_GATOR_API__AUTH__AUDIENCE=localhost
+PEOPLE_GATOR_API__AUTH__JWKS_URL=http://127.0.0.1:8002/.well-known/jwks.json
+PEOPLE_GATOR_API__API_KEYS__IDENTITY_ISSUER=http://localhost:5173
+PEOPLE_GATOR_AUTH__STATE_DIR=.cache/auth
+PEOPLE_GATOR_AUTH__ISSUER=http://localhost:5173
+PEOPLE_GATOR_AUTH__AUDIENCE=localhost
+PEOPLE_GATOR_AUTH__ALLOW_ORIGINS=["http://localhost:5173"]
 ```
 
 Exactly one persistence configuration and one storage configuration must be
@@ -68,17 +74,18 @@ Initialize local users, migrate and seed from `people-gator-api`:
 
 ```sh
 mkdir -p .cache/storage/peoplegator_api
-test -e .cache/storage/peoplegator_api/users.json || \
-  cp example.users.json .cache/storage/peoplegator_api/users.json
 uv run --locked python -m people_gator_api.cli.database migrate
 uv run --locked python -m people_gator_api.cli.seed
 uv run --locked python -m people_gator_api.cli.seed
 uv run --locked python -m people_gator_api.cli.database check
+uv run --locked people-gator-auth-provision example.users.json
 uv run --locked people-gator-api
 ```
 
 Run each command only after the preceding one succeeds. The second seed run
 demonstrates repeatability; existing edits and checkpoint identities are retained.
+In another terminal from `people-gator-api`, run `uv run --locked people-gator-auth`.
+The explicit provisioning step above creates the independent issuer account file.
 The supplied users file provides `test` / `test`. It is local demo authentication,
 not an account to expose with private collection data. For API reload, set
 `PEOPLE_GATOR_API__RELOAD=true` before starting the process.
@@ -86,9 +93,10 @@ not an account to expose with private collection data. For API reload, set
 Create `people-gator-app/.env.local`:
 
 ```dotenv
-VITE_API_BASE_URL=http://localhost:8000
-VITE_API_USERNAME=test
-VITE_API_PASSWORD=test
+VITE_API_BASE_URL=http://localhost:5173
+VITE_OIDC_AUTHORITY=http://localhost:5173
+API_PROXY_TARGET=http://127.0.0.1:8000
+AUTH_PROXY_TARGET=http://127.0.0.1:8002
 ```
 
 In a second terminal, from `people-gator-app`:
@@ -98,14 +106,23 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
 Set the API base explicitly: without it the client falls back to a remote
-development server. The app automatically logs in with the configured demo
-credentials and requests all four scopes. `VITE_*` values enter browser code.
+development server. Open `http://localhost:5173/docs` for Swagger at the gateway origin; the dev
+proxy forwards docs, OpenAPI and API requests to `API_PROXY_TARGET`, and issuer
+authorization/token/discovery requests to `AUTH_PROXY_TARGET`. Swagger
+**Authorize → Sign in** opens the existing login page and returns with the shared
+session. Opening the raw API origin's `/docs` still permits manual bearer/API-key
+authorization, but gateway session sharing requires the frontend origin.
+
+The app opens `/login.html`; enter the provisioned local `test` / `test`
+credentials. The issuer grants the account's configured scopes. `VITE_*` values
+enter browser code; never configure passwords there. See [Authentication](AUTHENTICATION.md).
 
 ## Readiness and first checks
 
 The API must complete startup/schema validation. Check its functional health:
 
 ```sh
+curl --fail http://127.0.0.1:8002/auth/health
 curl --fail http://127.0.0.1:8000/api/v1/health
 curl --fail http://127.0.0.1:5173/
 ```
@@ -113,7 +130,7 @@ curl --fail http://127.0.0.1:5173/
 Health should return `{"status":"ok"}` and the frontend should return Vite's
 application HTML. In a browser, use people search for Ada Novak and inspect her
 faces and OCR mentions, then open a seeded document/page. Authenticate an API
-request through `/token/login` and verify `/api/v1/entities` returns fixtures;
+login through the browser's `/login.html` using OIDC/PKCE and verify `/api/v1/entities` returns fixtures;
 see [Start here](START_HERE.md). A running PID alone does not establish readiness.
 Codex onboarding supports local HTTP validation, not user-facing localhost links.
 
@@ -201,7 +218,8 @@ Traefik, PostgreSQL, API reload and Vite at the default HTTP port 8080. For
 rootful Docker set `DOCKER_SOCKET=/var/run/docker.sock`; the default expects a
 rootless socket. `HTTP_HOST`, `HTTP_PORT`, `PUBLIC_ORIGIN` and
 `HTTP_API_BASE_URL` change routing/client origins. Development Compose bootstraps
-schema and mounts the sample users file, but does not automatically seed. To
+schema but does not automatically seed or provision accounts. Start `db` and
+`backend` first, then run the commands below before starting the full stack. To
 use the synthetic data, migrate/adopt before seeding:
 
 ```sh
@@ -209,6 +227,8 @@ docker compose -f compose.dev.yaml exec backend \
   uv run --locked python -m people_gator_api.cli.database migrate --adopt-bootstrap
 docker compose -f compose.dev.yaml exec backend \
   uv run --locked python -m people_gator_api.cli.seed
+docker compose -f compose.dev.yaml run --rm auth-provision
+docker compose -f compose.dev.yaml up -d --build
 ```
 
 For retained stores, follow the migration guide when schema changes arrive;
@@ -235,3 +255,11 @@ npm run type-check
 Review and commit intended `src/client/` changes with the API contract change.
 Do not hand-edit generated client files or fetch a different deployed server's
 schema to represent your local change.
+
+The legacy `compose.live-preview.yaml` entry also runs the standalone issuer.
+Set `AUTH_USERS_FILE` to an externally supplied credential file, or supply the
+default `/run/people-gator-auth/users.json`. The read-only bind refuses to create a
+missing source; ordinary stack/backup configuration needs no credential file.
+Provision through its `auth-provision` tools profile before
+starting `auth`. It does not silently install demo accounts. Preserve its
+`auth-data` volume and keep the retained issuer for actor continuity.

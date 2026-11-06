@@ -27,36 +27,6 @@ export type ApiKeyResponse = {
 };
 
 /**
- * Body_get_token_token_login_post
- */
-export type BodyGetTokenTokenLoginPost = {
-    /**
-     * Grant Type
-     */
-    grant_type?: string | null;
-    /**
-     * Username
-     */
-    username: string;
-    /**
-     * Password
-     */
-    password: string;
-    /**
-     * Scope
-     */
-    scope?: string;
-    /**
-     * Client Id
-     */
-    client_id?: string | null;
-    /**
-     * Client Secret
-     */
-    client_secret?: string | null;
-};
-
-/**
  * Body_put_page_image_by_id_route_api_v1_pages__page_source_id__image_put
  */
 export type BodyPutPageImageByIdRouteApiV1PagesPageSourceIdImagePut = {
@@ -2070,62 +2040,6 @@ export type ImageResponse = {
 };
 
 /**
- * JwkKeyResponse
- *
- * A single JSON Web Key (public fields only).
- */
-export type JwkKeyResponse = {
-    /**
-     * Kty
-     */
-    kty: string;
-    /**
-     * Use
-     */
-    use?: string | null;
-    /**
-     * Kid
-     */
-    kid?: string | null;
-    /**
-     * Alg
-     */
-    alg?: string | null;
-    /**
-     * N
-     */
-    n?: string | null;
-    /**
-     * E
-     */
-    e?: string | null;
-    /**
-     * X
-     */
-    x?: string | null;
-    /**
-     * Y
-     */
-    y?: string | null;
-    /**
-     * Crv
-     */
-    crv?: string | null;
-};
-
-/**
- * JwksResponse
- *
- * JSON Web Key Set response (RFC 7517).
- */
-export type JwksResponse = {
-    /**
-     * Keys
-     */
-    keys: Array<JwkKeyResponse>;
-};
-
-/**
  * Keypoint[FaceKeypointType]
  */
 export type KeypointFaceKeypointType = {
@@ -2160,42 +2074,6 @@ export type ModelEmbeddingFaceModelStub = {
      * A non-empty, finite vector whose dimension must match model_identifier.
      */
     vector: Array<number>;
-};
-
-/**
- * OpenIDConfigurationResponse
- *
- * OpenID Connect discovery metadata for the People Gator token service.
- */
-export type OpenIdConfigurationResponse = {
-    /**
-     * Issuer
-     */
-    issuer: string;
-    /**
-     * Jwks Uri
-     */
-    jwks_uri: string;
-    /**
-     * Token Endpoint
-     */
-    token_endpoint: string;
-    /**
-     * Grant Types Supported
-     */
-    grant_types_supported: Array<string>;
-    /**
-     * Scopes Supported
-     */
-    scopes_supported: Array<string>;
-    /**
-     * Subject Types Supported
-     */
-    subject_types_supported: Array<string>;
-    /**
-     * Token Endpoint Auth Methods Supported
-     */
-    token_endpoint_auth_methods_supported: Array<string>;
 };
 
 /**
@@ -2318,18 +2196,6 @@ export type PageResponse = {
  * PageSortField
  */
 export type PageSortField = 'annotations_total_count' | 'annotations_automatic_count' | 'annotations_manual_count' | 'annotations_verified_count' | 'annotations_unassigned_count' | 'faces_total_count' | 'faces_automatic_count' | 'faces_manual_count' | 'faces_verified_count' | 'faces_unassigned_count' | 'mentions_total_count' | 'mentions_automatic_count' | 'mentions_manual_count' | 'mentions_verified_count' | 'mentions_unassigned_count' | 'page_number' | 'relevance' | 'library' | 'document_id' | 'page_id' | 'last_touched_at';
-
-/**
- * RefreshTokenRequest
- *
- * Request model for refresh token endpoint.
- */
-export type RefreshTokenRequest = {
-    /**
-     * Refresh Token
-     */
-    refresh_token: string;
-};
 
 /**
  * RegionLayoutModel
@@ -2750,26 +2616,6 @@ export type TextMentionSpanModel = {
      * End Character
      */
     end_character: number;
-};
-
-/**
- * TokenResponse
- *
- * A signed JWT token response.
- */
-export type TokenResponse = {
-    /**
-     * Access Token
-     */
-    access_token: string;
-    /**
-     * Refresh Token
-     */
-    refresh_token: string;
-    /**
-     * Token Type
-     */
-    token_type: string;
 };
 
 /**
@@ -7401,85 +7247,3 @@ export type HealthApiV1HealthGetResponses = {
 };
 
 export type HealthApiV1HealthGetResponse = HealthApiV1HealthGetResponses[keyof HealthApiV1HealthGetResponses];
-
-export type GetJwksWellKnownJwksJsonGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/.well-known/jwks.json';
-};
-
-export type GetJwksWellKnownJwksJsonGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: JwksResponse;
-};
-
-export type GetJwksWellKnownJwksJsonGetResponse = GetJwksWellKnownJwksJsonGetResponses[keyof GetJwksWellKnownJwksJsonGetResponses];
-
-export type GetOpenidConfigurationWellKnownOpenidConfigurationGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/.well-known/openid-configuration';
-};
-
-export type GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: OpenIdConfigurationResponse;
-};
-
-export type GetOpenidConfigurationWellKnownOpenidConfigurationGetResponse = GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses[keyof GetOpenidConfigurationWellKnownOpenidConfigurationGetResponses];
-
-export type GetTokenTokenLoginPostData = {
-    body: BodyGetTokenTokenLoginPost;
-    path?: never;
-    query?: never;
-    url: '/token/login';
-};
-
-export type GetTokenTokenLoginPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetTokenTokenLoginPostError = GetTokenTokenLoginPostErrors[keyof GetTokenTokenLoginPostErrors];
-
-export type GetTokenTokenLoginPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: TokenResponse;
-};
-
-export type GetTokenTokenLoginPostResponse = GetTokenTokenLoginPostResponses[keyof GetTokenTokenLoginPostResponses];
-
-export type RefreshTokenTokenRefreshPostData = {
-    body: RefreshTokenRequest;
-    path?: never;
-    query?: never;
-    url: '/token/refresh';
-};
-
-export type RefreshTokenTokenRefreshPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type RefreshTokenTokenRefreshPostError = RefreshTokenTokenRefreshPostErrors[keyof RefreshTokenTokenRefreshPostErrors];
-
-export type RefreshTokenTokenRefreshPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: TokenResponse;
-};
-
-export type RefreshTokenTokenRefreshPostResponse = RefreshTokenTokenRefreshPostResponses[keyof RefreshTokenTokenRefreshPostResponses];

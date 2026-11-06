@@ -1,4 +1,7 @@
-"""Routes for the current user and contract-backed user administration."""
+"""Domain profiles and attribution identities, including API-key active state.
+
+Provider accounts/passwords/browser-login policy belong to the separate issuer.
+"""
 
 import uuid
 from pydantic import BaseModel

@@ -2978,32 +2978,37 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
     import argon2
     import httpx
     from fastapi import FastAPI
-    from people_gator_api.routes.jwks import router as token_router
+    from joserfc.jwk import KeySet
+    from people_gator_auth import accounts, keys
+    from people_gator_auth.app import get_app as issuer_app
+    from people_gator_auth.settings import settings as issuer_settings
     from people_gator_api.routes.v1 import router
-    from people_gator_api.schemas.users import (
-        UserListFilter, UserListRequest, UserPatchRequest, UserResponse,
-    )
+    from people_gator_api.schemas.users import UserCreateRequest, UserListFilter, UserListRequest, UserPatchRequest, UserResponse
     from people_gator_api.services import auth_service, database_service, jwk_service
-    from people_gator_api.settings import JwkSettings, LocalStorageSettings, StorageSettings
 
     db, fs, _ = seed_target
     seed = await preview.seed_preview(db, fs)
-    monkeypatch.setattr(settings, "storage", StorageSettings(local=LocalStorageSettings(root=tmp_path)))
-    monkeypatch.setattr(settings, "jwk", JwkSettings(
-        users_path="auth/users.json", key_path="auth/jwks.json",
-        issuer=jwk_service.TOKEN_ISSUER, audience=jwk_service.TOKEN_AUDIENCE,
-    ))
-    monkeypatch.setattr(auth_service, "_refresh_sessions", {})
-    monkeypatch.setattr(auth_service, "_refresh_session_locks", {})
+    monkeypatch.setattr(issuer_settings, "state_dir", tmp_path)
+    monkeypatch.setattr(keys, "_keyset", None)
+    monkeypatch.setattr(keys, "_last_fetch_time", None)
+    monkeypatch.setattr(keys, "_keyset_lock", asyncio.Lock())
     monkeypatch.setattr(jwk_service, "_keyset", None)
-    monkeypatch.setattr(jwk_service, "_last_fetch_time", None)
+    monkeypatch.setattr(jwk_service, "_last_fetch_time", float("-inf"))
+    monkeypatch.setattr(jwk_service, "_last_attempt", float("-inf"))
     monkeypatch.setattr(jwk_service, "_keyset_lock", asyncio.Lock())
-    monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
-    (tmp_path / "auth").mkdir()
-    (tmp_path / "auth/users.json").write_text(json.dumps({"lifecycle": {
-        "hash": argon2.PasswordHasher().hash("synthetic"),
-        "scopes": ["people-gator:browse", "people-gator:annotate"],
-    }}))
+    # Provision the actor explicitly, before running the issuer. Repeat uses the same UUID.
+    user = await db.users.get_or_create(UserCreateRequest(display_name="lifecycle", is_active=True,
+        external_subject="lifecycle", external_issuer=issuer_settings.issuer))
+    assert (await db.users.get_or_create(UserCreateRequest(display_name="lifecycle", is_active=True,
+        external_subject="lifecycle", external_issuer=issuer_settings.issuer))).user_id == user.user_id
+    account = accounts.Account(hash=argon2.PasswordHasher().hash("synthetic"),
+        scopes={"people-gator:browse", "people-gator:annotate"}, user_id=user.user_id)
+    def save_account():
+        (tmp_path / "accounts.json").write_bytes(accounts._adapter.dump_json({"lifecycle": account}))
+    save_account()
+    async def fetch_public():
+        return KeySet.import_key_set((await keys.get_key_set()).as_dict(private=False))
+    monkeypatch.setattr(jwk_service, "_fetch_public_keys", fetch_public)
 
     @dataclass
     class CountedContext:
@@ -3029,7 +3034,6 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
 
     contexts = CountedContext()
     app = FastAPI()
-    app.include_router(token_router)
     app.include_router(router)
     app.add_api_route("/whoami", whoami)
     app.dependency_overrides[database_service.get_database] = lambda: db
@@ -3039,14 +3043,44 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
 
     async def identities() -> list[UserResponse]:
         return (await db.users.list(UserListRequest(limit=10, filter_=UserListFilter(
-            external_subject=["lifecycle"], external_issuer=[settings.jwk.issuer],
+            external_subject=["lifecycle"], external_issuer=[issuer_settings.issuer],
         )))).items
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        assert await identities() == []
-        login = await client.post("/token/login", data=login_form)
+    async with (
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://resource") as client,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=issuer_app()), base_url=issuer_settings.issuer) as auth_client,
+    ):
+        async def browser_login():
+            import base64, hashlib, re, secrets
+            from urllib.parse import parse_qs, urlsplit
+            verifier = secrets.token_urlsafe(48)
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+            callback = issuer_settings.issuer + "/auth-callback.html"
+            page = await auth_client.get("/token/authorize", params={
+                "client_id": "people-gator-browser", "redirect_uri": callback,
+                "response_type": "code", "scope": "openid offline_access " + login_form["scope"],
+                "nonce": secrets.token_urlsafe(16), "state": secrets.token_urlsafe(16),
+                "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "login",
+            })
+            handle = re.search('name="interaction" value="([^\"]+)"', page.text).group(1)
+            logged_in = await auth_client.post("/token/login", data={
+                "interaction": handle, "username": login_form["username"], "password": login_form["password"],
+            }, follow_redirects=False)
+            if logged_in.status_code != 302:
+                return logged_in
+            code = parse_qs(urlsplit(logged_in.headers["location"]).query)["code"][0]
+            return await auth_client.post("/token/oidc", data={
+                "grant_type": "authorization_code", "client_id": "people-gator-browser",
+                "redirect_uri": callback, "code": code, "code_verifier": verifier,
+            })
+
+        async def renew(refresh_token):
+            return await auth_client.post("/token/oidc", data={"grant_type": "refresh_token",
+                "client_id": "people-gator-browser", "refresh_token": refresh_token})
+
+        login = await browser_login()
         assert login.status_code == 200, login.text
-        assert contexts.entries == 1
+        assert contexts.entries == 0
         [user] = await identities()
         assert user.is_active
         tokens = TokenResponse.model_validate(login.json())
@@ -3062,7 +3096,7 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
         assert patched.status_code == 200, patched.text
         assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
         assert patched.json()["last_touched_by_api_key_id"] is None
-        assert contexts.entries == 1
+        assert contexts.entries == 0
 
         await db.users.patch(user.user_id, UserPatchRequest(is_active=False))
         # Issued access tokens remain valid until expiry, including profile reads.
@@ -3071,28 +3105,88 @@ async def test_bearer_lifecycle_uses_token_identity_without_auth_lookups(
         assert me.status_code == 200 and me.json()["is_active"] is False
         patched = await client.patch(olga, json={"short_description": "Written after deactivation."}, headers=bearer)
         assert patched.json()["last_touched_by_user_id"] == str(user.user_id)
-        assert contexts.entries == 1
+        assert contexts.entries == 0
 
-        assert (await client.post("/token/login", data=login_form)).status_code == 403
-        refused = await client.post("/token/refresh", json={"refresh_token": tokens.refresh_token})
-        assert refused.status_code == 403
+        account.is_active = False
+        save_account()
+        assert "Check your username and password." in (await browser_login()).text
+        refused = await renew(tokens.refresh_token)
+        assert refused.status_code == 400
         assert "access_token" not in refused.json()
         await db.users.patch(user.user_id, UserPatchRequest(is_active=True))
+        account.is_active = True
+        save_account()
         # The rejected refresh revoked its session; reactivation does not revive it.
-        revoked = await client.post("/token/refresh", json={"refresh_token": tokens.refresh_token})
-        assert revoked.status_code == 401
+        revoked = await renew(tokens.refresh_token)
+        assert revoked.status_code == 400
         assert [item.user_id for item in await identities()] == [user.user_id]
 
-        relogin = TokenResponse.model_validate((await client.post("/token/login", data=login_form)).json())
-        refreshed = await client.post("/token/refresh", json={"refresh_token": relogin.refresh_token})
+        relogin = TokenResponse.model_validate((await browser_login()).json())
+        refreshed = await renew(relogin.refresh_token)
         assert refreshed.status_code == 200
         renewed = TokenResponse.model_validate(refreshed.json())
         assert (await jwk_service.verify_access_token(renewed.access_token))["uid"] == user.user_id
 
         expires = claims["exp"]
         monkeypatch.setattr(jwk_service, "_now", lambda: expires + 1)
-        monkeypatch.setattr(jwk_service, "_access_claims_registry", None)
         assert (await client.get("/whoami", headers=bearer)).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auth_provisioning_preserves_actors_accounts_and_seed_links(seed_target, tmp_path, monkeypatch):
+    from urllib.parse import parse_qs, urlsplit
+    from people_gator_auth import accounts
+    from people_gator_api.cli.auth_provision import provision_accounts
+    from people_gator_auth.settings import settings as issuer_settings
+    from people_gator_api.schemas.users import UserCreateRequest
+    from people_gator_api.schemas.entities import EntityPatchRequest
+    from people_gator_api.services.auth_service import AuthContext
+
+    database, filesystem, _ = seed_target
+    seed = await preview.seed_preview(database, filesystem)
+    gateway = urlsplit(seed.filter_examples["auth-attribution-login"])
+    assert gateway.path == "/login.html"
+    assert parse_qs(gateway.query)["return"] == [f"/people/{seed.entities['ada']}"]
+    docs_gateway = urlsplit(seed.filter_examples["auth-api-docs"])
+    assert docs_gateway.path == "/login.html"
+    assert parse_qs(docs_gateway.query)["return"] == ["/docs"]
+    assert (await database.entities.get(seed.entities["ada"])).name == "Ada Novak"
+    preview_gateway = urlsplit(seed.filter_examples["auth-preview-login"])
+    assert preview_gateway.path == "/login.html"
+    assert parse_qs(preview_gateway.query)["return"] == ["/people?q=Ada"]
+    oidc_gateway = urlsplit(seed.filter_examples["auth-oidc-sso"])
+    assert oidc_gateway.path == "/login.html"
+    assert parse_qs(oidc_gateway.query)["return"] == ["/docs?view=oidc"]
+    document_gateway = urlsplit(seed.filter_examples["auth-document-navigation"])
+    assert document_gateway.path == "/login.html"
+    assert parse_qs(document_gateway.query)["return"] == ["/documents?library=preview-table"]
+    from people_gator_api.schemas.sources import DocumentListFilter
+    documents = await database.sources.list_documents(DocumentListRequest(
+        limit=100, filter_=DocumentListFilter(library=["preview-table"]),
+    ))
+    assert documents.items and all(document.library == "preview-table" for document in documents.items)
+    monkeypatch.setattr(issuer_settings, "issuer", "urn:people-gator:preview-seed")
+    reviewer = await database.users.get_or_create(UserCreateRequest(display_name="Reviewer",
+        external_subject="reviewer", external_issuer=issuer_settings.issuer, is_active=True))
+    assert reviewer.user_id == seed.users["reviewer"]
+    source = tmp_path / "users.json"
+    source.write_text(json.dumps({"reviewer": {"hash": "synthetic-test-hash", "scopes": ["people-gator:browse"]}}))
+    destination = tmp_path / "accounts.json"
+    await provision_accounts(database, source, destination)
+    original = accounts._adapter.validate_json(destination.read_bytes())
+    assert original["reviewer"].user_id == reviewer.user_id
+    original["reviewer"].is_active = False
+    destination.write_bytes(accounts._adapter.dump_json(original))
+    before = destination.read_bytes()
+    await provision_accounts(database, source, destination)
+    assert destination.read_bytes() == before
+    actor = AuthContext(user_id=reviewer.user_id, scopes={"people-gator:annotate"}, authentication_method="bearer")
+    changed = await database.entities.patch(seed.entities["ada"], EntityPatchRequest(short_description="Reviewed after login."), actor)
+    await preview.seed_preview(database, filesystem)
+    retained = await database.entities.get(seed.entities["ada"])
+    assert retained.short_description == "Reviewed after login."
+    assert retained.last_touched_by_user_id == reviewer.user_id
+    assert retained.last_touched_at == changed.last_touched_at
 
 
 @pytest.mark.asyncio

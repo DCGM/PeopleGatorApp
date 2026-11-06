@@ -50,7 +50,7 @@ class TelemetryTests(unittest.TestCase):
             runtime.write_text('PEOPLE_GATOR_API__STORAGE__LOCAL__ROOT=/data\n')
             (root / 'staging-login.html').write_text('')
             variables = {
-                'PR_NUMBER': '94', 'COMMIT_SHA': 'abc123', 'RELEASE_TAG': 'v1.2.3',
+                'AUTH_STATE_DIR': str(root / 'auth'), 'PR_NUMBER': '94', 'COMMIT_SHA': 'abc123', 'RELEASE_TAG': 'v1.2.3',
                 'BACKEND_IMAGE': 'backend:test', 'FRONTEND_IMAGE': 'frontend:test',
                 'PREVIEW_HOST': 'pr.example', 'STAGING_HOST': 'staging.example', 'RELEASE_HOST': 'app.example',
                 'DB_NAME': 'test', 'DB_USER': 'test', 'DB_PASSWORD': 'synthetic',

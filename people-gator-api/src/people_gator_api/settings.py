@@ -267,18 +267,21 @@ class CorsSettings(BaseModel):
 
 
 class APIKeySettings(BaseModel):
+    identity_issuer: str = "https://preview.peoplegator.dev"
     keys_path: str = Field(default="peoplegator_api/api-keys.json", min_length=1)
 
 
-class JwkSettings(BaseModel):
-    key_path: str = "peoplegator_api/jwks.json"
-    users_path: str = Field(default="peoplegator_api/users.json", min_length=1)
-    key_cache_ttl_seconds: int = Field(default=3600, gt=0)
-    # Bearer requests trust signed claims until expiry; deactivation applies at login/refresh.
-    access_token_lifetime_seconds: int = Field(default=7200, gt=0)
+class TokenValidationSettings(BaseModel):
     issuer: str = "https://preview.peoplegator.dev"
     audience: str = "preview.peoplegator.dev"
-    
+    jwks_url: str = "http://127.0.0.1:8002/.well-known/jwks.json"
+    algorithms: list[Literal["ES256", "RS256"]] = Field(default_factory=lambda: ["ES256"], min_length=1)
+    key_cache_ttl_seconds: int = Field(default=3600, gt=0)
+    refresh_interval_seconds: int = Field(default=5, gt=0)
+    timeout_seconds: float = Field(default=5, gt=0)
+    actor_claim: str = "uid"
+    scopes_claim: str = "scopes"
+
 
 # --------------------------------------------------------------------------------------
 # Full application settings
@@ -306,7 +309,7 @@ class Settings(BaseSettings):
     otel: OpenTelemetrySettings = Field(default_factory=OpenTelemetrySettings)
     persistence: PersistenceSettings = Field(default_factory=PersistenceSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
-    jwk: JwkSettings = Field(default_factory=JwkSettings)
+    auth: TokenValidationSettings = Field(default_factory=TokenValidationSettings)
     api_keys: APIKeySettings = Field(default_factory=APIKeySettings)
     embedding_service: EmbeddingServiceSettings | None = None
     openrouter: OpenRouterSettings | None = None

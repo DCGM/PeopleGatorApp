@@ -18,16 +18,31 @@ def test_opt_in_agent_preserves_project_and_isolates_private_config(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, path)
     (tmp_path / ".env").write_text("AWS_ACCESS_KEY_ID=application-only-sentinel\nPOSTGRES_PASSWORD=fixture\n")
-    environment = {key: value for key, value in os.environ.items() if not key.startswith(("COMPOSE_", "BACKUP_", "AWS_"))}
-    def render(files):
+    environment = {key: value for key, value in os.environ.items() if not key.startswith(("COMPOSE_", "BACKUP_", "AWS_")) and key != "AUTH_USERS_FILE"}
+    def render(files, profiles=("backups",)):
         args = ["docker", "compose", "--project-directory", str(tmp_path), "--env-file", "/dev/null"]
         for name in files:
             args += ["-f", str(tmp_path / name)]
-        result = subprocess.run([*args, "--profile", "backups", "config", "--format", "json"],
+        for profile in profiles:
+            args += ["--profile", profile]
+        result = subprocess.run([*args, "config", "--format", "json"],
                                 env=environment, capture_output=True, check=True)
         return json.loads(result.stdout)
     rendered = render(["compose.live-preview.yaml", "deploy/backup/compose.agent.yaml"])
     assert rendered["name"] == "people-gator-live-preview"
+    # An inactive provisioning profile must not require credential configuration
+    # merely to render/run the backup stack. Its bind still fails closed on use.
+    assert "auth-provision" not in rendered["services"]
+    tools = render(["compose.live-preview.yaml", "deploy/backup/compose.agent.yaml"], ("backups", "tools"))
+    provision = tools["services"]["auth-provision"]
+    credential = next(mount for mount in provision["volumes"] if mount["target"] == "/users.json")
+    assert credential["source"] == "/run/people-gator-auth/users.json"
+    assert credential["read_only"] and not credential["bind"]["create_host_path"]
+    environment["AUTH_USERS_FILE"] = str(tmp_path / "external-users.json")
+    custom = render(["compose.live-preview.yaml", "deploy/backup/compose.agent.yaml"], ("backups", "tools"))
+    custom_credential = next(mount for mount in custom["services"]["auth-provision"]["volumes"] if mount["target"] == "/users.json")
+    assert custom_credential["source"] == environment["AUTH_USERS_FILE"]
+    assert custom_credential["read_only"] and not custom_credential["bind"]["create_host_path"]
     agent = rendered["services"]["backup-agent"]
     assert agent["profiles"] == ["backups"]
     assert agent.get("environment", {}) == {}
